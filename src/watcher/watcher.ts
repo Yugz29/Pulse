@@ -1,11 +1,15 @@
 import chokidar from 'chokidar';
 import { EventEmitter } from 'node:events';
+import { config } from '../config.js';
 
 export function startWatcher() {
     const emitter = new EventEmitter();
 
-    const watcher = chokidar.watch('/Users/yugz/Projets/DevNote/', {
-        ignored: /node_modules|\.git|dist|build|\.vscode|\.idea|\.DS_Store|\.log/,
+    const watcher = chokidar.watch(config.projectPath, {
+        ignored: (filePath: string) => {
+            const parts = filePath.split('/');
+            return parts.some(part => config.ignore.includes(part));
+        },
         ignoreInitial: true
     }).on('error', (err) => emitter.emit('error', err));
 
@@ -24,7 +28,7 @@ export function startWatcher() {
 
     return {
         emitter,
-        pause: () => watcher.unwatch('**/*'),
-        resume: () => watcher.add('/Users/yugz/Projets/DevNote/'),
+        pause: () => watcher.unwatch(config.projectPath),
+        resume: () => watcher.add(config.projectPath),
     };
 }
