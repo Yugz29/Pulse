@@ -2,11 +2,17 @@ import { startWatcher } from './watcher/watcher.js';
 import { analyzeFile } from './analyzer/parser.js';
 import { calculateRiskScore } from './risk-score/riskScore.js';
 import { initDb, saveScan } from './database/db.js';
+import { scanProject } from './cli/scanner.js';
+import { printReport } from './cli/display.js';
 
 
 // Init de la DB
 console.log('Pulse is initializing the database...');
 initDb();
+
+console.log('Pulse is scanning the project...');
+const results = scanProject('/Users/yugz/Projets/DevNote/');
+printReport(results);
 
 console.log('Pulse is watching...');
 
