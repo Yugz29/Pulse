@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { RiskScoreResult } from '../risk-score/riskScore.js';
+import { getLastFeedback } from '../database/db.js';
 
 
 function getRiskEmoji(score: number): string {
@@ -19,7 +20,9 @@ export function printReport(results: RiskScoreResult[]): void {
         const emoji = getRiskEmoji(result.globalScore);
         const fileName = path.basename(result.filePath);
         const score = result.globalScore.toFixed(1);
-        console.log(`   ${emoji} ${fileName.padEnd(30)} ${score}`);
+        const feedback = getLastFeedback(result.filePath);
+        const feedbackTag = feedback ? `[${feedback.action}]` : '';
+        console.log(`   ${emoji} ${fileName.padEnd(30)} ${score} ${feedbackTag}`);
     }
 
     // Footer
