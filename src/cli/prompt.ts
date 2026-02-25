@@ -41,3 +41,32 @@ export async function promptFeedback(results: RiskScoreResult []): Promise<void>
 
     rl.close();
 }
+
+export async function promptSingleFeedback(result: RiskScoreResult): Promise<void> {
+    const rl = readLine.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+
+    const fileName = path.basename(result.filePath);
+    console.log(`\n⚠️ ALERTE - ${fileName} (score: ${result.globalScore.toFixed(1)})`);
+
+    // Poser la question
+    const action = await ask(rl, 'Action (apply / ignore / explore / skip) : ');
+
+    // Si skip, on ne sauvegarde pas
+    if (action === 'skip') { rl.close(); return; }
+
+    // Valider l'action
+    if(!['apply', 'ignore', 'explore'].includes(action)) {
+        console.log('Action invalide');
+        rl.close();
+        return;
+    }
+
+    // Sauvegarder
+    saveFeedback(result.filePath, action, result.globalScore);
+    console.log(`✓ Feedback "${action}" enregistré pour ${fileName}`);
+
+    rl.close();
+}

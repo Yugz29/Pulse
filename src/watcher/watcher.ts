@@ -1,7 +1,6 @@
 import chokidar from 'chokidar';
 import { EventEmitter } from 'node:events';
 
-
 export function startWatcher() {
     const emitter = new EventEmitter();
 
@@ -15,6 +14,7 @@ export function startWatcher() {
     });
 
     watcher.on('change', (path) => {
+        if (!(path.endsWith('.js') || path.endsWith('.ts'))) return;
         emitter.emit('file:changed', path);
     });
 
@@ -22,5 +22,9 @@ export function startWatcher() {
         emitter.emit('file:deleted', path);
     });
 
-    return emitter;
+    return {
+        emitter,
+        pause: () => watcher.unwatch('**/*'),
+        resume: () => watcher.add('/Users/yugz/Projets/DevNote/'),
+    };
 }

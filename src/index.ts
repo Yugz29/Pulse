@@ -4,9 +4,8 @@ import { calculateRiskScore } from './risk-score/riskScore.js';
 import { initDb, saveScan } from './database/db.js';
 import { scanProject } from './cli/scanner.js';
 import { printReport } from './cli/display.js';
-import { promptFeedback } from './cli/prompt.js';
+import { promptFeedback, promptSingleFeedback } from './cli/prompt.js';
 import { config } from './config.js';
-
 
 
 console.log('Pulse is initializing the database...');
@@ -17,19 +16,24 @@ const results = scanProject(config.projectPath);
 printReport(results);
 await promptFeedback(results);
 
-console.log('Pulse is watching...');
-const emitter = startWatcher();
+console.log('\nPulse is watching...');
+const { emitter, pause, resume } = startWatcher();
 
-// Quand un fichier est modifié, on le passe au parser
+// Flag pour éviter les prompts simultanés
+let isPrompting = false;
+
+// Debounce timers par fichier
 const debounceTimers = new Map<string, NodeJS.Timeout>();
 
 emitter.on('file:changed', (filePath: string) => {
+    // Si un prompt est en cours, on ignore l'événement
+    if (isPrompting) return;
+
     // Si un timer existe déjà pour ce fichier, on l'annule
     const existing = debounceTimers.get(filePath);
     if (existing) clearTimeout(existing);
 
-    // On crée un nouveau timer
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
         debounceTimers.delete(filePath);
         console.log(`\n[CHANGED] ${filePath}`);
         try {
@@ -39,8 +43,17 @@ emitter.on('file:changed', (filePath: string) => {
 
             console.log(`  → RiskScore: ${result.globalScore.toFixed(1)} | complexité: ${result.details.complexityScore.toFixed(1)} | taille: ${result.details.functionSizeScore.toFixed(1)}`);
             console.log(`  → ${metrics.totalFunctions} fonction(s), ${metrics.totalLines} lignes`);
+
+            if (result.globalScore >= config.thresholds.alert) {
+                isPrompting = true;
+                pause();
+                await promptSingleFeedback(result);
+                resume();
+                isPrompting = false;
+            }
         } catch (err) {
             console.error(`  → Impossible d'analyser ce fichier :`, err);
+            isPrompting = false;
         }
     }, 500);
 
