@@ -5,13 +5,15 @@ import { initDb, saveScan } from './database/db.js';
 import { scanProject } from './cli/scanner.js';
 import { printReport } from './cli/display.js';
 import { promptFeedback } from './cli/prompt.js';
+import { config } from './config.js';
+
 
 async function main() {
     console.log('Pulse is initializing the database...');
     initDb();
 
     console.log('Pulse is scanning the project...');
-    const results = scanProject('/Users/yugz/Projets/DevNote/');
+    const results = scanProject(config.projectPath);
     printReport(results);
     await promptFeedback(results);
 

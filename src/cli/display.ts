@@ -1,11 +1,13 @@
 import path from 'node:path';
 import type { RiskScoreResult } from '../risk-score/riskScore.js';
 import { getLastFeedback } from '../database/db.js';
+import { config } from '../config.js';
+
 
 
 function getRiskEmoji(score: number): string {
-    if (score >=50) return '🔴';
-    if (score >= 20) return '🟡';
+    if (score >= config.thresholds.alert) return '🔴';
+    if (score >= config.thresholds.warning) return '🟡';
     return '🟢';
 }
 
@@ -26,7 +28,7 @@ export function printReport(results: RiskScoreResult[]): void {
     }
 
     // Footer
-    const alerts = results.filter(r => r.globalScore >= 20).length;
+    const alerts = results.filter(r => r.globalScore >= config.thresholds.warning).length;
     console.log('-'.repeat(45));
     console.log(`  ${results.length} fichiers analysés | ${alerts} alerte(s)`);
 }
