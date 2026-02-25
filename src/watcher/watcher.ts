@@ -1,18 +1,26 @@
 import chokidar from 'chokidar';
+import { EventEmitter } from 'node:events';
 
 
 export function startWatcher() {
-    const watcher = chokidar.watch('.');
+    const emitter = new EventEmitter();
+
+    const watcher = chokidar.watch('/Users/yugz/Projets/DevNote/', {
+        ignored: /node_modules|\.git|dist|build|\.vscode|\.idea|\.DS_Store|\.log/,
+        ignoreInitial: true
+    }).on('error', (err) => emitter.emit('error', err));
 
     watcher.on('add', (path) => {
-        console.log('Nouveau fichier :', path);
+        emitter.emit('file:added', path);
     });
 
     watcher.on('change', (path) => {
-        console.log('Fichier modifié :', path);
+        emitter.emit('file:changed', path);
     });
 
     watcher.on('unlink', (path) => {
-        console.log('Fichier supprimé :', path);
+        emitter.emit('file:deleted', path);
     });
+
+    return emitter;
 }
