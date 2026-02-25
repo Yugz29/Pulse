@@ -25,7 +25,7 @@ export async function promptFeedback(results: RiskScoreResult []): Promise<void>
     const fileAnswer = await ask(rl, '\nNuméro du fichier à traiter (ou "q" pour quitter) : ');
     if (fileAnswer === 'q') { rl.close(); return; }
 
-    const fileIndex = parseInt(fileAnswer) - 1;
+    const fileIndex = Number.parseInt(fileAnswer) - 1;
     const selected = results[fileIndex];
     if (!selected) { console.log('Numéro invalide.'); rl.close(); return; }
 

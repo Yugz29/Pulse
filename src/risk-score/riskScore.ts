@@ -1,4 +1,5 @@
 import type { FileMetrics } from '../analyzer/parser.js';
+import { getChurnScore } from '../analyzer/churn.js';
 
 
 export interface RiskScoreResult {
@@ -7,6 +8,7 @@ export interface RiskScoreResult {
     details: {
         complexityScore: number;
         functionSizeScore: number;
+        churnScore: number;
     };
 }
 
@@ -16,7 +18,7 @@ export function clampedScore(value: number, safe: number, danger: number): numbe
     return ((value - safe) / (danger - safe)) * 100;
 }
 
-export function calculateRiskScore(metrics: FileMetrics): RiskScoreResult {
+export async function calculateRiskScore(metrics: FileMetrics): Promise<RiskScoreResult> {
     const maxComplexity = metrics.functions.length > 0
         ? Math.max(...metrics.functions.map(fn => fn.cyclomaticComplexity))
         : 0;
@@ -29,12 +31,16 @@ export function calculateRiskScore(metrics: FileMetrics): RiskScoreResult {
     const complexityScore = clampedScore(maxComplexity, 3, 10);
     const functionSizeScore = clampedScore(maxFunctionSize, 20, 60);
 
+    // Churn
+    const churn = await getChurnScore(metrics.filePath);
+    const churnScore = clampedScore(churn, 5, 20); // 5 commit = safe / 20 commit = danger
+
     // Moyenne pondérée : complexité compte plus que la taille
-    const globalScore = (complexityScore * 0.6) + (functionSizeScore * 0.4);
+    const globalScore = (complexityScore * 0.5) + (functionSizeScore * 0.3) + (churnScore * 0.2);
 
     return {
         filePath: metrics.filePath,
         globalScore,
-        details: { complexityScore, functionSizeScore }
+        details: { complexityScore, functionSizeScore, churnScore }
     };
 }
