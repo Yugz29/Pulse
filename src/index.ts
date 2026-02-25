@@ -8,43 +8,40 @@ import { promptFeedback } from './cli/prompt.js';
 import { config } from './config.js';
 
 
-async function main() {
-    console.log('Pulse is initializing the database...');
-    initDb();
 
-    console.log('Pulse is scanning the project...');
-    const results = scanProject(config.projectPath);
-    printReport(results);
-    await promptFeedback(results);
+console.log('Pulse is initializing the database...');
+initDb();
 
-    console.log('Pulse is watching...');
-    const emitter = startWatcher();
+console.log('Pulse is scanning the project...');
+const results = scanProject(config.projectPath);
+printReport(results);
+await promptFeedback(results);
 
-    // Quand un fichier est modifié, on le passe au parser
-    emitter.on('file:changed', (filePath: string) => {
-        console.log(`\n[CHANGED] ${filePath}`);
-        try {
-            const metrics = analyzeFile(filePath);
-            const result = calculateRiskScore(metrics);
-            saveScan(result);
+console.log('Pulse is watching...');
+const emitter = startWatcher();
 
-            console.log(`  → RiskScore: ${result.globalScore.toFixed(1)} | complexité: ${result.details.complexityScore.toFixed(1)} | taille: ${result.details.functionSizeScore.toFixed(1)}`);
-            console.log(`  → ${metrics.totalFunctions} fonction(s), ${metrics.totalLines} lignes`);
-            for (const fn of metrics.functions) {
-                console.log(`     • ${fn.name}() — complexité: ${fn.cyclomaticComplexity}, lignes: ${fn.lineCount}`);
-            }
-        } catch (err) {
-            console.error(`  → Impossible d'analyser ce fichier :`, err);
+// Quand un fichier est modifié, on le passe au parser
+emitter.on('file:changed', (filePath: string) => {
+    console.log(`\n[CHANGED] ${filePath}`);
+    try {
+        const metrics = analyzeFile(filePath);
+        const result = calculateRiskScore(metrics);
+        saveScan(result);
+
+        console.log(`  → RiskScore: ${result.globalScore.toFixed(1)} | complexité: ${result.details.complexityScore.toFixed(1)} | taille: ${result.details.functionSizeScore.toFixed(1)}`);
+        console.log(`  → ${metrics.totalFunctions} fonction(s), ${metrics.totalLines} lignes`);
+        for (const fn of metrics.functions) {
+            console.log(`     • ${fn.name}() — complexité: ${fn.cyclomaticComplexity}, lignes: ${fn.lineCount}`);
         }
-    });
+    } catch (err) {
+        console.error(`  → Impossible d'analyser ce fichier :`, err);
+    }
+});
 
-    emitter.on('file:added', (filePath: string) => {
-        console.log(`[ADDED]   ${filePath}`);
-    });
+emitter.on('file:added', (filePath: string) => {
+    console.log(`[ADDED]   ${filePath}`);
+});
 
-    emitter.on('file:deleted', (filePath: string) => {
-        console.log(`[DELETED] ${filePath}`);
-    });
-}
-
-main();
+emitter.on('file:deleted', (filePath: string) => {
+    console.log(`[DELETED] ${filePath}`);
+});

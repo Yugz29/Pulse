@@ -1,8 +1,7 @@
 import path from 'node:path';
 import type { RiskScoreResult } from '../risk-score/riskScore.js';
-import { getLastFeedback } from '../database/db.js';
+import { getLastFeedback, getPreviousScore } from '../database/db.js';
 import { config } from '../config.js';
-
 
 
 function getRiskEmoji(score: number): string {
@@ -22,9 +21,15 @@ export function printReport(results: RiskScoreResult[]): void {
         const emoji = getRiskEmoji(result.globalScore);
         const fileName = path.basename(result.filePath);
         const score = result.globalScore.toFixed(1);
+        const previousScore = getPreviousScore(result.filePath);
+        let trend = '↔';
+            if (previousScore !== undefined) {
+                if (result.globalScore > previousScore) trend = '↑';
+                else if (result.globalScore < previousScore) trend = '↓';
+            }
         const feedback = getLastFeedback(result.filePath);
         const feedbackTag = feedback ? `[${feedback.action}]` : '';
-        console.log(`   ${emoji} ${fileName.padEnd(30)} ${score} ${feedbackTag}`);
+        console.log(`   ${emoji} ${fileName.padEnd(30)} ${score} ${trend} ${feedbackTag}`);
     }
 
     // Footer

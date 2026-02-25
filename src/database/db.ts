@@ -62,3 +62,11 @@ export function getLastFeedback(filePath: string) {
     `);
     return stmt.get(filePath) as { action: string, risk_score_at_time: number } | undefined;
 }
+
+export function getPreviousScore(filePath: string) {
+    const stmt = db.prepare(`
+        SELECT global_score FROM scans WHERE file_path = ? ORDER BY scanned_at DESC LIMIT 2
+    `);
+    const rows = stmt.all(filePath) as { global_score: number }[];
+    return rows[1]?.global_score;
+}
