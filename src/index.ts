@@ -21,21 +21,30 @@ console.log('Pulse is watching...');
 const emitter = startWatcher();
 
 // Quand un fichier est modifié, on le passe au parser
-emitter.on('file:changed', (filePath: string) => {
-    console.log(`\n[CHANGED] ${filePath}`);
-    try {
-        const metrics = analyzeFile(filePath);
-        const result = calculateRiskScore(metrics);
-        saveScan(result);
+const debounceTimers = new Map<string, NodeJS.Timeout>();
 
-        console.log(`  → RiskScore: ${result.globalScore.toFixed(1)} | complexité: ${result.details.complexityScore.toFixed(1)} | taille: ${result.details.functionSizeScore.toFixed(1)}`);
-        console.log(`  → ${metrics.totalFunctions} fonction(s), ${metrics.totalLines} lignes`);
-        for (const fn of metrics.functions) {
-            console.log(`     • ${fn.name}() — complexité: ${fn.cyclomaticComplexity}, lignes: ${fn.lineCount}`);
+emitter.on('file:changed', (filePath: string) => {
+    // Si un timer existe déjà pour ce fichier, on l'annule
+    const existing = debounceTimers.get(filePath);
+    if (existing) clearTimeout(existing);
+
+    // On crée un nouveau timer
+    const timer = setTimeout(() => {
+        debounceTimers.delete(filePath);
+        console.log(`\n[CHANGED] ${filePath}`);
+        try {
+            const metrics = analyzeFile(filePath);
+            const result = calculateRiskScore(metrics);
+            saveScan(result);
+
+            console.log(`  → RiskScore: ${result.globalScore.toFixed(1)} | complexité: ${result.details.complexityScore.toFixed(1)} | taille: ${result.details.functionSizeScore.toFixed(1)}`);
+            console.log(`  → ${metrics.totalFunctions} fonction(s), ${metrics.totalLines} lignes`);
+        } catch (err) {
+            console.error(`  → Impossible d'analyser ce fichier :`, err);
         }
-    } catch (err) {
-        console.error(`  → Impossible d'analyser ce fichier :`, err);
-    }
+    }, 500);
+
+    debounceTimers.set(filePath, timer);
 });
 
 emitter.on('file:added', (filePath: string) => {
