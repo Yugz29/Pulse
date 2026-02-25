@@ -30,7 +30,7 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 | **RiskScore Calculator** | ✅ Done | Combines weighted metrics (complexity 60%, function size 40%) to generate a risk score per file (0–100). |
 | **Database / Persistence** | ✅ Done | Stores scan history in SQLite via better-sqlite3. |
 | **CLI / Initial Report** | ✅ Done | Scans a project at startup and displays a ranked report with risk levels (🔴🟡🟢). |
-| **Feedback Loop** | 🔄 In Progress | Stores developer actions (`apply`, `ignore`, `explore`) per file in SQLite. Displays feedback history in CLI report. Dynamic weight adjustment deferred to V2. |
+| **Feedback Loop** | ✅ Done | Stores developer actions (`apply`, `ignore`, `explore`) per file in SQLite. Displays feedback history in CLI report. Dynamic weight adjustment deferred to V2. |
 | **Git Sandbox** | 📋 Planned V1 | Creates an isolated branch to apply and test modifications before final validation. |
 | **LLM Module** | 📋 Planned V1.5 | Provides intelligent explanations and suggestions for alerts. Runs locally via Ollama for privacy. |
 
@@ -58,11 +58,11 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 
 ### Backend / Core
 - Node.js + TypeScript daemon supervising filesystem, Git sandbox, and AI module
-- Modules: File Watcher ✅, Analyzer ✅, RiskScore ✅, CLI ✅, Feedback Loop 🔄, Git Sandbox 📋
+- Modules: File Watcher ✅, Analyzer ✅, RiskScore ✅, CLI ✅, Feedback Loop ✅, Git Sandbox 📋
 
 ### Database
 - **SQLite / Better SQLite3** for local persistence ✅
-- Storage: scans history ✅, feedbacks 🔄
+- Storage: scans history ✅, feedbacks ✅
 
 ### LLM / AI
 - Ollama or local LLaMA (optional V1.5+) for intelligent explanations and suggestions
@@ -116,7 +116,7 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 3. RiskScore Calculator generates score
 4. Terminal displays updated metrics
 
-### Flow 3: Feedback Loop 🔄
+### Flow 3: Feedback Loop V1 ✅
 1. Developer selects action (`apply / ignore / explore`) from CLI
 2. Action stored in SQLite with score at time of feedback
 3. CLI report shows feedback history per file
@@ -146,7 +146,7 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 
 | Phase | Features |
 |-------|----------|
-| **V1** *(current)* | ✅ CLI, file scanning, RiskScore, SQLite persistence, live watcher — 🔄 Feedback Loop (storage + CLI display) — 📋 Git Sandbox |
+| **V1** *(current)* | ✅ CLI, file scanning, RiskScore, SQLite persistence, live watcher — Feedback Loop (storage + CLI display) — 📋 Git Sandbox |
 | **V2** | Electron UI + interactive dashboard, system notifications, dynamic feedback weights, DeveloperProfile, multi-project support |
 | **V3** | Full LLM integration, semi-autonomous suggestions, cybersecurity (logs, vulnerabilities, network monitoring), controlled autonomy |
 
@@ -161,7 +161,7 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 | RiskScore Calculator | Low | ✅ Done |
 | Database / Persistence | Low | ✅ Done |
 | CLI / Report | Low | ✅ Done |
-| Feedback Loop V1 | Low | 🔄 In Progress |
+| Feedback Loop V1 | Low | ✅ Done |
 | Git Sandbox | High | 📋 Planned |
 | Electron UI | Medium | V2 |
 | Feedback Loop V2 (dynamic weights) | Medium | V2 |
