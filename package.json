@@ -3,25 +3,33 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Pulse is an intelligent agent residing on the desktop, functioning as a proactive entity.",
-  "main": "index.js",
+  "main": "out/main/index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@electron-toolkit/tsconfig": "^2.0.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron-vite": "^5.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "chokidar": "^5.0.0",
+    "electron": "^40.6.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "simple-git": "^3.32.2",
     "ts-morph": "^27.0.2"
   }
