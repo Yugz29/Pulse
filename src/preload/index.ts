@@ -23,6 +23,19 @@ contextBridge.exposeInMainWorld('api', {
     getFunctions: (filePath: string): Promise<any[]> => ipcRenderer.invoke('get-functions', filePath),
     saveFeedback: (filePath: string, action: string, score: number): Promise<void> => ipcRenderer.invoke('save-feedback', filePath, action, score),
     getScoreHistory: (filePath: string): Promise<{ score: number; scanned_at: string }[]> => ipcRenderer.invoke('get-score-history', filePath),
+    askLLM: (ctx: any): void => ipcRenderer.send('ask-llm', ctx),
+    onLLMChunk: (cb: (chunk: string) => void): void => {
+        ipcRenderer.removeAllListeners('llm-chunk');
+        ipcRenderer.on('llm-chunk', (_ipc, chunk) => cb(chunk));
+    },
+    onLLMDone: (cb: () => void): void => {
+        ipcRenderer.removeAllListeners('llm-done');
+        ipcRenderer.on('llm-done', cb);
+    },
+    onLLMError: (cb: (err: string) => void): void => {
+        ipcRenderer.removeAllListeners('llm-error');
+        ipcRenderer.on('llm-error', (_ipc, err) => cb(err));
+    },
     onScanComplete: (cb: () => void): void => {
         ipcRenderer.removeAllListeners('scan-complete');
         ipcRenderer.on('scan-complete', cb);

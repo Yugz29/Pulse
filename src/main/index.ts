@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'node:path';
 import { initDb, getLatestScans, getFunctions, cleanDeletedFiles, saveFeedback, getScoreHistory } from './database/db.js';
+import { askLLM } from './llm/llm.js';
+import type { LLMContext } from './llm/llm.js';
 import { scanProject } from './cli/scanner.js';
 import type { FileEdge } from './cli/scanner.js';
 import { loadConfig } from './config.js';
@@ -56,6 +58,15 @@ app.whenReady().then(() => {
         saveFeedback(filePath, action, score);
     });
     ipcMain.handle('get-score-history', (_e, filePath: string) => getScoreHistory(filePath));
+
+    ipcMain.on('ask-llm', (_e, ctx: LLMContext) => {
+        askLLM(
+            ctx,
+            (chunk) => mainWindow?.webContents.send('llm-chunk', chunk),
+            ()      => mainWindow?.webContents.send('llm-done'),
+            (err)   => mainWindow?.webContents.send('llm-error', err),
+        );
+    });
 
     // 1. Ouvre la fenêtre immédiatement
     createWindow();
