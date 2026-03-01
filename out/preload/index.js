@@ -4,6 +4,7 @@ electron.contextBridge.exposeInMainWorld("api", {
   getScans: () => electron.ipcRenderer.invoke("get-scans"),
   getEdges: () => electron.ipcRenderer.invoke("get-edges"),
   getFunctions: (filePath) => electron.ipcRenderer.invoke("get-functions", filePath),
+  saveFeedback: (filePath, action, score) => electron.ipcRenderer.invoke("save-feedback", filePath, action, score),
   onScanComplete: (cb) => {
     electron.ipcRenderer.removeAllListeners("scan-complete");
     electron.ipcRenderer.on("scan-complete", cb);

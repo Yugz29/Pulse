@@ -36,19 +36,27 @@ declare global {
       getScans: () => Promise<Scan[]>;
       getEdges: () => Promise<Edge[]>;
       getFunctions: (filePath: string) => Promise<FunctionDetail[]>;
+      saveFeedback: (filePath: string, action: string, score: number) => Promise<void>;
       onScanComplete: (cb: () => void) => void;
       onEvent: (cb: (e: any) => void) => void;
     };
   }
 }
 
-function Detail({ scan, onClose }: { scan: Scan, onClose: () => void }) {
+function Detail({ scan, onClose, onFeedback }: { scan: Scan, onClose: () => void, onFeedback: (filePath: string, action: string) => void }) {
   const color = scan.globalScore >= 50 ? '#ff3b30' : scan.globalScore >= 20 ? '#ff9500' : '#34c759';
   const [functions, setFunctions] = useState<FunctionDetail[]>([]);
+  const [lastFeedback, setLastFeedback] = useState<string | null>(scan.feedback);
 
   useEffect(() => {
     window.api.getFunctions(scan.filePath).then(setFunctions);
   }, [scan.filePath]);
+
+  async function handleFeedback(action: string) {
+    await window.api.saveFeedback(scan.filePath, action, scan.globalScore);
+    setLastFeedback(action);
+    onFeedback(scan.filePath, action);
+  }
 
   return (
     <div style={{ padding: 20, fontSize: 13 }}>
@@ -68,7 +76,7 @@ function Detail({ scan, onClose }: { scan: Scan, onClose: () => void }) {
         { label: 'Fan-out',       value: String(scan.fanOut),                color: scan.fanOut > 10 ? '#ff3b30' : scan.fanOut > 5 ? '#ff9500' : '#1d1d1f' },
         { label: 'Langage',       value: scan.language,                      color: '#1d1d1f' },
         { label: 'Trend',         value: scan.trend,                         color: scan.trend === '↑' ? '#ff3b30' : scan.trend === '↓' ? '#34c759' : '#86868b' },
-        { label: 'Feedback',      value: scan.feedback ?? '—',               color: '#86868b' },
+        { label: 'Feedback',      value: lastFeedback ?? '—',               color: lastFeedback === 'apply' ? '#34c759' : lastFeedback === 'ignore' ? '#86868b' : lastFeedback === 'explore' ? '#ff9500' : '#86868b' },
         { label: 'Scanné le',     value: new Date(scan.scannedAt).toLocaleString(), color: '#86868b' },
       ].map(row => (
         <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
@@ -76,6 +84,27 @@ function Detail({ scan, onClose }: { scan: Scan, onClose: () => void }) {
           <span style={{ fontWeight: 500, color: row.color }}>{row.value}</span>
         </div>
       ))}
+
+      <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+        {['apply', 'ignore', 'explore'].map(action => {
+          const isActive = lastFeedback === action;
+          const colors: Record<string, string> = { apply: '#34c759', ignore: '#86868b', explore: '#ff9500' };
+          return (
+            <button
+              key={action}
+              onClick={() => handleFeedback(action)}
+              style={{
+                flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${colors[action]}`,
+                background: isActive ? colors[action] : 'transparent',
+                color: isActive ? '#fff' : colors[action],
+                transition: 'all 0.15s',
+              }}
+            >
+              {action}
+            </button>
+          );
+        })}
+      </div>
 
       {functions.length > 0 && (
       <div style={{ marginTop: 20 }}>
@@ -188,7 +217,9 @@ export default function App() {
         {/* Sidebar droite */}
         <div style={{ width: 340, borderLeft: '1px solid #e0e0e0', background: '#fff', overflowY: 'auto' }}>
           {selected ? (
-            <Detail scan={selected} onClose={() => setSelected(null)}/>
+            <Detail scan={selected} onClose={() => setSelected(null)} onFeedback={(filePath, action) => {
+              setScans(prev => prev.map(s => s.filePath === filePath ? { ...s, feedback: action } : s));
+            }}/>
           ) : (
             <div style={{ padding: 16, fontSize: 12 }}>
               <div style={{ color: '#86868b', marginBottom: 10, fontWeight: 500 }}>Activité</div>

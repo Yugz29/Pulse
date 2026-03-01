@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'node:path';
-import { initDb, getLatestScans, getFunctions, cleanDeletedFiles } from './database/db.js';
+import { initDb, getLatestScans, getFunctions, cleanDeletedFiles, saveFeedback } from './database/db.js';
 import { scanProject } from './cli/scanner.js';
 import type { FileEdge } from './cli/scanner.js';
 import { loadConfig } from './config.js';
@@ -52,6 +52,9 @@ app.whenReady().then(() => {
     });
     ipcMain.handle('get-edges', () => lastEdges);
     ipcMain.handle('get-functions', (_e, filePath: string) => getFunctions(filePath));
+    ipcMain.handle('save-feedback', (_e, filePath: string, action: string, score: number) => {
+        saveFeedback(filePath, action, score);
+    });
 
     // 1. Ouvre la fenêtre immédiatement
     createWindow();

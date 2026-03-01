@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('api', {
     getScans: (): Promise<LatestScan[]> => ipcRenderer.invoke('get-scans'),
     getEdges: (): Promise<Edge[]>       => ipcRenderer.invoke('get-edges'),
     getFunctions: (filePath: string): Promise<any[]> => ipcRenderer.invoke('get-functions', filePath),
+    saveFeedback: (filePath: string, action: string, score: number): Promise<void> => ipcRenderer.invoke('save-feedback', filePath, action, score),
     onScanComplete: (cb: () => void): void => {
         ipcRenderer.removeAllListeners('scan-complete');
         ipcRenderer.on('scan-complete', cb);

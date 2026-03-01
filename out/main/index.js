@@ -127,6 +127,14 @@ function saveScan(result, projectPath) {
     (/* @__PURE__ */ new Date()).toISOString()
   );
 }
+function saveFeedback(filePath, action, riskScore) {
+  const db = getDb();
+  const stmt = db.prepare(`
+        INSERT INTO feedbacks (file_path, action, risk_score_at_time, created_at)
+        VALUES (?, ?, ?, ?)
+    `);
+  stmt.run(filePath, action, riskScore, (/* @__PURE__ */ new Date()).toISOString());
+}
 function saveFunctions(filePath, functions, projectPath) {
   const db = getDb();
   db.prepare(`DELETE FROM functions WHERE file_path = ?`).run(filePath);
@@ -642,6 +650,9 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("get-edges", () => lastEdges);
   ipcMain.handle("get-functions", (_e, filePath) => getFunctions(filePath));
+  ipcMain.handle("save-feedback", (_e, filePath, action, score) => {
+    saveFeedback(filePath, action, score);
+  });
   createWindow();
   runScan();
   const { emitter } = startWatcher();
