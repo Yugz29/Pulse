@@ -6,6 +6,7 @@ electron.contextBridge.exposeInMainWorld("api", {
   getFunctions: (filePath) => electron.ipcRenderer.invoke("get-functions", filePath),
   saveFeedback: (filePath, action, score) => electron.ipcRenderer.invoke("save-feedback", filePath, action, score),
   getScoreHistory: (filePath) => electron.ipcRenderer.invoke("get-score-history", filePath),
+  getFeedbackHistory: (filePath) => electron.ipcRenderer.invoke("get-feedback-history", filePath),
   askLLM: (ctx) => electron.ipcRenderer.send("ask-llm", ctx),
   onLLMChunk: (cb) => {
     electron.ipcRenderer.removeAllListeners("llm-chunk");

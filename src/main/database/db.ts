@@ -267,6 +267,12 @@ export function getLatestScans(projectPath: string): LatestScan[] {
     });
 }
 
+export function getFeedbackHistory(filePath: string): { action: string; created_at: string }[] {
+    return getDb()
+        .prepare(`SELECT action, created_at FROM feedbacks WHERE file_path = ? ORDER BY created_at ASC LIMIT 20`)
+        .all(filePath) as { action: string; created_at: string }[];
+}
+
 export function getScoreHistory(filePath: string): { score: number; scanned_at: string }[] {
     return getDb()
         .prepare(`

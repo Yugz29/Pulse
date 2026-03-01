@@ -39,6 +39,7 @@ declare global {
       getFunctions: (filePath: string) => Promise<FunctionDetail[]>;
       saveFeedback: (filePath: string, action: string, score: number) => Promise<void>;
       getScoreHistory: (filePath: string) => Promise<{ score: number; scanned_at: string }[]>;
+      getFeedbackHistory: (filePath: string) => Promise<{ action: string; created_at: string }[]>;
       askLLM: (ctx: any) => void;
       onLLMChunk: (cb: (chunk: string) => void) => void;
       onLLMDone: (cb: () => void) => void;
@@ -77,11 +78,12 @@ function ScoreGraph({ history, width }: { history: { score: number; scanned_at: 
   );
 }
 
-function Detail({ scan, onClose, onFeedback, sidebarWidth }: {
+function Detail({ scan, onClose, onFeedback, sidebarWidth, edges }: {
   scan: Scan;
   onClose: () => void;
   onFeedback: (filePath: string, action: string) => void;
   sidebarWidth: number;
+  edges: Edge[];
 }) {
   const color = scan.globalScore >= 50 ? '#ff3b30' : scan.globalScore >= 20 ? '#ff9500' : '#34c759';
   const [functions, setFunctions] = useState<FunctionDetail[]>([]);
@@ -90,10 +92,12 @@ function Detail({ scan, onClose, onFeedback, sidebarWidth }: {
   const [llmResponse, setLlmResponse] = useState<string>('');
   const [llmLoading, setLlmLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'metrics' | 'analyse'>('metrics');
+  const [feedbackHistory, setFeedbackHistory] = useState<{ action: string; created_at: string }[]>([]);
 
   useEffect(() => {
     window.api.getFunctions(scan.filePath).then(setFunctions);
     window.api.getScoreHistory(scan.filePath).then(setHistory);
+    window.api.getFeedbackHistory(scan.filePath).then(setFeedbackHistory);
   }, [scan.filePath]);
 
   async function handleFeedback(action: string) {
@@ -108,6 +112,9 @@ function Detail({ scan, onClose, onFeedback, sidebarWidth }: {
       window.api.onLLMChunk((chunk) => setLlmResponse(prev => prev + chunk));
       window.api.onLLMDone(() => setLlmLoading(false));
       window.api.onLLMError((err) => { setLlmResponse(`Erreur : ${err}`); setLlmLoading(false); });
+      const importedBy = edges
+        .filter(e => e.to === scan.filePath)
+        .map(e => e.from);
       window.api.askLLM({
         filePath: scan.filePath,
         globalScore: scan.globalScore,
@@ -119,6 +126,9 @@ function Detail({ scan, onClose, onFeedback, sidebarWidth }: {
           paramScore: scan.paramScore,
         },
         functions,
+        importedBy,
+        scoreHistory: history,
+        feedbackHistory,
       });
     }
   }
@@ -403,6 +413,7 @@ export default function App() {
                 setScans(prev => prev.map(s => s.filePath === filePath ? { ...s, feedback: action } : s));
               }}
               sidebarWidth={sidebarWidth}
+              edges={edges}
             />
           ) : (
             <div style={{ padding: 16, fontSize: 12 }}>

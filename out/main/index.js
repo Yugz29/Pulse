@@ -193,6 +193,9 @@ function getLatestScans(projectPath) {
     };
   });
 }
+function getFeedbackHistory(filePath) {
+  return getDb().prepare(`SELECT action, created_at FROM feedbacks WHERE file_path = ? ORDER BY created_at ASC LIMIT 20`).all(filePath);
+}
 function getScoreHistory(filePath) {
   return getDb().prepare(`
             SELECT global_score as score, scanned_at
@@ -229,36 +232,58 @@ const MODEL = "qwen2.5-coder:7b-instruct-q4_K_M";
 function getFileName(p) {
   return p.split("/").pop() ?? p;
 }
+function buildScoreTrend(history) {
+  if (history.length < 2) return "Pas assez de données historiques.";
+  const first = history[0].score;
+  const last = history[history.length - 1].score;
+  const delta = last - first;
+  const trend = delta > 5 ? "📈 en dégradation" : delta < -5 ? "📉 en amélioration" : "↔ stable";
+  return `${trend} (${first.toFixed(1)} → ${last.toFixed(1)} sur ${history.length} scans)`;
+}
 function buildPrompt(ctx, source) {
-  const topFns = ctx.functions.filter((fn) => fn.name !== "anonymous").sort((a, b) => b.cyclomaticComplexity - a.cyclomaticComplexity).slice(0, 5).map((fn) => `  - ${fn.name}(): cx=${fn.cyclomaticComplexity}, ${fn.lineCount} lines, depth=${fn.maxDepth}, params=${fn.parameterCount}`).join("\n");
-  return `You are a code quality expert. Analyze the following file and provide actionable refactoring suggestions.
+  const topFns = ctx.functions.filter((fn) => fn.name !== "anonymous").sort((a, b) => b.cyclomaticComplexity - a.cyclomaticComplexity).slice(0, 5).map((fn) => `  - ${fn.name}(): cx=${fn.cyclomaticComplexity}, ${fn.lineCount} lignes, profondeur=${fn.maxDepth}, params=${fn.parameterCount}`).join("\n");
+  const importedBySection = ctx.importedBy.length > 0 ? `Ce fichier est importé par ${ctx.importedBy.length} autre(s) fichier(s) : ${ctx.importedBy.map(getFileName).join(", ")}. Un bug ici aurait un impact direct sur ces fichiers.` : "Ce fichier n'est importé par aucun autre fichier du projet (point d'entrée ou module isolé).";
+  const feedbackSection = ctx.feedbackHistory.length > 0 ? `Historique des feedbacks : ${ctx.feedbackHistory.map((f) => f.action).join(" → ")} (${ctx.feedbackHistory.length} action(s) enregistrée(s)).` : "Aucun feedback enregistré pour ce fichier.";
+  return `Tu es un expert en qualité de code. Analyse le fichier suivant et fournis des suggestions de refactorisation concrètes.
 
-## File: ${getFileName(ctx.filePath)}
-## Risk Score: ${ctx.globalScore.toFixed(1)}/100
+## Fichier : ${getFileName(ctx.filePath)}
+## Score de risque : ${ctx.globalScore.toFixed(1)}/100
 
-## Metrics breakdown:
-- Cyclomatic complexity score: ${ctx.details.complexityScore.toFixed(1)}/100
-- Function size score: ${ctx.details.functionSizeScore.toFixed(1)}/100
-- Nesting depth score: ${ctx.details.depthScore.toFixed(1)}/100
-- Parameter count score: ${ctx.details.paramScore.toFixed(1)}/100
-- Churn score: ${ctx.details.churnScore.toFixed(1)}/100
+## Détail des métriques :
+- Complexité cyclomatique : ${ctx.details.complexityScore.toFixed(1)}/100
+- Taille des fonctions : ${ctx.details.functionSizeScore.toFixed(1)}/100
+- Profondeur d'imbrication : ${ctx.details.depthScore.toFixed(1)}/100
+- Nombre de paramètres : ${ctx.details.paramScore.toFixed(1)}/100
+- Churn (fréquence de modification) : ${ctx.details.churnScore.toFixed(1)}/100
 
-## Most complex functions:
-${topFns || "  (none)"}
+## Fonctions les plus complexes :
+${topFns || "  (aucune)"}
 
-## Source code:
+## Impact dans le projet :
+${importedBySection}
+
+## Évolution du score :
+${buildScoreTrend(ctx.scoreHistory)}
+
+## Historique des actions développeur :
+${feedbackSection}
+
+## Code source :
 \`\`\`
-${source.slice(0, 6e3)}${source.length > 6e3 ? "\n... (truncated)" : ""}
+${source.slice(0, 6e3)}${source.length > 6e3 ? "\n... (tronqué)" : ""}
 \`\`\`
 
-Réponds en français. Fournis une analyse concise (3-5 phrases) expliquant POURQUOI ce fichier a un score de risque élevé, puis liste 2-3 suggestions de refactorisation concrètes avec de brefs exemples de code si pertinent. Sois direct et pratique.`;
+Réponds en français. Structure ta réponse ainsi :
+1. **Analyse** (3-4 phrases) : explique POURQUOI ce fichier est risqué en t'appuyant sur les métriques ET le code source.
+2. **Suggestions** : liste 2-3 refactorisations concrètes avec exemples de code si pertinent. Priorise selon l'impact (commence par ce qui améliore le plus le score).
+Sois direct et pratique. Tiens compte de la criticité du fichier (nombre de dépendants) dans ta priorisation.`;
 }
 async function askLLM(ctx, onChunk, onDone, onError) {
   let source;
   try {
     source = fs__default.readFileSync(ctx.filePath, "utf-8");
   } catch {
-    onError(`Cannot read file: ${ctx.filePath}`);
+    onError(`Impossible de lire le fichier : ${ctx.filePath}`);
     return;
   }
   const prompt = buildPrompt(ctx, source);
@@ -269,7 +294,7 @@ async function askLLM(ctx, onChunk, onDone, onError) {
       body: JSON.stringify({ model: MODEL, prompt, stream: true })
     });
     if (!res.ok || !res.body) {
-      onError(`Ollama error: ${res.status} ${res.statusText}`);
+      onError(`Erreur Ollama : ${res.status} ${res.statusText}`);
       return;
     }
     const reader = res.body.getReader();
@@ -292,7 +317,7 @@ async function askLLM(ctx, onChunk, onDone, onError) {
     }
     onDone();
   } catch (err) {
-    onError(`Ollama unreachable: ${err instanceof Error ? err.message : String(err)}`);
+    onError(`Ollama inaccessible : ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 const EXTENSION_MAP = {
@@ -734,6 +759,7 @@ app.whenReady().then(() => {
     saveFeedback(filePath, action, score);
   });
   ipcMain.handle("get-score-history", (_e, filePath) => getScoreHistory(filePath));
+  ipcMain.handle("get-feedback-history", (_e, filePath) => getFeedbackHistory(filePath));
   ipcMain.on("ask-llm", (_e, ctx) => {
     askLLM(
       ctx,
