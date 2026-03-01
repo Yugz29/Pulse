@@ -31,14 +31,15 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 | **RiskScore Calculator** | ✅ Done | Weighted score per file (0–100) across 5 metrics: complexity 35%, depth 20%, function size 20%, churn 15%, parameters 10%. |
 | **Database / Persistence** | ✅ Done | SQLite via better-sqlite3. Stores scan history, function-level metrics, and feedbacks. Scoped per project via `project_path`. Auto-cleans deleted files at startup. |
 | **Score Trends** | ✅ Done | Displays score evolution (↑↓↔) compared to previous scan. |
-| **Feedback Loop V1** | ✅ Done | Stores `apply / ignore / explore` actions per file in SQLite. Displayed in UI. |
+| **Score History Graph** | ✅ Done | SVG inline chart showing score evolution over time (up to 30 points) per file. Displayed in sidebar. |
+| **Feedback Loop V1** | ✅ Done | Stores `apply / ignore / explore` actions per file in SQLite. Buttons in sidebar. Feedback history passed to LLM context. |
+| **LLM Module (V1.5)** | ✅ Done | Local AI analysis via Ollama (`qwen2.5-coder:7b`). Triggered by the `explore` action. Enriched context: source code, metrics, functions, import graph, score history, feedback history. Streamed response rendered as markdown in sidebar. |
 | **Config File** | ✅ Done | `pulse.config.json` centralizes project path, alert thresholds, and ignore list. Sensible defaults if fields are missing. |
-| **Electron UI** | ✅ Done | Desktop app with file list, risk scores, trends, feedbacks, and function-level detail sidebar. |
+| **Electron UI** | ✅ Done | Desktop app with file list, risk scores, trends, feedbacks. Sidebar with two tabs (Métriques / Analyse), resizable by dragging (260px–700px). |
 | **Multi-Project Support** | ✅ Done | Each scan scoped by `project_path`. Multiple projects coexist in the same DB without mixing. |
 | **Function-Level Detail** | ✅ Done | Per-function metrics stored in DB and displayed in sidebar: name, start line, line count, cyclomatic complexity, parameter count, nesting depth. |
 | **Auto-cleanup** | ✅ Done | At startup, Pulse removes from DB any file that no longer exists on disk. |
 | **Git Sandbox** | 📋 Planned V2 | Creates an isolated branch to apply and test modifications before final validation. |
-| **LLM Module** | 📋 Planned V1.5 | Intelligent explanations and suggestions for alerts. Runs locally via Ollama for privacy. |
 | **Feedback Loop V2** | 📋 Planned V2 | Dynamic adjustment of RiskScore weights based on feedback patterns. |
 
 ---
@@ -48,7 +49,6 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 | Feature | Description |
 |---------|-------------|
 | **System Notifications** | Proactive alerts displayed on desktop. |
-| **Score History Graph** | Chart.js visualization of score evolution over time per file. |
 | **Full Electron Dashboard** | Advanced interactive dashboard with graphs, clickable alerts, and detailed diff views. |
 | **Export / Import Configuration** | Rules and profiles in JSON/YAML for sharing or backup. |
 | **Controlled Autonomy** | Semi-automatic proposals executable after validation or via configurable auto-actions. |
@@ -61,11 +61,12 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 ### Frontend (Desktop UI)
 - **Electron + React** — cross-platform desktop ✅
 - File list, risk scores, trends, function detail sidebar ✅
-- **Chart.js dashboard** — V2
+- Resizable sidebar (drag to resize, 260px–700px) ✅
+- Tabbed sidebar: **Métriques** (metrics + graph + functions + feedback buttons) / **Analyse** (LLM response) ✅
 
 ### Backend / Core
 - Node.js + TypeScript daemon
-- Modules: File Watcher ✅, Analyzer ✅, Churn ✅, Coupling ✅, RiskScore ✅, Feedback Loop V1 ✅, Config ✅, Auto-cleanup ✅
+- Modules: File Watcher ✅, Analyzer ✅, Churn ✅, Coupling ✅, RiskScore ✅, Feedback Loop V1 ✅, LLM ✅, Config ✅, Auto-cleanup ✅
 - Git Sandbox — 📋 V2
 
 ### Database
@@ -75,7 +76,10 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 - Auto-migration on startup ✅
 
 ### LLM / AI
-- Ollama or local LLaMA (optional V1.5+)
+- **Ollama local** (`qwen2.5-coder:7b-instruct-q4_K_M`) ✅
+- Streamed via `http://localhost:11434/api/generate`
+- Enriched prompt: source code + metrics + top functions + import graph + score history + feedback history
+- Response rendered as markdown in sidebar (Analyse tab)
 
 ---
 
@@ -91,7 +95,8 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 | Churn / Git | simple-git | ✅ |
 | Database | better-sqlite3 | ✅ |
 | Config | pulse.config.json | ✅ |
-| LLM | Local Ollama | V1.5 |
+| Markdown rendering | marked | ✅ |
+| LLM | Ollama (qwen2.5-coder:7b) | ✅ |
 | Visualization | Chart.js | V2 |
 
 ---
@@ -153,17 +158,19 @@ All fields have sensible defaults if omitted.
 4. UI updated in real time
 
 ### Flow 3: Feedback Loop V1 ✅
-1. Developer selects action (`apply / ignore / explore`) from UI
+1. Developer selects action (`apply / ignore / explore`) from sidebar
 2. Action stored in SQLite with score at time of feedback
 3. UI report shows last feedback per file
 
-### Flow 4: Git Sandbox 📋 (V2)
+### Flow 4: LLM Analysis ✅
+1. Developer clicks **explore** in sidebar
+2. Pulse reads the source file + collects enriched context (metrics, functions, importedBy, score history, feedback history)
+3. Prompt sent to local Ollama instance (streaming)
+4. Response streamed to **Analyse** tab in sidebar, rendered as markdown
+
+### Flow 5: Git Sandbox 📋 (V2)
 1. Proposal applied in Git sandbox branch
 2. Human validation or automatic rollback
-
-### Flow 5: LLM Interactions 📋 (V1.5)
-1. Developer requests explanation
-2. Local LLM returns contextualized explanation of alert / proposal
 
 ---
 
@@ -180,15 +187,15 @@ All fields have sensible defaults if omitted.
 Score ranges: 🟢 < 20 · 🟡 20–49 · 🔴 ≥ 50
 
 **Notes:**
-- Anonymous functions are excluded from all metric calculations (they are already counted within their parent function).
+- Anonymous functions are excluded from all metric calculations (already counted within their parent function).
 - Fan-in / fan-out are informational only — not included in the RiskScore.
 
 ---
 
 ## 🔟 Technical Constraints & Security
 
-- **100% local execution** for privacy
-- LLM strictly local and optional
+- **100% local execution** for privacy — no data leaves the machine
+- LLM strictly local via Ollama — no cloud API calls
 - Filesystem exclusions driven by config
 - Limited permissions: no root access
 - Scan history preserved across sessions — no data loss on restart
@@ -200,9 +207,10 @@ Score ranges: 🟢 < 20 · 🟡 20–49 · 🔴 ≥ 50
 
 | Phase | Features |
 |-------|----------|
-| **V1** ✅ | Electron UI, file scanning, RiskScore (5 metrics), SQLite persistence, function-level metrics, coupling graph, live watcher, debouncing, proactive alerts, feedback loop, score trends, config file, multi-project support, auto-cleanup |
-| **V2** | Chart.js score history, system notifications, dynamic feedback weights, DeveloperProfile, Git Sandbox |
-| **V3** | Full LLM integration, semi-autonomous suggestions, cybersecurity (logs, vulnerabilities, network monitoring), controlled autonomy |
+| **V1** ✅ | Electron UI, file scanning, RiskScore (5 metrics), SQLite persistence, function-level metrics, coupling graph, live watcher, debouncing, feedback loop, score trends, score history graph, config file, multi-project support, auto-cleanup |
+| **V1.5** ✅ | LLM module (Ollama local), enriched context, streamed markdown response, resizable sidebar, tabbed sidebar (Métriques / Analyse) |
+| **V2** | System notifications, dynamic feedback weights, DeveloperProfile, Git Sandbox, Chart.js advanced dashboard |
+| **V3** | Semi-autonomous suggestions, cybersecurity (logs, vulnerabilities, network monitoring), controlled autonomy |
 
 ---
 
@@ -219,11 +227,13 @@ Score ranges: 🟢 < 20 · 🟡 20–49 · 🔴 ≥ 50
 | Database / Persistence | Low | ✅ Done |
 | Auto-cleanup | Low | ✅ Done |
 | Score Trends | Low | ✅ Done |
+| Score History Graph (SVG) | Low | ✅ Done |
 | Electron UI | Medium | ✅ Done |
+| Resizable Sidebar | Low | ✅ Done |
+| Tabbed Sidebar | Low | ✅ Done |
 | Function-Level Detail | Low | ✅ Done |
 | Multi-Project Support | Low | ✅ Done |
 | Feedback Loop V1 | Low | ✅ Done |
-| Score History Graph | Low | 📋 V2 |
+| LLM Module (Ollama) | Medium | ✅ Done |
 | Git Sandbox | High | 📋 V2 |
 | Feedback Loop V2 (dynamic weights) | Medium | 📋 V2 |
-| LLM Module | Medium → High | 📋 V1.5 |
