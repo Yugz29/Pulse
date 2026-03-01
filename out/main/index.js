@@ -193,6 +193,15 @@ function getLatestScans(projectPath) {
     };
   });
 }
+function getScoreHistory(filePath) {
+  return getDb().prepare(`
+            SELECT global_score as score, scanned_at
+            FROM scans
+            WHERE file_path = ?
+            ORDER BY scanned_at ASC
+            LIMIT 30
+        `).all(filePath);
+}
 function cleanDeletedFiles() {
   const db = getDb();
   const files = db.prepare(`SELECT DISTINCT file_path FROM scans`).all();
@@ -653,6 +662,7 @@ app.whenReady().then(() => {
   ipcMain.handle("save-feedback", (_e, filePath, action, score) => {
     saveFeedback(filePath, action, score);
   });
+  ipcMain.handle("get-score-history", (_e, filePath) => getScoreHistory(filePath));
   createWindow();
   runScan();
   const { emitter } = startWatcher();

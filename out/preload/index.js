@@ -5,6 +5,7 @@ electron.contextBridge.exposeInMainWorld("api", {
   getEdges: () => electron.ipcRenderer.invoke("get-edges"),
   getFunctions: (filePath) => electron.ipcRenderer.invoke("get-functions", filePath),
   saveFeedback: (filePath, action, score) => electron.ipcRenderer.invoke("save-feedback", filePath, action, score),
+  getScoreHistory: (filePath) => electron.ipcRenderer.invoke("get-score-history", filePath),
   onScanComplete: (cb) => {
     electron.ipcRenderer.removeAllListeners("scan-complete");
     electron.ipcRenderer.on("scan-complete", cb);

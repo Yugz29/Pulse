@@ -267,6 +267,18 @@ export function getLatestScans(projectPath: string): LatestScan[] {
     });
 }
 
+export function getScoreHistory(filePath: string): { score: number; scanned_at: string }[] {
+    return getDb()
+        .prepare(`
+            SELECT global_score as score, scanned_at
+            FROM scans
+            WHERE file_path = ?
+            ORDER BY scanned_at ASC
+            LIMIT 30
+        `)
+        .all(filePath) as { score: number; scanned_at: string }[];
+}
+
 export function cleanDeletedFiles(): number {
     const db = getDb();
     const files = db.prepare(`SELECT DISTINCT file_path FROM scans`).all() as { file_path: string }[];

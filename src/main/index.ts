@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'node:path';
-import { initDb, getLatestScans, getFunctions, cleanDeletedFiles, saveFeedback } from './database/db.js';
+import { initDb, getLatestScans, getFunctions, cleanDeletedFiles, saveFeedback, getScoreHistory } from './database/db.js';
 import { scanProject } from './cli/scanner.js';
 import type { FileEdge } from './cli/scanner.js';
 import { loadConfig } from './config.js';
@@ -55,6 +55,7 @@ app.whenReady().then(() => {
     ipcMain.handle('save-feedback', (_e, filePath: string, action: string, score: number) => {
         saveFeedback(filePath, action, score);
     });
+    ipcMain.handle('get-score-history', (_e, filePath: string) => getScoreHistory(filePath));
 
     // 1. Ouvre la fenêtre immédiatement
     createWindow();

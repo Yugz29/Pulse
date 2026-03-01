@@ -37,19 +37,50 @@ declare global {
       getEdges: () => Promise<Edge[]>;
       getFunctions: (filePath: string) => Promise<FunctionDetail[]>;
       saveFeedback: (filePath: string, action: string, score: number) => Promise<void>;
+      getScoreHistory: (filePath: string) => Promise<{ score: number; scanned_at: string }[]>;
       onScanComplete: (cb: () => void) => void;
       onEvent: (cb: (e: any) => void) => void;
     };
   }
 }
 
+function ScoreGraph({ history }: { history: { score: number; scanned_at: string }[] }) {
+  if (history.length < 2) return <div style={{ color: '#c7c7cc', fontSize: 11, marginTop: 4 }}>Pas assez de données</div>;
+
+  const W = 300, H = 60, pad = 4;
+  const scores = history.map(h => h.score);
+  const min = Math.min(...scores);
+  const max = Math.max(...scores) || 1;
+  const pts = scores.map((s, i) => {
+    const x = pad + (i / (scores.length - 1)) * (W - pad * 2);
+    const y = H - pad - ((s - min) / (max - min || 1)) * (H - pad * 2);
+    return `${x},${y}`;
+  }).join(' ');
+
+  const lastScore = scores[scores.length - 1] ?? 0;
+  const lineColor = lastScore >= 50 ? '#ff3b30' : lastScore >= 20 ? '#ff9500' : '#34c759';
+
+  return (
+    <svg width={W} height={H} style={{ display: 'block', marginTop: 4 }}>
+      <polyline points={pts} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" />
+      {scores.map((s, i) => {
+        const x = pad + (i / (scores.length - 1)) * (W - pad * 2);
+        const y = H - pad - ((s - min) / (max - min || 1)) * (H - pad * 2);
+        return <circle key={i} cx={x} cy={y} r={2.5} fill={lineColor} />;
+      })}
+    </svg>
+  );
+}
+
 function Detail({ scan, onClose, onFeedback }: { scan: Scan, onClose: () => void, onFeedback: (filePath: string, action: string) => void }) {
   const color = scan.globalScore >= 50 ? '#ff3b30' : scan.globalScore >= 20 ? '#ff9500' : '#34c759';
   const [functions, setFunctions] = useState<FunctionDetail[]>([]);
   const [lastFeedback, setLastFeedback] = useState<string | null>(scan.feedback);
+  const [history, setHistory] = useState<{ score: number; scanned_at: string }[]>([]);
 
   useEffect(() => {
     window.api.getFunctions(scan.filePath).then(setFunctions);
+    window.api.getScoreHistory(scan.filePath).then(setHistory);
   }, [scan.filePath]);
 
   async function handleFeedback(action: string) {
@@ -64,7 +95,11 @@ function Detail({ scan, onClose, onFeedback }: { scan: Scan, onClose: () => void
         <div style={{ fontWeight: 600 }}>{scan.filePath.split('/').pop()}</div>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86868b', fontSize: 16, lineHeight: 1 }}>×</button>
     </div>
-      <div style={{ color: '#86868b', fontSize: 11, marginBottom: 20, wordBreak: 'break-all' }}>{scan.filePath}</div>
+      <div style={{ color: '#86868b', fontSize: 11, marginBottom: 8, wordBreak: 'break-all' }}>{scan.filePath}</div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ color: '#86868b', fontSize: 11, marginBottom: 2 }}>Historique des scores</div>
+        <ScoreGraph history={history} />
+      </div>
       {[
         { label: 'Score global',  value: scan.globalScore.toFixed(1),       color },
         { label: 'Complexité',    value: scan.complexityScore.toFixed(1),    color: '#1d1d1f' },
