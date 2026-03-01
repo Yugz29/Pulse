@@ -5,7 +5,8 @@ import { initDb, saveScan } from './database/db.js';
 import { scanProject } from './cli/scanner.js';
 import { printReport } from './cli/display.js';
 import { promptFeedback, promptSingleFeedback } from './cli/prompt.js';
-import { config } from './config.js';
+import { loadConfig } from './config.js';
+const config = loadConfig();
 
 
 console.log('Pulse is initializing the database...');

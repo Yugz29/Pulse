@@ -1,8 +1,9 @@
 import chokidar from 'chokidar';
 import { EventEmitter } from 'node:events';
-import { config } from '../config.js';
+import { loadConfig } from '../config.js';
 
 export function startWatcher() {
+    const config = loadConfig();
     const emitter = new EventEmitter();
 
     const watcher = chokidar.watch(config.projectPath, {
@@ -13,12 +14,15 @@ export function startWatcher() {
         ignoreInitial: true
     }).on('error', (err) => emitter.emit('error', err));
 
+    const SUPPORTED = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py'];
+
     watcher.on('add', (path) => {
+        if (!SUPPORTED.some(ext => path.endsWith(ext))) return;
         emitter.emit('file:added', path);
     });
 
     watcher.on('change', (path) => {
-        if (!(path.endsWith('.js') || path.endsWith('.ts'))) return;
+        if (!SUPPORTED.some(ext => path.endsWith(ext))) return;
         emitter.emit('file:changed', path);
     });
 

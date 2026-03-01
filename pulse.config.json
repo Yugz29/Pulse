@@ -1,8 +1,16 @@
 {
-    "projectPath": "/Users/yugz/Projets/DevNote",
+    "projectPath": "/Users/yugz/Projets/Pulse",
+    "languages": ["ts", "tsx", "js", "jsx", "py"],
     "thresholds": {
         "alert": 50,
         "warning": 20
     },
-    "ignore": ["node_modules", ".git", "dist", ".vite", "static", "vendor", "__pycache__"]
+    "ignore": [
+        "node_modules", ".git", "dist", ".vite", "static", "vendor",
+        "__pycache__", ".next", "coverage", "build", "out", ".cache",
+        "public", "assets", "images", "fonts", "icons", "docs",
+        ".vscode", ".idea", "migrations", "fixtures", "storybook-static",
+        "DevNote-env", "venv", ".venv", "env", ".env",
+        "site-packages", "lib", "include", "bin", "share"
+    ]
 }

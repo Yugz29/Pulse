@@ -4,20 +4,19 @@
 
 ## 1️⃣ Project Summary
 
-**Concept:**  
-Pulse is an intelligent desktop-resident agent designed as a proactive entity capable of monitoring code, analyzing metrics, suggesting improvements, testing modifications in a sandboxed environment, and learning from developer interactions. In the long term, Pulse will evolve into a cybersecurity guardian capable of detecting threats and vulnerabilities on the local machine.
+**Concept:**
+Pulse is an intelligent desktop-resident agent designed as a proactive entity capable of monitoring code, analyzing metrics, and learning from developer interactions. In the long term, Pulse will evolve into a cybersecurity guardian capable of detecting threats and vulnerabilities on the local machine.
 
-**Objectives:**  
-- Reduce development errors and improve code quality.  
-- Provide proactive feedback and suggestions.  
-- Maintain a secure environment through sandboxing.  
-- Enable adaptive learning based on developer behavior.  
-- Build a scalable architecture toward cybersecurity and controlled autonomy.  
+**Objectives:**
+- Reduce development errors and improve code quality.
+- Provide proactive feedback and suggestions.
+- Enable adaptive learning based on developer behavior.
+- Build a scalable architecture toward cybersecurity and controlled autonomy.
 
-**Target Users:**  
-- Individual developers seeking an intelligent, always-on assistant.  
-- Multi-language projects, primarily Python and JavaScript/TypeScript.  
-- Secure local desktop usage, with potential expansion to multi-project management and cybersecurity features.  
+**Target Users:**
+- Individual developers seeking an intelligent, always-on assistant.
+- Multi-language projects: TypeScript, JavaScript, Python.
+- Secure local desktop usage, with potential expansion to multi-project management and cybersecurity features.
 
 ---
 
@@ -25,18 +24,21 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **File Watcher** | ✅ Done | Monitors project files in real time via chokidar. Exclusions driven by `pulse.config.json`. Debounced to avoid duplicate triggers. |
-| **Analyzer / Parser** | ✅ Done | Analyzes JS/TS code via AST (ts-morph). Measures cyclomatic complexity and function size per file. |
-| **Churn Metric** | ✅ Done | Counts recent commits per file via simple-git (last 30 days). Integrated into RiskScore weighting. |
+| **File Watcher** | ✅ Done | Monitors project files in real time via chokidar. Exclusions driven by `pulse.config.json`. Debounced 1500ms to avoid duplicate triggers. Filters on supported extensions (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.py`). |
+| **Analyzer / Parser** | ✅ Done | TS/JS via ts-morph (AST). Python via regex fallback. Measures cyclomatic complexity and function size per file. |
+| **Churn Metric** | ✅ Done | Single Git call per scan — builds a cache of commit counts per file (last 30 days). Efficient: 1 call for all files instead of 1 per file. |
 | **RiskScore Calculator** | ✅ Done | Weighted score per file (0–100): complexity 50%, function size 30%, churn 20%. |
-| **Database / Persistence** | ✅ Done | Stores scan history and feedbacks in SQLite via better-sqlite3. |
+| **Database / Persistence** | ✅ Done | SQLite via better-sqlite3. Stores scan history, function-level metrics, and feedbacks. Data is scoped per project via `project_path`. |
 | **Score Trends** | ✅ Done | Displays score evolution (↑↓↔) compared to previous scan using DB history. |
 | **CLI / Initial Report** | ✅ Done | Scans project at startup. Ranked report with risk levels (🔴🟡🟢), trends, and feedback history. |
 | **Feedback Loop V1** | ✅ Done | Interactive prompt after report and on proactive alerts. Stores `apply / ignore / explore` actions in SQLite. |
-| **Proactive Alerts** | ✅ Done | Real-time alert during watch when a file exceeds `thresholds.alert`. Watcher paused during prompt to avoid stdin interference. |
-| **Config File** | ✅ Done | `pulse.config.json` centralizes project path, alert thresholds, and ignore list. |
+| **Config File** | ✅ Done | `pulse.config.json` centralizes project path, alert thresholds, and ignore list. Fallback defaults if fields are missing. |
+| **Electron UI** | ✅ Done | Desktop app with file list, risk scores, trends, feedbacks, and function-level detail sidebar. |
+| **Multi-Project Support** | ✅ Done | Each scan is scoped by `project_path`. Multiple projects coexist in the same DB without mixing. |
+| **Function-Level Detail** | ✅ Done | Per-function metrics stored in DB (name, start line, line count, cyclomatic complexity). Displayed in UI sidebar on file click. |
 | **Git Sandbox** | 📋 Planned V2 | Creates an isolated branch to apply and test modifications before final validation. |
 | **LLM Module** | 📋 Planned V1.5 | Provides intelligent explanations and suggestions for alerts. Runs locally via Ollama for privacy. |
+| **Feedback Loop V2** | 📋 Planned V2 | Dynamic adjustment of RiskScore weights based on feedback patterns (apply/ignore ratio per rule). |
 
 ---
 
@@ -44,9 +46,8 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 
 | Feature | Description |
 |---------|-------------|
-| **System Notifications** | Proactive alerts and messages displayed on desktop. |
-| **Multi-Project Support** | Manage multiple projects simultaneously with independent profiles. |
-| **Full Electron Interface** | Advanced interactive dashboard with graphs, clickable alerts, and detailed diff views. |
+| **System Notifications** | Proactive alerts displayed on desktop. |
+| **Full Electron Dashboard** | Advanced interactive dashboard with graphs, clickable alerts, and detailed diff views. |
 | **Export / Import Configuration** | Rules and profiles in JSON/YAML for sharing or backup. |
 | **Controlled Autonomy** | Semi-automatic proposals executable after validation or via configurable auto-actions. |
 | **Cybersecurity (advanced phase)** | Log analysis, vulnerability detection, local network monitoring. |
@@ -56,17 +57,19 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 ## 4️⃣ Technical Architecture
 
 ### Frontend (Desktop UI)
-- **Electron** for cross-platform desktop (V2+)
-- **React + Chart.js** for interactive dashboard (V2+)
-- Minimal CLI for V1 ✅
+- **Electron + React** — cross-platform desktop ✅
+- Minimal functional UI: file list, risk scores, function detail sidebar ✅
+- **Chart.js dashboard** — V2
 
 ### Backend / Core
 - Node.js + TypeScript daemon
-- Modules: File Watcher ✅, Analyzer ✅, Churn ✅, RiskScore ✅, CLI ✅, Feedback Loop ✅, Config ✅, Git Sandbox 📋
+- Modules: File Watcher ✅, Analyzer ✅, Churn ✅, RiskScore ✅, Feedback Loop V1 ✅, Config ✅
+- Git Sandbox — 📋 V2
 
 ### Database
-- **SQLite / Better SQLite3** ✅
-- Tables: `scans` ✅, `feedbacks` ✅
+- **SQLite / better-sqlite3** ✅
+- Tables: `scans` ✅, `feedbacks` ✅, `functions` ✅
+- Per-project scoping via `project_path` ✅
 
 ### LLM / AI
 - Ollama or local LLaMA (optional V1.5+)
@@ -78,12 +81,13 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 | Component | Tech | Status |
 |-----------|------|--------|
 | Runtime | Node.js + TypeScript | ✅ |
+| Desktop UI | Electron + React | ✅ |
 | File Watching | chokidar | ✅ |
-| Code Analysis | ts-morph | ✅ |
+| TS/JS Analysis | ts-morph (AST) | ✅ |
+| Python Analysis | Regex | ✅ |
 | Churn / Git | simple-git | ✅ |
 | Database | better-sqlite3 | ✅ |
 | Config | pulse.config.json | ✅ |
-| Desktop UI | Electron + React | V2 |
 | LLM | Local Ollama | V1.5 |
 | Visualization | Chart.js | V2 |
 
@@ -91,55 +95,24 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 
 ## 6️⃣ Data Model
 
-### Current Tables (SQLite)
+### Tables (SQLite)
 
 **scans**
-- id, file_path, global_score, complexity_score, function_size_score, scanned_at
+- id, file_path, global_score, complexity_score, function_size_score, churn_score, language, project_path, scanned_at
 
 **feedbacks**
 - id, file_path, action (`apply` / `ignore` / `explore`), risk_score_at_time, created_at
 
+**functions**
+- id, file_path, name, start_line, line_count, cyclomatic_complexity, project_path, scanned_at
+
 ### Planned Tables (V2+)
-
-**projects** — id, name, path, last_scan  
-**alerts** — id, file_path, type, score, status, created_at  
-**proposals** — id, alert_id, diff_content, score_before, score_after, status, created_at  
+**alerts** — id, file_path, type, score, status, created_at
+**proposals** — id, alert_id, diff_content, score_before, score_after, status, created_at
 
 ---
 
-## 7️⃣ Main User Flows
-
-### Flow 1: Startup Scan ✅
-1. Pulse loads `pulse.config.json`
-2. Database initialized
-3. Scanner recursively reads all JS/TS files (respecting ignore list)
-4. Each file is parsed, scored (complexity + size + churn), compared to previous scan
-5. CLI displays ranked report with risk levels, trends, and last feedback
-
-### Flow 2: Live Watching ✅
-1. File modified → chokidar detects change (debounced 500ms)
-2. Analyzer computes AST metrics + churn
-3. RiskScore calculated
-4. If score ≥ `thresholds.alert` → proactive alert + interactive prompt
-5. Feedback saved to SQLite
-
-### Flow 3: Feedback Loop V1 ✅
-1. Developer selects action (`apply / ignore / explore / skip`) from CLI
-2. Action stored in SQLite with score at time of feedback
-3. CLI report shows last feedback per file
-4. *(V2)* Dynamic weight adjustment based on feedback patterns
-
-### Flow 4: Git Sandbox 📋 *(V2)*
-1. Proposal applied in Git sandbox branch
-2. Human validation or automatic rollback
-
-### Flow 5: LLM Interactions 📋 *(V1.5)*
-1. Developer requests explanation
-2. Local LLM returns contextualized explanation of alert / proposal
-
----
-
-## 8️⃣ pulse.config.json
+## 7️⃣ pulse.config.json
 
 ```json
 {
@@ -148,47 +121,94 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
         "alert": 50,
         "warning": 20
     },
-    "ignore": ["node_modules", ".git", "dist", ".vite", "static", "vendor", "__pycache__"]
+    "ignore": [
+        "node_modules", ".git", "dist", "build", ".vite",
+        "vendor", "__pycache__", "venv", ".venv", "coverage"
+    ]
 }
 ```
 
+All fields have sensible defaults if omitted.
+
 ---
 
-## 9️⃣ Technical Constraints & Security
+## 8️⃣ Main User Flows
+
+### Flow 1: Startup Scan ✅
+1. Pulse loads `pulse.config.json`
+2. Database initialized (migrations applied automatically)
+3. Scanner recursively reads all supported files (respecting ignore list)
+4. Each file is parsed, scored (complexity + size + churn), compared to previous scan
+5. UI displays ranked report with risk levels, trends, and last feedback
+
+### Flow 2: Live Watching ✅
+1. File modified → chokidar detects change (debounced 1500ms)
+2. Analyzer computes AST metrics + churn
+3. RiskScore calculated
+4. UI updated in real time
+
+### Flow 3: Feedback Loop V1 ✅
+1. Developer selects action (`apply / ignore / explore`) from UI
+2. Action stored in SQLite with score at time of feedback
+3. UI report shows last feedback per file
+
+### Flow 4: Git Sandbox 📋 (V2)
+1. Proposal applied in Git sandbox branch
+2. Human validation or automatic rollback
+
+### Flow 5: LLM Interactions 📋 (V1.5)
+1. Developer requests explanation
+2. Local LLM returns contextualized explanation of alert / proposal
+
+---
+
+## 9️⃣ RiskScore Weights
+
+| Metric | Weight | Safe threshold | Danger threshold |
+|--------|--------|----------------|-----------------|
+| Cyclomatic complexity | 50% | ≤ 3 | ≥ 10 |
+| Function size (lines) | 30% | ≤ 20 | ≥ 60 |
+| Churn (commits/30d) | 20% | ≤ 5 | ≥ 20 |
+
+Score ranges: 🟢 < 20 · 🟡 20–49 · 🔴 ≥ 50
+
+---
+
+## 🔟 Technical Constraints & Security
 
 - **100% local execution** for privacy
 - LLM strictly local and optional
-- Filesystem exclusions driven by config: `node_modules`, `.git`, `dist`, `.vite`, etc.
+- Filesystem exclusions driven by config
 - Limited permissions: no root access
-- Watcher paused during interactive prompts to avoid stdin conflicts
+- Scan history preserved across sessions — no data loss on restart
 
 ---
 
-## 🔟 Development Phases
+## 11️⃣ Development Phases
 
 | Phase | Features |
 |-------|----------|
-| **V1** ✅ | CLI, file scanning, RiskScore (complexity + size + churn), SQLite persistence, live watcher, debouncing, proactive alerts, feedback loop, score trends, config file |
-| **V2** | Electron UI, interactive dashboard with Chart.js, system notifications, dynamic feedback weights, DeveloperProfile, multi-project support, Git Sandbox |
+| **V1** ✅ | Electron UI, file scanning, RiskScore (complexity + size + churn), SQLite persistence, function-level metrics, live watcher, debouncing, proactive alerts, feedback loop, score trends, config file, multi-project support |
+| **V2** | Chart.js dashboard, system notifications, dynamic feedback weights, DeveloperProfile, Git Sandbox |
 | **V3** | Full LLM integration, semi-autonomous suggestions, cybersecurity (logs, vulnerabilities, network monitoring), controlled autonomy |
 
 ---
 
-## 11️⃣ Complexity Estimate per Module
+## 12️⃣ Complexity Estimate per Module
 
 | Module | Complexity | Status |
 |--------|-----------|--------|
 | File Watcher | Low | ✅ Done |
-| Analyzer / Parser | Medium | ✅ Done |
+| Analyzer / Parser (TS/JS) | Medium | ✅ Done |
+| Analyzer / Parser (Python) | Low | ✅ Done |
 | Churn Metric | Low | ✅ Done |
 | RiskScore Calculator | Low | ✅ Done |
 | Database / Persistence | Low | ✅ Done |
 | Score Trends | Low | ✅ Done |
-| CLI / Report | Low | ✅ Done |
+| Electron UI | Medium | ✅ Done |
+| Function-Level Detail | Low | ✅ Done |
+| Multi-Project Support | Low | ✅ Done |
 | Feedback Loop V1 | Low | ✅ Done |
-| Proactive Alerts | Low | ✅ Done |
-| Config File | Low | ✅ Done |
 | Git Sandbox | High | 📋 V2 |
-| Electron UI | High | V2 |
-| Feedback Loop V2 (dynamic weights) | Medium | V2 |
-| LLM Module | Medium → High | V1.5 |
+| Feedback Loop V2 (dynamic weights) | Medium | 📋 V2 |
+| LLM Module | Medium → High | 📋 V1.5 |
