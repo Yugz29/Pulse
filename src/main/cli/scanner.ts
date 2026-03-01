@@ -86,7 +86,9 @@ function extractImports(filePath: string, source: string): string[] {
 
 function resolveImport(fromFile: string, importPath: string, allFiles: Set<string>): string | null {
     const dir  = path.dirname(fromFile);
-    const base = path.resolve(dir, importPath);
+    // Strip .js extension (TypeScript ESM imports use .js but files are .ts)
+    const stripped = importPath.replace(/\.js$/, '');
+    const base = path.resolve(dir, stripped);
 
     // Essaie différentes extensions
     const candidates = [
@@ -151,7 +153,6 @@ export async function scanProject(projectPath: string): Promise<ScanResult> {
 
             const analysis  = await analyzeFile(file);
             const riskScore = await calculateRiskScore(analysis);
-            saveScan(riskScore, projectPath);
             saveFunctions(file, analysis.functions, projectPath);
             results.push(riskScore);
         } catch (error) {
@@ -161,6 +162,22 @@ export async function scanProject(projectPath: string): Promise<ScanResult> {
 
     // Construire les edges depuis les imports réels
     const edges = buildEdges(files, fileSources);
+
+    // Calculer fan-in / fan-out par fichier
+    const fanOutMap = new Map<string, number>();
+    const fanInMap  = new Map<string, number>();
+    for (const file of files) { fanOutMap.set(file, 0); fanInMap.set(file, 0); }
+    for (const edge of edges) {
+        fanOutMap.set(edge.from, (fanOutMap.get(edge.from) ?? 0) + 1);
+        fanInMap.set(edge.to,   (fanInMap.get(edge.to)   ?? 0) + 1);
+    }
+
+    // Injecter dans les résultats puis sauvegarder
+    for (const result of results) {
+        result.details.fanIn  = fanInMap.get(result.filePath)  ?? 0;
+        result.details.fanOut = fanOutMap.get(result.filePath) ?? 0;
+        saveScan(result, projectPath);
+    }
 
     console.log(`[Pulse] Scan complete — ${results.length} files, ${edges.length} connections`);
 

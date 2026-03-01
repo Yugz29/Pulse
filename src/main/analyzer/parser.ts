@@ -9,6 +9,8 @@ export interface FunctionMetrics {
     startLine: number;
     lineCount: number;
     cyclomaticComplexity: number;
+    parameterCount: number;
+    maxDepth: number;
 }
 
 export interface FileMetrics {
@@ -36,6 +38,29 @@ const EXTENSION_MAP: Record<string, Language> = {
 function detectLanguage(filePath: string): Language {
     const ext = path.extname(filePath).toLowerCase();
     return EXTENSION_MAP[ext] ?? 'unknown';
+}
+
+// ── PROFONDEUR D'IMBRICATION (ts-morph) ──
+
+const NESTING_KINDS = new Set([
+    SyntaxKind.IfStatement,
+    SyntaxKind.ForStatement,
+    SyntaxKind.ForInStatement,
+    SyntaxKind.ForOfStatement,
+    SyntaxKind.WhileStatement,
+    SyntaxKind.DoStatement,
+    SyntaxKind.SwitchStatement,
+    SyntaxKind.TryStatement,
+    // SyntaxKind.Block retiré — trop agressif, surcompte tous les {}
+]);
+
+function computeMaxDepth(node: Node, current = 0): number {
+    let max = current;
+    for (const child of node.getChildren()) {
+        const next = NESTING_KINDS.has(child.getKind()) ? current + 1 : current;
+        max = Math.max(max, computeMaxDepth(child, next));
+    }
+    return max;
 }
 
 // ── COMPLEXITÉ (ts-morph) ──
@@ -95,7 +120,13 @@ function analyzeWithTsMorph(filePath: string): FileMetrics {
             if (COMPLEXITY_KINDS.has(node.getKind())) cyclomaticComplexity++;
         });
 
-        return { name, startLine, lineCount, cyclomaticComplexity };
+        const parameterCount = 'getParameters' in fn && typeof fn.getParameters === 'function'
+            ? (fn.getParameters() as unknown[]).length
+            : 0;
+
+        const maxDepth = computeMaxDepth(fn);
+
+        return { name, startLine, lineCount, cyclomaticComplexity, parameterCount, maxDepth };
     });
 
     return { filePath, totalLines, totalFunctions: functions.length, functions, language: 'typescript' };
@@ -133,7 +164,20 @@ function analyzeWithRegex(source: string, filePath: string, language: Language):
                 const cyclomaticComplexity = 1 + fnLines.reduce((acc, l) =>
                     acc + complexityPatterns.filter(p => p.test(l)).length, 0);
 
-                functions.push({ name, startLine: i + 1, lineCount: fnLines.length, cyclomaticComplexity });
+                // Compte les paramètres via regex sur la signature
+                const sigMatch = /\(([^)]*)\)/.exec(line);
+                const parameterCount = sigMatch?.[1]?.trim()
+                    ? sigMatch[1].split(',').filter(p => p.trim().length > 0).length
+                    : 0;
+
+                // Profondeur via indentation (4 espaces ou 1 tab = 1 niveau)
+                const maxDepth = fnLines.reduce((max, l) => {
+                    const indent = l.match(/^(\s+)/)?.[1] ?? '';
+                    const depth  = Math.floor(indent.replace(/\t/g, '    ').length / 4);
+                    return Math.max(max, depth);
+                }, 0);
+
+                functions.push({ name, startLine: i + 1, lineCount: fnLines.length, cyclomaticComplexity, parameterCount, maxDepth });
                 break;
             }
         }

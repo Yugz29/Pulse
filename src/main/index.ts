@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'node:path';
-import { initDb, getLatestScans, getFunctions } from './database/db.js';
+import { initDb, getLatestScans, getFunctions, cleanDeletedFiles } from './database/db.js';
 import { scanProject } from './cli/scanner.js';
 import type { FileEdge } from './cli/scanner.js';
 import { loadConfig } from './config.js';
@@ -43,6 +43,8 @@ async function runScan(): Promise<void> {
 
 app.whenReady().then(() => {
     initDb();
+    const cleaned = cleanDeletedFiles();
+    if (cleaned > 0) console.log(`[Pulse] Cleaned ${cleaned} deleted file(s) from DB.`);
 
     ipcMain.handle('get-scans', () => {
         const config = loadConfig();

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import path__default, { join } from "node:path";
 import Database from "better-sqlite3";
 import * as fs from "node:fs";
-import fs__default from "node:fs";
+import fs__default, { existsSync } from "node:fs";
 import { SyntaxKind, Project } from "ts-morph";
 import { simpleGit } from "simple-git";
 import chokidar from "chokidar";
@@ -30,6 +30,10 @@ function initDb() {
             complexity_score    REAL    NOT NULL,
             function_size_score REAL    NOT NULL,
             churn_score         REAL    NOT NULL DEFAULT 0,
+            depth_score         REAL    NOT NULL DEFAULT 0,
+            param_score         REAL    NOT NULL DEFAULT 0,
+            fan_in              INTEGER NOT NULL DEFAULT 0,
+            fan_out             INTEGER NOT NULL DEFAULT 0,
             language            TEXT    NOT NULL DEFAULT 'unknown',
             scanned_at          TEXT    NOT NULL
         )
@@ -51,12 +55,34 @@ function initDb() {
             start_line INTEGER NOT NULL,
             line_count INTEGER NOT NULL,
             cyclomatic_complexity INTEGER NOT NULL,
+            parameter_count INTEGER NOT NULL DEFAULT 0,
+            max_depth INTEGER NOT NULL DEFAULT 0,
             scanned_at TEXT NOT NULL
         )
     `);
   try {
     db.exec(`ALTER TABLE scans ADD COLUMN churn_score REAL NOT NULL DEFAULT 0`);
     console.log("[Pulse] DB migrated: added churn_score column.");
+  } catch {
+  }
+  try {
+    db.exec(`ALTER TABLE scans ADD COLUMN depth_score REAL NOT NULL DEFAULT 0`);
+    console.log("[Pulse] DB migrated: added depth_score to scans.");
+  } catch {
+  }
+  try {
+    db.exec(`ALTER TABLE scans ADD COLUMN param_score REAL NOT NULL DEFAULT 0`);
+    console.log("[Pulse] DB migrated: added param_score to scans.");
+  } catch {
+  }
+  try {
+    db.exec(`ALTER TABLE scans ADD COLUMN fan_in INTEGER NOT NULL DEFAULT 0`);
+    console.log("[Pulse] DB migrated: added fan_in to scans.");
+  } catch {
+  }
+  try {
+    db.exec(`ALTER TABLE scans ADD COLUMN fan_out INTEGER NOT NULL DEFAULT 0`);
+    console.log("[Pulse] DB migrated: added fan_out to scans.");
   } catch {
   }
   try {
@@ -69,12 +95,22 @@ function initDb() {
     console.log("[Pulse] DB migrated: added project_path to functions.");
   } catch {
   }
+  try {
+    db.exec(`ALTER TABLE functions ADD COLUMN parameter_count INTEGER NOT NULL DEFAULT 0`);
+    console.log("[Pulse] DB migrated: added parameter_count to functions.");
+  } catch {
+  }
+  try {
+    db.exec(`ALTER TABLE functions ADD COLUMN max_depth INTEGER NOT NULL DEFAULT 0`);
+    console.log("[Pulse] DB migrated: added max_depth to functions.");
+  } catch {
+  }
 }
 function saveScan(result, projectPath) {
   const db = getDb();
   const stmt = db.prepare(`
-        INSERT INTO scans (file_path, global_score, complexity_score, function_size_score, churn_score, language, project_path, scanned_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO scans (file_path, global_score, complexity_score, function_size_score, churn_score, depth_score, param_score, fan_in, fan_out, language, project_path, scanned_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   stmt.run(
     result.filePath,
@@ -82,6 +118,10 @@ function saveScan(result, projectPath) {
     result.details.complexityScore,
     result.details.functionSizeScore,
     result.details.churnScore,
+    result.details.depthScore,
+    result.details.paramScore,
+    result.details.fanIn,
+    result.details.fanOut,
     result.language ?? "unknown",
     projectPath,
     (/* @__PURE__ */ new Date()).toISOString()
@@ -91,19 +131,19 @@ function saveFunctions(filePath, functions, projectPath) {
   const db = getDb();
   db.prepare(`DELETE FROM functions WHERE file_path = ?`).run(filePath);
   const stmt = db.prepare(`
-        INSERT INTO functions (file_path, name, start_line, line_count, cyclomatic_complexity, project_path, scanned_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO functions (file_path, name, start_line, line_count, cyclomatic_complexity, parameter_count, max_depth, project_path, scanned_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   for (const fn of functions) {
-    stmt.run(filePath, fn.name, fn.startLine, fn.lineCount, fn.cyclomaticComplexity, projectPath, now);
+    stmt.run(filePath, fn.name, fn.startLine, fn.lineCount, fn.cyclomaticComplexity, fn.parameterCount, fn.maxDepth, projectPath, now);
   }
 }
 function getLatestScans(projectPath) {
   const db = getDb();
   const rows = db.prepare(`
         SELECT s.file_path, s.global_score, s.complexity_score, s.function_size_score,
-            s.churn_score, s.language, s.scanned_at
+            s.churn_score, s.depth_score, s.param_score, s.fan_in, s.fan_out, s.language, s.scanned_at
         FROM scans s
         INNER JOIN (
             SELECT file_path, MAX(scanned_at) as max_at
@@ -134,6 +174,10 @@ function getLatestScans(projectPath) {
       complexityScore: row.complexity_score,
       functionSizeScore: row.function_size_score,
       churnScore: row.churn_score,
+      depthScore: row.depth_score,
+      paramScore: row.param_score,
+      fanIn: row.fan_in,
+      fanOut: row.fan_out,
       language: row.language,
       scannedAt: row.scanned_at,
       trend,
@@ -141,9 +185,23 @@ function getLatestScans(projectPath) {
     };
   });
 }
+function cleanDeletedFiles() {
+  const db = getDb();
+  const files = db.prepare(`SELECT DISTINCT file_path FROM scans`).all();
+  let deleted = 0;
+  for (const { file_path } of files) {
+    if (!existsSync(file_path)) {
+      db.prepare(`DELETE FROM scans WHERE file_path = ?`).run(file_path);
+      db.prepare(`DELETE FROM functions WHERE file_path = ?`).run(file_path);
+      db.prepare(`DELETE FROM feedbacks WHERE file_path = ?`).run(file_path);
+      deleted++;
+    }
+  }
+  return deleted;
+}
 function getFunctions(filePath) {
   return getDb().prepare(`
-            SELECT name, start_line, line_count, cyclomatic_complexity
+            SELECT name, start_line, line_count, cyclomatic_complexity, parameter_count, max_depth
             FROM functions
             WHERE file_path = ?
             ORDER BY cyclomatic_complexity DESC
@@ -161,6 +219,25 @@ const EXTENSION_MAP = {
 function detectLanguage(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   return EXTENSION_MAP[ext] ?? "unknown";
+}
+const NESTING_KINDS = /* @__PURE__ */ new Set([
+  SyntaxKind.IfStatement,
+  SyntaxKind.ForStatement,
+  SyntaxKind.ForInStatement,
+  SyntaxKind.ForOfStatement,
+  SyntaxKind.WhileStatement,
+  SyntaxKind.DoStatement,
+  SyntaxKind.SwitchStatement,
+  SyntaxKind.TryStatement
+  // SyntaxKind.Block retiré — trop agressif, surcompte tous les {}
+]);
+function computeMaxDepth(node, current = 0) {
+  let max = current;
+  for (const child of node.getChildren()) {
+    const next = NESTING_KINDS.has(child.getKind()) ? current + 1 : current;
+    max = Math.max(max, computeMaxDepth(child, next));
+  }
+  return max;
 }
 const COMPLEXITY_KINDS = /* @__PURE__ */ new Set([
   SyntaxKind.IfStatement,
@@ -208,7 +285,9 @@ function analyzeWithTsMorph(filePath) {
     fn.forEachDescendant((node) => {
       if (COMPLEXITY_KINDS.has(node.getKind())) cyclomaticComplexity++;
     });
-    return { name, startLine, lineCount, cyclomaticComplexity };
+    const parameterCount = "getParameters" in fn && typeof fn.getParameters === "function" ? fn.getParameters().length : 0;
+    const maxDepth = computeMaxDepth(fn);
+    return { name, startLine, lineCount, cyclomaticComplexity, parameterCount, maxDepth };
   });
   return { filePath, totalLines, totalFunctions: functions.length, functions, language: "typescript" };
 }
@@ -242,7 +321,14 @@ function analyzeWithRegex(source, filePath, language) {
         }
         const fnLines = lines.slice(i, endLine);
         const cyclomaticComplexity = 1 + fnLines.reduce((acc, l) => acc + complexityPatterns.filter((p) => p.test(l)).length, 0);
-        functions.push({ name, startLine: i + 1, lineCount: fnLines.length, cyclomaticComplexity });
+        const sigMatch = /\(([^)]*)\)/.exec(line);
+        const parameterCount = sigMatch?.[1]?.trim() ? sigMatch[1].split(",").filter((p) => p.trim().length > 0).length : 0;
+        const maxDepth = fnLines.reduce((max, l) => {
+          const indent = l.match(/^(\s+)/)?.[1] ?? "";
+          const depth = Math.floor(indent.replace(/\t/g, "    ").length / 4);
+          return Math.max(max, depth);
+        }, 0);
+        functions.push({ name, startLine: i + 1, lineCount: fnLines.length, cyclomaticComplexity, parameterCount, maxDepth });
         break;
       }
     }
@@ -323,18 +409,23 @@ function clampedScore(value, safe, danger) {
   return (value - safe) / (danger - safe) * 100;
 }
 async function calculateRiskScore(metrics) {
-  const maxComplexity = metrics.functions.length > 0 ? Math.max(...metrics.functions.map((fn) => fn.cyclomaticComplexity)) : 0;
-  const maxFunctionSize = metrics.functions.length > 0 ? Math.max(...metrics.functions.map((fn) => fn.lineCount)) : 0;
+  const fns = metrics.functions.filter((fn) => fn.name !== "anonymous");
+  const maxComplexity = fns.length > 0 ? Math.max(...fns.map((fn) => fn.cyclomaticComplexity)) : 0;
+  const maxFunctionSize = fns.length > 0 ? Math.max(...fns.map((fn) => fn.lineCount)) : 0;
+  const maxDepth = fns.length > 0 ? Math.max(...fns.map((fn) => fn.maxDepth)) : 0;
+  const maxParams = fns.length > 0 ? Math.max(...fns.map((fn) => fn.parameterCount)) : 0;
   const complexityScore = clampedScore(maxComplexity, 3, 10);
   const functionSizeScore = clampedScore(maxFunctionSize, 20, 60);
+  const depthScore = clampedScore(maxDepth, 2, 5);
+  const paramScore = clampedScore(maxParams, 3, 7);
   const churn = await getChurnScore(metrics.filePath);
   const churnScore = clampedScore(churn, 5, 20);
-  const globalScore = complexityScore * 0.5 + functionSizeScore * 0.3 + churnScore * 0.2;
+  const globalScore = complexityScore * 0.35 + functionSizeScore * 0.2 + churnScore * 0.15 + depthScore * 0.2 + paramScore * 0.1;
   return {
     filePath: metrics.filePath,
     language: metrics.language,
     globalScore,
-    details: { complexityScore, functionSizeScore, churnScore }
+    details: { complexityScore, functionSizeScore, churnScore, depthScore, paramScore, fanIn: 0, fanOut: 0 }
   };
 }
 const SUPPORTED_EXTENSIONS = /* @__PURE__ */ new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".py"]);
@@ -405,7 +496,8 @@ function extractImports(filePath, source) {
 }
 function resolveImport(fromFile, importPath, allFiles) {
   const dir = path__default.dirname(fromFile);
-  const base = path__default.resolve(dir, importPath);
+  const stripped = importPath.replace(/\.js$/, "");
+  const base = path__default.resolve(dir, stripped);
   const candidates = [
     base,
     base + ".ts",
@@ -452,7 +544,6 @@ async function scanProject(projectPath) {
       fileSources.set(file, source);
       const analysis = await analyzeFile(file);
       const riskScore = await calculateRiskScore(analysis);
-      saveScan(riskScore, projectPath);
       saveFunctions(file, analysis.functions, projectPath);
       results.push(riskScore);
     } catch (error) {
@@ -460,6 +551,21 @@ async function scanProject(projectPath) {
     }
   }
   const edges = buildEdges(files, fileSources);
+  const fanOutMap = /* @__PURE__ */ new Map();
+  const fanInMap = /* @__PURE__ */ new Map();
+  for (const file of files) {
+    fanOutMap.set(file, 0);
+    fanInMap.set(file, 0);
+  }
+  for (const edge of edges) {
+    fanOutMap.set(edge.from, (fanOutMap.get(edge.from) ?? 0) + 1);
+    fanInMap.set(edge.to, (fanInMap.get(edge.to) ?? 0) + 1);
+  }
+  for (const result of results) {
+    result.details.fanIn = fanInMap.get(result.filePath) ?? 0;
+    result.details.fanOut = fanOutMap.get(result.filePath) ?? 0;
+    saveScan(result, projectPath);
+  }
   console.log(`[Pulse] Scan complete — ${results.length} files, ${edges.length} connections`);
   return {
     files: results.sort((a, b) => b.globalScore - a.globalScore),
@@ -528,6 +634,8 @@ async function runScan() {
 }
 app.whenReady().then(() => {
   initDb();
+  const cleaned = cleanDeletedFiles();
+  if (cleaned > 0) console.log(`[Pulse] Cleaned ${cleaned} deleted file(s) from DB.`);
   ipcMain.handle("get-scans", () => {
     const config = loadConfig();
     return getLatestScans(config.projectPath);

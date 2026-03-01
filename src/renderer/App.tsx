@@ -6,6 +6,10 @@ interface Scan {
   complexityScore: number;
   functionSizeScore: number;
   churnScore: number;
+  depthScore: number;
+  paramScore: number;
+  fanIn: number;
+  fanOut: number;
   language: string;
   trend: '↑' | '↓' | '↔';
   feedback: string | null;
@@ -22,6 +26,8 @@ interface FunctionDetail {
   start_line: number;
   line_count: number;
   cyclomatic_complexity: number;
+  parameter_count: number;
+  max_depth: number;
 }
 
 declare global {
@@ -56,6 +62,10 @@ function Detail({ scan, onClose }: { scan: Scan, onClose: () => void }) {
         { label: 'Complexité',    value: scan.complexityScore.toFixed(1),    color: '#1d1d1f' },
         { label: 'Taille',        value: scan.functionSizeScore.toFixed(1),  color: '#1d1d1f' },
         { label: 'Churn',         value: scan.churnScore.toFixed(1),         color: '#1d1d1f' },
+        { label: 'Profondeur',    value: scan.depthScore.toFixed(1),          color: scan.depthScore  > 66 ? '#ff3b30' : scan.depthScore  > 33 ? '#ff9500' : '#1d1d1f' },
+        { label: 'Paramètres',   value: scan.paramScore.toFixed(1),           color: scan.paramScore  > 66 ? '#ff3b30' : scan.paramScore  > 33 ? '#ff9500' : '#1d1d1f' },
+        { label: 'Fan-in',        value: String(scan.fanIn),                 color: scan.fanIn  > 10 ? '#ff3b30' : scan.fanIn  > 5 ? '#ff9500' : '#1d1d1f' },
+        { label: 'Fan-out',       value: String(scan.fanOut),                color: scan.fanOut > 10 ? '#ff3b30' : scan.fanOut > 5 ? '#ff9500' : '#1d1d1f' },
         { label: 'Langage',       value: scan.language,                      color: '#1d1d1f' },
         { label: 'Trend',         value: scan.trend,                         color: scan.trend === '↑' ? '#ff3b30' : scan.trend === '↓' ? '#34c759' : '#86868b' },
         { label: 'Feedback',      value: scan.feedback ?? '—',               color: '#86868b' },
@@ -68,15 +78,17 @@ function Detail({ scan, onClose }: { scan: Scan, onClose: () => void }) {
       ))}
 
       {functions.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ color: '#86868b', fontWeight: 500, marginBottom: 8 }}>Fonctions</div>
-          {functions.map(fn => (
+      <div style={{ marginTop: 20 }}>
+      <div style={{ color: '#86868b', fontWeight: 500, marginBottom: 8 }}>Fonctions</div>
+      {functions.filter(fn => fn.name !== 'anonymous').map(fn => (
             <div key={fn.name + fn.start_line} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
               <span style={{ color: '#1d1d1f', fontFamily: 'monospace', fontSize: 12 }}>{fn.name}</span>
               <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
                 <span style={{ color: '#86868b' }}>l.{fn.start_line}</span>
                 <span style={{ color: '#86868b' }}>{fn.line_count} lignes</span>
                 <span style={{ color: fn.cyclomatic_complexity > 10 ? '#ff3b30' : fn.cyclomatic_complexity > 5 ? '#ff9500' : '#86868b' }}>cx {fn.cyclomatic_complexity}</span>
+                <span style={{ color: fn.parameter_count > 5 ? '#ff3b30' : '#86868b' }}>{fn.parameter_count}p</span>
+                <span style={{ color: fn.max_depth > 4 ? '#ff3b30' : fn.max_depth > 2 ? '#ff9500' : '#86868b' }}>d{fn.max_depth}</span>
               </div>
             </div>
           ))}
@@ -174,7 +186,7 @@ export default function App() {
         </div>
 
         {/* Sidebar droite */}
-        <div style={{ width: 280, borderLeft: '1px solid #e0e0e0', background: '#fff', overflowY: 'auto' }}>
+        <div style={{ width: 340, borderLeft: '1px solid #e0e0e0', background: '#fff', overflowY: 'auto' }}>
           {selected ? (
             <Detail scan={selected} onClose={() => setSelected(null)}/>
           ) : (
