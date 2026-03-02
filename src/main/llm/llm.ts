@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import type { FunctionMetrics } from '../analyzer/parser.js';
 
 const OLLAMA_URL = 'http://localhost:11434/api/generate';
-const MODEL      = 'qwen2.5-coder:7b-instruct-q4_K_M';
+const MODEL      = 'qwen2.5-coder:3b';
 
 export interface LLMContext {
     filePath: string;
