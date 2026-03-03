@@ -114,6 +114,22 @@ export function initDb(): void {
         db.exec(`ALTER TABLE functions ADD COLUMN max_depth INTEGER NOT NULL DEFAULT 0`);
         console.log('[Pulse] DB migrated: added max_depth to functions.');
     } catch { }
+
+    // ── TABLE terminal_errors ──
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS terminal_errors (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            command       TEXT    NOT NULL,
+            exit_code     INTEGER NOT NULL,
+            error_hash    TEXT    NOT NULL,
+            error_text    TEXT    NOT NULL DEFAULT '',
+            cwd           TEXT    NOT NULL DEFAULT '',
+            project_path  TEXT    NOT NULL DEFAULT '',
+            llm_response  TEXT,
+            resolved      INTEGER NOT NULL DEFAULT 0,
+            created_at    TEXT    NOT NULL
+        )
+    `);
 }
 
 // ── WRITE ──
@@ -309,4 +325,81 @@ export function getFunctions(filePath: string) {
             ORDER BY cyclomatic_complexity DESC
         `)
         .all(filePath) as { name: string; start_line: number; line_count: number; cyclomatic_complexity: number; parameter_count: number; max_depth: number }[];
+}
+
+// ── TERMINAL ERRORS ──
+
+export interface TerminalErrorRow {
+    id: number;
+    command: string;
+    exit_code: number;
+    error_hash: string;
+    error_text: string;
+    cwd: string;
+    project_path: string;
+    llm_response: string | null;
+    resolved: number;
+    created_at: string;
+}
+
+export function saveTerminalError(params: {
+    command: string;
+    exit_code: number;
+    error_hash: string;
+    error_text: string;
+    cwd: string;
+    project_path: string;
+}): number {
+    const db = getDb();
+    const stmt = db.prepare(`
+        INSERT INTO terminal_errors (command, exit_code, error_hash, error_text, cwd, project_path, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+        params.command,
+        params.exit_code,
+        params.error_hash,
+        params.error_text,
+        params.cwd,
+        params.project_path,
+        new Date().toISOString(),
+    );
+    return result.lastInsertRowid as number;
+}
+
+export function getTerminalErrorHistory(errorHash: string, projectPath: string): Pick<TerminalErrorRow, 'id' | 'command' | 'created_at' | 'resolved'>[] {
+    return getDb()
+        .prepare(`
+            SELECT id, command, created_at, resolved
+            FROM terminal_errors
+            WHERE error_hash = ? AND project_path = ?
+            ORDER BY created_at DESC
+            LIMIT 20
+        `)
+        .all(errorHash, projectPath) as Pick<TerminalErrorRow, 'id' | 'command' | 'created_at' | 'resolved'>[];
+}
+
+export function updateTerminalErrorResolved(id: number, resolved: 1 | -1): void {
+    getDb()
+        .prepare(`UPDATE terminal_errors SET resolved = ? WHERE id = ?`)
+        .run(resolved, id);
+}
+
+export function updateTerminalErrorLLM(id: number, llmResponse: string): void {
+    getDb()
+        .prepare(`UPDATE terminal_errors SET llm_response = ? WHERE id = ?`)
+        .run(llmResponse, id);
+}
+
+export function getTopRecurringErrors(projectPath: string): { command: string; error_hash: string; count: number; last_seen: string }[] {
+    return getDb()
+        .prepare(`
+            SELECT command, error_hash, COUNT(*) as count, MAX(created_at) as last_seen
+            FROM terminal_errors
+            WHERE project_path = ?
+            GROUP BY error_hash
+            ORDER BY count DESC
+            LIMIT 5
+        `)
+        .all(projectPath) as { command: string; error_hash: string; count: number; last_seen: string }[];
 }
