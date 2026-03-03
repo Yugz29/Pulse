@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow } from "electron";
+import { app, clipboard, ipcMain, BrowserWindow } from "electron";
 import * as path from "node:path";
 import path__default, { join } from "node:path";
 import Database from "better-sqlite3";
@@ -8,6 +8,7 @@ import { SyntaxKind, Project } from "ts-morph";
 import { simpleGit } from "simple-git";
 import chokidar from "chokidar";
 import { EventEmitter } from "node:events";
+import http from "node:http";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
@@ -105,6 +106,20 @@ function initDb() {
     console.log("[Pulse] DB migrated: added max_depth to functions.");
   } catch {
   }
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS terminal_errors (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            command       TEXT    NOT NULL,
+            exit_code     INTEGER NOT NULL,
+            error_hash    TEXT    NOT NULL,
+            error_text    TEXT    NOT NULL DEFAULT '',
+            cwd           TEXT    NOT NULL DEFAULT '',
+            project_path  TEXT    NOT NULL DEFAULT '',
+            llm_response  TEXT,
+            resolved      INTEGER NOT NULL DEFAULT 0,
+            created_at    TEXT    NOT NULL
+        )
+    `);
 }
 function saveScan(result, projectPath) {
   const db = getDb();
@@ -227,6 +242,38 @@ function getFunctions(filePath) {
             ORDER BY cyclomatic_complexity DESC
         `).all(filePath);
 }
+function saveTerminalError(params) {
+  const db = getDb();
+  const stmt = db.prepare(`
+        INSERT INTO terminal_errors (command, exit_code, error_hash, error_text, cwd, project_path, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+  const result = stmt.run(
+    params.command,
+    params.exit_code,
+    params.error_hash,
+    params.error_text,
+    params.cwd,
+    params.project_path,
+    (/* @__PURE__ */ new Date()).toISOString()
+  );
+  return result.lastInsertRowid;
+}
+function getTerminalErrorHistory(errorHash, projectPath) {
+  return getDb().prepare(`
+            SELECT id, command, created_at, resolved
+            FROM terminal_errors
+            WHERE error_hash = ? AND project_path = ?
+            ORDER BY created_at DESC
+            LIMIT 20
+        `).all(errorHash, projectPath);
+}
+function updateTerminalErrorResolved(id, resolved) {
+  getDb().prepare(`UPDATE terminal_errors SET resolved = ? WHERE id = ?`).run(resolved, id);
+}
+function updateTerminalErrorLLM(id, llmResponse) {
+  getDb().prepare(`UPDATE terminal_errors SET llm_response = ? WHERE id = ?`).run(llmResponse, id);
+}
 const OLLAMA_URL = "http://localhost:11434/api/generate";
 const MODEL = "qwen2.5-coder:3b";
 function getFileName(p) {
@@ -278,15 +325,7 @@ Réponds en français. Structure ta réponse ainsi :
 2. **Suggestions** : liste 2-3 refactorisations concrètes avec exemples de code si pertinent. Priorise selon l'impact (commence par ce qui améliore le plus le score).
 Sois direct et pratique. Tiens compte de la criticité du fichier (nombre de dépendants) dans ta priorisation.`;
 }
-async function askLLM(ctx, onChunk, onDone, onError) {
-  let source;
-  try {
-    source = fs__default.readFileSync(ctx.filePath, "utf-8");
-  } catch {
-    onError(`Impossible de lire le fichier : ${ctx.filePath}`);
-    return;
-  }
-  const prompt = buildPrompt(ctx, source);
+async function streamOllama(prompt, onChunk, onDone, onError) {
   try {
     const res = await fetch(OLLAMA_URL, {
       method: "POST",
@@ -319,6 +358,47 @@ async function askLLM(ctx, onChunk, onDone, onError) {
   } catch (err) {
     onError(`Ollama inaccessible : ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+function buildErrorPrompt(ctx, topFiles, pastOccurrences) {
+  const filesSection = topFiles.length > 0 ? topFiles.map((f) => `  - ${f.filePath.split("/").pop()} (risque: ${f.globalScore.toFixed(1)}/100)`).join("\n") : "  (aucun fichier analysé)";
+  const recidive = pastOccurrences > 1 ? `
+⚠️ **Récidive** : cette erreur a déjà été vue ${pastOccurrences} fois dans ce projet.
+` : "";
+  return `Tu es un expert en développement logiciel. Une commande a échoué dans un terminal.
+${recidive}
+## Commande échouée
+\`${ctx.command}\` (exit code: ${ctx.exit_code})
+Répertoire: ${ctx.cwd || "(inconnu)"}
+
+## Sortie d'erreur
+\`\`\`
+${ctx.errorText.slice(0, 4e3)}${ctx.errorText.length > 4e3 ? "\n... (tronqué)" : ""}
+\`\`\`
+
+## Fichiers à risque dans le projet (pour contexte)
+${filesSection}
+
+Réponds en français. Structure ta réponse ainsi :
+1. **Cause** (2-3 phrases) : explique la cause racine de cette erreur de manière claire et directe.
+2. **Solution** : donne la commande exacte ou les étapes précises pour résoudre le problème.
+3. **Prévention** (optionnel) : si c'est une erreur récurrente ou évitable, suggère comment l'éviter.
+
+Sois concis et pratique. Priorise la solution immédiate.`;
+}
+async function askLLMForError(ctx, topFiles, pastOccurrences, onChunk, onDone, onError) {
+  const prompt = buildErrorPrompt(ctx, topFiles, pastOccurrences);
+  await streamOllama(prompt, onChunk, onDone, onError);
+}
+async function askLLM(ctx, onChunk, onDone, onError) {
+  let source;
+  try {
+    source = fs__default.readFileSync(ctx.filePath, "utf-8");
+  } catch {
+    onError(`Impossible de lire le fichier : ${ctx.filePath}`);
+    return;
+  }
+  const prompt = buildPrompt(ctx, source);
+  await streamOllama(prompt, onChunk, onDone, onError);
 }
 const EXTENSION_MAP = {
   ".ts": "typescript",
@@ -480,7 +560,8 @@ function loadConfig() {
           alert: raw.thresholds?.alert ?? 50,
           warning: raw.thresholds?.warning ?? 20
         },
-        ignore: raw.ignore ?? ["node_modules", ".git", "dist", "build", ".vite", "vendor", "__pycache__"]
+        ignore: raw.ignore ?? ["node_modules", ".git", "dist", "build", ".vite", "vendor", "__pycache__"],
+        socketPort: raw.socketPort
       };
       return _cached;
     }
@@ -713,8 +794,137 @@ function startWatcher() {
     resume: () => watcher.add(config.projectPath)
   };
 }
+let lastCommandError = null;
+function startSocketServer(preferredPort = 7891) {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      if (req.method === "POST" && req.url === "/command-error") {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk;
+        });
+        req.on("end", () => {
+          try {
+            const parsed = JSON.parse(body);
+            lastCommandError = {
+              command: parsed.command ?? "",
+              exit_code: parsed.exit_code ?? 1,
+              cwd: parsed.cwd ?? "",
+              timestamp: parsed.timestamp ?? Date.now(),
+              receivedAt: Date.now()
+            };
+            console.log(`[Pulse] Command error received: "${lastCommandError.command}" (exit ${lastCommandError.exit_code})`);
+          } catch (e) {
+            console.warn("[Pulse] Failed to parse command-error payload:", e);
+          }
+          res.writeHead(200);
+          res.end("OK");
+        });
+      } else {
+        res.writeHead(404);
+        res.end("Not found");
+      }
+    });
+    const tryBind = (port, attemptsLeft) => {
+      server.once("error", (err) => {
+        if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
+          console.warn(`[Pulse] Port ${port} in use, trying ${port + 1}`);
+          tryBind(port + 1, attemptsLeft - 1);
+        } else {
+          reject(err);
+        }
+      });
+      server.listen(port, "127.0.0.1", () => {
+        console.log(`[Pulse] Socket server listening on port ${port}`);
+        resolve({
+          port,
+          getLastCommandError: () => lastCommandError,
+          stop: () => server.close()
+        });
+      });
+    };
+    tryBind(preferredPort, 3);
+  });
+}
+const ERROR_PATTERNS = [
+  // Node / TS
+  /Error:/,
+  /error TS\d+/,
+  /ENOENT/,
+  /EACCES/,
+  /ECONNREFUSED/,
+  /EADDRINUSE/,
+  /npm ERR!/,
+  /TypeError/,
+  /SyntaxError/,
+  /ReferenceError/,
+  /RangeError/,
+  /Cannot find module/,
+  /Module not found/,
+  // Unix / shell
+  /No such file or directory/,
+  /Permission denied/,
+  /command not found/,
+  /not found:/,
+  /cannot open/i,
+  /Segmentation fault/,
+  // Python
+  /Traceback \(most recent call last\)/,
+  /ModuleNotFoundError/,
+  /ImportError/,
+  /AssertionError/,
+  /IndentationError/,
+  // Build tools
+  /Build failed/i,
+  /failed to compile/i,
+  /Compilation failed/i,
+  /failed with exit code/i,
+  /exited with code [^0]/,
+  /FAILED/,
+  // Rust / Go / other
+  /error\[E\d+\]/,
+  /fatal:/i,
+  /panic:/i
+];
+const CORRELATION_WINDOW_MS = 3e4;
+const POLL_INTERVAL_MS = 600;
+function makeHash(text) {
+  return text.trim().slice(0, 80);
+}
+function isErrorText(text) {
+  if (text.trim().length < 30) return false;
+  return ERROR_PATTERNS.some((p) => p.test(text));
+}
+function startClipboardWatcher(getLastCommandError, onError) {
+  let lastClipboardText = clipboard.readText();
+  let lastNotifiedHash = "";
+  const timer = setInterval(() => {
+    const text = clipboard.readText();
+    if (text === lastClipboardText) return;
+    lastClipboardText = text;
+    if (!isErrorText(text)) return;
+    const hash = makeHash(text);
+    if (hash === lastNotifiedHash) return;
+    const cmdError = getLastCommandError();
+    const now = Date.now();
+    const inWindow = cmdError !== null && now - cmdError.receivedAt < CORRELATION_WINDOW_MS;
+    lastNotifiedHash = hash;
+    onError({
+      command: inWindow ? cmdError.command : "(commande inconnue)",
+      exit_code: inWindow ? cmdError.exit_code : 1,
+      cwd: inWindow ? cmdError.cwd : "",
+      errorText: text,
+      errorHash: hash,
+      timestamp: now
+    });
+  }, POLL_INTERVAL_MS);
+  return {
+    stop: () => clearInterval(timer)
+  };
+}
 let mainWindow = null;
 let lastEdges = [];
+let lastTopFiles = [];
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -738,6 +948,7 @@ async function runScan() {
     mainWindow?.webContents.send("pulse-event", { type: "scan-start", ts: Date.now() });
     const result = await scanProject(config.projectPath);
     lastEdges = result.edges;
+    lastTopFiles = result.files.slice(0, 10).map((f) => ({ filePath: f.filePath, globalScore: f.globalScore }));
     mainWindow?.webContents.send("pulse-event", { type: "scan-done", count: result.files.length, edges: result.edges.length, ts: Date.now() });
     mainWindow?.webContents.send("scan-complete");
   } catch (err) {
@@ -745,13 +956,36 @@ async function runScan() {
     mainWindow?.webContents.send("pulse-event", { type: "scan-error", ts: Date.now() });
   }
 }
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   initDb();
   const cleaned = cleanDeletedFiles();
   if (cleaned > 0) console.log(`[Pulse] Cleaned ${cleaned} deleted file(s) from DB.`);
+  const config = loadConfig();
+  const socketServer = await startSocketServer(config.socketPort ?? 7891);
+  const clipWatcher = startClipboardWatcher(
+    () => socketServer.getLastCommandError(),
+    (ctx) => {
+      const projectPath = loadConfig().projectPath;
+      const pastHistory = getTerminalErrorHistory(ctx.errorHash, projectPath);
+      const savedId = saveTerminalError({
+        command: ctx.command,
+        exit_code: ctx.exit_code,
+        error_hash: ctx.errorHash,
+        error_text: ctx.errorText,
+        cwd: ctx.cwd,
+        project_path: projectPath
+      });
+      mainWindow?.webContents.send("terminal-error", {
+        ...ctx,
+        id: savedId,
+        pastOccurrences: pastHistory.length + 1,
+        lastSeen: pastHistory[0]?.created_at ?? null
+      });
+    }
+  );
   ipcMain.handle("get-scans", () => {
-    const config = loadConfig();
-    return getLatestScans(config.projectPath);
+    const cfg = loadConfig();
+    return getLatestScans(cfg.projectPath);
   });
   ipcMain.handle("get-edges", () => lastEdges);
   ipcMain.handle("get-functions", (_e, filePath) => getFunctions(filePath));
@@ -760,6 +994,11 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("get-score-history", (_e, filePath) => getScoreHistory(filePath));
   ipcMain.handle("get-feedback-history", (_e, filePath) => getFeedbackHistory(filePath));
+  ipcMain.handle("get-socket-port", () => socketServer.port);
+  ipcMain.handle(
+    "get-terminal-error-history",
+    (_e, hash, projectPath) => getTerminalErrorHistory(hash, projectPath)
+  );
   ipcMain.on("ask-llm", (_e, ctx) => {
     askLLM(
       ctx,
@@ -768,7 +1007,31 @@ app.whenReady().then(() => {
       (err) => mainWindow?.webContents.send("llm-error", err)
     );
   });
+  ipcMain.on("analyze-terminal-error", (_e, ctx) => {
+    let llmAccumulated = "";
+    askLLMForError(
+      ctx,
+      lastTopFiles.slice(0, 5),
+      ctx.pastOccurrences,
+      (chunk) => {
+        llmAccumulated += chunk;
+        mainWindow?.webContents.send("llm-chunk", chunk);
+      },
+      () => {
+        mainWindow?.webContents.send("llm-done");
+        if (ctx.id) updateTerminalErrorLLM(ctx.id, llmAccumulated);
+      },
+      (err) => mainWindow?.webContents.send("llm-error", err)
+    );
+  });
+  ipcMain.on("resolve-terminal-error", (_e, id, resolved) => {
+    updateTerminalErrorResolved(id, resolved);
+  });
   createWindow();
+  app.on("before-quit", () => {
+    socketServer.stop();
+    clipWatcher.stop();
+  });
   runScan();
   const { emitter } = startWatcher();
   let scanTimeout = null;

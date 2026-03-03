@@ -27,5 +27,14 @@ electron.contextBridge.exposeInMainWorld("api", {
   onEvent: (cb) => {
     electron.ipcRenderer.removeAllListeners("pulse-event");
     electron.ipcRenderer.on("pulse-event", (_ipc, e) => cb(e));
-  }
+  },
+  // ── Terminal shell integration ──
+  getSocketPort: () => electron.ipcRenderer.invoke("get-socket-port"),
+  onTerminalError: (cb) => {
+    electron.ipcRenderer.removeAllListeners("terminal-error");
+    electron.ipcRenderer.on("terminal-error", (_ipc, ctx) => cb(ctx));
+  },
+  dismissTerminalError: () => electron.ipcRenderer.send("dismiss-terminal-error"),
+  analyzeTerminalError: (ctx) => electron.ipcRenderer.send("analyze-terminal-error", ctx),
+  resolveTerminalError: (id, resolved) => electron.ipcRenderer.send("resolve-terminal-error", id, resolved)
 });
