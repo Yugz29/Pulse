@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import type { FunctionMetrics } from '../analyzer/parser.js';
+import type { TerminalErrorContext } from '../terminal/clipboardWatcher.js';
 
 const OLLAMA_URL = 'http://localhost:11434/api/generate';
 const MODEL      = 'qwen2.5-coder:3b';
@@ -85,22 +86,17 @@ Réponds en français. Structure ta réponse ainsi :
 Sois direct et pratique. Tiens compte de la criticité du fichier (nombre de dépendants) dans ta priorisation.`;
 }
 
-export async function askLLM(
-    ctx: LLMContext,
+// ── Re-export type pour usage dans index.ts sans import circulaire ──
+export type { TerminalErrorContext };
+
+// ── STREAMING HELPER (partagé entre askLLM et askLLMForError) ──
+
+async function streamOllama(
+    prompt: string,
     onChunk: (text: string) => void,
     onDone: () => void,
     onError: (err: string) => void,
 ): Promise<void> {
-    let source: string;
-    try {
-        source = fs.readFileSync(ctx.filePath, 'utf-8');
-    } catch {
-        onError(`Impossible de lire le fichier : ${ctx.filePath}`);
-        return;
-    }
-
-    const prompt = buildPrompt(ctx, source);
-
     try {
         const res = await fetch(OLLAMA_URL, {
             method: 'POST',
@@ -113,7 +109,7 @@ export async function askLLM(
             return;
         }
 
-        const reader = res.body.getReader();
+        const reader  = res.body.getReader();
         const decoder = new TextDecoder();
 
         while (true) {
@@ -133,4 +129,73 @@ export async function askLLM(
     } catch (err) {
         onError(`Ollama inaccessible : ${err instanceof Error ? err.message : String(err)}`);
     }
+}
+
+// ── TERMINAL ERROR ANALYSIS ──
+
+function buildErrorPrompt(
+    ctx: TerminalErrorContext,
+    topFiles: { filePath: string; globalScore: number }[],
+    pastOccurrences: number,
+): string {
+    const filesSection = topFiles.length > 0
+        ? topFiles.map(f => `  - ${f.filePath.split('/').pop()} (risque: ${f.globalScore.toFixed(1)}/100)`).join('\n')
+        : '  (aucun fichier analysé)';
+
+    const recidive = pastOccurrences > 1
+        ? `\n⚠️ **Récidive** : cette erreur a déjà été vue ${pastOccurrences} fois dans ce projet.\n`
+        : '';
+
+    return `Tu es un expert en développement logiciel. Une commande a échoué dans un terminal.
+${recidive}
+## Commande échouée
+\`${ctx.command}\` (exit code: ${ctx.exit_code})
+Répertoire: ${ctx.cwd || '(inconnu)'}
+
+## Sortie d'erreur
+\`\`\`
+${ctx.errorText.slice(0, 4000)}${ctx.errorText.length > 4000 ? '\n... (tronqué)' : ''}
+\`\`\`
+
+## Fichiers à risque dans le projet (pour contexte)
+${filesSection}
+
+Réponds en français. Structure ta réponse ainsi :
+1. **Cause** (2-3 phrases) : explique la cause racine de cette erreur de manière claire et directe.
+2. **Solution** : donne la commande exacte ou les étapes précises pour résoudre le problème.
+3. **Prévention** (optionnel) : si c'est une erreur récurrente ou évitable, suggère comment l'éviter.
+
+Sois concis et pratique. Priorise la solution immédiate.`;
+}
+
+export async function askLLMForError(
+    ctx: TerminalErrorContext,
+    topFiles: { filePath: string; globalScore: number }[],
+    pastOccurrences: number,
+    onChunk: (text: string) => void,
+    onDone: () => void,
+    onError: (err: string) => void,
+): Promise<void> {
+    const prompt = buildErrorPrompt(ctx, topFiles, pastOccurrences);
+    await streamOllama(prompt, onChunk, onDone, onError);
+}
+
+// ── CODE QUALITY ANALYSIS ──
+
+export async function askLLM(
+    ctx: LLMContext,
+    onChunk: (text: string) => void,
+    onDone: () => void,
+    onError: (err: string) => void,
+): Promise<void> {
+    let source: string;
+    try {
+        source = fs.readFileSync(ctx.filePath, 'utf-8');
+    } catch {
+        onError(`Impossible de lire le fichier : ${ctx.filePath}`);
+        return;
+    }
+
+    const prompt = buildPrompt(ctx, source);
+    await streamOllama(prompt, onChunk, onDone, onError);
 }

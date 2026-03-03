@@ -1,5 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// ── Terminal error types (inline pour éviter imports circulaires en CJS preload) ──
+export interface TerminalErrorNotification {
+    command: string;
+    exit_code: number;
+    cwd: string;
+    errorText: string;
+    errorHash: string;
+    timestamp: number;
+    id: number;
+    pastOccurrences: number;
+    lastSeen: string | null;
+}
+
 export interface LatestScan {
     filePath: string;
     globalScore: number;
@@ -45,4 +58,22 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.removeAllListeners('pulse-event');
         ipcRenderer.on('pulse-event', (_ipc, e) => cb(e));
     },
+
+    // ── Terminal shell integration ──
+    getSocketPort: (): Promise<number> =>
+        ipcRenderer.invoke('get-socket-port'),
+
+    onTerminalError: (cb: (ctx: TerminalErrorNotification) => void): void => {
+        ipcRenderer.removeAllListeners('terminal-error');
+        ipcRenderer.on('terminal-error', (_ipc, ctx) => cb(ctx));
+    },
+
+    dismissTerminalError: (): void =>
+        ipcRenderer.send('dismiss-terminal-error'),
+
+    analyzeTerminalError: (ctx: TerminalErrorNotification): void =>
+        ipcRenderer.send('analyze-terminal-error', ctx),
+
+    resolveTerminalError: (id: number, resolved: 1 | -1): void =>
+        ipcRenderer.send('resolve-terminal-error', id, resolved),
 });

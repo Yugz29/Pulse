@@ -9,6 +9,7 @@ export interface PulseConfig {
         warning: number;
     };
     ignore: string[];
+    socketPort?: number;
 }
 
 let _cached: PulseConfig | null = null;
@@ -33,7 +34,8 @@ export function loadConfig(): PulseConfig {
                     alert:   raw.thresholds?.alert   ?? 50,
                     warning: raw.thresholds?.warning ?? 20,
                 },
-                ignore: raw.ignore ?? ['node_modules', '.git', 'dist', 'build', '.vite', 'vendor', '__pycache__'],
+                ignore:     raw.ignore      ?? ['node_modules', '.git', 'dist', 'build', '.vite', 'vendor', '__pycache__'],
+                socketPort: raw.socketPort,
             };
             return _cached;
         }

@@ -31,6 +31,18 @@ interface FunctionDetail {
   max_depth: number;
 }
 
+interface TerminalErrorNotification {
+  command: string;
+  exit_code: number;
+  cwd: string;
+  errorText: string;
+  errorHash: string;
+  timestamp: number;
+  id: number;
+  pastOccurrences: number;
+  lastSeen: string | null;
+}
+
 declare global {
   interface Window {
     api: {
@@ -46,6 +58,12 @@ declare global {
       onLLMError: (cb: (err: string) => void) => void;
       onScanComplete: (cb: () => void) => void;
       onEvent: (cb: (e: any) => void) => void;
+      // Terminal shell integration
+      getSocketPort: () => Promise<number>;
+      onTerminalError: (cb: (ctx: TerminalErrorNotification) => void) => void;
+      dismissTerminalError: () => void;
+      analyzeTerminalError: (ctx: TerminalErrorNotification) => void;
+      resolveTerminalError: (id: number, resolved: 1 | -1) => void;
     };
   }
 }
@@ -281,6 +299,76 @@ function Detail({ scan, onClose, onFeedback, sidebarWidth, edges }: {
   );
 }
 
+// ── TERMINAL ERROR BANNER ──
+function TerminalErrorBanner({ ctx, onDismiss, onAnalyze, onResolve }: {
+  ctx: TerminalErrorNotification;
+  onDismiss: () => void;
+  onAnalyze: () => void;
+  onResolve: () => void;
+}) {
+  const isRecurring = ctx.pastOccurrences > 1;
+  const lastSeenStr = ctx.lastSeen
+    ? new Date(ctx.lastSeen).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+    : null;
+
+  return (
+    <div style={{
+      background: '#fff3f0',
+      borderBottom: '2px solid #ff3b30',
+      padding: '10px 16px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6,
+      position: 'sticky',
+      top: 0,
+      zIndex: 15,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#ff3b30' }}>⚠</span>
+            <code style={{ fontSize: 12, fontWeight: 600, color: '#1d1d1f', background: '#f5f5f7', padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+              {ctx.command.length > 50 ? ctx.command.slice(0, 50) + '…' : ctx.command}
+            </code>
+            <span style={{ fontSize: 11, color: '#86868b' }}>exit {ctx.exit_code}</span>
+            {isRecurring && (
+              <span style={{ fontSize: 11, color: '#ff9500', fontWeight: 500 }}>
+                {ctx.pastOccurrences}e occurrence{lastSeenStr ? ` · dernière le ${lastSeenStr}` : ''}
+              </span>
+            )}
+          </div>
+          {ctx.errorText && (
+            <div style={{ fontSize: 11, color: '#3a3a3c', fontFamily: 'monospace', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {ctx.errorText.split('\n')[0]?.trim().slice(0, 100)}
+            </div>
+          )}
+        </div>
+        <button onClick={onDismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86868b', fontSize: 16, lineHeight: 1, padding: '2px 4px', flexShrink: 0 }}>×</button>
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          onClick={onAnalyze}
+          style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1.5px solid #ff3b30', background: '#ff3b30', color: '#fff' }}
+        >
+          Analyser avec Pulse
+        </button>
+        <button
+          onClick={onResolve}
+          style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1.5px solid #34c759', background: 'transparent', color: '#34c759' }}
+        >
+          Résolu ✓
+        </button>
+        <button
+          onClick={onDismiss}
+          style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: '1.5px solid #c7c7cc', background: 'transparent', color: '#86868b' }}
+        >
+          Ignorer
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function FileList({ scans, selected, onSelect }: { scans: Scan[], selected: Scan | null, onSelect: (s: Scan) => void }) {
   const sorted = [...scans].sort((a, b) => b.globalScore - a.globalScore);
 
@@ -331,6 +419,13 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const isResizing = useRef(false);
 
+  // Terminal shell integration state
+  const [terminalError, setTerminalError] = useState<TerminalErrorNotification | null>(null);
+  const [socketPort, setSocketPort]       = useState<number>(7891);
+  const [terminalLlm, setTerminalLlm]     = useState<string>('');
+  const [terminalLlmLoading, setTerminalLlmLoading] = useState(false);
+  const [shellCopied, setShellCopied]     = useState(false);
+
   async function load() {
     const [s, e] = await Promise.all([window.api.getScans(), window.api.getEdges()]);
     setScans(s);
@@ -344,7 +439,36 @@ export default function App() {
       const msg = e.type === 'changed' ? `● ${e.file}` : e.type === 'scan-start' ? '▶ Scanning…' : e.type === 'scan-done' ? `✓ ${e.count} fichiers` : e.type;
       setEvents(prev => [...prev.slice(-19), msg]);
     });
+    // Register terminal error listener once
+    window.api.onTerminalError((ctx) => setTerminalError(ctx));
+    window.api.getSocketPort().then(setSocketPort);
   }, []);
+
+  function handleAnalyzeTerminalError() {
+    if (!terminalError) return;
+    setTerminalLlm('');
+    setTerminalLlmLoading(true);
+    // Register LLM listeners at App level (overrides Detail's registration if any)
+    window.api.onLLMChunk((chunk) => setTerminalLlm(prev => prev + chunk));
+    window.api.onLLMDone(() => setTerminalLlmLoading(false));
+    window.api.onLLMError((err) => { setTerminalLlm(`Erreur : ${err}`); setTerminalLlmLoading(false); });
+    window.api.analyzeTerminalError(terminalError);
+    setTerminalError(null); // dismiss banner, analysis streams to panel below
+  }
+
+  function handleResolveTerminalError() {
+    if (!terminalError) return;
+    window.api.resolveTerminalError(terminalError.id, 1);
+    setTerminalError(null);
+  }
+
+  function copyShellSnippet() {
+    const snippet = `# Pulse shell integration\n_pulse_preexec() { __pulse_cmd="$1"; }\n_pulse_precmd() {\n  local code=$?\n  [ "$code" -ne 0 ] && [ -n "$__pulse_cmd" ] && \\\n    curl -s --max-time 0.3 -X POST http://localhost:${socketPort}/command-error \\\n      -H 'Content-Type: application/json' \\\n      -d "{\\"command\\":\\"$__pulse_cmd\\",\\"exit_code\\":$code,\\"cwd\\":\\"$PWD\\",\\"timestamp\\":$(date +%s)}" \\\n      2>/dev/null &\n  __pulse_cmd=""\n}\nautoload -Uz add-zsh-hook\nadd-zsh-hook preexec _pulse_preexec\nadd-zsh-hook precmd _pulse_precmd`;
+    navigator.clipboard.writeText(snippet).then(() => {
+      setShellCopied(true);
+      setTimeout(() => setShellCopied(false), 2000);
+    });
+  }
 
   // Resize handlers
   const onMouseDown = useCallback((e: React.MouseEvent) => {
@@ -371,6 +495,21 @@ export default function App() {
   const crit = scans.filter(s => s.globalScore >= 50).length;
   const warn = scans.filter(s => s.globalScore >= 20 && s.globalScore < 50).length;
 
+  const shellSnippet = `# Pulse shell integration
+_pulse_preexec() { __pulse_cmd="$1"; }
+_pulse_precmd() {
+  local code=$?
+  [ "$code" -ne 0 ] && [ -n "$__pulse_cmd" ] && \\
+    curl -s --max-time 0.3 -X POST http://localhost:${socketPort}/command-error \\
+      -H 'Content-Type: application/json' \\
+      -d "{\\"command\\":\\"$__pulse_cmd\\",\\"exit_code\\":$code,\\"cwd\\":\\"$PWD\\",\\"timestamp\\":$(date +%s)}" \\
+      2>/dev/null &
+  __pulse_cmd=""
+}
+autoload -Uz add-zsh-hook
+add-zsh-hook preexec _pulse_preexec
+add-zsh-hook precmd _pulse_precmd`;
+
   return (
     <div style={{ background: '#f5f5f7', color: '#1d1d1f', minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
 
@@ -382,7 +521,17 @@ export default function App() {
         <span style={{ color: '#ff9500', fontSize: 13 }}>{warn} warning</span>
       </div>
 
-      <div style={{ display: 'flex', height: 'calc(100vh - 45px)' }}>
+      {/* Terminal error banner (sticky sous le header) */}
+      {terminalError && (
+        <TerminalErrorBanner
+          ctx={terminalError}
+          onDismiss={() => { window.api.dismissTerminalError(); setTerminalError(null); }}
+          onAnalyze={handleAnalyzeTerminalError}
+          onResolve={handleResolveTerminalError}
+        />
+      )}
+
+      <div style={{ display: 'flex', height: terminalError ? 'calc(100vh - 45px - 76px)' : 'calc(100vh - 45px)' }}>
 
         {/* Liste principale */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -405,7 +554,41 @@ export default function App() {
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           />
 
-          {selected ? (
+          {/* Panel analyse terminal (prioritaire si actif) */}
+          {(terminalLlm || terminalLlmLoading) ? (
+            <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{ padding: '14px 16px 0', flexShrink: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>Analyse d'erreur</span>
+                  <button onClick={() => { setTerminalLlm(''); setTerminalLlmLoading(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86868b', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+                </div>
+                <div style={{ borderBottom: '1px solid #e0e0e0', marginBottom: 0 }} />
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
+                {terminalLlmLoading && <div style={{ color: '#86868b', fontSize: 12, marginBottom: 8 }}>⏳ Analyse en cours…</div>}
+                {terminalLlm && (
+                  <>
+                    <style>{`
+                      .pulse-llm h3 { font-size: 13px; font-weight: 600; margin: 14px 0 4px; color: #1d1d1f; }
+                      .pulse-llm h2 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: #1d1d1f; }
+                      .pulse-llm p  { margin: 4px 0 10px; line-height: 1.6; }
+                      .pulse-llm ul, .pulse-llm ol { padding-left: 18px; margin: 4px 0 10px; }
+                      .pulse-llm li { margin-bottom: 4px; line-height: 1.6; }
+                      .pulse-llm pre { background: #f5f5f7; border-radius: 6px; padding: 10px 12px; overflow-x: auto; font-size: 11px; margin: 8px 0; border: 1px solid #e0e0e0; }
+                      .pulse-llm code { background: #f0f0f2; border-radius: 3px; padding: 1px 4px; font-size: 11px; font-family: monospace; }
+                      .pulse-llm pre code { background: none; padding: 0; }
+                      .pulse-llm strong { font-weight: 600; }
+                    `}</style>
+                    <div
+                      className="pulse-llm"
+                      style={{ fontSize: 12, lineHeight: 1.6, color: '#1d1d1f' }}
+                      dangerouslySetInnerHTML={{ __html: marked(terminalLlm) as string }}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          ) : selected ? (
             <Detail
               scan={selected}
               onClose={() => setSelected(null)}
@@ -422,6 +605,35 @@ export default function App() {
               {events.map((e, i) => (
                 <div key={i} style={{ color: '#3a3a3c', marginBottom: 6, lineHeight: 1.4 }}>{e}</div>
               ))}
+
+              {/* Shell Integration */}
+              <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+                <div style={{ color: '#86868b', marginBottom: 8, fontWeight: 500 }}>Shell Integration</div>
+                <div style={{ color: '#3a3a3c', marginBottom: 8, lineHeight: 1.5 }}>
+                  Ajoute dans <code style={{ background: '#f5f5f7', padding: '1px 4px', borderRadius: 3, fontFamily: 'monospace' }}>~/.zshrc</code> pour que Pulse capte les erreurs de ton terminal :
+                </div>
+                <pre style={{
+                  background: '#1d1d1f', color: '#f5f5f7', borderRadius: 8, padding: '10px 12px',
+                  fontSize: 10, overflowX: 'auto', lineHeight: 1.5, marginBottom: 8, whiteSpace: 'pre',
+                }}>
+                  {shellSnippet}
+                </pre>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <button
+                    onClick={copyShellSnippet}
+                    style={{
+                      padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      cursor: 'pointer', border: '1.5px solid #1d1d1f',
+                      background: shellCopied ? '#1d1d1f' : 'transparent',
+                      color: shellCopied ? '#fff' : '#1d1d1f',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {shellCopied ? '✓ Copié !' : 'Copier'}
+                  </button>
+                  <span style={{ color: '#c7c7cc', fontSize: 10 }}>Port actif : {socketPort}</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
