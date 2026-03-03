@@ -39,6 +39,7 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 | **Multi-Project Support** | ✅ Done | Each scan scoped by `project_path`. Multiple projects coexist in the same DB without mixing. |
 | **Function-Level Detail** | ✅ Done | Per-function metrics stored in DB and displayed in sidebar: name, start line, line count, cyclomatic complexity, parameter count, nesting depth. |
 | **Auto-cleanup** | ✅ Done | At startup, Pulse removes from DB any file that no longer exists on disk. |
+| **Shell Integration** | ✅ Done | Passive observation of existing terminals (VSCode, iTerm2, Terminal.app). zsh hook sends failed commands to Pulse via HTTP. Clipboard polling (600ms) detects error text. 30s correlation window links hook data with clipboard content. In-app banner with LLM analysis. Error history + recurrence detection in SQLite. |
 | **Git Sandbox** | 📋 Planned V2 | Creates an isolated branch to apply and test modifications before final validation. |
 | **Feedback Loop V2** | 📋 Planned V2 | Dynamic adjustment of RiskScore weights based on feedback patterns. |
 
@@ -66,14 +67,22 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 
 ### Backend / Core
 - Node.js + TypeScript daemon
-- Modules: File Watcher ✅, Analyzer ✅, Churn ✅, Coupling ✅, RiskScore ✅, Feedback Loop V1 ✅, LLM ✅, Config ✅, Auto-cleanup ✅
+- Modules: File Watcher ✅, Analyzer ✅, Churn ✅, Coupling ✅, RiskScore ✅, Feedback Loop V1 ✅, LLM ✅, Config ✅, Auto-cleanup ✅, Shell Integration ✅
 - Git Sandbox — 📋 V2
 
 ### Database
 - **SQLite / better-sqlite3** ✅
-- Tables: `scans` ✅, `feedbacks` ✅, `functions` ✅
+- Tables: `scans` ✅, `feedbacks` ✅, `functions` ✅, `terminal_errors` ✅
 - Per-project scoping via `project_path` ✅
 - Auto-migration on startup ✅
+
+### Shell Integration
+- **HTTP socket server** (built-in Node.js `http`) on port 7891 (configurable) ✅
+- **Clipboard watcher** — `electron.clipboard` polled at 600ms ✅
+- **zsh hook** via `add-zsh-hook preexec/precmd` — compatible oh-my-zsh, starship ✅
+- 30s correlation window between hook fire and clipboard copy ✅
+- Error deduplication via hash (80-char prefix) ✅
+- Dynamic snippet generation with active port in sidebar ✅
 
 ### LLM / AI
 - **Ollama local** (`qwen2.5-coder:7b-instruct-q4_K_M`) ✅
@@ -114,6 +123,9 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 **functions**
 - id, file_path, name, start_line, line_count, cyclomatic_complexity, parameter_count, max_depth, project_path, scanned_at
 
+**terminal_errors**
+- id, command, exit_code, error_hash, error_text, cwd, project_path, llm_response, resolved (`0`=unknown / `1`=resolved / `-1`=ignored), created_at
+
 ### Planned Tables (V2+)
 **alerts** — id, file_path, type, score, status, created_at
 **proposals** — id, alert_id, diff_content, score_before, score_after, status, created_at
@@ -125,6 +137,7 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 ```json
 {
     "projectPath": "/path/to/your/project",
+    "socketPort": 7891,
     "thresholds": {
         "alert": 50,
         "warning": 20
@@ -136,7 +149,7 @@ Pulse is an intelligent desktop-resident agent designed as a proactive entity ca
 }
 ```
 
-All fields have sensible defaults if omitted.
+All fields have sensible defaults if omitted. `socketPort` defaults to `7891` with automatic fallback to `7892–7894` if occupied.
 
 ---
 
@@ -168,7 +181,17 @@ All fields have sensible defaults if omitted.
 3. Prompt sent to local Ollama instance (streaming)
 4. Response streamed to **Analyse** tab in sidebar, rendered as markdown
 
-### Flow 5: Git Sandbox 📋 (V2)
+### Flow 5: Terminal Error Detection ✅
+1. A command fails in any terminal (VSCode, iTerm2, Terminal.app…)
+2. zsh hook fires asynchronously → `POST localhost:{port}/command-error` (non-blocking, <300ms)
+3. Developer copies the error text from the terminal
+4. Pulse clipboard watcher detects error patterns in clipboard (600ms polling)
+5. Correlation: if hook fired within the last 30s → command + exit code attached; otherwise `(commande inconnue)`
+6. In-app banner appears: `⚠ npm run build a échoué (code 1) — 3ème occurrence`
+7. **Analyser** → LLM streams a Cause / Solution / Prévention diagnosis enriched with top risky files from last scan
+8. **Résolu ✓** or **Ignorer** → banner dismissed; resolution status stored in DB
+
+### Flow 6: Git Sandbox 📋 (V2)
 1. Proposal applied in Git sandbox branch
 2. Human validation or automatic rollback
 
@@ -209,6 +232,7 @@ Score ranges: 🟢 < 20 · 🟡 20–49 · 🔴 ≥ 50
 |-------|----------|
 | **V1** ✅ | Electron UI, file scanning, RiskScore (5 metrics), SQLite persistence, function-level metrics, coupling graph, live watcher, debouncing, feedback loop, score trends, score history graph, config file, multi-project support, auto-cleanup |
 | **V1.5** ✅ | LLM module (Ollama local), enriched context, streamed markdown response, resizable sidebar, tabbed sidebar (Métriques / Analyse) |
+| **V1.6** ✅ | Shell Integration — passive terminal observation (zsh hook + clipboard watcher), in-app error banner, terminal LLM analysis, error history + recurrence detection in SQLite |
 | **V2** | System notifications, dynamic feedback weights, DeveloperProfile, Git Sandbox, Chart.js advanced dashboard |
 | **V3** | Semi-autonomous suggestions, cybersecurity (logs, vulnerabilities, network monitoring), controlled autonomy |
 
@@ -235,5 +259,7 @@ Score ranges: 🟢 < 20 · 🟡 20–49 · 🔴 ≥ 50
 | Multi-Project Support | Low | ✅ Done |
 | Feedback Loop V1 | Low | ✅ Done |
 | LLM Module (Ollama) | Medium | ✅ Done |
+| Shell Integration (socket + clipboard) | Medium | ✅ Done |
+| Terminal Error History (SQLite) | Low | ✅ Done |
 | Git Sandbox | High | 📋 V2 |
 | Feedback Loop V2 (dynamic weights) | Medium | 📋 V2 |
