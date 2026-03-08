@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { analyzeFile } from '../analyzer/parser.js';
-import { calculateRiskScore } from '../risk-score/riskScore.js';
+import { extractRaw, scoreFromRaw, computeProjectBaselines } from '../risk-score/riskScore.js';
+import type { RawMetrics, RiskScoreResult } from '../risk-score/riskScore.js';
 import { saveScan, saveFunctions } from '../database/db.js';
-import type { RiskScoreResult } from '../risk-score/riskScore.js';
 import { loadConfig } from '../config.js';
-import { clearChurnCache } from '../analyzer/churn.js';
+import { buildChurnCache, clearChurnCache, getChurnScore } from '../analyzer/churn.js';
+import type { FileMetrics } from '../analyzer/parser.js';
 
 // Extensions supportées
 const SUPPORTED_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py']);
@@ -135,35 +136,69 @@ export interface ScanResult {
     edges: FileEdge[];
 }
 
+interface FileAnalysis {
+    metrics:  FileMetrics;
+    raw:      RawMetrics;
+}
+
 export async function scanProject(projectPath: string): Promise<ScanResult> {
     const config = loadConfig();
     const files  = getFiles(projectPath, config.ignore);
 
     clearChurnCache();
+    await buildChurnCache();
     console.log(`[Pulse] Found ${files.length} files to scan`);
 
-    const results: RiskScoreResult[] = [];
+    // ── Passe 1 : analyse statique + collecte des métriques brutes ──
+
+    const analyses: FileAnalysis[] = [];
     const fileSources = new Map<string, string>();
 
     for (const file of files) {
         try {
-            // Lire le source une fois (réutilisé pour les edges)
             const source = fs.readFileSync(file, 'utf-8');
             fileSources.set(file, source);
 
-            const analysis  = await analyzeFile(file);
-            const riskScore = await calculateRiskScore(analysis);
-            saveFunctions(file, analysis.functions, projectPath);
-            results.push(riskScore);
+            const metrics = await analyzeFile(file);
+            saveFunctions(file, metrics.functions, projectPath);
+
+            // Churn déjà en cache — appel synchrone-like
+            const fns  = metrics.functions.filter(fn => fn.name !== 'anonymous');
+            const churn = await getChurnScore(file);
+            const raw: RawMetrics = {
+                complexity:          fns.length > 0 ? Math.max(...fns.map(f => f.cyclomaticComplexity))                          : 0,
+                complexityMean:      fns.length > 0 ? fns.reduce((s, f) => s + f.cyclomaticComplexity, 0) / fns.length           : 0,
+                cognitiveComplexity: fns.length > 0 ? Math.max(...fns.map(f => f.cognitiveComplexity ?? 0))                      : 0,
+                functionSize:        fns.length > 0 ? Math.max(...fns.map(f => f.lineCount))                                     : 0,
+                functionSizeMean:    fns.length > 0 ? fns.reduce((s, f) => s + f.lineCount, 0) / fns.length                      : 0,
+                depth:               fns.length > 0 ? Math.max(...fns.map(f => f.maxDepth))                                      : 0,
+                params:              fns.length > 0 ? Math.max(...fns.map(f => f.parameterCount))                                : 0,
+                churn,
+            };
+
+            analyses.push({ metrics, raw });
         } catch (error) {
             console.error(`[Pulse] Error analyzing ${path.basename(file)}:`, error);
         }
     }
 
-    // Construire les edges depuis les imports réels
+    // ── Baselines : calcul des percentiles sur l'ensemble du projet ──
+
+    const baselines = computeProjectBaselines(analyses.map(a => a.raw));
+    console.log('[Pulse] Baselines —', Object.entries(baselines).map(
+        ([k, v]) => `${k}: p25=${v.p25.toFixed(1)} p90=${v.p90.toFixed(1)}`
+    ).join(' | '));
+
+    // ── Passe 2 : scoring adaptatif ──
+
+    const results: RiskScoreResult[] = analyses.map(({ metrics, raw }) =>
+        scoreFromRaw(raw, metrics.filePath, metrics.language, baselines)
+    );
+
+    // ── Edges + fan-in / fan-out ──
+
     const edges = buildEdges(files, fileSources);
 
-    // Calculer fan-in / fan-out par fichier
     const fanOutMap = new Map<string, number>();
     const fanInMap  = new Map<string, number>();
     for (const file of files) { fanOutMap.set(file, 0); fanInMap.set(file, 0); }
@@ -172,7 +207,6 @@ export async function scanProject(projectPath: string): Promise<ScanResult> {
         fanInMap.set(edge.to,   (fanInMap.get(edge.to)   ?? 0) + 1);
     }
 
-    // Injecter dans les résultats puis sauvegarder
     for (const result of results) {
         result.details.fanIn  = fanInMap.get(result.filePath)  ?? 0;
         result.details.fanOut = fanOutMap.get(result.filePath) ?? 0;
