@@ -1,5 +1,5 @@
 {
-  "include": ["src/renderer/src/**/*"],
+  "include": ["src/app/renderer/**/*"],
   "compilerOptions": {
     "composite": true,
     "outDir": "./dist",

@@ -7,7 +7,7 @@ export default defineConfig({
     main: {
         build: {
             rollupOptions: {
-                input: 'src/main/index.ts',
+                input: 'src/app/main/index.ts',
                 external: [
                     'better-sqlite3',
                     'electron',
@@ -22,7 +22,7 @@ export default defineConfig({
     preload: {
         build: {
             rollupOptions: {
-                input: 'src/preload/index.ts',
+                input: 'src/app/preload/index.ts',
                 output: {
                     format: 'cjs',
                     entryFileNames: 'index.js',
@@ -31,7 +31,12 @@ export default defineConfig({
         }
     },
     renderer: {
-        root: resolve(__dirname, 'src/renderer'),
+        root: resolve(__dirname, 'src/app/renderer'),
+        build: {
+            rollupOptions: {
+                input: resolve(__dirname, 'src/app/renderer/index.html'),
+            }
+        },
         plugins: [react(), tailwindcss()]
     }
 });
