@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from daemon.interpreter.command_interpreter import CommandInterpreter
 from daemon.core.event_bus import EventBus
 from daemon.core.state_store import StateStore
+from daemon.mcp.server import start_mcp_server
+from daemon.mcp.handlers import receive_decision
 
 app = Flask(__name__)
 
@@ -25,9 +27,7 @@ def receive_event():
     data = request.get_json()
     event_type = data.get("type", "unknown")
     payload = data.get("payload", {})
-
     bus.publish(event_type, payload)
-
     return jsonify({"ok": True})
 
 
@@ -39,7 +39,7 @@ def get_state():
 
 @app.route("/insights")
 def get_insights():
-    """Retourne les derniers events — insights bruts pour l'instant."""
+    """Retourne les derniers events."""
     recent = bus.recent(10)
     return jsonify([
         {
@@ -56,20 +56,20 @@ def ask():
     """Reçoit une question de l'utilisateur — LLM pas encore branché."""
     data = request.get_json()
     message = data.get("message", "")
-    return jsonify({"response": f"(LLM pas encore branché) : {message}"})
+    return jsonify({"response": f"(LLM not connected yet) : {message}"})
 
 
 @app.route("/context")
 def get_context():
     """Retourne un snapshot de contexte structuré."""
     state = store.to_dict()
-    context = f"""# Contexte Pulse
+    context = f"""# Pulse Context
 
-## Session courante
-- Projet : {state['active_project'] or 'non détecté'}
-- App active : {state['active_app'] or 'inconnue'}
-- Fichier actif : {state['active_file'] or 'aucun'}
-- Durée session : {state['session_duration_min']} minutes
+## Current session
+- Project : {state['active_project'] or 'not detected'}
+- Active app : {state['active_app'] or 'unknown'}
+- Active file : {state['active_file'] or 'none'}
+- Session duration : {state['session_duration_min']} minutes
 """
     return jsonify({"context": context})
 
@@ -83,10 +83,9 @@ def mcp_intercept():
 
     result = interpreter.interpret(command)
 
-    # Publie l'event dans le bus pour que l'état soit mis à jour
     bus.publish("mcp_command", {
-        "command":    command,
-        "risk_level": result.risk_level,
+        "command":     command,
+        "risk_level":  result.risk_level,
         "tool_use_id": tool_use_id,
     })
 
@@ -105,17 +104,22 @@ def mcp_intercept():
 
 @app.route("/mcp/decision", methods=["POST"])
 def mcp_decision():
-    """Reçoit la décision Autoriser/Refuser depuis Swift."""
+    """Reçoit la décision Autoriser/Refuser depuis Swift ou le terminal."""
     data = request.get_json()
     tool_use_id = data.get("tool_use_id")
     decision = data.get("decision")  # "allow" ou "deny"
 
-    print(f"[MCP] Décision : {decision} pour {tool_use_id}")
+    # Transmet la décision au handler qui attend
+    ok = receive_decision(tool_use_id, decision)
     bus.publish("mcp_decision", {"tool_use_id": tool_use_id, "decision": decision})
 
-    return jsonify({"ok": True})
+    return jsonify({"ok": ok})
 
 
 if __name__ == "__main__":
+    # Lance le serveur MCP dans un thread séparé (port 8766)
+    start_mcp_server(host="127.0.0.1", port=8766)
+
+    # Lance le serveur principal (port 8765)
     print("✓ Pulse daemon démarré sur http://localhost:8765")
     app.run(host="127.0.0.1", port=8765, debug=False)
