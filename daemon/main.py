@@ -8,10 +8,18 @@ from daemon.core.event_bus import EventBus
 from daemon.core.state_store import StateStore
 from daemon.core.signal_scorer import SignalScorer
 from daemon.core.decision_engine import DecisionEngine
+from daemon.llm.router import LLMRouter
 from daemon.memory.session import SessionMemory
-from daemon.memory.extractor import update_memories_from_session
+from daemon.memory.extractor import update_memories_from_session, load_memory_context
 from daemon.mcp.server import start_mcp_server
-from daemon.mcp.handlers import receive_decision, get_pending_command, intercept_command
+from daemon.mcp.handlers import (
+    receive_decision,
+    get_pending_command,
+    intercept_command,
+    get_available_llm_models,
+    get_selected_command_llm_model,
+    set_selected_command_llm_model,
+)
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -26,15 +34,20 @@ bus   = EventBus()
 store = StateStore()
 scorer = SignalScorer(bus)
 decision_engine = DecisionEngine()
+summary_llm = LLMRouter()
 session_memory = SessionMemory()
 runtime_lock = threading.Lock()
 last_signals = None
 last_decision = None
 last_memory_sync_at = None
+recent_file_events = {}
 
 
 def _handle_event(event):
-    global last_signals, last_decision, last_memory_sync_at
+    global last_signals, last_decision, last_memory_sync_at, recent_file_events
+
+    if _should_ignore_event(event):
+        return
 
     session_memory.record_event(event)
     signals = scorer.compute()
@@ -45,7 +58,10 @@ def _handle_event(event):
     snapshot = None
     if should_sync:
         snapshot = session_memory.export_session_data()
-        update_memories_from_session(snapshot)
+        update_memories_from_session(
+            snapshot,
+            llm=_summary_llm_for(event.type, signals),
+        )
 
     with runtime_lock:
         last_signals = signals
@@ -68,6 +84,47 @@ def _handle_event(event):
         )
 
 
+def _should_ignore_event(event):
+    global recent_file_events
+
+    if not event.type.startswith("file_"):
+        return False
+
+    path = (event.payload or {}).get("path", "")
+    if not _is_meaningful_file_path(path):
+        return True
+
+    dedupe_key = "{0}:{1}".format(event.type, path)
+    now = datetime.now()
+    with runtime_lock:
+        last_seen = recent_file_events.get(dedupe_key)
+        recent_file_events = {
+            key: ts for key, ts in recent_file_events.items()
+            if now - ts < timedelta(seconds=5)
+        }
+        if last_seen and now - last_seen < timedelta(seconds=1):
+            return True
+        recent_file_events[dedupe_key] = now
+
+    return False
+
+
+def _is_meaningful_file_path(path):
+    if not path:
+        return False
+
+    name = path.split("/")[-1]
+    if name.startswith("."):
+        return False
+    if name.endswith((".DS_Store", "~", ".xcuserstate")):
+        return False
+    if ".sb-" in name:
+        return False
+    if any(part in path for part in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")):
+        return False
+    return True
+
+
 def _should_sync_memory(event_type, signals, previous_sync_at):
     if signals.session_duration_min < 20:
         return False
@@ -78,6 +135,31 @@ def _should_sync_memory(event_type, signals, previous_sync_at):
     return datetime.now() - previous_sync_at >= timedelta(minutes=10)
 
 
+def _summary_llm_for(event_type, signals):
+    if signals.session_duration_min < 20:
+        return None
+
+    if event_type in {"screen_locked", "user_idle"}:
+        return summary_llm
+
+    if signals.focus_level == "idle":
+        return summary_llm
+
+    return None
+
+
+def get_selected_summary_llm_model():
+    return summary_llm.get_model()
+
+
+def set_selected_summary_llm_model(model: str) -> bool:
+    available = get_available_llm_models()
+    if available and model not in available:
+        return False
+    summary_llm.set_model(model)
+    return True
+
+
 def _shutdown_runtime():
     try:
         snapshot = session_memory.export_session_data()
@@ -86,6 +168,100 @@ def _shutdown_runtime():
         session_memory.close()
     except Exception as exc:
         log.warning("shutdown sync failed: %s", exc)
+
+
+def build_context_snapshot() -> str:
+    state = store.to_dict()
+    session_data = session_memory.export_session_data()
+    recent_events = session_memory.get_recent_events(limit=8)
+    memory_context = load_memory_context()
+
+    with runtime_lock:
+        signals = last_signals
+        decision = last_decision
+
+    sections = [
+        "# Pulse Context Snapshot",
+        "",
+        "## Current State",
+        "- Project: {0}".format(state.get("active_project") or "not detected"),
+        "- Active file: {0}".format(state.get("active_file") or "unknown"),
+        "- Active app: {0}".format(state.get("active_app") or "unknown"),
+        "- Session duration: {0} min".format(state.get("session_duration_min", 0)),
+        "- Last event: {0}".format(state.get("last_event_type") or "unknown"),
+    ]
+
+    if signals:
+        sections.extend(
+            [
+                "",
+                "## Signals",
+                "- Probable task: {0}".format(signals.probable_task),
+                "- Focus level: {0}".format(signals.focus_level),
+                "- Friction score: {0:.2f}".format(signals.friction_score),
+                "- Clipboard context: {0}".format(signals.clipboard_context or "none"),
+                "- Recent apps: {0}".format(", ".join(signals.recent_apps) or "none"),
+            ]
+        )
+
+    if decision:
+        sections.extend(
+            [
+                "",
+                "## Latest Decision",
+                "- Action: {0}".format(decision.action),
+                "- Level: {0}".format(decision.level),
+                "- Reason: {0}".format(decision.reason),
+            ]
+        )
+        if decision.payload:
+            payload_parts = [
+                "{0}={1}".format(key, value)
+                for key, value in sorted(decision.payload.items())
+            ]
+            sections.append("- Payload: {0}".format(", ".join(payload_parts)))
+
+    sections.extend(
+        [
+            "",
+            "## Session Memory",
+            "- Session ID: {0}".format(session_data.get("session_id") or "unknown"),
+            "- Files changed: {0}".format(session_data.get("files_changed", 0)),
+            "- Event count: {0}".format(session_data.get("event_count", 0)),
+            "- Max friction: {0:.2f}".format(float(session_data.get("max_friction", 0.0))),
+        ]
+    )
+
+    if recent_events:
+        sections.extend(["", "## Recent Events"])
+        for event in recent_events:
+            payload = event.get("payload") or {}
+            summary_keys = (
+                payload.get("app_name")
+                or payload.get("path")
+                or payload.get("content_kind")
+                or payload.get("tool_use_id")
+                or payload.get("decision")
+            )
+            suffix = " ({0})".format(summary_keys) if summary_keys else ""
+            sections.append(
+                "- {0}: {1}{2}".format(
+                    event.get("timestamp", "unknown"),
+                    event.get("type", "unknown"),
+                    suffix,
+                )
+            )
+
+    if memory_context:
+        sections.extend(
+            [
+                "",
+                "## Persistent Memory",
+                memory_context.strip(),
+            ]
+        )
+
+    return "\n".join(sections).strip() + "\n"
 
 
 bus.subscribe(store.update)
@@ -154,14 +330,46 @@ def ask():
 
 @app.route("/context")
 def get_context():
-    state = store.to_dict()
-    context = (
-        f"# Pulse Context\n\n"
-        f"- Project : {state['active_project'] or 'not detected'}\n"
-        f"- Active app : {state['active_app'] or 'unknown'}\n"
-        f"- Session : {state['session_duration_min']} min\n"
-    )
-    return jsonify({"context": context})
+    return jsonify({"context": build_context_snapshot()})
+
+
+@app.route("/llm/models")
+def get_llm_models():
+    return jsonify({
+        "provider": "ollama",
+        "available_models": get_available_llm_models(),
+        "selected_command_model": get_selected_command_llm_model(),
+        "selected_summary_model": get_selected_summary_llm_model(),
+    })
+
+
+@app.route("/llm/model", methods=["POST"])
+def set_llm_model():
+    data = request.get_json() or {}
+    kind = (data.get("kind") or "command").strip()
+    model = (data.get("model") or "").strip()
+    if not model:
+        return jsonify({"ok": False, "error": "missing_model"}), 400
+
+    if kind == "summary":
+        ok = set_selected_summary_llm_model(model)
+        selected = get_selected_summary_llm_model()
+    elif kind == "command":
+        ok = set_selected_command_llm_model(model)
+        selected = get_selected_command_llm_model()
+    else:
+        return jsonify({"ok": False, "error": "unknown_kind"}), 400
+
+    if not ok:
+        return jsonify({"ok": False, "error": "unknown_model"}), 400
+
+    return jsonify({
+        "ok": True,
+        "kind": kind,
+        "selected_model": selected,
+        "selected_command_model": get_selected_command_llm_model(),
+        "selected_summary_model": get_selected_summary_llm_model(),
+    })
 
 
 @app.route("/mcp/pending")
