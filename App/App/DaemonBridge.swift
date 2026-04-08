@@ -47,6 +47,40 @@ struct CommandAnalysis: Codable {
     }
 }
 
+struct ContextResponse: Codable {
+    let context: String
+}
+
+struct LLMModelsResponse: Codable {
+    let provider: String
+    let availableModels: [String]
+    let selectedCommandModel: String
+    let selectedSummaryModel: String
+
+    enum CodingKeys: String, CodingKey {
+        case provider
+        case availableModels = "available_models"
+        case selectedCommandModel = "selected_command_model"
+        case selectedSummaryModel = "selected_summary_model"
+    }
+}
+
+struct SetLLMModelResponse: Codable {
+    let ok: Bool
+    let kind: String?
+    let selectedModel: String?
+    let selectedCommandModel: String?
+    let selectedSummaryModel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case kind
+        case selectedModel = "selected_model"
+        case selectedCommandModel = "selected_command_model"
+        case selectedSummaryModel = "selected_summary_model"
+    }
+}
+
 // MARK: - Erreurs
 
 enum DaemonError: Error {
@@ -130,6 +164,35 @@ struct DaemonBridge {
     }
 
     // MARK: LLM
+
+    func getContext() async throws -> String {
+        let url = URL(string: "\(base)/context")!
+        let (data, _) = try await session.data(from: url)
+        let response = try JSONDecoder().decode(ContextResponse.self, from: data)
+        return response.context
+    }
+
+    func getLLMModels() async throws -> LLMModelsResponse {
+        let url = URL(string: "\(base)/llm/models")!
+        let (data, _) = try await session.data(from: url)
+        return try JSONDecoder().decode(LLMModelsResponse.self, from: data)
+    }
+
+    func setLLMModel(_ model: String, kind: String) async throws -> SetLLMModelResponse {
+        let url = URL(string: "\(base)/llm/model")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "model": model,
+            "kind": kind
+        ])
+        let (data, response) = try await session.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw DaemonError.badResponse
+        }
+        return try JSONDecoder().decode(SetLLMModelResponse.self, from: data)
+    }
 
     func ask(_ message: String) async throws -> String {
         let url = URL(string: "\(base)/ask")!

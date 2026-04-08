@@ -19,13 +19,15 @@ class SystemObserver {
     private var clipboardTimer: Timer?
     private var lastClipboardContent: String = ""
     private var lastActivity = Date()
+    private var recentFileEvents: [String: Date] = [:]
 
     // Chemins surveillés par FSEvents (ajuster selon le projet)
     private let watchedPaths: [String] = [
         NSHomeDirectory() + "/Desktop",
         NSHomeDirectory() + "/Documents",
         NSHomeDirectory() + "/Developer",
-        NSHomeDirectory() + "/Projects"
+        NSHomeDirectory() + "/Projects",
+        NSHomeDirectory() + "/Projets"
     ]
 
     // MARK: - Init
@@ -178,7 +180,7 @@ class SystemObserver {
         )
 
         guard let stream = fsEventStream else { return }
-        FSEventStreamScheduleWithRunLoop(stream, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        FSEventStreamSetDispatchQueue(stream, DispatchQueue.main)
         FSEventStreamStart(stream)
     }
 
@@ -188,10 +190,25 @@ class SystemObserver {
         guard !name.hasPrefix("."),
               !name.hasSuffix(".DS_Store"),
               !name.hasSuffix("~"),
+              !name.hasSuffix(".xcuserstate"),
+              !name.contains(".sb-"),
               !path.contains("/.git/"),
               !path.contains("/node_modules/"),
-              !path.contains("/__pycache__/")
+              !path.contains("/__pycache__/"),
+              !path.contains("/xcuserdata/"),
+              !path.contains("/DerivedData/")
         else { return }
+
+        let dedupeKey = "\(changeType):\(path)"
+        let now = Date()
+        if let lastSeen = recentFileEvents[dedupeKey],
+           now.timeIntervalSince(lastSeen) < 0.8 {
+            return
+        }
+        recentFileEvents[dedupeKey] = now
+        recentFileEvents = recentFileEvents.filter {
+            now.timeIntervalSince($0.value) < 5
+        }
 
         sendEvent([
             "type": "file_\(changeType)",

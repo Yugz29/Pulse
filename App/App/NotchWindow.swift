@@ -6,6 +6,7 @@ class NotchWindow: NSPanel {
 
     static let panelWidth:      CGFloat = 440
     static let dashboardHeight: CGFloat = 52
+    static let settingsHeight:  CGFloat = 116
     static let commandHeight:   CGFloat = 68
     static let bottomMargin:    CGFloat = 20
 

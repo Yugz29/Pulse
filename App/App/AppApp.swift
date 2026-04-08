@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Combine
+import Carbon.HIToolbox
 
 @main
 struct AppApp: App {
@@ -18,6 +19,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var vm: PulseViewModel!
     var observer: SystemObserver?
     private var cancellables = Set<AnyCancellable>()
+    private let bridge = DaemonBridge()
+    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyHandlerRef: EventHandlerRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -75,7 +79,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        vm.$panelMode
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, self.vm.isExpanded, self.vm.pendingCommand == nil else { return }
+                DispatchQueue.main.async {
+                    self.notchWindow?.currentPanelHeight = self.vm.currentPanelHeight
+                    self.notchWindow?.expandToPanel()
+                }
+            }
+            .store(in: &cancellables)
+
         setupFullscreenDetection()
+        registerGlobalShortcut()
         observer = SystemObserver()
         observer?.startObserving()
         notchWindow?.orderFrontRegardless()
@@ -107,9 +123,80 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func registerGlobalShortcut() {
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+
+        let handler: EventHandlerUPP = { _, eventRef, userData in
+            guard let eventRef, let userData else { return noErr }
+
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(
+                eventRef,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &hotKeyID
+            )
+
+            guard status == noErr else { return noErr }
+            guard hotKeyID.signature == AppDelegate.hotKeySignature else { return noErr }
+            guard hotKeyID.id == AppDelegate.hotKeyID else { return noErr }
+
+            let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+            delegate.copyContextSnapshot()
+            return noErr
+        }
+
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            handler,
+            1,
+            &eventType,
+            UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()),
+            &hotKeyHandlerRef
+        )
+
+        let hotKeyID = EventHotKeyID(
+            signature: AppDelegate.hotKeySignature,
+            id: AppDelegate.hotKeyID
+        )
+
+        RegisterEventHotKey(
+            UInt32(kVK_ANSI_C),
+            UInt32(cmdKey | optionKey | shiftKey),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+    }
+
+    private func copyContextSnapshot() {
+        Task {
+            guard let context = try? await bridge.getContext(), !context.isEmpty else { return }
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(context, forType: .string)
+            await MainActor.run {
+                self.vm.showTransientStatus("Context copied")
+            }
+            print("[Pulse] Context snapshot copied to clipboard")
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         observer?.stopObserving()
+        if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        if let hotKeyHandlerRef { RemoveEventHandler(hotKeyHandlerRef) }
         cancellables.removeAll()
         notchWindow = nil
     }
+
+    private static let hotKeySignature: OSType = 0x50554C53 // 'PULS'
+    private static let hotKeyID: UInt32 = 1
 }

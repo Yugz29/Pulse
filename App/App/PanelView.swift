@@ -5,6 +5,11 @@ import AppKit
 private let pureBlack = Color(red: 0, green: 0, blue: 0)
 private let startupExtensionHeight: CGFloat = 22
 
+enum PanelMode {
+    case dashboard
+    case settings
+}
+
 // --- ViewModel ---
 @MainActor
 class PulseViewModel: ObservableObject {
@@ -16,16 +21,24 @@ class PulseViewModel: ObservableObject {
     @Published var isFullscreen      = false
     @Published var isDaemonActive    = false
     @Published var inputText         = ""
+    @Published var transientStatusText: String? = nil
+    @Published var transientStatusAccent = Color(hex: "#5DCAA5")
 
     @Published var activeProject: String?   = nil
     @Published var activeApp: String?       = nil
     @Published var sessionDuration: Int     = 0
     @Published var pendingCommand: CommandAnalysis? = nil
+    @Published var availableModels: [String] = []
+    @Published var selectedCommandModel: String = ""
+    @Published var selectedSummaryModel: String = ""
+    @Published var isUpdatingModel = false
+    @Published var panelMode: PanelMode = .dashboard
 
     private let bridge = DaemonBridge()
 
     var currentPanelHeight: CGFloat {
-        pendingCommand != nil ? NotchWindow.commandHeight : NotchWindow.dashboardHeight
+        if pendingCommand != nil { return NotchWindow.commandHeight }
+        return panelMode == .settings ? NotchWindow.settingsHeight : NotchWindow.dashboardHeight
     }
 
     private var pollTask: Task<Void, Never>?
@@ -40,6 +53,7 @@ class PulseViewModel: ObservableObject {
                 if alive, let cmd = try? await self.bridge.fetchPendingCommand() {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         self.pendingCommand = cmd
+                        self.panelMode = .dashboard
                         self.isExpanded = true
                     }
                 }
@@ -51,7 +65,9 @@ class PulseViewModel: ObservableObject {
     func stopMcpPolling() { pollTask?.cancel(); pollTask = nil }
 
     func toggle() {
+        let willOpen = !isExpanded
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isExpanded.toggle() }
+        if willOpen { panelMode = .dashboard }
         if isExpanded { refreshState() }
     }
 
@@ -61,6 +77,45 @@ class PulseViewModel: ObservableObject {
             self.activeProject   = state.activeProject
             self.activeApp       = state.activeApp
             self.sessionDuration = state.sessionDurationMin
+            await refreshModels()
+        }
+    }
+
+    func refreshModels() async {
+        guard let response = try? await bridge.getLLMModels() else { return }
+        self.availableModels = response.availableModels
+        self.selectedCommandModel = response.selectedCommandModel
+        self.selectedSummaryModel = response.selectedSummaryModel
+    }
+
+    func updateSelectedModel(_ model: String, kind: String) {
+        let currentModel = kind == "summary" ? selectedSummaryModel : selectedCommandModel
+        guard !model.isEmpty, model != currentModel, !isUpdatingModel else { return }
+        isUpdatingModel = true
+        let previousCommandModel = selectedCommandModel
+        let previousSummaryModel = selectedSummaryModel
+
+        if kind == "summary" {
+            selectedSummaryModel = model
+        } else {
+            selectedCommandModel = model
+        }
+
+        Task {
+            let result = try? await bridge.setLLMModel(model, kind: kind)
+            await MainActor.run {
+                self.isUpdatingModel = false
+                if let result, result.ok {
+                    self.selectedCommandModel = result.selectedCommandModel ?? self.selectedCommandModel
+                    self.selectedSummaryModel = result.selectedSummaryModel ?? self.selectedSummaryModel
+                    let label = kind == "summary" ? "Summary model" : "Command model"
+                    self.showTransientStatus("\(label): \(model)")
+                } else {
+                    self.selectedCommandModel = previousCommandModel
+                    self.selectedSummaryModel = previousSummaryModel
+                    self.showTransientStatus("Model update failed", accent: Color(hex: "#ff453a"))
+                }
+            }
         }
     }
 
@@ -69,7 +124,14 @@ class PulseViewModel: ObservableObject {
         Task {
             try? await bridge.sendMcpDecision(toolUseId: command.toolUseId, allow: allow)
             self.pendingCommand = nil
+            self.panelMode = .dashboard
             self.isExpanded     = false
+        }
+    }
+
+    func toggleSettings() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            panelMode = panelMode == .dashboard ? .settings : .dashboard
         }
     }
 
@@ -85,6 +147,22 @@ class PulseViewModel: ObservableObject {
             }
         }
     }
+
+    func showTransientStatus(_ text: String, accent: Color? = nil) {
+        transientStatusAccent = accent ?? Color(hex: "#5DCAA5")
+        transientStatusText = text
+
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+            isStartupExpanded = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) {
+                self.transientStatusText = nil
+                self.isStartupExpanded = false
+            }
+        }
+    }
 }
 
 
@@ -92,6 +170,8 @@ class PulseViewModel: ObservableObject {
 
 struct NotchRootView: View {
     @ObservedObject var vm: PulseViewModel
+    @State private var isSettingsHovering = false
+    @State private var isRefreshHovering = false
 
     var notchWidth: CGFloat {
         guard let screen = NotchWindow.displayScreen() else { return 200 }
@@ -150,17 +230,111 @@ struct NotchRootView: View {
                     .transition(.opacity)
                 }
 
+                if let status = vm.transientStatusText, vm.isStartupExpanded {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(vm.transientStatusAccent)
+                            .frame(width: 6, height: 6)
+                        Text(status)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.78))
+                    }
+                    .frame(width: notchWidth)
+                    .offset(y: notchHeight + 3)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 if vm.isExpanded {
                     Group {
                         if let command = vm.pendingCommand {
                             CommandTranslationView(command: command, vm: vm)
                         } else {
-                            DashboardView(vm: vm)
+                            if vm.panelMode == .settings {
+                                SettingsView(vm: vm)
+                            } else {
+                                DashboardView(vm: vm)
+                            }
                         }
                     }
                     .frame(width: panelWidth)
                     .offset(y: notchHeight)
                     .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                if vm.isExpanded && vm.pendingCommand == nil {
+                    ZStack {
+                        if vm.panelMode == .settings {
+                            Text("Réglages")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.82))
+                                .frame(width: panelWidth, alignment: .leading)
+                                .padding(.leading, 36)
+                                .frame(height: notchHeight)
+
+                            Group {
+                                if vm.isUpdatingModel {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(.white.opacity(0.6))
+                                } else {
+                                    Button(action: {
+                                        vm.showTransientStatus("Refreshing models")
+                                        Task { await vm.refreshModels() }
+                                    }) {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundColor(.white.opacity(isRefreshHovering ? 0.9 : 0.52))
+                                            .frame(width: 22, height: 22)
+                                            .background(
+                                                Circle()
+                                                    .fill(Color.white.opacity(isRefreshHovering ? 0.12 : 0.04))
+                                            )
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(Color.white.opacity(isRefreshHovering ? 0.2 : 0.08), lineWidth: 0.8)
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .onHover { hovering in
+                                        withAnimation(.easeInOut(duration: 0.15)) {
+                                            isRefreshHovering = hovering
+                                        }
+                                    }
+                                }
+                            }
+                            .position(
+                                x: (geo.size.width - panelWidth) / 2 + panelWidth - 24,
+                                y: notchHeight / 2
+                            )
+                        }
+
+                        Button(action: vm.toggleSettings) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(isSettingsHovering ? 0.95 : 0.42))
+                                .frame(width: 22, height: 22)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(isSettingsHovering ? 0.14 : 0.03))
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(isSettingsHovering ? 0.24 : 0.06), lineWidth: 0.8)
+                                )
+                                .scaleEffect(isSettingsHovering ? 1.04 : 1.0)
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                isSettingsHovering = hovering
+                            }
+                        }
+                        .position(
+                            x: geo.size.width / 2 + notchWidth / 2 + 24,
+                            y: notchHeight / 2
+                        )
+                    }
+                    .frame(width: geo.size.width, height: notchHeight)
                 }
 
                 Color.clear
@@ -231,6 +405,69 @@ struct DashboardView: View {
         }
         .padding(.horizontal, 18)
         .frame(height: NotchWindow.dashboardHeight)
+    }
+}
+
+
+struct SettingsView: View {
+    @ObservedObject var vm: PulseViewModel
+
+    private func modelPicker(
+        label: String,
+        selection: Binding<String>
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.82))
+
+            Spacer()
+
+            if !vm.availableModels.isEmpty {
+                Picker(label, selection: selection) {
+                    ForEach(vm.availableModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(.white.opacity(0.82))
+            } else {
+                Text("No models detected")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.38))
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("IA")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.42))
+
+                modelPicker(
+                    label: "Command model",
+                    selection: Binding(
+                        get: { vm.selectedCommandModel },
+                        set: { vm.updateSelectedModel($0, kind: "command") }
+                    )
+                )
+
+                modelPicker(
+                    label: "Summary model",
+                    selection: Binding(
+                        get: { vm.selectedSummaryModel },
+                        set: { vm.updateSelectedModel($0, kind: "summary") }
+                    )
+                )
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .frame(height: NotchWindow.settingsHeight, alignment: .top)
     }
 }
 
