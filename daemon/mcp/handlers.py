@@ -4,6 +4,8 @@ from daemon.interpreter.command_interpreter import CommandInterpreter
 
 # Une queue par commande en attente — clé = tool_use_id
 _pending: dict[str, queue.Queue] = {}
+# Analyse en attente — exposée à /mcp/pending pour Swift
+_pending_analysis: dict[str, dict] = {}
 _lock = threading.Lock()
 
 interpreter = CommandInterpreter()
@@ -17,13 +19,27 @@ def intercept_command(command: str, tool_use_id: str) -> dict:
     # 1. Analyse la commande
     result = interpreter.interpret(command)
 
-    # 2. Affiche dans le terminal (l'encoche viendra plus tard)
+    # 2. Affiche dans le terminal
     _print_interception(command, result)
 
-    # 3. Crée une queue pour cette commande et attend la décision
+    # 3. Stocke l'analyse pour que Swift puisse la lire via /mcp/pending
+    analysis = {
+        "tool_use_id":  tool_use_id,
+        "command":      result.original,
+        "translated":   result.translated,
+        "risk_level":   result.risk_level,
+        "risk_score":   result.risk_score,
+        "is_read_only": result.is_read_only,
+        "affects":      result.affects,
+        "warning":      result.warning,
+        "needs_llm":    result.needs_llm,
+    }
+
+    # 4. Crée une queue pour cette commande et attend la décision
     decision_queue: queue.Queue = queue.Queue()
     with _lock:
         _pending[tool_use_id] = decision_queue
+        _pending_analysis[tool_use_id] = analysis
 
     try:
         # Attend la décision 60 secondes max
@@ -35,20 +51,9 @@ def intercept_command(command: str, tool_use_id: str) -> dict:
     finally:
         with _lock:
             _pending.pop(tool_use_id, None)
+            _pending_analysis.pop(tool_use_id, None)
 
-    return {
-        "tool_use_id":  tool_use_id,
-        "command":      result.original,
-        "translated":   result.translated,
-        "risk_level":   result.risk_level,
-        "risk_score":   result.risk_score,
-        "is_read_only": result.is_read_only,
-        "affects":      result.affects,
-        "warning":      result.warning,
-        "needs_llm":    result.needs_llm,
-        "decision":     decision,
-        "allowed":      decision == "allow",
-    }
+    return {**analysis, "decision": decision, "allowed": decision == "allow"}
 
 
 def receive_decision(tool_use_id: str, decision: str) -> bool:
@@ -66,6 +71,19 @@ def receive_decision(tool_use_id: str, decision: str) -> bool:
     return False
 
 
+def get_pending_command() -> dict | None:
+    """
+    Retourne la première commande en attente de décision.
+    Appelé par la route GET /mcp/pending — Swift poll cette route.
+    """
+    with _lock:
+        if not _pending_analysis:
+            return None
+        # Retourne la plus ancienne commande en attente
+        first_id = next(iter(_pending_analysis))
+        return _pending_analysis[first_id]
+
+
 def get_pending_count() -> int:
     """Retourne le nombre de commandes en attente de décision."""
     with _lock:
@@ -73,7 +91,7 @@ def get_pending_count() -> int:
 
 
 def _print_interception(command: str, result):
-    """Affiche l'interception dans le terminal — remplacé par l'encoche plus tard."""
+    """Affiche l'interception dans le terminal."""
     risk_icons = {
         "safe":     "✅",
         "low":      "🟡",
