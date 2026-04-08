@@ -93,6 +93,14 @@ def _update_habits(base_dir: Path, session: Dict[str, Any]) -> None:
     if apps:
         line += " avec {0}".format(", ".join(apps))
 
+    existing_lines = [
+        existing.strip()
+        for existing in habits_file.read_text(encoding="utf-8").splitlines()
+        if existing.strip()
+    ]
+    if existing_lines and existing_lines[-1] == line:
+        return
+
     with habits_file.open("a", encoding="utf-8") as handle:
         handle.write(line + "\n")
 

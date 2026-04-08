@@ -36,7 +36,11 @@ class SignalScorer:
         recent = self.bus.recent(100)
         now = datetime.now()
 
-        file_events = [e for e in recent if e.type in self._file_event_types()]
+        file_events = [
+            e for e in recent
+            if e.type in self._file_event_types()
+            and self._is_meaningful_file_path(e.payload.get("path"))
+        ]
         active_file = self._last_file_path(file_events)
         active_project = self._extract_project(active_file)
 
@@ -158,3 +162,18 @@ class SignalScorer:
                 if idx + 1 < len(parts):
                     return parts[idx + 1]
         return None
+
+    def _is_meaningful_file_path(self, path: Optional[str]) -> bool:
+        if not path:
+            return False
+
+        name = path.split("/")[-1]
+        if name.startswith("."):
+            return False
+        if name.endswith((".DS_Store", "~", ".xcuserstate")):
+            return False
+        if ".sb-" in name:
+            return False
+        if any(part in path for part in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")):
+            return False
+        return True

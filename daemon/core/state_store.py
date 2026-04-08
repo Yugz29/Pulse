@@ -4,6 +4,22 @@ from typing import Optional
 from .event_bus import Event
 
 
+def _is_meaningful_file_path(path: str) -> bool:
+    if not path:
+        return False
+
+    name = path.split("/")[-1]
+    if name.startswith("."):
+        return False
+    if name.endswith((".DS_Store", "~", ".xcuserstate")):
+        return False
+    if ".sb-" in name:
+        return False
+    if any(part in path for part in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")):
+        return False
+    return True
+
+
 @dataclass
 class State:
     active_app: Optional[str] = None
@@ -32,7 +48,7 @@ class StateStore:
 
         elif event.type in ("file_created", "file_modified", "file_renamed", "file_deleted"):
             path = event.payload.get("path", "")
-            if path:
+            if _is_meaningful_file_path(path):
                 self._state.active_file = path
                 self._state.active_project = self._extract_project(path)
 
@@ -47,7 +63,7 @@ class StateStore:
             self._state.active_app = event.payload.get("app_name")
         elif event.type == "file_change":
             path = event.payload.get("path", "")
-            if path:
+            if _is_meaningful_file_path(path):
                 self._state.active_file = path
                 self._state.active_project = self._extract_project(path)
 

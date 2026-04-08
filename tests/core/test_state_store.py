@@ -69,6 +69,13 @@ class TestStateStore(unittest.TestCase):
         self.assertEqual(result["active_app"], "Cursor")
         self.assertEqual(result["active_project"], "Cortex")
 
+    def test_ignore_fichier_bruite_xcode(self):
+        self.store.update(Event("file_modified", {
+            "path": "/Users/yugz/Projets/Pulse/Pulse/App/App.xcodeproj/project.xcworkspace/xcuserdata/yugz.xcuserdatad/UserInterfaceState.xcuserstate"
+        }))
+        self.assertIsNone(self.store.get().active_file)
+        self.assertIsNone(self.store.get().active_project)
+
 
 if __name__ == "__main__":
     unittest.main()

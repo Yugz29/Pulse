@@ -77,6 +77,18 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(signals.focus_level, "idle")
 
+    def test_ignore_fichiers_bruites_xcode(self):
+        self._push("file_modified", {
+            "path": "/Users/yugz/Projets/Pulse/Pulse/App/App.xcodeproj/project.xcworkspace/xcuserdata/yugz.xcuserdatad/UserInterfaceState.xcuserstate"
+        })
+        self._push("file_modified", {
+            "path": "/Users/yugz/Projets/Pulse/Pulse/App/App/SystemObserver.swift"
+        })
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/App/App/SystemObserver.swift")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -115,6 +115,25 @@ class TestExtractor(unittest.TestCase):
         self.assertEqual(len(session_files), 1)
         self.assertIn("Résumé court de la session.", session_files[0].read_text())
 
+    def test_habits_najoute_pas_de_doublon_consecutif(self):
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 25,
+            "probable_task": "coding",
+            "recent_apps": ["Cursor", "Terminal"],
+        }
+
+        update_memories_from_session(session, memory_dir=self.memory_dir)
+        update_memories_from_session(session, memory_dir=self.memory_dir)
+
+        habits_lines = [
+            line.strip()
+            for line in (self.memory_dir / "habits.md").read_text().splitlines()
+            if line.strip().startswith("- ")
+        ]
+
+        self.assertEqual(len(habits_lines), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
