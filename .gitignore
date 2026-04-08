@@ -36,3 +36,7 @@ build/
 
 # Pulse spécifique
 daemon/.venv/
+# Xcode user-specific files
+App/App.xcodeproj/project.xcworkspace/xcuserdata/
+App/App.xcodeproj/xcuserdata/
+*.xcuserstate
