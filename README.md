@@ -73,6 +73,8 @@ There is also an end-to-end script:
 python3 test_e2e.py
 ```
 
+For the current test battery and manual validation checklist, see `docs/testing.md`.
+
 ## Memory Output
 
 Pulse writes local runtime memory under:
@@ -102,3 +104,14 @@ Still in progress:
 - richer context injection,
 - LLM routing for unknown commands and summaries,
 - startup automation and final polish.
+
+## LaunchAgent
+
+For a stable login-time startup during development, Pulse now includes:
+- a daemon launcher script at `scripts/start_pulse_daemon.sh`,
+- a launchd plist template at `launchd/cafe.pulse.daemon.plist`,
+- an installer script at `scripts/install_launch_agent.sh`.
+
+This autostart flow currently targets the Python daemon. The notch app is still run from Xcode during development, so its bundle path is not stable enough yet for a robust login-time launch.
+
+The included scripts resolve the repository path dynamically, so they keep working even if Pulse is cloned into a different folder.
