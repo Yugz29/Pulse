@@ -94,6 +94,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerGlobalShortcut()
         observer = SystemObserver()
         observer?.startObserving()
+        vm.onObservationToggle = { [weak self] enabled in
+            guard let self else { return }
+            if enabled {
+                if self.observer == nil {
+                    self.observer = SystemObserver()
+                }
+                self.observer?.startObserving()
+            } else {
+                self.observer?.stopObserving()
+            }
+        }
         notchWindow?.orderFrontRegardless()
     }
 

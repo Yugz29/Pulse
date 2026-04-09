@@ -32,9 +32,11 @@ class PulseViewModel: ObservableObject {
     @Published var selectedCommandModel: String = ""
     @Published var selectedSummaryModel: String = ""
     @Published var isUpdatingModel = false
+    @Published var isObservingEnabled = true
     @Published var panelMode: PanelMode = .dashboard
 
     private let bridge = DaemonBridge()
+    var onObservationToggle: ((Bool) -> Void)?
 
     var currentPanelHeight: CGFloat {
         if pendingCommand != nil { return NotchWindow.commandHeight }
@@ -135,6 +137,25 @@ class PulseViewModel: ObservableObject {
         }
     }
 
+    func toggleObservation() {
+        isObservingEnabled.toggle()
+        onObservationToggle?(isObservingEnabled)
+        showTransientStatus(
+            isObservingEnabled ? "Observation enabled" : "Observation paused",
+            accent: isObservingEnabled ? Color(hex: "#ff453a") : Color(hex: "#7c7c80")
+        )
+    }
+
+    var observationStatusText: String {
+        if !isDaemonActive { return "Daemon inactif" }
+        return isObservingEnabled ? "Pulse observe" : "Observation paused"
+    }
+
+    var observationStatusColor: Color {
+        if !isDaemonActive { return Color(hex: "#7c7c80") }
+        return isObservingEnabled ? Color(hex: "#ff453a") : Color(hex: "#7c7c80")
+    }
+
     func triggerStartupAnimation() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { self.isStartupExpanded = true }
@@ -172,6 +193,7 @@ struct NotchRootView: View {
     @ObservedObject var vm: PulseViewModel
     @State private var isSettingsHovering = false
     @State private var isRefreshHovering = false
+    @State private var isObservationHovering = false
 
     var notchWidth: CGFloat {
         guard let screen = NotchWindow.displayScreen() else { return 200 }
@@ -263,6 +285,30 @@ struct NotchRootView: View {
 
                 if vm.isExpanded && vm.pendingCommand == nil {
                     ZStack {
+                        if vm.panelMode == .dashboard {
+                            Button(action: vm.toggleObservation) {
+                                HStack(spacing: 5) {
+                                    Circle()
+                                        .fill(vm.observationStatusColor)
+                                        .frame(width: 5, height: 5)
+                                    Text(vm.observationStatusText)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.white.opacity(isObservationHovering ? 0.82 : 0.62))
+                                        .lineLimit(1)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { hovering in
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    isObservationHovering = hovering
+                                }
+                            }
+                            .position(
+                                x: (geo.size.width - panelWidth) / 2 + 74,
+                                y: notchHeight / 2
+                            )
+                        }
+
                         if vm.panelMode == .settings {
                             Text("Réglages")
                                 .font(.system(size: 13, weight: .semibold))
@@ -365,17 +411,12 @@ struct DashboardView: View {
         return vm.isDaemonActive ? "Pulse" : "Inactif"
     }
 
-    var dotColor: Color {
-        vm.isDaemonActive ? Color(hex: "#5DCAA5") : Color(hex: "#ff453a")
-    }
-
     var body: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 7) {
-                Circle().fill(dotColor).frame(width: 7, height: 7)
+            HStack(spacing: 6) {
                 Text(appLabel)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.88))
+                    .foregroundColor(.white.opacity(0.48))
                     .lineLimit(1)
                 if vm.sessionDuration > 0 {
                     Text("·").foregroundColor(.white.opacity(0.25))

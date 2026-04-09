@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,9 +18,13 @@ class SystemObserver {
 
     private var fsEventStream: FSEventStreamRef?
     private var clipboardTimer: Timer?
+    private var idleTimer: Timer?
     private var lastClipboardContent: String = ""
-    private var lastActivity = Date()
     private var recentFileEvents: [String: Date] = [:]
+    private var isUserIdle = false
+
+    private let idleThresholdSeconds: TimeInterval = 300
+    private let idlePollInterval: TimeInterval = 15
 
     // Chemins surveillés par FSEvents (ajuster selon le projet)
     private let watchedPaths: [String] = [
@@ -42,6 +47,7 @@ class SystemObserver {
         observeActiveApp()
         observeFilesystem()
         observeClipboard()
+        observeUserIdle()
         observeScreenLock()
     }
 
@@ -61,6 +67,10 @@ class SystemObserver {
         // Clipboard polling
         clipboardTimer?.invalidate()
         clipboardTimer = nil
+
+        // Idle polling
+        idleTimer?.invalidate()
+        idleTimer = nil
     }
 
     deinit { stopObserving() }
@@ -242,6 +252,45 @@ class SystemObserver {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // MARK: - 4. User idle / active
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private func observeUserIdle() {
+        idleTimer = Timer.scheduledTimer(
+            withTimeInterval: idlePollInterval,
+            repeats: true
+        ) { [weak self] _ in
+            self?.checkUserIdle()
+        }
+    }
+
+    private func checkUserIdle() {
+        let idleSeconds = CGEventSource.secondsSinceLastEventType(
+            .combinedSessionState,
+            eventType: .null
+        )
+
+        if idleSeconds >= idleThresholdSeconds {
+            guard !isUserIdle else { return }
+            isUserIdle = true
+            sendEvent([
+                "type": "user_idle",
+                "seconds": String(Int(idleSeconds.rounded())),
+                "timestamp": ISO8601DateFormatter().string(from: Date())
+            ])
+            return
+        }
+
+        guard isUserIdle else { return }
+        isUserIdle = false
+        sendEvent([
+            "type": "user_active",
+            "seconds": String(Int(idleSeconds.rounded())),
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+    }
+
     private func checkClipboard() {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastChangeCount else { return }
@@ -285,7 +334,7 @@ class SystemObserver {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // MARK: - 4. Screen lock / unlock
+    // MARK: - 5. Screen lock / unlock
     // ─────────────────────────────────────────────────────────────────────────
 
     private func observeScreenLock() {
@@ -304,11 +353,13 @@ class SystemObserver {
     }
 
     @objc private func handleScreenLocked() {
+        isUserIdle = true
         sendEvent(["type": "screen_locked",
                    "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
 
     @objc private func handleScreenUnlocked() {
+        isUserIdle = false
         sendEvent(["type": "screen_unlocked",
                    "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
