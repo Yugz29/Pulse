@@ -11,6 +11,12 @@ class FakeLLM:
         return "Résumé court de la session."
 
 
+class FailingLLM:
+
+    def complete(self, prompt, max_tokens=200):
+        raise RuntimeError("offline")
+
+
 class TestExtractor(unittest.TestCase):
 
     def setUp(self):
@@ -133,6 +139,24 @@ class TestExtractor(unittest.TestCase):
         ]
 
         self.assertEqual(len(habits_lines), 1)
+
+    def test_resume_llm_ecrit_un_fallback_si_ollama_echoue(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 5,
+                "max_friction": 0.7,
+            },
+            llm=FailingLLM(),
+            memory_dir=self.memory_dir,
+        )
+
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        self.assertIn("Session de 45 min sur Pulse.", session_files[0].read_text())
 
 
 if __name__ == "__main__":

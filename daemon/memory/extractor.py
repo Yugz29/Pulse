@@ -133,7 +133,7 @@ def _write_session_summary(base_dir: Path, session: Dict[str, Any], llm: Any) ->
         summary = _llm_complete(llm, prompt)
     except Exception as exc:
         print("[Memory] Erreur résumé LLM: {0}".format(exc))
-        return
+        summary = _fallback_session_summary(session)
 
     content = "\n".join(
         [
@@ -223,3 +223,23 @@ def _llm_complete(llm: Any, prompt: str) -> str:
     if hasattr(llm, "complete"):
         return llm.complete(prompt, max_tokens=200)
     raise TypeError("LLM provider incompatible")
+
+
+def _fallback_session_summary(session: Dict[str, Any]) -> str:
+    project = session.get("active_project") or "Sans projet détecté"
+    duration = session.get("duration_min", 0)
+    task = session.get("probable_task", "general")
+    files_changed = session.get("files_changed", 0)
+    friction = float(session.get("max_friction", 0.0))
+
+    return (
+        "Session de {0} min sur {1}. "
+        "Travail principal: {2}. "
+        "Fichiers modifiés: {3}, friction max: {4:.1f}/1.0."
+    ).format(
+        duration,
+        project,
+        task,
+        files_changed,
+        friction,
+    )

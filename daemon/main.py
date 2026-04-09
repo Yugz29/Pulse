@@ -3,6 +3,7 @@ import time
 import logging
 import threading
 from datetime import datetime, timedelta
+from pathlib import Path
 from flask import Flask, request, jsonify
 from daemon.core.event_bus import EventBus
 from daemon.core.state_store import StateStore
@@ -11,6 +12,7 @@ from daemon.core.decision_engine import DecisionEngine
 from daemon.llm.router import LLMRouter
 from daemon.memory.session import SessionMemory
 from daemon.memory.extractor import update_memories_from_session, load_memory_context
+from daemon.settings import load_runtime_settings, save_runtime_settings
 from daemon.mcp.server import start_mcp_server
 from daemon.mcp.handlers import (
     receive_decision,
@@ -41,6 +43,7 @@ last_signals = None
 last_decision = None
 last_memory_sync_at = None
 recent_file_events = {}
+settings_path = Path.home() / ".pulse" / "settings.json"
 
 
 def _handle_event(event):
@@ -160,6 +163,28 @@ def set_selected_summary_llm_model(model: str) -> bool:
     return True
 
 
+def _load_persisted_models():
+    settings = load_runtime_settings(settings_path)
+
+    command_model = (settings.get("command_model") or "").strip()
+    if command_model:
+        set_selected_command_llm_model(command_model)
+
+    summary_model = (settings.get("summary_model") or "").strip()
+    if summary_model:
+        set_selected_summary_llm_model(summary_model)
+
+
+def _persist_selected_models():
+    save_runtime_settings(
+        {
+            "command_model": get_selected_command_llm_model(),
+            "summary_model": get_selected_summary_llm_model(),
+        },
+        settings_path=settings_path,
+    )
+
+
 def _shutdown_runtime():
     try:
         snapshot = session_memory.export_session_data()
@@ -267,6 +292,7 @@ def build_context_snapshot() -> str:
 bus.subscribe(store.update)
 bus.subscribe(_handle_event)
 atexit.register(_shutdown_runtime)
+_load_persisted_models()
 
 
 @app.route("/ping")
@@ -362,6 +388,8 @@ def set_llm_model():
 
     if not ok:
         return jsonify({"ok": False, "error": "unknown_model"}), 400
+
+    _persist_selected_models()
 
     return jsonify({
         "ok": True,
