@@ -16,9 +16,11 @@ What it covers:
 - signal scorer
 - decision engine
 - state store
+- runtime state matrix (`/ping`, `/state`, `/event`, `/insights`)
 - MCP handlers
 - session memory
 - memory extraction
+- LLM availability matrix (`ollama_online`, `llm_active`, selected models)
 - runtime settings persistence
 
 ## Interactive E2E
@@ -42,20 +44,44 @@ Optional custom command:
 
 - Open and close the notch.
 - Verify the dashboard appears first.
-- Verify the top status indicator changes between:
-  - `Pulse observe`
-  - `Observation paused`
-  - `Daemon inactif`
+- Verify the dashboard shows the current context card:
+  - active app or project
+  - active file
+  - task, focus, session
+  - friction badge
+- Verify the input bubble stays fully inside the expanded notch panel.
+- Send a message and verify the UI switches to chat mode.
+
+### Services
+
+- Open `Services` from the health icon.
+- Verify the daemon row supports:
+  - start
+  - pause
+  - resume
+  - stop
+  - restart
+- Verify the observation row can be paused/resumed independently.
+- Verify the `LLM` row shows:
+  - current availability
+  - refresh button
+  - model chooser menu
+- Change the command and summary models and restart Pulse to confirm persistence.
 
 ### Settings
 
 - Open settings from the gear icon.
 - Verify `Réglages` appears in the top bar.
-- Verify both model pickers are visible:
-  - `Command model`
-  - `Summary model`
-- Change each model and restart Pulse to confirm persistence.
-- Use refresh and verify the models list updates.
+- Verify the view only contains secondary/runtime guidance and no longer duplicates the LLM controls.
+
+### Chat
+
+- Send a message from the dashboard.
+- Verify the panel switches to chat mode and shows:
+  - loading state
+  - final response
+- Verify the close button exits chat back to the dashboard.
+- Verify no control is rendered inside the physical notch area.
 
 ### Context
 
@@ -65,6 +91,13 @@ Optional custom command:
 
 ### Observation
 
+- Open `Observation` from the eye icon.
+- Verify the panel shows only recent activity rows.
+- Verify each activity row displays:
+  - icon
+  - main value
+  - secondary description
+  - relative timestamp
 - Modify a real `.swift` or `.py` file.
 - Confirm `Project` and `Active file` update in the copied context.
 - Toggle observation off and verify file/app activity stops updating.

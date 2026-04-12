@@ -15,7 +15,10 @@ Pulse currently includes:
 - MCP command interception for Claude Code,
 - command interpretation and risk scoring,
 - local session memory in SQLite,
-- markdown memory extraction (`projects.md`, `habits.md`).
+- markdown memory extraction (`projects.md`, `habits.md`),
+- runtime controls for daemon pause/resume, observation pause/resume, and LLM model selection from the notch UI,
+- a dashboard and streaming chat inside the notch,
+- a split daemon architecture with dedicated runtime, assistant, memory, and MCP routes.
 
 ## Project Structure
 
@@ -45,8 +48,15 @@ The daemon serves:
 - `GET /ping`
 - `POST /event`
 - `GET /state`
+- `GET /insights`
 - `GET /context`
+- `POST /ask`
+- `POST /ask/stream`
+- `GET /llm/models`
+- `POST /llm/model`
+- runtime routes under `/daemon/*`
 - MCP-related routes under `/mcp/*`
+- memory/search routes under `/memory*` and `/search`
 
 ### Swift app
 
@@ -56,7 +66,8 @@ The app:
 - renders the notch UI,
 - polls the daemon,
 - observes apps/filesystem/clipboard,
-- sends events to the daemon.
+- sends events to the daemon,
+- exposes dashboard, services, observation, and chat panels.
 
 ## Tests
 
@@ -64,13 +75,13 @@ Run the Python test suite:
 
 ```bash
 cd Pulse
-python3 -m pytest tests -q
+./scripts/test_all.sh
 ```
 
 There is also an end-to-end script:
 
 ```bash
-python3 test_e2e.py
+.venv/bin/python3 tests/test_e2e.py
 ```
 
 For the current test battery and manual validation checklist, see `docs/testing.md`.
@@ -94,11 +105,13 @@ Pulse writes local runtime memory under:
 Implemented:
 - command interpreter,
 - MCP interception flow,
-- notch UI shell,
+- notch UI shell with dashboard, services, observation, and chat,
 - signal scorer,
 - decision engine,
 - SQLite session memory,
-- markdown memory extraction.
+- markdown memory extraction,
+- streaming LLM chat and model selection from the notch,
+- daemon runtime pause/resume and modular route registration.
 
 Still in progress:
 - richer context injection,

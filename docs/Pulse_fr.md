@@ -28,7 +28,7 @@ Principe fondateur :
 
 ## Ce que Pulse n'est pas
 
-- Pas un chatbot dans l'encoche.
+- Pas un chatbot généraliste ou une fenêtre de chat permanente.
 - Pas un wrapper LLM.
 - Pas un concurrent des IA existantes.
 - Pas dépendant de Cortex.
@@ -113,7 +113,11 @@ L'application Swift gère :
 - l'interface autour de l'encoche,
 - le polling de l'état du daemon,
 - l'observation du système,
-- l'envoi des événements au daemon.
+- l'envoi des événements au daemon,
+- un dashboard de contexte,
+- une vue d'activité récente,
+- un panneau `Services`,
+- un chat streamé avec Pulse.
 
 ### Daemon Python
 
@@ -124,7 +128,7 @@ Le daemon gère :
 - le `DecisionEngine`,
 - la mémoire de session SQLite,
 - l'extraction de mémoire persistante,
-- les routes HTTP locales,
+- les routes HTTP locales découpées par domaine (`runtime`, `assistant`, `memory`, `mcp`),
 - l'interception MCP.
 
 ---
@@ -225,10 +229,9 @@ Organisation visée :
 │   ├── MEMORY.md
 │   ├── habits.md
 │   ├── projects.md
-│   ├── preferences.md
 │   └── sessions/
 ├── session.db
-└── config.yaml
+└── settings.json
 ```
 
 ### Ce que mémorise Pulse
@@ -288,12 +291,14 @@ L'objectif est d'éviter de re-raconter manuellement ton contexte à chaque conv
 
 ## Notch UI
 
-L'interface notch n'est pas pensée comme une fenêtre de chat permanente. C'est une présence ambiante qui change d'état selon le contexte.
+L'interface notch reste une présence ambiante, mais elle expose maintenant plusieurs panneaux opérationnels.
 
-Trois modes principaux :
-- Idle : Pulse observe discrètement.
-- Commande interceptée : le panel s'ouvre pour demander une décision.
-- Ouverture manuelle : affichage d'un état plus large de la session.
+Panneaux principaux :
+- `Dashboard` : contexte courant, friction, tâche probable, session, saisie rapide,
+- `Chat` : réponse streamée token par token,
+- `Observation` : activité récente avec indicateurs temporels,
+- `Services` : daemon, observation, LLM et sélection de modèle,
+- `Commande interceptée` : traduction + allow / deny pour MCP.
 
 Le rôle de l'UI est d'être visible au bon moment, sans devenir envahissante.
 
@@ -309,7 +314,13 @@ Routes principales :
 - `GET /state`
 - `GET /insights`
 - `POST /ask`
+- `POST /ask/stream`
 - `GET /context`
+- `GET /llm/models`
+- `POST /llm/model`
+- `POST /daemon/pause`
+- `POST /daemon/resume`
+- `POST /daemon/shutdown`
 - `POST /mcp/decision`
 
 Swift agit comme client du daemon, et le daemon centralise l'état et les décisions.
@@ -334,6 +345,7 @@ Ces permissions doivent rester minimales et cohérentes avec le caractère local
 Pulse est conçu pour rester configurable localement :
 - provider LLM,
 - modèle,
+- comportement mémoire du provider (`keep_alive`, `num_ctx`),
 - politique d'injection,
 - comportement mémoire,
 - options du daemon,
@@ -347,7 +359,7 @@ L'idée n'est pas de multiplier les réglages, mais de garder une couche locale 
 
 ### 1. Lancer le daemon
 
-Créer un environnement Python, installer les dépendances du daemon puis lancer `daemon/main.py`.
+Créer un environnement Python, installer les dépendances du daemon puis lancer `daemon/main.py` ou installer le LaunchAgent de développement.
 
 ### 2. Lancer l'app macOS
 
@@ -363,6 +375,14 @@ Après une session de travail significative, vérifier :
 - `~/.pulse/session.db`
 - `~/.pulse/memory/projects.md`
 - `~/.pulse/memory/habits.md`
+
+### 5. Vérifier l'encoche
+
+Depuis l'encoche, vérifier :
+- `Services` pour pause/reprise du daemon,
+- `Observation` pour la timeline récente,
+- `Dashboard` pour le contexte courant,
+- `Chat` pour une réponse streamée.
 
 ---
 
