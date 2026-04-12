@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+import os
+import threading
+import time
+from datetime import datetime
+from typing import Any, Callable
+
+from flask import Flask, jsonify, request
+
+
+def register_runtime_routes(
+    app: Flask,
+    *,
+    bus: Any,
+    store: Any,
+    runtime_state: Any,
+    llm_unload_background: Callable[[], None],
+    llm_warmup_background: Callable[[], None],
+    shutdown_runtime: Callable[[], None],
+    log: Any,
+) -> None:
+    @app.route("/ping")
+    def ping():
+        paused = runtime_state.touch_ping()
+        return jsonify({"status": "ok", "version": "0.1.0", "paused": paused})
+
+    @app.route("/event", methods=["POST"])
+    def receive_event():
+        data = request.get_json() or {}
+        event_type = data.get("type", "unknown")
+        payload = {key: value for key, value in data.items() if key != "type"}
+        if runtime_state.is_paused():
+            return jsonify({"ok": True, "paused": True, "ignored": True})
+        # Répond immédiatement — Swift ne doit jamais attendre le pipeline SQLite.
+        threading.Thread(target=bus.publish, args=(event_type, payload), daemon=True).start()
+        return jsonify({"ok": True})
+
+    @app.route("/state")
+    def get_state():
+        state = store.to_dict()
+        signals, decision, paused = runtime_state.get_signal_snapshot()
+        state["runtime_paused"] = paused
+        if signals:
+            state["signals"] = {
+                "active_project": signals.active_project,
+                "active_file": signals.active_file,
+                "probable_task": signals.probable_task,
+                "friction_score": signals.friction_score,
+                "focus_level": signals.focus_level,
+                "session_duration_min": signals.session_duration_min,
+                "recent_apps": signals.recent_apps,
+                "clipboard_context": signals.clipboard_context,
+            }
+        if decision:
+            state["decision"] = {
+                "action": decision.action,
+                "level": decision.level,
+                "reason": decision.reason,
+                "payload": decision.payload,
+            }
+        return jsonify(state)
+
+    @app.route("/insights")
+    def get_insights():
+        try:
+            limit = int(request.args.get("limit", 25))
+        except (TypeError, ValueError):
+            limit = 25
+        limit = min(max(limit, 1), 100)
+        recent = bus.recent(limit)
+        return jsonify([
+            {"type": event.type, "payload": event.payload, "timestamp": event.timestamp.isoformat()}
+            for event in recent
+        ])
+
+    @app.route("/daemon/shutdown", methods=["POST"])
+    def daemon_shutdown():
+        log.info("Shutdown demandé via HTTP")
+        shutdown_runtime()
+
+        def _exit():
+            time.sleep(0.3)
+            os._exit(0)
+
+        threading.Thread(target=_exit, daemon=True).start()
+        return jsonify({"ok": True, "action": "shutdown"})
+
+    @app.route("/daemon/pause", methods=["POST"])
+    def daemon_pause():
+        runtime_state.set_paused(True)
+        threading.Thread(target=llm_unload_background, daemon=True).start()
+        return jsonify({"ok": True, "action": "pause", "paused": True})
+
+    @app.route("/daemon/resume", methods=["POST"])
+    def daemon_resume():
+        runtime_state.set_paused(False)
+        threading.Thread(target=llm_warmup_background, daemon=True).start()
+        return jsonify({"ok": True, "action": "resume", "paused": False})
+
+    @app.route("/daemon/restart", methods=["POST"])
+    def daemon_restart():
+        log.info("Restart demandé via HTTP")
+        shutdown_runtime()
+
+        def _exit():
+            time.sleep(0.3)
+            os._exit(1)
+
+        threading.Thread(target=_exit, daemon=True).start()
+        return jsonify({"ok": True, "action": "restart"})

@@ -33,6 +33,7 @@ def set_selected_command_llm_model(model: str) -> bool:
     return True
 
 
+# Alias unifié — command et summary utilisent le même modèle
 def get_selected_llm_model() -> str:
     return get_selected_command_llm_model()
 
