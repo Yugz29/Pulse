@@ -1,0 +1,26 @@
+# ── Dépendances core ───────────────────────────────────────────────────────────
+flask>=3.0.0
+
+# ── Tree-sitter core ───────────────────────────────────────────────────────────
+tree-sitter>=0.22.0,<0.25.0
+
+# ── Grammars stables sur PyPI ──────────────────────────────────────────────────
+# Testés et disponibles via pip
+tree-sitter-typescript>=0.23.0
+tree-sitter-javascript>=0.23.0
+tree-sitter-rust>=0.23.0
+tree-sitter-go>=0.23.0
+tree-sitter-java>=0.23.0
+tree-sitter-c>=0.23.0
+tree-sitter-cpp>=0.23.0
+tree-sitter-ruby>=0.23.0
+tree-sitter-c-sharp>=0.23.0
+
+# ── Grammars optionnels (installer séparément si besoin) ───────────────────────
+# Swift : pas de package PyPI officiel stable
+#   → installer manuellement si disponible :
+#   pip install tree-sitter-swift
+#
+# Kotlin : disponibilité variable selon la version de tree-sitter
+#   → installer manuellement si disponible :
+#   pip install tree-sitter-kotlin

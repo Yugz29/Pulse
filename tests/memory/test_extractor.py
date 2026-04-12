@@ -1,8 +1,11 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+from datetime import datetime, timedelta
 
 from daemon.memory.extractor import load_memory_context, update_memories_from_session
+import daemon.memory.extractor as extractor_module
 
 
 class FakeLLM:
@@ -22,6 +25,8 @@ class TestExtractor(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.memory_dir = Path(self.tmpdir.name)
+        # Réinitialise le curseur entre chaque test
+        extractor_module._last_report_at.clear()
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -104,6 +109,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("# Préférences", context)
 
     def test_resume_llm_ecrit_une_session_si_duree_suffisante(self):
+        # trigger='commit' pour que le LLM soit effectivement appelé
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -115,11 +121,95 @@ class TestExtractor(unittest.TestCase):
             },
             llm=FakeLLM(),
             memory_dir=self.memory_dir,
+            trigger="commit",
         )
 
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         self.assertIn("Résumé court de la session.", session_files[0].read_text())
+
+    def test_llm_desactive_pour_screen_lock(self):
+        """Le LLM ne doit PAS être appelé pour screen_lock — fallback déterministe uniquement."""
+        call_count = {"n": 0}
+
+        class CountingLLM:
+            def complete(self, prompt, max_tokens=200):
+                call_count["n"] += 1
+                return "Ne devrait pas apparaître."
+
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 3,
+                "max_friction": 0.2,
+            },
+            llm=CountingLLM(),
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        self.assertEqual(call_count["n"], 0, "LLM ne doit pas être appelé pour screen_lock")
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        # Le rapport déterministe doit quand même exister
+        self.assertIn("45 min", session_files[0].read_text())
+
+    def test_curseur_empeche_doublon_dans_cooldown(self):
+        """Deux appels en moins de REPORT_COOLDOWN_MIN ne produisent qu'un seul rapport."""
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+            "probable_task": "coding",
+            "recent_apps": ["Xcode"],
+            "files_changed": 5,
+            "max_friction": 0.3,
+        }
+        update_memories_from_session(session, memory_dir=self.memory_dir, trigger="screen_lock")
+        update_memories_from_session(session, memory_dir=self.memory_dir, trigger="screen_lock")
+
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1, "Le curseur doit bloquer le deuxième rapport")
+
+    def test_commit_ignore_le_cooldown(self):
+        """Un trigger commit bypasse toujours le cooldown."""
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+            "probable_task": "coding",
+            "recent_apps": ["Xcode"],
+            "files_changed": 5,
+            "max_friction": 0.3,
+        }
+        update_memories_from_session(session, memory_dir=self.memory_dir, trigger="screen_lock")
+        update_memories_from_session(
+            session, memory_dir=self.memory_dir,
+            trigger="commit", commit_message="fix: correction critique"
+        )
+
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 2, "Le commit doit bypasser le cooldown")
+
+    def test_curseur_expire_apres_cooldown(self):
+        """Après REPORT_COOLDOWN_MIN, un nouveau rapport peut être généré."""
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+            "probable_task": "coding",
+            "recent_apps": ["Xcode"],
+            "files_changed": 5,
+            "max_friction": 0.3,
+        }
+        # Simule un curseur vieux de 31 minutes
+        past = datetime.now() - timedelta(minutes=31)
+        extractor_module._last_report_at["Pulse"] = past
+
+        update_memories_from_session(session, memory_dir=self.memory_dir, trigger="screen_lock")
+
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1, "Le curseur expiré doit autoriser un nouveau rapport")
 
     def test_habits_najoute_pas_de_doublon_consecutif(self):
         session = {
@@ -156,7 +246,13 @@ class TestExtractor(unittest.TestCase):
 
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
-        self.assertIn("Session de 45 min sur Pulse.", session_files[0].read_text())
+        content = session_files[0].read_text()
+
+        # Vérifie les invariants stables plutôt que la phrase exacte
+        # (_deterministic_summary() peut évoluer en formulation)
+        self.assertIn("45 min", content)
+        self.assertIn("Pulse", content)
+        self.assertIn("5 fichier", content)
 
 
 if __name__ == "__main__":

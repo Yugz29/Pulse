@@ -32,6 +32,10 @@ class SignalScorer:
         self.bus = bus
         self._session_start = datetime.now()
 
+    def reset_session(self) -> None:
+        """Réinitialise l'horloge de session — appelé après une longue veille."""
+        self._session_start = datetime.now()
+
     def compute(self) -> Signals:
         recent = self.bus.recent(100)
         now = datetime.now()
