@@ -5,9 +5,12 @@ private let startupExtensionHeight: CGFloat = 22
 class NotchWindow: NSPanel {
 
     static let panelWidth:      CGFloat = 440
-    static let dashboardHeight: CGFloat = 52
-    static let settingsHeight:  CGFloat = 116
-    static let commandHeight:   CGFloat = 68
+    static let dashboardHeight: CGFloat = 214
+    static let chatHeight:      CGFloat = 212
+    static let insightHeight:   CGFloat = 218
+    static let settingsHeight:  CGFloat = 102
+    static let statusHeight:    CGFloat = 188
+    static let commandHeight:   CGFloat = 80
     static let bottomMargin:    CGFloat = 20
 
     var currentPanelHeight: CGFloat = NotchWindow.dashboardHeight
@@ -46,28 +49,19 @@ class NotchWindow: NSPanel {
 
     func expandToPanel() {
         guard let screen = currentDisplayScreen() else { return }
-        let frame = NotchWindow.expandedFrame(
-            for: screen,
-            panelHeight: currentPanelHeight
-        )
-        setFrame(frame, display: true)
+        setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: currentPanelHeight), display: true)
     }
 
     func expandForStartup() {
         guard let screen = currentDisplayScreen() else { return }
-        let frame = NotchWindow.expandedFrame(
-            for: screen,
-            panelHeight: startupExtensionHeight
-        )
-        setFrame(frame, display: true)
+        setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: startupExtensionHeight), display: true)
     }
 
     func collapseToNotch() {
         guard let screen = currentDisplayScreen() else { return }
         let notchH = screen.safeAreaInsets.top
         let notchW = NotchWindow.realNotchWidth(for: screen)
-        let frame = NotchWindow.collapsedFrame(for: screen, notchHeight: notchH, notchWidth: notchW)
-        setFrame(frame, display: true)
+        setFrame(NotchWindow.collapsedFrame(for: screen, notchHeight: notchH, notchWidth: notchW), display: true)
     }
 
     static func isFrontAppFullscreen() -> Bool {
@@ -78,16 +72,12 @@ class NotchWindow: NSPanel {
 
     static func displayScreen() -> NSScreen? {
         let screens = NSScreen.screens
-
-        if let notched = screens.first(where: { hasHardwareNotch(on: $0) }) {
-            return notched
-        }
-
+        if let notched = screens.first(where: { hasHardwareNotch(on: $0) }) { return notched }
         return NSScreen.main ?? screens.first
     }
 
     static func hasHardwareNotch(on screen: NSScreen) -> Bool {
-        let left = screen.auxiliaryTopLeftArea?.width ?? 0
+        let left  = screen.auxiliaryTopLeftArea?.width  ?? 0
         let right = screen.auxiliaryTopRightArea?.width ?? 0
         return left > 0 && right > 0 && realNotchWidth(for: screen) > 0
     }
@@ -98,42 +88,24 @@ class NotchWindow: NSPanel {
         return screen.frame.width - left - right
     }
 
-    private static func collapsedFrame(
-        for screen: NSScreen,
-        notchHeight: CGFloat,
-        notchWidth: CGFloat
-    ) -> NSRect {
+    private static func collapsedFrame(for screen: NSScreen, notchHeight: CGFloat, notchWidth: CGFloat) -> NSRect {
         let winW = max(NotchWindow.panelWidth + 40, notchWidth + 40)
         let winX = screen.frame.minX + (screen.frame.width - winW) / 2
-        return NSRect(
-            x: winX,
-            y: screen.frame.maxY - notchHeight - NotchWindow.bottomMargin,
-            width: winW,
-            height: notchHeight + NotchWindow.bottomMargin
-        )
+        return NSRect(x: winX, y: screen.frame.maxY - notchHeight - NotchWindow.bottomMargin,
+                      width: winW, height: notchHeight + NotchWindow.bottomMargin)
     }
 
-    private static func expandedFrame(
-        for screen: NSScreen,
-        panelHeight: CGFloat
-    ) -> NSRect {
+    private static func expandedFrame(for screen: NSScreen, panelHeight: CGFloat) -> NSRect {
         let notchH = screen.safeAreaInsets.top
         let notchW = realNotchWidth(for: screen)
         let totalH = notchH + panelHeight + NotchWindow.bottomMargin
-        let winW = max(NotchWindow.panelWidth + 40, notchW + 40)
-        let winX = screen.frame.minX + (screen.frame.width - winW) / 2
-        return NSRect(
-            x: winX,
-            y: screen.frame.maxY - totalH,
-            width: winW,
-            height: totalH
-        )
+        let winW   = max(NotchWindow.panelWidth + 40, notchW + 40)
+        let winX   = screen.frame.minX + (screen.frame.width - winW) / 2
+        return NSRect(x: winX, y: screen.frame.maxY - totalH, width: winW, height: totalH)
     }
 
     private func currentDisplayScreen() -> NSScreen? {
-        if let current = screen, NotchWindow.hasHardwareNotch(on: current) {
-            return current
-        }
+        if let current = screen, NotchWindow.hasHardwareNotch(on: current) { return current }
         return NotchWindow.displayScreen()
     }
 
@@ -162,23 +134,15 @@ class NotchWindow: NSPanel {
         guard let screen = currentDisplayScreen() else { return .zero }
         let notchW = NotchWindow.realNotchWidth(for: screen)
         let notchH = screen.safeAreaInsets.top
-        return NSRect(
-            x: screen.frame.minX + (screen.frame.width - notchW) / 2,
-            y: screen.frame.maxY - notchH,
-            width: notchW,
-            height: notchH
-        )
+        return NSRect(x: screen.frame.minX + (screen.frame.width - notchW) / 2,
+                      y: screen.frame.maxY - notchH, width: notchW, height: notchH)
     }
 
     private func panelScreenRect() -> NSRect {
         guard let screen = currentDisplayScreen() else { return .zero }
         let notchH = screen.safeAreaInsets.top
         let totalH = notchH + currentPanelHeight
-        return NSRect(
-            x: screen.frame.minX + (screen.frame.width - NotchWindow.panelWidth) / 2,
-            y: screen.frame.maxY - totalH,
-            width: NotchWindow.panelWidth,
-            height: totalH
-        )
+        return NSRect(x: screen.frame.minX + (screen.frame.width - NotchWindow.panelWidth) / 2,
+                      y: screen.frame.maxY - totalH, width: NotchWindow.panelWidth, height: totalH)
     }
 }

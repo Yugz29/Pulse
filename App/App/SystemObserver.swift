@@ -22,8 +22,9 @@ class SystemObserver {
     private var lastClipboardContent: String = ""
     private var recentFileEvents: [String: Date] = [:]
     private var isUserIdle = false
+    private let filesystemQueue = DispatchQueue(label: "pulse.systemobserver.filesystem", qos: .utility)
 
-    private let idleThresholdSeconds: TimeInterval = 300
+    private let idleThresholdSeconds: TimeInterval = 900  // 15 min — 5 min était trop court (pause café = idle)
     private let idlePollInterval: TimeInterval = 15
 
     // Chemins surveillés par FSEvents (ajuster selon le projet)
@@ -190,24 +191,30 @@ class SystemObserver {
         )
 
         guard let stream = fsEventStream else { return }
-        FSEventStreamSetDispatchQueue(stream, DispatchQueue.main)
+        FSEventStreamSetDispatchQueue(stream, filesystemQueue)
         FSEventStreamStart(stream)
     }
 
     private func handleFileChange(path: String, changeType: String) {
         // Ignore les fichiers système / cachés / temporaires
         let name = (path as NSString).lastPathComponent
-        guard !name.hasPrefix("."),
-              !name.hasSuffix(".DS_Store"),
-              !name.hasSuffix("~"),
-              !name.hasSuffix(".xcuserstate"),
-              !name.contains(".sb-"),
-              !path.contains("/.git/"),
-              !path.contains("/node_modules/"),
-              !path.contains("/__pycache__/"),
-              !path.contains("/xcuserdata/"),
+        // COMMIT_EDITMSG : laissé passer uniquement si c'est dans .git/
+        // Le daemon gère la logique de déclenchement de rapport.
+        // Tous les autres fichiers internes git sont filtrés.
+        let isCommitMsg = name == "COMMIT_EDITMSG" && path.contains("/.git/")
+
+        guard isCommitMsg || (
+              !name.hasPrefix(".") &&
+              !name.hasSuffix(".DS_Store") &&
+              !name.hasSuffix("~") &&
+              !name.hasSuffix(".xcuserstate") &&
+              !name.contains(".sb-") &&
+              !path.contains("/.git/") &&
+              !path.contains("/node_modules/") &&
+              !path.contains("/__pycache__/") &&
+              !path.contains("/xcuserdata/") &&
               !path.contains("/DerivedData/")
-        else { return }
+        ) else { return }
 
         let dedupeKey = "\(changeType):\(path)"
         let now = Date()
@@ -229,9 +236,18 @@ class SystemObserver {
     }
 
     private static func changeType(from flags: FSEventStreamEventFlags) -> String {
-        if flags & UInt32(kFSEventStreamEventFlagItemCreated) != 0  { return "created" }
-        if flags & UInt32(kFSEventStreamEventFlagItemRemoved) != 0  { return "deleted" }
-        if flags & UInt32(kFSEventStreamEventFlagItemRenamed) != 0  { return "renamed" }
+        // "modified" testé avant "renamed" : les écritures atomiques (Xcode, etc.)
+        // lèvent kFSEventStreamEventFlagItemRenamed | kFSEventStreamEventFlagItemModified
+        // ensemble. On préfère "modified" dans ce cas — un vrai renommage n'a
+        // généralement pas le flag ItemModified en même temps.
+        let isModified = flags & UInt32(kFSEventStreamEventFlagItemModified) != 0
+        let isCreated  = flags & UInt32(kFSEventStreamEventFlagItemCreated)  != 0
+        let isRemoved  = flags & UInt32(kFSEventStreamEventFlagItemRemoved)  != 0
+        let isRenamed  = flags & UInt32(kFSEventStreamEventFlagItemRenamed)  != 0
+
+        if isCreated && !isModified && !isRenamed { return "created" }
+        if isRemoved && !isModified && !isRenamed { return "deleted" }
+        if isRenamed && !isModified               { return "renamed" }
         return "modified"
     }
 
@@ -369,7 +385,7 @@ class SystemObserver {
     // ─────────────────────────────────────────────────────────────────────────
 
     private func sendEvent(_ payload: [String: String]) {
-        Task {
+        Task(priority: .utility) {
             try? await bridge.sendEvent(payload)
         }
     }
