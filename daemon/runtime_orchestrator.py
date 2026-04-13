@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from datetime import datetime, timedelta
+import subprocess
 
 from daemon.memory.extractor import (
     enrich_session_report,
@@ -264,6 +265,26 @@ class RuntimeOrchestrator:
         root_key = str(git_root)
         try:
             baseline_sha = read_head_sha(git_root)
+            with self._head_sha_lock:
+                previous_sha = self._last_head_sha.get(root_key)
+
+            # Cas 1: on connaissait déjà HEAD et il a changé avant même que
+            # l'event COMMIT_EDITMSG nous arrive.
+            if baseline_sha and previous_sha and baseline_sha != previous_sha:
+                with self._head_sha_lock:
+                    self._last_head_sha[root_key] = baseline_sha
+                self._process_confirmed_commit(git_root)
+                return
+
+            # Cas 2: premier commit après redémarrage. Si HEAD est tout frais,
+            # on le traite immédiatement au lieu d'attendre un changement
+            # supplémentaire qui n'arrivera jamais.
+            if baseline_sha and previous_sha is None and self._head_commit_is_recent(git_root):
+                with self._head_sha_lock:
+                    self._last_head_sha[root_key] = baseline_sha
+                self._process_confirmed_commit(git_root)
+                return
+
             if baseline_sha:
                 with self._head_sha_lock:
                     self._last_head_sha.setdefault(root_key, baseline_sha)
@@ -288,6 +309,28 @@ class RuntimeOrchestrator:
         finally:
             with self._commit_watch_lock:
                 self._pending_commit_watch.discard(root_key)
+
+    def _head_commit_is_recent(self, git_root, max_age_sec: float = 45.0) -> bool:
+        """
+        Retourne True si le commit HEAD a été créé récemment.
+        Sert de garde-fou pour le premier commit après redémarrage quand
+        COMMIT_EDITMSG est reçu après l'avancement de HEAD.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "show", "-s", "--format=%ct", "HEAD"],
+                cwd=str(git_root),
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode != 0:
+                return False
+            ts = int(result.stdout.strip())
+            age = time.time() - ts
+            return 0 <= age <= max_age_sec
+        except Exception:
+            return False
 
     def _process_confirmed_commit(self, git_root) -> None:
         commit_msg = read_commit_message(git_root)

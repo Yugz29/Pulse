@@ -124,6 +124,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         process_commit.assert_called_once_with(git_root)
 
+    def test_handle_commit_event_processes_recent_head_immediately_on_first_seen_commit(self):
+        git_root = Path("/tmp/Pulse")
+
+        with patch("daemon.runtime_orchestrator.find_git_root", return_value=git_root), \
+             patch("daemon.runtime_orchestrator.read_head_sha", return_value="new"), \
+             patch.object(self.orchestrator, "_head_commit_is_recent", return_value=True), \
+             patch.object(self.orchestrator, "_process_confirmed_commit") as process_commit:
+            self.orchestrator._handle_commit_event("/tmp/Pulse/.git/COMMIT_EDITMSG")
+
+        process_commit.assert_called_once_with(git_root)
+
 
 if __name__ == "__main__":
     unittest.main()
