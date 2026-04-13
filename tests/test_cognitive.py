@@ -2,7 +2,7 @@
 Tests pour daemon/cognitive.py
 
 Couvre :
-  - build_system_prompt : présence du contexte, troncature, mémoire vide
+  - build_system_prompt : présence du contexte, mémoire vide
   - ask() : réponse ok, message vide, LLM None, erreur offline, erreur inconnue
   - ask_stream() : tokens SSE, done final, erreur SSE
 """
@@ -34,6 +34,13 @@ class _FakeLLM:
         for token in self._response.split():
             yield token + " "
 
+    def stream_messages(self, messages, max_tokens=600):
+        if self._raise_exc:
+            raise self._raise_exc
+        self.last_messages = messages
+        for token in self._response.split():
+            yield token + " "
+
     # Permet à ask_stream d'accéder au provider via .default
     @property
     def default(self):
@@ -55,12 +62,11 @@ class TestBuildSystemPrompt(unittest.TestCase):
         prompt = build_system_prompt("ctx", frozen_memory="§ Focus deep work [il y a 2h]")
         self.assertIn("deep work", prompt)
 
-    def test_tronque_contexte_trop_long(self):
+    def test_preserve_contexte_long_sans_troncature_artificielle(self):
         long_ctx = "x" * 5_000
         prompt = build_system_prompt(long_ctx)
-        self.assertIn("tronqué", prompt)
-        # Le system prompt total doit rester raisonnable
-        self.assertLess(len(prompt), 6_000)
+        self.assertIn(long_ctx[:200], prompt)
+        self.assertGreater(len(prompt), 5_000)
 
     def test_sans_contexte_fallback(self):
         prompt = build_system_prompt("")
@@ -201,6 +207,19 @@ class TestAskStream(unittest.TestCase):
             self.assertTrue(line.endswith("\n\n"))
             # Le JSON doit être parsable
             json.loads(line[6:])
+
+    def test_stream_inclut_historique_dans_messages(self):
+        llm = _FakeLLM("Réponse")
+        history = [
+            {"role": "user", "content": "Question précédente"},
+            {"role": "assistant", "content": "Réponse précédente"},
+        ]
+
+        self._collect(ask_stream("Nouvelle question", llm, history=history))
+
+        self.assertEqual(llm.last_messages[1]["content"], "Question précédente")
+        self.assertEqual(llm.last_messages[2]["content"], "Réponse précédente")
+        self.assertEqual(llm.last_messages[-1]["content"], "Nouvelle question")
 
 
 if __name__ == "__main__":

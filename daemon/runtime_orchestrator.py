@@ -6,11 +6,13 @@ from datetime import datetime, timedelta
 
 from daemon.memory.extractor import (
     find_git_root,
+    get_fact_engine,
     load_memory_context,
     read_commit_message,
     read_head_sha,
     update_memories_from_session,
 )
+from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary
 
 
 class RuntimeOrchestrator:
@@ -49,6 +51,7 @@ class RuntimeOrchestrator:
         self._pending_file_events = []
         self._last_head_sha: dict[str, str] = {}
         self._head_sha_lock = threading.Lock()
+        self._fact_engine = get_fact_engine()
 
     def llm_unload_background(self) -> None:
         self.llm_runtime.unload_background(self.log)
@@ -67,13 +70,25 @@ class RuntimeOrchestrator:
         captured_at = datetime.now()
         structured = self.memory_store.render(captured_at=captured_at)
         legacy = load_memory_context() if not structured else ""
+
+        # Profil utilisateur issu des faits consolidés (facts.db)
+        facts_profile = ""
+        try:
+            facts_profile = self._fact_engine.render_for_context(limit=8)
+        except Exception as exc:
+            self.log.warning("freeze_memory: facts render échoué : %s", exc)
+
+        blocks = [b for b in [structured or legacy, facts_profile] if b.strip()]
+        frozen = "\n\n".join(blocks)
+
         with self._runtime_lock:
-            self._frozen_memory = structured or legacy or ""
+            self._frozen_memory = frozen or ""
             self._frozen_memory_at = captured_at
         self.log.info(
-            "Mémoire figée au démarrage : %d car. (%s)",
-            len(self._frozen_memory or ""),
+            "Mémoire figée : %d car. (%s)%s",
+            len(self._frozen_memory),
             captured_at.strftime("%H:%M:%S"),
+            f" — {len(facts_profile)} car. de profil utilisateur" if facts_profile else "",
         )
 
     def handle_event(self, event) -> None:
@@ -125,85 +140,56 @@ class RuntimeOrchestrator:
             self.log.warning("shutdown sync failed: %s", exc)
 
     def build_context_snapshot(self) -> str:
-        state = self.store.to_dict()
-        session_data = self.session_memory.export_session_data()
-        recent_events = self.session_memory.get_recent_events(limit=8)
-        memory_context = self.get_frozen_memory()
-        signals, decision = self.runtime_state.get_context_snapshot()
+        """
+        Snapshot minimal du contexte courant pour le LLM.
 
-        sections = [
-            "# Pulse Context Snapshot",
-            "",
-            "## État courant",
-            "- Projet : {0}".format(state.get("active_project") or "non détecté"),
-            "- Fichier actif : {0}".format(state.get("active_file") or "inconnu"),
-            "- App active : {0}".format(state.get("active_app") or "inconnue"),
-            "- Durée session : {0} min".format(state.get("session_duration_min", 0)),
-            "- Dernier event : {0}".format(state.get("last_event_type") or "inconnu"),
+        Principe : seuls les faits directement utiles pour répondre à une
+        question ou appeler un outil. Pas de bruit, pas de duplication.
+
+        La mémoire persistante (frozen_memory) est injectée séparément dans
+        build_system_prompt() — ne pas la répéter ici.
+        """
+        state = self.store.to_dict()
+        signals, _ = self.runtime_state.get_context_snapshot()
+
+        # Racine git pour les outils
+        active_file = state.get("active_file")
+        project_root: str | None = None
+        if active_file:
+            try:
+                git_root = find_git_root(active_file)
+                if git_root:
+                    project_root = str(git_root)
+            except Exception:
+                pass
+
+        lines = [
+            "# Contexte session",
+            f"- Projet : {state.get('active_project') or 'non détecté'}",
+            f"- Racine projet : {project_root or 'inconnue'}",
+            f"- Fichier actif : {active_file or 'aucun'}",
+            f"- App active : {state.get('active_app') or 'inconnue'}",
+            f"- Durée session : {state.get('session_duration_min', 0)} min",
         ]
 
         if signals:
-            sections.extend(
-                [
-                    "",
-                    "## Signaux",
-                    "- Tâche probable : {0}".format(signals.probable_task),
-                    "- Focus : {0}".format(signals.focus_level),
-                    "- Friction : {0:.2f}".format(signals.friction_score),
-                    "- Clipboard : {0}".format(signals.clipboard_context or "aucun"),
-                    "- Apps récentes : {0}".format(", ".join(signals.recent_apps) or "aucune"),
-                ]
-            )
-
-        if decision:
-            sections.extend(
-                [
-                    "",
-                    "## Dernière décision",
-                    "- Action : {0}".format(decision.action),
-                    "- Niveau : {0}".format(decision.level),
-                    "- Raison : {0}".format(decision.reason),
-                ]
-            )
-            if decision.payload:
-                parts = ["{0}={1}".format(k, v) for k, v in sorted(decision.payload.items())]
-                sections.append("- Payload : {0}".format(", ".join(parts)))
-
-        sections.extend(
-            [
-                "",
-                "## Session",
-                "- ID : {0}".format(session_data.get("session_id") or "inconnu"),
-                "- Fichiers modifiés : {0}".format(session_data.get("files_changed", 0)),
-                "- Events : {0}".format(session_data.get("event_count", 0)),
-                "- Friction max : {0:.2f}".format(float(session_data.get("max_friction", 0.0))),
+            lines += [
+                f"- Tâche probable : {signals.probable_task}",
+                f"- Focus : {signals.focus_level}",
             ]
-        )
+            if signals.recent_apps:
+                lines.append(f"- Apps récentes : {', '.join(signals.recent_apps[:4])}")
 
-        if recent_events:
-            sections.extend(["", "## Events récents"])
-            for event in recent_events:
-                payload = event.get("payload") or {}
-                key = (
-                    payload.get("app_name")
-                    or payload.get("path")
-                    or payload.get("content_kind")
-                    or payload.get("tool_use_id")
-                    or payload.get("decision")
-                )
-                suffix = " ({0})".format(key) if key else ""
-                sections.append(
-                    "- {0}: {1}{2}".format(
-                        event.get("timestamp", "?"),
-                        event.get("type", "?"),
-                        suffix,
-                    )
-                )
+        # Diff git — ce qui a réellement changé dans le code
+        if project_root:
+            try:
+                diff = read_diff_summary(project_root)
+                if diff:
+                    lines.append(f"- {diff.replace(chr(10), chr(10) + '  ')}")
+            except Exception:
+                pass
 
-        if memory_context:
-            sections.extend(["", "## Mémoire persistante", memory_context.strip()])
-
-        return "\n".join(sections).strip() + "\n"
+        return "\n".join(lines)
 
     def deferred_startup(self) -> None:
         time.sleep(0.2)
@@ -211,6 +197,15 @@ class RuntimeOrchestrator:
         purged = self.memory_store.purge_expired()
         if purged:
             self.log.info("Mémoire : %d entrée(s) expirée(s) supprimée(s)", purged)
+
+        # Decay des faits utilisateurs silencieux depuis > DECAY_START_DAYS jours
+        try:
+            decayed = self._fact_engine.decay_all()
+            if decayed:
+                self.log.info("Facts : decay appliqué sur %d fait(s)", decayed)
+        except Exception as exc:
+            self.log.warning("Facts : decay échoué : %s", exc)
+
         self.freeze_memory()
         provider = self.llm_runtime.provider()
         if provider and hasattr(provider, "warmup"):
@@ -260,10 +255,17 @@ class RuntimeOrchestrator:
             (commit_msg or "").splitlines()[0] if commit_msg else "(sans message)",
         )
 
+        # Lit le diff réel du commit pour enrichir le rapport LLM
+        diff_summary: str | None = None
+        try:
+            diff_summary = read_commit_diff_summary(git_root) or None
+        except Exception:
+            pass
+
         snapshot = self.session_memory.export_session_data()
         threading.Thread(
             target=self._sync_memory_background,
-            args=(snapshot, self.summary_llm, commit_msg, "commit"),
+            args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),
             daemon=True,
         ).start()
 
@@ -343,6 +345,7 @@ class RuntimeOrchestrator:
         llm,
         commit_message: str | None = None,
         trigger: str = "screen_lock",
+        diff_summary: str | None = None,
     ) -> None:
         try:
             update_memories_from_session(
@@ -350,6 +353,7 @@ class RuntimeOrchestrator:
                 llm=llm,
                 commit_message=commit_message,
                 trigger=trigger,
+                diff_summary=diff_summary,
             )
             self.log.info(
                 "memory sync ok project=%s duration=%smin trigger=%s",
@@ -357,6 +361,10 @@ class RuntimeOrchestrator:
                 snapshot.get("duration_min"),
                 trigger,
             )
+            # Rafraîchit la mémoire injectée dans le prompt après chaque sync.
+            # Garantit que les nouveaux faits consolidés sont visibles
+            # sans attendre le prochain redémarrage du daemon.
+            self.freeze_memory()
         except Exception as exc:
             self.log.warning("memory sync échouée : %s", exc)
 
@@ -364,6 +372,11 @@ class RuntimeOrchestrator:
         if signals.session_duration_min < 20:
             return False
         if event_type in {"screen_locked", "user_idle", "screen_unlocked"}:
+            # Cooldown court pour éviter les doubles syncs sur events rapprochés
+            if previous_sync_at is not None:
+                elapsed = (datetime.now() - previous_sync_at).total_seconds()
+                if elapsed < 60:  # moins d'1 minute → on skip
+                    return False
             return True
         if previous_sync_at is None:
             return True

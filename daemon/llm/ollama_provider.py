@@ -1,3 +1,16 @@
+"""
+OllamaProvider — client HTTP pour l'API Ollama locale.
+
+Utilise /api/chat (format messages) pour stream() et complete(),
+ce qui permet le tool calling natif en phase 2.
+Garde /api/generate uniquement pour les appels lifecycle (warmup/unload).
+
+Format /api/chat streaming :
+  → {"model": ..., "messages": [...], "stream": true, "options": {...}}
+  ← {"message": {"role": "assistant", "content": "token"}, "done": false}
+  ← {"message": {"role": "assistant", "content": ""}, "done": true, "done_reason": "stop"}
+"""
+
 import json
 import logging
 import threading
@@ -30,22 +43,15 @@ class OllamaProvider:
         self._last_failure_at = 0.0
         self._health_ttl = 120.0
 
+    # ── Santé ─────────────────────────────────────────────────────────────────
+
     @property
     def is_online(self) -> bool:
-        """
-        True uniquement si Ollama a répondu lors du dernier fetch réel.
-        False si on sert du cache stale (Ollama down mais cache présent).
-        """
         with self._models_lock:
             return self._models_error_at == 0.0 and self._models_cache is not None
 
     @property
     def is_operational(self) -> bool:
-        """
-        True si un appel utile au provider a réussi récemment.
-        N'est pas invalidé par un échec de listing des modèles : /api/tags
-        peut échouer alors que le modèle configuré répond encore.
-        """
         with self._health_lock:
             if self._last_success_at <= 0.0:
                 return False
@@ -61,8 +67,10 @@ class OllamaProvider:
         with self._health_lock:
             self._last_failure_at = time.monotonic()
 
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
     def warmup(self) -> bool:
-        """Pré-charge le modèle. Retourne True si Ollama a répondu."""
+        """Pré-charge le modèle en mémoire. Retourne True si Ollama a répondu."""
         return self._keep_alive_request(self.keep_alive)
 
     def unload(self) -> bool:
@@ -70,7 +78,10 @@ class OllamaProvider:
         return self._keep_alive_request("0")
 
     def _keep_alive_request(self, keep_alive: str) -> bool:
-        """Envoie une requête vide pour contrôler le cycle de vie du modèle."""
+        """
+        Envoie une requête vide via /api/generate pour contrôler le cycle de vie.
+        /api/generate est conservé ici car /api/chat ne supporte pas keep_alive seul.
+        """
         payload = {
             "model":      self.model,
             "prompt":     "",
@@ -91,18 +102,129 @@ class OllamaProvider:
             log.warning("Ollama keep_alive(%s) échoué : %s", keep_alive, exc)
             return False
 
-    def stream(self, prompt: str, system: str = "", max_tokens: int = 600):
+    # ── Génération via /api/chat ───────────────────────────────────────────────
+
+    def chat_with_tools(
+        self,
+        messages: list,
+        tools: list,
+        max_tokens: int = 600,
+    ) -> dict:
         """
-        Génère la réponse token par token via l'API Ollama streaming.
-        - keep_alive : contrôle la durée de chargement en mémoire
-        - num_ctx    : taille du contexte (impact direct sur la RAM/KV cache)
-        - timeout    : 300s pour laisser le temps aux questions complexes
+        Appel non-streaming à /api/chat avec tool calling.
+        Retourne le dict complet de la réponse Ollama.
+
+        Si le modèle veut appeler un outil, la réponse contient :
+          response["message"]["tool_calls"] = [{"function": {"name": ..., "arguments": {...}}}]
+
+        Si le modèle répond directement :
+          response["message"]["content"] = "..."
+        """
+        payload = {
+            "model":      self.model,
+            "stream":     False,
+            "messages":   messages,
+            "tools":      tools,
+            "keep_alive": self.keep_alive,
+            "options": {
+                "num_predict": max_tokens,
+                "num_ctx":     self.num_ctx,
+                "temperature": 0.3,
+                "top_p":       0.95,
+                "top_k":       64,
+            },
+        }
+        req = request.Request(
+            self.url + "/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=60) as response:
+                body = json.loads(response.read().decode("utf-8"))
+                if "error" in body:
+                    self._mark_failure()
+                    raise RuntimeError(f"Ollama error: {body['error']}")
+                self._mark_success()
+                return body
+        except error.URLError as exc:
+            self._mark_failure()
+            raise RuntimeError("Ollama unavailable") from exc
+
+    def stream_messages(self, messages: list, max_tokens: int = 600):
+        """
+        Streaming /api/chat sur un historique complet de messages.
+        Utilisé pour la réponse finale après exécution des outils.
+
+        Yields: str (tokens individuels)
         """
         payload = {
             "model":      self.model,
             "stream":     True,
-            "prompt":     prompt,
-            "system":     system,
+            "messages":   messages,
+            "keep_alive": self.keep_alive,
+            "options": {
+                "num_predict": max_tokens,
+                "num_ctx":     self.num_ctx,
+                "temperature": 0.3,
+                "top_p":       0.95,
+                "top_k":       64,
+            },
+        }
+        req = request.Request(
+            self.url + "/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        saw_success = False
+        try:
+            with request.urlopen(req, timeout=300) as response:
+                for raw_line in response:
+                    line = raw_line.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if "error" in chunk:
+                        self._mark_failure()
+                        raise RuntimeError(f"Ollama error: {chunk['error']}")
+                    msg   = chunk.get("message") or {}
+                    token = msg.get("content") or ""
+                    if token:
+                        if not saw_success:
+                            self._mark_success()
+                            saw_success = True
+                        yield token
+                    if chunk.get("done"):
+                        if not saw_success:
+                            self._mark_success()
+                        break
+        except error.URLError as exc:
+            self._mark_failure()
+            raise RuntimeError("Ollama unavailable") from exc
+
+    def stream(self, prompt: str, system: str = "", max_tokens: int = 600):
+        """
+        Génère la réponse token par token via /api/chat (streaming).
+
+        Utilise le format messages plutôt que prompt/system de /api/generate.
+        Prêt pour le tool calling natif en phase 2 (champ tools à ajouter).
+
+        Yields: str (tokens individuels)
+        """
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model":      self.model,
+            "stream":     True,
+            "messages":   messages,
             "keep_alive": self.keep_alive,
             "options": {
                 "num_predict": max_tokens,
@@ -114,7 +236,7 @@ class OllamaProvider:
         }
 
         req = request.Request(
-            self.url + "/api/generate",
+            self.url + "/api/chat",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -131,30 +253,35 @@ class OllamaProvider:
                         chunk = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    token = chunk.get("response", "")
-                    # Détection d'une erreur Ollama dans le flux
+
                     if "error" in chunk:
                         self._mark_failure()
                         raise RuntimeError(f"Ollama error: {chunk['error']}")
+
+                    # /api/chat : le token est dans chunk["message"]["content"]
+                    # (peut être None ou absent si tool_call en phase 2)
+                    msg   = chunk.get("message") or {}
+                    token = msg.get("content") or ""
+
                     if token:
                         if not saw_success:
                             self._mark_success()
                             saw_success = True
                         yield token
+
                     if chunk.get("done"):
                         if not saw_success:
                             self._mark_success()
                         break
+
         except error.URLError as exc:
             self._mark_failure()
             raise RuntimeError("Ollama unavailable") from exc
 
     def complete(self, prompt: str, system: str = "", max_tokens: int = 160) -> str:
         """
-        Réponse complète — implémenté par-dessus stream() pour éviter
-        le bloc `stream: False` qui attend la réponse entière (thinking
-        compris) avant de rendre la main. Avec stream=True, les tokens
-        arrivent au fil de l'eau et le timeout est moins agressif.
+        Réponse complète — construit par-dessus stream() pour réutiliser
+        le parsing /api/chat et bénéficier du même timeout.
         """
         tokens = []
         for token in self.stream(prompt=prompt, system=system, max_tokens=max_tokens):
@@ -163,6 +290,8 @@ class OllamaProvider:
         if not text:
             raise RuntimeError("Ollama returned an empty response")
         return text
+
+    # ── Listing des modèles ───────────────────────────────────────────────────
 
     def list_models(self) -> list:
         now = time.monotonic()

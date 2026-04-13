@@ -14,6 +14,11 @@ interpreter = CommandInterpreter()
 llm_router = LLMRouter()
 
 
+def configure_llm_router(router) -> None:
+    global llm_router
+    llm_router = router
+
+
 def get_available_llm_models() -> list:
     try:
         return llm_router.list_models()

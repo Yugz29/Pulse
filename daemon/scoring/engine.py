@@ -263,6 +263,9 @@ def score_file(
     Returns:
         RiskScoreResult — global_score ∈ [0, 100], label ∈ safe/low/medium/high/critical.
     """
+    if not Path(file_path).is_file():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
     if project_path is None:
         project_path = get_git_root(file_path)
 

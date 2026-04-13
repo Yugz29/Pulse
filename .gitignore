@@ -40,3 +40,4 @@ daemon/.venv/
 App/App.xcodeproj/project.xcworkspace/xcuserdata/
 App/App.xcodeproj/xcuserdata/
 *.xcuserstate
+cortex-snapshot.json

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flask import Flask
 
-from daemon.cognitive import ask as cognitive_ask, ask_stream as cognitive_ask_stream
+from daemon.cognitive import ask as cognitive_ask, ask_stream as cognitive_ask_stream, ask_stream_with_tools as cognitive_ask_stream_with_tools
 from daemon.core.decision_engine import DecisionEngine
 from daemon.core.event_bus import EventBus
 from daemon.core.signal_scorer import SignalScorer
@@ -16,6 +16,7 @@ from daemon.core.state_store import StateStore
 from daemon.llm.router import LLMRouter
 from daemon.llm.runtime import LLMRuntime
 from daemon.mcp.handlers import (
+    configure_llm_router,
     get_available_llm_models,
     get_pending_command,
     get_selected_command_llm_model,
@@ -27,6 +28,7 @@ from daemon.mcp.server import start_mcp_server
 from daemon.memory.session import SessionMemory
 from daemon.memory.store import MemoryStore
 from daemon.routes.assistant import register_assistant_routes
+from daemon.routes.facts import register_facts_routes
 from daemon.routes.mcp import register_mcp_routes
 from daemon.routes.memory import register_memory_routes
 from daemon.routes.runtime import register_runtime_routes
@@ -47,6 +49,7 @@ store = StateStore()
 scorer = SignalScorer(bus)
 decision_engine = DecisionEngine()
 summary_llm = LLMRouter()
+configure_llm_router(summary_llm)
 session_memory = SessionMemory()
 memory_store = MemoryStore()
 runtime_state = RuntimeState()
@@ -183,6 +186,7 @@ register_assistant_routes(
     app,
     cognitive_ask=cognitive_ask,
     cognitive_ask_stream=cognitive_ask_stream,
+    cognitive_ask_stream_with_tools=cognitive_ask_stream_with_tools,
     llm=summary_llm,
     build_context_snapshot=build_context_snapshot,
     get_frozen_memory=lambda: runtime_orchestrator.get_frozen_memory(),
@@ -210,6 +214,11 @@ register_mcp_routes(
     receive_decision=lambda tool_use_id, decision: receive_decision(tool_use_id, decision),
     get_scoring_status=lambda: get_scoring_status(),
     log=log,
+)
+
+register_facts_routes(
+    app,
+    get_fact_engine=lambda: runtime_orchestrator._fact_engine,
 )
 
 

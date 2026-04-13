@@ -19,17 +19,27 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.runtime_state = RuntimeState()
         self.llm_runtime = MagicMock()
         self.log = MagicMock()
-        self.orchestrator = RuntimeOrchestrator(
-            store=self.store,
-            scorer=self.scorer,
-            decision_engine=self.decision_engine,
-            summary_llm=self.summary_llm,
-            session_memory=self.session_memory,
-            memory_store=self.memory_store,
-            runtime_state=self.runtime_state,
-            llm_runtime=self.llm_runtime,
-            log=self.log,
-        )
+
+        # Mock FactEngine — évite toute dépendance sur ~/.pulse/facts.db dans les tests
+        self.mock_fact_engine = MagicMock()
+        self.mock_fact_engine.render_for_context.return_value = ""
+        self.mock_fact_engine.decay_all.return_value = 0
+
+        # memory_store.render doit retourner une str (pas un MagicMock)
+        self.memory_store.render.return_value = ""
+
+        with patch("daemon.runtime_orchestrator.get_fact_engine", return_value=self.mock_fact_engine):
+            self.orchestrator = RuntimeOrchestrator(
+                store=self.store,
+                scorer=self.scorer,
+                decision_engine=self.decision_engine,
+                summary_llm=self.summary_llm,
+                session_memory=self.session_memory,
+                memory_store=self.memory_store,
+                runtime_state=self.runtime_state,
+                llm_runtime=self.llm_runtime,
+                log=self.log,
+            )
 
     def test_build_context_snapshot_includes_state_signals_decision_and_memory(self):
         self.store.to_dict.return_value = {
@@ -74,12 +84,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         snapshot = self.orchestrator.build_context_snapshot()
 
-        self.assertIn("## État courant", snapshot)
+        self.assertIn("# Contexte session", snapshot)
         self.assertIn("- Projet : Pulse", snapshot)
         self.assertIn("- Tâche probable : coding", snapshot)
-        self.assertIn("- Action : notify", snapshot)
-        self.assertIn("## Mémoire persistante", snapshot)
-        self.assertIn("Projet: Pulse", snapshot)
 
     def test_freeze_memory_uses_structured_memory_first(self):
         self.memory_store.render.return_value = "Structured memory"

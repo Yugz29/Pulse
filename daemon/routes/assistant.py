@@ -4,12 +4,15 @@ from typing import Any, Callable
 
 from flask import Flask, Response, jsonify, request, stream_with_context
 
+from daemon.tools.pulse_tools import TOOL_DEFINITIONS, TOOL_MAP
+
 
 def register_assistant_routes(
     app: Flask,
     *,
     cognitive_ask: Callable[..., dict],
     cognitive_ask_stream: Callable[..., Any],
+    cognitive_ask_stream_with_tools: Callable[..., Any],
     llm: Any,
     build_context_snapshot: Callable[[], str],
     get_frozen_memory: Callable[[], str],
@@ -41,22 +44,40 @@ def register_assistant_routes(
     def ask_stream():
         data = request.get_json() or {}
         message = (data.get("message") or "").strip()
-        max_tok = int(data.get("max_tokens", 600))
+        history = data.get("history") or []
+        max_tok = int(data.get("max_tokens", 1200))
+        use_tools = data.get("tools", True)  # activé par défaut
+
+        ctx    = build_context_snapshot()
+        frozen = get_frozen_memory()
 
         def generate():
-            yield from cognitive_ask_stream(
-                message=message,
-                llm=llm,
-                context_snapshot=build_context_snapshot(),
-                frozen_memory=get_frozen_memory(),
-                max_tokens=max_tok,
-            )
+            if use_tools:
+                yield from cognitive_ask_stream_with_tools(
+                    message          = message,
+                    llm              = llm,
+                    tools            = TOOL_DEFINITIONS,
+                    tool_map         = TOOL_MAP,
+                    context_snapshot = ctx,
+                    frozen_memory    = frozen,
+                    history          = history,
+                    max_tokens       = max_tok,
+                )
+            else:
+                yield from cognitive_ask_stream(
+                    message          = message,
+                    llm              = llm,
+                    context_snapshot = ctx,
+                    frozen_memory    = frozen,
+                    history          = history,
+                    max_tokens       = max_tok,
+                )
 
         return Response(
             stream_with_context(generate()),
             mimetype="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
+                "Cache-Control":     "no-cache",
                 "X-Accel-Buffering": "no",
             },
         )

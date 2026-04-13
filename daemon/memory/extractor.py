@@ -11,8 +11,9 @@ Anti-doublon
 ────────────
   Curseur _last_report_at par projet : un rapport ne se génère pas
   si un autre a été écrit il y a moins de REPORT_COOLDOWN_MIN minutes
-  pour le même projet. Inspiré du pattern lastMemoryMessageUuid de
-  extractMemories.ts (Leak Claude).
+  pour le même projet. Le curseur est persisté dans cooldown.json pour
+  survivre aux redémarrages du daemon — c'est la cause principale de
+  l'explosion de fichiers de session.
 
 Qualité LLM
 ────────────
@@ -22,30 +23,93 @@ Qualité LLM
   screen_lock / user_idle — le fallback déterministe est plus honnête.
 """
 
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from daemon.memory.facts import FactEngine
+
+# Instance partagée du moteur de faits (initialisée une seule fois)
+_fact_engine: Optional[FactEngine] = None
+
+
+def get_fact_engine() -> FactEngine:
+    """Retourne l'instance partagée du FactEngine (lazy init)."""
+    global _fact_engine
+    if _fact_engine is None:
+        _fact_engine = FactEngine()
+    return _fact_engine
 
 
 MEMORY_DIR = Path.home() / ".pulse" / "memory"
 
 # Cooldown minimum entre deux rapports pour un même projet (en minutes).
-# Inspiré du cursor pattern de extractMemories.ts — évite les 46 rapports/jour.
 REPORT_COOLDOWN_MIN = 30
 
-# Suffixes et patterns à exclure des top_files
+# Durée maximum d'une session rapportée.
+# Au-delà, la donnée est aberrante (daemon jamais redémarré, veille longue, etc.)
+MAX_SESSION_DURATION_MIN = 480  # 8h
+
+# Fichier de persistance du curseur anti-doublon.
+# Survit aux redémarrages du daemon — fix principal pour l'explosion de fichiers.
+_COOLDOWN_FILE = Path.home() / ".pulse" / "cooldown.json"
+
+# Suffixes à exclure des top_files
 _NOISE_SUFFIXES = {
     ".tmp", ".swp", ".swo", ".orig", ".bak",
     ".xcuserstate", ".DS_Store", "~",
+    # Images et médias — jamais du code source
+    ".png", ".jpg", ".jpeg", ".gif", ".tiff", ".heic", ".webp",
+    ".mp4", ".mov", ".avi", ".pdf", ".zip", ".tar", ".gz",
 }
 _NOISE_PATTERNS = {
     "COMMIT_EDITMSG", "MERGE_MSG", "FETCH_HEAD", "ORIG_HEAD",
     "packed-refs", "index",
+    # Fichiers système macOS
+    "loginwindow", "Desktop", "Downloads", "Documents",
 }
-_NOISE_SUBSTRINGS = {".sb-", "__pycache__", "DerivedData", "xcuserdata"}
+_NOISE_SUBSTRINGS = {
+    ".sb-", "__pycache__", "DerivedData", "xcuserdata",
+    # Captures d'écran macOS (deux variantes typographiques)
+    "Capture d’écran", "Capture d'écran", "Screenshot",
+}
 
 # Curseur anti-doublon : {project_name: datetime du dernier rapport}
+# Chargé depuis cooldown.json au premier accès, persisté après chaque écriture.
 _last_report_at: Dict[str, datetime] = {}
+_cooldown_loaded: bool = False
+
+
+def _load_cooldown() -> None:
+    """Charge le curseur depuis le fichier JSON (une seule fois par processus)."""
+    global _last_report_at, _cooldown_loaded
+    if _cooldown_loaded:
+        return
+    _cooldown_loaded = True
+    try:
+        if _COOLDOWN_FILE.exists():
+            raw = json.loads(_COOLDOWN_FILE.read_text())
+            cutoff = datetime.now() - timedelta(minutes=REPORT_COOLDOWN_MIN)
+            for project, iso in raw.items():
+                try:
+                    dt = datetime.fromisoformat(iso)
+                    if dt > cutoff:  # ignorer les entrées expirées
+                        _last_report_at[project] = dt
+                except ValueError:
+                    pass
+    except Exception:
+        pass  # cooldown.json corrompu ou absent — on repart de zéro
+
+
+def _save_cooldown() -> None:
+    """Persiste le curseur dans cooldown.json."""
+    try:
+        _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {p: dt.isoformat() for p, dt in _last_report_at.items()}
+        _COOLDOWN_FILE.write_text(json.dumps(data))
+    except Exception:
+        pass  # non-bloquant
 
 
 # ── API publique ───────────────────────────────────────────────────────────────
@@ -56,6 +120,7 @@ def update_memories_from_session(
     memory_dir: Optional[Path] = None,
     commit_message: Optional[str] = None,
     trigger: str = "screen_lock",
+    diff_summary: Optional[str] = None,
 ) -> None:
     """
     Met à jour la mémoire de session et génère un rapport si nécessaire.
@@ -70,8 +135,26 @@ def update_memories_from_session(
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     base_dir.mkdir(parents=True, exist_ok=True)
 
+    # Charge le curseur persisté (une fois par processus)
+    _load_cooldown()
+
+    # Cap de durée — évite les sessions aberrantes (766 min, 2628 min, etc.)
+    if "duration_min" in session_data:
+        session_data = dict(session_data)
+        session_data["duration_min"] = min(
+            session_data["duration_min"], MAX_SESSION_DURATION_MIN
+        )
+
     _update_projects(base_dir, session_data)
-    _update_habits(base_dir, session_data)
+
+    # Moteur de faits : observe la session et tente une promotion
+    try:
+        engine = get_fact_engine()
+        new_facts = engine.observe_session(session_data)
+        if new_facts:
+            print(f"[Facts] {len(new_facts)} nouveau(x) fait(s) consolidé(s)")
+    except Exception as exc:
+        print(f"[Facts] Erreur observe_session : {exc}")
 
     project  = session_data.get("active_project") or "inconnu"
     duration = session_data.get("duration_min", 0)
@@ -92,8 +175,9 @@ def update_memories_from_session(
                 _update_index(base_dir)
                 return
 
-    # LLM uniquement sur commit et manual — désactivé pour idle/screen_lock
-    effective_llm = llm if trigger in ("commit", "manual") else None
+    # LLM uniquement sur commit — seul trigger avec assez de signal.
+    # screen_lock, user_idle, manual → fallback déterministe toujours.
+    effective_llm = llm if trigger == "commit" else None
 
     _write_session_report(
         base_dir,
@@ -101,27 +185,25 @@ def update_memories_from_session(
         llm=effective_llm,
         commit_message=commit_message,
         trigger=trigger,
+        diff_summary=diff_summary,
     )
 
-    # Avance le curseur après écriture réussie
+    # Avance le curseur après écriture réussie et le persiste sur disque
     _last_report_at[project] = datetime.now()
+    _save_cooldown()
 
     _update_index(base_dir)
 
 
 def load_memory_context(memory_dir: Optional[Path] = None) -> str:
+    """Fallback legacy : lit projects.md uniquement (habits.md = bruit pur)."""
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
-    index_file = base_dir / "MEMORY.md"
-    if not index_file.exists():
-        return ""
-
-    parts = [index_file.read_text()]
-    for filename in ("habits.md", "projects.md", "preferences.md"):
+    parts = []
+    for filename in ("projects.md", "preferences.md"):
         path = base_dir / filename
         if path.exists():
-            parts.append("\n---\n" + path.read_text())
-
-    return "\n".join(parts)[:4000]
+            parts.append(path.read_text())
+    return "\n---\n".join(parts)[:2000]
 
 
 def find_git_root(file_path: str) -> Optional[Path]:
@@ -185,7 +267,13 @@ def _write_session_report(
     llm: Optional[Any],
     commit_message: Optional[str],
     trigger: str,
+    diff_summary: Optional[str] = None,
 ) -> None:
+    """
+    Journal quotidien : un seul fichier par jour (YYYY-MM-DD.md).
+    Chaque session ajoute une section ## HH:MM en bas du fichier.
+    Plus de fichiers -2, -3, -4...
+    """
     now      = datetime.now()
     today    = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M")
@@ -193,16 +281,7 @@ def _write_session_report(
     sessions_dir = base_dir / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
 
-    # Nom de fichier unique
-    summary_file = sessions_dir / f"{today}.md"
-    if summary_file.exists():
-        idx = 2
-        while True:
-            candidate = sessions_dir / f"{today}-{idx}.md"
-            if not candidate.exists():
-                summary_file = candidate
-                break
-            idx += 1
+    journal_file = sessions_dir / f"{today}.md"
 
     project     = session.get("active_project") or "inconnu"
     duration    = session.get("duration_min", 0)
@@ -217,43 +296,36 @@ def _write_session_report(
         try:
             body = _llm_summary(
                 llm, project, duration, task, focus, friction,
-                apps, top_files, files_count, commit_message, trigger,
+                apps, top_files, files_count, commit_message, diff_summary,
             )
         except Exception as exc:
             print(f"[Memory] Erreur résumé LLM: {exc}")
             body = _deterministic_summary(
-                project, duration, task, focus, friction,
-                top_files, files_count, commit_message,
+                duration, task, focus, friction, top_files, files_count, commit_message,
             )
     else:
         body = _deterministic_summary(
-            project, duration, task, focus, friction,
-            top_files, files_count, commit_message,
+            duration, task, focus, friction, top_files, files_count, commit_message,
         )
 
-    trigger_label = {
-        "commit":      "commit git",
-        "screen_lock": "fin de session",
-        "user_idle":   "pause détectée",
-        "manual":      "manuel",
-    }.get(trigger, trigger)
+    # En-tête de section : ## HH:MM — coding, 45 min
+    task_labels = {
+        "coding":   "développement",
+        "debug":    "débogage",
+        "writing":  "rédaction",
+        "browsing": "navigation",
+    }
+    section_header = f"## {time_str} — {task_labels.get(task, task)}, {duration} min"
 
-    content = "\n".join([
-        "---",
-        f"date: {today}",
-        f"time: {time_str}",
-        f"project: {project}",
-        f"duration_min: {duration}",
-        f"task: {task}",
-        f"focus: {focus}",
-        f"trigger: {trigger_label}",
-        *([ f"commit: {commit_message.splitlines()[0]}" ] if commit_message else []),
-        "---",
-        "",
-        body.strip(),
-        "",
-    ])
-    summary_file.write_text(content, encoding="utf-8")
+    entry = f"\n{section_header}\n{body.strip()}\n"
+
+    if journal_file.exists():
+        # Append au journal existant
+        journal_file.open("a", encoding="utf-8").write(entry)
+    else:
+        # Créer le journal du jour avec en-tête
+        header = f"# Journal Pulse — {today}\n"
+        journal_file.write_text(header + entry, encoding="utf-8")
 
 
 def _llm_summary(
@@ -267,17 +339,16 @@ def _llm_summary(
     top_files: List[str],
     files_count: int,
     commit_message: Optional[str],
-    trigger: str,
+    diff_summary: Optional[str],
 ) -> str:
     """
-    Prompt inspiré de awaySummary.ts (Leak Claude) :
-    - 1-3 phrases maximum
-    - Tâche de haut niveau (ce qu'on construit/débogue), pas les détails d'implémentation
-    - Prochaine étape concrète si disponible
-    - Pas de récapitulatif de statut, pas de résumé de commits
+    Prompt de résumé LLM uniquement sur commit.
+    Exploit le diff réel du commit pour un résumé vraiment informatif.
 
-    Le modèle reçoit uniquement des faits vérifiables — aucune zone blanche
-    à remplir, ce qui évite les hallucinations sur les petits modèles.
+    Contraintes :
+    - 1 à 2 phrases maximum
+    - Ce qui a été livré, pas comment
+    - Aucun fait inventé
     """
     facts: List[str] = [
         f"Projet : {project}",
@@ -285,36 +356,36 @@ def _llm_summary(
     ]
 
     if commit_message:
-        facts.append(f"Commit livré : \"{commit_message.splitlines()[0]}\"")
+        facts.append(f'Commit : "{commit_message.splitlines()[0]}"')
 
-    if top_files:
+    # Diff du commit — source la plus fiable de ce qui a changé
+    if diff_summary:
+        for line in diff_summary.splitlines():
+            facts.append(line)
+    elif top_files:
         facts.append(f"Fichiers modifiés : {', '.join(top_files[:5])}")
     elif files_count:
         facts.append(f"Fichiers modifiés : {files_count}")
 
-    if apps:
-        facts.append(f"Outils : {', '.join(apps[:4])}")
-
     if friction >= 0.7:
-        facts.append("Friction : élevée (allers-retours fréquents sur les mêmes fichiers)")
+        facts.append("Friction : élevée")
 
     facts_block = "\n".join(f"- {f}" for f in facts)
 
     prompt = f"""\
-Voici les données factuelles de la session de travail :
+Voici les données factuelles du commit livré :
 
 {facts_block}
 
-Écris exactement 1 à 3 phrases courtes en français.
-Commence par la tâche de haut niveau — ce qui était en cours de construction ou de débogage, pas les détails d'implémentation.
-Si c'est évident depuis le commit, mentionne ce qui a été livré.
-Ne résume pas le statut, ne liste pas les fichiers, n'invente rien qui ne soit pas dans les données ci-dessus."""
+Écris 1 à 2 phrases courtes en français.
+Dis ce qui a été livré et pourquoi — pas comment ni les détails techniques.
+Si le message de commit est explicite, reformule-le naturellement.
+N'invente aucun fait absent des données ci-dessus."""
 
-    return _llm_complete(llm, prompt, max_tokens=150)
+    return _llm_complete(llm, prompt, max_tokens=120)
 
 
 def _deterministic_summary(
-    project: str,
     duration: int,
     task: str,
     focus: str,
@@ -323,32 +394,43 @@ def _deterministic_summary(
     files_count: int,
     commit_message: Optional[str],
 ) -> str:
-    """Résumé honnête sans LLM — utilisé pour idle et screen_lock."""
-    task_labels = {
-        "coding":   "développement",
-        "debug":    "débogage",
-        "writing":  "rédaction",
-        "browsing": "navigation",
-    }
-    task_str  = task_labels.get(task, task)
+    """
+    Résumé honnête sans LLM.
+    Préfère le commit quand il existe, sinon décrit l'activité observée.
+    """
     focus_str = {
         "deep":      "focus profond",
         "scattered": "travail dispersé",
         "idle":      "session légère",
-    }.get(focus, "focus normal")
+        "normal":    "",
+    }.get(focus, "")
 
-    parts = [f"Session de {duration} min sur {project} — {task_str}, {focus_str}."]
+    parts = []
 
+    # Commit — signal le plus fort, on le met en avant
     if commit_message:
         parts.append(f"Commit : « {commit_message.splitlines()[0]} ».")
 
+    # Fichier principal touché
     if top_files:
-        parts.append(f"Fichiers : {', '.join(top_files[:4])}.")
+        main_file = top_files[0]
+        if len(top_files) > 1:
+            others = f" (+{len(top_files) - 1})"
+        else:
+            others = ""
+        parts.append(f"Fichier principal : {main_file}{others}.")
     elif files_count:
         parts.append(f"{files_count} fichier(s) modifié(s).")
 
+    # Focus et friction
+    if focus_str:
+        parts.append(focus_str.capitalize() + ".")
     if friction >= 0.7:
-        parts.append("Forte friction détectée.")
+        parts.append("Friction élevée.")
+
+    # Fallback si rien à dire
+    if not parts:
+        parts.append(f"Session de {duration} min.")
 
     return " ".join(parts)
 
@@ -401,25 +483,6 @@ def _update_projects(base_dir: Path, session: Dict[str, Any]) -> None:
             f"- Type de travail détecté : {item['task']}",
         ])
     projects_file.write_text("\n".join(lines).strip() + "\n")
-
-
-def _update_habits(base_dir: Path, session: Dict[str, Any]) -> None:
-    habits_file = base_dir / "habits.md"
-    if not habits_file.exists():
-        habits_file.write_text("# Habitudes\n\n")
-
-    apps = [a for a in session.get("recent_apps", []) if a][:3]
-    task = session.get("probable_task", "general")
-    slot = _time_slot(datetime.now().hour)
-    line = f"- Session {slot} : {task}"
-    if apps:
-        line += f" avec {', '.join(apps)}"
-
-    existing = [l.strip() for l in habits_file.read_text(encoding="utf-8").splitlines() if l.strip()]
-    if existing and existing[-1] == line:
-        return
-    with habits_file.open("a", encoding="utf-8") as fh:
-        fh.write(line + "\n")
 
 
 def _update_index(base_dir: Path) -> None:
