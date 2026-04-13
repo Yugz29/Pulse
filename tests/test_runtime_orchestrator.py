@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from daemon.core.decision_engine import Decision
@@ -39,6 +40,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 runtime_state=self.runtime_state,
                 llm_runtime=self.llm_runtime,
                 log=self.log,
+                commit_poll_sec=0.0,
+                commit_confirm_timeout_sec=0.5,
             )
 
     def test_build_context_snapshot_includes_state_signals_decision_and_memory(self):
@@ -109,6 +112,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.llm_runtime.load_persisted_models.assert_called_once()
         self.memory_store.purge_expired.assert_called_once()
         provider.warmup.assert_called_once()
+
+    def test_handle_commit_event_waits_for_new_head_before_processing(self):
+        git_root = Path("/tmp/Pulse")
+
+        with patch("daemon.runtime_orchestrator.find_git_root", return_value=git_root), \
+             patch("daemon.runtime_orchestrator.read_head_sha", side_effect=["old", "old", "new"]), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None), \
+             patch.object(self.orchestrator, "_process_confirmed_commit") as process_commit:
+            self.orchestrator._handle_commit_event("/tmp/Pulse/.git/COMMIT_EDITMSG")
+
+        process_commit.assert_called_once_with(git_root)
 
 
 if __name__ == "__main__":

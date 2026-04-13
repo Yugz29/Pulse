@@ -24,6 +24,7 @@ Qualité LLM
 """
 
 import json
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -121,13 +122,14 @@ def update_memories_from_session(
     commit_message: Optional[str] = None,
     trigger: str = "screen_lock",
     diff_summary: Optional[str] = None,
-) -> None:
+    defer_llm_enrichment: bool = False,
+):
     """
     Met à jour la mémoire de session et génère un rapport si nécessaire.
 
-    Le LLM n'est utilisé que pour les triggers 'commit' et 'manual'.
-    Pour 'screen_lock' et 'user_idle', le fallback déterministe est appliqué
-    directement — plus honnête et sans risque d'hallucination.
+    Le LLM n'est utilisé que pour les triggers 'commit'.
+    Pour 'screen_lock', 'user_idle' et 'manual', le fallback déterministe
+    est appliqué directement — plus honnête et sans risque d'hallucination.
 
     Le curseur _last_report_at garantit qu'un rapport ne se génère pas deux
     fois en moins de REPORT_COOLDOWN_MIN minutes pour le même projet.
@@ -163,7 +165,7 @@ def update_memories_from_session(
     should_write = (duration >= 15 or trigger == "commit")
     if not should_write:
         _update_index(base_dir)
-        return
+        return None
 
     # Curseur anti-doublon — pas deux rapports en moins de REPORT_COOLDOWN_MIN
     # pour le même projet, sauf sur commit (unité de travail explicite).
@@ -173,13 +175,16 @@ def update_memories_from_session(
             elapsed = (datetime.now() - last).total_seconds() / 60
             if elapsed < REPORT_COOLDOWN_MIN:
                 _update_index(base_dir)
-                return
+                return None
 
     # LLM uniquement sur commit — seul trigger avec assez de signal.
-    # screen_lock, user_idle, manual → fallback déterministe toujours.
-    effective_llm = llm if trigger == "commit" else None
+    # En mode defer, on écrit d'abord une version déterministe immédiate,
+    # puis le LLM enrichit l'entrée existante hors chemin critique.
+    effective_llm = (
+        llm if trigger == "commit" and not defer_llm_enrichment else None
+    )
 
-    _write_session_report(
+    report_ref = _write_session_report(
         base_dir,
         session_data,
         llm=effective_llm,
@@ -193,6 +198,49 @@ def update_memories_from_session(
     _save_cooldown()
 
     _update_index(base_dir)
+    return report_ref
+
+
+def enrich_session_report(
+    report_ref,
+    session_data: Dict[str, Any],
+    llm: Any,
+    *,
+    commit_message: Optional[str] = None,
+    diff_summary: Optional[str] = None,
+) -> bool:
+    """
+    Enrichit a posteriori une entrée de journal déjà écrite.
+    Utilisé pour les commits : le fallback déterministe est immédiat,
+    puis le LLM remplace le corps quand sa réponse complète arrive.
+    """
+    if report_ref is None or llm is None:
+        return False
+
+    journal_file, entry_id = report_ref
+    project     = session_data.get("active_project") or "inconnu"
+    duration    = session_data.get("duration_min", 0)
+    task        = session_data.get("probable_task", "general")
+    focus       = session_data.get("focus_level", "normal")
+    friction    = float(session_data.get("max_friction", 0.0))
+    apps        = session_data.get("recent_apps", [])
+    top_files   = _clean_files(session_data.get("top_files", []))
+    files_count = session_data.get("files_changed", 0)
+
+    body = _llm_summary(
+        llm,
+        project,
+        duration,
+        task,
+        focus,
+        friction,
+        apps,
+        top_files,
+        files_count,
+        commit_message,
+        diff_summary,
+    )
+    return _replace_journal_entry(journal_file, entry_id, body)
 
 
 def load_memory_context(memory_dir: Optional[Path] = None) -> str:
@@ -268,7 +316,7 @@ def _write_session_report(
     commit_message: Optional[str],
     trigger: str,
     diff_summary: Optional[str] = None,
-) -> None:
+):
     """
     Journal quotidien : un seul fichier par jour (YYYY-MM-DD.md).
     Chaque session ajoute une section ## HH:MM en bas du fichier.
@@ -316,16 +364,27 @@ def _write_session_report(
         "browsing": "navigation",
     }
     section_header = f"## {time_str} — {task_labels.get(task, task)}, {duration} min"
+    entry_id = _new_entry_id(now)
 
-    entry = f"\n{section_header}\n{body.strip()}\n"
+    entry = "\n".join([
+        "",
+        section_header,
+        f"<!-- pulse-entry:{entry_id}:start -->",
+        body.strip(),
+        f"<!-- pulse-entry:{entry_id}:end -->",
+        "",
+    ])
 
     if journal_file.exists():
         # Append au journal existant
-        journal_file.open("a", encoding="utf-8").write(entry)
+        with journal_file.open("a", encoding="utf-8") as fh:
+            fh.write(entry)
     else:
         # Créer le journal du jour avec en-tête
         header = f"# Journal Pulse — {today}\n"
         journal_file.write_text(header + entry, encoding="utf-8")
+
+    return (journal_file, entry_id)
 
 
 def _llm_summary(
@@ -449,6 +508,30 @@ def _clean_files(files: List[str]) -> List[str]:
             continue
         result.append(name)
     return result
+
+
+def _replace_journal_entry(journal_file: Path, entry_id: str, body: str) -> bool:
+    if not journal_file.exists():
+        return False
+
+    start = f"<!-- pulse-entry:{entry_id}:start -->"
+    end = f"<!-- pulse-entry:{entry_id}:end -->"
+    pattern = re.compile(
+        rf"({re.escape(start)}\n)(.*?)((?:\n)?{re.escape(end)})",
+        re.DOTALL,
+    )
+
+    content = journal_file.read_text(encoding="utf-8")
+    replaced, count = pattern.subn(rf"\1{body.strip()}\3", content, count=1)
+    if count == 0:
+        return False
+
+    journal_file.write_text(replaced, encoding="utf-8")
+    return True
+
+
+def _new_entry_id(now: datetime) -> str:
+    return now.strftime("%Y%m%d%H%M%S%f")
 
 
 # ── Projets et habitudes ──────────────────────────────────────────────────────

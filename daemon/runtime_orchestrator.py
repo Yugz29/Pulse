@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta
 
 from daemon.memory.extractor import (
+    enrich_session_report,
     find_git_root,
     get_fact_engine,
     load_memory_context,
@@ -30,6 +31,8 @@ class RuntimeOrchestrator:
         log,
         sleep_session_threshold_min: int = 30,
         file_debounce_sec: float = 0.25,
+        commit_poll_sec: float = 0.4,
+        commit_confirm_timeout_sec: float = 15.0,
     ) -> None:
         self.store = store
         self.scorer = scorer
@@ -42,6 +45,8 @@ class RuntimeOrchestrator:
         self.log = log
         self.sleep_session_threshold_min = sleep_session_threshold_min
         self.file_debounce_sec = file_debounce_sec
+        self.commit_poll_sec = commit_poll_sec
+        self.commit_confirm_timeout_sec = commit_confirm_timeout_sec
 
         self._frozen_memory: str | None = None
         self._frozen_memory_at: datetime | None = None
@@ -51,6 +56,8 @@ class RuntimeOrchestrator:
         self._pending_file_events = []
         self._last_head_sha: dict[str, str] = {}
         self._head_sha_lock = threading.Lock()
+        self._commit_watch_lock = threading.Lock()
+        self._pending_commit_watch: set[str] = set()
         self._fact_engine = get_fact_engine()
 
     def llm_unload_background(self) -> None:
@@ -122,7 +129,7 @@ class RuntimeOrchestrator:
 
         path = (event.payload or {}).get("path", "")
         if event.type in ("file_modified", "file_created") and "/COMMIT_EDITMSG" in path:
-            threading.Thread(target=self._handle_commit_event, args=(path,), daemon=True).start()
+            self._schedule_commit_watch(path)
             return
 
         if event.type.startswith("file_"):
@@ -232,22 +239,57 @@ class RuntimeOrchestrator:
         dedupe_key = "{0}:{1}".format(event.type, path)
         return self.runtime_state.should_ignore_file_event(dedupe_key=dedupe_key)
 
+    def _schedule_commit_watch(self, path: str) -> None:
+        git_root = find_git_root(path)
+        if not git_root:
+            return
+
+        root_key = str(git_root)
+        with self._commit_watch_lock:
+            if root_key in self._pending_commit_watch:
+                return
+            self._pending_commit_watch.add(root_key)
+
+        threading.Thread(
+            target=self._handle_commit_event,
+            args=(path,),
+            daemon=True,
+        ).start()
+
     def _handle_commit_event(self, path: str) -> None:
         git_root = find_git_root(path)
         if not git_root:
             return
 
-        current_sha = read_head_sha(git_root)
         root_key = str(git_root)
+        try:
+            baseline_sha = read_head_sha(git_root)
+            if baseline_sha:
+                with self._head_sha_lock:
+                    self._last_head_sha.setdefault(root_key, baseline_sha)
 
-        with self._head_sha_lock:
-            previous_sha = self._last_head_sha.get(root_key)
-            self._last_head_sha[root_key] = current_sha or ""
+            deadline = time.monotonic() + self.commit_confirm_timeout_sec
+            while time.monotonic() < deadline:
+                time.sleep(self.commit_poll_sec)
+                current_sha = read_head_sha(git_root)
+                if not current_sha or current_sha == baseline_sha:
+                    continue
 
-        if not current_sha or current_sha == previous_sha:
-            self.log.debug("COMMIT_EDITMSG touché mais HEAD inchangé — ignoré (%s)", root_key)
-            return
+                with self._head_sha_lock:
+                    previous_sha = self._last_head_sha.get(root_key)
+                    if current_sha == previous_sha:
+                        return
+                    self._last_head_sha[root_key] = current_sha
 
+                self._process_confirmed_commit(git_root)
+                return
+
+            self.log.debug("COMMIT_EDITMSG touché sans nouveau HEAD — ignoré (%s)", root_key)
+        finally:
+            with self._commit_watch_lock:
+                self._pending_commit_watch.discard(root_key)
+
+    def _process_confirmed_commit(self, git_root) -> None:
         commit_msg = read_commit_message(git_root)
         self.log.info(
             "Commit git confirmé [%s] : %s",
@@ -255,7 +297,6 @@ class RuntimeOrchestrator:
             (commit_msg or "").splitlines()[0] if commit_msg else "(sans message)",
         )
 
-        # Lit le diff réel du commit pour enrichir le rapport LLM
         diff_summary: str | None = None
         try:
             diff_summary = read_commit_diff_summary(git_root) or None
@@ -348,12 +389,14 @@ class RuntimeOrchestrator:
         diff_summary: str | None = None,
     ) -> None:
         try:
-            update_memories_from_session(
+            defer_llm = trigger == "commit" and llm is not None
+            report_ref = update_memories_from_session(
                 snapshot,
                 llm=llm,
                 commit_message=commit_message,
                 trigger=trigger,
                 diff_summary=diff_summary,
+                defer_llm_enrichment=defer_llm,
             )
             self.log.info(
                 "memory sync ok project=%s duration=%smin trigger=%s",
@@ -365,8 +408,41 @@ class RuntimeOrchestrator:
             # Garantit que les nouveaux faits consolidés sont visibles
             # sans attendre le prochain redémarrage du daemon.
             self.freeze_memory()
+            if defer_llm and report_ref is not None:
+                threading.Thread(
+                    target=self._enrich_commit_summary_background,
+                    args=(report_ref, snapshot, llm, commit_message, diff_summary),
+                    daemon=True,
+                ).start()
         except Exception as exc:
             self.log.warning("memory sync échouée : %s", exc)
+
+    def _enrich_commit_summary_background(
+        self,
+        report_ref,
+        snapshot: dict,
+        llm,
+        commit_message: str | None,
+        diff_summary: str | None,
+    ) -> None:
+        try:
+            ok = enrich_session_report(
+                report_ref,
+                snapshot,
+                llm,
+                commit_message=commit_message,
+                diff_summary=diff_summary,
+            )
+            if ok:
+                self.log.info(
+                    "commit summary enrichi project=%s",
+                    snapshot.get("active_project"),
+                )
+                self.freeze_memory()
+            else:
+                self.log.warning("commit summary non enrichi : entrée introuvable")
+        except Exception as exc:
+            self.log.warning("commit summary enrich échouée : %s", exc)
 
     def _should_sync_memory(self, event_type, signals, previous_sync_at) -> bool:
         if signals.session_duration_min < 20:
@@ -397,6 +473,8 @@ class RuntimeOrchestrator:
                 self._file_debounce_timer.cancel()
             self._file_debounce_timer = None
             self._pending_file_events = []
+        with self._commit_watch_lock:
+            self._pending_commit_watch = set()
         with self._head_sha_lock:
             self._last_head_sha = {}
         with self._runtime_lock:

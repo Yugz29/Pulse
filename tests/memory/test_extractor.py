@@ -4,7 +4,11 @@ from pathlib import Path
 from unittest.mock import patch
 from datetime import datetime, timedelta
 
-from daemon.memory.extractor import load_memory_context, update_memories_from_session
+from daemon.memory.extractor import (
+    enrich_session_report,
+    load_memory_context,
+    update_memories_from_session,
+)
 import daemon.memory.extractor as extractor_module
 
 
@@ -372,6 +376,43 @@ class TestExtractor(unittest.TestCase):
         # Deux sections dans le même fichier
         self.assertGreaterEqual(content.count("## "), 2)
         self.assertIn("correction bug", content)
+
+    def test_commit_peut_etre_enrichi_apres_ecriture_initiale(self):
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "recent_apps": ["Cursor"],
+            "files_changed": 5,
+            "max_friction": 0.2,
+        }
+
+        report_ref = update_memories_from_session(
+            session,
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: commit enrichi",
+            defer_llm_enrichment=True,
+        )
+
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        before = session_files[0].read_text()
+        self.assertIn("Commit : « feat: commit enrichi ».", before)
+        self.assertNotIn("Résumé court de la session.", before)
+
+        ok = enrich_session_report(
+            report_ref,
+            session,
+            FakeLLM(),
+            commit_message="feat: commit enrichi",
+        )
+        self.assertTrue(ok)
+
+        after = session_files[0].read_text()
+        self.assertIn("Résumé court de la session.", after)
+        self.assertNotIn("Commit : « feat: commit enrichi ».", after)
 
 
 if __name__ == "__main__":
