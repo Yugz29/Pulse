@@ -221,7 +221,13 @@ class OllamaProvider:
             self._mark_failure()
             raise RuntimeError("Ollama unavailable") from exc
 
-    def stream(self, prompt: str, system: str = "", max_tokens: int = 600):
+    def stream(
+        self,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 600,
+        think: bool | None = None,
+    ):
         """
         Génère la réponse token par token via /api/chat (streaming).
 
@@ -248,6 +254,8 @@ class OllamaProvider:
                 "top_k":       64,
             },
         }
+        if think is not None:
+            payload["think"] = think
 
         req = request.Request(
             self.url + "/api/chat",
@@ -305,13 +313,24 @@ class OllamaProvider:
             self._mark_failure()
             raise RuntimeError("Ollama unavailable") from exc
 
-    def complete(self, prompt: str, system: str = "", max_tokens: int = 160) -> str:
+    def complete(
+        self,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 160,
+        think: bool | None = None,
+    ) -> str:
         """
         Réponse complète — construit par-dessus stream() pour réutiliser
         le parsing /api/chat et bénéficier du même timeout.
         """
         tokens = []
-        for token in self.stream(prompt=prompt, system=system, max_tokens=max_tokens):
+        for token in self.stream(
+            prompt=prompt,
+            system=system,
+            max_tokens=max_tokens,
+            think=think,
+        ):
             tokens.append(token)
         text = "".join(tokens).strip()
         if not text:

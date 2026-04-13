@@ -17,11 +17,18 @@ class LLMRouter:
             model=llm_cfg.get("model", "mistral"),
         )
 
-    def complete(self, prompt: str, system: str = "", max_tokens: int = 160) -> str:
+    def complete(
+        self,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 160,
+        think: bool | None = None,
+    ) -> str:
         return self.default.complete(
             prompt=prompt,
             system=system,
             max_tokens=max_tokens,
+            think=think,
         )
 
     def list_models(self) -> list:

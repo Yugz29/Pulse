@@ -441,7 +441,7 @@ Dis ce qui a été livré et pourquoi — pas comment ni les détails techniques
 Si le message de commit est explicite, reformule-le naturellement.
 N'invente aucun fait absent des données ci-dessus."""
 
-    return _llm_complete(llm, prompt, max_tokens=120)
+    return _llm_complete(llm, prompt, max_tokens=256, think=False)
 
 
 def _deterministic_summary(
@@ -630,7 +630,19 @@ def _time_slot(hour: int) -> str:
     return "soir"
 
 
-def _llm_complete(llm: Any, prompt: str, max_tokens: int = 150) -> str:
+def _llm_complete(
+    llm: Any,
+    prompt: str,
+    max_tokens: int = 150,
+    think: Optional[bool] = None,
+) -> str:
     if hasattr(llm, "complete"):
-        return llm.complete(prompt, max_tokens=max_tokens)
+        kwargs = {"max_tokens": max_tokens}
+        if think is not None:
+            kwargs["think"] = think
+        try:
+            return llm.complete(prompt, **kwargs)
+        except TypeError:
+            kwargs.pop("think", None)
+            return llm.complete(prompt, **kwargs)
     raise TypeError("LLM provider incompatible")
