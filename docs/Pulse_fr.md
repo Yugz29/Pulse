@@ -221,28 +221,30 @@ Pulse utilise une mémoire locale en trois niveaux :
 - Session : état courant stocké en SQLite.
 - Persistante : faits durables stockés en Markdown.
 
-Organisation visée :
+Organisation :
 
 ```text
 ~/.pulse/
-├── memory/
-│   ├── MEMORY.md
-│   ├── habits.md
-│   ├── projects.md
-│   └── sessions/
-├── session.db
-└── settings.json
+├── facts.db            ← Faits utilisateur (confiance dynamique)
+├── memory.db           ← MemoryStore structuré (tiers + TTL)
+├── session.db          ← Session courante (SQLite + FTS5)
+├── cooldown.json       ← Curseur anti-doublon persistant
+└── memory/
+    ├── MEMORY.md
+    ├── facts.md        ← Profil utilisateur (export lisible)
+    ├── projects.md
+    └── sessions/       ← Journal quotidien (un fichier par jour)
 ```
 
 ### Ce que mémorise Pulse
 
 La mémoire persistante vise surtout :
 - les projets connus,
-- les habitudes de travail,
-- certaines préférences,
-- des résumés de session.
+- les habitudes et faits de travail consolidés (FactEngine),
+- le journal de session quotidien,
+- des résumés de commit (via diff réel).
 
-Le but n'est pas de garder un log chronologique géant, mais une mémoire synthétique et réutilisable.
+Le but n'est pas de garder un log chronologique géant, mais une mémoire synthétique et réutilisable. Le FactEngine apprend progressivement avec un score de confiance dynamique — les faits incertains sont archivés, pas supprimés.
 
 ---
 
@@ -388,27 +390,24 @@ Depuis l'encoche, vérifier :
 
 ## Roadmap
 
-### Phase 1 — MVP
-- Command Interpreter fonctionnel
-- UI notch avec allow / deny
-- Intégration MCP
+### Implémenté ✅
+- Command Interpreter fonctionnel (déterministe, sans LLM pour 80% des cas)
+- UI notch avec allow / deny, dashboard, chat streamé, observation, services
+- Intégration MCP Claude Code
 - Daemon Python stable
-
-### Phase 2 — Intelligence locale
-- Signal scoring complet
-- Mémoire persistante
+- Signal scoring, Decision Engine
 - Scoring Cortex embarqué
-- Davantage de décisions déterministes
+- FactEngine — faits utilisateur avec confiance dynamique et decay
+- Journal de session quotidien
+- LLM activé uniquement sur commit (diff réel)
+- API `/facts` complète
+- 75 tests Python
 
-### Phase 3 — Contexte
-- Injection de contexte
-- Résumés de session
-- Dashboard plus riche
-
-### Phase 4 — Généralisation
-- Support d'autres agents IA
-- Actions rapides depuis l'encoche
-- Évolutions d'interface et d'usage
+### En cours / à venir
+- Compression automatique des faits (6+ par catégorie)
+- UI Swift pour le profil utilisateur
+- Autonomie progressive (`autonomy_level`)
+- Support d'autres agents IA (Cursor, GitHub Copilot)
 
 ---
 

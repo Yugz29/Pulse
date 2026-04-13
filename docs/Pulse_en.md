@@ -221,28 +221,30 @@ Pulse uses a three-level local memory model:
 - Session: current state stored in SQLite.
 - Persistent: durable facts stored in Markdown.
 
-Target layout:
+Layout:
 
 ```text
 ~/.pulse/
-├── memory/
-│   ├── MEMORY.md
-│   ├── habits.md
-│   ├── projects.md
-│   └── sessions/
-├── session.db
-└── settings.json
+├── facts.db            ← User facts (dynamic confidence)
+├── memory.db           ← Structured MemoryStore (tiers + TTL)
+├── session.db          ← Current session (SQLite + FTS5)
+├── cooldown.json       ← Persistent dedup cursor
+└── memory/
+    ├── MEMORY.md
+    ├── facts.md        ← User profile (human-readable export)
+    ├── projects.md
+    └── sessions/       ← Daily journal (one file per day)
 ```
 
 ### What Pulse remembers
 
 Persistent memory is mainly meant for:
 - known projects,
-- work habits,
-- selected preferences,
-- session summaries.
+- consolidated work facts (FactEngine),
+- the daily session journal,
+- commit summaries (from real diff).
 
-The goal is not to keep a giant chronological log, but to maintain compact, reusable memory.
+The goal is not to keep a giant chronological log, but to maintain compact, reusable memory. The FactEngine learns progressively with a dynamic confidence score — uncertain facts are archived, not deleted.
 
 ---
 
@@ -388,27 +390,24 @@ From the notch, verify:
 
 ## Roadmap
 
-### Phase 1 — MVP
-- Functional Command Interpreter
-- Notch UI with allow / deny
-- MCP integration
+### Implemented ✅
+- Functional Command Interpreter (deterministic, no LLM for 80% of cases)
+- Notch UI with allow / deny, dashboard, streamed chat, observation, services
+- MCP integration with Claude Code
 - Stable Python daemon
-
-### Phase 2 — Local intelligence
-- Complete signal scoring
-- Persistent memory
+- Signal scoring, Decision Engine
 - Embedded Cortex scoring
-- More deterministic decisions
+- FactEngine — user facts with dynamic confidence and decay
+- Daily session journal
+- LLM triggered only on commit (real diff)
+- Complete `/facts` API
+- 75 Python tests
 
-### Phase 3 — Context
-- Context injection
-- Session summaries
-- Richer dashboard
-
-### Phase 4 — Generalization
-- Support for other AI agents
-- Quick actions from the notch
-- UI and workflow expansion
+### In progress / upcoming
+- Automatic fact compression (6+ per category)
+- Swift UI for user profile
+- Progressive autonomy (`autonomy_level`)
+- Support for other AI agents (Cursor, GitHub Copilot)
 
 ---
 

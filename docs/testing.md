@@ -8,7 +8,7 @@ Run the full non-interactive Python suite:
 
 ```bash
 cd /path/to/Pulse
-./scripts/test_all.sh
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
 What it covers:
@@ -19,9 +19,12 @@ What it covers:
 - runtime state matrix (`/ping`, `/state`, `/event`, `/insights`)
 - MCP handlers
 - session memory
-- memory extraction
-- LLM availability matrix (`ollama_online`, `llm_active`, selected models)
-- runtime settings persistence
+- FactEngine (facts, reinforce, contradict, decay, archive)
+- memory extractor (cooldown, journal, projects)
+- git diff module
+- `/facts` API routes
+- runtime orchestrator
+- LLM availability matrix
 
 ## Interactive E2E
 
@@ -105,7 +108,7 @@ Optional custom command:
 ### Session Memory
 
 - Work for at least 20 minutes with Pulse active.
-- Trigger an idle period or lock the screen.
+- Trigger an idle period or lock the screen (or make a git commit).
 - Verify memory files exist:
 
 ```bash
@@ -114,9 +117,17 @@ ls ~/.pulse/memory/sessions
 ```
 
 - Verify:
-  - `habits.md`
+  - `facts.md` (profil utilisateur export)
   - `projects.md`
-  - a dated file under `sessions/`
+  - a dated file under `sessions/` (e.g. `2026-04-13.md`)
+  - `~/.pulse/facts.db` exists and contains active facts
+
+- Check the facts API:
+
+```bash
+curl http://127.0.0.1:8765/facts
+curl http://127.0.0.1:8765/facts/profile
+```
 
 ## LaunchAgent Checks
 
