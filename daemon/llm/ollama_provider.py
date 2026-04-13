@@ -18,6 +18,7 @@ import time
 from urllib import request, error
 
 log = logging.getLogger("pulse")
+_DEBUG_CHUNK_PREVIEW = 280
 
 
 class OllamaProvider:
@@ -179,9 +180,11 @@ class OllamaProvider:
             method="POST",
         )
         saw_success = False
+        raw_chunk_count = 0
         try:
             with request.urlopen(req, timeout=300) as response:
                 for raw_line in response:
+                    raw_chunk_count += 1
                     line = raw_line.decode("utf-8").strip()
                     if not line:
                         continue
@@ -194,12 +197,23 @@ class OllamaProvider:
                         raise RuntimeError(f"Ollama error: {chunk['error']}")
                     msg   = chunk.get("message") or {}
                     token = msg.get("content") or ""
+                    if not token and raw_chunk_count <= 5:
+                        log.debug(
+                            "Ollama /api/chat chunk sans content exploitable [%d]: %s",
+                            raw_chunk_count,
+                            _summarize_chunk_for_debug(chunk, line),
+                        )
                     if token:
                         if not saw_success:
                             self._mark_success()
                             saw_success = True
                         yield token
                     if chunk.get("done"):
+                        if not saw_success:
+                            log.warning(
+                                "Ollama /api/chat terminé sans token visible: %s",
+                                _summarize_chunk_for_debug(chunk, line),
+                            )
                         if not saw_success:
                             self._mark_success()
                         break
@@ -243,9 +257,11 @@ class OllamaProvider:
         )
 
         saw_success = False
+        raw_chunk_count = 0
         try:
             with request.urlopen(req, timeout=300) as response:
                 for raw_line in response:
+                    raw_chunk_count += 1
                     line = raw_line.decode("utf-8").strip()
                     if not line:
                         continue
@@ -262,6 +278,12 @@ class OllamaProvider:
                     # (peut être None ou absent si tool_call en phase 2)
                     msg   = chunk.get("message") or {}
                     token = msg.get("content") or ""
+                    if not token and raw_chunk_count <= 5:
+                        log.debug(
+                            "Ollama stream chunk sans content exploitable [%d]: %s",
+                            raw_chunk_count,
+                            _summarize_chunk_for_debug(chunk, line),
+                        )
 
                     if token:
                         if not saw_success:
@@ -270,6 +292,11 @@ class OllamaProvider:
                         yield token
 
                     if chunk.get("done"):
+                        if not saw_success:
+                            log.warning(
+                                "Ollama stream terminé sans token visible: %s",
+                                _summarize_chunk_for_debug(chunk, line),
+                            )
                         if not saw_success:
                             self._mark_success()
                         break
@@ -334,3 +361,36 @@ class OllamaProvider:
             self._models_error_at = 0.0
         self._mark_success()
         return models
+
+
+def _summarize_chunk_for_debug(chunk: dict, raw_line: str) -> str:
+    """
+    Résume un chunk Ollama pour diagnostic sans noyer les logs.
+    Utile pour les modèles qui renvoient du reasoning/thinking sans texte final.
+    """
+    try:
+        msg = chunk.get("message") or {}
+        summary = {
+            "keys": sorted(chunk.keys()),
+            "done": chunk.get("done"),
+            "done_reason": chunk.get("done_reason"),
+            "message_keys": sorted(msg.keys()) if isinstance(msg, dict) else [],
+            "role": msg.get("role") if isinstance(msg, dict) else None,
+            "content_len": len(msg.get("content") or "") if isinstance(msg, dict) else 0,
+        }
+        if isinstance(msg, dict):
+            for key in ("thinking", "reasoning", "tool_calls"):
+                if key in msg:
+                    value = msg.get(key)
+                    if isinstance(value, str):
+                        summary[f"{key}_len"] = len(value)
+                    elif isinstance(value, list):
+                        summary[f"{key}_count"] = len(value)
+                    else:
+                        summary[f"{key}_type"] = type(value).__name__
+        return json.dumps(summary, ensure_ascii=False)
+    except Exception:
+        preview = raw_line[:_DEBUG_CHUNK_PREVIEW]
+        if len(raw_line) > _DEBUG_CHUNK_PREVIEW:
+            preview += "…"
+        return preview
