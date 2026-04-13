@@ -41,12 +41,28 @@ struct DashboardView: View {
 struct ChatView: View {
     @ObservedObject var vm: PulseViewModel
 
+    private var isWaitingForFirstToken: Bool {
+        guard vm.isAsking, let last = vm.chatMessages.last else { return false }
+        return last.role == "assistant" && last.isStreaming && last.content.isEmpty
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        if vm.isAsking && vm.askResponse == nil {
+                        ForEach(vm.chatMessages) { message in
+                            if !message.content.isEmpty || message.role == "user" || !message.isStreaming {
+                                ChatMessageRow(
+                                    message: message,
+                                    showsCursor: vm.isAsking
+                                        && message.id == vm.chatMessages.last?.id
+                                        && message.role == "assistant"
+                                )
+                            }
+                        }
+
+                        if isWaitingForFirstToken {
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .controlSize(.small)
@@ -58,29 +74,15 @@ struct ChatView: View {
                             .padding(.top, 12)
                             .id("bottom")
                         }
-
-                        if let response = vm.askResponse {
-                            HStack(alignment: .bottom, spacing: 2) {
-                                Text(response)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.85))
-                                    .lineSpacing(4)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                if vm.isAsking {
-                                    BlinkingCursor()
-                                }
-                            }
-                            .padding(.top, 12)
-                            .id("bottom")
-                        }
                     }
                     .padding(.horizontal, 18)
                     .frame(maxWidth: .infinity)
                 }
                 .frame(maxHeight: .infinity)
-                .onChange(of: vm.askResponse) {
+                .onChange(of: vm.chatMessages.count) {
+                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+                .onChange(of: vm.chatMessages.last?.content ?? "") {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
                 .onChange(of: vm.isAsking) {
@@ -114,6 +116,47 @@ struct ChatView: View {
             .padding(.vertical, 10)
         }
         .frame(height: NotchWindow.chatHeight - .panelContentGap)
+    }
+}
+
+private struct ChatMessageRow: View {
+    let message: ChatMessage
+    let showsCursor: Bool
+
+    private var isUser: Bool { message.role == "user" }
+
+    var body: some View {
+        HStack {
+            if isUser { Spacer(minLength: 30) }
+
+            HStack(alignment: .bottom, spacing: 2) {
+                Text(message.content)
+                    .font(.system(size: 13))
+                    .foregroundColor(isUser ? .white.opacity(0.9) : .white.opacity(0.85))
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if showsCursor {
+                    BlinkingCursor()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isUser ? Color.white.opacity(0.09) : Color.white.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(isUser ? 0.08 : 0.04), lineWidth: 0.8)
+            )
+            .frame(maxWidth: 300, alignment: isUser ? .trailing : .leading)
+
+            if !isUser { Spacer(minLength: 30) }
+        }
+        .padding(.top, 12)
+        .id(message.id)
     }
 }
 

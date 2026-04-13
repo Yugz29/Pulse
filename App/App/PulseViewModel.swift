@@ -28,7 +28,7 @@ final class PulseViewModel: ObservableObject {
     @Published var isObservingEnabled = true
     @Published var panelMode: PanelMode = .dashboard
 
-    @Published var askResponse: String? = nil
+    @Published var chatMessages: [ChatMessage] = []
     @Published var isAsking: Bool = false
 
     @Published var recentEvents: [InsightEvent] = []

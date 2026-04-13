@@ -29,11 +29,19 @@ extension DaemonBridge {
         return try decode(SetLLMModelResponse.self, from: data)
     }
 
-    func askStream(_ message: String) -> AsyncThrowingStream<String, Error> {
+    func askStream(_ message: String, history: [ChatMessage] = []) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let request = try jsonObjectRequest(path: "/ask/stream", body: ["message": message])
+                    // Historique : max 6 messages (3 échanges) pour rester dans le contexte
+                    let historyPayload = history.suffix(6).map {
+                        ["role": $0.role, "content": $0.content]
+                    }
+                    let body: [String: Any] = [
+                        "message": message,
+                        "history": historyPayload,
+                    ]
+                    let request = try jsonObjectRequest(path: "/ask/stream", body: body, timeout: 300)
                     let (bytes, response) = try await bytes(for: request)
                     try validate(response, expectedStatus: 200)
 
@@ -47,6 +55,15 @@ extension DaemonBridge {
                         if let error = object["error"] as? String {
                             continuation.finish(throwing: DaemonError.llm(error))
                             return
+                        }
+                        // Heartbeat "thinking" et status — ignorés, gardent la connexion vivante
+                        if object["status"] != nil && object["token"] == nil && object["tool_call"] == nil {
+                            continue
+                        }
+                        // Outil en cours d'exécution — affiché comme token spécial
+                        if let toolName = object["tool_call"] as? String {
+                            continuation.yield("[" + toolName + "] ")
+                            continue
                         }
                         if let token = object["token"] as? String, !token.isEmpty {
                             continuation.yield(token)

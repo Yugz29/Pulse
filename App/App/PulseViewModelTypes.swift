@@ -1,5 +1,12 @@
 import SwiftUI
 
+struct ChatMessage: Identifiable {
+    let id      = UUID()
+    let role:   String   // "user" | "assistant"
+    var content: String
+    var isStreaming: Bool = false
+}
+
 enum PanelMode {
     case dashboard
     case chat

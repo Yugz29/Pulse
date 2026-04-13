@@ -63,40 +63,53 @@ extension PulseViewModel {
         guard !message.isEmpty, !isAsking else { return }
         askTask?.cancel()
         inputText = ""
-        isAsking = true
-        askResponse = nil
+        isAsking  = true
+
+        // Historique complet avant ce message (sans les messages en cours de streaming)
+        let historySnapshot = chatMessages.filter { !$0.isStreaming }
+
+        // Ajoute le message utilisateur + une réponse vide (remplie par le stream)
+        chatMessages.append(ChatMessage(role: "user",      content: message))
+        chatMessages.append(ChatMessage(role: "assistant", content: "", isStreaming: true))
+
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            panelMode = .chat
+            panelMode  = .chat
             isExpanded = true
         }
+
         askTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 self.isAsking = false
-                self.askTask = nil
+                self.askTask  = nil
+                // Marque le dernier message comme terminé
+                if let idx = self.chatMessages.indices.last {
+                    self.chatMessages[idx].isStreaming = false
+                }
             }
             do {
-                for try await token in self.bridge.askStream(message) {
+                for try await token in self.bridge.askStream(message, history: historySnapshot) {
                     try Task.checkCancellation()
-                    if self.askResponse == nil {
-                        self.askResponse = token
-                    } else {
-                        self.askResponse! += token
+                    if let idx = self.chatMessages.indices.last {
+                        self.chatMessages[idx].content += token
                     }
                 }
             } catch is CancellationError {
                 return
             } catch let error as DaemonError {
-                if case .llm(let message) = error {
-                    if self.askResponse == nil {
-                        self.askResponse = message
+                if let idx = self.chatMessages.indices.last {
+                    if self.chatMessages[idx].content.isEmpty {
+                        if case .llm(let msg) = error {
+                            self.chatMessages[idx].content = msg
+                        } else {
+                            self.chatMessages[idx].content = error.userMessage
+                        }
                     }
-                } else if self.askResponse == nil {
-                    self.askResponse = error.userMessage
                 }
             } catch {
-                if self.askResponse == nil {
-                    self.askResponse = "Pulse n'est pas disponible pour le moment."
+                if let idx = self.chatMessages.indices.last,
+                   self.chatMessages[idx].content.isEmpty {
+                    self.chatMessages[idx].content = "Pulse n'est pas disponible pour le moment."
                 }
             }
         }
@@ -107,8 +120,9 @@ extension PulseViewModel {
         askTask = nil
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             panelMode = .dashboard
-            askResponse = nil
-            isAsking = false
         }
+        // Réinitialise la conversation
+        chatMessages = []
+        isAsking     = false
     }
 }
