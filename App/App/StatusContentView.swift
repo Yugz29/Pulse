@@ -212,10 +212,18 @@ struct StatusView: View {
                 isTransitioning: false,
                 sublabelColor: .white.opacity(0.38),
                 accessory: {
-                    HStack(spacing: 6) {
-                        RoundIconButton("arrow.clockwise") {
-                            vm.showTransientStatus("Modèles rechargés")
-                            Task { await vm.refreshModels() }
+                        HStack(spacing: 6) {
+                            RoundIconButton("arrow.clockwise") {
+                            Task {
+                                let ok = await vm.refreshModels()
+                                await MainActor.run {
+                                    if ok {
+                                        vm.showTransientStatus("Modèles rechargés")
+                                    } else {
+                                        vm.showTransientStatus("Échec rechargement modèles", accent: Color(hex: "#ff453a"))
+                                    }
+                                }
+                            }
                         }
 
                         if vm.isUpdatingModel {

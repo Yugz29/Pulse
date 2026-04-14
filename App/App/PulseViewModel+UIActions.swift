@@ -26,10 +26,6 @@ extension PulseViewModel {
     func toggleObservation() {
         isObservingEnabled.toggle()
         onObservationToggle?(isObservingEnabled)
-        showTransientStatus(
-            isObservingEnabled ? "Observation activée" : "Observation suspendue",
-            accent: isObservingEnabled ? Color(hex: "#5DCAA5") : Color(hex: "#7c7c80")
-        )
     }
 
     func triggerStartupAnimation() {
