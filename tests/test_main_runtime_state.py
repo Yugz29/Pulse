@@ -105,6 +105,9 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertFalse(payload["ollama_online"])
+        self.assertEqual(payload["selected_model"], "mistral")
+        self.assertTrue(payload["model_selected"])
+        self.assertFalse(payload["llm_ready"])
         self.assertFalse(payload["llm_active"])
 
     def test_llm_models_reports_inactive_when_online_without_model_or_provider(self):
@@ -121,6 +124,9 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertTrue(payload["ollama_online"])
+        self.assertEqual(payload["selected_model"], "")
+        self.assertFalse(payload["model_selected"])
+        self.assertFalse(payload["llm_ready"])
         self.assertFalse(payload["llm_active"])
 
 

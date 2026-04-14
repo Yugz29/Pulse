@@ -135,6 +135,168 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         process_commit.assert_called_once_with(git_root)
 
+    def test_summary_llm_for_commit_only(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="deep",
+            session_duration_min=45,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+
+        self.assertIs(self.orchestrator._summary_llm_for("commit", signals), self.summary_llm)
+
+    def test_summary_llm_for_screen_locked_is_disabled(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="deep",
+            session_duration_min=45,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+
+        self.assertIsNone(self.orchestrator._summary_llm_for("screen_locked", signals))
+
+    def test_summary_llm_for_user_idle_is_disabled(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="deep",
+            session_duration_min=45,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+
+        self.assertIsNone(self.orchestrator._summary_llm_for("user_idle", signals))
+
+    def test_summary_llm_for_idle_focus_is_disabled_when_not_commit(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="idle",
+            session_duration_min=45,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+
+        self.assertIsNone(self.orchestrator._summary_llm_for("screen_unlocked", signals))
+
+    def test_commit_summary_logs_success_terminal_status(self):
+        snapshot = {"active_project": "Pulse"}
+        with patch("daemon.runtime_orchestrator.enrich_session_report", return_value=True):
+            self.orchestrator._enrich_commit_summary_background(
+                report_ref=("journal.md", "entry-1"),
+                snapshot=snapshot,
+                llm=self.summary_llm,
+                commit_message="fix: bug",
+                diff_summary="diff",
+            )
+
+        messages = [call[0][0] for call in self.log.info.call_args_list if call[0]]
+        self.assertTrue(any("llm_request_terminal" in msg for msg in messages))
+        terminal = next(msg for msg in messages if "llm_request_terminal" in msg)
+        self.assertIn("request_kind=commit_summary", terminal)
+        self.assertIn("status=success", terminal)
+
+    def test_commit_summary_logs_invalid_when_entry_missing(self):
+        snapshot = {"active_project": "Pulse"}
+        with patch("daemon.runtime_orchestrator.enrich_session_report", return_value=False):
+            self.orchestrator._enrich_commit_summary_background(
+                report_ref=("journal.md", "entry-1"),
+                snapshot=snapshot,
+                llm=self.summary_llm,
+                commit_message="fix: bug",
+                diff_summary="diff",
+            )
+
+        messages = [call[0][0] for call in self.log.warning.call_args_list if call[0]]
+        terminal = next(msg for msg in messages if "llm_request_terminal" in msg)
+        self.assertIn("request_kind=commit_summary", terminal)
+        self.assertIn("status=invalid", terminal)
+        self.assertIn("reason=entry_not_found", terminal)
+
+    def test_commit_summary_logs_error_on_exception(self):
+        snapshot = {"active_project": "Pulse"}
+        with patch("daemon.runtime_orchestrator.enrich_session_report", side_effect=RuntimeError("boom")):
+            self.orchestrator._enrich_commit_summary_background(
+                report_ref=("journal.md", "entry-1"),
+                snapshot=snapshot,
+                llm=self.summary_llm,
+                commit_message="fix: bug",
+                diff_summary="diff",
+            )
+
+        messages = [call[0][0] for call in self.log.error.call_args_list if call[0]]
+        terminal = next(msg for msg in messages if "llm_request_terminal" in msg)
+        self.assertIn("request_kind=commit_summary", terminal)
+        self.assertIn("status=error", terminal)
+        self.assertIn("reason=runtimeerror", terminal)
+
+    def test_process_signals_ne_met_pas_a_jour_memory_synced_at_avant_sync_reelle(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="deep",
+            session_duration_min=45,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+        decision = Decision(action="silent", level=0, reason="ok", payload={})
+        event = MagicMock()
+        event.type = "screen_locked"
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = decision
+        self.session_memory.export_session_data.return_value = {"active_project": "Pulse", "duration_min": 45}
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.started = False
+
+            def start(self):
+                self.started = True
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread()):
+            self.orchestrator._process_signals(event)
+
+        self.assertIsNone(self.runtime_state.get_last_memory_sync_at())
+
+    def test_sync_memory_background_skipped_ne_freeze_pas_et_ne_met_pas_a_jour_sync_at(self):
+        snapshot = {"active_project": "Pulse", "duration_min": 45}
+
+        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+            with patch.object(self.orchestrator, "freeze_memory") as freeze_memory:
+                self.orchestrator._sync_memory_background(snapshot, llm=None, trigger="screen_lock")
+
+        self.assertIsNone(self.runtime_state.get_last_memory_sync_at())
+        freeze_memory.assert_not_called()
+        messages = [call[0][0] for call in self.log.info.call_args_list if call[0]]
+        self.assertTrue(any("memory sync skipped" in msg for msg in messages))
+        self.assertFalse(any("memory sync ok" in msg for msg in messages))
+
+    def test_sync_memory_background_ok_met_a_jour_sync_at_et_freeze(self):
+        snapshot = {"active_project": "Pulse", "duration_min": 45}
+
+        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")):
+            with patch.object(self.orchestrator, "freeze_memory") as freeze_memory:
+                self.orchestrator._sync_memory_background(snapshot, llm=None, trigger="screen_lock")
+
+        self.assertIsNotNone(self.runtime_state.get_last_memory_sync_at())
+        freeze_memory.assert_called_once()
+        messages = [call[0][0] for call in self.log.info.call_args_list if call[0]]
+        self.assertTrue(any("memory sync ok" in msg for msg in messages))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -128,6 +128,44 @@ class TestStream(unittest.TestCase):
             tokens = list(provider.stream("test"))
         self.assertEqual(tokens, ["ok"])
 
+    def test_leve_erreur_si_done_sans_contenu_final(self):
+        provider = OllamaProvider()
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   return_value=_ndjson_response(_chat_chunk("", done=True))):
+            with self.assertRaises(RuntimeError) as ctx:
+                list(provider.stream("test"))
+        self.assertIn("invalid_final_response", str(ctx.exception))
+
+    def test_leve_erreur_si_reasoning_sans_reponse_finale(self):
+        provider = OllamaProvider()
+        chunk = {
+            "message": {"role": "assistant", "content": "", "thinking": "..."},
+            "done": True,
+        }
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   return_value=_ndjson_response(chunk)):
+            with self.assertRaises(RuntimeError) as ctx:
+                list(provider.stream("test"))
+        self.assertIn("invalid_final_response", str(ctx.exception))
+
+    def test_log_warning_si_done_sans_contenu_final(self):
+        provider = OllamaProvider()
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   return_value=_ndjson_response(_chat_chunk("", done=True))):
+            with self.assertLogs("pulse", level="WARNING") as captured:
+                with self.assertRaises(RuntimeError):
+                    list(provider.stream("test"))
+        self.assertTrue(any("stream terminé sans token visible" in line for line in captured.output))
+
+    def test_log_warning_si_ollama_indisponible(self):
+        provider = OllamaProvider()
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   side_effect=URLError("connection refused")):
+            with self.assertLogs("pulse", level="WARNING") as captured:
+                with self.assertRaises(RuntimeError):
+                    list(provider.stream("test"))
+        self.assertTrue(any("stream indisponible" in line for line in captured.output))
+
     def test_utilise_endpoint_api_chat(self):
         """stream() doit appeler /api/chat, pas /api/generate."""
         chunks = [_chat_chunk("ok", done=True)]
@@ -197,7 +235,7 @@ class TestComplete(unittest.TestCase):
                    return_value=_ndjson_response(*chunks)):
             with self.assertRaises(RuntimeError) as ctx:
                 provider.complete("test")
-        self.assertIn("empty", str(ctx.exception))
+        self.assertIn("invalid_final_response", str(ctx.exception))
 
     def test_propage_erreur_ollama(self):
         chunks = [{"error": "model 'xyz' not found", "done": True}]
@@ -207,6 +245,18 @@ class TestComplete(unittest.TestCase):
             with self.assertRaises(RuntimeError) as ctx:
                 provider.complete("test")
         self.assertIn("xyz", str(ctx.exception))
+
+
+class TestChatWithTools(unittest.TestCase):
+
+    def test_log_warning_si_chat_with_tools_indisponible(self):
+        provider = OllamaProvider()
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   side_effect=URLError("connection refused")):
+            with self.assertLogs("pulse", level="WARNING") as captured:
+                with self.assertRaises(RuntimeError):
+                    provider.chat_with_tools(messages=[], tools=[])
+        self.assertTrue(any("chat_with_tools indisponible" in line for line in captured.output))
 
 
 # ── Tests warmup() / unload() ─────────────────────────────────────────────────

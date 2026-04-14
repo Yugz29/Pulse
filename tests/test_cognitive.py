@@ -9,6 +9,7 @@ Couvre :
 
 import json
 import unittest
+from unittest.mock import patch
 
 
 # ── Faux LLM pour les tests ───────────────────────────────────────────────────
@@ -47,7 +48,13 @@ class _FakeLLM:
         return self
 
 
-from daemon.cognitive import ask, ask_stream, build_system_prompt
+from daemon.cognitive import (
+    MAX_SYSTEM_CONTEXT_CHARS,
+    ask,
+    ask_stream,
+    ask_stream_with_tools,
+    build_system_prompt,
+)
 
 
 # ── Tests build_system_prompt ─────────────────────────────────────────────────
@@ -62,11 +69,11 @@ class TestBuildSystemPrompt(unittest.TestCase):
         prompt = build_system_prompt("ctx", frozen_memory="§ Focus deep work [il y a 2h]")
         self.assertIn("deep work", prompt)
 
-    def test_preserve_contexte_long_sans_troncature_artificielle(self):
+    def test_contexte_sous_budget_reste_inchange(self):
         long_ctx = "x" * 5_000
         prompt = build_system_prompt(long_ctx)
         self.assertIn(long_ctx[:200], prompt)
-        self.assertGreater(len(prompt), 5_000)
+        self.assertIn(long_ctx[-200:], prompt)
 
     def test_sans_contexte_fallback(self):
         prompt = build_system_prompt("")
@@ -76,6 +83,40 @@ class TestBuildSystemPrompt(unittest.TestCase):
         prompt = build_system_prompt("ctx", frozen_memory="")
         # Ne doit pas ajouter de section mémoire vide
         self.assertNotIn("§", prompt)
+
+    def test_contexte_long_est_tronque_au_budget(self):
+        long_ctx = ("x" * (MAX_SYSTEM_CONTEXT_CHARS + 200)) + "TAIL_UNIQUE_CONTEXT"
+        prompt = build_system_prompt(long_ctx)
+        self.assertIn(long_ctx[:200], prompt)
+        self.assertNotIn("TAIL_UNIQUE_CONTEXT", prompt)
+        self.assertIn("contexte tronqué", prompt)
+
+    def test_memoire_figee_reste_prioritaire_quand_budget_serre(self):
+        frozen_memory = "M" * (MAX_SYSTEM_CONTEXT_CHARS - 100)
+        context_snapshot = "C" * 500
+        prompt = build_system_prompt(context_snapshot, frozen_memory=frozen_memory)
+        self.assertIn(frozen_memory[:200], prompt)
+        self.assertIn(frozen_memory[-200:], prompt)
+        self.assertIn(context_snapshot[:50], prompt)
+        self.assertNotIn(context_snapshot[-200:], prompt)
+
+    def test_memoire_tronquee_en_dernier_recours_si_elle_depasse_seule_le_budget(self):
+        frozen_memory = ("M" * (MAX_SYSTEM_CONTEXT_CHARS + 200)) + "TAIL_UNIQUE_MEMORY"
+        prompt = build_system_prompt("ctx", frozen_memory=frozen_memory)
+        self.assertIn(frozen_memory[:200], prompt)
+        self.assertNotIn("TAIL_UNIQUE_MEMORY", prompt)
+        self.assertNotIn("ctx", prompt)
+        self.assertIn("contexte tronqué", prompt)
+
+    def test_log_unique_quand_troncature_appliquee(self):
+        frozen_memory = "memoire"
+        context_snapshot = "x" * (MAX_SYSTEM_CONTEXT_CHARS + 200)
+        with patch("daemon.cognitive.log") as log:
+            prompt = build_system_prompt(context_snapshot, frozen_memory=frozen_memory)
+        self.assertIn("contexte tronqué", prompt)
+        log.warning.assert_called_once()
+        message = log.warning.call_args[0][0]
+        self.assertIn("llm_context_truncated", message)
 
 
 # ── Tests ask() ───────────────────────────────────────────────────────────────
@@ -123,6 +164,12 @@ class TestAsk(unittest.TestCase):
         self.assertFalse(res["ok"])
         self.assertEqual(res["code"], "llm_error")
 
+    def test_reponse_invalide_ko(self):
+        llm = _FakeLLM(raise_exc=RuntimeError("invalid_final_response: empty_final"))
+        res = ask("Question ?", llm)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["code"], "invalid_response")
+
     def test_erreur_inattendue(self):
         llm = _FakeLLM(raise_exc=ValueError("bug interne"))
         res = ask("Question ?", llm)
@@ -148,6 +195,38 @@ class TestAsk(unittest.TestCase):
         llm.default = llm
         ask("Test", llm, context_snapshot="PROJET_UNIQUE_XYZ")
         self.assertIn("PROJET_UNIQUE_XYZ", captured.get("system", ""))
+
+    def test_log_terminal_success(self):
+        with patch("daemon.cognitive.log") as log:
+            res = ask("Bonjour", self.llm)
+        self.assertTrue(res["ok"])
+        log.info.assert_called_once()
+        message = log.info.call_args[0][0]
+        self.assertIn("llm_request_terminal", message)
+        self.assertIn("request_kind=ask", message)
+        self.assertIn("status=success", message)
+
+    def test_log_terminal_invalid(self):
+        llm = _FakeLLM(raise_exc=RuntimeError("invalid_final_response: empty_final"))
+        with patch("daemon.cognitive.log") as log:
+            res = ask("Question ?", llm)
+        self.assertFalse(res["ok"])
+        log.warning.assert_called_once()
+        message = log.warning.call_args[0][0]
+        self.assertIn("request_kind=ask", message)
+        self.assertIn("status=invalid", message)
+        self.assertIn("reason=invalid_final_response", message)
+
+    def test_log_terminal_error(self):
+        llm = _FakeLLM(raise_exc=RuntimeError("Ollama unavailable"))
+        with patch("daemon.cognitive.log") as log:
+            res = ask("Question ?", llm)
+        self.assertFalse(res["ok"])
+        log.error.assert_called_once()
+        message = log.error.call_args[0][0]
+        self.assertIn("request_kind=ask", message)
+        self.assertIn("status=error", message)
+        self.assertIn("reason=llm_offline", message)
 
 
 # ── Tests ask_stream() ────────────────────────────────────────────────────────
@@ -195,6 +274,33 @@ class TestAskStream(unittest.TestCase):
         events = self._collect(ask_stream("Test", llm))
         self.assertTrue(any(e.get("code") == "llm_offline" for e in events))
 
+    def test_stream_reponse_invalide_emet_etat_invalid(self):
+        llm = _FakeLLM(raise_exc=RuntimeError("invalid_final_response: empty_final"))
+        events = self._collect(ask_stream("Test", llm))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["state"], "invalid")
+        self.assertEqual(events[0]["code"], "invalid_response")
+
+    def test_stream_partiel_puis_erreur_emet_etat_degraded(self):
+        class PartialThenErrorLLM:
+            @property
+            def default(self):
+                return self
+
+            def get_model(self):
+                return "partial/model"
+
+            def stream_messages(self, messages, max_tokens=600):
+                self.last_messages = messages
+                yield "Réponse "
+                raise RuntimeError("Ollama unavailable")
+
+        events = self._collect(ask_stream("Test", PartialThenErrorLLM()))
+        self.assertEqual(events[0]["token"], "Réponse ")
+        self.assertFalse(events[0]["done"])
+        self.assertEqual(events[1]["state"], "degraded")
+        self.assertEqual(events[1]["code"], "degraded_response")
+
     def test_stream_format_sse_valide(self):
         """Chaque ligne émise doit être au format 'data: {...}\\n\\n'."""
         llm   = _FakeLLM("Token1 Token2")
@@ -220,6 +326,263 @@ class TestAskStream(unittest.TestCase):
         self.assertEqual(llm.last_messages[1]["content"], "Question précédente")
         self.assertEqual(llm.last_messages[2]["content"], "Réponse précédente")
         self.assertEqual(llm.last_messages[-1]["content"], "Nouvelle question")
+
+    def test_stream_log_terminal_success(self):
+        llm = _FakeLLM("Bonjour monde")
+        with patch("daemon.cognitive.log") as log:
+            events = self._collect(ask_stream("Salut", llm))
+        self.assertTrue(events[-1]["done"])
+        log.info.assert_called_once()
+        message = log.info.call_args[0][0]
+        self.assertIn("request_kind=ask_stream", message)
+        self.assertIn("status=success", message)
+
+    def test_stream_log_terminal_degraded(self):
+        class PartialThenErrorLLM:
+            @property
+            def default(self):
+                return self
+
+            def get_model(self):
+                return "partial/model"
+
+            def stream_messages(self, messages, max_tokens=600):
+                yield "Réponse "
+                raise RuntimeError("Ollama unavailable")
+
+        with patch("daemon.cognitive.log") as log:
+            events = self._collect(ask_stream("Test", PartialThenErrorLLM()))
+        self.assertEqual(events[-1]["state"], "degraded")
+        log.warning.assert_called_once()
+        message = log.warning.call_args[0][0]
+        self.assertIn("request_kind=ask_stream", message)
+        self.assertIn("status=degraded", message)
+        self.assertIn("reason=stream_interrupted", message)
+
+
+class _FakeToolLLM:
+    def __init__(self, responses, model="fake/tools", raise_exc=None):
+        self._responses = list(responses)
+        self._model = model
+        self._raise_exc = raise_exc
+        self.stream_messages_called = False
+
+    @property
+    def default(self):
+        return self
+
+    def get_model(self):
+        return self._model
+
+    def chat_with_tools(self, messages, tools, max_tokens=600):
+        self.last_messages = messages
+        self.last_tools = tools
+        if self._raise_exc:
+            raise self._raise_exc
+        if not self._responses:
+            return {"message": {"content": "", "tool_calls": []}}
+        return self._responses.pop(0)
+
+    def stream_messages(self, messages, max_tokens=600):
+        self.stream_messages_called = True
+        yield "ne doit pas être appelé"
+
+
+class TestAskStreamWithTools(unittest.TestCase):
+
+    def _collect(self, gen) -> list[dict]:
+        events = []
+        for line in gen:
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+        return events
+
+    def _tools(self):
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "echo_tool",
+                    "description": "Retourne le texte fourni.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        ]
+
+    def _tool_map(self):
+        return {
+            "echo_tool": lambda text="": f"echo:{text}",
+        }
+
+    def test_sans_outil_reponse_directe_est_reponse_finale_canonique(self):
+        llm = _FakeToolLLM([
+            {"message": {"content": "Réponse directe", "tool_calls": []}},
+        ])
+
+        events = self._collect(
+            ask_stream_with_tools(
+                "Salut",
+                llm,
+                tools=self._tools(),
+                tool_map=self._tool_map(),
+            )
+        )
+
+        self.assertEqual(events[0]["status"], "thinking")
+        self.assertEqual(events[1]["token"], "Réponse directe")
+        self.assertFalse(events[1]["done"])
+        self.assertTrue(events[2]["done"])
+        self.assertFalse(llm.stream_messages_called)
+
+    def test_tool_call_puis_reponse_finale_unique(self):
+        llm = _FakeToolLLM([
+            {
+                "message": {
+                    "content": "Analyse intermédiaire",
+                    "tool_calls": [
+                        {"function": {"name": "echo_tool", "arguments": {"text": "abc"}}}
+                    ],
+                }
+            },
+            {"message": {"content": "Réponse finale", "tool_calls": []}},
+        ])
+
+        events = self._collect(
+            ask_stream_with_tools(
+                "Salut",
+                llm,
+                tools=self._tools(),
+                tool_map=self._tool_map(),
+            )
+        )
+
+        self.assertEqual(events[0]["status"], "thinking")
+        self.assertEqual(events[1]["tool_call"], "echo_tool")
+        self.assertEqual(events[1]["status"], "running")
+        self.assertEqual(events[2]["token"], "Réponse finale")
+        self.assertFalse(events[2]["done"])
+        self.assertTrue(events[3]["done"])
+        self.assertFalse(llm.stream_messages_called)
+        reconstructed = "".join(e.get("token", "") for e in events if "token" in e)
+        self.assertNotIn("Analyse intermédiaire", reconstructed)
+
+    def test_tool_call_sans_reponse_finale_termine_en_invalid(self):
+        llm = _FakeToolLLM([
+            {
+                "message": {
+                    "content": "Analyse intermédiaire",
+                    "tool_calls": [
+                        {"function": {"name": "echo_tool", "arguments": {"text": "abc"}}}
+                    ],
+                }
+            },
+            {"message": {"content": "", "tool_calls": []}},
+        ])
+
+        events = self._collect(
+            ask_stream_with_tools(
+                "Salut",
+                llm,
+                tools=self._tools(),
+                tool_map=self._tool_map(),
+            )
+        )
+
+        self.assertEqual(events[0]["status"], "thinking")
+        self.assertEqual(events[1]["tool_call"], "echo_tool")
+        self.assertEqual(events[2]["state"], "invalid")
+        self.assertEqual(events[2]["code"], "invalid_response")
+        self.assertFalse(llm.stream_messages_called)
+
+    def test_contenu_intermediaire_avant_outil_reste_interne(self):
+        llm = _FakeToolLLM([
+            {
+                "message": {
+                    "content": "Brouillon avant outil",
+                    "tool_calls": [
+                        {"function": {"name": "echo_tool", "arguments": {"text": "abc"}}}
+                    ],
+                }
+            },
+            {"message": {"content": "Réponse canonique", "tool_calls": []}},
+        ])
+
+        events = self._collect(
+            ask_stream_with_tools(
+                "Salut",
+                llm,
+                tools=self._tools(),
+                tool_map=self._tool_map(),
+            )
+        )
+
+        token_events = [e for e in events if "token" in e and not e.get("done")]
+        self.assertEqual(len(token_events), 1)
+        self.assertEqual(token_events[0]["token"], "Réponse canonique")
+
+    def test_tools_log_terminal_success(self):
+        llm = _FakeToolLLM([
+            {
+                "message": {
+                    "content": "Analyse intermédiaire",
+                    "tool_calls": [
+                        {"function": {"name": "echo_tool", "arguments": {"text": "abc"}}}
+                    ],
+                }
+            },
+            {"message": {"content": "Réponse finale", "tool_calls": []}},
+        ])
+
+        with patch("daemon.cognitive.log") as log:
+            events = self._collect(
+                ask_stream_with_tools(
+                    "Salut",
+                    llm,
+                    tools=self._tools(),
+                    tool_map=self._tool_map(),
+                )
+            )
+
+        self.assertTrue(events[-1]["done"])
+        log.info.assert_called_once()
+        message = log.info.call_args[0][0]
+        self.assertIn("request_kind=ask_stream_with_tools", message)
+        self.assertIn("status=success", message)
+
+    def test_tools_log_terminal_invalid(self):
+        llm = _FakeToolLLM([
+            {
+                "message": {
+                    "content": "Analyse intermédiaire",
+                    "tool_calls": [
+                        {"function": {"name": "echo_tool", "arguments": {"text": "abc"}}}
+                    ],
+                }
+            },
+            {"message": {"content": "", "tool_calls": []}},
+        ])
+
+        with patch("daemon.cognitive.log") as log:
+            events = self._collect(
+                ask_stream_with_tools(
+                    "Salut",
+                    llm,
+                    tools=self._tools(),
+                    tool_map=self._tool_map(),
+                )
+            )
+
+        self.assertEqual(events[-1]["state"], "invalid")
+        log.warning.assert_called_once()
+        message = log.warning.call_args[0][0]
+        self.assertIn("request_kind=ask_stream_with_tools", message)
+        self.assertIn("status=invalid", message)
+        self.assertIn("reason=invalid_final_response", message)
 
 
 if __name__ == "__main__":

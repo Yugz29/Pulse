@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from daemon.memory.extractor import find_git_root, read_commit_message, read_head_sha
+from daemon.memory.extractor import _resolve_git_dir, find_git_root, read_commit_message, read_head_sha
 
 
 class TestFindGitRoot(unittest.TestCase):
@@ -101,6 +101,55 @@ class TestReadHeadSha(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
+    def test_worktree_gitfile_avec_gitdir_relatif(self):
+        worktree = self.root / "wt"
+        gitdir = self.root / "gitdirs" / "wt"
+        gitdir_refs = gitdir / "refs" / "heads"
+        gitdir_refs.mkdir(parents=True)
+        worktree.mkdir()
+        (worktree / ".git").write_text("gitdir: ../gitdirs/wt\n")
+        (gitdir / "HEAD").write_text("ref: refs/heads/main\n")
+        sha = "c" * 40
+        (gitdir_refs / "main").write_text(sha + "\n")
+        self.assertEqual(read_head_sha(worktree), sha)
+
+
+class TestResolveGitDir(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_git_dossier_retourne_dossier_git(self):
+        git_dir = self.root / ".git"
+        git_dir.mkdir()
+        self.assertEqual(_resolve_git_dir(self.root), git_dir)
+
+    def test_gitfile_avec_gitdir_absolu_retourne_vrai_gitdir(self):
+        worktree = self.root / "wt"
+        gitdir = self.root / "realgit"
+        worktree.mkdir()
+        gitdir.mkdir()
+        (worktree / ".git").write_text(f"gitdir: {gitdir}\n")
+        self.assertEqual(_resolve_git_dir(worktree), gitdir)
+
+    def test_gitfile_avec_gitdir_relatif_est_resolu_depuis_parent(self):
+        worktree = self.root / "wt"
+        gitdir = self.root / "gitdirs" / "wt"
+        worktree.mkdir()
+        gitdir.mkdir(parents=True)
+        (worktree / ".git").write_text("gitdir: ../gitdirs/wt\n")
+        self.assertEqual(_resolve_git_dir(worktree), gitdir.resolve())
+
+    def test_retourne_none_si_gitfile_invalide(self):
+        worktree = self.root / "wt"
+        worktree.mkdir()
+        (worktree / ".git").write_text("pas-un-gitdir\n")
+        self.assertIsNone(_resolve_git_dir(worktree))
+
 
 class TestReadCommitMessage(unittest.TestCase):
 
@@ -141,6 +190,15 @@ class TestReadCommitMessage(unittest.TestCase):
 
     def test_retourne_none_si_fichier_absent(self):
         self.assertIsNone(read_commit_message(self.root))
+
+    def test_worktree_gitfile_lit_commit_editmsg_depuis_vrai_gitdir(self):
+        worktree = self.root / "wt"
+        gitdir = self.root / "gitdirs" / "wt"
+        worktree.mkdir()
+        gitdir.mkdir(parents=True)
+        (worktree / ".git").write_text("gitdir: ../gitdirs/wt\n")
+        (gitdir / "COMMIT_EDITMSG").write_text("fix: worktree commit\n")
+        self.assertEqual(read_commit_message(worktree), "fix: worktree commit")
 
 
 if __name__ == "__main__":
