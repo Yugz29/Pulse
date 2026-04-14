@@ -1,8 +1,16 @@
 import Foundation
 
 struct DaemonBridge {
-    let base = "http://127.0.0.1:8765"
-    let session = URLSession.shared
+    let base: String
+    let session: URLSession
+
+    nonisolated init(
+        base: String = "http://127.0.0.1:8765",
+        session: URLSession = .shared
+    ) {
+        self.base = base
+        self.session = session
+    }
 
     func makeURL(_ path: String) throws -> URL {
         guard let url = URL(string: "\(base)\(path)") else {

@@ -16,12 +16,11 @@ extension DaemonBridge {
         return try decode(LLMModelsResponse.self, from: data)
     }
 
-    func setLLMModel(_ model: String, kind: String) async throws -> SetLLMModelResponse {
+    func setLLMModel(_ model: String) async throws -> SetLLMModelResponse {
         let request = try jsonObjectRequest(
             path: "/llm/model",
             body: [
                 "model": model,
-                "kind": kind,
             ]
         )
         let (data, response) = try await data(for: request)
@@ -52,6 +51,12 @@ extension DaemonBridge {
                               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                         else { continue }
 
+                        if let state = object["state"] as? String {
+                            let message = (object["error"] as? String)
+                                ?? (state == "degraded" ? "Réponse incomplète." : "Réponse finale invalide.")
+                            continuation.finish(throwing: DaemonError.llm(message))
+                            return
+                        }
                         if let error = object["error"] as? String {
                             continuation.finish(throwing: DaemonError.llm(error))
                             return
@@ -60,9 +65,8 @@ extension DaemonBridge {
                         if object["status"] != nil && object["token"] == nil && object["tool_call"] == nil {
                             continue
                         }
-                        // Outil en cours d'exécution — affiché comme token spécial
-                        if let toolName = object["tool_call"] as? String {
-                            continuation.yield("[" + toolName + "] ")
+                        // Signal intermédiaire d'outil : jamais exposé comme texte assistant.
+                        if object["tool_call"] as? String != nil {
                             continue
                         }
                         if let token = object["token"] as? String, !token.isEmpty {
