@@ -11,6 +11,8 @@ final class PulseViewModel: ObservableObject {
     @Published var isDaemonActive = false
     @Published var isLLMActive = false
     @Published var isOllamaOnline = false
+    @Published var isModelSelected = false
+    @Published var llmReadyState = false
     @Published var inputText = ""
     @Published var transientStatusText: String? = nil
     @Published var transientStatusAccent = Color(hex: "#5DCAA5")
@@ -22,6 +24,7 @@ final class PulseViewModel: ObservableObject {
     @Published var focusLevel: String = "normal"
     @Published var pendingCommand: CommandAnalysis? = nil
     @Published var availableModels: [String] = []
+    @Published var selectedModel: String = ""
     @Published var selectedCommandModel: String = ""
     @Published var selectedSummaryModel: String = ""
     @Published var isUpdatingModel = false
@@ -30,6 +33,8 @@ final class PulseViewModel: ObservableObject {
 
     @Published var chatMessages: [ChatMessage] = []
     @Published var isAsking: Bool = false
+    @Published var activeRequestStatusText: String? = nil
+    @Published var activeRequestSystemMessage: String? = nil
 
     @Published var recentEvents: [InsightEvent] = []
     @Published var frictionScore: Double = 0.0
@@ -39,10 +44,15 @@ final class PulseViewModel: ObservableObject {
     let daemonController = DaemonController()
     var onObservationToggle: ((Bool) -> Void)?
 
-    let bridge = DaemonBridge()
+    let bridge: DaemonBridge
     var lastModelsRefreshAt: Date?
     var pollTask: Task<Void, Never>?
     var askTask: Task<Void, Never>?
+    var shouldShowCancellationFeedback = true
+
+    init(bridge: DaemonBridge = DaemonBridge()) {
+        self.bridge = bridge
+    }
 
     var currentPanelHeight: CGFloat {
         if pendingCommand != nil { return NotchWindow.commandHeight }
@@ -73,19 +83,15 @@ final class PulseViewModel: ObservableObject {
     }
 
     var isLLMReady: Bool {
-        guard isDaemonActive, isOllamaOnline else { return false }
-        if isLLMActive { return true }
-        return !selectedCommandModel.isEmpty
-            || !selectedSummaryModel.isEmpty
-            || !availableModels.isEmpty
+        guard isDaemonActive else { return false }
+        return llmReadyState
     }
 
     var llmStatusSubtitle: String {
         if !isDaemonActive { return "Daemon injoignable" }
         if !isOllamaOnline { return "Ollama introuvable" }
-        if !selectedCommandModel.isEmpty { return selectedCommandModel }
-        if !selectedSummaryModel.isEmpty { return selectedSummaryModel }
-        if !availableModels.isEmpty { return "Modèle disponible" }
+        if !selectedModel.isEmpty { return selectedModel }
+        if !isModelSelected && !availableModels.isEmpty { return "Aucun modèle sélectionné" }
         return "Aucun modèle détecté"
     }
 }

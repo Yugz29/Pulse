@@ -77,16 +77,22 @@ struct ContextResponse: Codable {
 struct LLMModelsResponse: Codable {
     let provider: String
     let availableModels: [String]
+    let selectedModel: String?
     let selectedCommandModel: String
     let selectedSummaryModel: String
+    let modelSelected: Bool?
+    let llmReady: Bool?
     let ollamaOnline: Bool?
     let llmActive: Bool?
 
     enum CodingKeys: String, CodingKey {
         case provider
         case availableModels = "available_models"
+        case selectedModel = "selected_model"
         case selectedCommandModel = "selected_command_model"
         case selectedSummaryModel = "selected_summary_model"
+        case modelSelected = "model_selected"
+        case llmReady = "llm_ready"
         case ollamaOnline = "ollama_online"
         case llmActive = "llm_active"
     }

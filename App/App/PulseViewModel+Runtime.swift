@@ -75,9 +75,11 @@ extension PulseViewModel {
         }
     }
 
-    func refreshModels() async {
-        guard let response = try? await bridge.getLLMModels() else { return }
+    @discardableResult
+    func refreshModels() async -> Bool {
+        guard let response = try? await bridge.getLLMModels() else { return false }
         applyLLMModels(response)
+        return true
     }
 }
 
@@ -96,7 +98,7 @@ private extension PulseViewModel {
     }
 
     func shouldRefreshModels(force: Bool = false) -> Bool {
-        if force || availableModels.isEmpty || selectedCommandModel.isEmpty || selectedSummaryModel.isEmpty {
+        if force || availableModels.isEmpty || selectedModel.isEmpty {
             return true
         }
         guard let lastRefresh = lastModelsRefreshAt else { return true }
@@ -118,11 +120,16 @@ private extension PulseViewModel {
 
     func applyLLMModels(_ response: LLMModelsResponse) {
         availableModels = response.availableModels
+        selectedModel = response.selectedModel
+            ?? (!response.selectedCommandModel.isEmpty ? response.selectedCommandModel : response.selectedSummaryModel)
         selectedCommandModel = response.selectedCommandModel
         selectedSummaryModel = response.selectedSummaryModel
         isOllamaOnline = response.ollamaOnline ?? false
-        isLLMActive = response.llmActive
-            ?? ((response.ollamaOnline ?? false) && !response.availableModels.isEmpty)
+        isModelSelected = response.modelSelected
+            ?? !selectedModel.isEmpty
+        llmReadyState = response.llmReady
+            ?? ((response.ollamaOnline ?? false) && isModelSelected)
+        isLLMActive = response.llmActive ?? false
         lastModelsRefreshAt = Date()
     }
 }
