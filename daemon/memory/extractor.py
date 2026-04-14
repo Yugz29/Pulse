@@ -5,7 +5,7 @@ Déclencheurs
 ────────────
   1. Commit git (signal principal — LLM activé)
   2. screen_lock / user_idle (fallback déterministe uniquement)
-  3. Manuel (LLM activé)
+  3. Manuel (fallback déterministe uniquement)
 
 Anti-doublon
 ────────────
@@ -25,6 +25,7 @@ Qualité LLM
 
 import json
 import re
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -80,6 +81,7 @@ _NOISE_SUBSTRINGS = {
 # Chargé depuis cooldown.json au premier accès, persisté après chaque écriture.
 _last_report_at: Dict[str, datetime] = {}
 _cooldown_loaded: bool = False
+_memory_write_lock = threading.Lock()
 
 
 def _load_cooldown() -> None:
@@ -269,24 +271,52 @@ def find_git_root(file_path: str) -> Optional[Path]:
     return None
 
 
+def _resolve_git_dir(git_root: Path) -> Optional[Path]:
+    """
+    Résout le vrai répertoire git pour un dépôt standard ou un worktree.
+    Supporte:
+      - .git dossier
+      - .git fichier contenant 'gitdir: ...'
+      - chemin relatif vers le vrai gitdir
+    Retourne None si la résolution échoue.
+    """
+    try:
+        git_entry = git_root / ".git"
+        if git_entry.is_dir():
+            return git_entry
+        if not git_entry.is_file():
+            return None
+
+        content = git_entry.read_text(encoding="utf-8").strip()
+        if not content.startswith("gitdir:"):
+            return None
+
+        gitdir_text = content[7:].strip()
+        if not gitdir_text:
+            return None
+
+        gitdir = Path(gitdir_text)
+        if not gitdir.is_absolute():
+            gitdir = (git_entry.parent / gitdir).resolve()
+        return gitdir if gitdir.exists() else None
+    except Exception:
+        return None
+
+
 def read_head_sha(git_root: Path) -> Optional[str]:
     """Lit le SHA courant de HEAD. Retourne None si indisponible."""
     try:
-        head_file = git_root / ".git" / "HEAD"
-        if not head_file.exists():
-            gitfile = git_root / ".git"
-            if gitfile.is_file():
-                content = gitfile.read_text().strip()
-                if content.startswith("gitdir:"):
-                    gitdir = Path(content[7:].strip())
-                    head_file = gitdir / "HEAD"
+        git_dir = _resolve_git_dir(git_root)
+        if git_dir is None:
+            return None
 
+        head_file = git_dir / "HEAD"
         if not head_file.exists():
             return None
 
         ref = head_file.read_text().strip()
         if ref.startswith("ref: "):
-            ref_path = git_root / ".git" / ref[5:]
+            ref_path = git_dir / ref[5:]
             if not ref_path.exists():
                 return None
             return ref_path.read_text().strip()
@@ -297,8 +327,11 @@ def read_head_sha(git_root: Path) -> Optional[str]:
 
 def read_commit_message(git_root: Path) -> Optional[str]:
     """Lit le message du dernier commit depuis COMMIT_EDITMSG."""
-    commit_msg_file = git_root / ".git" / "COMMIT_EDITMSG"
     try:
+        git_dir = _resolve_git_dir(git_root)
+        if git_dir is None:
+            return None
+        commit_msg_file = git_dir / "COMMIT_EDITMSG"
         content = commit_msg_file.read_text(encoding="utf-8").strip()
         lines = [l for l in content.splitlines() if not l.startswith("#")]
         msg = "\n".join(lines).strip()
@@ -375,14 +408,15 @@ def _write_session_report(
         "",
     ])
 
-    if journal_file.exists():
-        # Append au journal existant
-        with journal_file.open("a", encoding="utf-8") as fh:
-            fh.write(entry)
-    else:
-        # Créer le journal du jour avec en-tête
-        header = f"# Journal Pulse — {today}\n"
-        journal_file.write_text(header + entry, encoding="utf-8")
+    with _memory_write_lock:
+        if journal_file.exists():
+            # Append au journal existant
+            with journal_file.open("a", encoding="utf-8") as fh:
+                fh.write(entry)
+        else:
+            # Créer le journal du jour avec en-tête
+            header = f"# Journal Pulse — {today}\n"
+            journal_file.write_text(header + entry, encoding="utf-8")
 
     return (journal_file, entry_id)
 
@@ -511,23 +545,24 @@ def _clean_files(files: List[str]) -> List[str]:
 
 
 def _replace_journal_entry(journal_file: Path, entry_id: str, body: str) -> bool:
-    if not journal_file.exists():
-        return False
+    with _memory_write_lock:
+        if not journal_file.exists():
+            return False
 
-    start = f"<!-- pulse-entry:{entry_id}:start -->"
-    end = f"<!-- pulse-entry:{entry_id}:end -->"
-    pattern = re.compile(
-        rf"({re.escape(start)}\n)(.*?)((?:\n)?{re.escape(end)})",
-        re.DOTALL,
-    )
+        start = f"<!-- pulse-entry:{entry_id}:start -->"
+        end = f"<!-- pulse-entry:{entry_id}:end -->"
+        pattern = re.compile(
+            rf"({re.escape(start)}\n)(.*?)((?:\n)?{re.escape(end)})",
+            re.DOTALL,
+        )
 
-    content = journal_file.read_text(encoding="utf-8")
-    replaced, count = pattern.subn(rf"\1{body.strip()}\3", content, count=1)
-    if count == 0:
-        return False
+        content = journal_file.read_text(encoding="utf-8")
+        replaced, count = pattern.subn(rf"\1{body.strip()}\3", content, count=1)
+        if count == 0:
+            return False
 
-    journal_file.write_text(replaced, encoding="utf-8")
-    return True
+        journal_file.write_text(replaced, encoding="utf-8")
+        return True
 
 
 def _new_entry_id(now: datetime) -> str:
@@ -542,43 +577,45 @@ def _update_projects(base_dir: Path, session: Dict[str, Any]) -> None:
         return
 
     projects_file = base_dir / "projects.md"
-    current  = _parse_project_sections(projects_file)
-    today    = datetime.now().strftime("%Y-%m-%d")
-    duration = session.get("duration_min", 0)
-    task     = session.get("probable_task", "general")
+    with _memory_write_lock:
+        current  = _parse_project_sections(projects_file)
+        today    = datetime.now().strftime("%Y-%m-%d")
+        duration = session.get("duration_min", 0)
+        task     = session.get("probable_task", "general")
 
-    entry = current.get(project)
-    if entry is None:
-        current[project] = {"first_session": today, "last_session": today,
-                             "last_duration": duration, "task": task}
-    else:
-        entry["last_session"]  = today
-        entry["last_duration"] = duration
-        entry["task"]          = task
+        entry = current.get(project)
+        if entry is None:
+            current[project] = {"first_session": today, "last_session": today,
+                                 "last_duration": duration, "task": task}
+        else:
+            entry["last_session"]  = today
+            entry["last_duration"] = duration
+            entry["task"]          = task
 
-    lines = ["# Projets\n"]
-    for name in sorted(current):
-        item = current[name]
-        lines.extend([
-            "", f"## {name}", "",
-            f"- Première session : {item['first_session']}",
-            f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item['task']})",
-            f"- Type de travail détecté : {item['task']}",
-        ])
-    projects_file.write_text("\n".join(lines).strip() + "\n")
+        lines = ["# Projets\n"]
+        for name in sorted(current):
+            item = current[name]
+            lines.extend([
+                "", f"## {name}", "",
+                f"- Première session : {item['first_session']}",
+                f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item['task']})",
+                f"- Type de travail détecté : {item['task']}",
+            ])
+        projects_file.write_text("\n".join(lines).strip() + "\n")
 
 
 def _update_index(base_dir: Path) -> None:
     index_file = base_dir / "MEMORY.md"
-    entries = [
-        f"- [{f.stem}]({f.name})"
-        for f in sorted(base_dir.glob("*.md"))
-        if f.name != "MEMORY.md"
-    ]
-    content = "# Index mémoire Pulse\n\n" + "\n".join(entries)
-    if entries:
-        content += "\n"
-    index_file.write_text(content)
+    with _memory_write_lock:
+        entries = [
+            f"- [{f.stem}]({f.name})"
+            for f in sorted(base_dir.glob("*.md"))
+            if f.name != "MEMORY.md"
+        ]
+        content = "# Index mémoire Pulse\n\n" + "\n".join(entries)
+        if entries:
+            content += "\n"
+        index_file.write_text(content)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
