@@ -2,23 +2,29 @@ import SwiftUI
 
 extension PulseViewModel {
     func updateSelectedModel(_ model: String) {
-        guard !model.isEmpty, model != selectedCommandModel, !isUpdatingModel else { return }
+        guard !model.isEmpty, model != selectedModel, !isUpdatingModel else { return }
         isUpdatingModel = true
-        let previousModel = selectedCommandModel
+        let previousModel = selectedModel
+        selectedModel = model
         selectedCommandModel = model
         selectedSummaryModel = model
 
         Task {
             do {
-                let result = try await bridge.setLLMModel(model, kind: "command")
+                let result = try await bridge.setLLMModel(model)
                 await MainActor.run {
                     self.isUpdatingModel = false
                     if result.ok {
-                        let selectedModel = result.selectedCommandModel ?? model
+                        let selectedModel = result.selectedModel
+                            ?? result.selectedCommandModel
+                            ?? result.selectedSummaryModel
+                            ?? model
+                        self.selectedModel = selectedModel
                         self.selectedCommandModel = selectedModel
                         self.selectedSummaryModel = selectedModel
                         self.showTransientStatus("Modèle : \(model)")
                     } else {
+                        self.selectedModel = previousModel
                         self.selectedCommandModel = previousModel
                         self.selectedSummaryModel = previousModel
                         self.showTransientStatus("Échec changement de modèle", accent: Color(hex: "#ff453a"))
@@ -27,6 +33,7 @@ extension PulseViewModel {
             } catch let error as DaemonError {
                 await MainActor.run {
                     self.isUpdatingModel = false
+                    self.selectedModel = previousModel
                     self.selectedCommandModel = previousModel
                     self.selectedSummaryModel = previousModel
                     self.showTransientStatus(error.userMessage, accent: Color(hex: "#ff453a"))
@@ -34,6 +41,7 @@ extension PulseViewModel {
             } catch {
                 await MainActor.run {
                     self.isUpdatingModel = false
+                    self.selectedModel = previousModel
                     self.selectedCommandModel = previousModel
                     self.selectedSummaryModel = previousModel
                     self.showTransientStatus("Échec changement de modèle", accent: Color(hex: "#ff453a"))
@@ -64,6 +72,9 @@ extension PulseViewModel {
         askTask?.cancel()
         inputText = ""
         isAsking  = true
+        shouldShowCancellationFeedback = true
+        activeRequestStatusText = "Pulse réfléchit…"
+        activeRequestSystemMessage = nil
 
         // Historique complet avant ce message (sans les messages en cours de streaming)
         let historySnapshot = chatMessages.filter { !$0.isStreaming }
@@ -82,6 +93,7 @@ extension PulseViewModel {
             defer {
                 self.isAsking = false
                 self.askTask  = nil
+                self.activeRequestStatusText = nil
                 // Marque le dernier message comme terminé
                 if let idx = self.chatMessages.indices.last {
                     self.chatMessages[idx].isStreaming = false
@@ -95,27 +107,33 @@ extension PulseViewModel {
                     }
                 }
             } catch is CancellationError {
+                if self.shouldShowCancellationFeedback {
+                    self.handleCancelledRequest()
+                }
                 return
             } catch let error as DaemonError {
-                if let idx = self.chatMessages.indices.last {
-                    if self.chatMessages[idx].content.isEmpty {
-                        if case .llm(let msg) = error {
-                            self.chatMessages[idx].content = msg
-                        } else {
-                            self.chatMessages[idx].content = error.userMessage
-                        }
-                    }
-                }
+                self.handleChatFailure(errorMessage: self.userFacingChatError(for: error))
             } catch {
-                if let idx = self.chatMessages.indices.last,
-                   self.chatMessages[idx].content.isEmpty {
-                    self.chatMessages[idx].content = "Pulse n'est pas disponible pour le moment."
-                }
+                self.handleChatFailure(errorMessage: "Pulse n'est pas disponible pour le moment.")
             }
         }
     }
 
+    func stopAsking() {
+        guard isAsking else { return }
+        askTask?.cancel()
+        askTask = nil
+        isAsking = false
+        activeRequestStatusText = nil
+        shouldShowCancellationFeedback = true
+        handleCancelledRequest()
+        if let idx = chatMessages.indices.last {
+            chatMessages[idx].isStreaming = false
+        }
+    }
+
     func closeChat() {
+        shouldShowCancellationFeedback = false
         askTask?.cancel()
         askTask = nil
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -124,5 +142,57 @@ extension PulseViewModel {
         // Réinitialise la conversation
         chatMessages = []
         isAsking     = false
+        activeRequestStatusText = nil
+        activeRequestSystemMessage = nil
+    }
+}
+
+private extension PulseViewModel {
+    func userFacingChatError(for error: DaemonError) -> String {
+        if case .llm(let message) = error {
+            return message
+        }
+        return error.userMessage
+    }
+
+    func lastAssistantMessageIndex() -> Int? {
+        chatMessages.lastIndex { $0.role == "assistant" }
+    }
+
+    func removeTrailingEmptyAssistantMessageIfNeeded() {
+        guard let idx = lastAssistantMessageIndex(),
+              chatMessages[idx].content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        chatMessages.remove(at: idx)
+    }
+
+    func handleChatFailure(errorMessage: String) {
+        guard let idx = lastAssistantMessageIndex() else {
+            activeRequestSystemMessage = errorMessage
+            return
+        }
+
+        let hasAssistantContent = !chatMessages[idx].content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasAssistantContent {
+            activeRequestSystemMessage = "Réponse interrompue."
+        } else {
+            removeTrailingEmptyAssistantMessageIfNeeded()
+            activeRequestSystemMessage = errorMessage
+        }
+    }
+
+    func handleCancelledRequest() {
+        guard let idx = lastAssistantMessageIndex() else {
+            activeRequestSystemMessage = "Requête arrêtée."
+            return
+        }
+
+        let hasAssistantContent = !chatMessages[idx].content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasAssistantContent {
+            activeRequestSystemMessage = "Réponse interrompue."
+        } else {
+            removeTrailingEmptyAssistantMessageIfNeeded()
+            activeRequestSystemMessage = "Requête arrêtée."
+        }
     }
 }

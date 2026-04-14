@@ -41,11 +41,6 @@ struct DashboardView: View {
 struct ChatView: View {
     @ObservedObject var vm: PulseViewModel
 
-    private var isWaitingForFirstToken: Bool {
-        guard vm.isAsking, let last = vm.chatMessages.last else { return false }
-        return last.role == "assistant" && last.isStreaming && last.content.isEmpty
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -62,16 +57,29 @@ struct ChatView: View {
                             }
                         }
 
-                        if isWaitingForFirstToken {
+                        if let status = vm.activeRequestStatusText {
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .controlSize(.small)
                                     .tint(.white.opacity(0.4))
-                                Text("Pulse réfléchit…")
+                                Text(status)
                                     .font(.system(size: 12))
                                     .foregroundColor(.white.opacity(0.35))
                             }
                             .padding(.top, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        if let systemMessage = vm.activeRequestSystemMessage {
+                            Text(systemMessage)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color(hex: "#EF9F27"))
+                                .padding(.top, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        if vm.activeRequestStatusText != nil || vm.activeRequestSystemMessage != nil {
+                            Color.clear
                             .id("bottom")
                         }
                     }
@@ -111,6 +119,15 @@ struct ChatView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(vm.inputText.isEmpty || vm.isAsking)
+
+                if vm.isAsking {
+                    Button(action: { vm.stopAsking() }) {
+                        Image(systemName: "stop.circle")
+                            .font(.system(size: 15))
+                            .foregroundColor(Color(hex: "#EF9F27"))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
