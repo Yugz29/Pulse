@@ -19,6 +19,11 @@ from urllib import request, error
 
 log = logging.getLogger("pulse")
 _DEBUG_CHUNK_PREVIEW = 280
+_INVALID_FINAL_CODE = "invalid_final_response"
+
+
+def _invalid_final_response(reason: str) -> RuntimeError:
+    return RuntimeError(f"{_INVALID_FINAL_CODE}: {reason}")
 
 
 class OllamaProvider:
@@ -146,11 +151,13 @@ class OllamaProvider:
                 body = json.loads(response.read().decode("utf-8"))
                 if "error" in body:
                     self._mark_failure()
+                    log.warning("Ollama chat_with_tools error model=%s error=%s", self.model, body["error"])
                     raise RuntimeError(f"Ollama error: {body['error']}")
                 self._mark_success()
                 return body
         except error.URLError as exc:
             self._mark_failure()
+            log.warning("Ollama chat_with_tools indisponible model=%s error=%s", self.model, exc)
             raise RuntimeError("Ollama unavailable") from exc
 
     def stream_messages(self, messages: list, max_tokens: int = 600):
@@ -180,6 +187,7 @@ class OllamaProvider:
             method="POST",
         )
         saw_success = False
+        saw_reasoning = False
         raw_chunk_count = 0
         try:
             with request.urlopen(req, timeout=300) as response:
@@ -197,6 +205,8 @@ class OllamaProvider:
                         raise RuntimeError(f"Ollama error: {chunk['error']}")
                     msg   = chunk.get("message") or {}
                     token = msg.get("content") or ""
+                    if isinstance(msg, dict) and (msg.get("thinking") or msg.get("reasoning")):
+                        saw_reasoning = True
                     if not token and raw_chunk_count <= 5:
                         log.debug(
                             "Ollama /api/chat chunk sans content exploitable [%d]: %s",
@@ -214,11 +224,13 @@ class OllamaProvider:
                                 "Ollama /api/chat terminé sans token visible: %s",
                                 _summarize_chunk_for_debug(chunk, line),
                             )
-                        if not saw_success:
-                            self._mark_success()
+                            self._mark_failure()
+                            reason = "reasoning_without_final" if saw_reasoning else "empty_final"
+                            raise _invalid_final_response(reason)
                         break
         except error.URLError as exc:
             self._mark_failure()
+            log.warning("Ollama stream_messages indisponible model=%s error=%s", self.model, exc)
             raise RuntimeError("Ollama unavailable") from exc
 
     def stream(
@@ -265,6 +277,7 @@ class OllamaProvider:
         )
 
         saw_success = False
+        saw_reasoning = False
         raw_chunk_count = 0
         try:
             with request.urlopen(req, timeout=300) as response:
@@ -286,6 +299,8 @@ class OllamaProvider:
                     # (peut être None ou absent si tool_call en phase 2)
                     msg   = chunk.get("message") or {}
                     token = msg.get("content") or ""
+                    if isinstance(msg, dict) and (msg.get("thinking") or msg.get("reasoning")):
+                        saw_reasoning = True
                     if not token and raw_chunk_count <= 5:
                         log.debug(
                             "Ollama stream chunk sans content exploitable [%d]: %s",
@@ -305,12 +320,14 @@ class OllamaProvider:
                                 "Ollama stream terminé sans token visible: %s",
                                 _summarize_chunk_for_debug(chunk, line),
                             )
-                        if not saw_success:
-                            self._mark_success()
+                            self._mark_failure()
+                            reason = "reasoning_without_final" if saw_reasoning else "empty_final"
+                            raise _invalid_final_response(reason)
                         break
 
         except error.URLError as exc:
             self._mark_failure()
+            log.warning("Ollama stream indisponible model=%s error=%s", self.model, exc)
             raise RuntimeError("Ollama unavailable") from exc
 
     def complete(
@@ -334,7 +351,8 @@ class OllamaProvider:
             tokens.append(token)
         text = "".join(tokens).strip()
         if not text:
-            raise RuntimeError("Ollama returned an empty response")
+            log.warning("Ollama complete sans contenu final exploitable model=%s", self.model)
+            raise _invalid_final_response("empty_final")
         return text
 
     # ── Listing des modèles ───────────────────────────────────────────────────

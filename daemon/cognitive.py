@@ -8,12 +8,18 @@ pour traiter les intentions utilisateur via le LLM.
 from __future__ import annotations
 
 import json
+import logging
 import threading
+import time
 from typing import Any, Generator, Optional
 
 # Nombre maximum d'itérations dans la boucle agentique.
 # Empêche les boucles infinies si le modèle continue d'appeler des outils.
 _MAX_TOOL_ITERATIONS = 5
+_INVALID_FINAL_CODE = "invalid_final_response"
+MAX_SYSTEM_CONTEXT_CHARS = 6000
+_CONTEXT_TRUNCATION_SUFFIX = "\n[… contexte tronqué …]"
+log = logging.getLogger("pulse")
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -61,15 +67,7 @@ def build_system_prompt(context_snapshot: str, frozen_memory: str = "") -> str:
     Ordre : mémoire d'abord (stable, favorise le prefix cache),
     contexte ensuite (change à chaque appel).
     """
-    parts = []
-
-    if frozen_memory.strip():
-        parts.append(frozen_memory.strip())
-
-    if context_snapshot.strip():
-        parts.append(context_snapshot.strip())
-
-    context_block = "\n\n".join(parts) if parts else "(aucun contexte disponible)"
+    context_block = _bounded_context_block(context_snapshot, frozen_memory)
     return _SYSTEM_TEMPLATE.format(context_block=context_block)
 
 
@@ -83,6 +81,64 @@ def _normalize_history(history: Optional[list[dict[str, Any]]] = None) -> list[d
         if role in {"user", "assistant"} and content:
             normalized.append({"role": role, "content": content})
     return normalized
+
+
+def _bounded_context_block(context_snapshot: str, frozen_memory: str = "") -> str:
+    frozen = frozen_memory.strip()
+    snapshot = context_snapshot.strip()
+    if not frozen and not snapshot:
+        return "(aucun contexte disponible)"
+
+    original_frozen_len = len(frozen)
+    original_snapshot_len = len(snapshot)
+    truncated = False
+
+    if frozen:
+        if len(frozen) > MAX_SYSTEM_CONTEXT_CHARS:
+            frozen = _truncate_context_text(frozen, MAX_SYSTEM_CONTEXT_CHARS)
+            snapshot = ""
+            truncated = True
+        else:
+            remaining = MAX_SYSTEM_CONTEXT_CHARS - len(frozen)
+            if snapshot:
+                separator = "\n\n"
+                if remaining > len(separator):
+                    snapshot_budget = remaining - len(separator)
+                    bounded_snapshot = _truncate_context_text(snapshot, snapshot_budget)
+                    truncated = bounded_snapshot != snapshot
+                    snapshot = bounded_snapshot
+                else:
+                    truncated = True
+                    snapshot = ""
+    elif snapshot:
+        bounded_snapshot = _truncate_context_text(snapshot, MAX_SYSTEM_CONTEXT_CHARS)
+        truncated = bounded_snapshot != snapshot
+        snapshot = bounded_snapshot
+
+    if truncated:
+        log.warning(
+            "llm_context_truncated budget_chars=%d frozen_len=%d snapshot_len=%d",
+            MAX_SYSTEM_CONTEXT_CHARS,
+            original_frozen_len,
+            original_snapshot_len,
+        )
+
+    parts = []
+    if frozen:
+        parts.append(frozen)
+    if snapshot:
+        parts.append(snapshot)
+    return "\n\n".join(parts) if parts else "(aucun contexte disponible)"
+
+
+def _truncate_context_text(text: str, budget: int) -> str:
+    if budget <= 0:
+        return ""
+    if len(text) <= budget:
+        return text
+    if budget <= len(_CONTEXT_TRUNCATION_SUFFIX):
+        return _CONTEXT_TRUNCATION_SUFFIX[:budget]
+    return text[: budget - len(_CONTEXT_TRUNCATION_SUFFIX)] + _CONTEXT_TRUNCATION_SUFFIX
 
 
 # ── ask() — réponse complète ──────────────────────────────────────────────────
@@ -101,10 +157,26 @@ def ask(
         {"ok": True,  "response": <str>, "model": <str>}
         {"ok": False, "error": <str>,    "code": <str>}
     """
+    started_at = time.monotonic()
+    model = getattr(llm, "get_model", lambda: "unknown")() if llm is not None else "unknown"
     if not message.strip():
+        _log_llm_terminal(
+            request_kind="ask",
+            status="invalid",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="empty_message",
+        )
         return {"ok": False, "error": "Message vide", "code": "empty_message"}
 
     if llm is None:
+        _log_llm_terminal(
+            request_kind="ask",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="no_llm",
+        )
         return {"ok": False, "error": "LLM non disponible", "code": "no_llm"}
 
     system = build_system_prompt(context_snapshot, frozen_memory)
@@ -115,17 +187,53 @@ def ask(
             system=system,
             max_tokens=max_tokens,
         )
+        _log_llm_terminal(
+            request_kind="ask",
+            status="success",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+        )
         return {
             "ok":       True,
             "response": response,
-            "model":    getattr(llm, "get_model", lambda: "unknown")(),
+            "model":    model,
         }
     except RuntimeError as exc:
         msg = str(exc)
+        if _is_invalid_final_error(msg):
+            _log_llm_terminal(
+                request_kind="ask",
+                status="invalid",
+                model=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                reason="invalid_final_response",
+            )
+            return {"ok": False, "error": "Réponse finale invalide", "code": "invalid_response"}
         if "unavailable" in msg.lower():
+            _log_llm_terminal(
+                request_kind="ask",
+                status="error",
+                model=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                reason="llm_offline",
+            )
             return {"ok": False, "error": "Ollama non disponible", "code": "llm_offline"}
+        _log_llm_terminal(
+            request_kind="ask",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="llm_error",
+        )
         return {"ok": False, "error": msg, "code": "llm_error"}
     except Exception as exc:
+        _log_llm_terminal(
+            request_kind="ask",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="unknown",
+        )
         return {"ok": False, "error": f"Erreur inattendue : {exc}", "code": "unknown"}
 
 
@@ -149,11 +257,27 @@ def ask_stream(
     En cas d'erreur :
         data: {"error": "...", "code": "..."}\n\n
     """
+    started_at = time.monotonic()
+    model = getattr(llm, "get_model", lambda: "unknown")() if llm is not None else "unknown"
     if not message.strip():
+        _log_llm_terminal(
+            request_kind="ask_stream",
+            status="invalid",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="empty_message",
+        )
         yield _sse({"error": "Message vide", "code": "empty_message"})
         return
 
     if llm is None:
+        _log_llm_terminal(
+            request_kind="ask_stream",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="no_llm",
+        )
         yield _sse({"error": "LLM non disponible", "code": "no_llm"})
         return
 
@@ -165,26 +289,106 @@ def ask_stream(
     messages.extend(_normalize_history(history))
     messages.append({"role": "user", "content": message.strip()})
 
+    saw_token = False
     try:
         for token in provider.stream_messages(
             messages=messages,
             max_tokens=max_tokens,
         ):
+            saw_token = True
             yield _sse({"token": token, "done": False})
 
-        model = getattr(llm, "get_model", lambda: "unknown")()
         yield _sse({"token": "", "done": True, "model": model})
+        _log_llm_terminal(
+            request_kind="ask_stream",
+            status="success",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+        )
 
     except RuntimeError as exc:
         msg = str(exc)
+        if _is_invalid_final_error(msg):
+            state = "degraded" if saw_token else "invalid"
+            code = "degraded_response" if saw_token else "invalid_response"
+            error = "Réponse incomplète." if saw_token else "Réponse finale invalide."
+            _log_llm_terminal(
+                request_kind="ask_stream",
+                status=state,
+                model=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                reason="stream_interrupted" if saw_token else "invalid_final_response",
+            )
+            yield _sse({"state": state, "error": error, "code": code})
+            return
+        if saw_token:
+            _log_llm_terminal(
+                request_kind="ask_stream",
+                status="degraded",
+                model=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                reason="stream_interrupted",
+            )
+            yield _sse({"state": "degraded", "error": "Réponse incomplète.", "code": "degraded_response"})
+            return
         code = "llm_offline" if "unavailable" in msg.lower() else "llm_error"
+        _log_llm_terminal(
+            request_kind="ask_stream",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason=code,
+        )
         yield _sse({"error": msg, "code": code})
     except Exception as exc:
+        if saw_token:
+            _log_llm_terminal(
+                request_kind="ask_stream",
+                status="degraded",
+                model=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                reason="stream_interrupted",
+            )
+            yield _sse({"state": "degraded", "error": "Réponse incomplète.", "code": "degraded_response"})
+            return
+        _log_llm_terminal(
+            request_kind="ask_stream",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="unknown",
+        )
         yield _sse({"error": f"Erreur inattendue : {exc}", "code": "unknown"})
 
 
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _is_invalid_final_error(message: str) -> bool:
+    return _INVALID_FINAL_CODE in (message or "")
+
+
+def _log_llm_terminal(
+    *,
+    request_kind: str,
+    status: str,
+    model: str,
+    latency_ms: int,
+    reason: str | None = None,
+) -> None:
+    message = (
+        f"llm_request_terminal request_kind={request_kind} status={status} "
+        f"provider=ollama model={model} latency_ms={latency_ms}"
+    )
+    if reason:
+        message += f" reason={reason}"
+    if status == "success":
+        log.info(message)
+    elif status in {"invalid", "degraded"}:
+        log.warning(message)
+    else:
+        log.error(message)
 
 
 # ── ask_stream_with_tools() — boucle agentique + SSE ─────────────────────
@@ -204,21 +408,39 @@ def ask_stream_with_tools(
 
     Flux SSE émis :
       data: {"tool_call": "score_file", "status": "running"}\n\n   ← outil en cours
-      data: {"token": "...", "done": false}\n\n              ← tokens de la réponse
+      data: {"token": "...", "done": false}\n\n              ← réponse finale canonique
       data: {"token": "",   "done": true, "model": "..."}\n\n  ← fin
+      data: {"state": "invalid", "error": "...", "code": "..."}\n\n
       data: {"error": "...", "code": "..."}\n\n             ← erreur
 
     Algorithme :
       1. Appel non-streaming /api/chat avec outils (décision modèle)
       2. Si tool_calls → exécute chaque outil, ajoute le résultat aux messages, reboucle
-      3. Si réponse texte → streaming /api/chat sur l'historique complet
-      4. Limité à _MAX_TOOL_ITERATIONS itérations
+      3. Si pas de tool_calls → le contenu assistant courant devient la réponse finale canonique
+      4. Aucun second appel de génération n'est lancé pour "reformuler" la réponse
+      5. Limité à _MAX_TOOL_ITERATIONS itérations
     """
+    started_at = time.monotonic()
+    model = getattr(llm, "get_model", lambda: "unknown")() if llm is not None else "unknown"
     if not message.strip():
+        _log_llm_terminal(
+            request_kind="ask_stream_with_tools",
+            status="invalid",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="empty_message",
+        )
         yield _sse({"error": "Message vide", "code": "empty_message"})
         return
 
     if llm is None:
+        _log_llm_terminal(
+            request_kind="ask_stream_with_tools",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="no_llm",
+        )
         yield _sse({"error": "LLM non disponible", "code": "no_llm"})
         return
 
@@ -248,11 +470,28 @@ def ask_stream_with_tools(
             tool_calls = msg.get("tool_calls") or []
 
             if not tool_calls:
-                # Pas d'outil demandé — réponse directe disponible dans msg["content"]
-                # On préfère streamer via stream_messages() pour une meilleure UX
-                # (les tokens arrivent progressivement au lieu d'un bloc)
-                messages.append({"role": "assistant", "content": msg.get("content", "")})
-                break
+                # Pas d'outil demandé — la réponse courante est la seule réponse
+                # finale canonique. On n'effectue pas de seconde génération.
+                content = (msg.get("content") or "").strip()
+                if not content:
+                    _log_llm_terminal(
+                        request_kind="ask_stream_with_tools",
+                        status="invalid",
+                        model=model,
+                        latency_ms=int((time.monotonic() - started_at) * 1000),
+                        reason="invalid_final_response",
+                    )
+                    yield _sse({"state": "invalid", "error": "Réponse finale invalide.", "code": "invalid_response"})
+                    return
+                yield _sse({"token": content, "done": False})
+                yield _sse({"token": "", "done": True, "model": model})
+                _log_llm_terminal(
+                    request_kind="ask_stream_with_tools",
+                    status="success",
+                    model=model,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                )
+                return
 
             # ─ Exécution des outils demandés
             # Ajoute la décision du modèle à l'historique
@@ -285,33 +524,44 @@ def ask_stream_with_tools(
                     "content":   str(result),
                 })
 
-        # ─ Réponse finale en streaming sur l'historique complet
-        # (inclut tous les résultats d'outils comme contexte)
-        saw_token = False
-        for token in provider.stream_messages(
-            messages=messages,
-            max_tokens=max_tokens,
-        ):
-            saw_token = True
-            yield _sse({"token": token, "done": False})
-
-        # Si stream_messages n'a rien produit (contenu déjà dans la décision),
-        # on émet le contenu accumulé dans le dernier message assistant.
-        if not saw_token:
-            last_assistant = next(
-                (m for m in reversed(messages) if m.get("role") == "assistant"),
-                None,
-            )
-            content = (last_assistant or {}).get("content", "")
-            if content:
-                yield _sse({"token": content, "done": False})
-
-        model = getattr(llm, "get_model", lambda: "unknown")()
-        yield _sse({"token": "", "done": True, "model": model})
+        # Trop d'itérations sans réponse finale canonique identifiable.
+        _log_llm_terminal(
+            request_kind="ask_stream_with_tools",
+            status="invalid",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="invalid_final_response",
+        )
+        yield _sse({"state": "invalid", "error": "Réponse finale invalide.", "code": "invalid_response"})
+        return
 
     except RuntimeError as exc:
         msg_str = str(exc)
+        if _is_invalid_final_error(msg_str):
+            _log_llm_terminal(
+                request_kind="ask_stream_with_tools",
+                status="invalid",
+                model=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                reason="invalid_final_response",
+            )
+            yield _sse({"state": "invalid", "error": "Réponse finale invalide.", "code": "invalid_response"})
+            return
         code = "llm_offline" if "unavailable" in msg_str.lower() else "llm_error"
+        _log_llm_terminal(
+            request_kind="ask_stream_with_tools",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason=code,
+        )
         yield _sse({"error": msg_str, "code": code})
     except Exception as exc:
+        _log_llm_terminal(
+            request_kind="ask_stream_with_tools",
+            status="error",
+            model=model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            reason="unknown",
+        )
         yield _sse({"error": f"Erreur inattendue : {exc}", "code": "unknown"})

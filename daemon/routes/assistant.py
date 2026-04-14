@@ -91,17 +91,23 @@ def register_assistant_routes(
         available = get_available_models()
         selected_cmd = get_selected_command_model()
         selected_sum = get_selected_summary_model()
+        selected_model = (selected_cmd or selected_sum or "").strip()
         ollama_online = ollama_ping()
         provider = llm_provider()
         provider_ok = bool(provider and getattr(provider, "is_operational", False))
-        has_model = bool((selected_cmd or "").strip() or (selected_sum or "").strip())
-        llm_active = ollama_online and (provider_ok or has_model)
+        has_model = bool(selected_model)
+        model_selected = has_model
+        llm_ready = ollama_online and model_selected
+        llm_active = llm_ready and provider_ok
         return jsonify({
             "provider": "ollama",
             "available_models": available,
+            "selected_model": selected_model,
             "selected_command_model": selected_cmd,
             "selected_summary_model": selected_sum,
             "ollama_online": ollama_online,
+            "model_selected": model_selected,
+            "llm_ready": llm_ready,
             "llm_active": llm_active,
         })
 
@@ -119,6 +125,7 @@ def register_assistant_routes(
         return jsonify({
             "ok": True,
             "model": selected,
+            "selected_model": selected,
             "selected_command_model": selected,
             "selected_summary_model": selected,
         })

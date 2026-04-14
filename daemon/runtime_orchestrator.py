@@ -399,7 +399,6 @@ class RuntimeOrchestrator:
         self.runtime_state.set_analysis(
             signals=signals,
             decision=decision,
-            memory_synced_at=datetime.now() if should_sync else None,
         )
         if should_sync:
             snapshot = self.session_memory.export_session_data()
@@ -441,6 +440,21 @@ class RuntimeOrchestrator:
                 diff_summary=diff_summary,
                 defer_llm_enrichment=defer_llm,
             )
+            if report_ref is None:
+                self.log.info(
+                    "memory sync skipped project=%s duration=%smin trigger=%s",
+                    snapshot.get("active_project"),
+                    snapshot.get("duration_min"),
+                    trigger,
+                )
+                return
+
+            signals, decision = self.runtime_state.get_context_snapshot()
+            self.runtime_state.set_analysis(
+                signals=signals,
+                decision=decision,
+                memory_synced_at=datetime.now(),
+            )
             self.log.info(
                 "memory sync ok project=%s duration=%smin trigger=%s",
                 snapshot.get("active_project"),
@@ -468,6 +482,8 @@ class RuntimeOrchestrator:
         commit_message: str | None,
         diff_summary: str | None,
     ) -> None:
+        started_at = time.monotonic()
+        model = getattr(llm, "get_model", lambda: "unknown")() if llm is not None else "unknown"
         try:
             ok = enrich_session_report(
                 report_ref,
@@ -476,16 +492,28 @@ class RuntimeOrchestrator:
                 commit_message=commit_message,
                 diff_summary=diff_summary,
             )
+            latency_ms = int((time.monotonic() - started_at) * 1000)
+            project = snapshot.get("active_project")
             if ok:
                 self.log.info(
-                    "commit summary enrichi project=%s",
-                    snapshot.get("active_project"),
+                    f"llm_request_terminal request_kind=commit_summary status=success "
+                    f"provider=ollama model={model} latency_ms={latency_ms} project={project}",
                 )
                 self.freeze_memory()
             else:
-                self.log.warning("commit summary non enrichi : entrée introuvable")
+                self.log.warning(
+                    f"llm_request_terminal request_kind=commit_summary status=invalid "
+                    f"provider=ollama model={model} latency_ms={latency_ms} project={project} "
+                    f"reason=entry_not_found",
+                )
         except Exception as exc:
-            self.log.warning("commit summary enrich échouée : %s", exc)
+            latency_ms = int((time.monotonic() - started_at) * 1000)
+            project = snapshot.get("active_project")
+            self.log.error(
+                f"llm_request_terminal request_kind=commit_summary status=error "
+                f"provider=ollama model={model} latency_ms={latency_ms} project={project} "
+                f"reason={exc.__class__.__name__.lower()}",
+            )
 
     def _should_sync_memory(self, event_type, signals, previous_sync_at) -> bool:
         if signals.session_duration_min < 20:
@@ -504,9 +532,7 @@ class RuntimeOrchestrator:
     def _summary_llm_for(self, event_type, signals):
         if signals.session_duration_min < 20:
             return None
-        if event_type in {"screen_locked", "user_idle"}:
-            return self.summary_llm
-        if signals.focus_level == "idle":
+        if event_type == "commit":
             return self.summary_llm
         return None
 
