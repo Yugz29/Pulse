@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from daemon.core.event_bus import Event
 from daemon.core.signal_scorer import Signals
 from daemon.core.uid import new_uid
+from daemon.core.workspace_context import extract_project_name
 
 
 class SessionMemory:
@@ -327,8 +328,10 @@ class SessionMemory:
         if event.type in {
             "file_created", "file_modified", "file_renamed", "file_deleted", "file_change"
         }:
-            active_file = event.payload.get("path")
-            active_project = self._extract_project(active_file)
+            path = event.payload.get("path")
+            if path and event.type != "file_deleted":
+                active_file = path
+                active_project = extract_project_name(active_file)
 
         conn.execute(
             """
@@ -369,14 +372,3 @@ class SessionMemory:
 
     def _duration_min(self) -> int:
         return int((datetime.now() - self.started_at).total_seconds() / 60)
-
-    def _extract_project(self, file_path: Optional[str]) -> Optional[str]:
-        if not file_path:
-            return None
-        parts = file_path.split("/")
-        for marker in ("Projets", "Projects", "Developer", "src", "workspace"):
-            if marker in parts:
-                idx = parts.index(marker)
-                if idx + 1 < len(parts):
-                    return parts[idx + 1]
-        return None

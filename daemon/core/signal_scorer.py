@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from .event_bus import EventBus
+from .workspace_context import extract_project_name
 
 
 @dataclass
@@ -109,7 +110,7 @@ class SignalScorer:
     def _last_file_path(self, file_events: list) -> Optional[str]:
         for event in reversed(file_events):
             path = event.payload.get("path")
-            if path:
+            if path and event.type != "file_deleted":
                 return path
         return None
 
@@ -302,16 +303,7 @@ class SignalScorer:
         return len(distinct_paths) >= 3 or len(recent_file_edits) >= 4
 
     def _extract_project(self, file_path: Optional[str]) -> Optional[str]:
-        if not file_path:
-            return None
-
-        parts = file_path.split("/")
-        for marker in ("Projets", "Projects", "Developer", "src", "workspace"):
-            if marker in parts:
-                idx = parts.index(marker)
-                if idx + 1 < len(parts):
-                    return parts[idx + 1]
-        return None
+        return extract_project_name(file_path)
 
     def _classify_file_type(self, path: str) -> str:
         lower_path = path.lower()

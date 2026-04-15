@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 from datetime import datetime, timedelta
 
 from daemon.core.event_bus import EventBus, Event
@@ -186,6 +188,30 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertEqual(signals.probable_task, "general")
+
+    def test_active_project_detecte_depuis_racine_git_hors_chemins_marqueurs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir) / "clients" / "workspace-app"
+            (repo_root / ".git").mkdir(parents=True)
+            file_path = repo_root / "src" / "handler.py"
+            file_path.parent.mkdir(parents=True)
+            file_path.write_text("print('ok')\n")
+
+            self._push("file_modified", {"path": str(file_path)})
+
+            signals = self.scorer.compute()
+
+            self.assertEqual(signals.active_project, "workspace-app")
+            self.assertEqual(signals.active_file, str(file_path))
+
+    def test_file_deleted_ne_devient_pas_le_fichier_actif(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_deleted", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/obsolete.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.active_project, "Pulse")
 
 
 if __name__ == "__main__":

@@ -129,6 +129,34 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Fichier actif : /tmp/main.py", snapshot)
         self.assertIn("- Durée session : 24 min", snapshot)
 
+    def test_build_context_snapshot_falls_back_to_workspace_root_when_git_root_is_absent(self):
+        self.store.to_dict.return_value = {
+            "active_project": "client-repo",
+            "active_file": "/tmp/client-repo/src/main.py",
+            "active_app": "Cursor",
+            "session_duration_min": 18,
+            "last_event_type": "file_modified",
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project="client-repo",
+                active_file="/tmp/client-repo/src/main.py",
+                probable_task="coding",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=18,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+            decision=None,
+        )
+
+        with patch("daemon.runtime_orchestrator.find_git_root", return_value=None), \
+             patch("daemon.runtime_orchestrator.find_workspace_root", return_value=Path("/tmp/client-repo")):
+            snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("- Racine projet : /tmp/client-repo", snapshot)
+
     def test_freeze_memory_uses_structured_memory_first(self):
         self.memory_store.render.return_value = "Structured memory"
 

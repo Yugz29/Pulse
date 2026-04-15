@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 from .event_bus import Event
+from .workspace_context import extract_project_name
 
 
 def _is_meaningful_file_path(path: str) -> bool:
@@ -48,9 +49,9 @@ class StateStore:
 
         elif event.type in ("file_created", "file_modified", "file_renamed", "file_deleted"):
             path = event.payload.get("path", "")
-            if _is_meaningful_file_path(path):
+            if _is_meaningful_file_path(path) and event.type != "file_deleted":
                 self._state.active_file = path
-                self._state.active_project = self._extract_project(path)
+                self._state.active_project = extract_project_name(path)
 
         elif event.type == "clipboard_updated":
             pass  # Géré en phase 5 (signal scorer)
@@ -65,7 +66,7 @@ class StateStore:
             path = event.payload.get("path", "")
             if _is_meaningful_file_path(path):
                 self._state.active_file = path
-                self._state.active_project = self._extract_project(path)
+                self._state.active_project = extract_project_name(path)
 
     def get(self) -> State:
         return self._state
@@ -83,12 +84,3 @@ class StateStore:
             "last_event_type":      state.last_event_type,
             "last_activity":        state.last_activity.isoformat(),
         }
-
-    def _extract_project(self, file_path: str) -> Optional[str]:
-        parts = file_path.split("/")
-        for marker in ("Projets", "Projects", "Developer", "src", "workspace"):
-            if marker in parts:
-                idx = parts.index(marker)
-                if idx + 1 < len(parts):
-                    return parts[idx + 1]
-        return None

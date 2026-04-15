@@ -28,14 +28,9 @@ class SystemObserver {
     private let idleThresholdSeconds: TimeInterval = 900  // 15 min — 5 min était trop court (pause café = idle)
     private let idlePollInterval: TimeInterval = 15
 
-    // Chemins surveillés par FSEvents (ajuster selon le projet)
-    private let watchedPaths: [String] = [
-        NSHomeDirectory() + "/Desktop",
-        NSHomeDirectory() + "/Documents",
-        NSHomeDirectory() + "/Developer",
-        NSHomeDirectory() + "/Projects",
-        NSHomeDirectory() + "/Projets"
-    ]
+    // On surveille le HOME entier, puis on filtre explicitement le bruit.
+    // Ça évite de rater des workspaces hors des quelques dossiers codés en dur.
+    private let watchedPaths: [String] = [NSHomeDirectory()]
 
     // MARK: - Init
 
@@ -211,6 +206,8 @@ class SystemObserver {
               !path.contains("/.git/") &&
               !path.contains("/node_modules/") &&
               !path.contains("/__pycache__/") &&
+              !path.contains("/Library/") &&
+              !path.contains("/.Trash/") &&
               !path.contains("/xcuserdata/") &&
               !path.contains("/DerivedData/")
         ) else { return }
@@ -225,7 +222,9 @@ class SystemObserver {
         recentFileEvents = recentFileEvents.filter {
             now.timeIntervalSince($0.value) < 5
         }
-        lastMeaningfulFilePath = path
+        if changeType != "deleted" && !isCommitMsg {
+            lastMeaningfulFilePath = path
+        }
 
         sendEvent([
             "type": "file_\(changeType)",
@@ -403,7 +402,9 @@ class SystemObserver {
             ])
         }
 
-        if let path = lastMeaningfulFilePath, !path.isEmpty {
+        if let path = lastMeaningfulFilePath,
+           !path.isEmpty,
+           FileManager.default.fileExists(atPath: path) {
             sendEvent([
                 "type": "file_modified",
                 "path": path,

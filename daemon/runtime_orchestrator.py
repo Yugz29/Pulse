@@ -20,6 +20,7 @@ from daemon.memory.extractor import (
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary
 from daemon.core.proposals import Proposal, proposal_store
 from daemon.core.uid import new_uid
+from daemon.core.workspace_context import find_workspace_root
 
 
 class RuntimeOrchestrator:
@@ -179,8 +180,17 @@ class RuntimeOrchestrator:
                 git_root = find_git_root(active_file)
                 if git_root:
                     project_root = str(git_root)
+                else:
+                    workspace_root = find_workspace_root(active_file)
+                    if workspace_root:
+                        project_root = str(workspace_root)
             except Exception:
-                pass
+                try:
+                    workspace_root = find_workspace_root(active_file)
+                    if workspace_root:
+                        project_root = str(workspace_root)
+                except Exception:
+                    pass
 
         lines = [
             "# Contexte session",

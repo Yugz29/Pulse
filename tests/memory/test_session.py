@@ -86,6 +86,18 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIn("Cursor", data["recent_apps"])
         self.assertEqual(data["max_friction"], 0.8)
 
+    def test_file_deleted_ne_remplace_pas_le_fichier_actif_de_session(self):
+        active_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"
+        deleted_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/old.py"
+
+        self.memory.record_event(Event("file_modified", {"path": active_path}))
+        self.memory.record_event(Event("file_deleted", {"path": deleted_path}))
+
+        session = self.memory.get_session()
+
+        self.assertEqual(session["active_file"], active_path)
+        self.assertEqual(session["active_project"], "Pulse")
+
     def test_close_termine_la_session(self):
         self.memory.close()
         session = self.memory.get_session()
