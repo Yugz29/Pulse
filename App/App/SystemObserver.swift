@@ -22,6 +22,7 @@ class SystemObserver {
     private var lastClipboardContent: String = ""
     private var recentFileEvents: [String: Date] = [:]
     private var isUserIdle = false
+    private var lastMeaningfulFilePath: String?
     private let filesystemQueue = DispatchQueue(label: "pulse.systemobserver.filesystem", qos: .utility)
 
     private let idleThresholdSeconds: TimeInterval = 900  // 15 min — 5 min était trop court (pause café = idle)
@@ -50,6 +51,7 @@ class SystemObserver {
         observeClipboard()
         observeUserIdle()
         observeScreenLock()
+        refreshCurrentContext()
     }
 
     func stopObserving() {
@@ -108,10 +110,7 @@ class SystemObserver {
               let bundleId = app.bundleIdentifier
         else { return }
 
-        // Filtre le Finder et Pulse lui-même
-        guard bundleId != "com.apple.finder",
-              !bundleId.contains("pulse")
-        else { return }
+        guard shouldTrackApp(bundleId: bundleId) else { return }
 
         sendEvent([
             "type": "app_activated",
@@ -226,6 +225,7 @@ class SystemObserver {
         recentFileEvents = recentFileEvents.filter {
             now.timeIntervalSince($0.value) < 5
         }
+        lastMeaningfulFilePath = path
 
         sendEvent([
             "type": "file_\(changeType)",
@@ -388,5 +388,32 @@ class SystemObserver {
         Task(priority: .utility) {
             try? await bridge.sendEvent(payload)
         }
+    }
+
+    func refreshCurrentContext() {
+        if let app = NSWorkspace.shared.frontmostApplication,
+           let name = app.localizedName,
+           let bundleId = app.bundleIdentifier,
+           shouldTrackApp(bundleId: bundleId) {
+            sendEvent([
+                "type": "app_activated",
+                "app_name": name,
+                "bundle_id": bundleId,
+                "timestamp": ISO8601DateFormatter().string(from: Date())
+            ])
+        }
+
+        if let path = lastMeaningfulFilePath, !path.isEmpty {
+            sendEvent([
+                "type": "file_modified",
+                "path": path,
+                "extension": (path as NSString).pathExtension,
+                "timestamp": ISO8601DateFormatter().string(from: Date())
+            ])
+        }
+    }
+
+    private func shouldTrackApp(bundleId: String) -> Bool {
+        bundleId != "com.apple.finder" && !bundleId.contains("pulse")
     }
 }

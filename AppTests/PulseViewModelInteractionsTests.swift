@@ -324,6 +324,102 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.recentProposals[0].displayTitle, "Contexte de session prêt à être injecté")
     }
 
+    func testStartMcpPollingDeclencheLeRappelQuandLeDaemonRevient() async {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let lock = NSLock()
+        var pingCount = 0
+
+        MockURLProtocol.handler = { request in
+            let url = try XCTUnwrap(request.url)
+            let path = url.path
+
+            if path == "/ping" {
+                lock.lock()
+                pingCount += 1
+                let currentCount = pingCount
+                lock.unlock()
+
+                let statusCode = currentCount == 1 ? 503 : 200
+                let body = currentCount == 1
+                    ? "{}"
+                    : #"{"status":"ok","version":"0.1.0","paused":false}"#
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: statusCode,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data(body.utf8))
+            }
+
+            if path == "/llm/models" {
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                let json = """
+                {
+                  "provider": "ollama",
+                  "available_models": [],
+                  "selected_model": "",
+                  "selected_command_model": "",
+                  "selected_summary_model": "",
+                  "ollama_online": false,
+                  "model_selected": false,
+                  "llm_ready": false,
+                  "llm_active": false
+                }
+                """
+                return (response, Data(json.utf8))
+            }
+
+            if path == "/mcp/pending" {
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 204,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data())
+            }
+
+            if path == "/state" {
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data("{}".utf8))
+            }
+
+            XCTFail("Chemin inattendu: \\(path)")
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 404,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data("{}".utf8))
+        }
+
+        let vm = PulseViewModel(bridge: DaemonBridge(base: "http://127.0.0.1:8765", session: session))
+        var didReconnect = false
+        vm.onDaemonReconnected = {
+            didReconnect = true
+        }
+
+        vm.startMcpPolling()
+        await waitUntil { didReconnect }
+        vm.stopMcpPolling()
+
+        XCTAssertTrue(didReconnect)
+    }
+
     func testProposalRecordClarifiesBlockingVsAutomaticFlows() {
         let blocking = ProposalRecord(
             id: "proposal-1",

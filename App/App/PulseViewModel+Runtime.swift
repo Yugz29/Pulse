@@ -13,6 +13,9 @@ extension PulseViewModel {
                 let paused = ping?.paused ?? false
                 let daemonJustCameBack = alive && !self.isDaemonActive
                 self.syncDaemonReachability(alive: alive, paused: paused)
+                if daemonJustCameBack {
+                    self.onDaemonReconnected?()
+                }
 
                 if alive {
                     let forceRefresh = daemonJustCameBack || !self.isOllamaOnline || !self.isLLMReady

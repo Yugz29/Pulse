@@ -101,6 +101,34 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Activité fichiers : 5 fichier(s) touché(s) sur 10 min, surtout code source (3), documentation (1), tests (1)", snapshot)
         self.assertIn("- Lecture de la session : travail réparti sur plusieurs fichiers, ça ressemble à une évolution de fonctionnalité, avec quelques changements de structure", snapshot)
 
+    def test_build_context_snapshot_falls_back_to_signal_context_when_store_is_empty(self):
+        self.store.to_dict.return_value = {
+            "active_project": None,
+            "active_file": None,
+            "active_app": None,
+            "session_duration_min": 0,
+            "last_event_type": None,
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                friction_score=0.15,
+                focus_level="normal",
+                session_duration_min=24,
+                recent_apps=["Xcode"],
+                clipboard_context="text",
+            ),
+            decision=None,
+        )
+
+        snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("- Projet : Pulse", snapshot)
+        self.assertIn("- Fichier actif : /tmp/main.py", snapshot)
+        self.assertIn("- Durée session : 24 min", snapshot)
+
     def test_freeze_memory_uses_structured_memory_first(self):
         self.memory_store.render.return_value = "Structured memory"
 

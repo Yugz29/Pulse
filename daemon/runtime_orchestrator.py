@@ -164,8 +164,14 @@ class RuntimeOrchestrator:
         state = self.store.to_dict()
         signals, _ = self.runtime_state.get_context_snapshot()
 
+        active_project = state.get("active_project") or (signals.active_project if signals else None)
+        active_file = state.get("active_file") or (signals.active_file if signals else None)
+        active_app = state.get("active_app")
+        session_duration_min = state.get("session_duration_min")
+        if not session_duration_min and signals:
+            session_duration_min = signals.session_duration_min
+
         # Racine git pour les outils
-        active_file = state.get("active_file")
         project_root: str | None = None
         if active_file:
             try:
@@ -177,11 +183,11 @@ class RuntimeOrchestrator:
 
         lines = [
             "# Contexte session",
-            f"- Projet : {state.get('active_project') or 'non détecté'}",
+            f"- Projet : {active_project or 'non détecté'}",
             f"- Racine projet : {project_root or 'inconnue'}",
             f"- Fichier actif : {active_file or 'aucun'}",
-            f"- App active : {state.get('active_app') or 'inconnue'}",
-            f"- Durée session : {state.get('session_duration_min', 0)} min",
+            f"- App active : {active_app or 'inconnue'}",
+            f"- Durée session : {session_duration_min or 0} min",
         ]
 
         if signals:

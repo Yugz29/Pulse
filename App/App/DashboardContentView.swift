@@ -216,7 +216,7 @@ struct NowSummaryCard: View {
 
     private var currentAppLabel: String {
         if let project = vm.activeProject, !project.isEmpty { return project }
-        return vm.activeApp ?? (vm.isDaemonActive ? "Pulse" : "Inactif")
+        return vm.activeApp ?? (vm.isDaemonActive ? "Contexte non détecté" : "Inactif")
     }
 
     private var currentFileLabel: String {

@@ -105,6 +105,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.observer?.stopObserving()
             }
         }
+        vm.onDaemonReconnected = { [weak self] in
+            self?.observer?.refreshCurrentContext()
+        }
         notchWindow?.orderFrontRegardless()
     }
 
