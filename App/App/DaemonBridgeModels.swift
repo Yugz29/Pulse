@@ -114,6 +114,174 @@ struct SetLLMModelResponse: Codable {
     }
 }
 
+struct ProposalHistoryResponse: Codable {
+    let items: [ProposalRecord]
+}
+
+struct ProposalRecord: Identifiable, Codable {
+    let id: String
+    let type: String
+    let title: String
+    let summary: String
+    let rationale: String
+    let status: String
+    let createdAt: String
+    let updatedAt: String
+    let decidedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case title
+        case summary
+        case rationale
+        case status
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case decidedAt = "decided_at"
+    }
+
+    private static let internetISO8601Formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let internetISO8601WithoutFractionalFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static func localTimestampFormatter(_ format: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = format
+        return formatter
+    }
+
+    private static let localFractionalTimestampFormatter =
+        localTimestampFormatter("yyyy-MM-dd'T'HH:mm:ss.SSSSSS")
+
+    private static let localTimestampWithoutFractionalFormatter =
+        localTimestampFormatter("yyyy-MM-dd'T'HH:mm:ss")
+
+    private static let clockFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    private var effectiveTimestamp: String {
+        decidedAt ?? updatedAt
+    }
+
+    private var parsedDate: Date? {
+        Self.internetISO8601Formatter.date(from: effectiveTimestamp)
+            ?? Self.internetISO8601WithoutFractionalFormatter.date(from: effectiveTimestamp)
+            ?? Self.localFractionalTimestampFormatter.date(from: effectiveTimestamp)
+            ?? Self.localTimestampWithoutFractionalFormatter.date(from: effectiveTimestamp)
+    }
+
+    var displayTitle: String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        let fallback = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        return fallback.isEmpty ? typeLabel : fallback
+    }
+
+    var typeLabel: String {
+        switch type {
+        case "risky_command": return "Commande risquée"
+        case "context_injection": return "Contexte assistant"
+        default: return type.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    var flowLabel: String {
+        switch type {
+        case "risky_command":
+            return status == "pending" ? "validation requise" : "validation utilisateur"
+        case "context_injection":
+            return "application automatique"
+        default:
+            return status == "pending" ? "en attente" : "traitement interne"
+        }
+    }
+
+    var statusLabel: String {
+        switch status {
+        case "pending": return "À valider"
+        case "accepted": return "Autorisée"
+        case "refused": return "Refusée"
+        case "expired": return "Expirée"
+        case "executed": return "Appliquée"
+        default: return status
+        }
+    }
+
+    var statusAccentHex: String {
+        switch status {
+        case "accepted": return "#5DCAA5"
+        case "refused": return "#ff453a"
+        case "expired": return "#7c7c80"
+        case "executed": return "#5E9EFF"
+        default: return "#EF9F27"
+        }
+    }
+
+    var timeLabel: String {
+        guard let date = parsedDate else { return "" }
+        return Self.clockFormatter.string(from: date)
+    }
+
+    var relativeTimeLabel: String {
+        guard let date = parsedDate else { return "" }
+        let diff = Date().timeIntervalSince(date)
+        if diff < 10 { return "à l'instant" }
+        if diff < 60 { return "il y a \(Int(diff)) s" }
+        if diff < 3600 { return "il y a \(Int(diff / 60)) min" }
+        if diff < 86_400 { return "il y a \(Int(diff / 3600)) h" }
+        return "il y a \(Int(diff / 86_400)) j"
+    }
+
+    var statusSummary: String {
+        switch (type, status) {
+        case ("risky_command", "pending"):
+            return "Pulse a détecté une commande sensible et attend votre choix."
+        case ("risky_command", "accepted"):
+            return "La commande sensible a été autorisée."
+        case ("risky_command", "refused"):
+            return "La commande sensible a été refusée."
+        case ("risky_command", "expired"):
+            return "La commande sensible a expiré sans validation."
+        case ("context_injection", "executed"):
+            return "Pulse a injecté le contexte existant automatiquement."
+        case ("context_injection", "pending"):
+            return "Pulse prépare une injection de contexte."
+        default:
+            return "Pulse a enregistré cette proposition."
+        }
+    }
+
+    var detailText: String? {
+        let normalizedTitle = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedRationale = rationale.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var parts: [String] = [statusSummary]
+        if !normalizedSummary.isEmpty && normalizedSummary != normalizedTitle && normalizedSummary != statusSummary {
+            parts.append(normalizedSummary)
+        }
+        if !normalizedRationale.isEmpty && normalizedRationale != normalizedSummary && normalizedRationale != statusSummary {
+            parts.append("Pourquoi : \(normalizedRationale)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+}
+
 struct InsightEvent: Identifiable {
     let id = UUID()
     let type: String

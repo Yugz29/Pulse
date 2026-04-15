@@ -10,6 +10,7 @@ def register_mcp_routes(
     *,
     bus: Any,
     get_pending_command: Callable[[], Any],
+    get_proposal_history: Callable[[int], list[dict]],
     intercept_command: Callable[[str, str], dict],
     receive_decision: Callable[[str | None, str | None], bool],
     get_scoring_status: Callable[[], dict],
@@ -21,6 +22,14 @@ def register_mcp_routes(
         if cmd is None:
             return "", 204
         return jsonify(cmd)
+
+    @app.route("/mcp/proposals")
+    def mcp_proposals():
+        try:
+            limit = int(request.args.get("limit", 20))
+        except (TypeError, ValueError):
+            limit = 20
+        return jsonify({"items": get_proposal_history(limit)})
 
     @app.route("/mcp/intercept", methods=["POST"])
     def mcp_intercept():

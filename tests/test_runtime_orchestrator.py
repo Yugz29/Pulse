@@ -3,7 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
+from daemon.core.proposals import proposal_store
 from daemon.core.signal_scorer import Signals
 from daemon.runtime_orchestrator import RuntimeOrchestrator
 from daemon.runtime_state import RuntimeState
@@ -11,6 +13,7 @@ from daemon.runtime_state import RuntimeState
 
 class TestRuntimeOrchestrator(unittest.TestCase):
     def setUp(self):
+        proposal_store.clear()
         self.store = MagicMock()
         self.scorer = MagicMock()
         self.decision_engine = MagicMock()
@@ -296,6 +299,69 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         freeze_memory.assert_called_once()
         messages = [call[0][0] for call in self.log.info.call_args_list if call[0]]
         self.assertTrue(any("memory sync ok" in msg for msg in messages))
+
+    def test_process_signals_cree_une_proposition_executee_pour_context_ready(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="normal",
+            session_duration_min=25,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+        decision = Decision(
+            action="inject_context",
+            level=1,
+            reason="context_ready",
+            payload={"project": "Pulse", "task": "coding"},
+        )
+        event = Event("file_modified", {"path": "/tmp/main.py"})
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = decision
+
+        self.orchestrator._process_signals(event)
+
+        history = proposal_store.list_history(limit=1)
+        self.assertEqual(len(history), 1)
+        proposal = history[0]
+        self.assertEqual(proposal.type, "context_injection")
+        self.assertEqual(proposal.status, "executed")
+        self.assertEqual(
+            [entry["status"] for entry in proposal.lifecycle],
+            ["created", "pending", "executed"],
+        )
+        _, runtime_decision = self.runtime_state.get_context_snapshot()
+        self.assertEqual(runtime_decision.action, "inject_context")
+        self.assertIn("proposal_id", runtime_decision.payload)
+
+    def test_process_signals_ne_duplique_pas_la_meme_proposition_context_ready(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="normal",
+            session_duration_min=25,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+        decision = Decision(
+            action="inject_context",
+            level=1,
+            reason="context_ready",
+            payload={"project": "Pulse", "task": "coding"},
+        )
+        event = Event("file_modified", {"path": "/tmp/main.py"})
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = decision
+
+        self.orchestrator._process_signals(event)
+        self.orchestrator._process_signals(event)
+
+        history = proposal_store.list_history()
+        self.assertEqual(len(history), 1)
 
 
 if __name__ == "__main__":

@@ -256,6 +256,126 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.llmStatusSubtitle, "mistral")
     }
 
+    func testRefreshInsightsLoadsRecentProposals() async {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        MockURLProtocol.handler = { request in
+            let url = try XCTUnwrap(request.url)
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+
+            switch url.path {
+            case "/state":
+                let json = """
+                {
+                  "active_app": "Xcode",
+                  "active_project": "Pulse",
+                  "session_duration_min": 42,
+                  "signals": {
+                    "probable_task": "coding",
+                    "focus_level": "normal",
+                    "friction_score": 0.2,
+                    "recent_apps": ["Xcode"]
+                  }
+                }
+                """
+                return (response, Data(json.utf8))
+            case "/insights":
+                return (response, Data("[]".utf8))
+            case "/mcp/proposals":
+                let json = """
+                {
+                  "items": [
+                    {
+                      "id": "proposal-1",
+                      "type": "context_injection",
+                      "title": "Contexte de session prêt à être injecté",
+                      "summary": "Le contexte local est jugé assez riche pour une réponse assistée.",
+                      "rationale": "La session a accumulé assez de contexte local.",
+                      "status": "executed",
+                      "created_at": "2026-04-15T12:00:00",
+                      "updated_at": "2026-04-15T12:01:00",
+                      "decided_at": "2026-04-15T12:01:00"
+                    }
+                  ]
+                }
+                """
+                return (response, Data(json.utf8))
+            default:
+                XCTFail("Chemin inattendu: \(url.path)")
+                return (response, Data("{}".utf8))
+            }
+        }
+
+        let vm = PulseViewModel(bridge: DaemonBridge(base: "http://127.0.0.1:8765", session: session))
+
+        vm.refreshInsights()
+        await waitUntil { !vm.recentProposals.isEmpty }
+
+        XCTAssertEqual(vm.recentProposals.count, 1)
+        XCTAssertEqual(vm.recentProposals[0].type, "context_injection")
+        XCTAssertEqual(vm.recentProposals[0].status, "executed")
+        XCTAssertEqual(vm.recentProposals[0].displayTitle, "Contexte de session prêt à être injecté")
+    }
+
+    func testProposalRecordClarifiesBlockingVsAutomaticFlows() {
+        let blocking = ProposalRecord(
+            id: "proposal-1",
+            type: "risky_command",
+            title: "Supprime build",
+            summary: "Supprime le dossier build.",
+            rationale: "Commande destructive détectée.",
+            status: "pending",
+            createdAt: "2026-04-15T12:00:00",
+            updatedAt: "2026-04-15T12:00:00",
+            decidedAt: nil
+        )
+        let automatic = ProposalRecord(
+            id: "proposal-2",
+            type: "context_injection",
+            title: "Contexte de session prêt à être injecté",
+            summary: "Le contexte local est jugé assez riche pour une réponse assistée.",
+            rationale: "La session a accumulé assez de contexte local.",
+            status: "executed",
+            createdAt: "2026-04-15T12:00:00",
+            updatedAt: "2026-04-15T12:01:00",
+            decidedAt: "2026-04-15T12:01:00"
+        )
+
+        XCTAssertEqual(blocking.typeLabel, "Commande risquée")
+        XCTAssertEqual(blocking.flowLabel, "validation requise")
+        XCTAssertEqual(blocking.statusLabel, "À valider")
+        XCTAssertTrue(blocking.detailText?.contains("attend votre choix") == true)
+
+        XCTAssertEqual(automatic.typeLabel, "Contexte assistant")
+        XCTAssertEqual(automatic.flowLabel, "application automatique")
+        XCTAssertEqual(automatic.statusLabel, "Appliquée")
+        XCTAssertTrue(automatic.detailText?.contains("automatiquement") == true)
+    }
+
+    func testProposalRecordDetailFallsBackToRationaleWithoutRepeatingTitle() {
+        let proposal = ProposalRecord(
+            id: "proposal-1",
+            type: "context_injection",
+            title: "Contexte prêt",
+            summary: "Contexte prêt",
+            rationale: "Le contexte de session est assez riche pour aider la prochaine réponse.",
+            status: "executed",
+            createdAt: "2026-04-15T12:00:00",
+            updatedAt: "2026-04-15T12:01:00",
+            decidedAt: "2026-04-15T12:01:00"
+        )
+
+        XCTAssertTrue(proposal.detailText?.contains("Pourquoi :") == true)
+        XCTAssertFalse(proposal.detailText?.contains("Contexte prêt Contexte prêt") == true)
+    }
+
     func testUpdateSelectedModelUsesSelectedModelAsPrimaryResponseField() async {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]

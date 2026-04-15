@@ -7,12 +7,14 @@ _TEST_HOME = tempfile.mkdtemp(prefix="pulse-tests-home-")
 os.environ["HOME"] = _TEST_HOME
 
 import daemon.main as daemon_main
+from daemon.mcp import handlers as mcp_handlers
 
 
 class TestMainMcpRoutes(unittest.TestCase):
     def setUp(self):
         daemon_main.runtime_state.reset_for_tests()
         daemon_main.runtime_orchestrator.reset_for_tests()
+        mcp_handlers.reset_proposals_for_tests()
         daemon_main.bus.clear()
         self.client = daemon_main.app.test_client()
 
@@ -30,6 +32,16 @@ class TestMainMcpRoutes(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["tool_use_id"], "abc")
+
+    def test_mcp_proposals_returns_history_payload(self):
+        history = [{"tool_use_id": "tool-1", "status": "accepted"}]
+        with patch("daemon.main.get_proposal_history", return_value=history):
+            response = self.client.get("/mcp/proposals?limit=5")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["items"][0]["tool_use_id"], "tool-1")
+        self.assertEqual(payload["items"][0]["status"], "accepted")
 
     def test_mcp_intercept_publishes_and_returns_result(self):
         result = {"decision": "allow", "allowed": True}

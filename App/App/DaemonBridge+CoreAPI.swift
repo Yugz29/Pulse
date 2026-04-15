@@ -82,4 +82,12 @@ extension DaemonBridge {
             return InsightEvent(type: type, timestamp: timestamp, keyValue: keyValue)
         }
     }
+
+    func getRecentProposals(limit: Int = 6) async -> [ProposalRecord] {
+        guard let url = URL(string: "\(base)/mcp/proposals?limit=\(limit)") else { return [] }
+        guard let (data, response) = try? await data(from: url) else { return [] }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+        guard let payload = try? decode(ProposalHistoryResponse.self, from: data) else { return [] }
+        return payload.items
+    }
 }

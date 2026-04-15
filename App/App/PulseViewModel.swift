@@ -37,6 +37,7 @@ final class PulseViewModel: ObservableObject {
     @Published var activeRequestSystemMessage: String? = nil
 
     @Published var recentEvents: [InsightEvent] = []
+    @Published var recentProposals: [ProposalRecord] = []
     @Published var frictionScore: Double = 0.0
     @Published var activeFile: String? = nil
     @Published var recentApps: [String] = []

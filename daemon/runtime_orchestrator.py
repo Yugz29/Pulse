@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta
 import subprocess
 
@@ -15,6 +16,8 @@ from daemon.memory.extractor import (
     update_memories_from_session,
 )
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary
+from daemon.core.proposals import Proposal, proposal_store
+from daemon.core.uid import new_uid
 
 
 class RuntimeOrchestrator:
@@ -393,7 +396,14 @@ class RuntimeOrchestrator:
     def _process_signals(self, trigger_event) -> None:
         signals = self.scorer.compute()
         self.session_memory.update_signals(signals)
+        _, previous_decision = self.runtime_state.get_context_snapshot()
         decision = self.decision_engine.evaluate(signals, trigger_event=trigger_event)
+        decision = self._attach_context_proposal_if_needed(
+            signals=signals,
+            decision=decision,
+            previous_decision=previous_decision,
+            trigger_event=trigger_event,
+        )
         previous_sync_at = self.runtime_state.get_last_memory_sync_at()
         should_sync = self._should_sync_memory(trigger_event.type, signals, previous_sync_at)
         self.runtime_state.set_analysis(
@@ -421,6 +431,80 @@ class RuntimeOrchestrator:
                 decision.level,
                 decision.reason,
             )
+
+    def _attach_context_proposal_if_needed(self, *, signals, decision, previous_decision, trigger_event):
+        if not self._should_emit_context_proposal(decision, previous_decision):
+            return decision
+
+        proposal = self._build_context_injection_proposal(
+            signals=signals,
+            decision=decision,
+            trigger_event=trigger_event,
+        )
+        proposal_store.add(proposal)
+        proposal_store.resolve(proposal.id, "executed")
+
+        payload = dict(decision.payload or {})
+        payload["proposal_id"] = proposal.id
+        return replace(decision, payload=payload)
+
+    def _should_emit_context_proposal(self, decision, previous_decision) -> bool:
+        if decision.action != "inject_context" or decision.reason != "context_ready":
+            return False
+        if previous_decision is None:
+            return True
+        previous_payload = self._normalized_decision_payload(previous_decision.payload)
+        current_payload = self._normalized_decision_payload(decision.payload)
+        return not (
+            previous_decision.action == decision.action
+            and previous_decision.reason == decision.reason
+            and previous_payload == current_payload
+        )
+
+    def _normalized_decision_payload(self, payload):
+        normalized = dict(payload or {})
+        normalized.pop("proposal_id", None)
+        return normalized
+
+    def _build_context_injection_proposal(self, *, signals, decision, trigger_event) -> Proposal:
+        payload = dict(decision.payload or {})
+        evidence = [
+            {"kind": "project", "label": "Projet", "value": signals.active_project or "inconnu"},
+            {"kind": "task", "label": "Tâche", "value": signals.probable_task or "general"},
+            {"kind": "focus", "label": "Focus", "value": signals.focus_level},
+            {
+                "kind": "session",
+                "label": "Durée session",
+                "value": f"{signals.session_duration_min} min",
+            },
+        ]
+        if signals.active_file:
+            evidence.append({"kind": "file", "label": "Fichier actif", "value": signals.active_file})
+
+        proposal = Proposal(
+            id=new_uid(),
+            type="context_injection",
+            trigger=trigger_event.type,
+            title="Contexte de session prêt à être injecté",
+            summary="Le contexte local est jugé assez riche pour une réponse assistée.",
+            rationale="La session a accumulé assez de contexte local pour justifier une injection de contexte existante.",
+            evidence=evidence,
+            confidence=0.66,
+            proposed_action="inject_current_context",
+            metadata={
+                "details": {
+                    "decision_action": decision.action,
+                    "decision_reason": decision.reason,
+                    "project": signals.active_project,
+                    "task": signals.probable_task,
+                    "focus_level": signals.focus_level,
+                    "session_duration_min": signals.session_duration_min,
+                    "active_file": signals.active_file,
+                    "decision_payload": payload,
+                },
+            },
+        )
+        return proposal
 
     def _sync_memory_background(
         self,
@@ -549,3 +633,4 @@ class RuntimeOrchestrator:
         with self._runtime_lock:
             self._frozen_memory = None
             self._frozen_memory_at = None
+        proposal_store.clear()

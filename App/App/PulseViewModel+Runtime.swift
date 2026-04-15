@@ -67,11 +67,13 @@ extension PulseViewModel {
         Task {
             async let stateTask = bridge.getState()
             async let eventsTask = bridge.getInsights()
-            let (state, events) = await (try? stateTask, eventsTask)
+            async let proposalsTask = bridge.getRecentProposals()
+            let (state, events, proposals) = await (try? stateTask, eventsTask, proposalsTask)
             if let state {
                 self.applyState(state)
             }
             self.recentEvents = events
+            self.recentProposals = proposals
         }
     }
 
