@@ -98,9 +98,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("# Contexte session", snapshot)
         self.assertIn("- Projet : Pulse", snapshot)
         self.assertIn("- Tâche probable : coding", snapshot)
-        self.assertIn("- Fichiers touchés (10 min) : 5", snapshot)
-        self.assertIn("- Mode de travail fichiers : multi_file", snapshot)
-        self.assertIn("- Pattern de travail candidat : feature_candidate", snapshot)
+        self.assertIn("- Activité fichiers : 5 fichier(s) touché(s) sur 10 min, surtout code source (3), documentation (1), tests (1)", snapshot)
+        self.assertIn("- Lecture de la session : travail réparti sur plusieurs fichiers, ça ressemble à une évolution de fonctionnalité, avec quelques changements de structure", snapshot)
 
     def test_freeze_memory_uses_structured_memory_first(self):
         self.memory_store.render.return_value = "Structured memory"
@@ -346,9 +345,14 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             ["created", "pending", "executed"],
         )
         evidence_by_label = {entry["label"]: entry["value"] for entry in proposal.evidence}
-        self.assertEqual(evidence_by_label["Fichiers touchés (10 min)"], "4")
-        self.assertEqual(evidence_by_label["Mode de travail fichiers"], "few_files")
-        self.assertEqual(evidence_by_label["Pattern candidat"], "feature_candidate")
+        self.assertEqual(
+            evidence_by_label["Activité fichiers"],
+            "4 fichier(s) touché(s) sur 10 min, surtout code source (2), documentation (1), tests (1)",
+        )
+        self.assertEqual(
+            evidence_by_label["Lecture de la session"],
+            "petit lot cohérent de 4 fichiers, ça ressemble à une évolution de fonctionnalité",
+        )
         _, runtime_decision = self.runtime_state.get_context_snapshot()
         self.assertEqual(runtime_decision.action, "inject_context")
         self.assertIn("proposal_id", runtime_decision.payload)

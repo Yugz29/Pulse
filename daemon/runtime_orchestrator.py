@@ -189,19 +189,12 @@ class RuntimeOrchestrator:
                 f"- Tâche probable : {signals.probable_task}",
                 f"- Focus : {signals.focus_level}",
             ]
-            if signals.edited_file_count_10m:
-                lines.append(f"- Fichiers touchés (10 min) : {signals.edited_file_count_10m}")
-                lines.append(f"- Mode de travail fichiers : {signals.dominant_file_mode}")
-            if signals.file_type_mix_10m:
-                mix = ", ".join(
-                    f"{kind}:{count}"
-                    for kind, count in sorted(signals.file_type_mix_10m.items())
-                )
-                lines.append(f"- Mix fichiers (10 min) : {mix}")
-            if signals.rename_delete_ratio_10m > 0:
-                lines.append(f"- Ratio renommage/suppression (10 min) : {signals.rename_delete_ratio_10m:.2f}")
-            if signals.work_pattern_candidate:
-                lines.append(f"- Pattern de travail candidat : {signals.work_pattern_candidate}")
+            file_activity = self._format_file_activity_summary(signals)
+            if file_activity:
+                lines.append(f"- Activité fichiers : {file_activity}")
+            file_reading = self._format_file_work_reading(signals)
+            if file_reading:
+                lines.append(f"- Lecture de la session : {file_reading}")
             if signals.recent_apps:
                 lines.append(f"- Apps récentes : {', '.join(signals.recent_apps[:4])}")
 
@@ -492,37 +485,19 @@ class RuntimeOrchestrator:
                 "value": f"{signals.session_duration_min} min",
             },
         ]
-        if signals.edited_file_count_10m:
+        file_activity = self._format_file_activity_summary(signals)
+        if file_activity:
             evidence.append({
-                "kind": "edited_files",
-                "label": "Fichiers touchés (10 min)",
-                "value": str(signals.edited_file_count_10m),
+                "kind": "file_activity",
+                "label": "Activité fichiers",
+                "value": file_activity,
             })
+        file_reading = self._format_file_work_reading(signals)
+        if file_reading:
             evidence.append({
-                "kind": "file_mode",
-                "label": "Mode de travail fichiers",
-                "value": signals.dominant_file_mode,
-            })
-        if signals.file_type_mix_10m:
-            evidence.append({
-                "kind": "file_mix",
-                "label": "Mix fichiers (10 min)",
-                "value": ", ".join(
-                    f"{kind}:{count}"
-                    for kind, count in sorted(signals.file_type_mix_10m.items())
-                ),
-            })
-        if signals.rename_delete_ratio_10m > 0:
-            evidence.append({
-                "kind": "structural_changes",
-                "label": "Ratio renommage/suppression",
-                "value": f"{signals.rename_delete_ratio_10m:.2f}",
-            })
-        if signals.work_pattern_candidate:
-            evidence.append({
-                "kind": "work_pattern",
-                "label": "Pattern candidat",
-                "value": signals.work_pattern_candidate,
+                "kind": "file_reading",
+                "label": "Lecture de la session",
+                "value": file_reading,
             })
         if signals.active_file:
             evidence.append({"kind": "file", "label": "Fichier actif", "value": signals.active_file})
@@ -556,6 +531,79 @@ class RuntimeOrchestrator:
             },
         )
         return proposal
+
+    def _format_file_activity_summary(self, signals) -> str:
+        if not signals.edited_file_count_10m:
+            return ""
+
+        parts = [f"{signals.edited_file_count_10m} fichier(s) touché(s) sur 10 min"]
+        mix = self._format_file_type_mix(signals.file_type_mix_10m)
+        if mix:
+            parts.append(f"surtout {mix}")
+        return ", ".join(parts)
+
+    def _format_file_work_reading(self, signals) -> str:
+        mode = self._file_mode_label(signals.dominant_file_mode, signals.edited_file_count_10m)
+        pattern = self._work_pattern_label(signals.work_pattern_candidate)
+        structural = self._format_structural_changes(signals.rename_delete_ratio_10m)
+
+        parts = []
+        if mode:
+            parts.append(mode)
+        if pattern:
+            parts.append(pattern)
+        if structural:
+            parts.append(structural)
+        return ", ".join(parts)
+
+    def _format_file_type_mix(self, file_type_mix: dict) -> str:
+        if not file_type_mix:
+            return ""
+        ordered = sorted(file_type_mix.items(), key=lambda item: (-item[1], item[0]))
+        labels = [
+            f"{self._file_type_label(kind)} ({count})"
+            for kind, count in ordered[:3]
+            if count > 0
+        ]
+        return ", ".join(labels)
+
+    def _format_structural_changes(self, rename_delete_ratio: float) -> str:
+        if rename_delete_ratio >= 0.4:
+            return "avec changements de structure marqués"
+        if rename_delete_ratio >= 0.2:
+            return "avec quelques changements de structure"
+        return ""
+
+    def _file_mode_label(self, mode: str, edited_file_count: int) -> str:
+        if mode == "single_file":
+            return "travail concentré sur un seul fichier"
+        if mode == "few_files":
+            return f"petit lot cohérent de {edited_file_count} fichiers"
+        if mode == "multi_file":
+            return "travail réparti sur plusieurs fichiers"
+        return ""
+
+    def _work_pattern_label(self, pattern: str | None) -> str:
+        if pattern == "feature_candidate":
+            return "ça ressemble à une évolution de fonctionnalité"
+        if pattern == "refactor_candidate":
+            return "ça ressemble à un refactor"
+        if pattern == "setup_candidate":
+            return "ça ressemble à une phase de configuration"
+        if pattern == "debug_loop_candidate":
+            return "ça ressemble à une boucle de correction"
+        return ""
+
+    def _file_type_label(self, file_type: str) -> str:
+        labels = {
+            "source": "code source",
+            "test": "tests",
+            "config": "configuration",
+            "docs": "documentation",
+            "assets": "assets",
+            "other": "autres fichiers",
+        }
+        return labels.get(file_type, file_type)
 
     def _sync_memory_background(
         self,
