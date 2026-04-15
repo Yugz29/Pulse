@@ -40,43 +40,29 @@ class DecisionEngine:
                 payload=trigger_event.payload if trigger_event else None,
             )
 
-        # Copier une stacktrace pendant une phase de debug mérite une suggestion.
+        # Les signaux de debug dérivés du clipboard restent trop faibles
+        # pour justifier une émission produit autonome.
         if (
             signals.clipboard_context == "stacktrace"
             and signals.probable_task == "debug"
         ):
-            return Decision(
-                "notify",
-                2,
-                "debug_context_detected",
-                payload={"suggestion": "explain_error"},
-            )
+            return Decision("silent", 0, "debug_signal_only")
 
-        # Beaucoup de churn récent sur le même fichier.
+        # Le churn sur un fichier est un signal de contexte, pas un déclencheur direct.
         if signals.friction_score > 0.7:
-            return Decision(
-                "notify",
-                2,
-                "high_friction",
-                payload={
-                    "file": signals.active_file,
-                    "task": signals.probable_task,
-                },
-            )
+            return Decision("silent", 0, "friction_signal_only")
 
-        # Session longue puis idle -> opportunité de résumé.
+        # Longue session + idle reste insuffisant tant qu'il n'existe pas
+        # de surface produit claire pour cette suggestion.
         if (
             signals.focus_level == "idle"
             and signals.session_duration_min > 45
         ):
-            return Decision("llm", 1, "session_summary_opportunity")
+            return Decision("silent", 0, "summary_signal_only")
 
-        # Après un peu de contexte accumulé, Pulse peut proposer une injection.
-        if (
-            signals.active_project
-            and signals.session_duration_min > 10
-            and signals.focus_level in {"normal", "deep"}
-        ):
+        # Après un peu de contexte accumulé, Pulse peut proposer une injection,
+        # mais seulement sur un vrai signal de travail local et suffisamment concret.
+        if self._can_emit_context_proposal(signals, trigger_event):
             return Decision(
                 "inject_context",
                 1,
@@ -97,4 +83,20 @@ class DecisionEngine:
                 "mcp_command_received",
                 "mcp_command_requested",
             }
+        )
+
+    def _can_emit_context_proposal(
+        self, signals: Signals, trigger_event: Optional[Event]
+    ) -> bool:
+        if not trigger_event or trigger_event.type not in {
+            "file_created",
+            "file_modified",
+            "file_renamed",
+        }:
+            return False
+        return bool(
+            signals.active_project
+            and signals.active_file
+            and signals.session_duration_min > 10
+            and signals.focus_level == "normal"
         )
