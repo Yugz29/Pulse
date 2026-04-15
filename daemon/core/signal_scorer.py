@@ -274,21 +274,32 @@ class SignalScorer:
     def _detect_focus_level(
         self, recent: list, app_events: list, file_events: list, now: datetime
     ) -> str:
-        if any(event.type in {"screen_locked", "user_idle"} for event in recent[-5:]):
-            return "idle"
-
         recent_app_switches = [
             event for event in app_events if event.timestamp >= now - timedelta(minutes=10)
         ]
         recent_file_edits = [
             event for event in file_events if event.timestamp >= now - timedelta(minutes=10)
         ]
+        has_recent_idle_signal = any(event.type in {"screen_locked", "user_idle"} for event in recent[-5:])
+
+        if has_recent_idle_signal:
+            if self._has_meaningful_recent_file_activity(recent_file_edits):
+                return "normal"
+            return "idle"
 
         if len(recent_app_switches) >= 6:
             return "scattered"
         if len(recent_app_switches) <= 1 and len(recent_file_edits) >= 2:
             return "deep"
         return "normal"
+
+    def _has_meaningful_recent_file_activity(self, recent_file_edits: list) -> bool:
+        distinct_paths = {
+            event.payload.get("path")
+            for event in recent_file_edits
+            if event.payload.get("path")
+        }
+        return len(distinct_paths) >= 3 or len(recent_file_edits) >= 4
 
     def _extract_project(self, file_path: Optional[str]) -> Optional[str]:
         if not file_path:

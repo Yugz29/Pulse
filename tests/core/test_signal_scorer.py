@@ -80,6 +80,26 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(signals.focus_level, "idle")
 
+    def test_forte_activite_fichiers_empeche_idle_et_retombe_a_normal(self):
+        self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/a.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/b.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/c.py"}, minutes_ago=1)
+        self._push("user_idle", {"seconds": 420})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.focus_level, "normal")
+
+    def test_idle_reste_possible_si_activite_fichiers_est_trop_faible(self):
+        self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/a.py"}, minutes_ago=1)
+        self._push("user_idle", {"seconds": 420})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.focus_level, "idle")
+
     def test_ignore_fichiers_bruites_xcode(self):
         self._push("file_modified", {
             "path": "/Users/yugz/Projets/Pulse/Pulse/App/App.xcodeproj/project.xcworkspace/xcuserdata/yugz.xcuserdatad/UserInterfaceState.xcuserstate"
