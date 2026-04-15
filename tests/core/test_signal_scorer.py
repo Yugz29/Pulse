@@ -151,6 +151,17 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m["config"], 2)
         self.assertEqual(signals.work_pattern_candidate, "setup_candidate")
 
+    def test_reduit_other_avec_extensions_config_et_source_courantes(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/config/settings.yaml"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tsconfig.base.json"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/db/migrate.sql"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.file_type_mix_10m["config"], 2)
+        self.assertEqual(signals.file_type_mix_10m["source"], 1)
+        self.assertNotIn("other", signals.file_type_mix_10m)
+
     def test_notes_transitoire_ne_force_pas_writing_si_activite_code_forte(self):
         self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
         self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/a.py"}, minutes_ago=1)
@@ -226,6 +237,19 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
         self.assertEqual(signals.active_project, "Pulse")
         self.assertEqual(signals.edited_file_count_10m, 1)
+
+    def test_ignore_les_fichiers_techniques_pour_les_signaux_de_session(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/build.log"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/dev.sqlite"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/cache.db"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/session.db-journal"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.edited_file_count_10m, 1)
+        self.assertEqual(signals.file_type_mix_10m, {"source": 1})
 
 
 if __name__ == "__main__":

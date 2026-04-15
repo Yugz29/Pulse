@@ -312,7 +312,10 @@ class SignalScorer:
 
         if any(marker in lower_path for marker in ("/tests/", "/test/", "/spec/")):
             return "test"
-        if name.startswith("test_") or name.endswith(("_test.py", ".spec.ts", ".spec.tsx", "test.swift")):
+        if name.startswith(("test_", "spec_")) or name.endswith((
+            "_test.py", "_spec.py", ".spec.ts", ".spec.tsx", ".spec.js",
+            ".spec.jsx", ".test.ts", ".test.tsx", ".test.js", ".test.jsx", "test.swift",
+        )):
             return "test"
         if name in {
             "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
@@ -320,17 +323,25 @@ class SignalScorer:
             "cargo.toml", "cargo.lock", "go.mod", "go.sum", "package.swift",
             "podfile", "podfile.lock", "gemfile", "gemfile.lock", "makefile",
             "dockerfile", "docker-compose.yml", "docker-compose.yaml", ".env",
-            "tsconfig.json", "vite.config.ts", "vite.config.js",
+            "tsconfig.json", "tsconfig.base.json", "vite.config.ts", "vite.config.js",
+            "vite.config.mts", "vite.config.cjs", "vite.config.mjs", "jest.config.js",
+            "jest.config.ts", "vitest.config.ts", "vitest.config.js", "playwright.config.ts",
+            "playwright.config.js", ".editorconfig",
         }:
             return "config"
-        if name.endswith((".md", ".rst", ".txt")) or "/docs/" in lower_path:
+        if name.endswith((
+            ".json", ".jsonc", ".yaml", ".yml", ".toml", ".ini", ".cfg",
+            ".conf", ".plist", ".properties", ".env.local", ".env.example",
+        )):
+            return "config"
+        if name.endswith((".md", ".rst", ".txt", ".adoc")) or "/docs/" in lower_path:
             return "docs"
         if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico")):
             return "assets"
         if name.endswith((
             ".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".kt", ".java",
             ".go", ".rs", ".rb", ".php", ".c", ".h", ".cpp", ".hpp",
-            ".m", ".mm", ".cs",
+            ".m", ".mm", ".cs", ".sh", ".bash", ".zsh", ".sql",
         )):
             return "source"
         return "other"
@@ -345,6 +356,13 @@ class SignalScorer:
         if name.startswith("."):
             return False
         if name.endswith((".DS_Store", "~", ".xcuserstate")):
+            return False
+        if name.endswith((
+            ".sqlite", ".sqlite3", ".db", ".db-journal", ".db-wal", ".db-shm",
+            ".log", ".tmp", ".temp", ".swp", ".swo",
+        )):
+            return False
+        if name.endswith(("-journal", "-wal", "-shm")):
             return False
         if ".sb-" in name:
             return False

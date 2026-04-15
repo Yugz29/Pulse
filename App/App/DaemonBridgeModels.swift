@@ -157,7 +157,7 @@ struct SignalsData: Codable {
             "docs": "documentation",
             "assets": "assets",
         ]
-        let preferredOrder = ["source", "test", "config", "docs", "assets", "other"]
+        let preferredOrder = ["source", "test", "config", "docs", "assets"]
         let entries = preferredOrder.compactMap { key -> String? in
             guard let value = fileTypeMix10m[key], value > 0 else { return nil }
             return "\(labels[key] ?? key) (\(value))"

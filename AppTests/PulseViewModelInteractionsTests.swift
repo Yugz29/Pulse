@@ -532,6 +532,49 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertNil(signals.fileActivitySummary)
     }
 
+    func testSignalsDataNExposePasOtherCommeLectureUtileQuandUnTypeConcretExiste() {
+        let signals = SignalsData(
+            activeProject: "Pulse",
+            activeFile: "/tmp/main.py",
+            probableTask: "coding",
+            focusLevel: "normal",
+            frictionScore: 0.2,
+            sessionDurationMin: 12,
+            recentApps: ["Cursor"],
+            clipboardContext: nil,
+            editedFileCount10m: 7,
+            fileTypeMix10m: ["other": 5, "source": 2],
+            renameDeleteRatio10m: 0.0,
+            dominantFileMode: "few_files",
+            workPatternCandidate: nil
+        )
+
+        XCTAssertEqual(
+            signals.fileActivitySummary,
+            "7 fichier(s) touché(s) sur 10 min, surtout code source (2)"
+        )
+    }
+
+    func testSignalsDataRetombeSurUnResumeSimpleQuandLeMixResteTropGenerique() {
+        let signals = SignalsData(
+            activeProject: "Pulse",
+            activeFile: "/tmp/main.py",
+            probableTask: "general",
+            focusLevel: "normal",
+            frictionScore: 0.0,
+            sessionDurationMin: 8,
+            recentApps: ["Cursor"],
+            clipboardContext: nil,
+            editedFileCount10m: 13,
+            fileTypeMix10m: ["other": 13],
+            renameDeleteRatio10m: 0.0,
+            dominantFileMode: "multi_file",
+            workPatternCandidate: nil
+        )
+
+        XCTAssertEqual(signals.fileActivitySummary, "13 fichier(s) touché(s) sur 10 min")
+    }
+
     func testUpdateSelectedModelUsesSelectedModelAsPrimaryResponseField() async {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]

@@ -157,6 +157,48 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertIn("- Racine projet : /tmp/client-repo", snapshot)
 
+    def test_file_activity_summary_n_affiche_pas_other_comme_insight_principal(self):
+        summary = self.orchestrator._format_file_activity_summary(
+            Signals(
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                friction_score=0.2,
+                focus_level="normal",
+                session_duration_min=12,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+                edited_file_count_10m=7,
+                file_type_mix_10m={"other": 5, "source": 2},
+                rename_delete_ratio_10m=0.0,
+                dominant_file_mode="few_files",
+                work_pattern_candidate=None,
+            )
+        )
+
+        self.assertEqual(summary, "7 fichier(s) touché(s) sur 10 min, surtout code source (2)")
+
+    def test_file_activity_summary_retombe_sur_un_compte_simple_si_mix_est_trop_generique(self):
+        summary = self.orchestrator._format_file_activity_summary(
+            Signals(
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="general",
+                friction_score=0.0,
+                focus_level="normal",
+                session_duration_min=8,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+                edited_file_count_10m=13,
+                file_type_mix_10m={"other": 13},
+                rename_delete_ratio_10m=0.0,
+                dominant_file_mode="multi_file",
+                work_pattern_candidate=None,
+            )
+        )
+
+        self.assertEqual(summary, "13 fichier(s) touché(s) sur 10 min")
+
     def test_freeze_memory_uses_structured_memory_first(self):
         self.memory_store.render.return_value = "Structured memory"
 

@@ -576,7 +576,12 @@ class RuntimeOrchestrator:
     def _format_file_type_mix(self, file_type_mix: dict) -> str:
         if not file_type_mix:
             return ""
-        ordered = sorted(file_type_mix.items(), key=lambda item: (-item[1], item[0]))
+        meaningful_items = [
+            (kind, count)
+            for kind, count in file_type_mix.items()
+            if kind != "other" and count > 0
+        ]
+        ordered = sorted(meaningful_items, key=lambda item: (-item[1], item[0]))
         labels = [
             f"{self._file_type_label(kind)} ({count})"
             for kind, count in ordered[:3]
