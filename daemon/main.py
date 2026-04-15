@@ -1,4 +1,5 @@
 import atexit
+import importlib
 import logging
 import os
 import threading
@@ -13,8 +14,8 @@ from daemon.core.decision_engine import DecisionEngine
 from daemon.core.event_bus import EventBus
 from daemon.core.signal_scorer import SignalScorer
 from daemon.core.state_store import StateStore
-from daemon.llm.router import LLMRouter
 from daemon.llm.runtime import LLMRuntime
+from daemon.llm.unavailable import UnavailableLLMRouter
 from daemon.mcp.handlers import (
     configure_llm_router,
     get_available_llm_models,
@@ -45,11 +46,20 @@ log = logging.getLogger("pulse")
 
 app = Flask(__name__)
 
+
+def _build_summary_llm():
+    try:
+        router_module = importlib.import_module("daemon.llm.router")
+        return router_module.LLMRouter()
+    except Exception as exc:
+        log.warning("LLM router indisponible au démarrage: %s", exc)
+        return UnavailableLLMRouter(reason=exc)
+
 bus = EventBus()
 store = StateStore()
 scorer = SignalScorer(bus)
 decision_engine = DecisionEngine()
-summary_llm = LLMRouter()
+summary_llm = _build_summary_llm()
 configure_llm_router(summary_llm)
 session_memory = SessionMemory()
 memory_store = MemoryStore()
@@ -170,7 +180,6 @@ def get_scoring_status():
 
 bus.subscribe(store.update)
 bus.subscribe(_handle_event)
-atexit.register(_shutdown_runtime)
 
 register_runtime_routes(
     app,
@@ -225,6 +234,7 @@ register_facts_routes(
 
 
 if __name__ == "__main__":
+    atexit.register(_shutdown_runtime)
     start_mcp_server(host="127.0.0.1", port=8766)
     threading.Thread(target=_watchdog_loop, daemon=True, name="pulse-watchdog").start()
     threading.Thread(target=_deferred_startup, daemon=True, name="pulse-startup").start()

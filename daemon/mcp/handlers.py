@@ -1,11 +1,22 @@
+import importlib
 from typing import Optional
 
 from daemon.core.proposals import Proposal, proposal_store
 from daemon.interpreter.command_interpreter import CommandInterpreter
-from daemon.llm.router import LLMRouter
+from daemon.llm.unavailable import UnavailableLLMRouter
 
 interpreter = CommandInterpreter()
-llm_router = LLMRouter()
+
+
+def _build_llm_router():
+    try:
+        router_module = importlib.import_module("daemon.llm.router")
+        return router_module.LLMRouter()
+    except Exception as exc:
+        return UnavailableLLMRouter(reason=exc)
+
+
+llm_router = _build_llm_router()
 
 
 def configure_llm_router(router) -> None:

@@ -8,8 +8,13 @@ Run the full non-interactive Python suite:
 
 ```bash
 cd /path/to/Pulse
-.venv/bin/python -m unittest discover -s tests -v
+./scripts/test_all.sh
 ```
+
+This is the canonical entrypoint for daemon tests:
+- uses the project venv instead of the macOS system Python
+- fails fast if the interpreter is older than Python 3.11
+- avoids false negatives caused by running the suite with `/usr/bin/python3`
 
 What it covers:
 - command interpreter

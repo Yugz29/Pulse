@@ -7,6 +7,7 @@ _TEST_HOME = tempfile.mkdtemp(prefix="pulse-tests-home-")
 os.environ["HOME"] = _TEST_HOME
 
 import daemon.main as daemon_main
+from daemon.llm.unavailable import UnavailableLLMRouter
 
 
 class TestMainLLMModels(unittest.TestCase):
@@ -115,6 +116,13 @@ class TestMainLLMModels(unittest.TestCase):
         self.assertEqual(resume.status_code, 200)
         self.assertFalse(resume.get_json()["paused"])
         self.assertFalse(daemon_main.runtime_state.is_paused())
+
+    def test_build_summary_llm_returns_fallback_when_import_fails(self):
+        with patch("daemon.main.importlib.import_module", side_effect=ModuleNotFoundError("no llm")):
+            router = daemon_main._build_summary_llm()
+
+        self.assertIsInstance(router, UnavailableLLMRouter)
+        self.assertEqual(router.list_models(), [])
 
 
 if __name__ == "__main__":

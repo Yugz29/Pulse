@@ -44,6 +44,12 @@ def get_fact_engine() -> FactEngine:
     return _fact_engine
 
 
+def reset_fact_engine_for_tests() -> None:
+    """Réinitialise le singleton partagé pour isoler les suites de tests."""
+    global _fact_engine
+    _fact_engine = None
+
+
 MEMORY_DIR = Path.home() / ".pulse" / "memory"
 
 # Cooldown minimum entre deux rapports pour un même projet (en minutes).

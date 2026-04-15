@@ -169,10 +169,13 @@ Ajoute dans `~/.claude/settings.json` :
 
 ```bash
 cd Pulse
-./.venv/bin/python -m unittest discover -s tests -v
+./scripts/test_all.sh
 ```
 
-75 tests couvrant : moteur de faits, extractor, git diff, routes API, orchestrator, session, store.
+Le chemin standard de test force le venv local et Python 3.11+.
+Évite `python3 -m unittest ...` si ton shell pointe encore vers le Python système macOS.
+
+372 tests couvrent : moteur de faits, extractor, git diff, routes API, orchestrator, session, store.
 
 ---
 

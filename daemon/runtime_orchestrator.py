@@ -13,6 +13,7 @@ from daemon.memory.extractor import (
     load_memory_context,
     read_commit_message,
     read_head_sha,
+    reset_fact_engine_for_tests,
     update_memories_from_session,
 )
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary
@@ -683,4 +684,6 @@ class RuntimeOrchestrator:
         with self._runtime_lock:
             self._frozen_memory = None
             self._frozen_memory_at = None
+        reset_fact_engine_for_tests()
+        self._fact_engine = get_fact_engine()
         proposal_store.clear()
