@@ -62,7 +62,11 @@ et score_file, explique explicitement la différence entre classement relatif et
 """
 
 
-def build_system_prompt(context_snapshot: str, frozen_memory: str = "") -> str:
+def build_system_prompt(
+    context_snapshot: str,
+    frozen_memory: str = "",
+    user_message: str = "",
+) -> str:
     """
     Assemble le system prompt.
     - frozen_memory : mémoire persistante (injectée une seule fois)
@@ -72,9 +76,13 @@ def build_system_prompt(context_snapshot: str, frozen_memory: str = "") -> str:
     contexte ensuite (change à chaque appel).
     """
     context_block = _bounded_context_block(context_snapshot, frozen_memory)
-    context_guidance = _context_guidance_block(context_snapshot)
-    if context_guidance:
-        context_block = f"{context_block}\n\n{context_guidance}"
+    guidance_blocks = [
+        _context_guidance_block(context_snapshot),
+        _question_guidance_block(user_message),
+    ]
+    guidance = "\n\n".join(block for block in guidance_blocks if block)
+    if guidance:
+        context_block = f"{context_block}\n\n{guidance}"
     return _SYSTEM_TEMPLATE.format(context_block=context_block)
 
 
@@ -179,6 +187,42 @@ def _extract_snapshot_facts(context_snapshot: str) -> dict[str, str]:
     return facts
 
 
+def _question_guidance_block(user_message: str) -> str:
+    if not _is_present_focused_question(user_message):
+        return ""
+    return (
+        "Priorité de réponse pour cette question :\n"
+        "- Réponds d'abord depuis le travail en cours : fichier actif, activité fichiers récente, lecture de la session.\n"
+        "- Si tu proposes où regarder en premier, cite d'abord le fichier actif ou le petit groupe de fichiers récemment touchés.\n"
+        "- N'utilise le scoring global du projet qu'en second niveau, pour confirmer ou élargir, pas comme réponse principale.\n"
+        "- Si le contexte de session suffit, évite de transformer la réponse en audit global du projet."
+    )
+
+
+def _is_present_focused_question(user_message: str) -> bool:
+    text = (user_message or "").strip().lower()
+    if not text:
+        return False
+
+    present_patterns = [
+        "where should i look first",
+        "what should i focus on",
+        "what matters most right now",
+        "où regarder en premier",
+        "où regarder d'abord",
+        "où je regarde d'abord",
+        "où dois-je regarder",
+        "sur quoi je dois me concentrer",
+        "sur quoi dois-je me concentrer",
+        "qu'est-ce qui compte le plus maintenant",
+        "qu’est-ce qui compte le plus maintenant",
+        "qu'est-ce qui est le plus important maintenant",
+        "qu’est-ce qui est le plus important maintenant",
+        "que regarder en premier",
+    ]
+    return any(pattern in text for pattern in present_patterns)
+
+
 def _truncate_context_text(text: str, budget: int) -> str:
     if budget <= 0:
         return ""
@@ -227,7 +271,7 @@ def ask(
         )
         return {"ok": False, "error": "LLM non disponible", "code": "no_llm"}
 
-    system = build_system_prompt(context_snapshot, frozen_memory)
+    system = build_system_prompt(context_snapshot, frozen_memory, user_message=message.strip())
 
     try:
         response = llm.complete(
@@ -329,7 +373,7 @@ def ask_stream(
         yield _sse({"error": "LLM non disponible", "code": "no_llm"})
         return
 
-    system = build_system_prompt(context_snapshot, frozen_memory)
+    system = build_system_prompt(context_snapshot, frozen_memory, user_message=message.strip())
     provider = getattr(llm, "default", llm)  # unwrap LLMRouter → OllamaProvider
     messages: list[dict[str, str]] = []
     if system:
@@ -492,7 +536,7 @@ def ask_stream_with_tools(
         yield _sse({"error": "LLM non disponible", "code": "no_llm"})
         return
 
-    system = build_system_prompt(context_snapshot, frozen_memory)
+    system = build_system_prompt(context_snapshot, frozen_memory, user_message=message.strip())
     provider = getattr(llm, "default", llm)  # unwrap LLMRouter → OllamaProvider
 
     # Historique de conversation (système + utilisateur + résultats outils)

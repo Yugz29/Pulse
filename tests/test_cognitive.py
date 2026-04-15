@@ -141,6 +141,31 @@ class TestBuildSystemPrompt(unittest.TestCase):
         self.assertIn("utilise-les directement au lieu de redemander", prompt)
         self.assertIn("Traite les signaux dérivés comme des indices utiles", prompt)
 
+    def test_prompt_priorise_le_contexte_de_session_pour_une_question_immediate(self):
+        snapshot = "\n".join([
+            "# Contexte session",
+            "- Projet : Pulse",
+            "- Fichier actif : /tmp/main.py",
+            "- Activité fichiers : 3 fichier(s) touché(s) sur 10 min, surtout code source (2), tests (1)",
+            "- Lecture de la session : petit lot cohérent de 3 fichiers, ça ressemble à une évolution de fonctionnalité",
+        ])
+
+        prompt = build_system_prompt(
+            snapshot,
+            user_message="Where should I look first?",
+        )
+
+        self.assertIn("Priorité de réponse pour cette question", prompt)
+        self.assertIn("Réponds d'abord depuis le travail en cours", prompt)
+        self.assertIn("N'utilise le scoring global du projet qu'en second niveau", prompt)
+
+    def test_prompt_ne_force_pas_le_mode_immediat_pour_une_question_globale(self):
+        prompt = build_system_prompt(
+            "## État\n- Projet : Pulse",
+            user_message="Quels sont les hotspots du projet ?",
+        )
+        self.assertNotIn("Priorité de réponse pour cette question", prompt)
+
 
 # ── Tests ask() ───────────────────────────────────────────────────────────────
 
