@@ -27,16 +27,175 @@ struct StateResponse: Codable {
 }
 
 struct SignalsData: Codable {
+    let activeProject: String?
+    let activeFile: String?
     let probableTask: String?
     let focusLevel: String?
     let frictionScore: Double?
+    let sessionDurationMin: Int?
     let recentApps: [String]?
+    let clipboardContext: String?
+    let editedFileCount10m: Int?
+    let fileTypeMix10m: [String: Int]?
+    let renameDeleteRatio10m: Double?
+    let dominantFileMode: String?
+    let workPatternCandidate: String?
 
     enum CodingKeys: String, CodingKey {
+        case activeProject = "active_project"
+        case activeFile = "active_file"
         case probableTask = "probable_task"
         case focusLevel = "focus_level"
         case frictionScore = "friction_score"
+        case sessionDurationMin = "session_duration_min"
         case recentApps = "recent_apps"
+        case clipboardContext = "clipboard_context"
+        case editedFileCount10m = "edited_file_count_10m"
+        case fileTypeMix10m = "file_type_mix_10m"
+        case renameDeleteRatio10m = "rename_delete_ratio_10m"
+        case dominantFileMode = "dominant_file_mode"
+        case workPatternCandidate = "work_pattern_candidate"
+    }
+
+    var taskLabel: String {
+        switch probableTask {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "browsing": return "Navigation"
+        default: return "Général"
+        }
+    }
+
+    var taskAccentHex: String {
+        switch probableTask {
+        case "coding": return "#5DCAA5"
+        case "writing": return "#5E9EFF"
+        case "debug": return "#ff453a"
+        case "browsing": return "#EF9F27"
+        default: return "#7c7c80"
+        }
+    }
+
+    private var codeActivityCount: Int {
+        (fileTypeMix10m?["source"] ?? 0) + (fileTypeMix10m?["test"] ?? 0)
+    }
+
+    private var configActivityCount: Int {
+        fileTypeMix10m?["config"] ?? 0
+    }
+
+    private var docsActivityCount: Int {
+        fileTypeMix10m?["docs"] ?? 0
+    }
+
+    var taskEvidenceLabel: String {
+        if isFileDrivenTask {
+            return "ancré dans les fichiers"
+        }
+        return "contexte léger"
+    }
+
+    var taskEvidenceSummary: String {
+        if isFileDrivenTask {
+            var parts: [String] = []
+            if let fileActivitySummary, !fileActivitySummary.isEmpty {
+                parts.append(fileActivitySummary)
+            }
+            if let reading = sessionReadingSummary, !reading.isEmpty {
+                parts.append(reading)
+            }
+            return parts.joined(separator: " ")
+        }
+
+        if let latestApp = recentApps?.last, !latestApp.isEmpty {
+            return "Le libellé vient surtout de l’app récente (\(latestApp)) car l’activité fichiers reste faible."
+        }
+        return "Peu d’indices récents: Pulse garde une lecture prudente de la session."
+    }
+
+    var fileActivitySummary: String? {
+        guard let editedFileCount10m, editedFileCount10m > 0 else { return nil }
+        var parts = ["\(editedFileCount10m) fichier(s) touché(s) sur 10 min"]
+        let mixSummary = formattedFileMix
+        if !mixSummary.isEmpty {
+            parts.append("surtout \(mixSummary)")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    var sessionReadingSummary: String? {
+        var parts: [String] = []
+        if let mode = dominantFileModeLabel {
+            parts.append(mode)
+        }
+        if let pattern = workPatternLabel {
+            parts.append(pattern)
+        }
+        if let structural = structuralChangeLabel {
+            parts.append(structural)
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: ", ")
+    }
+
+    private var isFileDrivenTask: Bool {
+        if codeActivityCount >= 2 { return true }
+        if configActivityCount >= 2 { return true }
+        if docsActivityCount >= 2 { return true }
+        if let pattern = workPatternCandidate, !pattern.isEmpty { return true }
+        if let editedFileCount10m, editedFileCount10m >= 3 { return true }
+        return false
+    }
+
+    private var formattedFileMix: String {
+        guard let fileTypeMix10m else { return "" }
+        let labels: [String: String] = [
+            "source": "code source",
+            "test": "tests",
+            "config": "configuration",
+            "docs": "documentation",
+            "assets": "assets",
+        ]
+        let preferredOrder = ["source", "test", "config", "docs", "assets", "other"]
+        let entries = preferredOrder.compactMap { key -> String? in
+            guard let value = fileTypeMix10m[key], value > 0 else { return nil }
+            return "\(labels[key] ?? key) (\(value))"
+        }
+        return entries.prefix(3).joined(separator: ", ")
+    }
+
+    private var dominantFileModeLabel: String? {
+        switch dominantFileMode {
+        case "single_file":
+            return "travail concentré sur un seul fichier"
+        case "few_files":
+            return "petit lot cohérent de fichiers"
+        case "multi_file":
+            return "travail réparti sur plusieurs fichiers"
+        default:
+            return nil
+        }
+    }
+
+    private var workPatternLabel: String? {
+        switch workPatternCandidate {
+        case "feature_candidate":
+            return "ça ressemble à une évolution de fonctionnalité"
+        case "refactor_candidate":
+            return "ça ressemble à un refactor"
+        case "debug_loop_candidate":
+            return "ça ressemble à une boucle de débogage"
+        case "setup_candidate":
+            return "ça ressemble à une phase de configuration"
+        default:
+            return nil
+        }
+    }
+
+    private var structuralChangeLabel: String? {
+        guard let renameDeleteRatio10m, renameDeleteRatio10m >= 0.25 else { return nil }
+        return "avec quelques changements de structure"
     }
 }
 

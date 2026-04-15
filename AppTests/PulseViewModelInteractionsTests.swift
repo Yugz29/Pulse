@@ -472,6 +472,58 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertFalse(proposal.detailText?.contains("Contexte prêt Contexte prêt") == true)
     }
 
+    func testSignalsDataExpliqueQuandLaTacheEstAncreeDansLesFichiers() {
+        let signals = SignalsData(
+            activeProject: "Pulse",
+            activeFile: "/tmp/main.py",
+            probableTask: "coding",
+            focusLevel: "normal",
+            frictionScore: 0.2,
+            sessionDurationMin: 42,
+            recentApps: ["Notes", "Cursor"],
+            clipboardContext: "text",
+            editedFileCount10m: 5,
+            fileTypeMix10m: ["source": 3, "test": 1, "docs": 1],
+            renameDeleteRatio10m: 0.2,
+            dominantFileMode: "multi_file",
+            workPatternCandidate: "feature_candidate"
+        )
+
+        XCTAssertEqual(signals.taskLabel, "Développement")
+        XCTAssertEqual(signals.taskEvidenceLabel, "ancré dans les fichiers")
+        XCTAssertEqual(
+            signals.fileActivitySummary,
+            "5 fichier(s) touché(s) sur 10 min, surtout code source (3), tests (1), documentation (1)"
+        )
+        XCTAssertTrue(signals.taskEvidenceSummary.contains("5 fichier(s) touché(s) sur 10 min"))
+        XCTAssertTrue(signals.taskEvidenceSummary.contains("ça ressemble à une évolution de fonctionnalité"))
+    }
+
+    func testSignalsDataMarqueUnContexteFaibleQuandLesIndicesRestentLegers() {
+        let signals = SignalsData(
+            activeProject: nil,
+            activeFile: nil,
+            probableTask: "writing",
+            focusLevel: "normal",
+            frictionScore: 0.0,
+            sessionDurationMin: 4,
+            recentApps: ["Notes"],
+            clipboardContext: "text",
+            editedFileCount10m: 0,
+            fileTypeMix10m: [:],
+            renameDeleteRatio10m: 0.0,
+            dominantFileMode: "none",
+            workPatternCandidate: nil
+        )
+
+        XCTAssertEqual(signals.taskEvidenceLabel, "contexte léger")
+        XCTAssertEqual(
+            signals.taskEvidenceSummary,
+            "Le libellé vient surtout de l’app récente (Notes) car l’activité fichiers reste faible."
+        )
+        XCTAssertNil(signals.fileActivitySummary)
+    }
+
     func testUpdateSelectedModelUsesSelectedModelAsPrimaryResponseField() async {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]

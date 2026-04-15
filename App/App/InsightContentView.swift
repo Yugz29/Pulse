@@ -4,6 +4,7 @@ struct InsightView: View {
     @ObservedObject var vm: PulseViewModel
     private let eventLimit = 25
     private let proposalLimit = 4
+    private var currentSignals: SignalsData? { vm.currentSignals }
 
     private var visibleEvents: [InsightEvent] {
         Array(vm.recentEvents.suffix(eventLimit).reversed())
@@ -28,10 +29,22 @@ struct InsightView: View {
                 } else {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
-                            if !visibleProposals.isEmpty {
-                                sectionHeaderRow("Propositions récentes", count: visibleProposals.count)
+                            if let currentSignals {
+                                sectionHeader("Lecture courante")
                                     .padding(.horizontal, 18)
                                     .padding(.top, 10)
+
+                                currentInterpretationRow(currentSignals)
+                                    .padding(.horizontal, 18)
+                            }
+
+                            if !visibleProposals.isEmpty {
+                                if currentSignals != nil {
+                                    Divider().background(Color.white.opacity(0.05))
+                                }
+                                sectionHeaderRow("Propositions récentes", count: visibleProposals.count)
+                                    .padding(.horizontal, 18)
+                                    .padding(.top, currentSignals == nil ? 10 : 8)
 
                                 VStack(spacing: 0) {
                                     ForEach(visibleProposals) { proposal in
@@ -166,6 +179,51 @@ struct InsightView: View {
                     Text(detail)
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.52))
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func currentInterpretationRow(_ signals: SignalsData) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(Color(hex: signals.taskAccentHex).opacity(0.18))
+                    .frame(width: 24, height: 24)
+                Image(systemName: "waveform.path.ecg")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: signals.taskAccentHex))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(signals.taskLabel)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.78))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 8)
+
+                    Text(signals.taskEvidenceLabel)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(Color(hex: signals.taskAccentHex))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color(hex: signals.taskAccentHex).opacity(0.10))
+                        .clipShape(Capsule())
+                }
+
+                Text(signals.taskEvidenceSummary)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.52))
+                    .lineLimit(3)
+
+                if let fileActivity = signals.fileActivitySummary {
+                    Text("Activité fichiers : \(fileActivity)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.36))
                         .lineLimit(2)
                 }
             }

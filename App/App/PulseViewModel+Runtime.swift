@@ -94,6 +94,7 @@ private extension PulseViewModel {
         activeApp = state.activeApp
         sessionDuration = state.sessionDurationMin
         activeFile = state.activeFile
+        currentSignals = state.signals
         if let sig = state.signals {
             probableTask = sig.probableTask ?? "general"
             focusLevel = sig.focusLevel ?? "normal"
