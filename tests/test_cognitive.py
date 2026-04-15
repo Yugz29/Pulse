@@ -118,6 +118,29 @@ class TestBuildSystemPrompt(unittest.TestCase):
         message = log.warning.call_args[0][0]
         self.assertIn("llm_context_truncated", message)
 
+    def test_prompt_met_en_avant_les_reperes_de_contexte_courants(self):
+        snapshot = "\n".join([
+            "# Contexte session",
+            "- Projet : Pulse",
+            "- Fichier actif : /tmp/main.py",
+            "- Tâche probable : coding",
+            "- Activité fichiers : 4 fichier(s) touché(s) sur 10 min, surtout code source (3), tests (1)",
+            "- Lecture de la session : petit lot cohérent de 4 fichiers, ça ressemble à une évolution de fonctionnalité",
+        ])
+
+        prompt = build_system_prompt(snapshot)
+
+        self.assertIn("Repères de contexte à privilégier", prompt)
+        self.assertIn("Projet courant à privilégier : Pulse", prompt)
+        self.assertIn("Fichier actif à considérer en premier : /tmp/main.py", prompt)
+        self.assertIn("Activité récente utile : 4 fichier(s) touché(s)", prompt)
+        self.assertIn("Lecture prudente de la session : petit lot cohérent de 4 fichiers", prompt)
+
+    def test_prompt_demande_de_ne_pas_reposer_les_questions_deja_visibles(self):
+        prompt = build_system_prompt("## État\n- Projet : Pulse")
+        self.assertIn("utilise-les directement au lieu de redemander", prompt)
+        self.assertIn("Traite les signaux dérivés comme des indices utiles", prompt)
+
 
 # ── Tests ask() ───────────────────────────────────────────────────────────────
 

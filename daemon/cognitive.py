@@ -34,6 +34,10 @@ apps utilisées, signaux de focus et de friction, et ta mémoire persistante.
 Règles générales :
 - Réponds toujours en français, de façon concise et directe.
 - Appuie-toi sur le contexte fourni quand c'est pertinent.
+- Quand le projet, le fichier actif ou l'activité en cours sont déjà visibles dans le contexte, utilise-les directement au lieu de redemander ces informations.
+- Si la question est liée au travail en cours, commence par l'ancrer brièvement dans le contexte actuel avant d'élargir.
+- Traite les signaux dérivés comme des indices utiles, pas comme des certitudes. Utilise des formulations prudentes comme "je vois", "tu sembles", "ça ressemble à".
+- N'insiste pas sur le contexte si la question est manifestement générale ou hors du travail courant.
 - Si tu ne sais pas, dis-le clairement plutôt que d'inventer.
 - Texte brut uniquement : pas de markdown. Pas d'astérisques, pas de dièses \
 en début de ligne, pas de backticks. Utilise des tirets simples pour les listes.
@@ -68,6 +72,9 @@ def build_system_prompt(context_snapshot: str, frozen_memory: str = "") -> str:
     contexte ensuite (change à chaque appel).
     """
     context_block = _bounded_context_block(context_snapshot, frozen_memory)
+    context_guidance = _context_guidance_block(context_snapshot)
+    if context_guidance:
+        context_block = f"{context_block}\n\n{context_guidance}"
     return _SYSTEM_TEMPLATE.format(context_block=context_block)
 
 
@@ -129,6 +136,47 @@ def _bounded_context_block(context_snapshot: str, frozen_memory: str = "") -> st
     if snapshot:
         parts.append(snapshot)
     return "\n\n".join(parts) if parts else "(aucun contexte disponible)"
+
+
+def _context_guidance_block(context_snapshot: str) -> str:
+    facts = _extract_snapshot_facts(context_snapshot)
+    hints: list[str] = []
+
+    project = facts.get("Projet")
+    if project and project != "non détecté":
+        hints.append(f"- Projet courant à privilégier : {project}")
+
+    active_file = facts.get("Fichier actif")
+    if active_file and active_file != "aucun":
+        hints.append(f"- Fichier actif à considérer en premier : {active_file}")
+
+    activity = facts.get("Activité fichiers")
+    if activity:
+        hints.append(f"- Activité récente utile : {activity}")
+
+    reading = facts.get("Lecture de la session")
+    if reading:
+        hints.append(f"- Lecture prudente de la session : {reading}")
+
+    task = facts.get("Tâche probable")
+    if task and task != "general":
+        hints.append(f"- Tâche de travail probable : {task}")
+
+    if not hints:
+        return ""
+
+    return "Repères de contexte à privilégier :\n" + "\n".join(hints)
+
+
+def _extract_snapshot_facts(context_snapshot: str) -> dict[str, str]:
+    facts: dict[str, str] = {}
+    for raw_line in context_snapshot.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("- ") or " : " not in line:
+            continue
+        label, value = line[2:].split(" : ", 1)
+        facts[label.strip()] = value.strip()
+    return facts
 
 
 def _truncate_context_text(text: str, budget: int) -> str:
