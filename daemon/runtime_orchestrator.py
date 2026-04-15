@@ -188,6 +188,19 @@ class RuntimeOrchestrator:
                 f"- Tâche probable : {signals.probable_task}",
                 f"- Focus : {signals.focus_level}",
             ]
+            if signals.edited_file_count_10m:
+                lines.append(f"- Fichiers touchés (10 min) : {signals.edited_file_count_10m}")
+                lines.append(f"- Mode de travail fichiers : {signals.dominant_file_mode}")
+            if signals.file_type_mix_10m:
+                mix = ", ".join(
+                    f"{kind}:{count}"
+                    for kind, count in sorted(signals.file_type_mix_10m.items())
+                )
+                lines.append(f"- Mix fichiers (10 min) : {mix}")
+            if signals.rename_delete_ratio_10m > 0:
+                lines.append(f"- Ratio renommage/suppression (10 min) : {signals.rename_delete_ratio_10m:.2f}")
+            if signals.work_pattern_candidate:
+                lines.append(f"- Pattern de travail candidat : {signals.work_pattern_candidate}")
             if signals.recent_apps:
                 lines.append(f"- Apps récentes : {', '.join(signals.recent_apps[:4])}")
 
@@ -478,6 +491,38 @@ class RuntimeOrchestrator:
                 "value": f"{signals.session_duration_min} min",
             },
         ]
+        if signals.edited_file_count_10m:
+            evidence.append({
+                "kind": "edited_files",
+                "label": "Fichiers touchés (10 min)",
+                "value": str(signals.edited_file_count_10m),
+            })
+            evidence.append({
+                "kind": "file_mode",
+                "label": "Mode de travail fichiers",
+                "value": signals.dominant_file_mode,
+            })
+        if signals.file_type_mix_10m:
+            evidence.append({
+                "kind": "file_mix",
+                "label": "Mix fichiers (10 min)",
+                "value": ", ".join(
+                    f"{kind}:{count}"
+                    for kind, count in sorted(signals.file_type_mix_10m.items())
+                ),
+            })
+        if signals.rename_delete_ratio_10m > 0:
+            evidence.append({
+                "kind": "structural_changes",
+                "label": "Ratio renommage/suppression",
+                "value": f"{signals.rename_delete_ratio_10m:.2f}",
+            })
+        if signals.work_pattern_candidate:
+            evidence.append({
+                "kind": "work_pattern",
+                "label": "Pattern candidat",
+                "value": signals.work_pattern_candidate,
+            })
         if signals.active_file:
             evidence.append({"kind": "file", "label": "Fichier actif", "value": signals.active_file})
 
@@ -500,6 +545,11 @@ class RuntimeOrchestrator:
                     "focus_level": signals.focus_level,
                     "session_duration_min": signals.session_duration_min,
                     "active_file": signals.active_file,
+                    "edited_file_count_10m": signals.edited_file_count_10m,
+                    "file_type_mix_10m": dict(signals.file_type_mix_10m),
+                    "rename_delete_ratio_10m": signals.rename_delete_ratio_10m,
+                    "dominant_file_mode": signals.dominant_file_mode,
+                    "work_pattern_candidate": signals.work_pattern_candidate,
                     "decision_payload": payload,
                 },
             },

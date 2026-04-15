@@ -30,6 +30,9 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
         self.assertEqual(signals.probable_task, "coding")
         self.assertEqual(signals.clipboard_context, "code")
+        self.assertEqual(signals.edited_file_count_10m, 1)
+        self.assertEqual(signals.file_type_mix_10m["source"], 1)
+        self.assertEqual(signals.dominant_file_mode, "single_file")
 
     def test_detecte_debug_si_stacktrace(self):
         self._push("app_activated", {"app_name": "Terminal"})
@@ -88,6 +91,43 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/App/App/SystemObserver.swift")
+
+    def test_derive_file_type_mix_and_feature_candidate(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/tests/test_main.py"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/README.md"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.edited_file_count_10m, 3)
+        self.assertEqual(signals.file_type_mix_10m["source"], 1)
+        self.assertEqual(signals.file_type_mix_10m["test"], 1)
+        self.assertEqual(signals.file_type_mix_10m["docs"], 1)
+        self.assertEqual(signals.dominant_file_mode, "few_files")
+        self.assertEqual(signals.work_pattern_candidate, "feature_candidate")
+
+    def test_detecte_refactor_candidate_avec_renommages(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/a.py"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/b.py"})
+        self._push("file_renamed", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/c.py"})
+        self._push("file_deleted", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/d.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.edited_file_count_10m, 4)
+        self.assertGreaterEqual(signals.rename_delete_ratio_10m, 0.5)
+        self.assertEqual(signals.dominant_file_mode, "few_files")
+        self.assertEqual(signals.work_pattern_candidate, "refactor_candidate")
+
+    def test_detecte_setup_candidate_sur_fichiers_config(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/package.json"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/pyproject.toml"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/.env"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.file_type_mix_10m["config"], 2)
+        self.assertEqual(signals.work_pattern_candidate, "setup_candidate")
 
 
 if __name__ == "__main__":

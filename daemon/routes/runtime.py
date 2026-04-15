@@ -51,6 +51,11 @@ def register_runtime_routes(
                 "session_duration_min": signals.session_duration_min,
                 "recent_apps": signals.recent_apps,
                 "clipboard_context": signals.clipboard_context,
+                "edited_file_count_10m": signals.edited_file_count_10m,
+                "file_type_mix_10m": signals.file_type_mix_10m,
+                "rename_delete_ratio_10m": signals.rename_delete_ratio_10m,
+                "dominant_file_mode": signals.dominant_file_mode,
+                "work_pattern_candidate": signals.work_pattern_candidate,
             }
         if decision:
             state["decision"] = {

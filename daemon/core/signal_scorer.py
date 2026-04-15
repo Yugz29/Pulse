@@ -1,7 +1,7 @@
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .event_bus import EventBus
 
@@ -16,6 +16,11 @@ class Signals:
     session_duration_min: int
     recent_apps: List[str]
     clipboard_context: Optional[str]
+    edited_file_count_10m: int = 0
+    file_type_mix_10m: Dict[str, int] = field(default_factory=dict)
+    rename_delete_ratio_10m: float = 0.0
+    dominant_file_mode: str = "none"
+    work_pattern_candidate: Optional[str] = None
 
 
 class SignalScorer:
@@ -59,6 +64,18 @@ class SignalScorer:
         friction_score = self._compute_friction(file_events, clipboard_events, now)
         probable_task = self._detect_task(recent_apps, clipboard_context, friction_score)
         focus_level = self._detect_focus_level(recent, app_events, file_events, now)
+        recent_file_events = self._recent_file_events(file_events, now)
+        edited_file_count_10m = self._edited_file_count_10m(recent_file_events)
+        file_type_mix_10m = self._file_type_mix_10m(recent_file_events)
+        rename_delete_ratio_10m = self._rename_delete_ratio_10m(recent_file_events)
+        dominant_file_mode = self._dominant_file_mode(recent_file_events)
+        work_pattern_candidate = self._work_pattern_candidate(
+            file_type_mix=file_type_mix_10m,
+            edited_file_count=edited_file_count_10m,
+            rename_delete_ratio=rename_delete_ratio_10m,
+            dominant_file_mode=dominant_file_mode,
+            friction_score=friction_score,
+        )
 
         return Signals(
             active_project=active_project,
@@ -69,6 +86,11 @@ class SignalScorer:
             session_duration_min=int((now - self._session_start).total_seconds() / 60),
             recent_apps=recent_apps,
             clipboard_context=clipboard_context,
+            edited_file_count_10m=edited_file_count_10m,
+            file_type_mix_10m=file_type_mix_10m,
+            rename_delete_ratio_10m=rename_delete_ratio_10m,
+            dominant_file_mode=dominant_file_mode,
+            work_pattern_candidate=work_pattern_candidate,
         )
 
     def _file_event_types(self) -> set[str]:
@@ -121,6 +143,76 @@ class SignalScorer:
 
         return round(friction, 2)
 
+    def _recent_file_events(self, file_events: list, now: datetime) -> list:
+        recent_window = now - timedelta(minutes=10)
+        return [event for event in file_events if event.timestamp >= recent_window]
+
+    def _edited_file_count_10m(self, recent_file_events: list) -> int:
+        paths = {
+            event.payload.get("path")
+            for event in recent_file_events
+            if event.payload.get("path")
+        }
+        return len(paths)
+
+    def _file_type_mix_10m(self, recent_file_events: list) -> Dict[str, int]:
+        mix: Counter[str] = Counter()
+        for event in recent_file_events:
+            path = event.payload.get("path")
+            if not path:
+                continue
+            mix[self._classify_file_type(path)] += 1
+        return dict(mix)
+
+    def _rename_delete_ratio_10m(self, recent_file_events: list) -> float:
+        if not recent_file_events:
+            return 0.0
+        structural = sum(
+            1
+            for event in recent_file_events
+            if event.type in {"file_renamed", "file_deleted"}
+        )
+        return round(structural / len(recent_file_events), 2)
+
+    def _dominant_file_mode(self, recent_file_events: list) -> str:
+        paths = [
+            event.payload.get("path")
+            for event in recent_file_events
+            if event.payload.get("path")
+        ]
+        distinct_count = len(set(paths))
+        if distinct_count == 0:
+            return "none"
+        if distinct_count == 1:
+            return "single_file"
+        if distinct_count <= 4:
+            return "few_files"
+        return "multi_file"
+
+    def _work_pattern_candidate(
+        self,
+        *,
+        file_type_mix: Dict[str, int],
+        edited_file_count: int,
+        rename_delete_ratio: float,
+        dominant_file_mode: str,
+        friction_score: float,
+    ) -> Optional[str]:
+        source_count = file_type_mix.get("source", 0)
+        test_count = file_type_mix.get("test", 0)
+        config_count = file_type_mix.get("config", 0)
+        docs_count = file_type_mix.get("docs", 0)
+
+        if config_count >= 2 and config_count >= source_count + test_count:
+            return "setup_candidate"
+        if source_count >= 2 and edited_file_count >= 4 and rename_delete_ratio >= 0.25:
+            return "refactor_candidate"
+        if source_count >= 1 and edited_file_count >= 3 and (test_count >= 1 or docs_count >= 1):
+            return "feature_candidate"
+        if dominant_file_mode == "single_file" and friction_score >= 0.5 and (source_count + test_count) >= 1:
+            return "debug_loop_candidate"
+        return None
+
     def _detect_task(
         self, recent_apps: List[str], clipboard_context: Optional[str], friction_score: float
     ) -> str:
@@ -166,6 +258,35 @@ class SignalScorer:
                 if idx + 1 < len(parts):
                     return parts[idx + 1]
         return None
+
+    def _classify_file_type(self, path: str) -> str:
+        lower_path = path.lower()
+        name = lower_path.split("/")[-1]
+
+        if any(marker in lower_path for marker in ("/tests/", "/test/", "/spec/")):
+            return "test"
+        if name.startswith("test_") or name.endswith(("_test.py", ".spec.ts", ".spec.tsx", "test.swift")):
+            return "test"
+        if name in {
+            "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+            "pyproject.toml", "requirements.txt", "poetry.lock", "pipfile", "pipfile.lock",
+            "cargo.toml", "cargo.lock", "go.mod", "go.sum", "package.swift",
+            "podfile", "podfile.lock", "gemfile", "gemfile.lock", "makefile",
+            "dockerfile", "docker-compose.yml", "docker-compose.yaml", ".env",
+            "tsconfig.json", "vite.config.ts", "vite.config.js",
+        }:
+            return "config"
+        if name.endswith((".md", ".rst", ".txt")) or "/docs/" in lower_path:
+            return "docs"
+        if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico")):
+            return "assets"
+        if name.endswith((
+            ".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".kt", ".java",
+            ".go", ".rs", ".rb", ".php", ".c", ".h", ".cpp", ".hpp",
+            ".m", ".mm", ".cs",
+        )):
+            return "source"
+        return "other"
 
     def _is_meaningful_file_path(self, path: Optional[str]) -> bool:
         if not path:

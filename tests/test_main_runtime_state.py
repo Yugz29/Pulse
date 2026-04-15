@@ -29,6 +29,11 @@ class TestMainRuntimeState(unittest.TestCase):
             session_duration_min=96,
             recent_apps=["Xcode", "Codex", "Safari"],
             clipboard_context="text",
+            edited_file_count_10m=4,
+            file_type_mix_10m={"source": 2, "test": 1, "docs": 1},
+            rename_delete_ratio_10m=0.25,
+            dominant_file_mode="few_files",
+            work_pattern_candidate="feature_candidate",
         )
         decision = Decision(
             action="notify",
@@ -51,6 +56,10 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(payload["active_app"], "Xcode")
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["probable_task"], "coding")
+        self.assertEqual(payload["signals"]["edited_file_count_10m"], 4)
+        self.assertEqual(payload["signals"]["file_type_mix_10m"]["source"], 2)
+        self.assertEqual(payload["signals"]["dominant_file_mode"], "few_files")
+        self.assertEqual(payload["signals"]["work_pattern_candidate"], "feature_candidate")
         self.assertEqual(payload["decision"]["action"], "notify")
         self.assertEqual(payload["decision"]["payload"]["file"], "PanelView.swift")
 

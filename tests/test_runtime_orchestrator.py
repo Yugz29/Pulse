@@ -78,6 +78,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 session_duration_min=96,
                 recent_apps=["Xcode", "Codex"],
                 clipboard_context="text",
+                edited_file_count_10m=5,
+                file_type_mix_10m={"source": 3, "test": 1, "docs": 1},
+                rename_delete_ratio_10m=0.2,
+                dominant_file_mode="multi_file",
+                work_pattern_candidate="feature_candidate",
             ),
             decision=Decision(
                 action="notify",
@@ -93,6 +98,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("# Contexte session", snapshot)
         self.assertIn("- Projet : Pulse", snapshot)
         self.assertIn("- Tâche probable : coding", snapshot)
+        self.assertIn("- Fichiers touchés (10 min) : 5", snapshot)
+        self.assertIn("- Mode de travail fichiers : multi_file", snapshot)
+        self.assertIn("- Pattern de travail candidat : feature_candidate", snapshot)
 
     def test_freeze_memory_uses_structured_memory_first(self):
         self.memory_store.render.return_value = "Structured memory"
@@ -310,6 +318,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             session_duration_min=25,
             recent_apps=["Xcode"],
             clipboard_context="text",
+            edited_file_count_10m=4,
+            file_type_mix_10m={"source": 2, "test": 1, "docs": 1},
+            rename_delete_ratio_10m=0.0,
+            dominant_file_mode="few_files",
+            work_pattern_candidate="feature_candidate",
         )
         decision = Decision(
             action="inject_context",
@@ -332,6 +345,10 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             [entry["status"] for entry in proposal.lifecycle],
             ["created", "pending", "executed"],
         )
+        evidence_by_label = {entry["label"]: entry["value"] for entry in proposal.evidence}
+        self.assertEqual(evidence_by_label["Fichiers touchés (10 min)"], "4")
+        self.assertEqual(evidence_by_label["Mode de travail fichiers"], "few_files")
+        self.assertEqual(evidence_by_label["Pattern candidat"], "feature_candidate")
         _, runtime_decision = self.runtime_state.get_context_snapshot()
         self.assertEqual(runtime_decision.action, "inject_context")
         self.assertIn("proposal_id", runtime_decision.payload)
@@ -346,6 +363,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             session_duration_min=25,
             recent_apps=["Xcode"],
             clipboard_context="text",
+            edited_file_count_10m=4,
+            file_type_mix_10m={"source": 2, "test": 1, "docs": 1},
+            rename_delete_ratio_10m=0.0,
+            dominant_file_mode="few_files",
+            work_pattern_candidate="feature_candidate",
         )
         decision = Decision(
             action="inject_context",
