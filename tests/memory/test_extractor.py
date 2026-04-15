@@ -33,12 +33,17 @@ class TestExtractor(unittest.TestCase):
         extractor_module._last_report_at.clear()
         extractor_module._cooldown_loaded = False
         extractor_module.reset_fact_engine_for_tests()
+        extractor_module._fact_engine = extractor_module.FactEngine(
+            db_path=Path(self.tmpdir.name) / "facts.db",
+            md_path=Path(self.tmpdir.name) / "facts.md",
+        )
         # Redirige cooldown.json vers un fichier temporaire isolé
         # pour éviter que le vrai ~/.pulse/cooldown.json ne bloque les tests
         self._orig_cooldown_file = extractor_module._COOLDOWN_FILE
         extractor_module._COOLDOWN_FILE = Path(self.tmpdir.name) / "cooldown.json"
 
     def tearDown(self):
+        extractor_module.reset_fact_engine_for_tests()
         extractor_module._COOLDOWN_FILE = self._orig_cooldown_file
         self.tmpdir.cleanup()
 
