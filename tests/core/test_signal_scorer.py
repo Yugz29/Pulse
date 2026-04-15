@@ -129,6 +129,44 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m["config"], 2)
         self.assertEqual(signals.work_pattern_candidate, "setup_candidate")
 
+    def test_notes_transitoire_ne_force_pas_writing_si_activite_code_forte(self):
+        self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/a.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/b.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/tests/test_a.py"}, minutes_ago=1)
+        self._push("app_activated", {"app_name": "Notes"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_activite_code_multi_fichiers_promeut_coding_meme_sans_app_dev(self):
+        self._push("app_activated", {"app_name": "Notes"}, minutes_ago=3)
+        for index in range(8):
+            self._push(
+                "file_modified",
+                {"path": f"/Users/yugz/Projets/Pulse/Pulse/daemon/module_{index}.py"},
+                minutes_ago=1,
+            )
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.edited_file_count_10m, 8)
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_general_reste_fallback_si_activite_est_trop_faible(self):
+        self._push("app_activated", {"app_name": "Notes"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.probable_task, "writing")
+        self.bus._queue.clear()
+
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/misc/data.json"})
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.probable_task, "general")
+
 
 if __name__ == "__main__":
     unittest.main()

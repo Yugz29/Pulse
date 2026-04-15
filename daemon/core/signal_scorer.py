@@ -61,14 +61,12 @@ class SignalScorer:
         ]
         clipboard_context = self._last_clipboard_context(clipboard_events)
 
-        friction_score = self._compute_friction(file_events, clipboard_events, now)
-        probable_task = self._detect_task(recent_apps, clipboard_context, friction_score)
-        focus_level = self._detect_focus_level(recent, app_events, file_events, now)
         recent_file_events = self._recent_file_events(file_events, now)
         edited_file_count_10m = self._edited_file_count_10m(recent_file_events)
         file_type_mix_10m = self._file_type_mix_10m(recent_file_events)
         rename_delete_ratio_10m = self._rename_delete_ratio_10m(recent_file_events)
         dominant_file_mode = self._dominant_file_mode(recent_file_events)
+        friction_score = self._compute_friction(file_events, clipboard_events, now)
         work_pattern_candidate = self._work_pattern_candidate(
             file_type_mix=file_type_mix_10m,
             edited_file_count=edited_file_count_10m,
@@ -76,6 +74,16 @@ class SignalScorer:
             dominant_file_mode=dominant_file_mode,
             friction_score=friction_score,
         )
+        probable_task = self._detect_task(
+            recent_apps=recent_apps,
+            clipboard_context=clipboard_context,
+            friction_score=friction_score,
+            edited_file_count=edited_file_count_10m,
+            file_type_mix=file_type_mix_10m,
+            dominant_file_mode=dominant_file_mode,
+            work_pattern_candidate=work_pattern_candidate,
+        )
+        focus_level = self._detect_focus_level(recent, app_events, file_events, now)
 
         return Signals(
             active_project=active_project,
@@ -214,18 +222,53 @@ class SignalScorer:
         return None
 
     def _detect_task(
-        self, recent_apps: List[str], clipboard_context: Optional[str], friction_score: float
+        self,
+        *,
+        recent_apps: List[str],
+        clipboard_context: Optional[str],
+        friction_score: float,
+        edited_file_count: int,
+        file_type_mix: Dict[str, int],
+        dominant_file_mode: str,
+        work_pattern_candidate: Optional[str],
     ) -> str:
         active_set = set(recent_apps)
+        latest_app = recent_apps[-1] if recent_apps else None
+        source_count = file_type_mix.get("source", 0)
+        test_count = file_type_mix.get("test", 0)
+        config_count = file_type_mix.get("config", 0)
+        docs_count = file_type_mix.get("docs", 0)
+        code_file_activity = source_count + test_count
+        coding_patterns = {"feature_candidate", "refactor_candidate", "debug_loop_candidate", "setup_candidate"}
+        strong_coding_evidence = (
+            code_file_activity >= 2
+            or work_pattern_candidate in coding_patterns
+            or (
+                edited_file_count >= 3
+                and dominant_file_mode in {"few_files", "multi_file"}
+                and (code_file_activity >= 1 or config_count >= 2)
+            )
+        )
+        strong_writing_evidence = (
+            docs_count >= 2
+            and code_file_activity == 0
+            and config_count == 0
+        )
 
         if clipboard_context == "stacktrace" or friction_score >= 0.75:
             return "debug"
-        if active_set & self.DEV_APPS:
+        if strong_coding_evidence:
             return "coding"
-        if active_set & self.WRITING_APPS:
+        if strong_writing_evidence:
             return "writing"
-        if active_set & self.BROWSER_APPS:
+        if latest_app in self.DEV_APPS and edited_file_count >= 1:
+            return "coding"
+        if latest_app in self.WRITING_APPS and edited_file_count == 0:
+            return "writing"
+        if latest_app in self.BROWSER_APPS and edited_file_count == 0:
             return "browsing"
+        if active_set & self.DEV_APPS and edited_file_count >= 1:
+            return "coding"
         return "general"
 
     def _detect_focus_level(
