@@ -63,7 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				0EE47B502F843C4100D67CA3 /* App */,
-				7A2F10052F843C4100D67CA3 /* AppTests */,
+				7A2F10052F843C4100D67CA3 /* ../AppTests */,
 				0EE47B4F2F843C4100D67CA3 /* Products */,
 				7A2F10002F843C4100D67CA3 /* XCTest.framework */,
 			);
@@ -78,7 +78,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		7A2F10052F843C4100D67CA3 /* AppTests */ = {
+		7A2F10052F843C4100D67CA3 /* ../AppTests */ = {
 			isa = PBXGroup;
 			children = (
 				7A2F10132F843C4100D67CA3 /* DaemonBridgeLLMTests.swift */,
@@ -417,7 +417,7 @@
 				DEVELOPMENT_TEAM = LC2LK3JKDQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				PRODUCT_BUNDLE_IDENTIFIER = "yugz.AppTests";
+				PRODUCT_BUNDLE_IDENTIFIER = yugz.AppTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -437,7 +437,7 @@
 				DEVELOPMENT_TEAM = LC2LK3JKDQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				PRODUCT_BUNDLE_IDENTIFIER = "yugz.AppTests";
+				PRODUCT_BUNDLE_IDENTIFIER = yugz.AppTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
