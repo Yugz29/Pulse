@@ -29,7 +29,7 @@ extension PulseViewModel {
                         self.refreshState()
                     }
 
-                    if self.panelMode == .insight && self.isExpanded && tick % 4 == 0 {
+                    if (self.panelMode == .insight || self.panelMode == .currentState) && self.isExpanded && tick % 4 == 0 {
                         self.refreshInsights()
                     }
 

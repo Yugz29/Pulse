@@ -62,6 +62,8 @@ final class PulseViewModel: ObservableObject {
         switch panelMode {
         case .chat:
             return NotchWindow.chatHeight
+        case .currentState:
+            return NotchWindow.currentStateHeight
         case .insight:
             return NotchWindow.insightHeight
         case .settings:

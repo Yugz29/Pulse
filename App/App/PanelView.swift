@@ -84,6 +84,8 @@ struct NotchRootView: View {
                             switch vm.panelMode {
                             case .chat:
                                 ChatView(vm: vm)
+                            case .currentState:
+                                CurrentStateView(vm: vm)
                             case .insight:
                                 InsightView(vm: vm)
                             case .settings:

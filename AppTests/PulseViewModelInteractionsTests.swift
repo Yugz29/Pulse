@@ -324,6 +324,14 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.recentProposals[0].displayTitle, "Contexte de session prêt à être injecté")
     }
 
+    func testCurrentStateModeUsesDedicatedPanelHeight() {
+        let vm = PulseViewModel()
+
+        vm.panelMode = .currentState
+
+        XCTAssertEqual(vm.currentPanelHeight, NotchWindow.currentStateHeight)
+    }
+
     func testStartMcpPollingDeclencheLeRappelQuandLeDaemonRevient() async {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]

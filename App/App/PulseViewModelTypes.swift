@@ -10,6 +10,7 @@ struct ChatMessage: Identifiable {
 enum PanelMode {
     case dashboard
     case chat
+    case currentState
     case insight
     case settings
     case status

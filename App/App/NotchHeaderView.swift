@@ -57,6 +57,8 @@ struct NotchExpandedHeader: View {
             return "Services"
         case .chat:
             return "Pulse"
+        case .currentState:
+            return "Maintenant"
         case .insight:
             return "Observation"
         default:
@@ -90,6 +92,24 @@ struct NotchExpandedHeader: View {
             .position(x: (geometryWidth - panelWidth) / 2 + 32, y: notchHeight / 2)
 
             NotchHeaderButton(
+                systemName: "waveform.path.ecg",
+                size: 11,
+                baseOpacity: vm.panelMode == .currentState ? 0.95 : 0.42,
+                hoverOpacity: 0.95,
+                baseBackgroundOpacity: vm.panelMode == .currentState ? 0.14 : 0.03,
+                hoverBackgroundOpacity: 0.14,
+                baseStrokeOpacity: vm.panelMode == .currentState ? 0.24 : 0.06,
+                hoverStrokeOpacity: 0.24,
+                hoverScale: 1.0,
+                foregroundColor: .white,
+                action: {
+                    vm.switchMode(.currentState)
+                    if vm.panelMode == .currentState { vm.refreshInsights() }
+                }
+            )
+            .position(x: (geometryWidth - panelWidth) / 2 + 60, y: notchHeight / 2)
+
+            NotchHeaderButton(
                 systemName: vm.panelMode == .insight ? "eye.fill" : "eye",
                 size: 11,
                 baseOpacity: 0.42,
@@ -105,7 +125,7 @@ struct NotchExpandedHeader: View {
                     if vm.panelMode == .insight { vm.refreshInsights() }
                 }
             )
-            .position(x: (geometryWidth - panelWidth) / 2 + 60, y: notchHeight / 2)
+            .position(x: (geometryWidth - panelWidth) / 2 + 88, y: notchHeight / 2)
 
             NotchHeaderButton(
                 systemName: "gearshape.fill",
@@ -136,7 +156,7 @@ struct NotchExpandedHeader: View {
                     foregroundColor: .white,
                     action: { vm.closeChat() }
                 )
-                .position(x: (geometryWidth - panelWidth) / 2 + 88, y: notchHeight / 2)
+                .position(x: (geometryWidth - panelWidth) / 2 + 116, y: notchHeight / 2)
             }
         }
         .frame(width: geometryWidth, height: notchHeight)

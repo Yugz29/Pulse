@@ -3,24 +3,18 @@ import SwiftUI
 struct InsightView: View {
     @ObservedObject var vm: PulseViewModel
     private let eventLimit = 25
-    private let proposalLimit = 4
-    private var currentSignals: SignalsData? { vm.currentSignals }
 
     private var visibleEvents: [InsightEvent] {
         Array(vm.recentEvents.suffix(eventLimit).reversed())
     }
 
-    private var visibleProposals: [ProposalRecord] {
-        Array(vm.recentProposals.prefix(proposalLimit))
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                if visibleProposals.isEmpty && visibleEvents.isEmpty {
+                if visibleEvents.isEmpty {
                     HStack {
                         Spacer()
-                        Text("Aucune activité ni proposition récente")
+                        Text("Aucune activité récente")
                             .font(.system(size: 11))
                             .foregroundColor(.white.opacity(0.22))
                         Spacer()
@@ -29,52 +23,19 @@ struct InsightView: View {
                 } else {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
-                            if let currentSignals {
-                                sectionHeader("Lecture courante")
-                                    .padding(.horizontal, 18)
-                                    .padding(.top, 10)
+                            sectionHeaderRow("Activité récente", count: visibleEvents.count)
+                                .padding(.horizontal, 18)
+                                .padding(.top, 10)
 
-                                currentInterpretationRow(currentSignals)
-                                    .padding(.horizontal, 18)
-                            }
-
-                            if !visibleProposals.isEmpty {
-                                if currentSignals != nil {
-                                    Divider().background(Color.white.opacity(0.05))
-                                }
-                                sectionHeaderRow("Propositions récentes", count: visibleProposals.count)
-                                    .padding(.horizontal, 18)
-                                    .padding(.top, currentSignals == nil ? 10 : 8)
-
-                                VStack(spacing: 0) {
-                                    ForEach(visibleProposals) { proposal in
-                                        proposalRow(proposal)
-                                        if proposal.id != visibleProposals.last?.id {
-                                            Divider().background(Color.white.opacity(0.05))
-                                        }
+                            VStack(spacing: 0) {
+                                ForEach(visibleEvents) { event in
+                                    activityRow(event)
+                                    if event.id != visibleEvents.last?.id {
+                                        Divider().background(Color.white.opacity(0.05))
                                     }
                                 }
-                                .padding(.horizontal, 18)
                             }
-
-                            if !visibleEvents.isEmpty {
-                                if !visibleProposals.isEmpty {
-                                    Divider().background(Color.white.opacity(0.05))
-                                }
-                                sectionHeaderRow("Activité récente", count: visibleEvents.count)
-                                    .padding(.horizontal, 18)
-                                    .padding(.top, visibleProposals.isEmpty ? 10 : 8)
-
-                                VStack(spacing: 0) {
-                                    ForEach(visibleEvents) { event in
-                                        activityRow(event)
-                                        if event.id != visibleEvents.last?.id {
-                                            Divider().background(Color.white.opacity(0.05))
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 18)
-                            }
+                            .padding(.horizontal, 18)
                         }
                     }
                 }
@@ -135,97 +96,6 @@ struct InsightView: View {
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.36))
                     .lineLimit(1)
-            }
-        }
-        .padding(.vertical, 8)
-    }
-
-    private func proposalRow(_ proposal: ProposalRecord) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color(hex: proposal.statusAccentHex).opacity(0.18))
-                    .frame(width: 24, height: 24)
-                Circle()
-                    .fill(Color(hex: proposal.statusAccentHex))
-                    .frame(width: 8, height: 8)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(proposal.displayTitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.78))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    Spacer(minLength: 8)
-
-                    Text(proposal.statusLabel)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(Color(hex: proposal.statusAccentHex))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color(hex: proposal.statusAccentHex).opacity(0.10))
-                        .clipShape(Capsule())
-                }
-
-                Text("\(proposal.typeLabel) · \(proposal.flowLabel) · \(proposal.relativeTimeLabel)")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.36))
-                    .lineLimit(1)
-
-                if let detail = proposal.detailText {
-                    Text(detail)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.52))
-                        .lineLimit(2)
-                }
-            }
-        }
-        .padding(.vertical, 8)
-    }
-
-    private func currentInterpretationRow(_ signals: SignalsData) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color(hex: signals.taskAccentHex).opacity(0.18))
-                    .frame(width: 24, height: 24)
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color(hex: signals.taskAccentHex))
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(signals.taskLabel)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.78))
-                        .lineLimit(1)
-
-                    Spacer(minLength: 8)
-
-                    Text(signals.taskEvidenceLabel)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(Color(hex: signals.taskAccentHex))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color(hex: signals.taskAccentHex).opacity(0.10))
-                        .clipShape(Capsule())
-                }
-
-                Text(signals.taskEvidenceSummary)
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.52))
-                    .lineLimit(3)
-
-                if let fileActivity = signals.fileActivitySummary {
-                    Text("Activité fichiers : \(fileActivity)")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.36))
-                        .lineLimit(2)
-                }
             }
         }
         .padding(.vertical, 8)
