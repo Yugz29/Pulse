@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from .event_bus import Event
 from .workspace_context import extract_project_name
@@ -7,6 +8,8 @@ from .workspace_context import extract_project_name
 
 def _is_meaningful_file_path(path: str) -> bool:
     if not path:
+        return False
+    if _is_pulse_internal_path(path):
         return False
 
     name = path.split("/")[-1]
@@ -19,6 +22,15 @@ def _is_meaningful_file_path(path: str) -> bool:
     if any(part in path for part in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")):
         return False
     return True
+
+
+def _is_pulse_internal_path(path: str) -> bool:
+    pulse_home = Path.home() / ".pulse"
+    try:
+        candidate = Path(path)
+    except Exception:
+        return False
+    return candidate == pulse_home or pulse_home in candidate.parents
 
 
 @dataclass

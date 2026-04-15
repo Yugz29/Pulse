@@ -197,6 +197,8 @@ class SystemObserver {
         // Tous les autres fichiers internes git sont filtrés.
         let isCommitMsg = name == "COMMIT_EDITMSG" && path.contains("/.git/")
 
+        guard !isPulseInternalPath(path) else { return }
+
         guard isCommitMsg || (
               !name.hasPrefix(".") &&
               !name.hasSuffix(".DS_Store") &&
@@ -412,6 +414,11 @@ class SystemObserver {
                 "timestamp": ISO8601DateFormatter().string(from: Date())
             ])
         }
+    }
+
+    private func isPulseInternalPath(_ path: String) -> Bool {
+        let pulseHome = NSHomeDirectory() + "/.pulse"
+        return path == pulseHome || path.hasPrefix(pulseHome + "/")
     }
 
     private func shouldTrackApp(bundleId: String) -> Bool {

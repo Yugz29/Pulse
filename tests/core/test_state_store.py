@@ -100,6 +100,14 @@ class TestStateStore(unittest.TestCase):
         self.assertIsNone(self.store.get().active_file)
         self.assertIsNone(self.store.get().active_project)
 
+    def test_ignore_fichiers_internes_pulse_dans_home(self):
+        pulse_db = str(Path.home() / ".pulse" / "session.db")
+
+        self.store.update(Event("file_modified", {"path": pulse_db}))
+
+        self.assertIsNone(self.store.get().active_file)
+        self.assertIsNone(self.store.get().active_project)
+
 
 if __name__ == "__main__":
     unittest.main()

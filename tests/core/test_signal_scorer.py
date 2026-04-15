@@ -213,6 +213,20 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
         self.assertEqual(signals.active_project, "Pulse")
 
+    def test_ignore_les_fichiers_internes_pulse_dans_les_signaux(self):
+        pulse_db = str(Path.home() / ".pulse" / "session.db")
+        pulse_journal = str(Path.home() / ".pulse" / "session.db-journal")
+
+        self._push("file_modified", {"path": pulse_db})
+        self._push("file_modified", {"path": pulse_journal})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.edited_file_count_10m, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

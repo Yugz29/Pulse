@@ -1,6 +1,7 @@
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from .event_bus import EventBus
@@ -337,6 +338,8 @@ class SignalScorer:
     def _is_meaningful_file_path(self, path: Optional[str]) -> bool:
         if not path:
             return False
+        if self._is_pulse_internal_path(path):
+            return False
 
         name = path.split("/")[-1]
         if name.startswith("."):
@@ -348,3 +351,11 @@ class SignalScorer:
         if any(part in path for part in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")):
             return False
         return True
+
+    def _is_pulse_internal_path(self, path: str) -> bool:
+        pulse_home = Path.home() / ".pulse"
+        try:
+            candidate = Path(path)
+        except Exception:
+            return False
+        return candidate == pulse_home or pulse_home in candidate.parents
