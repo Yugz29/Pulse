@@ -14,6 +14,7 @@ from daemon.memory.extractor import (
     read_commit_message,
     read_head_sha,
     reset_fact_engine_for_tests,
+    should_use_llm_for_commit,
     update_memories_from_session,
 )
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary
@@ -620,7 +621,17 @@ class RuntimeOrchestrator:
         diff_summary: str | None = None,
     ) -> None:
         try:
-            defer_llm = trigger == "commit" and llm is not None
+            top_files = snapshot.get("top_files", []) or []
+            files_count = snapshot.get("files_changed", 0) or 0
+            defer_llm = (
+                trigger == "commit"
+                and llm is not None
+                and should_use_llm_for_commit(
+                    diff_summary=diff_summary,
+                    top_files=top_files,
+                    files_count=files_count,
+                )
+            )
             report_ref = update_memories_from_session(
                 snapshot,
                 llm=llm,

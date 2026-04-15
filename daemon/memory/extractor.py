@@ -168,9 +168,17 @@ def update_memories_from_session(
 
     project  = session_data.get("active_project") or "inconnu"
     duration = session_data.get("duration_min", 0)
+    top_files = _clean_files(session_data.get("top_files", []))
+    files_count = session_data.get("files_changed", 0)
+    substantive_commit = trigger == "commit" and _has_substantive_commit_signal(
+        commit_message=commit_message,
+        diff_summary=diff_summary,
+        top_files=top_files,
+        files_count=files_count,
+    )
 
     # Vérifie si un rapport est nécessaire
-    should_write = (duration >= 15 or trigger == "commit")
+    should_write = (duration >= 15 or substantive_commit)
     if not should_write:
         _update_index(base_dir)
         return None
@@ -189,7 +197,16 @@ def update_memories_from_session(
     # En mode defer, on écrit d'abord une version déterministe immédiate,
     # puis le LLM enrichit l'entrée existante hors chemin critique.
     effective_llm = (
-        llm if trigger == "commit" and not defer_llm_enrichment else None
+        llm
+        if trigger == "commit"
+        and substantive_commit
+        and should_use_llm_for_commit(
+            diff_summary=diff_summary,
+            top_files=top_files,
+            files_count=files_count,
+        )
+        and not defer_llm_enrichment
+        else None
     )
 
     report_ref = _write_session_report(
@@ -477,8 +494,10 @@ Voici les données factuelles du commit livré :
 {facts_block}
 
 Écris 1 à 2 phrases courtes en français.
-Dis ce qui a été livré et pourquoi — pas comment ni les détails techniques.
-Si le message de commit est explicite, reformule-le naturellement.
+Adopte un ton de note de journal concise et factuelle.
+Dis ce qui a été livré et la portée principale — pas comment ni les détails techniques.
+Évite les tournures emphatiques comme « Ce commit améliore... ».
+Si le message de commit est explicite, reformule-le naturellement dans ce ton.
 N'invente aucun fait absent des données ci-dessus."""
 
     return _llm_complete(llm, prompt, max_tokens=256, think=False)
@@ -508,30 +527,59 @@ def _deterministic_summary(
 
     # Commit — signal le plus fort, on le met en avant
     if commit_message:
-        parts.append(f"Commit : « {commit_message.splitlines()[0]} ».")
+        parts.append(f"Livraison : « {commit_message.splitlines()[0]} ».")
 
-    # Fichier principal touché
+    # Portée principale touchée
     if top_files:
         main_file = top_files[0]
         if len(top_files) > 1:
             others = f" (+{len(top_files) - 1})"
         else:
             others = ""
-        parts.append(f"Fichier principal : {main_file}{others}.")
+        parts.append(f"Portée : {main_file}{others}.")
     elif files_count:
-        parts.append(f"{files_count} fichier(s) modifié(s).")
+        parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
 
     # Focus et friction
     if focus_str:
-        parts.append(focus_str.capitalize() + ".")
+        parts.append(f"Rythme : {focus_str}.")
     if friction >= 0.7:
-        parts.append("Friction élevée.")
+        parts.append("Friction : élevée.")
 
     # Fallback si rien à dire
     if not parts:
         parts.append(f"Session de {duration} min.")
 
     return " ".join(parts)
+
+
+def _has_substantive_commit_signal(
+    *,
+    commit_message: Optional[str],
+    diff_summary: Optional[str],
+    top_files: List[str],
+    files_count: int,
+) -> bool:
+    if diff_summary and diff_summary.strip():
+        return True
+    if len(top_files) >= 2 or files_count >= 2:
+        return True
+    if commit_message and len(commit_message.split()) >= 3:
+        return True
+    return False
+
+
+def should_use_llm_for_commit(
+    *,
+    diff_summary: Optional[str],
+    top_files: List[str],
+    files_count: int,
+) -> bool:
+    if diff_summary and diff_summary.strip():
+        return True
+    if len(top_files) >= 2 or files_count >= 3:
+        return True
+    return False
 
 
 # ── Nettoyage des fichiers ────────────────────────────────────────────────────

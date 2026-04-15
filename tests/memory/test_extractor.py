@@ -140,6 +140,53 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("## ", content)
         self.assertIn("développement, 45 min", content)
 
+    def test_commit_leger_et_court_ne_genere_pas_de_journal(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 5,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 1,
+            },
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="wip",
+        )
+
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(session_files, [])
+
+    def test_commit_peu_substantiel_reste_deterministe_meme_avec_llm(self):
+        call_count = {"n": 0}
+
+        class CountingLLM:
+            def complete(self, prompt, max_tokens=200):
+                call_count["n"] += 1
+                return "Ne devrait pas apparaître."
+
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 1,
+                "top_files": ["main.py"],
+            },
+            llm=CountingLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="wip",
+        )
+
+        self.assertEqual(call_count["n"], 0)
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        content = session_files[0].read_text()
+        self.assertIn("Livraison : « wip ». Portée : main.py.", content)
+
     def test_llm_desactive_pour_screen_lock(self):
         """Le LLM ne doit PAS être appelé pour screen_lock — fallback déterministe uniquement."""
         call_count = {"n": 0}
@@ -405,7 +452,7 @@ class TestExtractor(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         before = session_files[0].read_text()
-        self.assertIn("Commit : « feat: commit enrichi ».", before)
+        self.assertIn("Livraison : « feat: commit enrichi ».", before)
         self.assertNotIn("Résumé court de la session.", before)
 
         ok = enrich_session_report(
@@ -418,7 +465,7 @@ class TestExtractor(unittest.TestCase):
 
         after = session_files[0].read_text()
         self.assertIn("Résumé court de la session.", after)
-        self.assertNotIn("Commit : « feat: commit enrichi ».", after)
+        self.assertNotIn("Livraison : « feat: commit enrichi ».", after)
 
 
 if __name__ == "__main__":
