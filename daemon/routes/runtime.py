@@ -8,6 +8,8 @@ from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
+from daemon.core.file_classifier import file_signal_significance
+
 
 def register_runtime_routes(
     app: Flask,
@@ -73,10 +75,25 @@ def register_runtime_routes(
         except (TypeError, ValueError):
             limit = 25
         limit = min(max(limit, 1), 100)
-        recent = bus.recent(limit)
+
+        _FILE_EVENT_TYPES = {
+            "file_created", "file_modified", "file_renamed",
+            "file_deleted", "file_change",
+        }
+
+        def _is_meaningful(event) -> bool:
+            if event.type not in _FILE_EVENT_TYPES:
+                return True  # app, clipboard, screen — toujours utiles
+            path = (event.payload or {}).get("path", "")
+            return file_signal_significance(path) == "meaningful"
+
+        recent = bus.recent(limit * 4)  # over-fetch pour compenser le filtrage
+        filtered = [e for e in recent if _is_meaningful(e)]
+        visible = filtered[-limit:]
+
         return jsonify([
             {"type": event.type, "payload": event.payload, "timestamp": event.timestamp.isoformat()}
-            for event in recent
+            for event in visible
         ])
 
     @app.route("/daemon/shutdown", methods=["POST"])

@@ -129,9 +129,19 @@ private func _isNoisyEvent(type: String, payload: [String: Any]) -> Bool {
 
     // Noisy path segments
     let noisySegments = [
+        // Dev tooling
         "/.git/", "/node_modules/", "/__pycache__/",
         "/xcuserdata/", "/DerivedData/",
-        "/Library/", "/Caches/", "/Containers/",
+        // Python environments
+        "/site-packages/", "/dist-packages/", "/.venv/", "/venv/",
+        // macOS system & Homebrew libraries
+        "/opt/homebrew/Cellar/", "/opt/homebrew/lib/",
+        "/usr/local/lib/", "/usr/lib/", "/usr/share/",
+        "/System/Library/", "/private/var/",
+        // macOS user library
+        "/Library/Caches/", "/Library/Containers/",
+        "/Library/Application Support/",
+        // Pulse internal
         "/.pulse/",
     ]
     for segment in noisySegments where path.contains(segment) { return true }

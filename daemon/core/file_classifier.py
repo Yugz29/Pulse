@@ -132,7 +132,17 @@ def file_signal_significance(path: Optional[str]) -> str:
         return "technical_noise"
     if any(
         segment in path
-        for segment in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")
+        for segment in (
+            # Outils de développement
+            "/.git/", "/node_modules/", "/__pycache__/",
+            "/xcuserdata/", "/DerivedData/",
+            # Environnements Python
+            "/site-packages/", "/dist-packages/", "/.venv/", "/venv/",
+            # Librairies système macOS / Homebrew
+            "/opt/homebrew/Cellar/", "/opt/homebrew/lib/",
+            "/usr/local/lib/", "/usr/lib/", "/usr/share/",
+            "/System/Library/", "/private/var/",
+        )
     ):
         return "technical_noise"
 
