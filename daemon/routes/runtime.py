@@ -77,25 +77,12 @@ def register_runtime_routes(
         except (TypeError, ValueError):
             limit = 25
         limit = min(max(limit, 1), 100)
-
-        _FILE_EVENT_TYPES = {
-            "file_created", "file_modified", "file_renamed",
-            "file_deleted", "file_change",
-        }
-
-        def _is_meaningful(event) -> bool:
-            if event.type not in _FILE_EVENT_TYPES:
-                return True  # app, clipboard, screen — toujours utiles
-            path = (event.payload or {}).get("path", "")
-            return file_signal_significance(path) == "meaningful"
-
-        recent = bus.recent(limit * 2)  # over-fetch léger — le bus est déjà filtré à l'entrée
-        filtered = [e for e in recent if _is_meaningful(e)]
-        visible = filtered[-limit:]
-
+        # Le bus ne contient que des events meaningful depuis le filtrage
+        # à l'entrée dans _should_publish_to_bus(). Pas de filtre supplémentaire.
+        recent = bus.recent(limit)
         return jsonify([
             {"type": event.type, "payload": event.payload, "timestamp": event.timestamp.isoformat()}
-            for event in visible
+            for event in recent
         ])
 
     @app.route("/daemon/shutdown", methods=["POST"])
