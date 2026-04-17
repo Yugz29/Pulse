@@ -1,36 +1,9 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 from .event_bus import Event
+from .file_classifier import file_signal_significance
 from .workspace_context import extract_project_name
-
-
-def _is_meaningful_file_path(path: str) -> bool:
-    if not path:
-        return False
-    if _is_pulse_internal_path(path):
-        return False
-
-    name = path.split("/")[-1]
-    if name.startswith("."):
-        return False
-    if name.endswith((".DS_Store", "~", ".xcuserstate")):
-        return False
-    if ".sb-" in name:
-        return False
-    if any(part in path for part in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")):
-        return False
-    return True
-
-
-def _is_pulse_internal_path(path: str) -> bool:
-    pulse_home = Path.home() / ".pulse"
-    try:
-        candidate = Path(path)
-    except Exception:
-        return False
-    return candidate == pulse_home or pulse_home in candidate.parents
 
 
 @dataclass
@@ -61,7 +34,8 @@ class StateStore:
 
         elif event.type in ("file_created", "file_modified", "file_renamed", "file_deleted"):
             path = event.payload.get("path", "")
-            if _is_meaningful_file_path(path) and event.type != "file_deleted":
+            significance = _file_signal_significance(path)
+            if significance == "meaningful" and event.type != "file_deleted":
                 self._state.active_file = path
                 self._state.active_project = extract_project_name(path)
 
@@ -76,7 +50,7 @@ class StateStore:
             self._state.active_app = event.payload.get("app_name")
         elif event.type == "file_change":
             path = event.payload.get("path", "")
-            if _is_meaningful_file_path(path):
+            if _file_signal_significance(path) == "meaningful":
                 self._state.active_file = path
                 self._state.active_project = extract_project_name(path)
 

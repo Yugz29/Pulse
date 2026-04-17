@@ -1,10 +1,10 @@
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from .event_bus import EventBus
+from .file_classifier import classify_file_type, file_signal_significance, is_pulse_internal_path
 from .workspace_context import extract_project_name
 
 
@@ -50,9 +50,13 @@ class SignalScorer:
         file_events = [
             e for e in recent
             if e.type in self._file_event_types()
-            and self._is_meaningful_file_path(e.payload.get("path"))
+            and self._is_trackable_file_path(e.payload.get("path"))
         ]
-        active_file = self._last_file_path(file_events)
+        meaningful_file_events = [
+            e for e in file_events
+            if self._file_signal_significance(e.payload.get("path")) == "meaningful"
+        ]
+        active_file = self._last_file_path(meaningful_file_events)
         active_project = self._extract_project(active_file)
 
         app_events = [e for e in recent if e.type in {"app_activated", "app_switch"}]
@@ -64,11 +68,12 @@ class SignalScorer:
         clipboard_context = self._last_clipboard_context(clipboard_events)
 
         recent_file_events = self._recent_file_events(file_events, now)
-        edited_file_count_10m = self._edited_file_count_10m(recent_file_events)
-        file_type_mix_10m = self._file_type_mix_10m(recent_file_events)
-        rename_delete_ratio_10m = self._rename_delete_ratio_10m(recent_file_events)
-        dominant_file_mode = self._dominant_file_mode(recent_file_events)
-        friction_score = self._compute_friction(file_events, clipboard_events, now)
+        recent_meaningful_file_events = self._recent_file_events(meaningful_file_events, now)
+        edited_file_count_10m = self._edited_file_count_10m(recent_meaningful_file_events)
+        file_type_mix_10m = self._file_type_mix_10m(recent_meaningful_file_events)
+        rename_delete_ratio_10m = self._rename_delete_ratio_10m(recent_meaningful_file_events)
+        dominant_file_mode = self._dominant_file_mode(recent_meaningful_file_events)
+        friction_score = self._compute_friction(meaningful_file_events, clipboard_events, now)
         work_pattern_candidate = self._work_pattern_candidate(
             file_type_mix=file_type_mix_10m,
             edited_file_count=edited_file_count_10m,
@@ -85,7 +90,7 @@ class SignalScorer:
             dominant_file_mode=dominant_file_mode,
             work_pattern_candidate=work_pattern_candidate,
         )
-        focus_level = self._detect_focus_level(recent, app_events, file_events, now)
+        focus_level = self._detect_focus_level(recent, app_events, meaningful_file_events, now)
 
         return Signals(
             active_project=active_project,
@@ -307,73 +312,13 @@ class SignalScorer:
         return extract_project_name(file_path)
 
     def _classify_file_type(self, path: str) -> str:
-        lower_path = path.lower()
-        name = lower_path.split("/")[-1]
+        return classify_file_type(path)
 
-        if any(marker in lower_path for marker in ("/tests/", "/test/", "/spec/")):
-            return "test"
-        if name.startswith(("test_", "spec_")) or name.endswith((
-            "_test.py", "_spec.py", ".spec.ts", ".spec.tsx", ".spec.js",
-            ".spec.jsx", ".test.ts", ".test.tsx", ".test.js", ".test.jsx", "test.swift",
-        )):
-            return "test"
-        if name in {
-            "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
-            "pyproject.toml", "requirements.txt", "poetry.lock", "pipfile", "pipfile.lock",
-            "cargo.toml", "cargo.lock", "go.mod", "go.sum", "package.swift",
-            "podfile", "podfile.lock", "gemfile", "gemfile.lock", "makefile",
-            "dockerfile", "docker-compose.yml", "docker-compose.yaml", ".env",
-            "tsconfig.json", "tsconfig.base.json", "vite.config.ts", "vite.config.js",
-            "vite.config.mts", "vite.config.cjs", "vite.config.mjs", "jest.config.js",
-            "jest.config.ts", "vitest.config.ts", "vitest.config.js", "playwright.config.ts",
-            "playwright.config.js", ".editorconfig",
-        }:
-            return "config"
-        if name.endswith((
-            ".json", ".jsonc", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-            ".conf", ".plist", ".properties", ".env.local", ".env.example",
-        )):
-            return "config"
-        if name.endswith((".md", ".rst", ".txt", ".adoc")) or "/docs/" in lower_path:
-            return "docs"
-        if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico")):
-            return "assets"
-        if name.endswith((
-            ".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".kt", ".java",
-            ".go", ".rs", ".rb", ".php", ".c", ".h", ".cpp", ".hpp",
-            ".m", ".mm", ".cs", ".sh", ".bash", ".zsh", ".sql",
-        )):
-            return "source"
-        return "other"
+    def _file_signal_significance(self, path: Optional[str]) -> str:
+        return file_signal_significance(path)
 
-    def _is_meaningful_file_path(self, path: Optional[str]) -> bool:
-        if not path:
-            return False
-        if self._is_pulse_internal_path(path):
-            return False
-
-        name = path.split("/")[-1]
-        if name.startswith("."):
-            return False
-        if name.endswith((".DS_Store", "~", ".xcuserstate")):
-            return False
-        if name.endswith((
-            ".sqlite", ".sqlite3", ".db", ".db-journal", ".db-wal", ".db-shm",
-            ".log", ".tmp", ".temp", ".swp", ".swo",
-        )):
-            return False
-        if name.endswith(("-journal", "-wal", "-shm")):
-            return False
-        if ".sb-" in name:
-            return False
-        if any(part in path for part in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")):
-            return False
-        return True
+    def _is_trackable_file_path(self, path: Optional[str]) -> bool:
+        return file_signal_significance(path) != "technical_noise"
 
     def _is_pulse_internal_path(self, path: str) -> bool:
-        pulse_home = Path.home() / ".pulse"
-        try:
-            candidate = Path(path)
-        except Exception:
-            return False
-        return candidate == pulse_home or pulse_home in candidate.parents
+        return is_pulse_internal_path(path)
