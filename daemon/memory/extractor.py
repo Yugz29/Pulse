@@ -24,6 +24,7 @@ Qualité LLM
 """
 
 import json
+import logging
 import re
 import threading
 from datetime import datetime, timedelta
@@ -31,6 +32,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from daemon.memory.facts import FactEngine
+
+log = logging.getLogger("pulse")
 
 # Instance partagée du moteur de faits (initialisée une seule fois)
 _fact_engine: Optional[FactEngine] = None
@@ -174,9 +177,9 @@ def update_memories_from_session(
         engine = get_fact_engine()
         new_facts = engine.observe_session(session_data)
         if new_facts:
-            print(f"[Facts] {len(new_facts)} nouveau(x) fait(s) consolidé(s)")
+            log.info("Facts : %d nouveau(x) fait(s) consolidé(s)", len(new_facts))
     except Exception as exc:
-        print(f"[Facts] Erreur observe_session : {exc}")
+        log.warning("Facts : erreur observe_session : %s", exc)
 
     project  = session_data.get("active_project") or "inconnu"
     duration = session_data.get("duration_min", 0)
@@ -415,7 +418,7 @@ def _write_session_report(
                 apps, top_files, files_count, commit_message, diff_summary,
             )
         except Exception as exc:
-            print(f"[Memory] Erreur résumé LLM: {exc}")
+            log.warning("Memory : erreur résumé LLM, fallback déterministe utilisé : %s", exc)
             body = _deterministic_summary(
                 duration, task, focus, friction, top_files, files_count, commit_message,
             )
