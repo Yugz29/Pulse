@@ -74,6 +74,7 @@ extension DaemonBridge {
             guard let type = dict["type"] as? String,
                   let timestamp = dict["timestamp"] as? String else { return nil }
             let payload = dict["payload"] as? [String: Any] ?? [:]
+            guard !_isNoisyEvent(type: type, payload: payload) else { return nil }
             let keyValue =
                 (payload["app_name"] as? String)
                 ?? (payload["path"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent }
@@ -90,4 +91,55 @@ extension DaemonBridge {
         guard let payload = try? decode(ProposalHistoryResponse.self, from: data) else { return [] }
         return payload.items
     }
+}
+
+// MARK: - Insight filtering
+
+/// Returns true if the event should be hidden from the Observation feed.
+/// Keeps the list human-readable by removing technical noise.
+private func _isNoisyEvent(type: String, payload: [String: Any]) -> Bool {
+    // Only file events can be noisy — other types are always meaningful.
+    let fileEventTypes: Set<String> = [
+        "file_created", "file_modified", "file_renamed",
+        "file_deleted", "file_change",
+    ]
+    guard fileEventTypes.contains(type) else { return false }
+
+    guard let path = payload["path"] as? String, !path.isEmpty else { return true }
+
+    let name = URL(fileURLWithPath: path).lastPathComponent
+
+    // Noisy filename suffixes
+    let noisySuffixes = [
+        ".sqlite", ".sqlite3", ".db", ".db-journal", ".db-wal", ".db-shm",
+        ".log", ".jsonl", ".tmp", ".temp", ".swp", ".swo",
+        "-journal", "-wal", "-shm",
+    ]
+    for suffix in noisySuffixes where name.hasSuffix(suffix) { return true }
+
+    // Noisy exact filenames
+    let noisyNames: Set<String> = ["COMMIT_EDITMSG", "MERGE_MSG", "FETCH_HEAD", "ORIG_HEAD"]
+    if noisyNames.contains(name) { return true }
+
+    // Hidden files
+    if name.hasPrefix(".") { return true }
+
+    // macOS sandbox noise
+    if name.contains(".sb-") { return true }
+
+    // Noisy path segments
+    let noisySegments = [
+        "/.git/", "/node_modules/", "/__pycache__/",
+        "/xcuserdata/", "/DerivedData/",
+        "/Library/", "/Caches/", "/Containers/",
+        "/.pulse/",
+    ]
+    for segment in noisySegments where path.contains(segment) { return true }
+
+    // UUID-looking filenames (macOS temp files, cache keys, etc.)
+    // Pattern: 8-4-4-4-12 hex chars
+    let uuidPattern = #"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"#
+    if name.range(of: uuidPattern, options: .regularExpression) != nil { return true }
+
+    return false
 }
