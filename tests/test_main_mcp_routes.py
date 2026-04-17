@@ -70,6 +70,73 @@ class TestMainMcpRoutes(unittest.TestCase):
         receive.assert_called_once_with("tool-1", "deny")
         publish.assert_called_once()
 
+    def test_e2e_intercept_pending_decision_flux(self):
+        """
+        Flux complet sans mock sur les handlers :
+          1. POST /mcp/intercept lance l'interception en thread
+          2. GET /mcp/pending retourne la commande en attente
+          3. POST /mcp/decision résout la proposition
+          4. La réponse d'intercept contient allowed=True
+        """
+        import threading, time
+        from daemon.interpreter.command_interpreter import CommandInterpretation
+
+        safe_interpretation = CommandInterpretation(
+            original="ls -la",
+            translated="Liste les fichiers du répertoire",
+            risk_level="safe",
+            risk_score=0,
+            is_read_only=True,
+            affects=[],
+            warning=None,
+            needs_llm=False,
+        )
+
+        result_box = {}
+
+        def run_intercept():
+            with patch.object(mcp_handlers.interpreter, "interpret", return_value=safe_interpretation), \
+                 patch("daemon.mcp.handlers._log_interception"):
+                result_box["result"] = mcp_handlers.intercept_command("ls -la", "e2e-tool-1")
+
+        thread = threading.Thread(target=run_intercept, daemon=True)
+        thread.start()
+
+        # Attend que la proposition soit visible
+        deadline = time.time() + 2.0
+        pending_payload = None
+        while time.time() < deadline:
+            response = self.client.get("/mcp/pending")
+            if response.status_code == 200:
+                pending_payload = response.get_json()
+                break
+            time.sleep(0.02)
+
+        self.assertIsNotNone(pending_payload, "La commande n'est pas apparue dans /mcp/pending")
+        self.assertEqual(pending_payload["tool_use_id"], "e2e-tool-1")
+        self.assertEqual(pending_payload["status"], "pending")
+        self.assertEqual(pending_payload["risk_level"], "safe")
+
+        # Résout via /mcp/decision
+        decision_response = self.client.post(
+            "/mcp/decision",
+            json={"tool_use_id": "e2e-tool-1", "decision": "allow"},
+        )
+        self.assertEqual(decision_response.status_code, 200)
+        self.assertTrue(decision_response.get_json()["ok"])
+
+        thread.join(timeout=2.0)
+        self.assertFalse(thread.is_alive(), "Le thread intercept n'a pas terminé")
+
+        result = result_box.get("result")
+        self.assertIsNotNone(result)
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["decision"], "allow")
+        self.assertEqual(result["status"], "accepted")
+
+        # La file est vide après résolution
+        self.assertEqual(self.client.get("/mcp/pending").status_code, 204)
+
     def test_scoring_status_returns_runtime_capabilities(self):
         with patch("daemon.main.get_scoring_status", return_value={
             "treesitter_core": True,
