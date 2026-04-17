@@ -18,6 +18,12 @@ from daemon.memory.extractor import (
     should_use_llm_for_commit,
     update_memories_from_session,
 )
+from daemon.core.context_formatter import (
+    format_file_activity_summary,
+    format_file_work_reading,
+    has_informative_file_reading,
+)
+from daemon.core.file_classifier import file_signal_significance
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary
 from daemon.core.proposals import Proposal, proposal_store
 from daemon.core.uid import new_uid
@@ -207,11 +213,11 @@ class RuntimeOrchestrator:
                 f"- Tâche probable : {signals.probable_task}",
                 f"- Focus : {signals.focus_level}",
             ]
-            file_activity = self._format_file_activity_summary(signals)
+            file_activity = format_file_activity_summary(signals)
             if file_activity:
                 lines.append(f"- Activité fichiers : {file_activity}")
-            if self._has_informative_file_reading(signals):
-                file_reading = self._format_file_work_reading(signals)
+            if has_informative_file_reading(signals):
+                file_reading = format_file_work_reading(signals)
                 if file_reading:
                     lines.append(f"- Lecture de la session : {file_reading}")
             if signals.recent_apps:
@@ -260,11 +266,9 @@ class RuntimeOrchestrator:
         path = (event.payload or {}).get("path", "")
         if not path:
             return True
-
         if path.endswith(".git/COMMIT_EDITMSG") or "/COMMIT_EDITMSG" in path:
             return False
-
-        if not self._is_meaningful_file_path(path):
+        if file_signal_significance(path) != "meaningful":
             return True
         dedupe_key = "{0}:{1}".format(event.type, path)
         return self.runtime_state.should_ignore_file_event(dedupe_key=dedupe_key)
@@ -382,23 +386,6 @@ class RuntimeOrchestrator:
             daemon=True,
         ).start()
 
-    def _is_meaningful_file_path(self, path: str) -> bool:
-        if not path:
-            return False
-        name = path.split("/")[-1]
-        if name.startswith("."):
-            return False
-        if name.endswith((".DS_Store", "~", ".xcuserstate")):
-            return False
-        if ".sb-" in name:
-            return False
-        if any(
-            segment in path
-            for segment in ("/.git/", "/node_modules/", "/__pycache__/", "/xcuserdata/", "/DerivedData/")
-        ):
-            return False
-        return True
-
     def _enqueue_file_event(self, event) -> None:
         with self._debounce_lock:
             self._pending_file_events.append(event)
@@ -504,15 +491,15 @@ class RuntimeOrchestrator:
                 "value": f"{signals.session_duration_min} min",
             },
         ]
-        file_activity = self._format_file_activity_summary(signals)
+        file_activity = format_file_activity_summary(signals)
         if file_activity:
             evidence.append({
                 "kind": "file_activity",
                 "label": "Activité fichiers",
                 "value": file_activity,
             })
-        if self._has_informative_file_reading(signals):
-            file_reading = self._format_file_work_reading(signals)
+        if has_informative_file_reading(signals):
+            file_reading = format_file_work_reading(signals)
             if file_reading:
                 evidence.append({
                     "kind": "file_reading",
@@ -551,99 +538,6 @@ class RuntimeOrchestrator:
             },
         )
         return proposal
-
-    def _has_informative_file_reading(self, signals) -> bool:
-        if signals.work_pattern_candidate:
-            return True
-        if signals.rename_delete_ratio_10m >= 0.2:
-            return True
-        if signals.edited_file_count_10m >= 2 and signals.dominant_file_mode != "single_file":
-            return True
-        return False
-
-    def _format_file_activity_summary(self, signals) -> str:
-        if not signals.edited_file_count_10m:
-            return ""
-
-        parts = [f"{signals.edited_file_count_10m} fichier(s) touché(s) sur 10 min"]
-        if signals.edited_file_count_10m < 2:
-            return ", ".join(parts)
-
-        mix = self._format_file_type_mix(signals.file_type_mix_10m)
-        if mix:
-            parts.append(f"surtout {mix}")
-        return ", ".join(parts)
-
-    def _format_file_work_reading(self, signals) -> str:
-        if not self._has_informative_file_reading(signals):
-            return ""
-
-        mode = self._file_mode_label(signals.dominant_file_mode, signals.edited_file_count_10m)
-        pattern = self._work_pattern_label(signals.work_pattern_candidate)
-        structural = self._format_structural_changes(signals.rename_delete_ratio_10m)
-
-        parts = []
-        if mode:
-            parts.append(mode)
-        if pattern:
-            parts.append(pattern)
-        if structural:
-            parts.append(structural)
-        return ", ".join(parts)
-
-    def _format_file_type_mix(self, file_type_mix: dict) -> str:
-        if not file_type_mix:
-            return ""
-        meaningful_items = [
-            (kind, count)
-            for kind, count in file_type_mix.items()
-            if kind != "other" and count > 0
-        ]
-        ordered = sorted(meaningful_items, key=lambda item: (-item[1], item[0]))
-        labels = [
-            f"{self._file_type_label(kind)} ({count})"
-            for kind, count in ordered[:3]
-            if count > 0
-        ]
-        return ", ".join(labels)
-
-    def _format_structural_changes(self, rename_delete_ratio: float) -> str:
-        if rename_delete_ratio >= 0.4:
-            return "avec changements de structure marqués"
-        if rename_delete_ratio >= 0.2:
-            return "avec quelques changements de structure"
-        return ""
-
-    def _file_mode_label(self, mode: str, edited_file_count: int) -> str:
-        if mode == "single_file":
-            return "travail concentré sur un seul fichier"
-        if mode == "few_files":
-            return f"petit lot cohérent de {edited_file_count} fichiers"
-        if mode == "multi_file":
-            return "travail réparti sur plusieurs fichiers"
-        return ""
-
-    def _work_pattern_label(self, pattern: str | None) -> str:
-        if pattern == "feature_candidate":
-            return "ça ressemble à une évolution de fonctionnalité"
-        if pattern == "refactor_candidate":
-            return "ça ressemble à un refactor"
-        if pattern == "setup_candidate":
-            return "ça ressemble à une phase de configuration"
-        if pattern == "debug_loop_candidate":
-            return "ça ressemble à une boucle de correction"
-        return ""
-
-    def _file_type_label(self, file_type: str) -> str:
-        labels = {
-            "source": "code source",
-            "test": "tests",
-            "config": "configuration",
-            "docs": "documentation",
-            "assets": "assets",
-            "other": "autres fichiers",
-        }
-        return labels.get(file_type, file_type)
 
     def _sync_memory_background(
         self,

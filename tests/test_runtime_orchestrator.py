@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from daemon.core.context_formatter import format_file_activity_summary
 from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
 from daemon.core.proposals import proposal_store
@@ -158,7 +159,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Racine projet : /tmp/client-repo", snapshot)
 
     def test_file_activity_summary_n_affiche_pas_other_comme_insight_principal(self):
-        summary = self.orchestrator._format_file_activity_summary(
+        summary = format_file_activity_summary(
             Signals(
                 active_project="Pulse",
                 active_file="/tmp/main.py",
@@ -179,7 +180,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(summary, "7 fichier(s) touché(s) sur 10 min, surtout code source (2)")
 
     def test_file_activity_summary_retombe_sur_un_compte_simple_si_mix_est_trop_generique(self):
-        summary = self.orchestrator._format_file_activity_summary(
+        summary = format_file_activity_summary(
             Signals(
                 active_project="Pulse",
                 active_file="/tmp/main.py",
