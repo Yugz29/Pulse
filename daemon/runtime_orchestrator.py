@@ -209,9 +209,10 @@ class RuntimeOrchestrator:
             file_activity = self._format_file_activity_summary(signals)
             if file_activity:
                 lines.append(f"- Activité fichiers : {file_activity}")
-            file_reading = self._format_file_work_reading(signals)
-            if file_reading:
-                lines.append(f"- Lecture de la session : {file_reading}")
+            if self._has_informative_file_reading(signals):
+                file_reading = self._format_file_work_reading(signals)
+                if file_reading:
+                    lines.append(f"- Lecture de la session : {file_reading}")
             if signals.recent_apps:
                 lines.append(f"- Apps récentes : {', '.join(signals.recent_apps[:4])}")
 
@@ -509,13 +510,14 @@ class RuntimeOrchestrator:
                 "label": "Activité fichiers",
                 "value": file_activity,
             })
-        file_reading = self._format_file_work_reading(signals)
-        if file_reading:
-            evidence.append({
-                "kind": "file_reading",
-                "label": "Lecture de la session",
-                "value": file_reading,
-            })
+        if self._has_informative_file_reading(signals):
+            file_reading = self._format_file_work_reading(signals)
+            if file_reading:
+                evidence.append({
+                    "kind": "file_reading",
+                    "label": "Lecture de la session",
+                    "value": file_reading,
+                })
         if signals.active_file:
             evidence.append({"kind": "file", "label": "Fichier actif", "value": signals.active_file})
 
@@ -549,17 +551,32 @@ class RuntimeOrchestrator:
         )
         return proposal
 
+    def _has_informative_file_reading(self, signals) -> bool:
+        if signals.work_pattern_candidate:
+            return True
+        if signals.rename_delete_ratio_10m >= 0.2:
+            return True
+        if signals.edited_file_count_10m >= 2 and signals.dominant_file_mode != "single_file":
+            return True
+        return False
+
     def _format_file_activity_summary(self, signals) -> str:
         if not signals.edited_file_count_10m:
             return ""
 
         parts = [f"{signals.edited_file_count_10m} fichier(s) touché(s) sur 10 min"]
+        if signals.edited_file_count_10m < 2:
+            return ", ".join(parts)
+
         mix = self._format_file_type_mix(signals.file_type_mix_10m)
         if mix:
             parts.append(f"surtout {mix}")
         return ", ".join(parts)
 
     def _format_file_work_reading(self, signals) -> str:
+        if not self._has_informative_file_reading(signals):
+            return ""
+
         mode = self._file_mode_label(signals.dominant_file_mode, signals.edited_file_count_10m)
         pattern = self._work_pattern_label(signals.work_pattern_candidate)
         structural = self._format_structural_changes(signals.rename_delete_ratio_10m)

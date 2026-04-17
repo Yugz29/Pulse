@@ -117,6 +117,9 @@ struct SignalsData: Codable {
     var fileActivitySummary: String? {
         guard let editedFileCount10m, editedFileCount10m > 0 else { return nil }
         var parts = ["\(editedFileCount10m) fichier(s) touché(s) sur 10 min"]
+        if editedFileCount10m < 2 {
+            return parts.joined(separator: ", ")
+        }
         let mixSummary = formattedFileMix
         if !mixSummary.isEmpty {
             parts.append("surtout \(mixSummary)")
@@ -144,7 +147,6 @@ struct SignalsData: Codable {
         if configActivityCount >= 2 { return true }
         if docsActivityCount >= 2 { return true }
         if let pattern = workPatternCandidate, !pattern.isEmpty { return true }
-        if let editedFileCount10m, editedFileCount10m >= 3 { return true }
         return false
     }
 
