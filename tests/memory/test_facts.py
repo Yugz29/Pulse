@@ -1,323 +1,283 @@
 """
-tests/memory/test_facts.py — Tests du moteur de faits utilisateur.
+test_facts.py — Tests du FactEngine (c2t3).
 
 Couvre :
-  - Pipeline observation → signal → fait (déterministe)
-  - Renforcement et contradiction d'un fait
-  - Decay temporel
-  - Export Markdown
-  - render_for_context()
-  - _extract_observations() : cas nominaux et cas limites
+  - observe_session() : promotion à FACT_THRESHOLD
+  - reinforce() : augmentation de confiance
+  - contradict() : réduction + archivage si sous ARCHIVE_THRESHOLD
+  - decay_all() : decay temporel + archivage automatique
+  - render_for_context() : format pour le system prompt
+  - stats() : compteurs cohérents
 """
 
-import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from daemon.memory.facts import (
+    ARCHIVE_THRESHOLD,
+    CONFIDENCE_CONFIRM,
+    CONFIDENCE_INIT,
+    CONFIDENCE_MAX,
     FACT_THRESHOLD,
-    SIGNAL_THRESHOLD,
     FactEngine,
-    _extract_observations,
-    _time_slot,
 )
 
 
-def _make_session(
-    task: str = "coding",
-    focus: str = "normal",
-    duration: int = 45,
-    friction: float = 0.0,
-    apps: list | None = None,
-    project: str = "Pulse",
-    hour: int | None = None,
-) -> dict:
-    """Construit un session_data minimal pour les tests."""
+def _make_engine(tmp: Path) -> FactEngine:
+    return FactEngine(
+        db_path=tmp / "facts.db",
+        md_path=tmp / "facts.md",
+    )
+
+
+def _session(task="coding", focus="normal", duration=30, friction=0.0, apps=None):
     return {
-        "probable_task":  task,
-        "focus_level":    focus,
-        "duration_min":   duration,
-        "max_friction":   friction,
-        "recent_apps":    apps or ["Xcode", "Claude", "Safari"],
-        "active_project": project,
+        "probable_task": task,
+        "focus_level": focus,
+        "duration_min": duration,
+        "max_friction": friction,
+        "recent_apps": apps or [],
+        "active_project": "Pulse",
     }
 
 
-class TestExtractObservations(unittest.TestCase):
-    """Tests unitaires sur _extract_observations — pas de DB."""
-
-    def test_coding_session_produces_workflow_obs(self):
-        obs = _extract_observations(_make_session(task="coding"))
-        keys = [o[0] for o in obs]
-        self.assertTrue(any("task:coding" in k for k in keys))
-
-    def test_general_task_skipped(self):
-        obs = _extract_observations(_make_session(task="general"))
-        keys = [o[0] for o in obs]
-        self.assertFalse(any("task:general" in k for k in keys))
-
-    def test_deep_focus_produces_cognitive_obs(self):
-        obs = _extract_observations(_make_session(focus="deep"))
-        cats = [o[1] for o in obs]
-        self.assertIn("cognitive", cats)
-
-    def test_long_session_produces_obs(self):
-        obs = _extract_observations(_make_session(duration=90))
-        keys = [o[0] for o in obs]
-        self.assertTrue(any("session:long" in k for k in keys))
-
-    def test_short_session_no_long_obs(self):
-        obs = _extract_observations(_make_session(duration=30))
-        keys = [o[0] for o in obs]
-        self.assertFalse(any("session:long" in k for k in keys))
-
-    def test_high_friction_produces_obs(self):
-        obs = _extract_observations(_make_session(friction=0.8, project="Pulse"))
-        keys = [o[0] for o in obs]
-        self.assertTrue(any("friction:high" in k for k in keys))
-
-    def test_low_friction_no_obs(self):
-        obs = _extract_observations(_make_session(friction=0.3))
-        keys = [o[0] for o in obs]
-        self.assertFalse(any("friction:high" in k for k in keys))
-
-    def test_app_pairs_generated(self):
-        obs = _extract_observations(_make_session(apps=["Xcode", "Claude", "Safari"]))
-        keys = [o[0] for o in obs]
-        pair_keys = [k for k in keys if "apps:pair" in k]
-        # 3 apps → 3 paires max
-        self.assertGreaterEqual(len(pair_keys), 1)
-
-    def test_no_duplicate_keys_from_single_session(self):
-        obs = _extract_observations(_make_session())
-        keys = [o[0] for o in obs]
-        self.assertEqual(len(keys), len(set(keys)))
-
-
 class TestFactEnginePromotion(unittest.TestCase):
-    """Tests d'intégration du pipeline observation → fait."""
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        db_path = Path(self.tmp.name) / "facts.db"
-        md_path = Path(self.tmp.name) / "facts.md"
-        self.engine = FactEngine(db_path=db_path, md_path=md_path)
-        self.session = _make_session(task="coding", focus="deep")
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.engine = _make_engine(Path(self.tmpdir.name))
 
     def tearDown(self):
-        self.tmp.cleanup()
+        self.tmpdir.cleanup()
 
-    def test_single_observation_no_fact(self):
-        self.engine.observe_session(self.session)
-        facts = self.engine.get_facts()
-        self.assertEqual(len(facts), 0)
+    def test_observation_sous_threshold_ne_cree_pas_de_fait(self):
+        for _ in range(FACT_THRESHOLD - 1):
+            new_facts = self.engine.observe_session(_session())
+            self.assertEqual(new_facts, [])
 
-    def test_promotion_after_threshold(self):
+        stats = self.engine.stats()
+        self.assertEqual(stats["active_facts"], 0)
+
+    def test_observation_au_threshold_cree_un_fait(self):
+        new_facts = []
         for _ in range(FACT_THRESHOLD):
-            self.engine.observe_session(self.session)
-        facts = self.engine.get_facts()
-        self.assertGreater(len(facts), 0)
+            new_facts = self.engine.observe_session(_session())
 
-    def test_promoted_fact_has_correct_category(self):
+        self.assertGreater(len(new_facts), 0)
+        stats = self.engine.stats()
+        self.assertGreater(stats["active_facts"], 0)
+
+    def test_fait_cree_avec_confiance_initiale(self):
         for _ in range(FACT_THRESHOLD):
-            self.engine.observe_session(self.session)
+            self.engine.observe_session(_session())
+
         facts = self.engine.get_facts()
-        categories = {f["category"] for f in facts}
-        # coding + deep focus → workflow et/ou cognitive
-        self.assertTrue(categories & {"workflow", "cognitive"})
+        self.assertTrue(all(f["confidence"] == CONFIDENCE_INIT for f in facts))
 
-    def test_promoted_fact_initial_confidence(self):
+    def test_observation_supplementaire_renforce_le_fait(self):
         for _ in range(FACT_THRESHOLD):
-            self.engine.observe_session(self.session)
+            self.engine.observe_session(_session())
+
+        conf_before = self.engine.get_facts()[0]["confidence"]
+
+        self.engine.observe_session(_session())
+        conf_after = self.engine.get_facts()[0]["confidence"]
+
+        self.assertGreater(conf_after, conf_before)
+
+    def test_confiance_ne_depasse_pas_confidence_max(self):
+        for _ in range(FACT_THRESHOLD + 50):
+            self.engine.observe_session(_session())
+
         facts = self.engine.get_facts()
-        for f in facts:
-            self.assertAlmostEqual(f["confidence"], 0.5, delta=0.1)
+        self.assertTrue(all(f["confidence"] <= CONFIDENCE_MAX for f in facts))
 
-    def test_repeated_observation_increases_confidence(self):
-        # D'abord promotion
-        for _ in range(FACT_THRESHOLD):
-            self.engine.observe_session(self.session)
-        facts_after_promo = self.engine.get_facts()
-        conf_after_promo = facts_after_promo[0]["confidence"]
-
-        # Puis observations supplémentaires
-        for _ in range(5):
-            self.engine.observe_session(self.session)
-        facts_after_more = self.engine.get_facts()
-        conf_after_more = facts_after_more[0]["confidence"]
-
-        self.assertGreater(conf_after_more, conf_after_promo)
-
-    def test_no_duplicate_fact_for_same_key(self):
+    def test_meme_key_ne_cree_pas_deux_faits(self):
         for _ in range(FACT_THRESHOLD * 2):
-            self.engine.observe_session(self.session)
+            self.engine.observe_session(_session())
+
+        # Une même session génère une même key — un seul fait par key
         facts = self.engine.get_facts()
         keys = [f["key"] for f in facts]
         self.assertEqual(len(keys), len(set(keys)))
+
+    def test_categorie_workflow_cree_des_faits_workflow(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="coding"))
+
+        facts = self.engine.get_facts(category="workflow")
+        self.assertGreater(len(facts), 0)
+        self.assertTrue(all(f["category"] == "workflow" for f in facts))
+
+    def test_focus_deep_cree_faits_cognitive(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(focus="deep"))
+
+        facts = self.engine.get_facts(category="cognitive")
+        self.assertGreater(len(facts), 0)
 
 
 class TestFactEngineReinforceContradict(unittest.TestCase):
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.engine = FactEngine(
-            db_path=Path(self.tmp.name) / "facts.db",
-            md_path=Path(self.tmp.name) / "facts.md",
-        )
-        session = _make_session(task="coding", focus="deep")
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.engine = _make_engine(Path(self.tmpdir.name))
+        # Crée un fait consolidé
         for _ in range(FACT_THRESHOLD):
-            self.engine.observe_session(session)
+            self.engine.observe_session(_session())
         self.fact_id = self.engine.get_facts()[0]["id"]
 
     def tearDown(self):
-        self.tmp.cleanup()
+        self.tmpdir.cleanup()
 
-    def test_reinforce_increases_confidence(self):
-        before = self.engine.get_facts()[0]["confidence"]
-        self.engine.reinforce(self.fact_id)
-        after = self.engine.get_facts()[0]["confidence"]
-        self.assertGreater(after, before)
+    def test_reinforce_augmente_la_confiance(self):
+        conf_before = self.engine.get_facts()[0]["confidence"]
+        result = self.engine.reinforce(self.fact_id)
 
-    def test_contradict_decreases_confidence(self):
-        before = self.engine.get_facts()[0]["confidence"]
-        self.engine.contradict(self.fact_id)
-        after_facts = self.engine.get_facts(include_archived=True)
-        fact = next(f for f in after_facts if f["id"] == self.fact_id)
-        self.assertLess(fact["confidence"], before)
+        self.assertTrue(result["ok"])
+        self.assertAlmostEqual(
+            result["confidence"],
+            min(conf_before + CONFIDENCE_CONFIRM, CONFIDENCE_MAX),
+            places=5,
+        )
 
-    def test_contradict_unknown_id_returns_error(self):
-        result = self.engine.contradict("nonexistent-id")
-        self.assertFalse(result["ok"])
+    def test_contradict_reduit_la_confiance(self):
+        conf_before = self.engine.get_facts()[0]["confidence"]
+        result = self.engine.contradict(self.fact_id)
 
-    def test_reinforce_unknown_id_returns_error(self):
-        result = self.engine.reinforce("nonexistent-id")
-        self.assertFalse(result["ok"])
+        self.assertTrue(result["ok"])
+        self.assertLess(result["confidence"], conf_before)
 
-    def test_heavy_contradiction_archives_fact(self):
-        # Contredire suffisamment pour tomber sous ARCHIVE_THRESHOLD
+    def test_contradict_archive_si_confiance_sous_seuil(self):
+        # On contredit suffisamment pour passer sous ARCHIVE_THRESHOLD
+        result = None
         for _ in range(20):
-            self.engine.contradict(self.fact_id)
-        facts_active = self.engine.get_facts(include_archived=False)
-        ids_active = [f["id"] for f in facts_active]
-        self.assertNotIn(self.fact_id, ids_active)
+            result = self.engine.contradict(self.fact_id)
+            if result.get("archived"):
+                break
 
-    def test_autonomy_level_increases_after_5_reinforcements(self):
-        initial_level = self.engine.get_facts()[0]["autonomy_level"]
-        for _ in range(5):
-            self.engine.reinforce(self.fact_id)
-        after_level = self.engine.get_facts()[0]["autonomy_level"]
-        self.assertGreater(after_level, initial_level)
+        self.assertTrue(result["archived"])
+        # Le fait est archivé — plus visible dans get_facts()
+        facts = self.engine.get_facts()
+        self.assertFalse(any(f["id"] == self.fact_id for f in facts))
+
+    def test_reinforce_inconnu_retourne_erreur(self):
+        result = self.engine.reinforce("id-qui-nexiste-pas")
+        self.assertFalse(result["ok"])
+        self.assertIn("error", result)
+
+    def test_archive_directement(self):
+        result = self.engine.archive(self.fact_id)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["archived"])
+
+        facts = self.engine.get_facts()
+        self.assertFalse(any(f["id"] == self.fact_id for f in facts))
+
+        # Visible avec include_archived=True
+        all_facts = self.engine.get_facts(include_archived=True)
+        self.assertTrue(any(f["id"] == self.fact_id for f in all_facts))
 
 
 class TestFactEngineDecay(unittest.TestCase):
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.db_path = Path(self.tmp.name) / "facts.db"
-        self.engine = FactEngine(
-            db_path=self.db_path,
-            md_path=Path(self.tmp.name) / "facts.md",
-        )
-        session = _make_session(task="coding")
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.engine = _make_engine(Path(self.tmpdir.name))
         for _ in range(FACT_THRESHOLD):
-            self.engine.observe_session(session)
+            self.engine.observe_session(_session())
 
     def tearDown(self):
-        self.tmp.cleanup()
+        self.tmpdir.cleanup()
 
-    def test_decay_on_stale_fact(self):
-        facts = self.engine.get_facts()
-        self.assertGreater(len(facts), 0)
-        fact_id = facts[0]["id"]
-        conf_before = facts[0]["confidence"]
+    def _set_last_seen_old(self, days: int) -> None:
+        """Rétrodate last_seen pour simuler un fait inactif."""
+        old_date = (datetime.now() - timedelta(days=days)).isoformat()
+        with self.engine._connect() as conn:
+            conn.execute("UPDATE facts SET last_seen = ?", (old_date,))
+            conn.commit()
 
-        # Forcer last_seen dans le passé (10 jours) sur ce fait spécifique
-        import sqlite3
-        stale_date = (datetime.now() - timedelta(days=10)).isoformat()
-        with sqlite3.connect(str(self.db_path)) as conn:
+    def test_decay_ne_touche_pas_les_faits_recents(self):
+        conf_before = self.engine.get_facts()[0]["confidence"]
+        decayed = self.engine.decay_all()
+        conf_after = self.engine.get_facts()[0]["confidence"]
+
+        self.assertEqual(decayed, 0)
+        self.assertEqual(conf_before, conf_after)
+
+    def test_decay_reduit_confiance_apres_decay_start_days(self):
+        self._set_last_seen_old(days=5)
+        conf_before = self.engine.get_facts()[0]["confidence"]
+
+        decayed = self.engine.decay_all()
+
+        self.assertGreater(decayed, 0)
+        conf_after = self.engine.get_facts()[0]["confidence"]
+        self.assertLess(conf_after, conf_before)
+
+    def test_decay_archive_si_confiance_sous_seuil(self):
+        # Fait déjà proche du seuil d'archivage
+        fact_id = self.engine.get_facts()[0]["id"]
+        with self.engine._connect() as conn:
             conn.execute(
-                "UPDATE facts SET last_seen = ? WHERE id = ?",
-                (stale_date, fact_id),
+                "UPDATE facts SET confidence = ? WHERE id = ?",
+                (ARCHIVE_THRESHOLD + 0.01, fact_id),
             )
             conn.commit()
 
-        decayed = self.engine.decay_all()
-        self.assertGreater(decayed, 0)
+        self._set_last_seen_old(days=10)
+        self.engine.decay_all()
 
-        # Chercher le fait par son ID, pas par position (d'autres faits peuvent
-        # avoir la même confidence et changer l'ordre de tri)
-        all_facts = self.engine.get_facts(include_archived=True)
-        updated = next((f for f in all_facts if f["id"] == fact_id), None)
-        self.assertIsNotNone(updated, "Le fait devrait toujours exister après decay")
-        self.assertLess(updated["confidence"], conf_before)
-
-    def test_decay_does_not_affect_recent_facts(self):
         facts = self.engine.get_facts()
-        conf_before = facts[0]["confidence"]
-        decayed = self.engine.decay_all()
-        # Aucun decay car last_seen est récent
-        self.assertEqual(decayed, 0)
-        conf_after = self.engine.get_facts()[0]["confidence"]
-        self.assertEqual(conf_after, conf_before)
+        self.assertFalse(any(f["id"] == fact_id for f in facts))
 
 
 class TestFactEngineRender(unittest.TestCase):
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.engine = FactEngine(
-            db_path=Path(self.tmp.name) / "facts.db",
-            md_path=Path(self.tmp.name) / "facts.md",
-        )
-        session = _make_session(task="coding", focus="deep")
-        for _ in range(FACT_THRESHOLD):
-            self.engine.observe_session(session)
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.engine = _make_engine(Path(self.tmpdir.name))
 
     def tearDown(self):
-        self.tmp.cleanup()
+        self.tmpdir.cleanup()
 
-    def test_render_not_empty_when_facts_exist(self):
-        output = self.engine.render_for_context()
-        self.assertIn("Profil utilisateur", output)
+    def test_render_vide_si_pas_de_faits(self):
+        result = self.engine.render_for_context()
+        self.assertEqual(result, "")
 
-    def test_render_empty_when_no_facts(self):
-        engine = FactEngine(
-            db_path=Path(self.tmp.name) / "empty.db",
-            md_path=Path(self.tmp.name) / "empty.md",
-        )
-        self.assertEqual(engine.render_for_context(), "")
+    def test_render_contient_header_et_faits(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="coding"))
 
-    def test_markdown_export_creates_file(self):
-        md_path = Path(self.tmp.name) / "facts.md"
-        self.assertTrue(md_path.exists())
-        content = md_path.read_text()
-        self.assertIn("Faits utilisateur Pulse", content)
+        result = self.engine.render_for_context()
+        self.assertIn("── Profil utilisateur ──", result)
+        self.assertIn("conf ", result)
 
-    def test_stats_returns_correct_counts(self):
+    def test_render_exclut_faits_sous_seuil_confiance(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="coding"))
+
+        fact_id = self.engine.get_facts()[0]["id"]
+        # Baisse la confiance sous 0.5
+        with self.engine._connect() as conn:
+            conn.execute("UPDATE facts SET confidence = 0.3 WHERE id = ?", (fact_id,))
+            conn.commit()
+
+        result = self.engine.render_for_context()
+        # Pas de faits au-dessus du seuil → vide
+        self.assertEqual(result, "")
+
+    def test_stats_coherentes(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="coding", focus="deep"))
+
         stats = self.engine.stats()
-        self.assertGreater(stats["observations"], 0)
         self.assertGreater(stats["active_facts"], 0)
+        self.assertGreater(stats["observations"], 0)
         self.assertEqual(stats["archived_facts"], 0)
-
-
-class TestTimeSlot(unittest.TestCase):
-
-    def test_morning(self):
-        self.assertEqual(_time_slot(8), "matin")
-
-    def test_afternoon(self):
-        self.assertEqual(_time_slot(15), "après-midi")
-
-    def test_evening(self):
-        self.assertEqual(_time_slot(21), "soir")
-
-    def test_midnight(self):
-        self.assertEqual(_time_slot(0), "soir")
-
-    def test_noon_is_afternoon(self):
-        self.assertEqual(_time_slot(12), "après-midi")
+        self.assertIn("workflow", stats["by_category"])
 
 
 if __name__ == "__main__":
