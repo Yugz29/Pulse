@@ -34,7 +34,7 @@ class StateStore:
 
         elif event.type in ("file_created", "file_modified", "file_renamed", "file_deleted"):
             path = event.payload.get("path", "")
-            significance = _file_signal_significance(path)
+            significance = file_signal_significance(path)
             if significance == "meaningful" and event.type != "file_deleted":
                 self._state.active_file = path
                 self._state.active_project = extract_project_name(path)
@@ -50,7 +50,7 @@ class StateStore:
             self._state.active_app = event.payload.get("app_name")
         elif event.type == "file_change":
             path = event.payload.get("path", "")
-            if _file_signal_significance(path) == "meaningful":
+            if file_signal_significance(path) == "meaningful":
                 self._state.active_file = path
                 self._state.active_project = extract_project_name(path)
 
