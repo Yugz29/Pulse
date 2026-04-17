@@ -9,7 +9,7 @@ Déclencheurs
 
 Anti-doublon
 ────────────
-  Curseur _last_report_at par projet : un rapport ne se génère pas
+  Curseur par projet dans _CooldownState : un rapport ne se génère pas
   si un autre a été écrit il y a moins de REPORT_COOLDOWN_MIN minutes
   pour le même projet. Le curseur est persisté dans cooldown.json pour
   survivre aux redémarrages du daemon — c'est la cause principale de
@@ -50,6 +50,11 @@ def reset_fact_engine_for_tests() -> None:
     _fact_engine = None
 
 
+def reset_cooldown_for_tests() -> None:
+    """Réinitialise le curseur anti-doublon pour isoler les suites de tests."""
+    _cooldown.reset()
+
+
 MEMORY_DIR = Path.home() / ".pulse" / "memory"
 
 # Cooldown minimum entre deux rapports pour un même projet (en minutes).
@@ -83,19 +88,26 @@ _NOISE_SUBSTRINGS = {
     "Capture d’écran", "Capture d'écran", "Screenshot",
 }
 
-# Curseur anti-doublon : {project_name: datetime du dernier rapport}
-# Chargé depuis cooldown.json au premier accès, persisté après chaque écriture.
-_last_report_at: Dict[str, datetime] = {}
-_cooldown_loaded: bool = False
+# Curseur anti-doublon encapsulé pour permettre le reset en test.
+class _CooldownState:
+    def __init__(self) -> None:
+        self.last_report_at: Dict[str, datetime] = {}
+        self.loaded: bool = False
+
+    def reset(self) -> None:
+        self.last_report_at = {}
+        self.loaded = False
+
+
+_cooldown = _CooldownState()
 _memory_write_lock = threading.Lock()
 
 
 def _load_cooldown() -> None:
     """Charge le curseur depuis le fichier JSON (une seule fois par processus)."""
-    global _last_report_at, _cooldown_loaded
-    if _cooldown_loaded:
+    if _cooldown.loaded:
         return
-    _cooldown_loaded = True
+    _cooldown.loaded = True
     try:
         if _COOLDOWN_FILE.exists():
             raw = json.loads(_COOLDOWN_FILE.read_text())
@@ -104,7 +116,7 @@ def _load_cooldown() -> None:
                 try:
                     dt = datetime.fromisoformat(iso)
                     if dt > cutoff:  # ignorer les entrées expirées
-                        _last_report_at[project] = dt
+                        _cooldown.last_report_at[project] = dt
                 except ValueError:
                     pass
     except Exception:
@@ -115,7 +127,7 @@ def _save_cooldown() -> None:
     """Persiste le curseur dans cooldown.json."""
     try:
         _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        data = {p: dt.isoformat() for p, dt in _last_report_at.items()}
+        data = {p: dt.isoformat() for p, dt in _cooldown.last_report_at.items()}
         _COOLDOWN_FILE.write_text(json.dumps(data))
     except Exception:
         pass  # non-bloquant
@@ -186,7 +198,7 @@ def update_memories_from_session(
     # Curseur anti-doublon — pas deux rapports en moins de REPORT_COOLDOWN_MIN
     # pour le même projet, sauf sur commit (unité de travail explicite).
     if trigger != "commit":
-        last = _last_report_at.get(project)
+        last = _cooldown.last_report_at.get(project)
         if last is not None:
             elapsed = (datetime.now() - last).total_seconds() / 60
             if elapsed < REPORT_COOLDOWN_MIN:
@@ -219,7 +231,7 @@ def update_memories_from_session(
     )
 
     # Avance le curseur après écriture réussie et le persiste sur disque
-    _last_report_at[project] = datetime.now()
+    _cooldown.last_report_at[project] = datetime.now()
     _save_cooldown()
 
     _update_index(base_dir)

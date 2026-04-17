@@ -13,6 +13,7 @@ from daemon.memory.extractor import (
     load_memory_context,
     read_commit_message,
     read_head_sha,
+    reset_cooldown_for_tests,
     reset_fact_engine_for_tests,
     should_use_llm_for_commit,
     update_memories_from_session,
@@ -782,5 +783,6 @@ class RuntimeOrchestrator:
             self._frozen_memory = None
             self._frozen_memory_at = None
         reset_fact_engine_for_tests()
+        reset_cooldown_for_tests()
         self._fact_engine = get_fact_engine()
         proposal_store.clear()
