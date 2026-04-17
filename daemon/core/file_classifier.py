@@ -146,6 +146,15 @@ def file_signal_significance(path: Optional[str]) -> str:
     ):
         return "technical_noise"
 
+    # Lockfiles — auto-générés, pas d'action utilisateur directe
+    _LOCKFILE_NAMES = {
+        "poetry.lock", "pipfile.lock", "cargo.lock",
+        "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+        "podfile.lock", "gemfile.lock", "composer.lock",
+    }
+    if name.lower() in _LOCKFILE_NAMES:
+        return "neutral"
+
     # Meaningful — type de fichier connu et utile
     file_type = classify_file_type(path)
     if file_type in {"source", "test", "config", "docs", "assets"}:
