@@ -212,6 +212,9 @@ class SessionMemory:
                 path = payload.get("path")
                 if path:
                     file_counts[path] = file_counts.get(path, 0) + 1
+                    # Note : le filtrage du bruit système (site-packages, .git, etc.)
+                    # est assuré en amont par _should_publish_to_bus() dans routes/runtime.py.
+                    # Les events qui arrivent ici sont déjà des fichiers meaningful.
 
         # Fichiers les plus touchés en premier (top 8), on garde juste le nom relatif
         top_files = sorted(file_counts.items(), key=lambda x: x[1], reverse=True)[:8]
