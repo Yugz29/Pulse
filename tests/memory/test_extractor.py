@@ -30,8 +30,7 @@ class TestExtractor(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.memory_dir = Path(self.tmpdir.name)
         # Réinitialise le curseur et l'état de chargement entre chaque test
-        extractor_module._last_report_at.clear()
-        extractor_module._cooldown_loaded = False
+        extractor_module.reset_cooldown_for_tests()
         extractor_module.reset_fact_engine_for_tests()
         extractor_module._fact_engine = extractor_module.FactEngine(
             db_path=Path(self.tmpdir.name) / "facts.db",
@@ -293,7 +292,7 @@ class TestExtractor(unittest.TestCase):
         }
         # Simule un curseur vieux de 31 minutes
         past = datetime.now() - timedelta(minutes=31)
-        extractor_module._last_report_at["Pulse"] = past
+        extractor_module._cooldown.last_report_at["Pulse"] = past
 
         update_memories_from_session(session, memory_dir=self.memory_dir, trigger="screen_lock")
 
@@ -369,9 +368,8 @@ class TestExtractor(unittest.TestCase):
         update_memories_from_session(session, memory_dir=self.memory_dir, trigger="screen_lock")
         self.assertTrue(extractor_module._COOLDOWN_FILE.exists())
 
-        # Simule un restart : remet _cooldown_loaded à False, vide le dict
-        extractor_module._last_report_at.clear()
-        extractor_module._cooldown_loaded = False
+        # Simule un restart : remet le cooldown à zéro
+        extractor_module.reset_cooldown_for_tests()
 
         # Deuxième daemon : doit lire le curseur et bloquer le rapport
         update_memories_from_session(session, memory_dir=self.memory_dir, trigger="screen_lock")
