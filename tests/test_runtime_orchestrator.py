@@ -208,6 +208,39 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(self.orchestrator.get_frozen_memory(), "Structured memory")
         self.assertIsInstance(self.orchestrator.get_frozen_memory_at(), datetime)
 
+    def test_freeze_memory_mis_a_jour_apres_sync(self):
+        """freeze_memory() reflète toujours le contenu le plus récent."""
+        self.memory_store.render.return_value = "Avant sync"
+        self.orchestrator.freeze_memory()
+        self.assertEqual(self.orchestrator.get_frozen_memory(), "Avant sync")
+
+        # Simule une mise à jour de la mémoire après une sync
+        self.memory_store.render.return_value = "Après sync"
+        self.orchestrator.freeze_memory()
+
+        self.assertEqual(self.orchestrator.get_frozen_memory(), "Après sync")
+        self.assertIsInstance(self.orchestrator.get_frozen_memory_at(), datetime)
+
+    def test_freeze_memory_inclut_facts_profile_si_disponible(self):
+        """Le profil utilisateur du FactEngine est concaténé à la mémoire structurée."""
+        self.memory_store.render.return_value = "Structured memory"
+        self.mock_fact_engine.render_for_context.return_value = "── Profil utilisateur ──\n• [workflow] Coding le soir"
+
+        self.orchestrator.freeze_memory()
+
+        frozen = self.orchestrator.get_frozen_memory()
+        self.assertIn("Structured memory", frozen)
+        self.assertIn("Profil utilisateur", frozen)
+
+    def test_freeze_memory_fonctionne_sans_memory_store(self):
+        """Si memory_store.render() retourne vide, legacy load_memory_context est utilisé."""
+        self.memory_store.render.return_value = ""
+
+        with patch("daemon.runtime_orchestrator.load_memory_context", return_value="Legacy memory"):
+            self.orchestrator.freeze_memory()
+
+        self.assertEqual(self.orchestrator.get_frozen_memory(), "Legacy memory")
+
     def test_deferred_startup_loads_models_purges_memory_and_warms_provider(self):
         provider = MagicMock()
         provider.model = "gemma4:e4b"
