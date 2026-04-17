@@ -1,10 +1,12 @@
 import importlib
+import logging
 from typing import Optional
 
 from daemon.core.proposals import Proposal, proposal_store
 from daemon.interpreter.command_interpreter import CommandInterpreter
 from daemon.llm.unavailable import UnavailableLLMRouter
 
+log = logging.getLogger("pulse")
 interpreter = CommandInterpreter()
 
 
@@ -63,8 +65,8 @@ def intercept_command(command: str, tool_use_id: str) -> dict:
     if result.needs_llm:
         translated = _translate_with_llm(command, translated)
 
-    # 2. Affiche dans le terminal
-    _print_interception(command, translated, result)
+    # 2. Log de l'interception
+    _log_interception(command, translated, result)
 
     # 3. Construit la proposition réutilisable et la place dans la file
     proposal = _build_risky_command_proposal(
@@ -84,7 +86,7 @@ def intercept_command(command: str, tool_use_id: str) -> dict:
         decision, status = _decision_from_proposal_status(resolved.status)
 
     if status == "expired":
-        print(f"[MCP] Timeout — commande refusée par défaut : {command}")
+        log.warning("MCP: timeout 60s — commande refusée par défaut : %s", command)
 
     return {
         **_proposal_to_api_payload(proposal_store.get(proposal.id) or proposal),
@@ -147,7 +149,12 @@ def _translate_with_llm(command: str, fallback: str) -> str:
     try:
         translated = llm_router.complete(prompt=prompt, system=system, max_tokens=80)
         return translated.strip() or fallback
-    except Exception:
+    except Exception as exc:
+        log.warning(
+            "MCP: traduction LLM echouee pour %r, fallback deterministe utilise : %s",
+            command[:60],
+            exc,
+        )
         return fallback
 
 
@@ -235,19 +242,24 @@ def _decision_from_proposal_status(status: str) -> tuple[str, str]:
     return "deny", status
 
 
-def _print_interception(command: str, translated: str, result):
-    """Affiche l'interception dans le terminal."""
-    risk_icons = {
-        "safe":     "✅",
-        "low":      "🟡",
-        "medium":   "🟠",
-        "high":     "🔴",
-        "critical": "💀",
-    }
-    icon = risk_icons.get(result.risk_level, "❓")
-    print(f"\n[MCP] Commande interceptée")
-    print(f"  {icon} {translated}")
-    print(f"  Risque : {result.risk_level} ({result.risk_score}/100)")
-    if result.warning:
-        print(f"  ⚠ {result.warning}")
-    print(f"  Commande : {command}\n")
+_RISK_ICONS = {
+    "safe":     "[safe]",
+    "low":      "[low]",
+    "medium":   "[medium]",
+    "high":     "[high]",
+    "critical": "[critical]",
+}
+
+
+def _log_interception(command: str, translated: str, result) -> None:
+    """Log l'interception MCP via le logger structuré du daemon."""
+    icon = _RISK_ICONS.get(result.risk_level, "[?]")
+    log.info(
+        "MCP intercept risk=%s score=%d icon=%s translated=%r command=%r warning=%s",
+        result.risk_level,
+        result.risk_score,
+        icon,
+        translated,
+        command,
+        result.warning or "none",
+    )
