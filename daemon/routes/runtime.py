@@ -34,6 +34,8 @@ def register_runtime_routes(
         payload = {key: value for key, value in data.items() if key != "type"}
         if runtime_state.is_paused():
             return jsonify({"ok": True, "paused": True, "ignored": True})
+        if not _should_publish_to_bus(event_type, payload):
+            return jsonify({"ok": True, "filtered": True})
         # Répond immédiatement — Swift ne doit jamais attendre le pipeline SQLite.
         threading.Thread(target=bus.publish, args=(event_type, payload), daemon=True).start()
         return jsonify({"ok": True})
@@ -87,7 +89,7 @@ def register_runtime_routes(
             path = (event.payload or {}).get("path", "")
             return file_signal_significance(path) == "meaningful"
 
-        recent = bus.recent(limit * 4)  # over-fetch pour compenser le filtrage
+        recent = bus.recent(limit * 2)  # over-fetch léger — le bus est déjà filtré à l'entrée
         filtered = [e for e in recent if _is_meaningful(e)]
         visible = filtered[-limit:]
 
@@ -131,3 +133,34 @@ def register_runtime_routes(
 
         threading.Thread(target=_exit, daemon=True).start()
         return jsonify({"ok": True, "action": "restart"})
+
+
+# ── Bus entry filter ──────────────────────────────────────────────────────────
+
+_BUS_FILE_EVENT_TYPES: frozenset[str] = frozenset({
+    "file_created", "file_modified", "file_renamed",
+    "file_deleted", "file_change",
+})
+
+
+def _should_publish_to_bus(event_type: str, payload: dict) -> bool:
+    """
+    Décide si un event doit entrer dans l'EventBus.
+
+    Règles :
+    - Les events non-fichier (app, screen, clipboard) passent toujours.
+    - COMMIT_EDITMSG passe toujours — l'orchestrateur en a besoin
+      pour la détection de commit.
+    - Les autres events fichier sont filtrés par file_signal_significance :
+      seuls les chemins 'meaningful' entrent dans le bus.
+    """
+    if event_type not in _BUS_FILE_EVENT_TYPES:
+        return True
+
+    path = payload.get("path", "")
+
+    # Exception critique : COMMIT_EDITMSG déclenche la détection de commit.
+    if "COMMIT_EDITMSG" in path:
+        return True
+
+    return file_signal_significance(path) == "meaningful"
