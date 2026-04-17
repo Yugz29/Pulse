@@ -25,3 +25,15 @@ class UnavailableLLMRouter:
 
     def set_model(self, model: str) -> None:
         self._model = model
+
+    def stream_messages(self, *args, **kwargs):
+        message = "LLM unavailable"
+        if self.reason:
+            message = f"{message}: {self.reason}"
+        raise RuntimeError(message)
+
+    def chat_with_tools(self, *args, **kwargs) -> dict:
+        message = "LLM unavailable"
+        if self.reason:
+            message = f"{message}: {self.reason}"
+        raise RuntimeError(message)

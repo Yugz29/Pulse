@@ -39,3 +39,26 @@ class LLMRouter:
 
     def set_model(self, model: str) -> None:
         self.default.model = model
+
+    def stream_messages(self, messages: list, max_tokens: int = 600):
+        """
+        Streaming sur un historique complet de messages.
+        Délègue au provider actif.
+        """
+        return self.default.stream_messages(messages=messages, max_tokens=max_tokens)
+
+    def chat_with_tools(
+        self,
+        messages: list,
+        tools: list,
+        max_tokens: int = 600,
+    ) -> dict:
+        """
+        Appel non-streaming avec tool calling.
+        Délègue au provider actif.
+        """
+        return self.default.chat_with_tools(
+            messages=messages,
+            tools=tools,
+            max_tokens=max_tokens,
+        )

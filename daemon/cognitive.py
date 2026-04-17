@@ -374,7 +374,6 @@ def ask_stream(
         return
 
     system = build_system_prompt(context_snapshot, frozen_memory, user_message=message.strip())
-    provider = getattr(llm, "default", llm)  # unwrap LLMRouter → OllamaProvider
     messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -383,7 +382,7 @@ def ask_stream(
 
     saw_token = False
     try:
-        for token in provider.stream_messages(
+        for token in llm.stream_messages(
             messages=messages,
             max_tokens=max_tokens,
         ):
@@ -537,9 +536,6 @@ def ask_stream_with_tools(
         return
 
     system = build_system_prompt(context_snapshot, frozen_memory, user_message=message.strip())
-    provider = getattr(llm, "default", llm)  # unwrap LLMRouter → OllamaProvider
-
-    # Historique de conversation (système + utilisateur + résultats outils)
     messages: list[dict] = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -553,7 +549,7 @@ def ask_stream_with_tools(
     try:
         for _ in range(_MAX_TOOL_ITERATIONS):
             # ─ Décision : outil ou réponse directe ?
-            response = provider.chat_with_tools(
+            response = llm.chat_with_tools(
                 messages=messages,
                 tools=tools,
                 max_tokens=max_tokens,
