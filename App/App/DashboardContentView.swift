@@ -225,8 +225,13 @@ struct NowSummaryCard: View {
     }
 
     private var taskLabel: String {
-        let raw = vm.probableTask.trimmingCharacters(in: .whitespacesAndNewlines)
-        return raw.isEmpty ? "général" : raw
+        switch vm.probableTask {
+        case "coding":   return "Développement"
+        case "debug":    return "Débogage"
+        case "writing":  return "Rédaction"
+        case "browsing": return "Navigation"
+        default:         return "Général"
+        }
     }
 
     private var focusLabel: String {
@@ -252,45 +257,57 @@ struct NowSummaryCard: View {
         return Color(hex: "#5DCAA5")
     }
 
+    private var isPresenceOnly: Bool {
+        vm.probableTask == "general"
+    }
+
+    private var cardOpacity: Double {
+        isPresenceOnly ? 0.6 : 1.0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(currentAppLabel)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.84))
+                            .font(.system(size: 13, weight: isPresenceOnly ? .regular : .semibold))
+                            .foregroundColor(.white.opacity(isPresenceOnly ? 0.52 : 0.84))
                             .lineLimit(1)
                         Text(currentFileLabel)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.46))
+                            .foregroundColor(.white.opacity(0.30))
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
 
                     Spacer()
 
-                    VStack(alignment: .trailing, spacing: 5) {
-                        Text("Friction")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.32))
-                        Text(frictionLabel)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(frictionColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(frictionColor.opacity(0.14))
-                            .clipShape(Capsule())
+                    if vm.frictionScore >= 0.3 {
+                        VStack(alignment: .trailing, spacing: 5) {
+                            Text("Friction")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.32))
+                            Text(frictionLabel)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(frictionColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(frictionColor.opacity(0.14))
+                                .clipShape(Capsule())
+                        }
                     }
                 }
 
                 HStack(spacing: 8) {
-                    summaryMetric(label: "Tâche", value: taskLabel, tint: taskColor)
-                    summaryMetric(label: "Focus", value: focusLabel, tint: focusColor)
+                    if !isPresenceOnly {
+                        summaryMetric(label: "Tâche", value: taskLabel, tint: taskColor)
+                        summaryMetric(label: "Focus", value: focusLabel, tint: focusColor)
+                    }
                     summaryMetric(
-                        label: vm.probableTask == "general" ? "Présence" : "Session",
+                        label: isPresenceOnly ? "Présence" : "Session",
                         value: "\(max(vm.sessionDuration, 0)) min",
-                        tint: Color.white.opacity(0.42)
+                        tint: isPresenceOnly ? Color.white.opacity(0.22) : Color.white.opacity(0.42)
                     )
                 }
 
