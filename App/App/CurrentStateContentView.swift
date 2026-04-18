@@ -104,6 +104,13 @@ struct CurrentStateView: View {
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.36))
                     .lineLimit(2)
+
+                if let continuity = continuityLine {
+                    Text(continuity)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.28))
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.vertical, 8)
@@ -140,11 +147,12 @@ struct CurrentStateView: View {
            let fileActivity = signals.fileActivitySummary {
             parts.append(fileActivity)
         }
-        if vm.probableTask != "general",
-           let lastSessionContext = currentSignals?.lastSessionContext {
-            parts.append(lastSessionContext)
-        }
         return parts.isEmpty ? "Pas encore assez de contexte local." : parts.joined(separator: " · ")
+    }
+
+    private var continuityLine: String? {
+        guard vm.probableTask != "general" else { return nil }
+        return currentSignals?.lastSessionContext
     }
 
     private func proposalRow(_ proposal: ProposalRecord) -> some View {
