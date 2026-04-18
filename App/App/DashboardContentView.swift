@@ -288,7 +288,7 @@ struct NowSummaryCard: View {
                     summaryMetric(label: "Tâche", value: taskLabel, tint: taskColor)
                     summaryMetric(label: "Focus", value: focusLabel, tint: focusColor)
                     summaryMetric(
-                        label: "Session",
+                        label: vm.probableTask == "general" ? "Présence" : "Session",
                         value: "\(max(vm.sessionDuration, 0)) min",
                         tint: Color.white.opacity(0.42)
                     )

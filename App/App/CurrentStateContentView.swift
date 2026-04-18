@@ -133,7 +133,8 @@ struct CurrentStateView: View {
             parts.append("App : \(app)")
         }
         if vm.sessionDuration > 0 {
-            parts.append("Session : \(vm.sessionDuration) min")
+            let durationLabel = vm.probableTask == "general" ? "Présence" : "Session"
+            parts.append("\(durationLabel) : \(vm.sessionDuration) min")
         }
         if let signals = currentSignals,
            let fileActivity = signals.fileActivitySummary {
