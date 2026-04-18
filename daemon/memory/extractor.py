@@ -283,6 +283,68 @@ def enrich_session_report(
     return _replace_journal_entry(journal_file, entry_id, body)
 
 
+def last_session_context(
+    project: str,
+    memory_dir: Optional[Path] = None,
+    today: Optional["date"] = None,
+) -> Optional[str]:
+    """
+    Retourne une ligne de contexte sur la dernière session connue pour ce projet.
+
+    Lit projects.md (déjà écrit par _update_projects) — aucune nouvelle donnée.
+    Exemple : "Dernière session Pulse : hier (développement, 45 min)"
+
+    Retourne None si le projet est inconnu, si les données sont absentes,
+    ou si le parsing échoue. Ne lève jamais d'exception.
+
+    Paramètres :
+      project    : nom du projet actif
+      memory_dir : répertoire mémoire (défaut : MEMORY_DIR)
+      today      : date de référence pour le calcul d'âge (défaut : aujourd'hui)
+                   injecté pour les tests sans mock de datetime
+    """
+    from datetime import date as _date
+
+    base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
+    sections = _parse_project_sections(base_dir / "projects.md")
+    entry = sections.get(project)
+    if not entry or not entry.get("last_session"):
+        return None
+
+    try:
+        last_date = datetime.strptime(entry["last_session"], "%Y-%m-%d").date()
+        ref_today = today if today is not None else datetime.now().date()
+        delta = (ref_today - last_date).days
+
+        if delta < 0:
+            return None  # date future — donnée corrompue
+        elif delta == 0:
+            age = "aujourd'hui"
+        elif delta == 1:
+            age = "hier"
+        elif delta <= 6:
+            age = f"il y a {delta} jours"
+        elif delta <= 13:
+            age = "la semaine dernière"
+        else:
+            age = f"il y a {delta // 7} semaine(s)"
+
+        _task_labels = {
+            "coding":   "développement",
+            "debug":    "débogage",
+            "writing":  "rédaction",
+            "browsing": "navigation",
+        }
+        raw_task = entry.get("task") or "general"
+        task = _task_labels.get(raw_task, raw_task)
+        duration = int(entry.get("last_duration") or 0)
+
+        return f"Dernière session {project} : {age} ({task}, {duration} min)"
+
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def load_memory_context(memory_dir: Optional[Path] = None) -> str:
     """Fallback legacy : lit projects.md uniquement (habits.md = bruit pur)."""
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
