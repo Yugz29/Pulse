@@ -9,6 +9,7 @@ from typing import Any, Callable
 from flask import Flask, jsonify, request
 
 from daemon.core.file_classifier import file_signal_significance
+from daemon.memory.extractor import last_session_context
 
 
 def register_runtime_routes(
@@ -60,6 +61,7 @@ def register_runtime_routes(
                 "rename_delete_ratio_10m": signals.rename_delete_ratio_10m,
                 "dominant_file_mode": signals.dominant_file_mode,
                 "work_pattern_candidate": signals.work_pattern_candidate,
+                "last_session_context": last_session_context(signals.active_project) if signals.active_project else None,
             }
         if decision:
             state["decision"] = {

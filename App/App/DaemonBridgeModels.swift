@@ -40,6 +40,7 @@ struct SignalsData: Codable {
     let renameDeleteRatio10m: Double?
     let dominantFileMode: String?
     let workPatternCandidate: String?
+    let lastSessionContext: String?
 
     enum CodingKeys: String, CodingKey {
         case activeProject = "active_project"
@@ -55,6 +56,7 @@ struct SignalsData: Codable {
         case renameDeleteRatio10m = "rename_delete_ratio_10m"
         case dominantFileMode = "dominant_file_mode"
         case workPatternCandidate = "work_pattern_candidate"
+        case lastSessionContext = "last_session_context"
     }
 
     var taskLabel: String {

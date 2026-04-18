@@ -140,6 +140,10 @@ struct CurrentStateView: View {
            let fileActivity = signals.fileActivitySummary {
             parts.append(fileActivity)
         }
+        if vm.probableTask != "general",
+           let lastSessionContext = currentSignals?.lastSessionContext {
+            parts.append(lastSessionContext)
+        }
         return parts.isEmpty ? "Pas encore assez de contexte local." : parts.joined(separator: " · ")
     }
 
