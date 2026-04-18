@@ -10,6 +10,7 @@ from daemon.memory.extractor import (
     enrich_session_report,
     find_git_root,
     get_fact_engine,
+    last_session_context,
     load_memory_context,
     read_commit_message,
     read_head_sha,
@@ -231,6 +232,13 @@ class RuntimeOrchestrator:
                     lines.append(f"- {diff.replace(chr(10), chr(10) + '  ')}")
             except Exception:
                 pass
+
+        # Continuité projet — la dernière session connue pour ce projet
+        # last_session_context() retourne None proprement si donnée absente.
+        if active_project:
+            session_ctx = last_session_context(active_project)
+            if session_ctx:
+                lines.append(f"- {session_ctx}")
 
         return "\n".join(lines)
 
