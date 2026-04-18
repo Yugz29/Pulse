@@ -77,6 +77,7 @@ def build_system_prompt(
     """
     context_block = _bounded_context_block(context_snapshot, frozen_memory)
     guidance_blocks = [
+        _memory_guidance_block(frozen_memory),
         _context_guidance_block(context_snapshot),
         _question_guidance_block(user_message),
     ]
@@ -144,6 +145,57 @@ def _bounded_context_block(context_snapshot: str, frozen_memory: str = "") -> st
     if snapshot:
         parts.append(snapshot)
     return "\n\n".join(parts) if parts else "(aucun contexte disponible)"
+
+
+def _memory_guidance_block(frozen_memory: str) -> str:
+    """
+    Extrait le profil utilisateur du bloc FactEngine dans frozen_memory
+    et le convertit en hints explicites pour le LLM.
+
+    Le profil est présent dans frozen_memory sous la forme :
+      ── Profil utilisateur ──
+      • [workflow] Travaille principalement le soir en mode développement  (conf 0.82)
+      • [cognitif] Sessions longues avec focus profond le matin  (conf 0.71)
+
+    Sans ce bloc, les faits consolidés par FactEngine sont présents dans
+    le prompt comme texte passif — le LLM les lit peut-être, mais rien
+    ne l'oriente à s'en servir activement.
+    """
+    if not frozen_memory or "── Profil utilisateur ──" not in frozen_memory:
+        return ""
+
+    # Extrait les lignes du bloc profil
+    lines = frozen_memory.splitlines()
+    profile_lines: list[str] = []
+    in_profile = False
+    for line in lines:
+        if "── Profil utilisateur ──" in line:
+            in_profile = True
+            continue
+        if in_profile:
+            stripped = line.strip()
+            if not stripped:
+                break  # fin du bloc
+            if stripped.startswith("•"):
+                # Extrait la description sans le label de catégorie ni la confiance
+                # Format : • [cat] description  (conf 0.82)
+                desc = stripped.lstrip("•").strip()
+                # Supprime la confiance en fin de ligne
+                if "  (conf " in desc:
+                    desc = desc[:desc.rfind("  (conf ")].strip()
+                # Supprime le label [cat]
+                if desc.startswith("[") and "]" in desc:
+                    desc = desc[desc.index("]") + 1:].strip()
+                if desc:
+                    profile_lines.append(f"- {desc}")
+
+    if not profile_lines:
+        return ""
+
+    return (
+        "Profil utilisateur à prendre en compte pour personnaliser ta réponse :\n"
+        + "\n".join(profile_lines[:4])  # max 4 faits pour éviter le bruit
+    )
 
 
 def _context_guidance_block(context_snapshot: str) -> str:
