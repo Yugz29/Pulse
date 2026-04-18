@@ -25,6 +25,13 @@ class Signals:
     work_pattern_candidate: Optional[str] = None
 
 
+# Durée d'inactivité au-delà de laquelle une nouvelle session commence.
+SESSION_TIMEOUT_MIN = 10
+
+# Types d'events qui comptent comme activité significative pour les limites de session.
+_MEANINGFUL_FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed"}
+
+
 class SignalScorer:
     """Convertit les derniers events en signaux simples pour le moteur local."""
 
@@ -38,14 +45,36 @@ class SignalScorer:
     def __init__(self, bus: EventBus):
         self.bus = bus
         self._session_start = datetime.now()
+        self._last_meaningful_activity_at: Optional[datetime] = None
 
     def reset_session(self) -> None:
-        """Réinitialise l'horloge de session — appelé après une longue veille."""
+        """Réinitialise l'horloge de session — appelé après une veille ou un screen_lock."""
         self._session_start = datetime.now()
+        self._last_meaningful_activity_at = None
 
     def compute(self) -> Signals:
         recent = self.bus.recent(100)
         now = datetime.now()
+
+        # ── Détection des limites de session ──────────────────────────────────────────────
+        # On cherche le timestamp de la dernière activité significative dans le bus.
+        # Si le gap avec la précédente dépasse SESSION_TIMEOUT_MIN ou qu'un
+        # screen_lock s'était produit entre les deux, la session redémarre
+        # à partir de cette nouvelle activité.
+        latest_meaningful = self._find_latest_meaningful_activity(recent)
+        if latest_meaningful is not None and latest_meaningful >= self._session_start:
+            prev = self._last_meaningful_activity_at
+            if prev is not None:
+                screen_locked = self._has_screen_lock_after(recent, prev)
+                gap_min = (latest_meaningful - prev).total_seconds() / 60
+                if screen_locked or gap_min > SESSION_TIMEOUT_MIN:
+                    self._session_start = latest_meaningful
+            else:
+                # Première activité significative depuis le démarrage ou le dernier reset :
+                # la session démarre réellement maintenant, pas au démarrage du daemon.
+                self._session_start = latest_meaningful
+            self._last_meaningful_activity_at = latest_meaningful
+        # ───────────────────────────────────────────────────────────────────
 
         file_events = [
             e for e in recent
@@ -322,3 +351,25 @@ class SignalScorer:
 
     def _is_pulse_internal_path(self, path: str) -> bool:
         return is_pulse_internal_path(path)
+
+    def _find_latest_meaningful_activity(self, events: list) -> Optional[datetime]:
+        """
+        Retourne le timestamp de la dernière activité significative pour les
+        limites de session : modification de fichier OU usage d'une app de dev.
+        Évènements inspectés depuis la fin du bus (le plus récent en premier).
+        """
+        for event in reversed(events):
+            if event.type in _MEANINGFUL_FILE_EVENT_TYPES:
+                if self._is_trackable_file_path(event.payload.get("path")):
+                    return event.timestamp
+            if event.type in {"app_activated", "app_switch"}:
+                if event.payload.get("app_name") in self.DEV_APPS:
+                    return event.timestamp
+        return None
+
+    def _has_screen_lock_after(self, events: list, since: datetime) -> bool:
+        """Retourne True s'il y a eu un screen_locked après `since` dans le bus."""
+        return any(
+            event.type == "screen_locked" and event.timestamp > since
+            for event in events
+        )
