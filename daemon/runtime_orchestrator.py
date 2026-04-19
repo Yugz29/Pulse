@@ -185,12 +185,23 @@ class RuntimeOrchestrator:
         state = self.store.to_dict()
         signals, _ = self.runtime_state.get_context_snapshot()
 
-        active_project = state.get("active_project") or (signals.active_project if signals else None)
-        active_file = state.get("active_file") or (signals.active_file if signals else None)
+        # C4 — Signals est prioritaire sur StateStore pour active_file et active_project.
+        # Raison : signals.active_file vient de _last_file_path() qui exclut file_deleted
+        # et opère sur une fenêtre courante. StateStore.active_file ne se réinitialise
+        # jamais à None — il peut pointer un fichier obsolète depuis le démarrage du daemon.
+        # Fallback sur state uniquement si signals n'a pas de valeur courante.
+        active_project = (signals.active_project if signals else None) or state.get("active_project")
+        active_file    = (signals.active_file    if signals else None) or state.get("active_file")
         active_app = state.get("active_app")
-        session_duration_min = state.get("session_duration_min")
-        if not session_duration_min and signals:
+
+        # C5 — Signals est la source de vérité pour la durée de session.
+        # StateStore.session_start est figé au démarrage du daemon et n'est jamais
+        # resynchronisé sur les frontières de session. Sa valeur est quasi-toujours
+        # supérieure ou égale à la vraie durée. On préfère 0 à une durée fausse.
+        if signals and signals.session_duration_min > 0:
             session_duration_min = signals.session_duration_min
+        else:
+            session_duration_min = 0
 
         # Racine git pour les outils
         project_root: str | None = None

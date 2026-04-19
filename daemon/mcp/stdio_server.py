@@ -104,17 +104,20 @@ def handle_request(request: dict) -> dict | None:
             })
 
             if result is None:
-                # Daemon injoignable → analyse locale sans bloquer
-                _log("Fallback local — daemon injoignable")
+                # Daemon injoignable : on ne laisse jamais passer une commande risquée.
+                # Seules les commandes en lecture seule (ls, cat, git log…) sont autorisées
+                # car elles ne peuvent pas modifier le système.
+                _log("Fallback local — daemon injoignable, commandes risquées refusées par précaution")
                 local = interpreter.interpret(command)
+                is_safe = local.is_read_only
                 result = {
-                    "translated":  local.translated,
-                    "risk_level":  local.risk_level,
-                    "risk_score":  local.risk_score,
+                    "translated":   local.translated,
+                    "risk_level":   local.risk_level,
+                    "risk_score":   local.risk_score,
                     "is_read_only": local.is_read_only,
-                    "warning":     local.warning,
-                    "allowed":     True,   # pas de daemon = on laisse passer
-                    "decision":    "allow"
+                    "warning":      None if is_safe else "Daemon Pulse injoignable — commande bloquée par précaution.",
+                    "allowed":      is_safe,
+                    "decision":     "allow" if is_safe else "deny",
                 }
 
             risk_icons = {"safe":"✅","low":"🟡","medium":"🟠","high":"🔴","critical":"💀"}

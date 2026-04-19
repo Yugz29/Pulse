@@ -526,5 +526,187 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(len(history), 1)
 
 
+    # ── C4 : priorité signals > state pour active_file et active_project ──────
+
+    def test_c4_signals_active_file_prime_sur_state_active_file(self):
+        """
+        Quand signals a un fichier actif, il doit primer sur StateStore.
+        StateStore peut pointer un fichier obsolète (ancien session, fichier supprimé).
+        """
+        self.store.to_dict.return_value = {
+            "active_project": "OldProject",
+            "active_file": "/stale/path/from_store.py",  # ← StateStore : potentiellement obsolète
+            "active_app": "Xcode",
+            "session_duration_min": 999,
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/fresh/path/current.py",  # ← Signals : fenêtre courante
+                probable_task="coding",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=30,
+                recent_apps=["Xcode"],
+                clipboard_context=None,
+            ),
+            decision=None,
+        )
+
+        snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("/fresh/path/current.py", snapshot,
+            "signals.active_file doit primer sur state.active_file")
+        self.assertNotIn("/stale/path/from_store.py", snapshot,
+            "Le fichier StateStore obsolète ne doit pas apparaître dans le snapshot LLM")
+        self.assertIn("- Projet : Pulse", snapshot,
+            "signals.active_project doit primer sur state.active_project")
+        self.assertNotIn("OldProject", snapshot)
+
+    def test_c4_fallback_sur_state_si_signals_active_file_est_none(self):
+        """
+        Quand signals.active_file est None (bus vide ou fenêtre vide),
+        on se rabat sur StateStore comme dernier recours.
+        """
+        self.store.to_dict.return_value = {
+            "active_project": "FallbackProject",
+            "active_file": "/fallback/from_store.py",
+            "active_app": "Terminal",
+            "session_duration_min": 10,
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project=None,   # ← Signals n'a pas de fichier courant
+                active_file=None,
+                probable_task="general",
+                friction_score=0.0,
+                focus_level="normal",
+                session_duration_min=5,
+                recent_apps=[],
+                clipboard_context=None,
+            ),
+            decision=None,
+        )
+
+        snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("/fallback/from_store.py", snapshot,
+            "state.active_file doit être utilisé en fallback quand signals.active_file est None")
+        self.assertIn("FallbackProject", snapshot)
+
+    def test_c4_aucun_fichier_affiche_aucun_si_les_deux_sont_none(self):
+        """Cas démarrage à froid : ni signals ni state n'ont de fichier."""
+        self.store.to_dict.return_value = {
+            "active_project": None,
+            "active_file": None,
+            "active_app": None,
+            "session_duration_min": 0,
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project=None,
+                active_file=None,
+                probable_task="general",
+                friction_score=0.0,
+                focus_level="normal",
+                session_duration_min=0,
+                recent_apps=[],
+                clipboard_context=None,
+            ),
+            decision=None,
+        )
+
+        snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("- Fichier actif : aucun", snapshot)
+        self.assertIn("- Projet : non détecté", snapshot)
+
+    # ── C5 : priorité signals > state pour session_duration_min ─────────────
+
+    def test_c5_signals_duration_prime_sur_state_duration(self):
+        """
+        StateStore.session_start est figé au démarrage du daemon.
+        La valeur renvoyée par state.session_duration_min est presque toujours
+        plus grande que la vraie durée de session. Signals doit primer.
+        """
+        self.store.to_dict.return_value = {
+            "active_project": "Pulse",
+            "active_file": None,
+            "active_app": "Xcode",
+            "session_duration_min": 240,  # ← StateStore : depuis le démarrage du daemon
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project="Pulse",
+                active_file=None,
+                probable_task="coding",
+                friction_score=0.0,
+                focus_level="normal",
+                session_duration_min=45,  # ← Signals : vraie durée de session
+                recent_apps=["Xcode"],
+                clipboard_context=None,
+            ),
+            decision=None,
+        )
+
+        snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("- Durée session : 45 min", snapshot,
+            "signals.session_duration_min doit primer sur state.session_duration_min")
+        self.assertNotIn("240 min", snapshot,
+            "La durée StateStore (depuis démarrage daemon) ne doit pas apparaître")
+
+    def test_c5_zero_si_signals_absent(self):
+        """
+        Sans signals (démarrage daemon, avant le premier event),
+        on préfère 0 à la durée fausse de StateStore.
+        """
+        self.store.to_dict.return_value = {
+            "active_project": None,
+            "active_file": None,
+            "active_app": None,
+            "session_duration_min": 15,  # ← StateStore : depuis le démarrage du daemon
+        }
+        # Pas de signals : runtime_state non initialisé
+        # (get_context_snapshot retourne (None, None) par défaut)
+
+        snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("- Durée session : 0 min", snapshot,
+            "Sans signals, la durée doit être 0 plutôt que la valeur fausse du StateStore")
+        self.assertNotIn("15 min", snapshot)
+
+    def test_c5_zero_si_signals_duration_est_zero(self):
+        """
+        Si signals.session_duration_min est 0 (scorer vient de reset),
+        on affiche 0 — pas la valeur StateStore qui serait trop grande.
+        """
+        self.store.to_dict.return_value = {
+            "active_project": "Pulse",
+            "active_file": None,
+            "active_app": "Xcode",
+            "session_duration_min": 90,  # ← StateStore : ancienne valeur
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project="Pulse",
+                active_file=None,
+                probable_task="coding",
+                friction_score=0.0,
+                focus_level="normal",
+                session_duration_min=0,  # ← Scorer vient de reset
+                recent_apps=["Xcode"],
+                clipboard_context=None,
+            ),
+            decision=None,
+        )
+
+        snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("- Durée session : 0 min", snapshot,
+            "session_duration_min=0 depuis le scorer doit afficher 0, pas la valeur StateStore")
+        self.assertNotIn("90 min", snapshot)
+
+
 if __name__ == "__main__":
     unittest.main()

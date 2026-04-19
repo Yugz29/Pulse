@@ -62,7 +62,12 @@ class RuntimeState:
 
     def mark_screen_locked(self, when: datetime | None = None) -> None:
         with self._lock:
-            self._last_screen_locked_at = when or datetime.now()
+            # On enregistre l'heure du PREMIER signal de verrouillage uniquement.
+            # Un second signal (ex. sommeil d'écran arrivant quelques minutes après
+            # le vrai verrou utilisateur) ne doit pas écraser l'heure réelle du lock —
+            # ce serait faux pour le calcul de sleep_min dans handle_event().
+            if not self._screen_is_locked:
+                self._last_screen_locked_at = when or datetime.now()
             self._screen_is_locked = True
 
     def mark_screen_unlocked(self) -> None:

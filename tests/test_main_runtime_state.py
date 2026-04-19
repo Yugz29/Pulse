@@ -139,5 +139,58 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertFalse(payload["llm_active"])
 
 
+    # ── C1 : double signal screen_locked ───────────────────────────────────────
+
+    def test_mark_screen_locked_premier_signal_gagne(self):
+        """
+        Quand deux screen_locked arrivent (vrai lock + sleep écran),
+        _last_screen_locked_at doit rester l'heure du PREMIER signal.
+        Sans ce garde-fou, le second signal écraserait l'heure du vrai lock,
+        faussant le calcul de sleep_min dans handle_event().
+        """
+        state = daemon_main.runtime_state
+        state.reset_for_tests()
+
+        from datetime import datetime, timedelta
+        t_lock = datetime.now() - timedelta(minutes=35)
+        t_sleep = datetime.now() - timedelta(minutes=30)  # 5 min après le vrai lock
+
+        state.mark_screen_locked(when=t_lock)   # premier signal : vrai verrou
+        state.mark_screen_locked(when=t_sleep)  # second signal : sommeil écran
+
+        self.assertEqual(state.get_last_screen_locked_at(), t_lock,
+            "Le second mark_screen_locked ne doit pas écraser l'heure du premier signal")
+        self.assertTrue(state.is_screen_locked())
+
+    def test_mark_screen_locked_accepte_heure_si_pas_encore_locké(self):
+        """Comportement normal : si écran non verrouillé, l'heure est bien enregistrée."""
+        state = daemon_main.runtime_state
+        state.reset_for_tests()
+
+        from datetime import datetime
+        t = datetime.now()
+        state.mark_screen_locked(when=t)
+
+        self.assertEqual(state.get_last_screen_locked_at(), t)
+        self.assertTrue(state.is_screen_locked())
+
+    def test_mark_screen_locked_puis_unlock_reset_heure(self):
+        """Après unlock + clear_sleep_markers, un nouveau lock repart de zéro."""
+        state = daemon_main.runtime_state
+        state.reset_for_tests()
+
+        from datetime import datetime, timedelta
+        t1 = datetime.now() - timedelta(minutes=60)
+        state.mark_screen_locked(when=t1)
+        state.mark_screen_unlocked()
+        state.clear_sleep_markers()  # simule ce que handle_event fait après reset session
+
+        t2 = datetime.now()
+        state.mark_screen_locked(when=t2)  # nouveau cycle de lock
+
+        self.assertEqual(state.get_last_screen_locked_at(), t2,
+            "Après clear_sleep_markers, un nouveau lock doit enregistrer sa propre heure")
+
+
 if __name__ == "__main__":
     unittest.main()

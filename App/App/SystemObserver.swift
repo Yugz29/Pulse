@@ -50,9 +50,11 @@ class SystemObserver {
     }
 
     func stopObserving() {
-        // NSWorkspace notifications — auto-removed à la deallociation
+        // NSWorkspace notifications
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        // DistributedNotificationCenter — centre séparé, doit être retiré explicitement
+        DistributedNotificationCenter.default().removeObserver(self)
 
         // FSEvents
         if let stream = fsEventStream {
@@ -355,6 +357,26 @@ class SystemObserver {
     // ─────────────────────────────────────────────────────────────────────────
 
     private func observeScreenLock() {
+        // Source principale : vrai verrouillage utilisateur (Cmd+Ctrl+Q, menu Apple).
+        // DistributedNotificationCenter est le seul canal qui reçoit ces événements.
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(handleScreenLocked),
+            name: NSNotification.Name("com.apple.screenIsLocked"),
+            object: nil
+        )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(handleScreenUnlocked),
+            name: NSNotification.Name("com.apple.screenIsUnlocked"),
+            object: nil
+        )
+
+        // Source secondaire : sommeil d'écran (après le délai de mise en veille).
+        // Arrive quelques minutes après le vrai lock — tenu en compte pour
+        // les cas où l'écran s'endort sans verrouillage explicite (ex. veille auto).
+        // Coté daemon, mark_screen_locked() ignore ce second signal si le premier
+        // a déjà été reçu (protection "premier signal gagne").
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(handleScreenLocked),
