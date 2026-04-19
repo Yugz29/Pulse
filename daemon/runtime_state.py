@@ -15,6 +15,7 @@ class RuntimeState:
         self._last_memory_sync_at: datetime | None = None
         self._last_screen_locked_at: datetime | None = None
         self._recent_file_events: dict[str, datetime] = {}
+        self._screen_is_locked: bool = False
 
     def touch_ping(self, when: datetime | None = None) -> bool:
         now = when or datetime.now()
@@ -62,6 +63,15 @@ class RuntimeState:
     def mark_screen_locked(self, when: datetime | None = None) -> None:
         with self._lock:
             self._last_screen_locked_at = when or datetime.now()
+            self._screen_is_locked = True
+
+    def mark_screen_unlocked(self) -> None:
+        with self._lock:
+            self._screen_is_locked = False
+
+    def is_screen_locked(self) -> bool:
+        with self._lock:
+            return self._screen_is_locked
 
     def get_last_screen_locked_at(self) -> datetime | None:
         with self._lock:
@@ -101,4 +111,5 @@ class RuntimeState:
             self._last_decision = None
             self._last_memory_sync_at = None
             self._last_screen_locked_at = None
+            self._screen_is_locked = False
             self._recent_file_events = {}

@@ -74,6 +74,9 @@ class RuntimeOrchestrator:
         self._commit_watch_lock = threading.Lock()
         self._pending_commit_watch: set[str] = set()
         self._fact_engine = get_fact_engine()
+        # Dernière valeur connue du compteur de resets d'inactivité du scorer.
+        # Quand il augmente, le scorer a détecté une nouvelle frontière de session.
+        self._last_scorer_reset_count: int = 0
 
     def llm_unload_background(self) -> None:
         self.llm_runtime.unload_background(self.log)
@@ -119,11 +122,19 @@ class RuntimeOrchestrator:
         if self.runtime_state.is_paused():
             return
 
+        # Pendant le verrou écran, seuls screen_locked/screen_unlocked
+        # sont traités. Les events fichier et app sont ignorés pour éviter
+        # que des écritures système en arrière-plan polluent l'activité.
+        _SCREEN_PASSTHROUGH = {"screen_locked", "screen_unlocked"}
+        if self.runtime_state.is_screen_locked() and event.type not in _SCREEN_PASSTHROUGH:
+            return
+
         if event.type == "screen_locked":
             self.runtime_state.mark_screen_locked()
             threading.Thread(target=self.llm_unload_background, daemon=True).start()
 
         elif event.type == "screen_unlocked":
+            self.runtime_state.mark_screen_unlocked()
             locked_at = self.runtime_state.get_last_screen_locked_at()
             if locked_at is not None:
                 sleep_min = (datetime.now() - locked_at).total_seconds() / 60
@@ -416,6 +427,28 @@ class RuntimeOrchestrator:
 
     def _process_signals(self, trigger_event) -> None:
         signals = self.scorer.compute()
+
+        # Détection de frontière de session par inactivité :
+        # si le scorer a reset son horloge (gap > timeout ou screen_lock),
+        # on synchro la session mémoire pour éviter la divergence de durée.
+        current_reset_count = self.scorer.inactivity_reset_count
+        if current_reset_count > self._last_scorer_reset_count:
+            self._last_scorer_reset_count = current_reset_count
+            self.log.info(
+                "Session boundary detected (inactivity/screen_lock) — flushing session memory"
+            )
+            try:
+                snapshot = self.session_memory.export_session_data()
+                if snapshot.get("duration_min", 0) >= 5:
+                    threading.Thread(
+                        target=self._sync_memory_background,
+                        args=(snapshot, None, None, "screen_lock"),
+                        daemon=True,
+                    ).start()
+            except Exception as exc:
+                self.log.warning("session boundary flush échouée : %s", exc)
+            self.session_memory.new_session()
+
         self.session_memory.update_signals(signals)
         _, previous_decision = self.runtime_state.get_context_snapshot()
         decision = self.decision_engine.evaluate(signals, trigger_event=trigger_event)

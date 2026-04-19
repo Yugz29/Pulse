@@ -183,6 +183,83 @@ class TestShouldPublishToBus(unittest.TestCase):
             {"path": "/usr/local/lib/python3.11/ssl.py"},
         ))
 
+    # ── Verrou écran — filtrage des events pendant le lock ─────────────────────────
+
+    def _locked_state(self):
+        """RuntimeState minimal avec écran verrouillé."""
+        class FakeState:
+            def is_screen_locked(self):
+                return True
+        return FakeState()
+
+    def _unlocked_state(self):
+        """RuntimeState minimal avec écran déverrouillé."""
+        class FakeState:
+            def is_screen_locked(self):
+                return False
+        return FakeState()
+
+    def test_file_modified_bloque_pendant_lock(self):
+        """Un file_modified ne doit pas entrer dans le bus pendant le verrou."""
+        self.assertFalse(_should_publish_to_bus(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/daemon/main.py"},
+            self._locked_state(),
+        ))
+
+    def test_app_activated_bloque_pendant_lock(self):
+        """Un app_activated ne doit pas entrer dans le bus pendant le verrou."""
+        self.assertFalse(_should_publish_to_bus(
+            "app_activated",
+            {"app_name": "Cursor"},
+            self._locked_state(),
+        ))
+
+    def test_clipboard_bloque_pendant_lock(self):
+        """Un clipboard_updated ne doit pas entrer dans le bus pendant le verrou."""
+        self.assertFalse(_should_publish_to_bus(
+            "clipboard_updated",
+            {"content": "hello"},
+            self._locked_state(),
+        ))
+
+    def test_screen_unlocked_passe_pendant_lock(self):
+        """screen_unlocked doit toujours passer, même quand écran marqué comme verrouillé."""
+        self.assertTrue(_should_publish_to_bus(
+            "screen_unlocked",
+            {},
+            self._locked_state(),
+        ))
+
+    def test_screen_locked_passe_pendant_lock(self):
+        """screen_locked passe toujours (idempotence du verrou)."""
+        self.assertTrue(_should_publish_to_bus(
+            "screen_locked",
+            {},
+            self._locked_state(),
+        ))
+
+    def test_file_modified_passe_apres_unlock(self):
+        """Après unlock, les events fichier meaningful doivent à nouveau passer."""
+        self.assertTrue(_should_publish_to_bus(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/daemon/main.py"},
+            self._unlocked_state(),
+        ))
+
+    def test_sans_runtime_state_comportement_inchange(self):
+        """Sans runtime_state (valeur None), le filtre se comporte comme avant."""
+        self.assertTrue(_should_publish_to_bus(
+            "app_activated",
+            {"app_name": "Xcode"},
+            None,
+        ))
+        self.assertTrue(_should_publish_to_bus(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/daemon/main.py"},
+            None,
+        ))
+
 
 if __name__ == "__main__":
     unittest.main()
