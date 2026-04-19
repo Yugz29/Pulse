@@ -444,6 +444,13 @@ class SystemObserver {
     }
 
     private func shouldTrackApp(bundleId: String) -> Bool {
-        bundleId != "com.apple.finder" && !bundleId.contains("pulse")
+        // Processus système macOS exclus : ils génèrent des app_activated events
+        // lors des transitions de session (lock/unlock, démarrage) mais ne
+        // représentent pas une vraie utilisation d'application par l'utilisateur.
+        let blockedBundleIds: Set<String> = [
+            "com.apple.finder",
+            "com.apple.loginwindow",  // gestionnaire de session (lock/unlock)
+        ]
+        return !blockedBundleIds.contains(bundleId) && !bundleId.contains("pulse")
     }
 }

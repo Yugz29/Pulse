@@ -279,6 +279,38 @@ class TestFactEngineRender(unittest.TestCase):
         self.assertEqual(stats["archived_facts"], 0)
         self.assertIn("workflow", stats["by_category"])
 
+# ── loginwindow : filtre processus système ─────────────────────────────────────
+
+    def test_loginwindow_absent_des_paires_dapps(self):
+        """loginwindow dans recent_apps ne doit générer aucune paire."""
+        session = _session(task="coding", focus="normal", apps=["Claude", "loginwindow", "Code"])
+        from daemon.memory.facts import _extract_observations
+        obs = _extract_observations(session)
+        keys = [o[0] for o in obs]
+        self.assertFalse(any("loginwindow" in k for k in keys),
+            "loginwindow ne doit pas apparaitre dans les clés d'observation")
+
+    def test_loginwindow_ne_prend_pas_un_slot_dans_le_top4(self):
+        """Avec 5 apps dont loginwindow, les 4 vraies apps sont retenues pour les paires."""
+        session = _session(task="coding", focus="normal",
+                        apps=["Claude", "loginwindow", "Code", "Safari", "Xcode"])
+        from daemon.memory.facts import _extract_observations
+        obs = _extract_observations(session)
+        pairs = [o for o in obs if o[0].startswith("apps:pair:")]
+        pair_keys = " ".join(o[0] for o in pairs)
+        self.assertNotIn("loginwindow", pair_keys)
+        # Claude, Code, Safari, Xcode → 6 paires attendues
+        self.assertEqual(len(pairs), 6)
+
+    def test_liste_sans_processus_systeme_reste_inchangee(self):
+        """Avec des apps normales, le filtre ne change rien."""
+        session = _session(task="coding", focus="normal",
+                        apps=["Claude", "Code", "Safari", "Xcode"])
+        from daemon.memory.facts import _extract_observations
+        obs = _extract_observations(session)
+        pairs = [o for o in obs if o[0].startswith("apps:pair:")]
+        self.assertEqual(len(pairs), 6)
+
 
 if __name__ == "__main__":
     unittest.main()

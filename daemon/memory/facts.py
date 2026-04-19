@@ -527,6 +527,18 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
 
 # ── Extraction des observations depuis session_data ───────────────────────────
 
+# Noms de processus système macOS pouvant apparaître dans recent_apps
+# via des events app_activated au moment du lock/unlock ou au démarrage.
+# Ces processus ne représentent pas une vraie utilisation d'application.
+# Défense en profondeur : le filtre Swift (shouldTrackApp) bloque leur bundle ID
+# à la source, mais des données antérieures peuvent rester dans session.db.
+_SYSTEM_PROCESS_NAMES: frozenset = frozenset({
+    "loginwindow",    # gestionnaire de session macOS (lock/unlock)
+    "SystemUIServer", # menu bar système
+    "Finder",         # déjà filtré côté Swift, défense en profondeur
+})
+
+
 def _extract_observations(
     session_data: Dict[str, Any],
 ) -> List[Tuple[str, str, str, Dict]]:
@@ -587,8 +599,11 @@ def _extract_observations(
         ))
 
     # 5. Apps principales ─────────────────────────────────────────────────────
-    # On note les paires d'apps qui apparaissent ensemble (max 3 paires)
-    core_apps = apps[:4]
+    # On note les paires d'apps qui apparaissent ensemble (max 3 paires).
+    # Les processus système (loginwindow, etc.) sont exclus avant le slicing
+    # pour ne pas consommer des slots dans le top-4 au détriment des vraies apps.
+    user_apps = [a for a in apps if a not in _SYSTEM_PROCESS_NAMES]
+    core_apps = user_apps[:4]
     for i, app in enumerate(core_apps):
         for other in core_apps[i + 1:]:
             pair_key = ":".join(sorted([app.lower(), other.lower()]))
