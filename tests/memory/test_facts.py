@@ -279,37 +279,55 @@ class TestFactEngineRender(unittest.TestCase):
         self.assertEqual(stats["archived_facts"], 0)
         self.assertIn("workflow", stats["by_category"])
 
-# ── loginwindow : filtre processus système ─────────────────────────────────────
-
-    def test_loginwindow_absent_des_paires_dapps(self):
-        """loginwindow dans recent_apps ne doit générer aucune paire."""
-        session = _session(task="coding", focus="normal", apps=["Claude", "loginwindow", "Code"])
+    def test_observations_dapps_ne_sont_plus_generees(self):
+        session = _session(task="coding", focus="normal", apps=["Claude", "Code", "Safari", "Xcode"])
         from daemon.memory.facts import _extract_observations
         obs = _extract_observations(session)
         keys = [o[0] for o in obs]
-        self.assertFalse(any("loginwindow" in k for k in keys),
-            "loginwindow ne doit pas apparaitre dans les clés d'observation")
+        self.assertFalse(any(k.startswith("apps:pair:") for k in keys))
 
-    def test_loginwindow_ne_prend_pas_un_slot_dans_le_top4(self):
-        """Avec 5 apps dont loginwindow, les 4 vraies apps sont retenues pour les paires."""
-        session = _session(task="coding", focus="normal",
-                        apps=["Claude", "loginwindow", "Code", "Safari", "Xcode"])
+    def test_observation_focus_scattered_nest_plus_generee(self):
+        session = _session(task="coding", focus="scattered")
         from daemon.memory.facts import _extract_observations
         obs = _extract_observations(session)
-        pairs = [o for o in obs if o[0].startswith("apps:pair:")]
-        pair_keys = " ".join(o[0] for o in pairs)
-        self.assertNotIn("loginwindow", pair_keys)
-        # Claude, Code, Safari, Xcode → 6 paires attendues
-        self.assertEqual(len(pairs), 6)
+        keys = [o[0] for o in obs]
+        self.assertFalse(any(k.startswith("focus:scattered:") for k in keys))
 
-    def test_liste_sans_processus_systeme_reste_inchangee(self):
-        """Avec des apps normales, le filtre ne change rien."""
-        session = _session(task="coding", focus="normal",
-                        apps=["Claude", "Code", "Safari", "Xcode"])
+    def test_wording_slot_task_est_moins_affirmatif(self):
+        session = _session(task="coding")
         from daemon.memory.facts import _extract_observations
         obs = _extract_observations(session)
-        pairs = [o for o in obs if o[0].startswith("apps:pair:")]
-        self.assertEqual(len(pairs), 6)
+        descriptions = {key: description for key, _, description, _ in obs}
+        description = next(v for k, v in descriptions.items() if k.startswith("slot:"))
+        self.assertIn("Travaille souvent", description)
+        self.assertNotIn("Travaille principalement", description)
+
+    def test_wording_focus_deep_est_moins_affirmatif(self):
+        session = _session(task="coding", focus="deep")
+        from daemon.memory.facts import _extract_observations
+        obs = _extract_observations(session)
+        descriptions = {key: description for key, _, description, _ in obs}
+        description = next(v for k, v in descriptions.items() if k.startswith("focus:deep:"))
+        self.assertIn("focus soutenu", description)
+        self.assertNotIn("focus profond", description)
+
+    def test_wording_session_long_est_moins_affirmatif(self):
+        session = _session(task="coding", duration=60)
+        from daemon.memory.facts import _extract_observations
+        obs = _extract_observations(session)
+        descriptions = {key: description for key, _, description, _ in obs}
+        description = next(v for k, v in descriptions.items() if k.startswith("session:long:"))
+        self.assertIn("Sessions souvent longues", description)
+        self.assertNotIn("Fait souvent des sessions longues", description)
+
+    def test_wording_friction_est_moins_affirmatif(self):
+        session = _session(task="coding", friction=0.8)
+        from daemon.memory.facts import _extract_observations
+        obs = _extract_observations(session)
+        descriptions = {key: description for key, _, description, _ in obs}
+        description = next(v for k, v in descriptions.items() if k.startswith("friction:high:project:"))
+        self.assertIn("Friction souvent observée", description)
+        self.assertNotIn("Friction élevée récurrente", description)
 
 
 if __name__ == "__main__":

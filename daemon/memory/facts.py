@@ -567,7 +567,7 @@ def _extract_observations(
         obs.append((
             f"slot:{slot}:task:{task}",
             "workflow",
-            f"Travaille principalement {_slot_label(slot)} en mode {_task_label(task)}",
+            f"Travaille souvent {_slot_label(slot)} en mode {_task_label(task)}",
             {"time_slot": slot, "task": task},
         ))
 
@@ -576,7 +576,7 @@ def _extract_observations(
         obs.append((
             f"focus:deep:{slot}",
             "cognitive",
-            f"Atteint un focus profond lors des sessions {_slot_label(slot)}",
+            f"Présente des phases de focus soutenu lors des sessions {_slot_label(slot)}",
             {"time_slot": slot, "focus": "deep"},
         ))
 
@@ -585,7 +585,7 @@ def _extract_observations(
         obs.append((
             f"session:long:{slot}",
             "cognitive",
-            f"Fait souvent des sessions longues (1h+) {_slot_label(slot)}",
+            f"Sessions souvent longues (1h+) {_slot_label(slot)}",
             {"time_slot": slot, "duration_min": duration},
         ))
 
@@ -594,33 +594,8 @@ def _extract_observations(
         obs.append((
             f"friction:high:project:{project}",
             "cognitive",
-            f"Friction élevée récurrente sur le projet {project}",
+            f"Friction souvent observée sur le projet {project}",
             {"project": project, "friction": friction},
-        ))
-
-    # 5. Apps principales ─────────────────────────────────────────────────────
-    # On note les paires d'apps qui apparaissent ensemble (max 3 paires).
-    # Les processus système (loginwindow, etc.) sont exclus avant le slicing
-    # pour ne pas consommer des slots dans le top-4 au détriment des vraies apps.
-    user_apps = [a for a in apps if a not in _SYSTEM_PROCESS_NAMES]
-    core_apps = user_apps[:4]
-    for i, app in enumerate(core_apps):
-        for other in core_apps[i + 1:]:
-            pair_key = ":".join(sorted([app.lower(), other.lower()]))
-            obs.append((
-                f"apps:pair:{pair_key}",
-                "workflow",
-                f"Utilise fréquemment {app} et {other} ensemble",
-                {"apps": [app, other]},
-            ))
-
-    # 6. Travail dispersé récurrent ───────────────────────────────────────────
-    if focus == "scattered":
-        obs.append((
-            f"focus:scattered:{slot}",
-            "cognitive",
-            f"Travail souvent dispersé (nombreux changements de fenêtre) {_slot_label(slot)}",
-            {"time_slot": slot, "focus": "scattered"},
         ))
 
     return obs
