@@ -330,6 +330,67 @@ class TestSessionBoundaries(unittest.TestCase):
         self.assertEqual(scorer._session_start, t_file)
         self.assertIsNotNone(scorer._last_meaningful_activity_at)
 
+    # -- Verrou court : session_duration_min ne doit pas inclure le temps de verrou --
+
+    def test_verrou_court_session_duration_ne_compte_pas_le_temps_de_verrou(self):
+        """
+        Scenario exact du bug :
+        - Session demarre (travail 30 min)
+        - screen_locked
+        - screen_unlocked 10 min plus tard -> scorer.reset_session() appele
+        - signals.session_duration_min doit etre 0 ou 1 max, pas 40
+
+        C'est le mecanisme central du fix : reset_session() remet _session_start
+        a maintenant, effacant le temps de verrou de la duree calculee.
+        """
+        scorer = self._make_scorer()
+
+        # Simule 30 min de travail avant le verrou
+        t_work_start = self._at(40)  # session demarre il y a 40 min
+        scorer._session_start = t_work_start
+        scorer._last_meaningful_activity_at = self._at(30)  # derniere activite il y a 30 min
+
+        # Verrou pendant 10 min — sans reset, session_duration_min serait 40
+        # (depuis t_work_start jusqu'a maintenant, lock inclus)
+
+        # handle_event(screen_unlocked) appelle scorer.reset_session() pour tout unlock
+        scorer.reset_session()
+
+        # compute() simule _process_signals apres l'unlock
+        scorer.bus = FakeBus([])  # bus vide : pas de nouvelle activite encore
+        signals = scorer.compute()
+
+        self.assertLessEqual(
+            signals.session_duration_min, 1,
+            "Apres reset_session(), session_duration_min doit etre 0 ou 1. "
+            f"Valeur obtenue : {signals.session_duration_min} min. "
+            "Le temps de verrou (10 min) et le travail pre-lock (30 min) "
+            "ne doivent pas etre comptes."
+        )
+
+    def test_verrou_court_sans_reset_duration_serait_gonflee(self):
+        """
+        Test de reference : sans reset_session(), la duree inclurait le temps
+        de verrou. Documente le bug original pour eviter toute regression.
+        """
+        scorer = self._make_scorer()
+
+        # Meme setup : session demarre il y a 40 min
+        t_work_start = self._at(40)
+        scorer._session_start = t_work_start
+        scorer._last_meaningful_activity_at = self._at(30)
+
+        # PAS de reset_session() — comportement pre-fix
+        scorer.bus = FakeBus([])
+        signals = scorer.compute()
+
+        # Sans reset, la duree inclut tout depuis le demarrage de session
+        self.assertGreaterEqual(
+            signals.session_duration_min, 38,
+            "Sans reset_session(), la duree doit inclure le temps de verrou "
+            "(regression : ce test documente le bug original)"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

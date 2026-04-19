@@ -801,5 +801,86 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(captured_triggers[0].payload["path"], "/tmp/c.py")
 
 
+    # -- Verrou court : session_duration_min ne doit pas inclure le temps de veille ---
+
+    def test_verrou_court_reset_timer_scorer_sans_nouvelle_session(self):
+        """
+        Verrou < sleep_session_threshold_min (30 min) :
+        - scorer.reset_session() doit etre appele (timer repart a zero)
+        - session_memory.new_session() ne doit PAS etre appele
+        Le temps de veille ne doit pas s'accumuler dans session_duration_min.
+        """
+        from datetime import timedelta
+        from daemon.core.event_bus import Event
+
+        # Simule un verrou qui s'est produit il y a 10 min
+        t_lock = datetime.now() - timedelta(minutes=10)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+
+        unlock_event = Event("screen_unlocked", {})
+
+        with patch.object(self.orchestrator.scorer, "reset_session") as mock_reset, \
+             patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(unlock_event)
+
+        mock_reset.assert_called_once(
+        ), "scorer.reset_session() doit etre appele pour tout unlock"
+        mock_new_session.assert_not_called(
+        ), "session_memory.new_session() ne doit pas etre appele pour un verrou court"
+
+    def test_verrou_long_reset_scorer_et_nouvelle_session(self):
+        """
+        Verrou >= sleep_session_threshold_min (30 min) :
+        - scorer.reset_session() appele
+        - session_memory.new_session() appele
+        Comportement existant preserve.
+        """
+        from datetime import timedelta
+        from daemon.core.event_bus import Event
+
+        # Simule un verrou il y a 35 min (> seuil de 30 min)
+        t_lock = datetime.now() - timedelta(minutes=35)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+
+        unlock_event = Event("screen_unlocked", {})
+
+        with patch.object(self.orchestrator.scorer, "reset_session") as mock_reset, \
+             patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
+             patch.object(self.orchestrator.session_memory, "export_session_data",
+                          return_value={"duration_min": 0}), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session"), \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(unlock_event)
+
+        mock_reset.assert_called_once()
+        mock_new_session.assert_called_once(
+        ), "session_memory.new_session() doit etre appele pour un verrou long"
+
+    def test_verrou_court_clear_sleep_markers_apres_unlock(self):
+        """
+        Apres un verrou court, clear_sleep_markers() doit etre appele pour
+        eviter que le prochain unlock calcule sleep_min depuis un ancien lock.
+        """
+        from datetime import timedelta
+        from daemon.core.event_bus import Event
+
+        t_lock = datetime.now() - timedelta(minutes=5)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+
+        self.assertIsNotNone(self.runtime_state.get_last_screen_locked_at())
+
+        unlock_event = Event("screen_unlocked", {})
+
+        with patch.object(self.orchestrator.scorer, "reset_session"), \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(unlock_event)
+
+        self.assertIsNone(
+            self.runtime_state.get_last_screen_locked_at(),
+            "_last_screen_locked_at doit etre efface apres un verrou court"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

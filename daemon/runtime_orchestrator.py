@@ -149,6 +149,17 @@ class RuntimeOrchestrator:
                     self.scorer.reset_session()
                     self.session_memory.new_session()
                     self.runtime_state.clear_sleep_markers()
+                else:
+                    # Verrou court : reset du timer scorer uniquement.
+                    # Le temps de veille ne doit pas s'accumuler dans session_duration_min.
+                    # On ne cree pas de nouvelle session : le contexte de travail
+                    # (projet, fichier actif) est conserve.
+                    self.log.debug(
+                        "Verrou court (%.0f min) -> reset timer scorer, session conservee",
+                        sleep_min,
+                    )
+                    self.scorer.reset_session()
+                    self.runtime_state.clear_sleep_markers()
             threading.Thread(target=self.llm_warmup_background, daemon=True).start()
 
         self.session_memory.record_event(event)
