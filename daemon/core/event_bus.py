@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
 
+DEFAULT_EVENT_BUS_SIZE = 500
+
 
 @dataclass
 class Event:
@@ -18,7 +20,7 @@ class EventBus:
     Les modules publient des events, les abonnés les reçoivent automatiquement.
     """
 
-    def __init__(self, max_size: int = 200):
+    def __init__(self, max_size: int = DEFAULT_EVENT_BUS_SIZE):
         # deque = queue circulaire — quand elle est pleine, le plus vieux est supprimé
         self._queue: deque[Event] = deque(maxlen=max_size)
         # Liste des fonctions abonnées — appelées à chaque publish

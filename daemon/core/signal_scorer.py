@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from .event_bus import EventBus
+from .event_bus import DEFAULT_EVENT_BUS_SIZE, EventBus
 from .file_classifier import classify_file_type, file_signal_significance, is_pulse_internal_path
 from .workspace_context import extract_project_name
 
@@ -57,7 +57,10 @@ class SignalScorer:
         self._last_meaningful_activity_at = None
 
     def compute(self) -> Signals:
-        recent = self.bus.recent(100)
+        # Les fenêtres de calcul montent jusqu'à 30 min. En session active,
+        # une coupe fixe à 100 tronque artificiellement ce signal bien avant
+        # la saturation du bus.
+        recent = self.bus.recent(DEFAULT_EVENT_BUS_SIZE)
         now = datetime.now()
 
         # ── Détection des limites de session ──────────────────────────────────────────────

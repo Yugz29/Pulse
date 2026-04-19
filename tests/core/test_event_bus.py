@@ -42,6 +42,12 @@ class TestEventBus(unittest.TestCase):
         # Seuls les 10 derniers doivent être gardés
         self.assertEqual(len(self.bus.recent()), 10)
 
+    def test_default_bus_supporte_une_fenetre_plus_large_que_200_events(self):
+        bus = EventBus()
+        for i in range(350):
+            bus.publish("event", {"i": i})
+        self.assertEqual(len(bus.recent(500)), 350)
+
     def test_clear_vide_la_queue(self):
         self.bus.publish("file_change", {"path": "/test.py"})
         self.bus.clear()

@@ -251,6 +251,24 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.edited_file_count_10m, 1)
         self.assertEqual(signals.file_type_mix_10m, {"source": 1})
 
+    def test_long_burst_ne_tronque_pas_les_signaux_fichier_dans_la_fenetre_10m(self):
+        bus = EventBus()
+        scorer = SignalScorer(bus)
+        timestamp = datetime.now() - timedelta(minutes=5)
+
+        for index in range(220):
+            bus._queue.append(Event(
+                type="file_modified",
+                payload={"path": f"/Users/yugz/Projets/Pulse/Pulse/daemon/module_{index}.py"},
+                timestamp=timestamp,
+            ))
+
+        signals = scorer.compute()
+
+        self.assertEqual(signals.edited_file_count_10m, 220)
+        self.assertEqual(signals.dominant_file_mode, "multi_file")
+        self.assertEqual(signals.file_type_mix_10m, {"source": 220})
+
 
     # ── I1 : recent_apps — dernière occurrence gagne ────────────────────────────
 
