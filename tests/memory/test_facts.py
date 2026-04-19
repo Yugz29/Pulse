@@ -297,37 +297,38 @@ class TestFactEngineRender(unittest.TestCase):
         session = _session(task="coding")
         from daemon.memory.facts import _extract_observations
         obs = _extract_observations(session)
-        descriptions = {key: description for key, _, description, _ in obs}
+        descriptions = {key: obs_desc for key, _, obs_desc, _fact_desc, _ctx in obs}
         description = next(v for k, v in descriptions.items() if k.startswith("slot:"))
-        self.assertIn("Travaille souvent", description)
-        self.assertNotIn("Travaille principalement", description)
+        self.assertIn("Session", description)
+        self.assertIn("mode", description)
+        self.assertNotIn("souvent", description)
 
     def test_wording_focus_deep_est_moins_affirmatif(self):
         session = _session(task="coding", focus="deep")
         from daemon.memory.facts import _extract_observations
         obs = _extract_observations(session)
-        descriptions = {key: description for key, _, description, _ in obs}
+        descriptions = {key: obs_desc for key, _, obs_desc, _fact_desc, _ctx in obs}
         description = next(v for k, v in descriptions.items() if k.startswith("focus:deep:"))
-        self.assertIn("focus soutenu", description)
-        self.assertNotIn("focus profond", description)
+        self.assertIn("Focus soutenu observé", description)
+        self.assertNotIn("Présente des phases", description)
 
     def test_wording_session_long_est_moins_affirmatif(self):
         session = _session(task="coding", duration=60)
         from daemon.memory.facts import _extract_observations
         obs = _extract_observations(session)
-        descriptions = {key: description for key, _, description, _ in obs}
+        descriptions = {key: obs_desc for key, _, obs_desc, _fact_desc, _ctx in obs}
         description = next(v for k, v in descriptions.items() if k.startswith("session:long:"))
-        self.assertIn("Sessions souvent longues", description)
-        self.assertNotIn("Fait souvent des sessions longues", description)
+        self.assertIn("Session longue", description)
+        self.assertNotIn("souvent", description)
 
     def test_wording_friction_est_moins_affirmatif(self):
         session = _session(task="coding", friction=0.8)
         from daemon.memory.facts import _extract_observations
         obs = _extract_observations(session)
-        descriptions = {key: description for key, _, description, _ in obs}
+        descriptions = {key: obs_desc for key, _, obs_desc, _fact_desc, _ctx in obs}
         description = next(v for k, v in descriptions.items() if k.startswith("friction:high:project:"))
-        self.assertIn("Friction souvent observée", description)
-        self.assertNotIn("Friction élevée récurrente", description)
+        self.assertIn("Friction élevée observée", description)
+        self.assertNotIn("souvent", description)
 
 
 if __name__ == "__main__":

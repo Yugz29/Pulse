@@ -93,8 +93,8 @@ class FactEngine:
 
         with self._lock:
             with self._connect() as conn:
-                for key, category, description, context in observations:
-                    self._upsert_observation(conn, key, category, description, context, now)
+                for key, category, obs_desc, fact_desc, context in observations:
+                    self._upsert_observation(conn, key, category, obs_desc, fact_desc, context, now)
 
                 newly_promoted = self._promote_pending(conn, now)
                 conn.commit()
@@ -450,7 +450,8 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
         conn: sqlite3.Connection,
         key: str,
         category: str,
-        description: str,
+        obs_description: str,
+        fact_description: str,
         context: Dict[str, Any],
         now: str,
     ) -> None:
@@ -477,10 +478,14 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                     (now, CONFIDENCE_CONFIRM / 2, CONFIDENCE_MAX, fact["id"]),
                 )
         else:
+            # Stocke obs_description comme description lisible de l'observation.
+            # fact_description est rangée dans context_json sous _fact_description
+            # pour être utilisée par _promote_pending() à la création du fait.
+            context_with_fact = {**context, "_fact_description": fact_description}
             conn.execute(
                 """INSERT INTO observations (key, category, description, context_json, count, first_seen, last_seen)
                    VALUES (?, ?, ?, ?, 1, ?, ?)""",
-                (key, category, description, json.dumps(context), now, now),
+                (key, category, obs_description, json.dumps(context_with_fact), now, now),
             )
 
     def _promote_pending(self, conn: sqlite3.Connection, now: str) -> List[str]:
@@ -498,6 +503,10 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
         created = []
         for obs in candidates:
             fact_id = _new_uid()
+            # Utilise fact_description si disponible (stockée dans context_json),
+            # fallback sur description (observation brute) pour les entrées legacy.
+            ctx = json.loads(obs["context_json"] or "{}")
+            fact_description = ctx.pop("_fact_description", obs["description"])
             conn.execute(
                 """INSERT INTO facts
                    (id, key, category, description, context_json, confidence,
@@ -508,8 +517,8 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                     fact_id,
                     obs["key"],
                     obs["category"],
-                    obs["description"],
-                    obs["context_json"],
+                    fact_description,
+                    json.dumps(ctx),
                     CONFIDENCE_INIT,
                     obs["count"],
                     now, now, now,
@@ -541,17 +550,25 @@ _SYSTEM_PROCESS_NAMES: frozenset = frozenset({
 
 def _extract_observations(
     session_data: Dict[str, Any],
-) -> List[Tuple[str, str, str, Dict]]:
+) -> List[Tuple[str, str, str, str, Dict]]:
     """
     Traduit les données brutes d'une session en observations nommées.
 
-    Retourne une liste de (key, category, description, context).
+    Retourne une liste de (key, category, obs_description, fact_description, context).
     Chaque key est un identifiant stable et déterministe.
+
+    obs_description  : formulation sessionnelle et neutre (niveau 3)
+                       Décrit ce qui s'est passé dans cette session.
+                       Stockée dans la table `observations`.
+
+    fact_description : formulation comportementale (niveau 5)
+                       Décrit le pattern qui se dégage si l'observation se confirme.
+                       Utilisée par `_promote_pending()` lors de la création du fait.
 
     Principe : on n'observe QUE ce qu'on peut vraiment affirmer.
     Pas d'inférence sur des sessions uniques — le compteur fait le travail.
     """
-    obs: List[Tuple[str, str, str, Dict]] = []
+    obs: List[Tuple[str, str, str, str, Dict]] = []
     now  = datetime.now()
     slot = _time_slot(now.hour)
 
@@ -567,7 +584,8 @@ def _extract_observations(
         obs.append((
             f"slot:{slot}:task:{task}",
             "workflow",
-            f"Travaille souvent {_slot_label(slot)} en mode {_task_label(task)}",
+            f"Session {_slot_label(slot)} — mode {_task_label(task)}",
+            f"Tendance à travailler {_slot_label(slot)} en mode {_task_label(task)}",
             {"time_slot": slot, "task": task},
         ))
 
@@ -576,7 +594,8 @@ def _extract_observations(
         obs.append((
             f"focus:deep:{slot}",
             "cognitive",
-            f"Présente des phases de focus soutenu lors des sessions {_slot_label(slot)}",
+            f"Focus soutenu observé — session {_slot_label(slot)}",
+            f"Focus soutenu fréquent {_slot_label(slot)}",
             {"time_slot": slot, "focus": "deep"},
         ))
 
@@ -585,6 +604,7 @@ def _extract_observations(
         obs.append((
             f"session:long:{slot}",
             "cognitive",
+            f"Session longue (1h+) — {_slot_label(slot)}",
             f"Sessions souvent longues (1h+) {_slot_label(slot)}",
             {"time_slot": slot, "duration_min": duration},
         ))
@@ -594,7 +614,8 @@ def _extract_observations(
         obs.append((
             f"friction:high:project:{project}",
             "cognitive",
-            f"Friction souvent observée sur le projet {project}",
+            f"Friction élevée observée — projet {project}",
+            f"Friction récurrente sur le projet {project}",
             {"project": project, "friction": friction},
         ))
 
