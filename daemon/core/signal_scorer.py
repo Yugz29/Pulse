@@ -103,7 +103,7 @@ class SignalScorer:
         clipboard_events = [
             e for e in recent if e.type in {"clipboard_updated", "clipboard_update"}
         ]
-        clipboard_context = self._last_clipboard_context(clipboard_events)
+        clipboard_context = self._last_clipboard_context(clipboard_events, now)
 
         recent_file_events = self._recent_file_events(file_events, now)
         recent_meaningful_file_events = self._recent_file_events(meaningful_file_events, now)
@@ -121,6 +121,7 @@ class SignalScorer:
         )
         probable_task = self._detect_task(
             recent_apps=recent_apps,
+            latest_active_app=self._latest_active_app(app_events, now, minutes=5),
             clipboard_context=clipboard_context,
             friction_score=friction_score,
             edited_file_count=edited_file_count_10m,
@@ -177,8 +178,30 @@ class SignalScorer:
 
         return list(ordered)[-10:]
 
-    def _last_clipboard_context(self, clipboard_events: list) -> Optional[str]:
+    def _latest_active_app(self, app_events: list, now: datetime, minutes: int) -> Optional[str]:
+        """
+        Retourne l'app la plus recemment activee dans la fenetre [now - minutes, now].
+        Utilise pour les decisions browsing/writing qui necessitent que l'app
+        soit vraiment l'app courante, pas juste la derniere vue sur 30 min.
+        """
+        cutoff = now - timedelta(minutes=minutes)
+        for event in reversed(app_events):
+            if event.timestamp < cutoff:
+                break
+            name = event.payload.get("app_name")
+            if name:
+                return name
+        return None
+
+    def _last_clipboard_context(self, clipboard_events: list, now: datetime) -> Optional[str]:
+        # Le clipboard n'est un signal actif que s'il est récent.
+        # Une stacktrace copiée il y a 20 min ne doit plus forcer probable_task='debug'.
+        # Fenêtre de 5 min : un copier-coller pertinent est généralement utilisé
+        # dans la minute qui suit, pas un quart d'heure plus tard.
+        recent_window = now - timedelta(minutes=5)
         for event in reversed(clipboard_events):
+            if event.timestamp < recent_window:
+                break
             kind = event.payload.get("content_kind") or event.payload.get("content_type")
             if kind:
                 return kind
@@ -195,7 +218,7 @@ class SignalScorer:
         max_churn = max(Counter(recent_paths).values(), default=0)
         friction = min(max_churn / 6.0, 1.0)
 
-        if self._last_clipboard_context(clipboard_events) == "stacktrace":
+        if self._last_clipboard_context(clipboard_events, now) == "stacktrace":
             friction = min(friction + 0.3, 1.0)
 
         return round(friction, 2)
@@ -274,6 +297,7 @@ class SignalScorer:
         self,
         *,
         recent_apps: List[str],
+        latest_active_app: Optional[str],
         clipboard_context: Optional[str],
         friction_score: float,
         edited_file_count: int,
@@ -282,6 +306,8 @@ class SignalScorer:
         work_pattern_candidate: Optional[str],
     ) -> str:
         active_set = set(recent_apps)
+        # latest_app (30 min) : sert pour coding — avoir ouvert Xcode il y a 20 min reste valide.
+        # latest_active_app (5 min) : sert pour browsing/writing — l'app doit etre vraiment courante.
         latest_app = recent_apps[-1] if recent_apps else None
         source_count = file_type_mix.get("source", 0)
         test_count = file_type_mix.get("test", 0)
@@ -312,9 +338,11 @@ class SignalScorer:
             return "writing"
         if latest_app in self.DEV_APPS and edited_file_count >= 1:
             return "coding"
-        if latest_app in self.WRITING_APPS and edited_file_count == 0:
+        # browsing et writing : on exige que l'app soit active dans les 5 dernieres minutes.
+        # Un switch browser il y a 20 min ne doit pas colorer toute la session.
+        if latest_active_app in self.WRITING_APPS and edited_file_count == 0:
             return "writing"
-        if latest_app in self.BROWSER_APPS and edited_file_count == 0:
+        if latest_active_app in self.BROWSER_APPS and edited_file_count == 0:
             return "browsing"
         if active_set & self.DEV_APPS and edited_file_count >= 1:
             return "coding"
@@ -337,6 +365,12 @@ class SignalScorer:
             return "idle"
 
         if len(recent_app_switches) >= 6:
+            # De nombreux switches n'impliquent pas un manque de focus si une
+            # activite fichiers substantielle se produit en parallele.
+            # Xcode/Terminal/Chrome en workflow de dev actif peut generer 6+ switches
+            # tout en produisant de vraies modifications de code.
+            if len(recent_file_edits) >= 3:
+                return "normal"
             return "scattered"
         if len(recent_app_switches) <= 1 and len(recent_file_edits) >= 2:
             return "deep"

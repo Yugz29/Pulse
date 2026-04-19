@@ -316,5 +316,184 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.recent_apps[-1], "Xcode")
 
 
+    # ── 4A : clipboard context borné dans le temps ──────────────────────────────
+
+    def test_4a_stacktrace_recent_maintient_debug(self):
+        """Une stacktrace copiee il y a < 5 min → probable_task = debug. Comportement preserve."""
+        self._push("app_activated", {"app_name": "Terminal"})
+        self._push("clipboard_updated", {"content_kind": "stacktrace"}, minutes_ago=2)
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.probable_task, "debug")
+        self.assertEqual(signals.clipboard_context, "stacktrace")
+
+    def test_4a_stacktrace_ancien_ne_force_pas_debug(self):
+        """
+        Bug original : une stacktrace copiee il y a > 5 min maintenait
+        probable_task='debug' indefiniment, ecrasant toute activite de code.
+        """
+        self._push("clipboard_updated", {"content_kind": "stacktrace"}, minutes_ago=10)
+        self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=5)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/session.py"}, minutes_ago=1)
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "debug",
+            "Une stacktrace > 5 min ne doit plus forcer debug. "
+            f"probable_task obtenu : {signals.probable_task}")
+        self.assertIsNone(signals.clipboard_context,
+            "clipboard_context doit etre None si le dernier clipboard a > 5 min")
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_4a_clipboard_context_none_si_hors_fenetre(self):
+        """clipboard_context est None si tous les events clipboard ont > 5 min."""
+        self._push("clipboard_updated", {"content_kind": "code"}, minutes_ago=8)
+        self._push("clipboard_updated", {"content_kind": "url"}, minutes_ago=6)
+
+        signals = self.scorer.compute()
+
+        self.assertIsNone(signals.clipboard_context)
+
+    def test_4a_clipboard_le_plus_recent_dans_fenetre_est_retenu(self):
+        """Si plusieurs clipboards dont certains dans la fenetre, on retient le plus recent."""
+        self._push("clipboard_updated", {"content_kind": "stacktrace"}, minutes_ago=15)
+        self._push("clipboard_updated", {"content_kind": "code"}, minutes_ago=3)  # dans la fenetre
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.clipboard_context, "code",
+            "Le clipboard recent (code, 3 min) doit primer sur l'ancien (stacktrace, 15 min)")
+        self.assertNotEqual(signals.probable_task, "debug",
+            "Une stacktrace ancienne ne doit pas influencer probable_task")
+
+    def test_4a_friction_stacktrace_non_appliquee_si_hors_fenetre(self):
+        """
+        Le bonus friction +0.3 pour stacktrace ne doit pas s'appliquer
+        si la stacktrace a ete copiee il y a > 5 min.
+        """
+        # Aucun fichier churn : friction de base = 0
+        self._push("clipboard_updated", {"content_kind": "stacktrace"}, minutes_ago=10)
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.friction_score, 0.0,
+            "Une stacktrace ancienne ne doit pas ajouter +0.3 au friction_score")
+
+    def test_4a_friction_stacktrace_appliquee_si_recente(self):
+        """Le bonus friction +0.3 est applique si la stacktrace est dans la fenetre."""
+        self._push("clipboard_updated", {"content_kind": "stacktrace"}, minutes_ago=2)
+
+        signals = self.scorer.compute()
+
+        self.assertGreaterEqual(signals.friction_score, 0.3,
+            "Une stacktrace recente doit ajouter +0.3 au friction_score")
+
+
+    # ── 4B : browsing/writing uniquement si l'app est vraiment recente ────────────
+
+    def test_4b_browsing_recent_detecte_normalement(self):
+        """Un switch browser il y a < 5 min sans fichiers → browsing. Comportement preserve."""
+        self._push("app_activated", {"app_name": "Chrome"}, minutes_ago=2)
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.probable_task, "browsing")
+
+    def test_4b_browsing_ancien_ne_force_pas_browsing(self):
+        """
+        Bug original : un switch browser il y a 20 min maintenait probable_task='browsing'
+        alors que l'utilisateur avait repris le travail.
+        """
+        self._push("app_activated", {"app_name": "Chrome"}, minutes_ago=20)
+        # Pas de nouvelle activite app dans les 5 dernieres minutes
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "browsing",
+            "Un switch browser il y a 20 min ne doit plus forcer browsing. "
+            f"probable_task obtenu : {signals.probable_task}")
+        self.assertEqual(signals.probable_task, "general")
+
+    def test_4b_coding_stable_apres_browser_court(self):
+        """
+        Scenario reel : Xcode (travail) -> Chrome (10s) -> retour Xcode.
+        A t+6 min, le Chrome est hors fenetre 5 min. Pulse doit dire 'coding'.
+        """
+        self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=15)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, minutes_ago=12)
+        self._push("app_activated", {"app_name": "Chrome"}, minutes_ago=10)
+        self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=8)
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/scorer.py"}, minutes_ago=7)
+        # Maintenant : aucune app active dans les 5 derniere min (Xcode actif il y a 8 min)
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "browsing")
+        # 2 fichiers source modifies -> strong_coding_evidence -> coding
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_4b_writing_recent_detecte_normalement(self):
+        """Une app writing active il y a < 5 min sans fichiers -> writing. Comport. preserve."""
+        self._push("app_activated", {"app_name": "Notion"}, minutes_ago=2)
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.probable_task, "writing")
+
+    def test_4b_writing_ancien_tombe_sur_general(self):
+        """Une app writing active il y a > 5 min sans fichiers -> general (pas writing)."""
+        self._push("app_activated", {"app_name": "Notion"}, minutes_ago=15)
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.probable_task, "general")
+
+
+    # ── 4C : scattered ne doit pas ecraser une vraie activite fichiers ───────────
+
+    def test_4c_scattered_sans_fichiers_reste_scattered(self):
+        """Beaucoup de switches, peu de fichiers -> scattered. Comportement preserve."""
+        apps = ["Cursor", "Safari", "Terminal", "Notion", "Chrome", "Arc"]
+        for app in apps:
+            self._push("app_activated", {"app_name": app})
+        # 0 fichier edite -> scattered
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.focus_level, "scattered")
+
+    def test_4c_switches_nombreux_avec_fichiers_retourne_normal(self):
+        """
+        6+ switches en 10 min mais 3+ fichiers modifies en parallele -> normal.
+        Workflow dev actif (Xcode/Terminal/Chrome) ne doit pas etre classe scattered.
+        """
+        apps = ["Xcode", "Terminal", "Chrome", "Xcode", "Terminal", "Xcode"]
+        for app in apps:
+            self._push("app_activated", {"app_name": app})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/scorer.py"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/session.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.focus_level, "normal",
+            "6 switches + 3 fichiers modifies doit etre 'normal', pas 'scattered'")
+
+    def test_4c_seuil_2_fichiers_insuffisant_pour_annuler_scattered(self):
+        """2 fichiers ne suffisent pas pour annuler scattered (seuil = 3)."""
+        apps = ["Xcode", "Terminal", "Chrome", "Xcode", "Terminal", "Xcode"]
+        for app in apps:
+            self._push("app_activated", {"app_name": app})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/scorer.py"})
+        # 2 fichiers < seuil de 3
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.focus_level, "scattered")
+
+
 if __name__ == "__main__":
     unittest.main()
