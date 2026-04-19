@@ -160,18 +160,22 @@ class SignalScorer:
 
     def _recent_apps(self, app_events: list, now: datetime) -> List[str]:
         window_start = now - timedelta(minutes=30)
-        apps: List[str] = []
-        seen = set()
+        # On veut que apps[-1] soit la DERNIÈRE app réellement activée dans la fenêtre,
+        # pas la première fois qu'elle a été vue. Un dict ordonné permet de déplacer
+        # chaque app à la fin à chaque nouvelle occurrence via pop + réinsertion.
+        # Xcode → Chrome → Xcode donne [Chrome, Xcode], pas [Xcode, Chrome].
+        ordered: dict = {}
 
         for event in app_events:
             if event.timestamp < window_start:
                 continue
             app_name = event.payload.get("app_name")
-            if app_name and app_name not in seen:
-                seen.add(app_name)
-                apps.append(app_name)
+            if not app_name:
+                continue
+            ordered.pop(app_name, None)  # supprime l'occurrence précédente si présente
+            ordered[app_name] = None     # réinsère à la fin
 
-        return apps[-10:]
+        return list(ordered)[-10:]
 
     def _last_clipboard_context(self, clipboard_events: list) -> Optional[str]:
         for event in reversed(clipboard_events):

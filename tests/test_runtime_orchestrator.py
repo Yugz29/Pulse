@@ -708,5 +708,98 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertNotIn("90 min", snapshot)
 
 
+    # ── I2 : flush file events — file_deleted ne bloque pas inject_context ────
+
+    def test_i2_burst_terminant_par_delete_utilise_dernier_event_non_delete(self):
+        """
+        Un burst [modified, modified, deleted] doit passer le dernier 'modified'
+        comme trigger, pas le 'deleted'. DecisionEngine refuse file_deleted
+        comme trigger pour inject_context.
+        """
+        from daemon.core.event_bus import Event
+        from unittest.mock import patch
+
+        events = [
+            Event("file_modified", {"path": "/tmp/a.py"}),
+            Event("file_modified", {"path": "/tmp/b.py"}),
+            Event("file_deleted", {"path": "/tmp/old.py"}),  # dernier du burst
+        ]
+
+        captured_triggers = []
+
+        def fake_process_signals(trigger_event):
+            captured_triggers.append(trigger_event)
+
+        with self.orchestrator._debounce_lock:
+            self.orchestrator._pending_file_events = events[:]
+
+        with patch.object(self.orchestrator, "_process_signals", side_effect=fake_process_signals):
+            self.orchestrator._flush_file_events()
+
+        self.assertEqual(len(captured_triggers), 1)
+        self.assertNotEqual(captured_triggers[0].type, "file_deleted",
+            "Le trigger ne doit pas être file_deleted quand des events non-delete existent")
+        self.assertEqual(captured_triggers[0].type, "file_modified")
+        self.assertEqual(captured_triggers[0].payload["path"], "/tmp/b.py",
+            "Le trigger doit être le dernier event non-delete du burst")
+
+    def test_i2_burst_tout_delete_utilise_le_dernier_event(self):
+        """
+        Si tout le burst est des deletions (cas rare), on garde le comportement
+        existant : events[-1] est utilisé comme trigger.
+        """
+        from daemon.core.event_bus import Event
+        from unittest.mock import patch
+
+        events = [
+            Event("file_deleted", {"path": "/tmp/x.py"}),
+            Event("file_deleted", {"path": "/tmp/y.py"}),
+        ]
+
+        captured_triggers = []
+
+        def fake_process_signals(trigger_event):
+            captured_triggers.append(trigger_event)
+
+        with self.orchestrator._debounce_lock:
+            self.orchestrator._pending_file_events = events[:]
+
+        with patch.object(self.orchestrator, "_process_signals", side_effect=fake_process_signals):
+            self.orchestrator._flush_file_events()
+
+        self.assertEqual(len(captured_triggers), 1)
+        self.assertEqual(captured_triggers[0].type, "file_deleted")
+        self.assertEqual(captured_triggers[0].payload["path"], "/tmp/y.py",
+            "Fallback : dernier event du burst si tout est delete")
+
+    def test_i2_burst_sans_delete_comportement_inchange(self):
+        """
+        Régression : un burst sans delete doit continuer à utiliser
+        le dernier event du burst (comportement original préservé).
+        """
+        from daemon.core.event_bus import Event
+        from unittest.mock import patch
+
+        events = [
+            Event("file_modified", {"path": "/tmp/a.py"}),
+            Event("file_created", {"path": "/tmp/b.py"}),
+            Event("file_renamed", {"path": "/tmp/c.py"}),
+        ]
+
+        captured_triggers = []
+
+        def fake_process_signals(trigger_event):
+            captured_triggers.append(trigger_event)
+
+        with self.orchestrator._debounce_lock:
+            self.orchestrator._pending_file_events = events[:]
+
+        with patch.object(self.orchestrator, "_process_signals", side_effect=fake_process_signals):
+            self.orchestrator._flush_file_events()
+
+        self.assertEqual(captured_triggers[0].type, "file_renamed")
+        self.assertEqual(captured_triggers[0].payload["path"], "/tmp/c.py")
+
+
 if __name__ == "__main__":
     unittest.main()

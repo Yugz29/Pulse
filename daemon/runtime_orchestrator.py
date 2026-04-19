@@ -434,7 +434,16 @@ class RuntimeOrchestrator:
         if not events:
             return
         self.log.debug("file burst flush n=%d", len(events))
-        self._process_signals(events[-1])
+        # On préfère le dernier event non-delete comme trigger pour _process_signals.
+        # Un burst se terminant par file_deleted (ex. refactoring avec suppression finale)
+        # ne doit pas bloquer inject_context : DecisionEngine n'accepte pas file_deleted
+        # comme trigger valide dans _can_emit_context_proposal.
+        # Fallback sur events[-1] uniquement si tout le burst est composé de deletions.
+        trigger = next(
+            (e for e in reversed(events) if e.type != "file_deleted"),
+            events[-1],
+        )
+        self._process_signals(trigger)
 
     def _process_signals(self, trigger_event) -> None:
         signals = self.scorer.compute()

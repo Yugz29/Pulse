@@ -252,5 +252,69 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m, {"source": 1})
 
 
+    # ── I1 : recent_apps — dernière occurrence gagne ────────────────────────────
+
+    def test_i1_retour_app_dev_apres_browser_detecte_comme_app_courante(self):
+        """
+        Xcode → Chrome → Xcode : la dernière app activée doit être Xcode.
+        Avec l'ancienne impl (set dedup), Chrome était la "dernière" car
+        Xcode était déjà dans le set et ignoré à la deuxième occurrence.
+        """
+        self._push("app_activated", {"app_name": "Xcode"})
+        self._push("app_activated", {"app_name": "Chrome"})
+        self._push("app_activated", {"app_name": "Xcode"})  # retour dans l'IDE
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.recent_apps[-1], "Xcode",
+            "La dernière app activée doit être la dernière dans recent_apps")
+        self.assertEqual(signals.probable_task, "coding",
+            "Retour dans Xcode + fichier modifié doit être détecté comme coding, pas browsing")
+
+    def test_i1_ordre_reflète_dernière_activation(self):
+        """
+        A → B → A : la liste doit être [B, A] (pas [A, B]).
+        A → B → C → A : la liste doit être [B, C, A].
+        """
+        self._push("app_activated", {"app_name": "Xcode"})
+        self._push("app_activated", {"app_name": "Terminal"})
+        self._push("app_activated", {"app_name": "Arc"})
+        self._push("app_activated", {"app_name": "Xcode"})  # retour dans l'IDE
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.recent_apps, ["Terminal", "Arc", "Xcode"],
+            "Xcode doit apparaître en dernière position, pas en première")
+
+    def test_i1_apps_uniques_pas_de_doublons_dans_la_liste(self):
+        """Chaque app n'apparaît qu'une seule fois, même si activée plusieurs fois."""
+        for _ in range(3):
+            self._push("app_activated", {"app_name": "Xcode"})
+            self._push("app_activated", {"app_name": "Terminal"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.recent_apps.count("Xcode"), 1)
+        self.assertEqual(signals.recent_apps.count("Terminal"), 1)
+
+    def test_i1_browsing_court_ne_masque_pas_app_dev_active(self):
+        """
+        Cas réel : Xcode → Chrome (recherche rapide) → Xcode.
+        Sans le fix, probable_task pouvait tomber sur 'browsing'.
+        """
+        self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=5)
+        self._push("file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, minutes_ago=4)
+        self._push("app_activated", {"app_name": "Chrome"}, minutes_ago=2)
+        self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=1)  # retour
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "browsing",
+            "Un aller-retour sur Chrome ne doit pas écraser la détection d'activité de dev")
+        self.assertEqual(signals.recent_apps[-1], "Xcode")
+
+
 if __name__ == "__main__":
     unittest.main()

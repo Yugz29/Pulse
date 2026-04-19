@@ -75,7 +75,13 @@ class SessionMemory:
                 conn.commit()
 
     def update_signals(self, signals: Signals) -> None:
-        duration = max(signals.session_duration_min, self._duration_min())
+        # Signals est la source de vérité pour la durée de session :
+        # son horloge (_session_start) est resynchronisée sur chaque frontière
+        # de session via reset_session(). self._duration_min() part du démarrage
+        # de SessionMemory et peut être gonflé si les deux horloges divergent
+        # (ex. update_signals appelé avec signals post-reset avant new_session).
+        # Le max() était défensif mais pouvait écrire une durée fausse.
+        duration = signals.session_duration_min
 
         with self._lock:
             with self._connect() as conn:

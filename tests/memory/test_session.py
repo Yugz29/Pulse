@@ -104,5 +104,83 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIsNotNone(session["ended_at"])
 
 
+    # ── I3 : update_signals — signals est la source de vérité pour la durée ───
+
+    def test_i3_signals_duration_ecrase_pas_le_max_avec_memory_duration(self):
+        """
+        Cas problématique du max() :
+        Si session_memory.started_at est ancien (grande _duration_min),
+        mais que signals.session_duration_min est petit (post-reset du scorer),
+        le max() aurait écrit la grande valeur. On doit écrire la petite.
+        """
+        from datetime import timedelta
+        # Simule une session_memory dont started_at pointe loin dans le passé
+        self.memory.started_at = datetime.now() - timedelta(minutes=90)
+
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="normal",
+            session_duration_min=5,   # ← scorer vient de reseté
+            recent_apps=["Xcode"],
+            clipboard_context=None,
+        )
+
+        self.memory.update_signals(signals)
+
+        session = self.memory.get_session()
+        self.assertEqual(session["session_duration_min"], 5,
+            "signals.session_duration_min doit primer sur _duration_min() "
+            "même quand _duration_min() est plus grand")
+
+    def test_i3_zero_signals_duration_ecrit_zero(self):
+        """
+        Quand le scorer vient de reseté (duration=0), on écrit 0.
+        Avec l'ancien max(), si _duration_min() > 0, on aurait écrit
+        la durée depuis le démarrage de SessionMemory.
+        """
+        from datetime import timedelta
+        self.memory.started_at = datetime.now() - timedelta(minutes=60)
+
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=0,   # ← scorer tout juste reseté
+            recent_apps=[],
+            clipboard_context=None,
+        )
+
+        self.memory.update_signals(signals)
+
+        session = self.memory.get_session()
+        self.assertEqual(session["session_duration_min"], 0,
+            "session_duration_min=0 depuis signals doit être écrit tel quel")
+
+    def test_i3_update_signals_valeur_normale_inchangee(self):
+        """Régression : cas normal sans divergence reste correct."""
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.2,
+            focus_level="deep",
+            session_duration_min=45,
+            recent_apps=["Xcode"],
+            clipboard_context=None,
+        )
+
+        self.memory.update_signals(signals)
+
+        session = self.memory.get_session()
+        self.assertEqual(session["session_duration_min"], 45)
+        self.assertEqual(session["probable_task"], "coding")
+        self.assertEqual(session["focus_level"], "deep")
+
+
 if __name__ == "__main__":
     unittest.main()
