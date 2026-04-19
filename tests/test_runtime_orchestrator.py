@@ -25,10 +25,14 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.llm_runtime = MagicMock()
         self.log = MagicMock()
 
-        # Mock FactEngine — évite toute dépendance sur ~/.pulse/facts.db dans les tests
+        # mock FactEngine — évite toute dépendance sur ~/.pulse/facts.db dans les tests
         self.mock_fact_engine = MagicMock()
         self.mock_fact_engine.render_for_context.return_value = ""
         self.mock_fact_engine.decay_all.return_value = 0
+
+        # inactivity_reset_count doit être un int (pas un MagicMock)
+        # pour que la comparaison > dans _process_signals() fonctionne.
+        self.scorer.inactivity_reset_count = 0
 
         # memory_store.render doit retourner une str (pas un MagicMock)
         self.memory_store.render.return_value = ""
