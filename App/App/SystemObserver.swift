@@ -323,12 +323,12 @@ class SystemObserver {
         lastClipboardContent = content
         let kind = clipboardContentKind(content)
 
-        // Tronque avant d'envoyer au daemon (évite les gros payloads)
-        let preview = String(content.prefix(500))
-
+        // Le contenu brut du clipboard n'est jamais utilisé par le daemon :
+        // seul content_kind (url/code/stacktrace/text) alimente le scorer.
+        // On ne transmet pas le contenu pour éviter de persister des données
+        // sensibles (tokens, mots de passe, clés API) dans session.db.
         sendEvent([
             "type": "clipboard_updated",
-            "content": preview,
             "content_kind": kind,
             "char_count": "\(content.count)",
             "timestamp": ISO8601DateFormatter().string(from: Date())

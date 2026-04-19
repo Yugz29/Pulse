@@ -143,6 +143,9 @@ def _should_publish_to_bus(event_type: str, payload: dict, runtime_state: Any = 
     - Pendant le verrou, seuls screen_locked/screen_unlocked entrent dans le bus.
       Les écritures système en arrière-plan ne doivent pas contaminer le scorer.
     - Les autres events fichier sont filtrés par file_signal_significance.
+    - Pour clipboard_updated, le champ 'content' est retiré du payload avant
+      publication : seul content_kind est utilisé par le scorer. Défense en
+      profondeur au cas où un ancien client Swift enverrait encore le contenu brut.
     """
     _LOCK_PASSTHROUGH = {"screen_locked", "screen_unlocked"}
 
@@ -152,6 +155,9 @@ def _should_publish_to_bus(event_type: str, payload: dict, runtime_state: Any = 
             return False
 
     if event_type not in _BUS_FILE_EVENT_TYPES:
+        # Défense en profondeur : retirer le contenu brut clipboard avant publication.
+        if event_type == "clipboard_updated" and "content" in payload:
+            payload.pop("content")
         return True
 
     path = payload.get("path", "")

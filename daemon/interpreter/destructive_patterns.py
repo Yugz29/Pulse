@@ -14,6 +14,19 @@ class DestructiveMatch:
 
 DESTRUCTIVE_PATTERNS: list[tuple[re.Pattern, DestructiveMatch]] = [
 
+    # --- Exécution de code distant (risque critique) ---
+
+    # curl ... | bash/sh/zsh/fish : télécharge et exécute du code distant
+    # Couvre : curl URL | bash, curl -s URL | sh, curl -fsSL URL | sudo bash
+    (re.compile(r'\bcurl\b.*?\|\s*(?:sudo\s+)?(?:bash|sh|zsh|fish)\b'),
+     DestructiveMatch("Exécute du code téléchargé depuis internet", "critical")),
+
+    # wget ... | bash/sh/zsh : variante wget
+    # Couvre : wget -qO- URL | bash, wget -O - URL | sh
+    (re.compile(r'\bwget\b.*?\|\s*(?:sudo\s+)?(?:bash|sh|zsh|fish)\b'),
+     DestructiveMatch("Exécute du code téléchargé depuis internet", "critical")),
+
+
     # --- Git — risque de perte de données ---
 
     # git reset --hard : efface tous les changements non commités

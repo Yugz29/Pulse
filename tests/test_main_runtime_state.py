@@ -192,5 +192,81 @@ class TestMainRuntimeState(unittest.TestCase):
             "Après clear_sleep_markers, un nouveau lock doit enregistrer sa propre heure")
 
 
+    # ── I5 : clipboard — contenu brut retiré avant publication ───────────────────
+
+    def test_i5_clipboard_content_retire_du_payload_avant_publication(self):
+        """
+        Un event clipboard_updated contenant 'content' (client ancien ou test)
+        doit avoir ce champ retiré avant publication dans le bus.
+        Seul content_kind doit passer.
+        """
+        published_payloads = []
+
+        def capture_publish(event_type, payload):
+            published_payloads.append((event_type, dict(payload)))
+
+        with patch.object(daemon_main.bus, "publish", side_effect=capture_publish):
+            response = self.client.post("/event", json={
+                "type": "clipboard_updated",
+                "content": "api_key = 'sk-secret123'",  # donnée sensible
+                "content_kind": "code",
+                "char_count": "24",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(published_payloads), 1)
+        _, payload = published_payloads[0]
+        self.assertNotIn("content", payload,
+            "Le contenu brut ne doit pas être publié dans le bus")
+        self.assertEqual(payload.get("content_kind"), "code",
+            "content_kind doit rester présent")
+        self.assertEqual(payload.get("char_count"), "24",
+            "char_count doit rester présent")
+
+    def test_i5_clipboard_sans_content_passe_sans_modification(self):
+        """
+        Un event clipboard_updated sans 'content' (client Swift à jour)
+        doit passer normalement sans erreur.
+        """
+        published_payloads = []
+
+        def capture_publish(event_type, payload):
+            published_payloads.append((event_type, dict(payload)))
+
+        with patch.object(daemon_main.bus, "publish", side_effect=capture_publish):
+            response = self.client.post("/event", json={
+                "type": "clipboard_updated",
+                "content_kind": "stacktrace",
+                "char_count": "150",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(published_payloads), 1)
+        _, payload = published_payloads[0]
+        self.assertNotIn("content", payload)
+        self.assertEqual(payload.get("content_kind"), "stacktrace")
+
+    def test_i5_clipboard_pendant_screen_lock_filtre(self):
+        """
+        Pendant le verrou écran, les events clipboard ne passent pas du tout.
+        Ce comportement pré-existant ne doit pas être affecté par le fix I5.
+        """
+        daemon_main.runtime_state.mark_screen_locked()
+
+        with patch.object(daemon_main.bus, "publish") as mock_publish:
+            response = self.client.post("/event", json={
+                "type": "clipboard_updated",
+                "content": "sensible",
+                "content_kind": "text",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        mock_publish.assert_not_called()
+
+        # Nettoyage
+        daemon_main.runtime_state.mark_screen_unlocked()
+        daemon_main.runtime_state.clear_sleep_markers()
+
+
 if __name__ == "__main__":
     unittest.main()
