@@ -287,6 +287,33 @@ class TestFileSignalSignificance(unittest.TestCase):
             "neutral",
         )
 
+    # ── Plist système — neutral (pas technical_noise mais filtré du bus) ────────
+
+    def test_plist_systeme_est_neutral(self):
+        """Les plists système / app (bruit background) ne doivent PAS être meaningful."""
+        system_plists = [
+            "/Users/yugz/Library/Containers/com.openai.chat/appPrivateData.plist",
+            "/Users/yugz/Library/Containers/com.apple.iCloud/syncstatus.plist",
+            "/Users/yugz/Library/Preferences/metrics.plist",
+            "/Users/yugz/Library/Caches/sharedAssetsPrefetchCount.plist",
+        ]
+        for path in system_plists:
+            result = file_signal_significance(path)
+            self.assertNotEqual(
+                result, "meaningful",
+                f"Plist système classé 'meaningful' à tort : {path}",
+            )
+
+    def test_info_plist_est_meaningful(self):
+        """Info.plist dans un projet dev doit être meaningful via file_signal_significance."""
+        result = file_signal_significance("/Users/yugz/Projets/MonApp/MonApp/Info.plist")
+        self.assertEqual(result, "meaningful")
+
+    def test_plist_generique_est_neutral(self):
+        """Un .plist non référencé dans la liste de dev doit être neutral."""
+        result = file_signal_significance("/Users/yugz/Projets/MonApp/foo.plist")
+        self.assertNotEqual(result, "meaningful")
+
 
 if __name__ == "__main__":
     unittest.main()

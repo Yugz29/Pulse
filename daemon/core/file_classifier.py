@@ -72,8 +72,19 @@ def classify_file_type(path: str) -> str:
     # Config — extensions
     if name.endswith((
         ".json", ".jsonc", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-        ".conf", ".plist", ".properties", ".env.local", ".env.example",
+        ".conf", ".properties", ".env.local", ".env.example",
     )):
+        return "config"
+
+    # Plists : seulement les fichiers de projet connus
+    # Les plists systèmes (appPrivateData, syncstatus, metrics, etc.) génèrent
+    # du bruit constant en arrière-plan — ils ne constituent pas un signal de travail.
+    # Comparaison sur le nom original (case-sensitive) — name est en lowercase.
+    original_name = path.split("/")[-1]
+    if original_name.endswith(".plist") and original_name in {
+        "Info.plist", "Entitlements.plist",
+        "Debug.entitlements", "Release.entitlements",
+    }:
         return "config"
 
     # Docs
