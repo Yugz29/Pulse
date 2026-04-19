@@ -17,6 +17,7 @@ Comportements vérifiés :
   - screen_locked sans activité suivante → session_start ne saute pas à now.
   - reset_session() efface _last_meaningful_activity_at.
   - Les vieux events dans le bus après un reset ne provoquent pas de double reset.
+  - inactivity_reset_count s'incrémente sur reset réel, pas sur ancrage première activité.
 """
 
 import unittest
@@ -61,21 +62,12 @@ class FakeBus:
 class TestSessionBoundaries(unittest.TestCase):
 
     def setUp(self):
-        # Un seul appel datetime.now() par test.
-        # Tous les timestamps dérivent de cette base — gap toujours exact.
         self.base = datetime.now()
 
     def _at(self, delta_min: float) -> datetime:
-        """Timestamp à exactement `delta_min` minutes avant la base du test."""
         return self.base - timedelta(minutes=delta_min)
 
     def _make_scorer(self) -> SignalScorer:
-        """
-        Crée un SignalScorer avec un bus vide et un _session_start ancré
-        très loin dans le passé (120 min), afin que tous les events de test
-        (qui sont dans les 60 dernières minutes) passent le guard
-        `latest_meaningful >= _session_start` sans ambiguïté.
-        """
         scorer = SignalScorer(FakeBus([]))
         scorer._session_start = self._at(120)
         return scorer
@@ -86,34 +78,25 @@ class TestSessionBoundaries(unittest.TestCase):
         """
         Quand le daemon tourne depuis longtemps sans activité (2h),
         la première activité significative doit définir le vrai début de session.
-        Avant le fix : duration ≈ 120 min. Après : duration ≈ 0 min.
         """
         scorer = self._make_scorer()
-        # Daemon démarré il y a 2h, première activité fichier maintenant
         t_first = self._at(0)
         scorer.bus = FakeBus([_file_event("/proj/main.py", t_first)])
-
         signals = scorer.compute()
 
-        # _session_start doit avoir été déplacé à t_first
         self.assertLessEqual(signals.session_duration_min, 1)
         self.assertEqual(scorer._session_start, t_first)
 
     # ── Inactivité longue → réinitialisation ─────────────────────────────────
 
     def test_inactivite_longue_reinitialise_la_session(self):
-        """
-        Gap de 25 min entre deux activités (bien au-dessus du seuil de 10 min).
-        La session doit redémarrer à la reprise d'activité.
-        """
+        """Gap de 25 min → reset, session repart de la nouvelle activité."""
         scorer = self._make_scorer()
 
-        # Première activité il y a 25 min
         t_old = self._at(25)
         scorer.bus = FakeBus([_file_event("/proj/main.py", t_old)])
-        scorer.compute()  # ancre _session_start et _last_meaningful_activity_at à t_old
+        scorer.compute()
 
-        # Reprise d'activité maintenant — gap exact = 25 min > SESSION_TIMEOUT_MIN (10)
         t_new = self._at(0)
         scorer.bus = FakeBus([
             _file_event("/proj/main.py", t_old),
@@ -121,25 +104,19 @@ class TestSessionBoundaries(unittest.TestCase):
         ])
         signals = scorer.compute()
 
-        # Session réinitialisée à t_new → durée ≈ 0
         self.assertLessEqual(signals.session_duration_min, 1)
         self.assertEqual(scorer._session_start, t_new)
 
     # ── Pause courte → session continue ──────────────────────────────────────
 
     def test_pause_courte_ne_reinitialise_pas_la_session(self):
-        """
-        Gap de 5 min entre deux activités (bien en dessous du seuil de 10 min).
-        La session continue depuis la première activité.
-        """
+        """Gap de 5 min < SESSION_TIMEOUT_MIN → pas de reset."""
         scorer = self._make_scorer()
 
-        # Première activité il y a 20 min — ancre _session_start à _at(20)
         t_first = self._at(20)
         scorer.bus = FakeBus([_file_event("/proj/main.py", t_first)])
         scorer.compute()
 
-        # Deuxième activité il y a 15 min — gap exact = 5 min < SESSION_TIMEOUT_MIN
         t_second = self._at(15)
         scorer.bus = FakeBus([
             _file_event("/proj/main.py", t_first),
@@ -147,55 +124,42 @@ class TestSessionBoundaries(unittest.TestCase):
         ])
         signals = scorer.compute()
 
-        # Pas de reset — session_start reste à t_first = _at(20)
         self.assertEqual(scorer._session_start, t_first)
         self.assertGreaterEqual(signals.session_duration_min, 18)
 
     def test_activite_continue_accumule_la_duree(self):
-        """
-        Plusieurs activités avec gap de 9 min (< seuil) entre chacune.
-        La durée s'accumule depuis la première activité, sans reset.
-        """
+        """Plusieurs activités avec gap < seuil → durée accumule depuis la première."""
         scorer = self._make_scorer()
 
-        t1 = self._at(30)  # première activité il y a 30 min
+        t1 = self._at(30)
         scorer.bus = FakeBus([_file_event("/proj/main.py", t1)])
-        scorer.compute()  # _session_start = t1
+        scorer.compute()
 
-        t2 = self._at(21)  # gap = 9 min < SESSION_TIMEOUT_MIN
-        scorer.bus = FakeBus([
-            _file_event("/proj/main.py", t1),
-            _file_event("/proj/main.py", t2),
-        ])
-        scorer.compute()  # pas de reset
+        t2 = self._at(21)
+        scorer.bus = FakeBus([_file_event("/proj/main.py", t1), _file_event("/proj/main.py", t2)])
+        scorer.compute()
 
-        t3 = self._at(12)  # gap = 9 min < SESSION_TIMEOUT_MIN
+        t3 = self._at(12)
         scorer.bus = FakeBus([
             _file_event("/proj/main.py", t1),
             _file_event("/proj/main.py", t2),
             _file_event("/proj/main.py", t3),
         ])
-        signals = scorer.compute()  # pas de reset
+        signals = scorer.compute()
 
-        # _session_start = t1, durée ≈ 30 min
         self.assertEqual(scorer._session_start, t1)
         self.assertGreaterEqual(signals.session_duration_min, 27)
 
     # ── screen_locked → réinitialisation ─────────────────────────────────────
 
     def test_screen_lock_entre_deux_activites_reinitialise_la_session(self):
-        """
-        screen_locked entre deux activités → reset, même si le gap temporel
-        est inférieur au timeout d'inactivité (8 min < 10 min).
-        """
+        """screen_locked entre deux activités → reset même si gap < timeout."""
         scorer = self._make_scorer()
 
-        # Première activité il y a 8 min
         t_before = self._at(8)
         scorer.bus = FakeBus([_file_event("/proj/main.py", t_before)])
-        scorer.compute()  # _session_start = t_before
+        scorer.compute()
 
-        # Screen lock il y a 4 min, reprise maintenant
         t_lock = self._at(4)
         t_after = self._at(0)
         scorer.bus = FakeBus([
@@ -205,24 +169,17 @@ class TestSessionBoundaries(unittest.TestCase):
         ])
         signals = scorer.compute()
 
-        # Reset déclenché par le screen_lock → _session_start = t_after
         self.assertLessEqual(signals.session_duration_min, 1)
         self.assertEqual(scorer._session_start, t_after)
 
     def test_screen_lock_sans_nouvelle_activite_ne_saute_pas_a_now(self):
-        """
-        screen_locked suivi d'aucune nouvelle activité ne déplace pas
-        _session_start vers now (0 min). L'invariant : la session reste
-        ancrée à la dernière activité connue, pas réinitialisée à now.
-        """
+        """screen_lock sans nouvelle activité → session_start reste sur dernière activité."""
         scorer = self._make_scorer()
 
-        # Unique activité il y a 15 min
         t_activity = self._at(15)
         scorer.bus = FakeBus([_file_event("/proj/main.py", t_activity)])
-        scorer.compute()  # _session_start = t_activity
+        scorer.compute()
 
-        # Screen lock il y a 5 min, AUCUNE nouvelle activité fichier
         t_lock = self._at(5)
         scorer.bus = FakeBus([
             _file_event("/proj/main.py", t_activity),
@@ -230,8 +187,6 @@ class TestSessionBoundaries(unittest.TestCase):
         ])
         signals = scorer.compute()
 
-        # latest_meaningful = t_activity (aucun nouvel event) → reset à t_activity (inchangé)
-        # La session ne saute PAS à now → durée doit rester proche de 15 min
         self.assertEqual(scorer._session_start, t_activity)
         self.assertGreaterEqual(signals.session_duration_min, 13)
 
@@ -250,42 +205,100 @@ class TestSessionBoundaries(unittest.TestCase):
         self.assertIsNone(scorer._last_meaningful_activity_at)
 
     def test_reset_session_vieux_events_bus_ne_causent_pas_de_double_reset(self):
-        """
-        Après reset_session(), les events antérieurs à _session_start dans le bus
-        ne doivent pas déclencher de reset parasite : le guard
-        `latest_meaningful >= _session_start` les bloque.
-        """
+        """Après reset_session(), les vieux events du bus sont ignorés par le guard."""
         scorer = self._make_scorer()
 
-        # Première activité il y a 60 min → ancre _session_start
         t_old = self._at(60)
         scorer.bus = FakeBus([_file_event("/proj/main.py", t_old)])
         scorer.compute()
 
-        # reset_session() → _session_start = datetime.now() ≈ self.base
         scorer.reset_session()
         session_start_post_reset = scorer._session_start
 
-        # Même vieux event encore dans le bus (antérieur à _session_start)
         signals = scorer.compute()
 
-        # _session_start n'a pas bougé — l'event est ignoré par le guard
         self.assertEqual(scorer._session_start, session_start_post_reset)
         self.assertLessEqual(signals.session_duration_min, 1)
+
+    # ── inactivity_reset_count ────────────────────────────────────────────────
+
+    def test_inactivity_reset_count_incremente_sur_gap_long(self):
+        """
+        inactivity_reset_count s'incrémente sur un vrai reset (inactivité),
+        mais PAS sur l'ancrage de la première activité.
+        """
+        scorer = self._make_scorer()
+        self.assertEqual(scorer.inactivity_reset_count, 0)
+
+        # Première activité — ancrage, pas un reset
+        t_first = self._at(30)
+        scorer.bus = FakeBus([_file_event("/proj/main.py", t_first)])
+        scorer.compute()
+        self.assertEqual(scorer.inactivity_reset_count, 0, "ancrage ne doit pas incrémenter")
+
+        # Gap court (5 min) — pas de reset
+        t_second = self._at(25)
+        scorer.bus = FakeBus([
+            _file_event("/proj/main.py", t_first),
+            _file_event("/proj/main.py", t_second),
+        ])
+        scorer.compute()
+        self.assertEqual(scorer.inactivity_reset_count, 0, "gap court ne doit pas incrémenter")
+
+        # Gap long (25 min) — reset d'inactivité
+        t_third = self._at(0)
+        scorer.bus = FakeBus([
+            _file_event("/proj/main.py", t_second),
+            _file_event("/proj/main.py", t_third),
+        ])
+        scorer.compute()
+        self.assertEqual(scorer.inactivity_reset_count, 1, "gap long doit incrémenter")
+
+    def test_inactivity_reset_count_incremente_sur_screen_lock(self):
+        """inactivity_reset_count s'incrémente sur screen_lock entre deux activités."""
+        scorer = self._make_scorer()
+
+        t_before = self._at(8)
+        scorer.bus = FakeBus([_file_event("/proj/main.py", t_before)])
+        scorer.compute()
+        self.assertEqual(scorer.inactivity_reset_count, 0)
+
+        t_lock = self._at(4)
+        t_after = self._at(0)
+        scorer.bus = FakeBus([
+            _file_event("/proj/main.py", t_before),
+            _screen_lock_event(t_lock),
+            _file_event("/proj/main.py", t_after),
+        ])
+        scorer.compute()
+        self.assertEqual(scorer.inactivity_reset_count, 1)
+
+    def test_inactivity_reset_count_ne_incremente_pas_sans_activite_post_screen_lock(self):
+        """screen_lock sans nouvelle activité ne doit pas incrémenter le compteur."""
+        scorer = self._make_scorer()
+
+        t_activity = self._at(15)
+        scorer.bus = FakeBus([_file_event("/proj/main.py", t_activity)])
+        scorer.compute()
+
+        t_lock = self._at(5)
+        scorer.bus = FakeBus([
+            _file_event("/proj/main.py", t_activity),
+            _screen_lock_event(t_lock),
+        ])
+        scorer.compute()
+        # Pas de nouvelle activité → latest_meaningful = t_activity = prev → pas de reset
+        self.assertEqual(scorer.inactivity_reset_count, 0)
 
     # ── Types d'activité ─────────────────────────────────────────────────────
 
     def test_app_de_dev_compte_comme_activite_significative(self):
-        """
-        Un switch vers une app de dev (Cursor, Xcode, etc.) compte
-        comme activité significative pour les limites de session.
-        Gap de 25 min → reset attendu.
-        """
+        """Switch vers app de dev → compte comme activité, gap long → reset."""
         scorer = self._make_scorer()
 
         t_old = self._at(25)
         scorer.bus = FakeBus([_app_event("Cursor", t_old)])
-        scorer.compute()  # ancre via app de dev
+        scorer.compute()
 
         t_new = self._at(0)
         scorer.bus = FakeBus([
@@ -294,27 +307,18 @@ class TestSessionBoundaries(unittest.TestCase):
         ])
         signals = scorer.compute()
 
-        # Gap 25 min > SESSION_TIMEOUT_MIN → reset → durée ≈ 0
         self.assertLessEqual(signals.session_duration_min, 1)
         self.assertEqual(scorer._session_start, t_new)
 
     def test_app_non_dev_ne_compte_pas_comme_activite_significative(self):
-        """
-        Safari ne compte pas comme activité significative.
-        _last_meaningful_activity_at reste None après un event Safari.
-        La première activité fichier qui suit ancre bien la session (else branch).
-        """
+        """Safari ne définit pas _last_meaningful_activity_at."""
         scorer = self._make_scorer()
 
-        # Seule activité : Safari il y a 25 min — non significatif
         t_safari = self._at(25)
         scorer.bus = FakeBus([_app_event("Safari", t_safari)])
         scorer.compute()
-
-        # _last_meaningful_activity_at doit rester None
         self.assertIsNone(scorer._last_meaningful_activity_at)
 
-        # Première activité fichier maintenant
         t_file = self._at(0)
         scorer.bus = FakeBus([
             _app_event("Safari", t_safari),
@@ -322,7 +326,6 @@ class TestSessionBoundaries(unittest.TestCase):
         ])
         signals = scorer.compute()
 
-        # else branch : _session_start = t_file → durée ≈ 0
         self.assertLessEqual(signals.session_duration_min, 1)
         self.assertEqual(scorer._session_start, t_file)
         self.assertIsNotNone(scorer._last_meaningful_activity_at)

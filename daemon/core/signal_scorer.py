@@ -46,6 +46,10 @@ class SignalScorer:
         self.bus = bus
         self._session_start = datetime.now()
         self._last_meaningful_activity_at: Optional[datetime] = None
+        # Incrémenté uniquement sur un vrai reset de frontière (inactivité ou screen_lock),
+        # PAS sur l'ancrage de la première activité.
+        # Permet à l'orchestrateur de détecter qu'une nouvelle session a commencé.
+        self.inactivity_reset_count: int = 0
 
     def reset_session(self) -> None:
         """Réinitialise l'horloge de session — appelé après une veille ou un screen_lock."""
@@ -65,10 +69,15 @@ class SignalScorer:
         if latest_meaningful is not None and latest_meaningful >= self._session_start:
             prev = self._last_meaningful_activity_at
             if prev is not None:
-                screen_locked = self._has_screen_lock_after(recent, prev)
-                gap_min = (latest_meaningful - prev).total_seconds() / 60
-                if screen_locked or gap_min > SESSION_TIMEOUT_MIN:
-                    self._session_start = latest_meaningful
+                # Un reset ne se déclenche que s'il y a UNE NOUVELLE activité.
+                # screen_locked seul (sans reprise) ne doit pas réinitialiser.
+                has_new_activity = latest_meaningful > prev
+                if has_new_activity:
+                    screen_locked = self._has_screen_lock_after(recent, prev)
+                    gap_min = (latest_meaningful - prev).total_seconds() / 60
+                    if screen_locked or gap_min > SESSION_TIMEOUT_MIN:
+                        self._session_start = latest_meaningful
+                        self.inactivity_reset_count += 1
             else:
                 # Première activité significative depuis le démarrage ou le dernier reset :
                 # la session démarre réellement maintenant, pas au démarrage du daemon.
