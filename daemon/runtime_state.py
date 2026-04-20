@@ -16,6 +16,7 @@ class RuntimeState:
         self._last_screen_locked_at: datetime | None = None
         self._recent_file_events: dict[str, datetime] = {}
         self._screen_is_locked: bool = False
+        self._latest_active_app: str | None = None
 
     def touch_ping(self, when: datetime | None = None) -> bool:
         now = when or datetime.now()
@@ -108,6 +109,14 @@ class RuntimeState:
             self._recent_file_events[dedupe_key] = current
             return False
 
+    def set_latest_active_app(self, app_name: str) -> None:
+        with self._lock:
+            self._latest_active_app = app_name
+
+    def get_latest_active_app(self) -> str | None:
+        with self._lock:
+            return self._latest_active_app
+
     def reset_for_tests(self) -> None:
         with self._lock:
             self._paused = False
@@ -118,3 +127,4 @@ class RuntimeState:
             self._last_screen_locked_at = None
             self._screen_is_locked = False
             self._recent_file_events = {}
+            self._latest_active_app = None

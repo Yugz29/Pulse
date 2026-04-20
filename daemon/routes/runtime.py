@@ -8,8 +8,11 @@ from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
+from daemon.core.event_actor import EventActorClassifier
 from daemon.core.file_classifier import file_signal_significance
 from daemon.memory.extractor import last_session_context
+
+_actor_classifier = EventActorClassifier()
 
 
 def register_runtime_routes(
@@ -35,8 +38,33 @@ def register_runtime_routes(
         payload = {key: value for key, value in data.items() if key != "type"}
         if runtime_state.is_paused():
             return jsonify({"ok": True, "paused": True, "ignored": True})
+
+        # Mise à jour de l'app active avant le filtre — la classification d'actor
+        # en a besoin pour les events fichiers qui suivent.
+        if event_type in {"app_activated", "app_switch"}:
+            app_name = payload.get("app_name")
+            if app_name:
+                runtime_state.set_latest_active_app(app_name)
+
         if not _should_publish_to_bus(event_type, payload, runtime_state):
             return jsonify({"ok": True, "filtered": True})
+
+        # Attribution de l'auteur pour les events fichiers.
+        # On lit le bus avant la publication de l'event courant pour la détection
+        # de burst et de repeat — l'event courant n'est pas encore dans le bus.
+        if event_type in {"file_modified", "file_created", "file_renamed", "file_deleted"}:
+            recent = bus.recent(60)
+            attribution = _actor_classifier.classify(
+                event_type,
+                payload,
+                latest_app=runtime_state.get_latest_active_app(),
+                recent_events=recent,
+            )
+            payload["_actor"]            = attribution.actor
+            payload["_actor_confidence"] = attribution.confidence
+            payload["_automation_score"] = attribution.automation_score
+            payload["_noise_policy"]     = attribution.noise_policy
+
         # Répond immédiatement — Swift ne doit jamais attendre le pipeline SQLite.
         threading.Thread(target=bus.publish, args=(event_type, payload), daemon=True).start()
         return jsonify({"ok": True})
