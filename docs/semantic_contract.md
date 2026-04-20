@@ -137,23 +137,17 @@ Niveau 5 → archivé    confidence < ARCHIVE_THRESHOLD (0.30)
 `render_for_context()` est le point de sortie vers le LLM. C'est là que le contrat est
 le plus critique.
 
-**Règle actuelle (code) :** tous les faits actifs avec `confidence >= 0.5`, limités à 8.
+**Règle actuelle :** facts actifs avec `confidence >= 0.60`, limités à 8.
 
-**Problème :** la confiance initiale à la création est 0.50 — donc un fait tout juste
-promu atterrit immédiatement dans le contexte LLM avec le même poids qu'un fait confirmé
-à 0.80.
+`autonomy_level` n'intervient pas dans ce filtre. Il est réservé au futur système
+d'action autonome de Pulse — quand Pulse agira, pas seulement quand il parlera.
 
-**Règle cible :**
+La séparation est intentionnelle :
+- **Parler** (injection LLM) → régi par `confidence`
+- **Agir** (futures actions autonomes) → sera régi par `autonomy_level`
 
-| autonomy_level | confidence minimale pour injection | Ton autorisé |
-|---|---|---|
-| 0 | non injecté | — |
-| 1 | ≥ 0.60 | "Il semble que…", "souvent observé…" |
-| 2 | ≥ 0.50 | déclaratif neutre |
-| 3 | ≥ 0.40 | affirmatif — le fait est très confirmé |
-
-Un fait qui vient d'être promu (level 0, conf 0.50) ne devrait pas encore parler au LLM.
-Il doit d'abord survivre à quelques renforcements ou au moins au premier cycle de decay.
+Un fait avec `confidence >= 0.60` a survécu à suffisamment de répétitions et au decay
+pour mériter d'être mentionné au LLM. C'est le seul critère pertinent aujourd'hui.
 
 ---
 
