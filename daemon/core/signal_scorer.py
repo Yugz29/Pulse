@@ -411,7 +411,9 @@ class SignalScorer:
             active.add("docs_only")
 
         # Writing app : fenêtre 5 min — l'app doit être vraiment en avant-plan.
-        if latest_active_app in self.WRITING_APPS:
+        # Désactivé si l'utilisateur édite des fichiers source ou test :
+        # Notes/Notion ouverts pendant une session de code ne signifient pas writing.
+        if latest_active_app in self.WRITING_APPS and (source_count + test_count) == 0:
             active.add("writing_app_active")
 
         # Browser sans édition → exploration (pas une tâche "browsing").
