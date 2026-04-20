@@ -247,26 +247,40 @@ class TestFactEngineRender(unittest.TestCase):
         result = self.engine.render_for_context()
         self.assertEqual(result, "")
 
-    def test_render_contient_header_et_faits(self):
+    def test_render_vide_si_faits_tous_niveau_zero(self):
+        # Faits promus mais jamais renforcés : autonomy_level = 0, non injectables
         for _ in range(FACT_THRESHOLD):
             self.engine.observe_session(_session(task="coding"))
+
+        result = self.engine.render_for_context()
+        self.assertEqual(result, "")
+
+    def test_render_contient_faits_apres_renforcement(self):
+        # Un fait devient injectable après 5 renforcements (autonomy_level → 1)
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="coding"))
+
+        fact_id = self.engine.get_facts()[0]["id"]
+        for _ in range(5):
+            self.engine.reinforce(fact_id)
 
         result = self.engine.render_for_context()
         self.assertIn("── Profil utilisateur ──", result)
         self.assertIn("conf ", result)
 
-    def test_render_exclut_faits_sous_seuil_confiance(self):
+    def test_render_exclut_faits_level1_sous_seuil_confiance(self):
+        # level 1 : seuil à 0.60 — un fait à 0.55 ne doit pas passer
         for _ in range(FACT_THRESHOLD):
             self.engine.observe_session(_session(task="coding"))
 
         fact_id = self.engine.get_facts()[0]["id"]
-        # Baisse la confiance sous 0.5
+        for _ in range(5):
+            self.engine.reinforce(fact_id)  # autonomy_level → 1
         with self.engine._connect() as conn:
-            conn.execute("UPDATE facts SET confidence = 0.3 WHERE id = ?", (fact_id,))
+            conn.execute("UPDATE facts SET confidence = 0.55 WHERE id = ?", (fact_id,))
             conn.commit()
 
         result = self.engine.render_for_context()
-        # Pas de faits au-dessus du seuil → vide
         self.assertEqual(result, "")
 
     def test_stats_coherentes(self):

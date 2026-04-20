@@ -255,15 +255,29 @@ class FactEngine:
     def render_for_context(self, limit: int = 8) -> str:
         """
         Génère un bloc texte compact pour injection dans le system prompt.
-        Seuls les faits actifs avec confiance >= 0.5 sont inclus.
+
+        Règle d'injection par autonomy_level (contrat sémantique) :
+          level 0 → non injecté (fait nouveau-né, pas encore confirmé)
+          level 1 → confidence >= 0.60, ton prudent
+          level 2 → confidence >= 0.50, déclaratif neutre
+          level 3 → confidence >= 0.40, affirmatif
 
         Format :
           ── Profil utilisateur ──
-          • [workflow] Travaille principalement le soir en mode coding  (conf 0.82)
-          • [cognitive] Sessions longues avec focus profond le matin     (conf 0.74)
+          • [workflow] Tendance à travailler le soir en mode développement  (conf 0.82)
+          • [cognitive] Focus soutenu fréquent le soir                      (conf 0.74)
         """
-        facts = self.get_facts(min_confidence=0.5, limit=limit)
-        if not facts:
+        # Seuils de confiance minimale par autonomy_level
+        _MIN_CONF = {1: 0.60, 2: 0.50, 3: 0.40}
+
+        candidates = self.get_facts(min_confidence=0.40, limit=limit * 3)
+        eligible = [
+            f for f in candidates
+            if f["autonomy_level"] >= 1
+            and f["confidence"] >= _MIN_CONF.get(f["autonomy_level"], 0.60)
+        ][:limit]
+
+        if not eligible:
             return ""
 
         lines = ["── Profil utilisateur ──"]
@@ -273,7 +287,7 @@ class FactEngine:
             "cognitive":   "cognitif",
             "preference":  "préf",
         }
-        for f in facts:
+        for f in eligible:
             label = category_labels.get(f["category"], f["category"])
             conf  = f["confidence"]
             lines.append(f"• [{label}] {f['description']}  (conf {conf:.2f})")
@@ -336,7 +350,7 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                         json.dumps({"source": "llm_compression", "facts_count": len(facts)}),
                         0.75,          # confiance initiale élevée — synthèse validée
                         len(facts),    # hérite du total d'observations
-                        0, 0, 0,
+                        0, 0, 1,       # autonomy_level=1 : déjà validé par compression
                         now, now, now,
                     ),
                 )
