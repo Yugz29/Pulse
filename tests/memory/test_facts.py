@@ -247,39 +247,42 @@ class TestFactEngineRender(unittest.TestCase):
         result = self.engine.render_for_context()
         self.assertEqual(result, "")
 
-    def test_render_vide_si_faits_tous_niveau_zero(self):
-        # Faits promus mais jamais renforcés : autonomy_level = 0, non injectables
+    def test_render_vide_si_confidence_sous_seuil(self):
+        # Facts promus mais confidence < 0.60 : non injectables
         for _ in range(FACT_THRESHOLD):
             self.engine.observe_session(_session(task="coding"))
-
+        # confidence initiale = 0.50, sous le seuil
         result = self.engine.render_for_context()
         self.assertEqual(result, "")
 
-    def test_render_contient_faits_apres_renforcement(self):
-        # Un fait devient injectable après 5 renforcements (autonomy_level → 1)
+    def test_render_contient_faits_si_confidence_suffisante(self):
         for _ in range(FACT_THRESHOLD):
             self.engine.observe_session(_session(task="coding"))
-
         fact_id = self.engine.get_facts()[0]["id"]
-        for _ in range(5):
-            self.engine.reinforce(fact_id)
-
+        with self.engine._connect() as conn:
+            conn.execute("UPDATE facts SET confidence = 0.60 WHERE id = ?", (fact_id,))
+            conn.commit()
         result = self.engine.render_for_context()
         self.assertIn("── Profil utilisateur ──", result)
         self.assertIn("conf ", result)
 
-    def test_render_exclut_faits_level1_sous_seuil_confiance(self):
-        # level 1 : seuil à 0.60 — un fait à 0.55 ne doit pas passer
+    def test_render_inclut_fact_a_0_60(self):
         for _ in range(FACT_THRESHOLD):
             self.engine.observe_session(_session(task="coding"))
-
         fact_id = self.engine.get_facts()[0]["id"]
-        for _ in range(5):
-            self.engine.reinforce(fact_id)  # autonomy_level → 1
         with self.engine._connect() as conn:
-            conn.execute("UPDATE facts SET confidence = 0.55 WHERE id = ?", (fact_id,))
+            conn.execute("UPDATE facts SET confidence = 0.60 WHERE id = ?", (fact_id,))
             conn.commit()
+        result = self.engine.render_for_context()
+        self.assertNotEqual(result, "")
 
+    def test_render_exclut_fact_a_0_40(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="coding"))
+        fact_id = self.engine.get_facts()[0]["id"]
+        with self.engine._connect() as conn:
+            conn.execute("UPDATE facts SET confidence = 0.40 WHERE id = ?", (fact_id,))
+            conn.commit()
         result = self.engine.render_for_context()
         self.assertEqual(result, "")
 

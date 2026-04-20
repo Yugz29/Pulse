@@ -256,28 +256,17 @@ class FactEngine:
         """
         Génère un bloc texte compact pour injection dans le system prompt.
 
-        Règle d'injection par autonomy_level (contrat sémantique) :
-          level 0 → non injecté (fait nouveau-né, pas encore confirmé)
-          level 1 → confidence >= 0.60, ton prudent
-          level 2 → confidence >= 0.50, déclaratif neutre
-          level 3 → confidence >= 0.40, affirmatif
+        Filtre uniquement sur confidence >= 0.60.
+        `autonomy_level` n'intervient pas ici — il est réservé au futur
+        système d'action autonome.
 
         Format :
           ── Profil utilisateur ──
           • [workflow] Tendance à travailler le soir en mode développement  (conf 0.82)
           • [cognitive] Focus soutenu fréquent le soir                      (conf 0.74)
         """
-        # Seuils de confiance minimale par autonomy_level
-        _MIN_CONF = {1: 0.60, 2: 0.50, 3: 0.40}
-
-        candidates = self.get_facts(min_confidence=0.40, limit=limit * 3)
-        eligible = [
-            f for f in candidates
-            if f["autonomy_level"] >= 1
-            and f["confidence"] >= _MIN_CONF.get(f["autonomy_level"], 0.60)
-        ][:limit]
-
-        if not eligible:
+        facts = self.get_facts(min_confidence=0.60, limit=limit)
+        if not facts:
             return ""
 
         lines = ["── Profil utilisateur ──"]
@@ -287,7 +276,7 @@ class FactEngine:
             "cognitive":   "cognitif",
             "preference":  "préf",
         }
-        for f in eligible:
+        for f in facts:
             label = category_labels.get(f["category"], f["category"])
             conf  = f["confidence"]
             lines.append(f"• [{label}] {f['description']}  (conf {conf:.2f})")
