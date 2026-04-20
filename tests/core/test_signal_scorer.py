@@ -412,12 +412,13 @@ class TestSignalScorer(unittest.TestCase):
     # ── 4B : browsing/writing uniquement si l'app est vraiment recente ────────────
 
     def test_4b_browsing_recent_detecte_normalement(self):
-        """Un switch browser il y a < 5 min sans fichiers → browsing. Comportement preserve."""
+        """Un switch browser il y a < 5 min sans fichiers → exploration (browsing supprimé des tâches)."""
         self._push("app_activated", {"app_name": "Chrome"}, minutes_ago=2)
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.probable_task, "browsing")
+        # browsing n'est plus une tâche valide — remplacé par exploration
+        self.assertEqual(signals.probable_task, "exploration")
 
     def test_4b_browsing_ancien_ne_force_pas_browsing(self):
         """

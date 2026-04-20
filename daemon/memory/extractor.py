@@ -136,6 +136,68 @@ def _save_cooldown() -> None:
         pass  # non-bloquant
 
 
+# ── Correction de tâche par préfixe de commit ─────────────────────────────────
+
+# Mappage préfixe conventionnel → tâche cible.
+# None = pas de correction (chore, build, ci sont trop ambigus).
+_COMMIT_PREFIX_TASK: Dict[str, Optional[str]] = {
+    "fix":      "debug",
+    "feat":     "coding",
+    "docs":     "writing",
+    "refactor": "coding",
+    "test":     "coding",
+    "perf":     "coding",
+    "style":    "coding",
+    "chore":    None,
+    "build":    None,
+    "ci":       None,
+}
+
+# Tâches source compatibles avec chaque tâche cible.
+# La correction s'applique uniquement si la tâche actuelle est ambiguë
+# (general, exploration) ou compatible avec la cible.
+_COMMIT_CORRECTION_FROM: Dict[str, set] = {
+    "debug":   {"general", "exploration", "coding"},
+    "coding":  {"general", "exploration"},
+    "writing": {"general", "exploration"},
+}
+
+
+def _commit_task_correction(commit_message: str, current_task: str) -> str:
+    """
+    Retourne la tâche corrigée selon le préfixe du message de commit.
+
+    Corrections applicables :
+      fix:      → debug   (si session coding/general/exploration)
+      feat:     → coding  (si session general/exploration)
+      docs:     → writing (si session general/exploration)
+      refactor: → coding  (si session general/exploration)
+      test/perf/style: → coding  (si session general/exploration)
+      chore/build/ci: pas de correction
+
+    La correction est rétroactive — appliquée lors de l'écriture mémoire,
+    pas en temps réel. Elle n'écrase jamais une tâche contradictoire
+    (ex. writing → debug sur un commit fix: dans une session docs).
+    """
+    if not commit_message or not current_task:
+        return current_task
+
+    match = re.match(r'^(\w+)(?:\([^)]*\))?!?:', commit_message.strip().lower())
+    if not match:
+        return current_task
+
+    prefix = match.group(1)
+    target = _COMMIT_PREFIX_TASK.get(prefix)
+    if target is None:
+        return current_task
+
+    compatible = _COMMIT_CORRECTION_FROM.get(target, set())
+    if current_task in compatible:
+        return target
+
+    return current_task
+
+
 # ── API publique ───────────────────────────────────────────────────────────────
 
 def update_memories_from_session(
@@ -169,6 +231,19 @@ def update_memories_from_session(
         session_data["duration_min"] = min(
             session_data["duration_min"], MAX_SESSION_DURATION_MIN
         )
+
+    # Correction rétroactive de la tâche selon le préfixe du commit.
+    # Appliquée uniquement sur trigger commit et si la tâche actuelle est compatible.
+    # Mutualise la copie de session_data déjà faite au-dessus si nécessaire.
+    if trigger == "commit" and commit_message:
+        corrected = _commit_task_correction(
+            commit_message,
+            session_data.get("probable_task", "general"),
+        )
+        if corrected != session_data.get("probable_task"):
+            session_data = dict(session_data)  # ne pas muter le dict de l'appelant
+            session_data["probable_task"] = corrected
+            session_data["task_source"] = "commit_correction"
 
     _update_projects(base_dir, session_data)
 
