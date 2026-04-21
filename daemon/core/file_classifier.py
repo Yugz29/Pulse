@@ -15,6 +15,33 @@ from pathlib import Path
 from typing import Optional
 
 
+# ── Bruit récurrent à faible valeur produit ──────────────────────────────────
+
+_SCREENSHOT_MARKERS = (
+    "capture d’écran",
+    "capture d'ecran",
+    "capture d'écran",
+    "screenshot",
+)
+
+_SCREENSHOT_EXTENSIONS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".heic",
+    ".tiff",
+    ".webp",
+)
+
+
+def _is_screenshot_capture(name: str) -> bool:
+    lower_name = name.lower()
+    return (
+        lower_name.endswith(_SCREENSHOT_EXTENSIONS)
+        and any(marker in lower_name for marker in _SCREENSHOT_MARKERS)
+    )
+
+
 # ── Pulse interne ─────────────────────────────────────────────────────────────
 
 def is_pulse_internal_path(path: str) -> bool:
@@ -129,6 +156,8 @@ def file_signal_significance(path: Optional[str]) -> str:
     # Bruit système
     if name.startswith("."):
         return "technical_noise"
+    if "/.trash/" in lower_path:
+        return "technical_noise"
     if name.endswith((".DS_Store", "~", ".xcuserstate")):
         return "technical_noise"
     if name == "COMMIT_EDITMSG":
@@ -143,6 +172,8 @@ def file_signal_significance(path: Optional[str]) -> str:
     if lower_name == "models_cache.json":
         return "technical_noise"
     if lower_name.endswith(("_cache.json", "-cache.json", ".cache.json")):
+        return "technical_noise"
+    if _is_screenshot_capture(name):
         return "technical_noise"
     if name.endswith(("-journal", "-wal", "-shm")):
         return "technical_noise"

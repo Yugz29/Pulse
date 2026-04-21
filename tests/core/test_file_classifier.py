@@ -267,6 +267,24 @@ class TestFileSignalSignificance(unittest.TestCase):
             "technical_noise",
         )
 
+    def test_capture_ecran_macos_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance("/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"),
+            "technical_noise",
+        )
+
+    def test_screenshot_anglais_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance("/Users/yugz/Desktop/Screenshot 2026-04-21 at 10.32.18.png"),
+            "technical_noise",
+        )
+
+    def test_asset_normal_reste_meaningful(self):
+        self.assertEqual(
+            file_signal_significance("/Users/yugz/Projets/MonApp/assets/logo-final.png"),
+            "meaningful",
+        )
+
     def test_chemin_vide(self):
         self.assertEqual(file_signal_significance(""), "technical_noise")
 

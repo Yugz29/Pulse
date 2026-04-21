@@ -111,6 +111,7 @@ class SignalScorer:
             friction_score=friction_score,
         )
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
+        has_recent_local_exploration = self._has_recent_local_exploration(recent, now)
         probable_task, task_confidence = self._detect_task(
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
@@ -127,6 +128,7 @@ class SignalScorer:
             user_file_count=edited_file_count_10m,
             latest_active_app=latest_active_app,
             recent_apps=recent_apps,
+            has_recent_local_exploration=has_recent_local_exploration,
         )
 
         return Signals(
@@ -206,6 +208,13 @@ class SignalScorer:
             if kind:
                 return kind
         return None
+
+    def _has_recent_local_exploration(self, recent: list, now: datetime) -> bool:
+        recent_window = now - timedelta(minutes=5)
+        return any(
+            event.type == "local_exploration" and event.timestamp >= recent_window
+            for event in recent
+        )
 
     def _compute_friction(self, file_events: list, clipboard_events: list, now: datetime) -> float:
         recent_window = now - timedelta(minutes=10)
@@ -452,6 +461,7 @@ class SignalScorer:
         user_file_count: int,
         latest_active_app: Optional[str],
         recent_apps: List[str],
+        has_recent_local_exploration: bool,
     ) -> str:
         """
         Activité bas niveau : ce que l'utilisateur fait concrètement.
@@ -465,7 +475,7 @@ class SignalScorer:
             return "executing"
         if user_file_count >= 1:
             return "editing"
-        if latest_active_app in self.BROWSER_APPS:
+        if latest_active_app in self.BROWSER_APPS or has_recent_local_exploration:
             return "navigating"
         # App dev ou writing récente (3 dernières des 30 min) sans édition → lecture
         if recent_apps and set(recent_apps[-3:]) & (self.DEV_APPS | self.WRITING_APPS):

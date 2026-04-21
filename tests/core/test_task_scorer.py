@@ -68,6 +68,26 @@ class TestActivityLevel(unittest.TestCase):
         signals = scorer.compute()
         self.assertEqual(signals.activity_level, "navigating")
 
+    def test_local_exploration_donne_navigating_sans_tache_forte(self):
+        """Finder visible comme navigation locale, sans dériver la tâche."""
+        scorer, bus = _make_scorer()
+        _push(bus, "local_exploration", {"app_name": "Finder", "bundle_id": "com.apple.finder"})
+        signals = scorer.compute()
+        self.assertEqual(signals.activity_level, "navigating")
+        self.assertEqual(signals.probable_task, "general")
+        self.assertIsNone(signals.active_file)
+
+    def test_local_exploration_necrase_pas_une_session_de_code_active(self):
+        """Finder + édition récente → le travail réel reste editing/coding."""
+        scorer, bus = _make_scorer()
+        _push(bus, "app_activated", {"app_name": "Cursor"})
+        _push(bus, "local_exploration", {"app_name": "Finder", "bundle_id": "com.apple.finder"})
+        _push(bus, "file_modified", {"path": "/proj/src/main.py", "_actor": "user"})
+        signals = scorer.compute()
+        self.assertEqual(signals.activity_level, "editing")
+        self.assertEqual(signals.probable_task, "coding")
+        self.assertEqual(signals.active_file, "/proj/src/main.py")
+
     def test_idle_si_aucune_app_recente(self):
         """Aucun event → activity=idle."""
         scorer, bus = _make_scorer()

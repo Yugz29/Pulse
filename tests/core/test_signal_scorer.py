@@ -273,6 +273,38 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m, {})
         self.assertEqual(signals.probable_task, "general")
 
+    def test_capture_ecran_seule_ne_pese_pas_sur_la_tache_probable(self):
+        self._push("file_created", {"path": "/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"})
+
+        signals = self.scorer.compute()
+
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.edited_file_count_10m, 0)
+        self.assertEqual(signals.file_type_mix_10m, {})
+        self.assertEqual(signals.probable_task, "general")
+
+    def test_capture_ecran_n_ecrase_pas_un_vrai_fichier_de_travail(self):
+        self._push("app_activated", {"app_name": "Cursor"})
+        self._push("file_created", {"path": "/Users/yugz/Desktop/Screenshot 2026-04-21 at 10.32.18.png"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.edited_file_count_10m, 1)
+        self.assertEqual(signals.file_type_mix_10m, {"source": 1})
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_trash_seul_ne_pese_pas_sur_la_tache_probable(self):
+        self._push("file_modified", {"path": "/Users/yugz/.Trash/logo-final.png"})
+
+        signals = self.scorer.compute()
+
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.edited_file_count_10m, 0)
+        self.assertEqual(signals.file_type_mix_10m, {})
+        self.assertEqual(signals.probable_task, "general")
+
     def test_long_burst_ne_tronque_pas_les_signaux_fichier_dans_la_fenetre_10m(self):
         bus = EventBus()
         scorer = SignalScorer(bus)

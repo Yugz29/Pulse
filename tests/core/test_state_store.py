@@ -116,6 +116,22 @@ class TestStateStore(unittest.TestCase):
         self.assertIsNone(self.store.get().active_file)
         self.assertIsNone(self.store.get().active_project)
 
+    def test_ignore_capture_ecran(self):
+        self.store.update(Event("file_created", {
+            "path": "/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"
+        }))
+
+        self.assertIsNone(self.store.get().active_file)
+        self.assertIsNone(self.store.get().active_project)
+
+    def test_ignore_fichier_dans_trash(self):
+        self.store.update(Event("file_modified", {
+            "path": "/Users/yugz/.Trash/logo-final.png"
+        }))
+
+        self.assertIsNone(self.store.get().active_file)
+        self.assertIsNone(self.store.get().active_project)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -547,7 +547,7 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
 _SYSTEM_PROCESS_NAMES: frozenset = frozenset({
     "loginwindow",    # gestionnaire de session macOS (lock/unlock)
     "SystemUIServer", # menu bar système
-    "Finder",         # déjà filtré côté Swift, défense en profondeur
+    "Finder",         # encore exclu de recent_apps ; local_exploration est géré à part
 })
 
 

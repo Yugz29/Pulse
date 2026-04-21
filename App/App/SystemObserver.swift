@@ -107,6 +107,11 @@ class SystemObserver {
               let bundleId = app.bundleIdentifier
         else { return }
 
+        if bundleId == "com.apple.finder" {
+            sendLocalExplorationEvent(appName: name, bundleId: bundleId)
+            return
+        }
+
         guard shouldTrackApp(bundleId: bundleId) else { return }
 
         sendEvent([
@@ -416,14 +421,17 @@ class SystemObserver {
     func refreshCurrentContext() {
         if let app = NSWorkspace.shared.frontmostApplication,
            let name = app.localizedName,
-           let bundleId = app.bundleIdentifier,
-           shouldTrackApp(bundleId: bundleId) {
-            sendEvent([
-                "type": "app_activated",
-                "app_name": name,
-                "bundle_id": bundleId,
-                "timestamp": ISO8601DateFormatter().string(from: Date())
-            ])
+           let bundleId = app.bundleIdentifier {
+            if bundleId == "com.apple.finder" {
+                sendLocalExplorationEvent(appName: name, bundleId: bundleId)
+            } else if shouldTrackApp(bundleId: bundleId) {
+                sendEvent([
+                    "type": "app_activated",
+                    "app_name": name,
+                    "bundle_id": bundleId,
+                    "timestamp": ISO8601DateFormatter().string(from: Date())
+                ])
+            }
         }
 
         if let path = lastMeaningfulFilePath,
@@ -441,6 +449,15 @@ class SystemObserver {
     private func isPulseInternalPath(_ path: String) -> Bool {
         let pulseHome = NSHomeDirectory() + "/.pulse"
         return path == pulseHome || path.hasPrefix(pulseHome + "/")
+    }
+
+    private func sendLocalExplorationEvent(appName: String, bundleId: String) {
+        sendEvent([
+            "type": "local_exploration",
+            "app_name": appName,
+            "bundle_id": bundleId,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
     }
 
     private func shouldTrackApp(bundleId: String) -> Bool {

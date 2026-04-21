@@ -494,6 +494,7 @@ struct InsightEvent: Identifiable {
     var label: String {
         switch type {
         case "app_activated", "app_switch": return "App"
+        case "local_exploration": return "Exploration locale"
         case "file_modified": return "Modifié"
         case "file_created": return "Créé"
         case "file_deleted": return "Supprimé"
@@ -524,6 +525,7 @@ struct InsightEvent: Identifiable {
     var iconName: String {
         switch type {
         case "app_activated", "app_switch": return "app.badge"
+        case "local_exploration": return "folder"
         case "file_modified": return "pencil.line"
         case "file_created": return "plus.square"
         case "file_deleted": return "trash"
@@ -539,6 +541,7 @@ struct InsightEvent: Identifiable {
     var accentHex: String {
         switch type {
         case "app_activated", "app_switch": return "#5E9EFF"
+        case "local_exploration": return "#8B5CF6"
         case "file_modified": return "#5DCAA5"
         case "file_created": return "#7DD3FC"
         case "file_deleted": return "#ff453a"
@@ -560,6 +563,7 @@ struct InsightEvent: Identifiable {
     var secondaryText: String {
         switch type {
         case "app_activated", "app_switch": return "application active"
+        case "local_exploration": return "exploration locale"
         case "file_modified": return "fichier modifié"
         case "file_created": return "fichier créé"
         case "file_deleted": return "fichier supprimé"

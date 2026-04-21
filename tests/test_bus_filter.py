@@ -40,6 +40,12 @@ class TestShouldPublishToBus(unittest.TestCase):
     def test_mcp_command_passe(self):
         self.assertTrue(_should_publish_to_bus("mcp_command_received", {"command": "ls"}))
 
+    def test_local_exploration_passe(self):
+        self.assertTrue(_should_publish_to_bus(
+            "local_exploration",
+            {"app_name": "Finder", "bundle_id": "com.apple.finder"},
+        ))
+
     # ── COMMIT_EDITMSG — exception critique ───────────────────────────────────
 
     def test_commit_editmsg_file_modified_passe(self):
@@ -155,6 +161,18 @@ class TestShouldPublishToBus(unittest.TestCase):
             {"path": "/Users/yugz/Projets/Pulse/build/models_cache.json"},
         ))
 
+    def test_capture_ecran_bloquee(self):
+        self.assertFalse(_should_publish_to_bus(
+            "file_created",
+            {"path": "/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"},
+        ))
+
+    def test_fichier_dans_trash_bloque(self):
+        self.assertFalse(_should_publish_to_bus(
+            "file_modified",
+            {"path": "/Users/yugz/.Trash/logo-final.png"},
+        ))
+
     # ── Fichiers sans chemin — bloqués ────────────────────────────────────────
 
     def test_payload_sans_path_bloque(self):
@@ -226,6 +244,13 @@ class TestShouldPublishToBus(unittest.TestCase):
         self.assertFalse(_should_publish_to_bus(
             "clipboard_updated",
             {"content": "hello"},
+            self._locked_state(),
+        ))
+
+    def test_local_exploration_bloque_pendant_lock(self):
+        self.assertFalse(_should_publish_to_bus(
+            "local_exploration",
+            {"app_name": "Finder", "bundle_id": "com.apple.finder"},
             self._locked_state(),
         ))
 
