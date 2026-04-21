@@ -27,17 +27,33 @@ def register_facts_routes(
         min_conf = float(request.args.get("min_confidence", 0.0))
         archived = request.args.get("archived", "false").lower() == "true"
         limit    = min(int(request.args.get("limit", 20)), 100)
+        health = engine.health_status() if hasattr(engine, "health_status") else {"status": "ok", "reason": None}
 
-        facts = engine.get_facts(
-            category=category,
-            min_confidence=min_conf,
-            include_archived=archived,
-            limit=limit,
-        )
-        return jsonify({
+        try:
+            facts = engine.get_facts(
+                category=category,
+                min_confidence=min_conf,
+                include_archived=archived,
+                limit=limit,
+            )
+        except Exception as exc:
+            reason = f"{exc.__class__.__name__}: {exc}"
+            payload = {
+                "status": "degraded",
+                "reason": reason,
+                "count": 0,
+                "facts": [],
+            }
+            return jsonify(payload), 503
+
+        payload = {
+            "status": health.get("status", "ok"),
             "count": len(facts),
             "facts": facts,
-        })
+        }
+        if health.get("status") == "degraded" and health.get("reason"):
+            payload["reason"] = health["reason"]
+        return jsonify(payload)
 
     @app.route("/facts/stats")
     def facts_stats():

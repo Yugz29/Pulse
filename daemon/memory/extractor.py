@@ -251,10 +251,16 @@ def update_memories_from_session(
     try:
         engine = get_fact_engine()
         new_facts = engine.observe_session(session_data)
+        engine.clear_runtime_error()
         if new_facts:
             log.info("Facts : %d nouveau(x) fait(s) consolidé(s)", len(new_facts))
     except Exception as exc:
-        log.warning("Facts : erreur observe_session : %s", exc)
+        engine = get_fact_engine()
+        info = engine.mark_runtime_error(exc)
+        if info["recoverable"]:
+            log.warning("Facts : erreur récupérable observe_session : %s", info["reason"])
+        else:
+            log.error("Facts : erreur structurelle observe_session : %s", info["reason"])
 
     project  = session_data.get("active_project") or "inconnu"
     duration = session_data.get("duration_min", 0)

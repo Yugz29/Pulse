@@ -56,6 +56,67 @@ DEFAULT_DB_PATH = Path.home() / ".pulse" / "facts.db"
 DEFAULT_MD_PATH = Path.home() / ".pulse" / "memory" / "facts.md"
 
 
+def classify_fact_engine_error(exc: Exception) -> Dict[str, str | bool]:
+    """
+    Classe les erreurs du moteur de faits.
+
+    recoverable=True : contention transitoire SQLite (database is locked/busy)
+    recoverable=False : permissions, corruption, ouverture impossible, etc.
+    """
+    message = str(exc).strip() or exc.__class__.__name__
+    lower = message.lower()
+
+    if isinstance(exc, sqlite3.OperationalError):
+        if any(marker in lower for marker in ("database is locked", "database table is locked", "database is busy")):
+            return {
+                "recoverable": True,
+                "severity": "warning",
+                "reason": f"{exc.__class__.__name__}: {message}",
+            }
+        if any(marker in lower for marker in (
+            "readonly",
+            "read-only",
+            "permission denied",
+            "unable to open database file",
+            "disk i/o error",
+        )):
+            return {
+                "recoverable": False,
+                "severity": "error",
+                "reason": f"{exc.__class__.__name__}: {message}",
+            }
+
+    if isinstance(exc, sqlite3.DatabaseError):
+        if any(marker in lower for marker in ("malformed", "corrupt", "not a database")):
+            return {
+                "recoverable": False,
+                "severity": "error",
+                "reason": f"{exc.__class__.__name__}: {message}",
+            }
+
+    return {
+        "recoverable": False,
+        "severity": "error",
+        "reason": f"{exc.__class__.__name__}: {message}",
+    }
+
+
+def _is_active_fact_key(key: str) -> bool:
+    if not key:
+        return False
+    if key.startswith("slot:") and ":task:" in key:
+        return True
+    if key.startswith("focus:deep:"):
+        return True
+    if key.startswith("session:long:"):
+        return True
+    if key.startswith("friction:high:project:"):
+        return True
+    if key.startswith("compressed:"):
+        return True
+    return False
+
+
 # ── FactEngine ────────────────────────────────────────────────────────────────
 
 class FactEngine:
@@ -73,6 +134,8 @@ class FactEngine:
         self.md_path = md_path or DEFAULT_MD_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._health_status = "ok"
+        self._health_reason: Optional[str] = None
         self._init_db()
 
     # ── API publique ──────────────────────────────────────────────────────────
@@ -103,6 +166,25 @@ class FactEngine:
             self.export_markdown()
 
         return newly_promoted
+
+    def mark_runtime_error(self, exc: Exception) -> Dict[str, str | bool]:
+        info = classify_fact_engine_error(exc)
+        with self._lock:
+            self._health_status = "degraded"
+            self._health_reason = str(info["reason"])
+        return info
+
+    def clear_runtime_error(self) -> None:
+        with self._lock:
+            self._health_status = "ok"
+            self._health_reason = None
+
+    def health_status(self) -> Dict[str, Optional[str]]:
+        with self._lock:
+            return {
+                "status": self._health_status,
+                "reason": self._health_reason,
+            }
 
     def reinforce(self, fact_id: str) -> Dict[str, Any]:
         """
@@ -220,6 +302,33 @@ class FactEngine:
             self.export_markdown()
 
         return decayed
+
+    def archive_legacy_facts(self) -> int:
+        """
+        Archive les faits actifs dont la clé ne correspond plus aux templates
+        encore produits par _extract_observations().
+        """
+        archived = 0
+        now = datetime.now().isoformat()
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT id, key FROM facts WHERE archived = 0"
+                ).fetchall()
+                legacy_ids = [row["id"] for row in rows if not _is_active_fact_key(row["key"])]
+                if legacy_ids:
+                    placeholders = ",".join("?" * len(legacy_ids))
+                    conn.execute(
+                        f"UPDATE facts SET archived = 1, updated_at = ? WHERE id IN ({placeholders})",
+                        [now] + legacy_ids,
+                    )
+                    archived = len(legacy_ids)
+                conn.commit()
+
+        if archived:
+            self.export_markdown()
+
+        return archived
 
     def get_facts(
         self,

@@ -1,8 +1,10 @@
 import tempfile
 import unittest
+import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 from datetime import datetime, timedelta
+from flask import Flask
 
 from daemon.memory.extractor import (
     enrich_session_report,
@@ -10,6 +12,7 @@ from daemon.memory.extractor import (
     update_memories_from_session,
 )
 import daemon.memory.extractor as extractor_module
+from daemon.routes.facts import register_facts_routes
 
 
 class FakeLLM:
@@ -464,6 +467,42 @@ class TestExtractor(unittest.TestCase):
         after = session_files[0].read_text()
         self.assertIn("Résumé court de la session.", after)
         self.assertNotIn("Livraison : « feat: commit enrichi ».", after)
+
+    def test_fact_engine_structural_error_is_logged_and_exposed_via_facts_route(self):
+        class ReadOnlyFailingFactEngine(extractor_module.FactEngine):
+            def observe_session(self, session_data):
+                raise sqlite3.OperationalError("attempt to write a readonly database")
+
+        failing_engine = ReadOnlyFailingFactEngine(
+            db_path=Path(self.tmpdir.name) / "facts-readonly.db",
+            md_path=Path(self.tmpdir.name) / "facts-readonly.md",
+        )
+        extractor_module._fact_engine = failing_engine
+
+        with self.assertLogs("pulse", level="ERROR") as captured:
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 25,
+                    "probable_task": "coding",
+                    "recent_apps": ["Cursor"],
+                },
+                memory_dir=self.memory_dir,
+            )
+
+        self.assertTrue(any("Readonly" in line or "readonly database" in line for line in captured.output))
+
+        app = Flask(__name__)
+        app.config["TESTING"] = True
+        register_facts_routes(app, get_fact_engine=lambda: failing_engine)
+        client = app.test_client()
+
+        resp = client.get("/facts")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data["status"], "degraded")
+        self.assertIn("readonly database", data["reason"])
+        self.assertEqual(data["facts"], [])
 
 
 if __name__ == "__main__":
