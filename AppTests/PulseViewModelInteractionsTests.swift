@@ -573,6 +573,28 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertTrue(signals.taskEvidenceSummary.contains("ça ressemble à une évolution de fonctionnalité"))
     }
 
+    func testSignalsDataRendExplorationDeManiereCohérente() {
+        let signals = SignalsData(
+            activeProject: nil,
+            activeFile: nil,
+            probableTask: "exploration",
+            focusLevel: "normal",
+            frictionScore: 0.0,
+            sessionDurationMin: 6,
+            recentApps: ["Google Chrome"],
+            clipboardContext: "url",
+            editedFileCount10m: 0,
+            fileTypeMix10m: [:],
+            renameDeleteRatio10m: 0.0,
+            dominantFileMode: "none",
+            workPatternCandidate: nil,
+            lastSessionContext: nil
+        )
+
+        XCTAssertEqual(signals.taskLabel, "Exploration")
+        XCTAssertEqual(signals.taskAccentHex, "#EF9F27")
+    }
+
     func testSignalsDataMarqueUnContexteFaibleQuandLesIndicesRestentLegers() {
         let signals = SignalsData(
             activeProject: nil,

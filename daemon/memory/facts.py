@@ -642,7 +642,8 @@ def _task_label(task: str) -> str:
         "coding":   "développement",
         "debug":    "débogage",
         "writing":  "rédaction",
-        "browsing": "navigation",
+        "exploration": "exploration",
+        "browsing": "exploration",
         "general":  "général",
     }.get(task, task)
 

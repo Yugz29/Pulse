@@ -408,7 +408,8 @@ def last_session_context(
             "coding":   "développement",
             "debug":    "débogage",
             "writing":  "rédaction",
-            "browsing": "navigation",
+            "exploration": "exploration",
+            "browsing": "exploration",
         }
         raw_task = entry.get("task") or "general"
         task = _task_labels.get(raw_task, raw_task)
@@ -569,7 +570,8 @@ def _write_session_report(
         "coding":   "développement",
         "debug":    "débogage",
         "writing":  "rédaction",
-        "browsing": "navigation",
+        "exploration": "exploration",
+        "browsing": "exploration",
     }
     section_header = f"## {time_str} — {task_labels.get(task, task)}, {duration} min"
     entry_id = _new_entry_id(now)

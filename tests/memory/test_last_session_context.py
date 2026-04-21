@@ -119,6 +119,20 @@ class TestLastSessionContext(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIn("refactor", result)
 
+    def test_browsing_legacy_est_rendu_comme_exploration(self):
+        yesterday = self.today - timedelta(days=1)
+        _write_projects_md(self.memory_dir, f"""# Projets
+
+## Pulse
+
+- Première session : 2026-01-01
+- Dernière session : {yesterday.strftime('%Y-%m-%d')} (25 min, browsing)
+- Type de travail détecté : browsing
+""")
+        result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
+        self.assertIsNotNone(result)
+        self.assertIn("exploration", result)
+
     # ── Robustesse ────────────────────────────────────────────────────────────
 
     def test_retourne_none_si_projet_inconnu(self):

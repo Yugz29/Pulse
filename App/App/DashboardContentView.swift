@@ -200,7 +200,7 @@ struct NowSummaryCard: View {
         case "coding": return Color(hex: "#5DCAA5")
         case "debug": return Color(hex: "#ff453a")
         case "writing": return Color(hex: "#5E9EFF")
-        case "browsing": return Color(hex: "#EF9F27")
+        case "exploration", "browsing": return Color(hex: "#EF9F27")
         default: return Color(hex: "#7c7c80")
         }
     }
@@ -229,7 +229,7 @@ struct NowSummaryCard: View {
         case "coding":   return "Développement"
         case "debug":    return "Débogage"
         case "writing":  return "Rédaction"
-        case "browsing": return "Navigation"
+        case "exploration", "browsing": return "Exploration"
         default:         return "Général"
         }
     }

@@ -64,7 +64,7 @@ struct SignalsData: Codable {
         case "coding": return "Développement"
         case "writing": return "Rédaction"
         case "debug": return "Débogage"
-        case "browsing": return "Navigation"
+        case "exploration", "browsing": return "Exploration"
         default: return "Général"
         }
     }
@@ -74,7 +74,7 @@ struct SignalsData: Codable {
         case "coding": return "#5DCAA5"
         case "writing": return "#5E9EFF"
         case "debug": return "#ff453a"
-        case "browsing": return "#EF9F27"
+        case "exploration", "browsing": return "#EF9F27"
         default: return "#7c7c80"
         }
     }
