@@ -324,6 +324,71 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.recentProposals[0].displayTitle, "Contexte de session prêt à être injecté")
     }
 
+    func testRefreshStateUsesSessionDurationFromSignalsInsteadOfLegacyTopLevelField() async {
+        let json = """
+        {
+          "active_app": "Xcode",
+          "active_project": "Pulse",
+          "active_file": "/tmp/runtime_orchestrator.py",
+          "session_duration_min": 240,
+          "signals": {
+            "probable_task": "coding",
+            "focus_level": "normal",
+            "friction_score": 0.2,
+            "session_duration_min": 45,
+            "recent_apps": ["Xcode"]
+          }
+        }
+        """
+        let vm = PulseViewModel(bridge: makeJSONBridge(json: json, path: "/state"))
+
+        vm.refreshState()
+        await waitUntil { vm.sessionDuration == 45 }
+
+        XCTAssertEqual(vm.sessionDuration, 45)
+    }
+
+    func testRefreshStateShowsZeroWhenSignalsAreMissingEvenIfLegacyDurationIsHigh() async {
+        let json = """
+        {
+          "active_app": "Xcode",
+          "active_project": "Pulse",
+          "session_duration_min": 90
+        }
+        """
+        let vm = PulseViewModel(bridge: makeJSONBridge(json: json, path: "/state"))
+        vm.sessionDuration = 12
+
+        vm.refreshState()
+        await waitUntil { vm.sessionDuration == 0 }
+
+        XCTAssertEqual(vm.sessionDuration, 0)
+    }
+
+    func testRefreshStateKeepsZeroWhenSignalsSessionDurationIsZero() async {
+        let json = """
+        {
+          "active_app": "Xcode",
+          "active_project": "Pulse",
+          "session_duration_min": 90,
+          "signals": {
+            "probable_task": "coding",
+            "focus_level": "normal",
+            "friction_score": 0.2,
+            "session_duration_min": 0,
+            "recent_apps": ["Xcode"]
+          }
+        }
+        """
+        let vm = PulseViewModel(bridge: makeJSONBridge(json: json, path: "/state"))
+        vm.sessionDuration = 18
+
+        vm.refreshState()
+        await waitUntil { vm.sessionDuration == 0 }
+
+        XCTAssertEqual(vm.sessionDuration, 0)
+    }
+
     func testCurrentStateModeUsesDedicatedPanelHeight() {
         let vm = PulseViewModel()
 
@@ -494,7 +559,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             fileTypeMix10m: ["source": 3, "test": 1, "docs": 1],
             renameDeleteRatio10m: 0.2,
             dominantFileMode: "multi_file",
-            workPatternCandidate: "feature_candidate"
+            workPatternCandidate: "feature_candidate",
+            lastSessionContext: nil
         )
 
         XCTAssertEqual(signals.taskLabel, "Développement")
@@ -521,7 +587,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             fileTypeMix10m: [:],
             renameDeleteRatio10m: 0.0,
             dominantFileMode: "none",
-            workPatternCandidate: nil
+            workPatternCandidate: nil,
+            lastSessionContext: nil
         )
 
         XCTAssertEqual(signals.taskEvidenceLabel, "contexte léger")
@@ -546,7 +613,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             fileTypeMix10m: ["other": 5, "source": 2],
             renameDeleteRatio10m: 0.0,
             dominantFileMode: "few_files",
-            workPatternCandidate: nil
+            workPatternCandidate: nil,
+            lastSessionContext: nil
         )
 
         XCTAssertEqual(
@@ -569,7 +637,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             fileTypeMix10m: ["other": 13],
             renameDeleteRatio10m: 0.0,
             dominantFileMode: "multi_file",
-            workPatternCandidate: nil
+            workPatternCandidate: nil,
+            lastSessionContext: nil
         )
 
         XCTAssertEqual(signals.fileActivitySummary, "13 fichier(s) touché(s) sur 10 min")

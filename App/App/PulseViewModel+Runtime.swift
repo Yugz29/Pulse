@@ -92,7 +92,7 @@ private extension PulseViewModel {
     func applyState(_ state: StateResponse) {
         activeProject = state.activeProject
         activeApp = state.activeApp
-        sessionDuration = state.sessionDurationMin
+        sessionDuration = max(state.signals?.sessionDurationMin ?? 0, 0)
         activeFile = state.activeFile
         currentSignals = state.signals
         if let sig = state.signals {
