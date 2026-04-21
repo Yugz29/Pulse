@@ -6,7 +6,7 @@ from flask import Flask
 from daemon.core.contracts import CurrentContext, SignalSummary
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
-from daemon.routes.runtime import register_runtime_routes
+from daemon.routes.runtime import _FileEventCoalescer, register_runtime_routes
 from daemon.runtime_state import RuntimeState
 
 
@@ -18,6 +18,27 @@ class _DummyThread:
 
     def start(self):
         self.started = True
+
+
+class _ManualTimer:
+    def __init__(self, interval, callback, args=None, kwargs=None):
+        self.interval = interval
+        self.callback = callback
+        self.args = args or ()
+        self.kwargs = kwargs or {}
+        self.daemon = False
+        self.cancelled = False
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+    def cancel(self):
+        self.cancelled = True
+
+    def fire(self):
+        if not self.cancelled:
+            self.callback(*self.args, **self.kwargs)
 
 
 class TestRuntimeRoutes(unittest.TestCase):
@@ -246,6 +267,78 @@ class TestRuntimeRoutes(unittest.TestCase):
             {"ok": True, "action": "restart"},
         )
         self.shutdown_runtime.assert_called_once()
+
+
+class TestFileEventCoalescer(unittest.TestCase):
+    def setUp(self):
+        self.emitted = []
+        self.now = 100.0
+        self.timers = []
+
+        def timer_factory(interval, callback, args=None, kwargs=None):
+            timer = _ManualTimer(interval, callback, args=args, kwargs=kwargs)
+            self.timers.append(timer)
+            return timer
+
+        self.coalescer = _FileEventCoalescer(
+            publisher=lambda event_type, payload: self.emitted.append((event_type, dict(payload))),
+            timer_factory=timer_factory,
+            time_fn=lambda: self.now,
+        )
+
+    def _flush_last_pending(self):
+        self.timers[-1].fire()
+
+    def test_heterogeneous_burst_created_then_modified_emits_one_created(self):
+        path = "/tmp/screenshot.png"
+
+        self.coalescer.publish("file_created", {"path": path})
+        self.coalescer.publish("file_modified", {"path": path})
+        self._flush_last_pending()
+
+        self.assertEqual(self.emitted, [("file_created", {"path": path})])
+
+    def test_heterogeneous_burst_renamed_then_modified_emits_one_renamed(self):
+        path = "/tmp/screenshot.png"
+
+        self.coalescer.publish("file_renamed", {"path": path})
+        self.coalescer.publish("file_modified", {"path": path})
+        self._flush_last_pending()
+
+        self.assertEqual(self.emitted, [("file_renamed", {"path": path})])
+
+    def test_events_outside_window_remain_distinct(self):
+        path = "/tmp/screenshot.png"
+
+        self.coalescer.publish("file_created", {"path": path})
+        self._flush_last_pending()
+
+        self.now += 1.2
+        self.coalescer.publish("file_modified", {"path": path})
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [
+                ("file_created", {"path": path}),
+                ("file_modified", {"path": path}),
+            ],
+        )
+
+    def test_successive_modify_events_are_not_fused_by_new_rule(self):
+        path = "/tmp/main.py"
+
+        self.coalescer.publish("file_modified", {"path": path, "seq": 1})
+        self.coalescer.publish("file_modified", {"path": path, "seq": 2})
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [
+                ("file_modified", {"path": path, "seq": 1}),
+                ("file_modified", {"path": path, "seq": 2}),
+            ],
+        )
 
 
 if __name__ == "__main__":

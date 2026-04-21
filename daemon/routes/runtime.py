@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
@@ -19,6 +20,141 @@ from daemon.memory.extractor import find_git_root
 _actor_classifier = EventActorClassifier()
 _current_context_builder = CurrentContextBuilder()
 
+_FILE_EVENT_COHERENCE_WINDOW_SEC = 1.0
+_COALESCIBLE_FILE_EVENT_TYPES: frozenset[str] = frozenset({
+    "file_created",
+    "file_modified",
+    "file_renamed",
+})
+_FILE_EVENT_PRIORITY: dict[str, int] = {
+    "file_modified": 0,
+    "file_created": 1,
+    "file_renamed": 2,
+}
+
+
+@dataclass
+class _PendingFileEvent:
+    path: str
+    event_type: str
+    payload: dict[str, Any]
+    started_at: float
+    token: int
+    timer: Any
+
+
+class _FileEventCoalescer:
+    """
+    Regroupe un burst heterogene create/modify/rename sur un meme path
+    avant injection dans l'EventBus.
+
+    Le premier event eligible est retenu pendant une courte fenetre.
+    - meme type (modify + modify) : pas de fusion, les events restent distincts
+    - types heterogenes : l'event de priorite la plus forte gagne
+      (renamed > created > modified)
+    """
+
+    def __init__(
+        self,
+        *,
+        publisher: Callable[[str, dict[str, Any]], None],
+        window_sec: float = _FILE_EVENT_COHERENCE_WINDOW_SEC,
+        timer_factory: Callable[..., Any] | None = None,
+        time_fn: Callable[[], float] | None = None,
+    ) -> None:
+        self._publisher = publisher
+        self._window_sec = window_sec
+        self._timer_factory = timer_factory or threading.Timer
+        self._time_fn = time_fn or time.monotonic
+        self._lock = threading.Lock()
+        self._pending_by_path: dict[str, _PendingFileEvent] = {}
+        self._next_token = 0
+
+    def publish(self, event_type: str, payload: dict[str, Any]) -> None:
+        path = payload.get("path")
+        if not self._is_coalescible(event_type, path):
+            self._publisher(event_type, payload)
+            return
+
+        emit_now: tuple[str, dict[str, Any]] | None = None
+        now = self._time_fn()
+
+        with self._lock:
+            pending = self._pending_by_path.get(path)
+            if pending is None:
+                self._pending_by_path[path] = self._new_pending(
+                    path=path,
+                    event_type=event_type,
+                    payload=dict(payload),
+                    started_at=now,
+                )
+                return
+
+            expired = (now - pending.started_at) > self._window_sec
+            same_type = pending.event_type == event_type
+
+            if expired or same_type:
+                pending.timer.cancel()
+                emit_now = (pending.event_type, pending.payload)
+                self._pending_by_path[path] = self._new_pending(
+                    path=path,
+                    event_type=event_type,
+                    payload=dict(payload),
+                    started_at=now,
+                )
+            else:
+                if self._priority(event_type) > self._priority(pending.event_type):
+                    pending.event_type = event_type
+                    pending.payload = dict(payload)
+
+        if emit_now is not None:
+            self._publisher(*emit_now)
+
+    def _new_pending(
+        self,
+        *,
+        path: str,
+        event_type: str,
+        payload: dict[str, Any],
+        started_at: float,
+    ) -> _PendingFileEvent:
+        token = self._next_token
+        self._next_token += 1
+        timer = self._timer_factory(
+            self._window_sec,
+            self._flush_pending,
+            args=(path, token),
+        )
+        timer.daemon = True
+        pending = _PendingFileEvent(
+            path=path,
+            event_type=event_type,
+            payload=payload,
+            started_at=started_at,
+            token=token,
+            timer=timer,
+        )
+        timer.start()
+        return pending
+
+    def _flush_pending(self, path: str, token: int) -> None:
+        emit: tuple[str, dict[str, Any]] | None = None
+        with self._lock:
+            pending = self._pending_by_path.get(path)
+            if pending is None or pending.token != token:
+                return
+            emit = (pending.event_type, pending.payload)
+            self._pending_by_path.pop(path, None)
+
+        if emit is not None:
+            self._publisher(*emit)
+
+    def _is_coalescible(self, event_type: str, path: Any) -> bool:
+        return bool(path) and event_type in _COALESCIBLE_FILE_EVENT_TYPES
+
+    def _priority(self, event_type: str) -> int:
+        return _FILE_EVENT_PRIORITY.get(event_type, -1)
+
 
 def register_runtime_routes(
     app: Flask,
@@ -31,6 +167,14 @@ def register_runtime_routes(
     shutdown_runtime: Callable[[], None],
     log: Any,
 ) -> None:
+    file_event_coalescer = _FileEventCoalescer(
+        publisher=lambda event_type, payload: threading.Thread(
+            target=bus.publish,
+            args=(event_type, payload),
+            daemon=True,
+        ).start()
+    )
+
     @app.route("/ping")
     def ping():
         paused = runtime_state.touch_ping()
@@ -71,7 +215,9 @@ def register_runtime_routes(
             payload["_noise_policy"]     = attribution.noise_policy
 
         # Répond immédiatement — Swift ne doit jamais attendre le pipeline SQLite.
-        threading.Thread(target=bus.publish, args=(event_type, payload), daemon=True).start()
+        # Les bursts heterogenes create/modify/rename sont coalesces ici,
+        # juste avant l'injection dans l'EventBus.
+        file_event_coalescer.publish(event_type, payload)
         return jsonify({"ok": True})
 
     @app.route("/state")
