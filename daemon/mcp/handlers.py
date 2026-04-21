@@ -2,6 +2,8 @@ import importlib
 import logging
 from typing import Optional
 
+from daemon.core.contracts import ProposalCandidate
+from daemon.core.proposal_candidate_adapter import proposal_candidate_to_proposal
 from daemon.core.proposals import Proposal, proposal_store
 from daemon.interpreter.command_interpreter import CommandInterpreter
 from daemon.llm.unavailable import UnavailableLLMRouter
@@ -69,12 +71,13 @@ def intercept_command(command: str, tool_use_id: str) -> dict:
     _log_interception(command, translated, result)
 
     # 3. Construit la proposition réutilisable et la place dans la file
-    proposal = _build_risky_command_proposal(
+    candidate = _build_risky_command_candidate(
         tool_use_id=tool_use_id,
         command=command,
         interpretation=result,
         translated=translated,
     )
+    proposal = proposal_candidate_to_proposal(candidate, proposal_id=tool_use_id)
     proposal_store.add(proposal)
 
     # 4. Attend la résolution de la proposition
@@ -158,7 +161,12 @@ def _translate_with_llm(command: str, fallback: str) -> str:
         return fallback
 
 
-def _build_risky_command_proposal(tool_use_id: str, command: str, interpretation, translated: str) -> Proposal:
+def _build_risky_command_candidate(
+    tool_use_id: str,
+    command: str,
+    interpretation,
+    translated: str,
+) -> ProposalCandidate:
     confidence = 0.78 if interpretation.needs_llm else 0.96
     warning = interpretation.warning
     rationale = warning or "Commande shell demandée via MCP et soumise à validation utilisateur."
@@ -180,28 +188,30 @@ def _build_risky_command_proposal(tool_use_id: str, command: str, interpretation
     if warning:
         evidence.append({"kind": "warning", "label": "Avertissement", "value": warning})
 
-    return Proposal(
-        id=tool_use_id,
+    return ProposalCandidate(
         type="risky_command",
         trigger="mcp_intercept",
-        title=translated,
-        summary=translated,
-        rationale=rationale,
+        decision_action="allow_shell_command",
+        decision_reason="mcp_interception",
         evidence=evidence,
         confidence=confidence,
         proposed_action="allow_shell_command",
-        metadata={
-            "transport": {
-                "tool_use_id": tool_use_id,
-                "command": interpretation.original,
-                "translated": translated,
-                "risk_level": interpretation.risk_level,
-                "risk_score": interpretation.risk_score,
-                "is_read_only": interpretation.is_read_only,
-                "affects": list(interpretation.affects),
-                "warning": interpretation.warning,
-                "needs_llm": interpretation.needs_llm,
-            },
+        details={
+            "decision_action": "allow_shell_command",
+            "decision_reason": "mcp_interception",
+            "translated": translated,
+            "rationale": rationale,
+        },
+        transport={
+            "tool_use_id": tool_use_id,
+            "command": interpretation.original,
+            "translated": translated,
+            "risk_level": interpretation.risk_level,
+            "risk_score": interpretation.risk_score,
+            "is_read_only": interpretation.is_read_only,
+            "affects": list(interpretation.affects),
+            "warning": interpretation.warning,
+            "needs_llm": interpretation.needs_llm,
         },
     )
 

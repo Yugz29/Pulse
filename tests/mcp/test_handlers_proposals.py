@@ -23,12 +23,13 @@ class TestHandlersProposals(unittest.TestCase):
             warning="Supprime définitivement des fichiers.",
             needs_llm=False,
         )
-        proposal = handlers._build_risky_command_proposal(
+        candidate = handlers._build_risky_command_candidate(
             tool_use_id="tool-1",
             command="rm -rf build",
             interpretation=interpretation,
             translated="Supprime le dossier build",
         )
+        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-1")
         handlers.proposal_store.add(proposal)
 
         pending = handlers.get_pending_command()
@@ -52,12 +53,13 @@ class TestHandlersProposals(unittest.TestCase):
             warning="Supprime définitivement des fichiers.",
             needs_llm=False,
         )
-        proposal = handlers._build_risky_command_proposal(
+        candidate = handlers._build_risky_command_candidate(
             tool_use_id="tool-1",
             command="rm -rf build",
             interpretation=interpretation,
             translated="Supprime le dossier build",
         )
+        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-1")
         handlers.proposal_store.add(proposal)
 
         ok = handlers.receive_decision("tool-1", "deny")
@@ -79,12 +81,13 @@ class TestHandlersProposals(unittest.TestCase):
             warning="Supprime définitivement des fichiers.",
             needs_llm=False,
         )
-        proposal = handlers._build_risky_command_proposal(
+        candidate = handlers._build_risky_command_candidate(
             tool_use_id="tool-1",
             command="rm -rf build",
             interpretation=interpretation,
             translated="Supprime le dossier build",
         )
+        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-1")
         handlers.proposal_store.add(proposal)
         handlers.receive_decision("tool-1", "allow")
 
@@ -197,10 +200,11 @@ class TestHandlersProposals(unittest.TestCase):
             risk_level="safe", risk_score=0,
             is_read_only=True, affects=[], warning=None, needs_llm=False,
         )
-        proposal = handlers._build_risky_command_proposal(
+        candidate = handlers._build_risky_command_candidate(
             tool_use_id="tool-3", command="ls",
             interpretation=interpretation, translated="Liste les fichiers",
         )
+        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-3")
         handlers.proposal_store.add(proposal)
         ok = handlers.receive_decision("tool-3", "maybe")
         self.assertFalse(ok)
@@ -221,12 +225,13 @@ class TestHandlersProposals(unittest.TestCase):
             warning="Action irréversible.",
             needs_llm=False,
         )
-        proposal = handlers._build_risky_command_proposal(
+        candidate = handlers._build_risky_command_candidate(
             tool_use_id="tool-swift",
             command="rm -rf build",
             interpretation=interpretation,
             translated="Supprime le dossier build",
         )
+        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-swift")
         handlers.proposal_store.add(proposal)
         payload = handlers._proposal_to_api_payload(proposal)
 
@@ -244,6 +249,35 @@ class TestHandlersProposals(unittest.TestCase):
         self.assertEqual(payload["risk_score"], 80)
         self.assertFalse(payload["is_read_only"])
         self.assertEqual(payload["warning"], "Action irréversible.")
+
+    def test_build_risky_command_candidate_preserves_business_and_transport_data(self):
+        interpretation = CommandInterpretation(
+            original="rm -rf build",
+            translated="Supprime le dossier build",
+            risk_level="high",
+            risk_score=80,
+            is_read_only=False,
+            affects=["fichiers"],
+            warning="Action irréversible.",
+            needs_llm=False,
+        )
+
+        candidate = handlers._build_risky_command_candidate(
+            tool_use_id="tool-meta",
+            command="rm -rf build",
+            interpretation=interpretation,
+            translated="Supprime le dossier build",
+        )
+
+        self.assertEqual(candidate.type, "risky_command")
+        self.assertEqual(candidate.trigger, "mcp_intercept")
+        self.assertEqual(candidate.decision_action, "allow_shell_command")
+        self.assertEqual(candidate.decision_reason, "mcp_interception")
+        self.assertEqual(candidate.details["translated"], "Supprime le dossier build")
+        self.assertEqual(candidate.details["rationale"], "Action irréversible.")
+        self.assertEqual(candidate.transport["tool_use_id"], "tool-meta")
+        self.assertEqual(candidate.transport["risk_level"], "high")
+        self.assertEqual(candidate.transport["warning"], "Action irréversible.")
 
     def test_get_proposal_history_limit_zero_retourne_liste_vide(self):
         self.assertEqual(handlers.get_proposal_history(limit=0), [])

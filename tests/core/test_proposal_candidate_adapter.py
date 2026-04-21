@@ -85,6 +85,88 @@ class TestProposalCandidateAdapter(unittest.TestCase):
 
         self.assertEqual(proposal.to_dict(), expected)
 
+    def test_risky_command_adapter_preserves_transport_and_legacy_payload(self):
+        candidate = ProposalCandidate(
+            type="risky_command",
+            trigger="mcp_intercept",
+            decision_action="allow_shell_command",
+            decision_reason="mcp_interception",
+            confidence=0.96,
+            proposed_action="allow_shell_command",
+            evidence=[
+                {"kind": "command", "label": "Commande", "value": "rm -rf build"},
+                {"kind": "risk", "label": "Risque", "value": "critical (100/100)"},
+            ],
+            details={
+                "decision_action": "allow_shell_command",
+                "decision_reason": "mcp_interception",
+                "translated": "Supprime le dossier build",
+                "rationale": "Supprime définitivement des fichiers.",
+            },
+            transport={
+                "tool_use_id": "tool-1",
+                "command": "rm -rf build",
+                "translated": "Supprime le dossier build",
+                "risk_level": "critical",
+                "risk_score": 100,
+                "is_read_only": False,
+                "affects": ["fichiers"],
+                "warning": "Supprime définitivement des fichiers.",
+                "needs_llm": False,
+            },
+        )
+
+        proposal = proposal_candidate_to_proposal(
+            candidate,
+            proposal_id="tool-1",
+            created_at="2026-04-21T10:00:00",
+            updated_at="2026-04-21T10:00:00",
+        )
+
+        expected = {
+            "id": "tool-1",
+            "type": "risky_command",
+            "trigger": "mcp_intercept",
+            "title": "Supprime le dossier build",
+            "summary": "Supprime le dossier build",
+            "rationale": "Supprime définitivement des fichiers.",
+            "evidence": [
+                {"kind": "command", "label": "Commande", "value": "rm -rf build"},
+                {"kind": "risk", "label": "Risque", "value": "critical (100/100)"},
+            ],
+            "confidence": 0.96,
+            "proposed_action": "allow_shell_command",
+            "status": "pending",
+            "created_at": "2026-04-21T10:00:00",
+            "updated_at": "2026-04-21T10:00:00",
+            "decided_at": None,
+            "lifecycle": [
+                {"status": "created", "at": "2026-04-21T10:00:00"},
+                {"status": "pending", "at": "2026-04-21T10:00:00"},
+            ],
+            "metadata": {
+                "details": {
+                    "decision_action": "allow_shell_command",
+                    "decision_reason": "mcp_interception",
+                    "translated": "Supprime le dossier build",
+                    "rationale": "Supprime définitivement des fichiers.",
+                },
+                "transport": {
+                    "tool_use_id": "tool-1",
+                    "command": "rm -rf build",
+                    "translated": "Supprime le dossier build",
+                    "risk_level": "critical",
+                    "risk_score": 100,
+                    "is_read_only": False,
+                    "affects": ["fichiers"],
+                    "warning": "Supprime définitivement des fichiers.",
+                    "needs_llm": False,
+                },
+            },
+        }
+
+        self.assertEqual(proposal.to_dict(), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

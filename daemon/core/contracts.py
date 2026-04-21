@@ -73,6 +73,10 @@ class ProposalCandidate:
     """
     Contrat métier passif d'une proposition avant conversion vers le transport
     legacy Proposal.
+
+    `details` porte les informations métier stables.
+    `transport` permet de conserver des métadonnées techniques nécessaires
+    au flux d'entrée sans imposer leur présence à tous les producteurs.
     """
 
     type: str
@@ -83,3 +87,4 @@ class ProposalCandidate:
     proposed_action: str = ""
     evidence: list[dict[str, Any]] = field(default_factory=list)
     details: dict[str, Any] = field(default_factory=dict)
+    transport: dict[str, Any] = field(default_factory=dict)
