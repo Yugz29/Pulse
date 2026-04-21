@@ -200,14 +200,30 @@ Elle n’est pas encore structurée par épisodes.
 
 ## Intégration MCP
 
-Ajoute dans `~/.claude/settings.json` :
+Pour l'usage réel actuel avec Claude Desktop, le transport MCP canonique de Pulse est `stdio`.
+
+Le point d'entrée MCP réel est :
+
+```bash
+python3 -m daemon.mcp.stdio_server
+```
+
+Ce serveur `stdio` implémente les méthodes MCP visibles (`initialize`, `tools/list`, `tools/call`), puis relaie les commandes au daemon HTTP local sur `http://127.0.0.1:8765` via `/mcp/intercept`.
+
+Exemple de configuration Claude Desktop dans `~/Library/Application Support/Claude/claude_desktop_config.json` :
 
 ```json
 {
   "mcpServers": {
     "pulse": {
-      "type": "sse",
-      "url": "http://127.0.0.1:8766/mcp"
+      "command": "/abs/path/to/Pulse/.venv/bin/python3",
+      "args": [
+        "-m",
+        "daemon.mcp.stdio_server"
+      ],
+      "env": {
+        "PYTHONPATH": "/abs/path/to/Pulse"
+      }
     }
   }
 }
@@ -218,6 +234,8 @@ Pulse peut alors :
 - les traduire
 - scorer leur risque
 - attendre une décision utilisateur
+
+Un serveur SSE custom existe aussi sur `http://127.0.0.1:8766/mcp`, mais il est aujourd'hui secondaire et ne doit pas être lu comme la voie principale d'intégration Claude Desktop.
 
 ---
 

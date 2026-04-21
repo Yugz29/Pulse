@@ -91,6 +91,8 @@ Attendus typiques :
 
 Le smoke test MCP reste séparé car il nécessite un daemon vivant :
 
+Il simule le bridge MCP `daemon.mcp.stdio_server` et vérifie le flux réel `stdio -> /mcp/intercept -> /mcp/pending -> /mcp/decision`.
+
 ```bash
 cd /path/to/Pulse
 .venv/bin/python3 tests/test_e2e.py

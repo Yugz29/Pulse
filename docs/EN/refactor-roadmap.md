@@ -106,7 +106,7 @@ Measure the real behavior of the stabilized system before opening Episode System
 ### Observation method
 
 - Use the system in real development sessions
-- Log observations consistently in `docs/observation-log.md`
+- Keep consistent field-observation notes outside the repo, in a lightweight free-form way
 - Analyze drift between:
   - actual activity vs `activity_level`
   - actual task vs `probable_task`

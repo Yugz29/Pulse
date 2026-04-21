@@ -106,7 +106,7 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 ### Méthode d’observation
 
 - Utilisation réelle du système sur sessions de développement
-- Logging systématique dans `docs/observation-log.md`
+- Prise de notes d’observation terrain hors repo, de manière libre et systématique
 - Analyse des divergences :
   - activité réelle vs `activity_level`
   - tâche réelle vs `probable_task`

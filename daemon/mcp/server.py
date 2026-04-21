@@ -9,8 +9,8 @@ mcp_app = Flask(__name__)
 @mcp_app.route("/mcp")
 def mcp_sse():
     """
-    Point d'entrée SSE pour Claude Code.
-    Claude Code se connecte ici et reste en écoute.
+    Point d'entrée SSE custom secondaire.
+    L'intégration Claude Desktop canonique passe aujourd'hui par daemon.mcp.stdio_server.
     """
     def stream():
         # Annonce les capabilities au client MCP
@@ -31,7 +31,7 @@ def mcp_sse():
 @mcp_app.route("/mcp/command", methods=["POST"])
 def mcp_command():
     """
-    Reçoit une commande bash de Claude Code.
+    Reçoit une commande bash depuis un client SSE custom.
     Bloque jusqu'à ce que l'utilisateur décide (allow/deny).
     """
     data = request.get_json()
