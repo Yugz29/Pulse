@@ -83,6 +83,14 @@ class RuntimeOrchestrator:
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
 
+    @property
+    def session_fsm(self) -> SessionFSM:
+        return self._session_fsm
+
+    @property
+    def fact_engine(self):
+        return self._fact_engine
+
     def llm_unload_background(self) -> None:
         self.llm_runtime.unload_background(self.log)
 
@@ -253,6 +261,13 @@ class RuntimeOrchestrator:
         purged = self.memory_store.purge_expired()
         if purged:
             self.log.info("Mémoire : %d entrée(s) expirée(s) supprimée(s)", purged)
+
+        try:
+            archived_legacy = self._fact_engine.archive_legacy_facts()
+            if archived_legacy:
+                self.log.info("Facts : %d fait(s) legacy archivé(s)", archived_legacy)
+        except Exception as exc:
+            self.log.warning("Facts : archivage legacy échoué : %s", exc)
 
         # Decay des faits utilisateurs silencieux depuis > DECAY_START_DAYS jours
         try:

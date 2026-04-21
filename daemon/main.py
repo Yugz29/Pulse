@@ -186,7 +186,7 @@ register_runtime_routes(
     bus=bus,
     store=store,
     runtime_state=runtime_state,
-    get_session_fsm=lambda: runtime_orchestrator._session_fsm,
+    get_session_fsm=lambda: runtime_orchestrator.session_fsm,
     llm_unload_background=_llm_unload_background,
     llm_warmup_background=_llm_warmup_background,
     shutdown_runtime=_shutdown_runtime,
@@ -230,7 +230,7 @@ register_mcp_routes(
 
 register_facts_routes(
     app,
-    get_fact_engine=lambda: runtime_orchestrator._fact_engine,
+    get_fact_engine=lambda: runtime_orchestrator.fact_engine,
 )
 
 
