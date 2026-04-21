@@ -165,8 +165,17 @@ class TestProbableTask(unittest.TestCase):
             self.assertNotEqual(signals.probable_task, "debug")
 
     def test_docs_files_donnent_writing(self):
-        """2+ fichiers docs sans code → writing."""
+        """2+ fichiers docs sans app active → general (pas writing)."""
         scorer, bus = _make_scorer()
+        _push(bus, "file_modified", {"path": "/proj/README.md", "_actor": "user"})
+        _push(bus, "file_modified", {"path": "/proj/docs/api.md", "_actor": "user"})
+        signals = scorer.compute()
+        self.assertEqual(signals.probable_task, "general")
+
+    def test_docs_files_avec_writing_app_donnent_writing(self):
+        """2+ fichiers docs + app d'écriture active → writing."""
+        scorer, bus = _make_scorer()
+        _push(bus, "app_activated", {"app_name": "Notion"})
         _push(bus, "file_modified", {"path": "/proj/README.md", "_actor": "user"})
         _push(bus, "file_modified", {"path": "/proj/docs/api.md", "_actor": "user"})
         signals = scorer.compute()
