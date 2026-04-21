@@ -251,6 +251,28 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.edited_file_count_10m, 1)
         self.assertEqual(signals.file_type_mix_10m, {"source": 1})
 
+    def test_ignore_models_cache_json_dans_les_signaux(self):
+        self._push("app_activated", {"app_name": "Cursor"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/build/models_cache.json"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.edited_file_count_10m, 1)
+        self.assertEqual(signals.file_type_mix_10m, {"source": 1})
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_cache_json_seul_ne_pese_pas_sur_la_tache_probable(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/build/models_cache.json"})
+
+        signals = self.scorer.compute()
+
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.edited_file_count_10m, 0)
+        self.assertEqual(signals.file_type_mix_10m, {})
+        self.assertEqual(signals.probable_task, "general")
+
     def test_long_burst_ne_tronque_pas_les_signaux_fichier_dans_la_fenetre_10m(self):
         bus = EventBus()
         scorer = SignalScorer(bus)

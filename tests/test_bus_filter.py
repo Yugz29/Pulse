@@ -149,6 +149,12 @@ class TestShouldPublishToBus(unittest.TestCase):
             {"path": "/Users/yugz/Projets/Pulse/.git/objects/pack/pack-abc.idx"},
         ))
 
+    def test_models_cache_json_bloque(self):
+        self.assertFalse(_should_publish_to_bus(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/build/models_cache.json"},
+        ))
+
     # ── Fichiers sans chemin — bloqués ────────────────────────────────────────
 
     def test_payload_sans_path_bloque(self):

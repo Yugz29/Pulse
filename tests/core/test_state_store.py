@@ -108,6 +108,14 @@ class TestStateStore(unittest.TestCase):
         self.assertIsNone(self.store.get().active_file)
         self.assertIsNone(self.store.get().active_project)
 
+    def test_ignore_models_cache_json(self):
+        self.store.update(Event("file_modified", {
+            "path": "/Users/yugz/Projets/Pulse/build/models_cache.json"
+        }))
+
+        self.assertIsNone(self.store.get().active_file)
+        self.assertIsNone(self.store.get().active_project)
+
 
 if __name__ == "__main__":
     unittest.main()

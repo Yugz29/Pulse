@@ -123,6 +123,7 @@ def file_signal_significance(path: Optional[str]) -> str:
         return "technical_noise"
 
     name = path.split("/")[-1]
+    lower_name = name.lower()
     lower_path = path.lower()
 
     # Bruit système
@@ -136,6 +137,12 @@ def file_signal_significance(path: Optional[str]) -> str:
         ".sqlite", ".sqlite3", ".db", ".db-journal", ".db-wal", ".db-shm",
         ".log", ".jsonl", ".tmp", ".temp", ".swp", ".swo",
     )):
+        return "technical_noise"
+    # JSON de cache auto-générés : bruit technique récurrent qui ne doit pas
+    # piloter le contexte courant ni la tâche probable.
+    if lower_name == "models_cache.json":
+        return "technical_noise"
+    if lower_name.endswith(("_cache.json", "-cache.json", ".cache.json")):
         return "technical_noise"
     if name.endswith(("-journal", "-wal", "-shm")):
         return "technical_noise"
