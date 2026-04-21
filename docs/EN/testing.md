@@ -2,6 +2,20 @@
 
 This document defines the current test battery for Pulse.
 
+## Testing Philosophy
+
+Pulse tests are used for three different purposes:
+
+- `Unit tests`: verify local logic in isolation
+- `Integration tests`: verify that modules still work together through the real pipeline
+- `Contract tests`: verify that specific public or legacy-compatible outputs do not change
+
+Contract tests are not optional cleanup tests. They are structural guarantees.
+
+Rule:
+
+> If a test asserts exact output, any change is a breaking change.
+
 ## Automated Tests
 
 Run the full non-interactive Python suite:
@@ -21,6 +35,10 @@ What it covers:
 - signal scorer
 - decision engine
 - state store
+- `CurrentContext` builders and legacy adapters
+- `SessionSnapshot` builders and legacy adapters
+- `ProposalCandidate` adapters
+- `SessionFSM`
 - runtime state matrix (`/ping`, `/state`, `/event`, `/insights`)
 - MCP handlers
 - session memory
@@ -30,6 +48,45 @@ What it covers:
 - `/facts` API routes
 - runtime orchestrator
 - LLM availability matrix
+
+## Contract Locking Tests
+
+Some outputs are now explicitly frozen through golden or exact-match tests.
+
+These tests exist to prevent structural regressions during refactors. They are not
+"nice to have" checks.
+
+Current locked outputs include:
+- `build_context_snapshot()` -> exact Markdown output
+- `/state` -> exact JSON output
+- `export_session_data()` -> exact legacy dict output
+- proposal generation output -> exact payload / structure / evidence output
+
+These tests are used when Pulse must preserve behavior while changing internal
+structure. If one of these assertions fails, the default assumption is that the
+change is breaking until proven otherwise.
+
+## Core Artifacts Under Test
+
+The current runtime foundation introduces several structural artifacts that are now
+tested directly:
+
+- `CurrentContext`
+- `SessionSnapshot`
+- `ProposalCandidate`
+- `SessionFSM`
+
+They are not tested to justify behavior drift. They are tested to lock:
+- compatibility
+- invariants
+- legacy output stability
+- session lifecycle consistency
+
+Typical expectations:
+- a builder can replace inline assembly without changing output
+- a legacy adapter reproduces the exact previous contract
+- the session lifecycle has a single source of truth
+- a candidate-to-transport conversion does not mutate the final external payload
 
 ## Interactive E2E
 

@@ -1,80 +1,135 @@
 # Pulse
 
-Pulse est une couche ambiante locale entre toi et les outils IA sur macOS.
+Pulse est une couche locale d'observation, de structuration de contexte, de mémoire et de contrôle autour des outils IA sur macOS.
 
-Il combine :
-- une app Swift macOS qui vit autour de l'encoche,
-- un daemon Python qui observe l'activité système et intercepte les commandes risquées,
-- un moteur de mémoire et de contexte injecté dans les conversations IA.
+Aujourd'hui, Pulse sait :
+- observer l'activité locale utile
+- structurer le contexte courant
+- consolider une mémoire sessionnelle et des faits utilisateur
+- intercepter certaines commandes agents via MCP
+- produire des propositions explicables
 
----
+Pulse n'est pas :
+- un agent autonome
+- un système qui comprend parfaitement le travail utilisateur
+- un système à épisodes déjà en production
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│  Swift — Observation système                    │
-│  FSEvents · NSWorkspace · Clipboard             │
-└────────────────────┬────────────────────────────┘
-                     │ events bruts
-┌────────────────────▼────────────────────────────┐
-│  Python — Moteur cognitif (daemon)              │
-│  Signal Scoring · Decision Engine               │
-│  Command Interpreter · Cortex Scoring           │
-│  FactEngine · Memory · Git Diff                 │
-└────────────────────┬────────────────────────────┘
-                     │ seulement si nécessaire
-┌────────────────────▼────────────────────────────┐
-│  LLM — Ollama local / Claude API                │
-│  Résumés de commit · Réponses chat              │
-└─────────────────────────────────────────────────┘
-```
-
-**Règle fondamentale :** tout ce qui peut être décidé sans LLM est décidé sans LLM.
+La fondation du runtime est en place. La prochaine étape logique du projet est l'observation terrain du système stabilisé, avant toute ouverture d'un vrai chantier `Episode System`.
 
 ---
 
-## Ce que Pulse fait
+## Vue d’ensemble
 
-- **Interception MCP** — intercepte les commandes que Claude Code veut exécuter, les traduit en français avec un score de risque, et attend ta décision depuis l'encoche.
-- **Contexte session** — observe le projet actif, les fichiers modifiés, le diff git en cours, le focus et la friction.
-- **Mémoire utilisateur** — apprend tes habitudes de travail (créneau, outils, sessions longues) via un moteur de faits avec confiance dynamique et decay temporel.
-- **Journal de session** — génère un journal quotidien avec une entrée par session. Sur commit, le résumé exploite le diff réel du commit.
-- **Chat dans l'encoche** — répond à tes questions avec le contexte session + profil utilisateur injecté.
+Pulse combine :
+- une app Swift macOS centrée sur l'encoche et l'observation système
+- un daemon Python local qui qualifie les événements, calcule les signaux, gère le cycle de session, produit du contexte et alimente la mémoire
+- une couche LLM optionnelle pour les cas où l'approche déterministe ne suffit plus
+
+Principe fondamental :
+
+> Tout ce qui peut être décidé sans LLM doit être décidé sans LLM.
+
+---
+
+## Ce que Pulse fait aujourd’hui
+
+- **Observation locale** : apps actives, fichiers touchés, clipboard, lock/unlock écran, événements utiles au runtime
+- **Contexte courant** : construction d’un `CurrentContext` temps réel à partir des signaux de session
+- **Cycle de session** : gestion unifiée du lifecycle via `SessionFSM`
+- **Projection de session** : production d’un `SessionSnapshot` structuré, exposé avec compat legacy
+- **Mémoire locale** : extraction rétrospective de résumés de session et consolidation de faits utilisateur
+- **Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
+- **Interception MCP** : traduction et arbitrage de certaines commandes risquées avant exécution
+- **Chat contextuel** : injection du contexte local et de la mémoire consolidée dans les échanges assistant
+
+Ce que Pulse ne fait pas encore :
+- segmenter le travail en épisodes exploitables
+- structurer la mémoire autour des épisodes
+- contextualiser finement les propositions par continuité de travail
+- agir de manière autonome
+
+---
+
+## Architecture actuelle
+
+```text
+macOS events
+    ↓
+Swift observation layer
+    ↓
+Python daemon
+    ├─ qualification d’événements
+    ├─ scoring et interprétation locale
+    ├─ CurrentContext
+    ├─ SessionFSM
+    ├─ SessionSnapshot
+    ├─ ProposalCandidate
+    └─ mémoire locale
+    ↓
+optional LLM enrichment
+```
+
+Le runtime actuel repose notamment sur :
+- `CurrentContext` : vue synthétique temps réel
+- `SessionSnapshot` : projection structurée de session
+- `ProposalCandidate` : contrat métier avant transport legacy
+- `SessionFSM` : source de vérité du lifecycle de session
+
+Références :
+- [Architecture](./docs/architecture.md)
+- [Contrat sémantique](./docs/semantic_contract.md)
+- [Roadmap](./docs/refactor-roadmap.md)
 
 ---
 
 ## Structure du projet
 
-```
+```text
 Pulse/
-├── App/                        # Swift macOS app
+├── App/                            # App macOS SwiftUI
 │   └── App.xcodeproj
-├── daemon/                     # Python daemon (port 8765)
+├── AppTests/                       # Tests Swift
+├── daemon/                         # Daemon Python local
 │   ├── main.py
+│   ├── runtime_orchestrator.py
+│   ├── runtime_state.py
+│   ├── cognitive.py
 │   ├── core/
-│   │   ├── event_bus.py
+│   │   ├── contracts.py
+│   │   ├── current_context_builder.py
+│   │   ├── current_context_adapters.py
+│   │   ├── session_fsm.py
 │   │   ├── signal_scorer.py
 │   │   ├── decision_engine.py
-│   │   ├── state_store.py
-│   │   └── git_diff.py         # Diff git en temps réel
-│   ├── interpreter/            # Command Interpreter (porté de Claude Code)
-│   ├── scoring/                # Moteur Cortex embarqué
+│   │   ├── proposal_candidate_adapter.py
+│   │   ├── proposals.py
+│   │   ├── event_actor.py
+│   │   ├── event_bus.py
+│   │   ├── state_store.py         # encore présent pour compat
+│   │   └── git_diff.py
 │   ├── memory/
-│   │   ├── facts.py            # Moteur de faits utilisateur
-│   │   ├── store.py            # MemoryStore SQLite
-│   │   ├── session.py          # Session courante
-│   │   └── extractor.py        # Extraction et journal de session
-│   ├── mcp/                    # Serveur MCP SSE (port 8766)
-│   ├── llm/                    # Router LLM (Ollama / Claude)
-│   ├── routes/                 # Routes Flask
+│   │   ├── session.py
+│   │   ├── session_snapshot_builder.py
+│   │   ├── extractor.py
+│   │   ├── facts.py
+│   │   └── store.py
+│   ├── routes/
+│   │   ├── runtime.py
 │   │   ├── assistant.py
-│   │   ├── facts.py            # API /facts
 │   │   ├── memory.py
-│   │   ├── mcp.py
-│   │   └── runtime.py
-│   └── runtime_orchestrator.py
-└── tests/                      # Suite de tests Python (75 tests)
+│   │   ├── facts.py
+│   │   └── mcp.py
+│   ├── mcp/                        # Serveur MCP
+│   ├── interpreter/                # Interprétation de commandes
+│   ├── llm/                        # Runtime et providers LLM
+│   └── scoring/                    # Scoring structurel de code
+├── docs/                           # Documentation de référence
+├── launchd/                        # Intégration LaunchAgent
+├── scripts/
+│   ├── start_pulse_daemon.sh
+│   ├── test_all.sh
+│   └── install_launch_agent.sh
+└── tests/                          # Tests Python
 ```
 
 ---
@@ -98,57 +153,52 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | `/ping` | Health check |
-| GET | `/state` | État courant (signals, projet, fichier actif) |
-| POST | `/ask` | Question au LLM avec contexte session |
-| POST | `/ask/stream` | Streaming SSE |
+| GET | `/state` | État courant legacy-compatible du runtime |
+| GET | `/insights` | Activité récente issue du bus |
+| POST | `/event` | Entrée d’événements depuis l’app Swift |
+| POST | `/ask` | Question assistant avec contexte local |
+| POST | `/ask/stream` | Streaming assistant |
 | GET | `/facts` | Faits utilisateur consolidés |
-| GET | `/facts/profile` | Profil injecté dans le prompt |
-| GET | `/facts/stats` | Statistiques du moteur de faits |
-| POST | `/facts/<id>/reinforce` | Valider un fait |
-| POST | `/facts/<id>/contradict` | Corriger un fait |
-| POST | `/facts/<id>/archive` | Archiver un fait erroné |
-| GET | `/memory` | Entrées MemoryStore |
-| GET | `/search` | Recherche FTS5 dans les events |
-| GET | `/mcp/pending` | Commande en attente de décision |
+| GET | `/facts/profile` | Bloc mémoire injecté dans le prompt |
+| GET | `/memory` | Entrées du `MemoryStore` |
+| GET | `/mcp/pending` | Commande agent en attente |
 | POST | `/mcp/decision` | Autoriser ou refuser une commande |
 
 ---
 
 ## Mémoire locale
 
-```
+```text
 ~/.pulse/
-├── facts.db                    # Faits utilisateur (SQLite)
-├── cooldown.json               # Curseur anti-doublon (persiste entre restarts)
-├── memory.db                   # MemoryStore structuré
-├── session.db                  # Session courante
+├── facts.db
+├── cooldown.json
+├── memory.db
+├── session.db
 └── memory/
-    ├── MEMORY.md               # Index
-    ├── facts.md                # Profil utilisateur (export lisible)
-    ├── projects.md             # Projets connus
+    ├── MEMORY.md
+    ├── facts.md
+    ├── projects.md
     └── sessions/
-        └── 2026-04-13.md       # Journal quotidien (une entrée par session)
+        └── YYYY-MM-DD.md
 ```
 
-### Moteur de faits
+### Ce que mémorise Pulse aujourd’hui
 
-`facts.py` implémente un pipeline déterministe :
+- sessions de travail rétrospectives
+- faits utilisateur dérivés d’observations répétées
+- projets connus
+- résumés de commit quand un commit confirmé sert de frontière fiable
 
-```
-Observation brute → Signal (5 occurrences) → Fait consolidé
-Fait → Renforcement / Contradiction → Archivage si confiance < 0.30
-Fait stale (3j sans observation) → Decay (−0.02/jour)
-```
+La mémoire actuelle reste principalement :
+- session-centrique
+- heuristique
+- locale
 
-Chaque fait porte : `confidence`, `observations`, `autonomy_level`, `last_seen`.
-
-### Journal de session
-
-Un seul fichier par jour (`YYYY-MM-DD.md`). Chaque session ajoute une section `## HH:MM`. Le LLM est activé **uniquement sur commit** — il reçoit le diff réel du commit pour produire un résumé informatif.
+Elle n’est pas encore structurée par épisodes.
 
 ---
 
-## Intégration Claude Code (MCP)
+## Intégration MCP
 
 Ajoute dans `~/.claude/settings.json` :
 
@@ -163,19 +213,38 @@ Ajoute dans `~/.claude/settings.json` :
 }
 ```
 
+Pulse peut alors :
+- intercepter certaines commandes
+- les traduire
+- scorer leur risque
+- attendre une décision utilisateur
+
 ---
 
 ## Tests
+
+Entrée standard :
 
 ```bash
 cd Pulse
 ./scripts/test_all.sh
 ```
 
-Le chemin standard de test force le venv local et Python 3.11+.
-Évite `python3 -m unittest ...` si ton shell pointe encore vers le Python système macOS.
+Cette commande :
+- force le venv local
+- utilise Python 3.11+
+- évite les faux négatifs liés au Python système macOS
 
-372 tests couvrent : moteur de faits, extractor, git diff, routes API, orchestrator, session, store.
+Le repo contient actuellement :
+- 43 fichiers de tests Python dans `tests/`
+- des tests ciblés sur les contrats et verrous récents :
+  - `CurrentContext`
+  - `SessionSnapshot`
+  - `ProposalCandidate`
+  - `SessionFSM`
+  - compat legacy golden sur `build_context_snapshot()`, `/state`, `export_session_data()`
+
+La documentation de test détaillée est dans [docs/testing.md](./docs/testing.md).
 
 ---
 
@@ -183,15 +252,30 @@ Le chemin standard de test force le venv local et Python 3.11+.
 
 Ouvre `App/App.xcodeproj` dans Xcode et lance la target macOS.
 
-L'app :
-- affiche le panel dans l'encoche,
-- observe apps / filesystem / clipboard,
-- envoie les events au daemon,
-- affiche le dashboard, les insights et le chat.
+L’app :
+- observe le système local
+- envoie les événements utiles au daemon
+- affiche le contexte courant
+- expose les contrôles runtime
+- sert de point d’entrée UX pour le chat et les décisions MCP
 
 ---
 
-*Stack : Swift (macOS 14+) + Python 3.11+*
-*LLM : Ollama local (gemma, mistral, phi) ou Claude API*
-*Moteur de scoring : porté de Cortex (TypeScript → Python)*
-*Command Interpreter : inspiré de Claude Code source interne*
+## Stack
+
+- Swift / SwiftUI pour l’app macOS
+- Python 3.11+ pour le daemon
+- SQLite pour la mémoire locale
+- Ollama local ou provider configuré pour les enrichissements LLM
+
+---
+
+## Niveau de maturité
+
+Le projet est aujourd’hui dans une phase où :
+- la fondation runtime est stabilisée
+- la compat legacy est verrouillée
+- le système est assez structuré pour être observé sérieusement
+
+La prochaine étape logique n’est pas d’ajouter des features lourdes.
+La prochaine étape logique est de mesurer le comportement réel du système stabilisé avant d’ouvrir un chantier Episode.
