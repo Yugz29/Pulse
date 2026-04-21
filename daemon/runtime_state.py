@@ -12,6 +12,7 @@ class RuntimeState:
         self._last_ping_at: datetime | None = None
         self._last_signals = None
         self._last_decision = None
+        self._last_current_context = None
         self._last_memory_sync_at: datetime | None = None
         self._last_screen_locked_at: datetime | None = None
         self._recent_file_events: dict[str, datetime] = {}
@@ -44,16 +45,23 @@ class RuntimeState:
         with self._lock:
             return self._last_signals, self._last_decision
 
+    def get_current_context(self) -> Any:
+        with self._lock:
+            return self._last_current_context
+
     def set_analysis(
         self,
         *,
         signals: Any,
         decision: Any,
+        current_context: Any = None,
         memory_synced_at: datetime | None = None,
     ) -> None:
         with self._lock:
             self._last_signals = signals
             self._last_decision = decision
+            if current_context is not None:
+                self._last_current_context = current_context
             if memory_synced_at is not None:
                 self._last_memory_sync_at = memory_synced_at
 
@@ -123,6 +131,7 @@ class RuntimeState:
             self._last_ping_at = None
             self._last_signals = None
             self._last_decision = None
+            self._last_current_context = None
             self._last_memory_sync_at = None
             self._last_screen_locked_at = None
             self._screen_is_locked = False

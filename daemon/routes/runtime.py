@@ -8,11 +8,16 @@ from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
+from daemon.core.current_context_adapters import current_context_to_legacy_signals_payload
+from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.event_actor import EventActorClassifier
 from daemon.core.file_classifier import file_signal_significance
+from daemon.core.workspace_context import find_workspace_root
 from daemon.memory.extractor import last_session_context
+from daemon.memory.extractor import find_git_root
 
 _actor_classifier = EventActorClassifier()
+_current_context_builder = CurrentContextBuilder()
 
 
 def register_runtime_routes(
@@ -75,22 +80,23 @@ def register_runtime_routes(
         signals, decision, paused = runtime_state.get_signal_snapshot()
         state["runtime_paused"] = paused
         if signals:
-            state["signals"] = {
-                "active_project": signals.active_project,
-                "active_file": signals.active_file,
-                "probable_task": signals.probable_task,
-                "friction_score": signals.friction_score,
-                "focus_level": signals.focus_level,
-                "session_duration_min": signals.session_duration_min,
-                "recent_apps": signals.recent_apps,
-                "clipboard_context": signals.clipboard_context,
-                "edited_file_count_10m": signals.edited_file_count_10m,
-                "file_type_mix_10m": signals.file_type_mix_10m,
-                "rename_delete_ratio_10m": signals.rename_delete_ratio_10m,
-                "dominant_file_mode": signals.dominant_file_mode,
-                "work_pattern_candidate": signals.work_pattern_candidate,
-                "last_session_context": last_session_context(signals.active_project) if signals.active_project else None,
-            }
+            current_context = runtime_state.get_current_context()
+            if current_context is None:
+                current_context = _current_context_builder.build(
+                    state=state,
+                    signals=signals,
+                    find_git_root_fn=find_git_root,
+                    find_workspace_root_fn=find_workspace_root,
+                )
+            state["signals"] = current_context_to_legacy_signals_payload(
+                current_context,
+                signals=signals,
+                last_session_line=(
+                    last_session_context(current_context.active_project)
+                    if current_context.active_project
+                    else None
+                ),
+            )
         if decision:
             state["decision"] = {
                 "action": decision.action,

@@ -30,9 +30,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.mock_fact_engine.render_for_context.return_value = ""
         self.mock_fact_engine.decay_all.return_value = 0
 
-        # inactivity_reset_count doit être un int (pas un MagicMock)
-        # pour que la comparaison > dans _process_signals() fonctionne.
-        self.scorer.inactivity_reset_count = 0
+        # _process_signals lit désormais le bus pour laisser la SessionFSM
+        # décider des frontières de session.
+        self.scorer.bus.recent.return_value = []
 
         # memory_store.render doit retourner une str (pas un MagicMock)
         self.memory_store.render.return_value = ""
@@ -105,6 +105,60 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Tâche probable : coding", snapshot)
         self.assertIn("- Activité fichiers : 5 fichier(s) touché(s) sur 10 min, surtout code source (3), documentation (1), tests (1)", snapshot)
         self.assertIn("- Lecture de la session : travail réparti sur plusieurs fichiers, ça ressemble à une évolution de fonctionnalité, avec quelques changements de structure", snapshot)
+
+    def test_build_context_snapshot_golden_legacy_markdown_output_exact(self):
+        self.store.to_dict.return_value = {
+            "active_project": "Pulse",
+            "active_file": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+            "active_app": "Cursor",
+            "session_duration_min": 96,
+            "last_event_type": "file_modified",
+        }
+        self.runtime_state.set_analysis(
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+                probable_task="coding",
+                friction_score=0.72,
+                focus_level="normal",
+                session_duration_min=96,
+                recent_apps=["Cursor", "Terminal", "Safari", "Xcode", "Codex"],
+                clipboard_context="text",
+                edited_file_count_10m=5,
+                file_type_mix_10m={"source": 3, "test": 1, "docs": 1},
+                rename_delete_ratio_10m=0.2,
+                dominant_file_mode="multi_file",
+                work_pattern_candidate="feature_candidate",
+                activity_level="editing",
+                task_confidence=0.82,
+            ),
+            decision=None,
+        )
+
+        expected = "\n".join([
+            "# Contexte session",
+            "- Projet : Pulse",
+            "- Racine projet : /Users/yugz/Projets/Pulse/Pulse",
+            "- Fichier actif : /Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+            "- App active : Cursor",
+            "- Durée session : 96 min",
+            "- Tâche probable : coding",
+            "- Focus : normal",
+            "- Activité fichiers : 5 fichier(s) touché(s) sur 10 min, surtout code source (3), documentation (1), tests (1)",
+            "- Lecture de la session : travail réparti sur plusieurs fichiers, ça ressemble à une évolution de fonctionnalité, avec quelques changements de structure",
+            "- Apps récentes : Cursor, Terminal, Safari, Xcode",
+            "- diff --git a/daemon/runtime_orchestrator.py b/daemon/runtime_orchestrator.py\n"
+            "  + 3 insertions(+)\n"
+            "  - 1 suppression(-)",
+            "- Dernière session Pulse : hier (développement, 45 min)",
+        ])
+
+        with patch("daemon.runtime_orchestrator.find_git_root", return_value=Path("/Users/yugz/Projets/Pulse/Pulse")), \
+             patch("daemon.runtime_orchestrator.read_diff_summary", return_value="diff --git a/daemon/runtime_orchestrator.py b/daemon/runtime_orchestrator.py\n+ 3 insertions(+)\n- 1 suppression(-)"), \
+             patch("daemon.runtime_orchestrator.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
+            snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertEqual(snapshot, expected)
 
     def test_build_context_snapshot_falls_back_to_signal_context_when_store_is_empty(self):
         self.store.to_dict.return_value = {
@@ -493,6 +547,96 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(runtime_decision.action, "inject_context")
         self.assertIn("proposal_id", runtime_decision.payload)
 
+    def test_process_signals_flow_decision_candidate_adapter_store_preserves_legacy_output(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="normal",
+            session_duration_min=25,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+            edited_file_count_10m=4,
+            file_type_mix_10m={"source": 2, "test": 1, "docs": 1},
+            rename_delete_ratio_10m=0.0,
+            dominant_file_mode="few_files",
+            work_pattern_candidate="feature_candidate",
+        )
+        decision = Decision(
+            action="inject_context",
+            level=1,
+            reason="context_ready",
+            payload={"project": "Pulse", "task": "coding"},
+        )
+        event = Event("file_modified", {"path": "/tmp/main.py"})
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = decision
+
+        with patch("daemon.runtime_orchestrator.new_uid", return_value="proposal-123"):
+            self.orchestrator._process_signals(event)
+
+        history = proposal_store.list_history(limit=1)
+        self.assertEqual(len(history), 1)
+        proposal = history[0]
+        expected_evidence = [
+            {"kind": "project", "label": "Projet", "value": "Pulse"},
+            {"kind": "task", "label": "Tâche", "value": "coding"},
+            {"kind": "focus", "label": "Focus", "value": "normal"},
+            {"kind": "session", "label": "Durée session", "value": "25 min"},
+            {
+                "kind": "file_activity",
+                "label": "Activité fichiers",
+                "value": "4 fichier(s) touché(s) sur 10 min, surtout code source (2), documentation (1), tests (1)",
+            },
+            {
+                "kind": "file_reading",
+                "label": "Lecture de la session",
+                "value": "petit lot cohérent de 4 fichiers, ça ressemble à une évolution de fonctionnalité",
+            },
+            {"kind": "file", "label": "Fichier actif", "value": "/tmp/main.py"},
+        ]
+        expected_details = {
+            "decision_action": "inject_context",
+            "decision_reason": "context_ready",
+            "project": "Pulse",
+            "task": "coding",
+            "focus_level": "normal",
+            "session_duration_min": 25,
+            "active_file": "/tmp/main.py",
+            "edited_file_count_10m": 4,
+            "file_type_mix_10m": {"source": 2, "test": 1, "docs": 1},
+            "rename_delete_ratio_10m": 0.0,
+            "dominant_file_mode": "few_files",
+            "work_pattern_candidate": "feature_candidate",
+            "decision_payload": {"project": "Pulse", "task": "coding"},
+        }
+
+        self.assertEqual(proposal.id, "proposal-123")
+        self.assertEqual(proposal.type, "context_injection")
+        self.assertEqual(proposal.trigger, "file_modified")
+        self.assertEqual(proposal.title, "Contexte de session prêt à être injecté")
+        self.assertEqual(proposal.summary, "Le contexte local est jugé assez riche pour une réponse assistée.")
+        self.assertEqual(
+            proposal.rationale,
+            "La session a accumulé assez de contexte local pour justifier une injection de contexte existante.",
+        )
+        self.assertEqual(proposal.evidence, expected_evidence)
+        self.assertEqual(proposal.confidence, 0.66)
+        self.assertEqual(proposal.proposed_action, "inject_current_context")
+        self.assertEqual(proposal.status, "executed")
+        self.assertEqual(proposal.metadata, {"details": expected_details})
+        self.assertEqual(
+            [entry["status"] for entry in proposal.lifecycle],
+            ["created", "pending", "executed"],
+        )
+
+        _, runtime_decision = self.runtime_state.get_context_snapshot()
+        self.assertEqual(
+            runtime_decision.payload,
+            {"project": "Pulse", "task": "coding", "proposal_id": "proposal-123"},
+        )
+
     def test_process_signals_ne_duplique_pas_la_meme_proposition_context_ready(self):
         signals = Signals(
             active_project="Pulse",
@@ -806,7 +950,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
     def test_verrou_court_reset_timer_scorer_sans_nouvelle_session(self):
         """
         Verrou < sleep_session_threshold_min (30 min) :
-        - scorer.reset_session() doit etre appele (timer repart a zero)
+        - la session doit repartir avec une horloge remise a zero
         - session_memory.new_session() ne doit PAS etre appele
         Le temps de veille ne doit pas s'accumuler dans session_duration_min.
         """
@@ -819,20 +963,16 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         unlock_event = Event("screen_unlocked", {})
 
-        with patch.object(self.orchestrator.scorer, "reset_session") as mock_reset, \
-             patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
+        with patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
              patch.object(self.orchestrator, "_process_signals"):
             self.orchestrator.handle_event(unlock_event)
 
-        mock_reset.assert_called_once(
-        ), "scorer.reset_session() doit etre appele pour tout unlock"
         mock_new_session.assert_not_called(
         ), "session_memory.new_session() ne doit pas etre appele pour un verrou court"
 
     def test_verrou_long_reset_scorer_et_nouvelle_session(self):
         """
         Verrou >= sleep_session_threshold_min (30 min) :
-        - scorer.reset_session() appele
         - session_memory.new_session() appele
         Comportement existant preserve.
         """
@@ -845,15 +985,13 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         unlock_event = Event("screen_unlocked", {})
 
-        with patch.object(self.orchestrator.scorer, "reset_session") as mock_reset, \
-             patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
+        with patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
              patch.object(self.orchestrator.session_memory, "export_session_data",
                           return_value={"duration_min": 0}), \
              patch("daemon.runtime_orchestrator.update_memories_from_session"), \
              patch.object(self.orchestrator, "_process_signals"):
             self.orchestrator.handle_event(unlock_event)
 
-        mock_reset.assert_called_once()
         mock_new_session.assert_called_once(
         ), "session_memory.new_session() doit etre appele pour un verrou long"
 
@@ -872,8 +1010,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         unlock_event = Event("screen_unlocked", {})
 
-        with patch.object(self.orchestrator.scorer, "reset_session"), \
-             patch.object(self.orchestrator, "_process_signals"):
+        with patch.object(self.orchestrator, "_process_signals"):
             self.orchestrator.handle_event(unlock_event)
 
         self.assertIsNone(

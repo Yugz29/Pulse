@@ -24,9 +24,15 @@ from daemon.core.context_formatter import (
     format_file_work_reading,
     has_informative_file_reading,
 )
+from daemon.core.current_context_adapters import current_context_to_markdown
+from daemon.core.current_context_builder import CurrentContextBuilder
+from daemon.core.contracts import ProposalCandidate
+from daemon.core.event_bus import DEFAULT_EVENT_BUS_SIZE
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary
-from daemon.core.proposals import Proposal, proposal_store
+from daemon.core.proposal_candidate_adapter import proposal_candidate_to_proposal
+from daemon.core.proposals import proposal_store
+from daemon.core.session_fsm import SessionFSM
 from daemon.core.uid import new_uid
 from daemon.core.workspace_context import find_workspace_root
 
@@ -74,9 +80,8 @@ class RuntimeOrchestrator:
         self._commit_watch_lock = threading.Lock()
         self._pending_commit_watch: set[str] = set()
         self._fact_engine = get_fact_engine()
-        # Dernière valeur connue du compteur de resets d'inactivité du scorer.
-        # Quand il augmente, le scorer a détecté une nouvelle frontière de session.
-        self._last_scorer_reset_count: int = 0
+        self._current_context_builder = CurrentContextBuilder()
+        self._session_fsm = SessionFSM()
 
     def llm_unload_background(self) -> None:
         self.llm_runtime.unload_background(self.log)
@@ -130,15 +135,33 @@ class RuntimeOrchestrator:
             return
 
         if event.type == "screen_locked":
-            self.runtime_state.mark_screen_locked()
+            self._session_fsm.on_screen_locked(when=event.timestamp)
+            self.runtime_state.mark_screen_locked(when=event.timestamp)
             threading.Thread(target=self.llm_unload_background, daemon=True).start()
 
         elif event.type == "screen_unlocked":
+            # Shim de compat Phase 2 :
+            # si RuntimeState porte encore le marqueur legacy de lock mais que la FSM
+            # ne l'a pas, on réinjecte ce timestamp une seule fois avant l'unlock.
+            # Ce cas intervient surtout pendant la coexistence RuntimeState/FSM
+            # et dans certains tests qui préparent directement RuntimeState.
+            # À supprimer quand RuntimeState ne sera plus porteur du marqueur de lock
+            # utilisé uniquement pour compat.
+            if (
+                self._session_fsm.last_screen_locked_at is None
+                and self.runtime_state.get_last_screen_locked_at() is not None
+            ):
+                self._session_fsm.on_screen_locked(
+                    when=self.runtime_state.get_last_screen_locked_at(),
+                )
+            transition = self._session_fsm.on_screen_unlocked(
+                when=event.timestamp,
+                sleep_session_threshold_min=self.sleep_session_threshold_min,
+            )
             self.runtime_state.mark_screen_unlocked()
-            locked_at = self.runtime_state.get_last_screen_locked_at()
-            if locked_at is not None:
-                sleep_min = (datetime.now() - locked_at).total_seconds() / 60
-                if sleep_min >= self.sleep_session_threshold_min:
+            if transition.should_reset_clock:
+                sleep_min = transition.sleep_minutes or 0.0
+                if transition.should_start_new_session:
                     self.log.info("Longue veille (%.0f min) → nouvelle session", sleep_min)
                     try:
                         snapshot = self.session_memory.export_session_data()
@@ -146,9 +169,7 @@ class RuntimeOrchestrator:
                             update_memories_from_session(snapshot, llm=self.summary_llm)
                     except Exception as exc:
                         self.log.warning("sync mémoire pré-reset échouée : %s", exc)
-                    self.scorer.reset_session()
                     self.session_memory.new_session()
-                    self.runtime_state.clear_sleep_markers()
                 else:
                     # Verrou court : reset du timer scorer uniquement.
                     # Le temps de veille ne doit pas s'accumuler dans session_duration_min.
@@ -158,7 +179,7 @@ class RuntimeOrchestrator:
                         "Verrou court (%.0f min) -> reset timer scorer, session conservee",
                         sleep_min,
                     )
-                    self.scorer.reset_session()
+                if transition.should_clear_sleep_markers:
                     self.runtime_state.clear_sleep_markers()
             threading.Thread(target=self.llm_warmup_background, daemon=True).start()
 
@@ -195,85 +216,32 @@ class RuntimeOrchestrator:
         """
         state = self.store.to_dict()
         signals, _ = self.runtime_state.get_context_snapshot()
+        current_context = self.runtime_state.get_current_context()
+        if current_context is None:
+            current_context = self._current_context_builder.build(
+                state=state,
+                signals=signals,
+                find_git_root_fn=find_git_root,
+                find_workspace_root_fn=find_workspace_root,
+            )
 
-        # C4 — Signals est prioritaire sur StateStore pour active_file et active_project.
-        # Raison : signals.active_file vient de _last_file_path() qui exclut file_deleted
-        # et opère sur une fenêtre courante. StateStore.active_file ne se réinitialise
-        # jamais à None — il peut pointer un fichier obsolète depuis le démarrage du daemon.
-        # Fallback sur state uniquement si signals n'a pas de valeur courante.
-        active_project = (signals.active_project if signals else None) or state.get("active_project")
-        active_file    = (signals.active_file    if signals else None) or state.get("active_file")
-        active_app = state.get("active_app")
-
-        # C5 — Signals est la source de vérité pour la durée de session.
-        # StateStore.session_start est figé au démarrage du daemon et n'est jamais
-        # resynchronisé sur les frontières de session. Sa valeur est quasi-toujours
-        # supérieure ou égale à la vraie durée. On préfère 0 à une durée fausse.
-        if signals and signals.session_duration_min > 0:
-            session_duration_min = signals.session_duration_min
-        else:
-            session_duration_min = 0
-
-        # Racine git pour les outils
-        project_root: str | None = None
-        if active_file:
+        diff_summary: str | None = None
+        if current_context.project_root:
             try:
-                git_root = find_git_root(active_file)
-                if git_root:
-                    project_root = str(git_root)
-                else:
-                    workspace_root = find_workspace_root(active_file)
-                    if workspace_root:
-                        project_root = str(workspace_root)
+                diff_summary = read_diff_summary(current_context.project_root)
             except Exception:
-                try:
-                    workspace_root = find_workspace_root(active_file)
-                    if workspace_root:
-                        project_root = str(workspace_root)
-                except Exception:
-                    pass
+                diff_summary = None
 
-        lines = [
-            "# Contexte session",
-            f"- Projet : {active_project or 'non détecté'}",
-            f"- Racine projet : {project_root or 'inconnue'}",
-            f"- Fichier actif : {active_file or 'aucun'}",
-            f"- App active : {active_app or 'inconnue'}",
-            f"- Durée session : {session_duration_min or 0} min",
-        ]
+        last_session_line: str | None = None
+        if current_context.active_project:
+            last_session_line = last_session_context(current_context.active_project)
 
-        if signals:
-            lines += [
-                f"- Tâche probable : {signals.probable_task}",
-                f"- Focus : {signals.focus_level}",
-            ]
-            file_activity = format_file_activity_summary(signals)
-            if file_activity:
-                lines.append(f"- Activité fichiers : {file_activity}")
-            if has_informative_file_reading(signals):
-                file_reading = format_file_work_reading(signals)
-                if file_reading:
-                    lines.append(f"- Lecture de la session : {file_reading}")
-            if signals.recent_apps:
-                lines.append(f"- Apps récentes : {', '.join(signals.recent_apps[:4])}")
-
-        # Diff git — ce qui a réellement changé dans le code
-        if project_root:
-            try:
-                diff = read_diff_summary(project_root)
-                if diff:
-                    lines.append(f"- {diff.replace(chr(10), chr(10) + '  ')}")
-            except Exception:
-                pass
-
-        # Continuité projet — la dernière session connue pour ce projet
-        # last_session_context() retourne None proprement si donnée absente.
-        if active_project:
-            session_ctx = last_session_context(active_project)
-            if session_ctx:
-                lines.append(f"- {session_ctx}")
-
-        return "\n".join(lines)
+        return current_context_to_markdown(
+            current_context,
+            signals=signals,
+            diff_summary=diff_summary,
+            last_session_line=last_session_line,
+        )
 
     def deferred_startup(self) -> None:
         time.sleep(0.2)
@@ -457,16 +425,18 @@ class RuntimeOrchestrator:
         self._process_signals(trigger)
 
     def _process_signals(self, trigger_event) -> None:
-        signals = self.scorer.compute()
+        if trigger_event.type == "user_idle":
+            self._session_fsm.on_user_idle()
 
-        # Détection de frontière de session par inactivité :
-        # si le scorer a reset son horloge (gap > timeout ou screen_lock),
-        # on synchro la session mémoire pour éviter la divergence de durée.
-        current_reset_count = self.scorer.inactivity_reset_count
-        if current_reset_count > self._last_scorer_reset_count:
-            self._last_scorer_reset_count = current_reset_count
+        recent_events = self.scorer.bus.recent(DEFAULT_EVENT_BUS_SIZE)
+        lifecycle_transition = self._session_fsm.observe_recent_events(
+            recent_events=recent_events,
+        )
+
+        if lifecycle_transition.boundary_detected:
             self.log.info(
-                "Session boundary detected (inactivity/screen_lock) — flushing session memory"
+                "Session boundary detected (%s) — flushing session memory",
+                lifecycle_transition.boundary_reason,
             )
             try:
                 snapshot = self.session_memory.export_session_data()
@@ -478,7 +448,18 @@ class RuntimeOrchestrator:
                     ).start()
             except Exception as exc:
                 self.log.warning("session boundary flush échouée : %s", exc)
-            self.session_memory.new_session()
+            if lifecycle_transition.should_start_new_session:
+                self.session_memory.new_session()
+
+        signals = self.scorer.compute(
+            session_started_at=self._session_fsm.session_started_at,
+        )
+        current_context = self._current_context_builder.build(
+            state=self.store.to_dict(),
+            signals=signals,
+            find_git_root_fn=find_git_root,
+            find_workspace_root_fn=find_workspace_root,
+        )
 
         self.session_memory.update_signals(signals)
         _, previous_decision = self.runtime_state.get_context_snapshot()
@@ -494,6 +475,7 @@ class RuntimeOrchestrator:
         self.runtime_state.set_analysis(
             signals=signals,
             decision=decision,
+            current_context=current_context,
         )
         if should_sync:
             snapshot = self.session_memory.export_session_data()
@@ -521,10 +503,14 @@ class RuntimeOrchestrator:
         if not self._should_emit_context_proposal(decision, previous_decision):
             return decision
 
-        proposal = self._build_context_injection_proposal(
+        candidate = self._build_context_injection_candidate(
             signals=signals,
             decision=decision,
             trigger_event=trigger_event,
+        )
+        proposal = proposal_candidate_to_proposal(
+            candidate,
+            proposal_id=new_uid(),
         )
         proposal_store.add(proposal)
         proposal_store.resolve(proposal.id, "executed")
@@ -551,7 +537,7 @@ class RuntimeOrchestrator:
         normalized.pop("proposal_id", None)
         return normalized
 
-    def _build_context_injection_proposal(self, *, signals, decision, trigger_event) -> Proposal:
+    def _build_context_injection_candidate(self, *, signals, decision, trigger_event) -> ProposalCandidate:
         payload = dict(decision.payload or {})
         evidence = [
             {"kind": "project", "label": "Projet", "value": signals.active_project or "inconnu"},
@@ -581,35 +567,30 @@ class RuntimeOrchestrator:
         if signals.active_file:
             evidence.append({"kind": "file", "label": "Fichier actif", "value": signals.active_file})
 
-        proposal = Proposal(
-            id=new_uid(),
+        return ProposalCandidate(
             type="context_injection",
             trigger=trigger_event.type,
-            title="Contexte de session prêt à être injecté",
-            summary="Le contexte local est jugé assez riche pour une réponse assistée.",
-            rationale="La session a accumulé assez de contexte local pour justifier une injection de contexte existante.",
+            decision_action=decision.action,
+            decision_reason=decision.reason,
             evidence=evidence,
             confidence=0.66,
             proposed_action="inject_current_context",
-            metadata={
-                "details": {
-                    "decision_action": decision.action,
-                    "decision_reason": decision.reason,
-                    "project": signals.active_project,
-                    "task": signals.probable_task,
-                    "focus_level": signals.focus_level,
-                    "session_duration_min": signals.session_duration_min,
-                    "active_file": signals.active_file,
-                    "edited_file_count_10m": signals.edited_file_count_10m,
-                    "file_type_mix_10m": dict(signals.file_type_mix_10m),
-                    "rename_delete_ratio_10m": signals.rename_delete_ratio_10m,
-                    "dominant_file_mode": signals.dominant_file_mode,
-                    "work_pattern_candidate": signals.work_pattern_candidate,
-                    "decision_payload": payload,
-                },
+            details={
+                "decision_action": decision.action,
+                "decision_reason": decision.reason,
+                "project": signals.active_project,
+                "task": signals.probable_task,
+                "focus_level": signals.focus_level,
+                "session_duration_min": signals.session_duration_min,
+                "active_file": signals.active_file,
+                "edited_file_count_10m": signals.edited_file_count_10m,
+                "file_type_mix_10m": dict(signals.file_type_mix_10m),
+                "rename_delete_ratio_10m": signals.rename_delete_ratio_10m,
+                "dominant_file_mode": signals.dominant_file_mode,
+                "work_pattern_candidate": signals.work_pattern_candidate,
+                "decision_payload": payload,
             },
         )
-        return proposal
 
     def _sync_memory_background(
         self,
@@ -649,9 +630,11 @@ class RuntimeOrchestrator:
                 return
 
             signals, decision = self.runtime_state.get_context_snapshot()
+            current_context = self.runtime_state.get_current_context()
             self.runtime_state.set_analysis(
                 signals=signals,
                 decision=decision,
+                current_context=current_context,
                 memory_synced_at=datetime.now(),
             )
             self.log.info(
@@ -751,4 +734,5 @@ class RuntimeOrchestrator:
         reset_fact_engine_for_tests()
         reset_cooldown_for_tests()
         self._fact_engine = get_fact_engine()
+        self._session_fsm.reset_for_tests()
         proposal_store.clear()

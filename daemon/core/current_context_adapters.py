@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+from typing import Any, Optional
+
+from daemon.core.context_formatter import (
+    format_file_activity_summary,
+    format_file_work_reading,
+    has_informative_file_reading,
+)
+from daemon.core.contracts import CurrentContext
+
+
+def current_context_to_markdown(
+    context: CurrentContext,
+    *,
+    signals: Any | None = None,
+    diff_summary: Optional[str] = None,
+    last_session_line: Optional[str] = None,
+) -> str:
+    """
+    Adaptateur legacy vers le texte Markdown attendu par build_context_snapshot().
+
+    Le rendu doit rester strictement identique à l'implémentation historique.
+    """
+
+    lines = [
+        "# Contexte session",
+        f"- Projet : {context.active_project or 'non détecté'}",
+        f"- Racine projet : {context.project_root or 'inconnue'}",
+        f"- Fichier actif : {context.active_file or 'aucun'}",
+        f"- App active : {context.active_app or 'inconnue'}",
+        f"- Durée session : {context.session_duration_min or 0} min",
+    ]
+
+    if signals:
+        lines += [
+            f"- Tâche probable : {signals.probable_task}",
+            f"- Focus : {signals.focus_level}",
+        ]
+        file_activity = format_file_activity_summary(signals)
+        if file_activity:
+            lines.append(f"- Activité fichiers : {file_activity}")
+        if has_informative_file_reading(signals):
+            file_reading = format_file_work_reading(signals)
+            if file_reading:
+                lines.append(f"- Lecture de la session : {file_reading}")
+        if signals.recent_apps:
+            lines.append(f"- Apps récentes : {', '.join(signals.recent_apps[:4])}")
+
+    if diff_summary:
+        lines.append(f"- {diff_summary.replace(chr(10), chr(10) + '  ')}")
+
+    if last_session_line:
+        lines.append(f"- {last_session_line}")
+
+    return "\n".join(lines)
+
+
+def current_context_to_legacy_signals_payload(
+    context: CurrentContext,
+    *,
+    signals: Any,
+    last_session_line: Optional[str] = None,
+) -> dict[str, Any]:
+    """
+    Adaptateur legacy pour le bloc `signals` exposé par /state.
+
+    Le JSON retourné doit rester strictement identique au contrat existant.
+    """
+
+    return {
+        "active_project": context.active_project,
+        "active_file": context.active_file,
+        "probable_task": context.probable_task,
+        "friction_score": signals.friction_score,
+        "focus_level": context.focus_level,
+        "session_duration_min": context.session_duration_min,
+        "recent_apps": list(context.signal_summary.recent_apps),
+        "clipboard_context": context.clipboard_context,
+        "edited_file_count_10m": context.signal_summary.edited_file_count_10m,
+        "file_type_mix_10m": dict(context.signal_summary.file_type_mix_10m),
+        "rename_delete_ratio_10m": context.signal_summary.rename_delete_ratio_10m,
+        "dominant_file_mode": context.signal_summary.dominant_file_mode,
+        "work_pattern_candidate": context.signal_summary.work_pattern_candidate,
+        "last_session_context": last_session_line,
+    }
