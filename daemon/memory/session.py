@@ -5,10 +5,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from daemon.core.contracts import SessionSnapshot
 from daemon.core.event_bus import Event
 from daemon.core.signal_scorer import Signals
 from daemon.core.uid import new_uid
 from daemon.core.workspace_context import extract_project_name
+from daemon.memory.session_snapshot_builder import (
+    build_session_snapshot as build_structured_session_snapshot,
+    session_snapshot_to_legacy_dict,
+)
 
 
 class SessionMemory:
@@ -193,55 +198,18 @@ class SessionMemory:
             )
         return result
 
-    def export_session_data(self) -> Dict[str, Any]:
+    def build_session_snapshot(self) -> SessionSnapshot:
         session = self.get_session()
         recent_events = self.get_recent_events(limit=200)
+        return build_structured_session_snapshot(
+            session=session,
+            recent_events=recent_events,
+            duration_fallback_min=self._duration_min(),
+        )
 
-        apps: List[str] = []
-        seen_apps: set = set()
-        # Comptage des modifications par fichier pour trouver les plus travaillés
-        file_counts: Dict[str, int] = {}
-        max_friction = float(session.get("friction_score") or 0.0)
-
-        for event in recent_events:
-            payload = event["payload"]
-
-            if event["type"] in {"app_activated", "app_switch"}:
-                app_name = payload.get("app_name")
-                if app_name and app_name not in seen_apps:
-                    seen_apps.add(app_name)
-                    apps.append(app_name)
-
-            if event["type"] in {
-                "file_created", "file_modified", "file_renamed", "file_deleted", "file_change"
-            }:
-                path = payload.get("path")
-                if path:
-                    file_counts[path] = file_counts.get(path, 0) + 1
-                    # Note : le filtrage du bruit système (site-packages, .git, etc.)
-                    # est assuré en amont par _should_publish_to_bus() dans routes/runtime.py.
-                    # Les events qui arrivent ici sont déjà des fichiers meaningful.
-
-        # Fichiers les plus touchés en premier (top 8), on garde juste le nom relatif
-        top_files = sorted(file_counts.items(), key=lambda x: x[1], reverse=True)[:8]
-        top_file_names = [Path(p).name for p, _ in top_files]
-
-        return {
-            "session_id":    session.get("id"),
-            "started_at":    session.get("started_at"),
-            "updated_at":    session.get("updated_at"),
-            "ended_at":      session.get("ended_at"),
-            "active_project": session.get("active_project"),
-            "active_file":   session.get("active_file"),
-            "probable_task": session.get("probable_task"),
-            "focus_level":   session.get("focus_level"),
-            "duration_min":  session.get("session_duration_min") or self._duration_min(),
-            "recent_apps":   apps[-10:],
-            "files_changed": len(file_counts),
-            "top_files":     top_file_names,       # ← nouveau : noms des fichiers réels
-            "event_count":   len(recent_events),
-            "max_friction":  max_friction,
-        }
+    def export_session_data(self) -> Dict[str, Any]:
+        snapshot = self.build_session_snapshot()
+        return session_snapshot_to_legacy_dict(snapshot)
 
     def close(self) -> None:
         with self._lock:

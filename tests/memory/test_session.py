@@ -6,6 +6,10 @@ from pathlib import Path
 from daemon.core.event_bus import Event
 from daemon.core.signal_scorer import Signals
 from daemon.memory.session import SessionMemory
+from daemon.memory.session_snapshot_builder import (
+    build_session_snapshot,
+    session_snapshot_to_legacy_dict,
+)
 
 
 class TestSessionMemory(unittest.TestCase):
@@ -85,6 +89,101 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(data["files_changed"], 1)
         self.assertIn("Cursor", data["recent_apps"])
         self.assertEqual(data["max_friction"], 0.8)
+
+    def test_export_session_data_golden_legacy_contract_exact(self):
+        main_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"
+        helper_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/helper.py"
+        deleted_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/old.py"
+
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}))
+        self.memory.record_event(Event("app_activated", {"app_name": "Terminal"}))
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}))
+        self.memory.record_event(Event("file_modified", {"path": main_path}))
+        self.memory.record_event(Event("file_modified", {"path": helper_path}))
+        self.memory.record_event(Event("file_modified", {"path": main_path}))
+        self.memory.record_event(Event("file_deleted", {"path": deleted_path}))
+        self.memory.update_signals(
+            Signals(
+                active_project="Pulse",
+                active_file=main_path,
+                probable_task="coding",
+                friction_score=0.8,
+                focus_level="normal",
+                session_duration_min=20,
+                recent_apps=["Cursor", "Terminal"],
+                clipboard_context=None,
+            )
+        )
+
+        session = self.memory.get_session()
+        expected = {
+            "session_id": "test-session",
+            "started_at": session["started_at"],
+            "updated_at": session["updated_at"],
+            "ended_at": session["ended_at"],
+            "active_project": "Pulse",
+            "active_file": main_path,
+            "probable_task": "coding",
+            "focus_level": "normal",
+            "duration_min": 20,
+            "recent_apps": ["Cursor", "Terminal"],
+            "files_changed": 3,
+            "top_files": ["main.py", "helper.py", "old.py"],
+            "event_count": 7,
+            "max_friction": 0.8,
+        }
+
+        data = self.memory.export_session_data()
+
+        self.assertEqual(data, expected)
+
+    def test_build_session_snapshot_plus_adaptateur_legacy_reproduit_le_contrat_exact(self):
+        session = {
+            "id": "session-42",
+            "started_at": "2026-04-21T09:00:00",
+            "updated_at": "2026-04-21T09:25:00",
+            "ended_at": None,
+            "active_project": "Pulse",
+            "active_file": "/repo/daemon/main.py",
+            "probable_task": "coding",
+            "focus_level": "deep",
+            "session_duration_min": 25,
+            "friction_score": 0.6,
+        }
+        recent_events = [
+            {"type": "app_activated", "payload": {"app_name": "Cursor"}, "timestamp": "2026-04-21T09:01:00"},
+            {"type": "app_switch", "payload": {"app_name": "Terminal"}, "timestamp": "2026-04-21T09:02:00"},
+            {"type": "app_activated", "payload": {"app_name": "Cursor"}, "timestamp": "2026-04-21T09:03:00"},
+            {"type": "file_modified", "payload": {"path": "/repo/daemon/main.py"}, "timestamp": "2026-04-21T09:04:00"},
+            {"type": "file_modified", "payload": {"path": "/repo/daemon/utils.py"}, "timestamp": "2026-04-21T09:05:00"},
+            {"type": "file_modified", "payload": {"path": "/repo/daemon/main.py"}, "timestamp": "2026-04-21T09:06:00"},
+            {"type": "file_deleted", "payload": {"path": "/repo/daemon/old.py"}, "timestamp": "2026-04-21T09:07:00"},
+        ]
+        expected = {
+            "session_id": "session-42",
+            "started_at": "2026-04-21T09:00:00",
+            "updated_at": "2026-04-21T09:25:00",
+            "ended_at": None,
+            "active_project": "Pulse",
+            "active_file": "/repo/daemon/main.py",
+            "probable_task": "coding",
+            "focus_level": "deep",
+            "duration_min": 25,
+            "recent_apps": ["Cursor", "Terminal"],
+            "files_changed": 3,
+            "top_files": ["main.py", "utils.py", "old.py"],
+            "event_count": 7,
+            "max_friction": 0.6,
+        }
+
+        snapshot = build_session_snapshot(
+            session=session,
+            recent_events=recent_events,
+            duration_fallback_min=999,
+        )
+        legacy = session_snapshot_to_legacy_dict(snapshot)
+
+        self.assertEqual(legacy, expected)
 
     def test_file_deleted_ne_remplace_pas_le_fichier_actif_de_session(self):
         active_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"
