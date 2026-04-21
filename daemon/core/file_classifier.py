@@ -195,6 +195,10 @@ def file_signal_significance(path: Optional[str]) -> str:
     ):
         return "technical_noise"
 
+    # Téléchargements — fichier déposé par le système, pas en cours d'édition
+    if "/Downloads/" in path:
+        return "neutral"
+
     # Lockfiles — auto-générés, pas d'action utilisateur directe
     _LOCKFILE_NAMES = {
         "poetry.lock", "pipfile.lock", "cargo.lock",

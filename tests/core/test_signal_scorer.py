@@ -419,6 +419,40 @@ class TestSignalScorer(unittest.TestCase):
             "clipboard_context doit etre None si le dernier clipboard a > 5 min")
         self.assertEqual(signals.probable_task, "coding")
 
+
+    # ── Faux positif "rédaction" sur téléchargements (Phase 1 terrain) ───────────
+
+    def test_md_telecharge_depuis_chrome_ne_produit_pas_writing(self):
+        """
+        Scénario réel : Google Docs exporté → ~/Downloads/Untitled document.md
+        depuis Chrome. Le fichier doit être neutral (pas dans edited_file_count)
+        et la tâche ne doit pas être writing.
+        """
+        for _ in range(4):
+            self._push("file_modified", {"path": "/Users/yugz/Downloads/Untitled document.md"})
+        self._push("app_activated", {"app_name": "Google Chrome"})
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "writing",
+            f"Un .md dans Downloads + Chrome ne doit pas produire writing, got: {signals.probable_task}")
+        self.assertEqual(signals.edited_file_count_10m, 0,
+            "Les fichiers dans ~/Downloads doivent être neutral → pas comptés dans edited_file_count")
+
+    def test_browser_actif_bloque_docs_only_meme_hors_downloads(self):
+        """
+        Guard browser sur docs_only : si le browser est l'app active,
+        plusieurs events sur un .md de projet ne doivent pas produire writing.
+        """
+        for _ in range(4):
+            self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/NOTES.md"})
+        self._push("app_activated", {"app_name": "Google Chrome"})
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "writing",
+            f"Browser actif + .md projet ne doit pas produire writing, got: {signals.probable_task}")
+
     def test_4a_clipboard_context_none_si_hors_fenetre(self):
         """clipboard_context est None si tous les events clipboard ont > 5 min."""
         self._push("clipboard_updated", {"content_kind": "code"}, minutes_ago=8)

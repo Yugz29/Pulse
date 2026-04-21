@@ -305,6 +305,20 @@ class TestFileSignalSignificance(unittest.TestCase):
             "neutral",
         )
 
+    def test_downloads_md_est_neutral(self):
+        """Un .md téléchargé depuis un browser ne doit pas être meaningful."""
+        self.assertEqual(
+            file_signal_significance("/Users/yugz/Downloads/Untitled document.md"),
+            "neutral",
+        )
+
+    def test_downloads_py_est_neutral(self):
+        """Tout fichier dans ~/Downloads est neutral, quelle que soit l'extension."""
+        self.assertEqual(
+            file_signal_significance("/Users/yugz/Downloads/script.py"),
+            "neutral",
+        )
+
     # ── Plist système — neutral (pas technical_noise mais filtré du bus) ────────
 
     def test_plist_systeme_est_neutral(self):

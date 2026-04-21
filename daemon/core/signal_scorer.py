@@ -382,7 +382,13 @@ class SignalScorer:
         if work_pattern_candidate in _PATTERN_MAP:
             active.add(_PATTERN_MAP[work_pattern_candidate])
 
-        if docs_count >= 2 and (source_count + test_count) == 0 and config_count == 0:
+        if (
+            docs_count >= 2
+            and (source_count + test_count) == 0
+            and config_count == 0
+            and latest_active_app not in self.BROWSER_APPS
+            and latest_active_app is not None
+        ):
             active.add("docs_only")
 
         # Writing app : fenêtre 5 min — l'app doit être vraiment en avant-plan.
