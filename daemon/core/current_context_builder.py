@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Mapping, Optional
 
 from daemon.core.contracts import CurrentContext, SignalSummary
+
+log = logging.getLogger("pulse")
+
+
 class CurrentContextBuilder:
     """
     Construit un CurrentContext structuré à partir des sources runtime actuelles.
@@ -27,7 +32,7 @@ class CurrentContextBuilder:
         else:
             session_duration_min = 0
 
-        return CurrentContext(
+        ctx = CurrentContext(
             active_project=active_project,
             project_root=self._resolve_project_root(
                 active_file,
@@ -44,6 +49,14 @@ class CurrentContextBuilder:
             clipboard_context=getattr(signals, "clipboard_context", None) if signals else None,
             signal_summary=self._build_signal_summary(signals),
         )
+        log.debug(
+            "context: task=%s conf=%.2f activity=%s project=%s",
+            ctx.probable_task,
+            ctx.task_confidence,
+            ctx.activity_level,
+            ctx.active_project,
+        )
+        return ctx
 
     def _build_signal_summary(self, signals: Any | None) -> SignalSummary:
         if signals is None:
