@@ -162,6 +162,7 @@ def register_runtime_routes(
     bus: Any,
     store: Any,
     runtime_state: Any,
+    get_session_fsm: Callable[[], Any] | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
     shutdown_runtime: Callable[[], None],
@@ -249,6 +250,14 @@ def register_runtime_routes(
                 "level": decision.level,
                 "reason": decision.reason,
                 "payload": decision.payload,
+            }
+        if get_session_fsm is not None:
+            fsm = get_session_fsm()
+            state["session_fsm"] = {
+                "state": fsm.state,
+                "session_started_at": fsm.session_started_at.isoformat() if fsm.session_started_at else None,
+                "last_meaningful_activity_at": fsm.last_meaningful_activity_at.isoformat() if fsm.last_meaningful_activity_at else None,
+                "last_screen_locked_at": fsm.last_screen_locked_at.isoformat() if fsm.last_screen_locked_at else None,
             }
         return jsonify(state)
 

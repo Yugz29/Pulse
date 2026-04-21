@@ -186,6 +186,7 @@ register_runtime_routes(
     bus=bus,
     store=store,
     runtime_state=runtime_state,
+    get_session_fsm=lambda: runtime_orchestrator._session_fsm,
     llm_unload_background=_llm_unload_background,
     llm_warmup_background=_llm_warmup_background,
     shutdown_runtime=_shutdown_runtime,

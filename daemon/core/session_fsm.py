@@ -53,6 +53,10 @@ class SessionFSM:
         return self._session_started_at
 
     @property
+    def last_meaningful_activity_at(self) -> datetime | None:
+        return self._last_meaningful_activity_at
+
+    @property
     def last_screen_locked_at(self) -> datetime | None:
         return self._last_screen_locked_at
 
