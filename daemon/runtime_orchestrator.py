@@ -439,8 +439,10 @@ class RuntimeOrchestrator:
 
         if lifecycle_transition.boundary_detected:
             self.log.info(
-                "Session boundary detected (%s) — flushing session memory",
+                "Frontière session : reason=%s sleep=%.0fmin new_session=%s",
                 lifecycle_transition.boundary_reason,
+                lifecycle_transition.sleep_minutes or 0,
+                lifecycle_transition.should_start_new_session,
             )
             try:
                 snapshot = self.session_memory.export_session_data()
