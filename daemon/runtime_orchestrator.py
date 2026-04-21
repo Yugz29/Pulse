@@ -99,7 +99,11 @@ class RuntimeOrchestrator:
     def freeze_memory(self) -> None:
         captured_at = datetime.now()
         structured = self.memory_store.render(captured_at=captured_at)
-        legacy = load_memory_context() if not structured else ""
+        if not structured:
+            self.log.warning("freeze_memory: mémoire structurée vide — fallback vers legacy context")
+            legacy = load_memory_context()
+        else:
+            legacy = ""
 
         # Profil utilisateur issu des faits consolidés (facts.db)
         facts_profile = ""
