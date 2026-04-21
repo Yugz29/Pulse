@@ -76,9 +76,9 @@ Le runtime actuel repose notamment sur :
 - `SessionFSM` : source de vérité du lifecycle de session
 
 Références :
-- [Architecture](./docs/architecture.md)
-- [Contrat sémantique](./docs/semantic_contract.md)
-- [Roadmap](./docs/refactor-roadmap.md)
+- [Architecture](./docs/FR/architecture.md)
+- [Contrat sémantique](./docs/FR/semantic_contract.md)
+- [Roadmap](./docs/FR/refactor-roadmap.md)
 
 ---
 
@@ -262,7 +262,7 @@ Le repo contient actuellement :
   - `SessionFSM`
   - compat legacy golden sur `build_context_snapshot()`, `/state`, `export_session_data()`
 
-La documentation de test détaillée est dans [docs/testing.md](./docs/testing.md).
+La documentation de test détaillée est dans [docs/testing.md](./docs/FR/testing.md).
 
 ---
 

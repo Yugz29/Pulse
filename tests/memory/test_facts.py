@@ -233,6 +233,89 @@ class TestFactEngineDecay(unittest.TestCase):
         facts = self.engine.get_facts()
         self.assertFalse(any(f["id"] == fact_id for f in facts))
 
+    def test_archive_legacy_facts_archive_les_cles_obsoletes_et_garde_les_actives(self):
+        now = datetime.now().isoformat()
+        with self.engine._connect() as conn:
+            conn.execute("DELETE FROM facts")
+            conn.execute(
+                """INSERT INTO facts
+                   (id, key, category, description, context_json, confidence,
+                    observations, confirmations, contradictions, autonomy_level,
+                    created_at, updated_at, last_seen, archived)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                (
+                    "legacy-id",
+                    "apps:pair:Code:Claude",
+                    "workflow",
+                    "Legacy apps pair",
+                    "{}",
+                    0.9,
+                    12,
+                    0,
+                    0,
+                    0,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO facts
+                   (id, key, category, description, context_json, confidence,
+                    observations, confirmations, contradictions, autonomy_level,
+                    created_at, updated_at, last_seen, archived)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                (
+                    "active-id",
+                    "slot:soir:task:coding",
+                    "workflow",
+                    "Fact actif",
+                    "{}",
+                    0.9,
+                    12,
+                    0,
+                    0,
+                    0,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO facts
+                   (id, key, category, description, context_json, confidence,
+                    observations, confirmations, contradictions, autonomy_level,
+                    created_at, updated_at, last_seen, archived)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                (
+                    "compressed-id",
+                    "compressed:workflow:2026-04-21",
+                    "workflow",
+                    "Synthèse valide",
+                    "{}",
+                    0.75,
+                    12,
+                    0,
+                    0,
+                    1,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+
+        archived = self.engine.archive_legacy_facts()
+
+        self.assertEqual(archived, 1)
+        active_ids = {fact["id"] for fact in self.engine.get_facts(include_archived=True)}
+        self.assertIn("legacy-id", active_ids)
+
+        by_id = {fact["id"]: fact for fact in self.engine.get_facts(include_archived=True, limit=50)}
+        self.assertEqual(by_id["legacy-id"]["archived"], 1)
+        self.assertEqual(by_id["active-id"]["archived"], 0)
+        self.assertEqual(by_id["compressed-id"]["archived"], 0)
+
 
 class TestFactEngineRender(unittest.TestCase):
 

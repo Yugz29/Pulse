@@ -28,6 +28,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         # mock FactEngine — évite toute dépendance sur ~/.pulse/facts.db dans les tests
         self.mock_fact_engine = MagicMock()
         self.mock_fact_engine.render_for_context.return_value = ""
+        self.mock_fact_engine.archive_legacy_facts.return_value = 0
         self.mock_fact_engine.decay_all.return_value = 0
 
         # _process_signals lit désormais le bus pour laisser la SessionFSM
@@ -305,13 +306,18 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         provider.warmup.return_value = True
         self.llm_runtime.provider.return_value = provider
         self.memory_store.purge_expired.return_value = 2
+        self.mock_fact_engine.archive_legacy_facts.return_value = 3
 
         with patch("daemon.runtime_orchestrator.time.sleep", return_value=None):
             self.orchestrator.deferred_startup()
 
         self.llm_runtime.load_persisted_models.assert_called_once()
         self.memory_store.purge_expired.assert_called_once()
+        self.mock_fact_engine.archive_legacy_facts.assert_called_once()
+        self.mock_fact_engine.decay_all.assert_called_once()
         provider.warmup.assert_called_once()
+        messages = [call[0][0] for call in self.log.info.call_args_list if call[0]]
+        self.assertTrue(any("legacy archivé" in msg for msg in messages))
 
     def test_handle_commit_event_waits_for_new_head_before_processing(self):
         git_root = Path("/tmp/Pulse")
