@@ -28,6 +28,8 @@ def register_assistant_routes(
     def ask():
         data = request.get_json() or {}
         message = (data.get("message") or "").strip()
+        if not message:
+            return jsonify({"ok": False, "error": "message requis"}), 400
         max_tok = int(data.get("max_tokens", 600))
 
         result = cognitive_ask(

@@ -106,6 +106,14 @@ class TestMainLLMModels(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json()["paused"])
 
+    def test_ask_returns_400_when_message_is_missing(self):
+        with patch("daemon.main.cognitive_ask") as cognitive_ask:
+            response = self.client.post("/ask", json={})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json(), {"ok": False, "error": "message requis"})
+        cognitive_ask.assert_not_called()
+
     def test_pause_and_resume_routes_toggle_runtime(self):
         pause = self.client.post("/daemon/pause")
         self.assertEqual(pause.status_code, 200)
