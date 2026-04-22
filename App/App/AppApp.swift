@@ -13,20 +13,22 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     var notchWindow: NotchWindow?
     var vm: PulseViewModel!
     var observer: SystemObserver?
     private var cancellables = Set<AnyCancellable>()
     private let bridge = DaemonBridge()
+    private var dashboardWindow: DashboardWindow?
+    private var dashboardVM: DashboardViewModel?
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandlerRef: EventHandlerRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        vm = PulseViewModel()
+        vm = PulseViewModel(bridge: bridge)
         notchWindow = NotchWindow()
 
         let hostingView = FirstMouseHostingView(rootView: NotchRootView(vm: vm))
@@ -107,6 +109,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         vm.onDaemonReconnected = { [weak self] in
             self?.observer?.refreshCurrentContext()
+        }
+        vm.onToggleDashboard = { [weak self] in
+            self?.toggleDashboard()
         }
         notchWindow?.orderFrontRegardless()
     }
@@ -205,10 +210,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         observer?.stopObserving()
+        dashboardVM?.stopPolling()
         if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
         if let hotKeyHandlerRef { RemoveEventHandler(hotKeyHandlerRef) }
         cancellables.removeAll()
         notchWindow = nil
+        dashboardWindow = nil
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window == dashboardWindow else { return }
+        dashboardVM?.stopPolling()
+    }
+
+    private func toggleDashboard() {
+        if dashboardWindow == nil {
+            let vm = DashboardViewModel(bridge: bridge)
+            dashboardVM = vm
+
+            let window = DashboardWindow()
+            let hostingView = NSHostingView(rootView: DashboardRootView(vm: vm))
+            hostingView.frame = window.contentView?.bounds ?? .zero
+            hostingView.autoresizingMask = [.width, .height]
+            if let containerView = window.contentView {
+                containerView.addSubview(hostingView)
+            } else {
+                window.contentView = hostingView
+            }
+            window.delegate = self
+            dashboardWindow = window
+        }
+
+        guard let window = dashboardWindow else { return }
+
+        if window.isVisible {
+            window.orderOut(nil)
+            dashboardVM?.stopPolling()
+        } else {
+            vm.isExpanded = false
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            Task { await dashboardVM?.refresh() }
+            dashboardVM?.startPolling()
+        }
     }
 
     private static let hotKeySignature: OSType = 0x50554C53 // 'PULS'

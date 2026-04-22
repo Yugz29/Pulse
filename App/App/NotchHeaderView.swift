@@ -142,6 +142,21 @@ struct NotchExpandedHeader: View {
             )
             .position(x: geometryWidth / 2 + notchWidth / 2 + 24, y: notchHeight / 2)
 
+            NotchHeaderButton(
+                systemName: "rectangle.on.rectangle",
+                size: 11,
+                baseOpacity: 0.42,
+                hoverOpacity: 0.95,
+                baseBackgroundOpacity: 0.03,
+                hoverBackgroundOpacity: 0.14,
+                baseStrokeOpacity: 0.06,
+                hoverStrokeOpacity: 0.24,
+                hoverScale: 1.04,
+                foregroundColor: .white,
+                action: { vm.onToggleDashboard?() }
+            )
+            .position(x: geometryWidth / 2 + notchWidth / 2 + 52, y: notchHeight / 2)
+
             if vm.panelMode == .chat {
                 NotchHeaderButton(
                     systemName: "xmark",
