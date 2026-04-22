@@ -6,7 +6,7 @@ from typing import Optional
 
 from .file_classifier import file_signal_significance
 
-SESSION_TIMEOUT_MIN = 10
+SESSION_TIMEOUT_MIN = 30
 
 _MEANINGFUL_FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed"}
 _DEV_APPS = {
@@ -85,7 +85,8 @@ class SessionFSM:
                 unlocked_at - self._last_screen_locked_at
             ).total_seconds() / 60
             boundary = sleep_minutes >= sleep_session_threshold_min
-            self._session_started_at = unlocked_at
+            if boundary:
+                self._session_started_at = unlocked_at
             self._last_meaningful_activity_at = None
 
         self._state = self.ACTIVE

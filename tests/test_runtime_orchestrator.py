@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -20,10 +20,12 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.decision_engine = MagicMock()
         self.summary_llm = MagicMock()
         self.session_memory = MagicMock()
+        self.session_memory.session_id = "session-1"
         self.memory_store = MagicMock()
         self.runtime_state = RuntimeState()
         self.llm_runtime = MagicMock()
         self.log = MagicMock()
+        self.store.to_dict.return_value = {}
 
         # mock FactEngine — évite toute dépendance sur ~/.pulse/facts.db dans les tests
         self.mock_fact_engine = MagicMock()
@@ -329,6 +331,219 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             self.orchestrator._handle_commit_event("/tmp/Pulse/.git/COMMIT_EDITMSG")
 
         process_commit.assert_called_once_with(git_root)
+
+    def test_process_signals_opens_first_episode_from_meaningful_activity(self):
+        event = Event("file_modified", {"path": "/tmp/main.py"})
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.83,
+            friction_score=0.1,
+            focus_level="deep",
+            session_duration_min=5,
+            recent_apps=["Cursor"],
+            clipboard_context=None,
+        )
+        self.scorer.bus.recent.return_value = [event]
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.orchestrator._process_signals(event)
+
+        self.session_memory.save_episode.assert_called_once()
+        saved = self.session_memory.save_episode.call_args[0][0]
+        self.assertEqual(saved.id, "ep-1")
+        self.assertEqual(saved.session_id, "session-1")
+        self.assertEqual(saved.started_at, event.timestamp.isoformat())
+        self.assertIsNone(saved.probable_task)
+        self.assertIsNone(saved.activity_level)
+        self.assertIsNone(saved.task_confidence)
+
+    def test_process_confirmed_commit_closes_and_reopens_episode(self):
+        git_root = Path("/tmp/Pulse")
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=datetime.now(),
+            )
+
+        self.session_memory.save_episode.reset_mock()
+        self.session_memory.export_session_data.return_value = {"active_project": "Pulse", "duration_min": 30}
+        self.scorer.compute.return_value = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.87,
+            friction_score=0.1,
+            focus_level="deep",
+            session_duration_min=12,
+            recent_apps=["Cursor"],
+            clipboard_context=None,
+        )
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.args = kwargs.get("args", ())
+
+            def start(self):
+                return None
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+             patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
+             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="diff"):
+            self.orchestrator._process_confirmed_commit(git_root)
+
+        self.assertEqual(self.session_memory.save_episode.call_count, 2)
+        closed = self.session_memory.save_episode.call_args_list[0][0][0]
+        opened = self.session_memory.save_episode.call_args_list[1][0][0]
+        self.assertEqual(closed.boundary_reason, "commit")
+        self.assertIsNotNone(closed.ended_at)
+        self.assertEqual(closed.probable_task, "coding")
+        self.assertEqual(closed.activity_level, "editing")
+        self.assertEqual(closed.task_confidence, 0.87)
+        self.assertEqual(opened.session_id, "session-1")
+        self.assertIsNone(opened.probable_task)
+
+    def test_process_confirmed_commit_uses_non_null_fallback_when_no_signals_exist(self):
+        git_root = Path("/tmp/Pulse")
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=datetime.now(),
+            )
+
+        self.session_memory.save_episode.reset_mock()
+        self.session_memory.export_session_data.return_value = {"active_project": "Pulse", "duration_min": 30}
+        self.scorer.compute.return_value = None
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.args = kwargs.get("args", ())
+
+            def start(self):
+                return None
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+             patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
+             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="diff"):
+            self.orchestrator._process_confirmed_commit(git_root)
+
+        closed = self.session_memory.save_episode.call_args_list[0][0][0]
+        self.assertEqual(closed.probable_task, "unknown")
+        self.assertEqual(closed.activity_level, "idle")
+        self.assertEqual(closed.task_confidence, 0.0)
+
+    def test_idle_timeout_closes_episode_with_fresh_semantics(self):
+        old_event = Event("file_modified", {"path": "/tmp/old.py"}, timestamp=datetime.now())
+        resumed_event = Event(
+            "file_modified",
+            {"path": "/tmp/new.py"},
+            timestamp=old_event.timestamp + timedelta(minutes=40),
+        )
+
+        self.orchestrator.session_fsm.observe_recent_events(recent_events=[old_event], now=old_event.timestamp)
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=old_event.timestamp,
+            )
+
+        self.scorer.bus.recent.return_value = [old_event, resumed_event]
+        self.scorer.compute.side_effect = [
+            Signals(
+                active_project="Pulse",
+                active_file="/tmp/new.py",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.91,
+                friction_score=0.1,
+                focus_level="deep",
+                session_duration_min=12,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+            Signals(
+                active_project="Pulse",
+                active_file="/tmp/new.py",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.91,
+                friction_score=0.1,
+                focus_level="deep",
+                session_duration_min=1,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        ]
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+
+        self.orchestrator._process_signals(resumed_event)
+
+        closed = self.session_memory.save_episode.call_args_list[0][0][0]
+        self.assertEqual(closed.boundary_reason, "idle_timeout")
+        self.assertEqual(closed.probable_task, "coding")
+        self.assertEqual(closed.activity_level, "editing")
+        self.assertEqual(closed.task_confidence, 0.91)
+
+    def test_long_screen_unlock_closes_episode_with_fresh_semantics(self):
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=datetime.now() - timedelta(minutes=45),
+            )
+
+        self.scorer.compute.return_value = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.89,
+            friction_score=0.1,
+            focus_level="deep",
+            session_duration_min=20,
+            recent_apps=["Cursor"],
+            clipboard_context=None,
+        )
+
+        t_lock = datetime.now() - timedelta(minutes=35)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+        unlock_event = Event("screen_unlocked", {})
+
+        with patch.object(self.orchestrator.session_memory, "export_session_data", return_value={"duration_min": 0}), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session"), \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(unlock_event)
+
+        closed = self.session_memory.save_episode.call_args_list[0][0][0]
+        self.assertEqual(closed.boundary_reason, "screen_lock")
+        self.assertEqual(closed.probable_task, "coding")
+        self.assertEqual(closed.activity_level, "editing")
+        self.assertEqual(closed.task_confidence, 0.89)
+
+    def test_shutdown_runtime_closes_episode_with_fallback_when_no_signals_exist(self):
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=datetime.now(),
+            )
+
+        self.scorer.compute.return_value = None
+        self.session_memory.export_session_data.return_value = {"duration_min": 0}
+
+        with patch("daemon.runtime_orchestrator.update_memories_from_session"):
+            self.orchestrator.shutdown_runtime()
+
+        closed = self.session_memory.save_episode.call_args_list[0][0][0]
+        self.assertEqual(closed.boundary_reason, "session_end")
+        self.assertEqual(closed.probable_task, "unknown")
+        self.assertEqual(closed.activity_level, "idle")
+        self.assertEqual(closed.task_confidence, 0.0)
 
     def test_handle_commit_event_processes_recent_head_immediately_on_first_seen_commit(self):
         git_root = Path("/tmp/Pulse")
@@ -953,16 +1168,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
     # -- Verrou court : session_duration_min ne doit pas inclure le temps de veille ---
 
-    def test_verrou_court_reset_timer_scorer_sans_nouvelle_session(self):
+    def test_verrou_court_conserve_session_started_at_sans_nouvelle_session(self):
         """
         Verrou < sleep_session_threshold_min (30 min) :
-        - la session doit repartir avec une horloge remise a zero
+        - la session est conservee
         - session_memory.new_session() ne doit PAS etre appele
-        Le temps de veille ne doit pas s'accumuler dans session_duration_min.
+        Le debut de session ne doit pas etre reinitialise.
         """
         from datetime import timedelta
         from daemon.core.event_bus import Event
 
+        original_start = self.orchestrator.session_fsm.session_started_at
         # Simule un verrou qui s'est produit il y a 10 min
         t_lock = datetime.now() - timedelta(minutes=10)
         self.runtime_state.mark_screen_locked(when=t_lock)
@@ -975,6 +1191,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         mock_new_session.assert_not_called(
         ), "session_memory.new_session() ne doit pas etre appele pour un verrou court"
+        self.assertEqual(
+            self.orchestrator.session_fsm.session_started_at,
+            original_start,
+            "session_started_at doit rester stable sur un verrou court",
+        )
 
     def test_verrou_long_reset_scorer_et_nouvelle_session(self):
         """
@@ -996,10 +1217,16 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                           return_value={"duration_min": 0}), \
              patch("daemon.runtime_orchestrator.update_memories_from_session"), \
              patch.object(self.orchestrator, "_process_signals"):
+            original_start = self.orchestrator.session_fsm.session_started_at
             self.orchestrator.handle_event(unlock_event)
 
         mock_new_session.assert_called_once(
         ), "session_memory.new_session() doit etre appele pour un verrou long"
+        self.assertNotEqual(
+            self.orchestrator.session_fsm.session_started_at,
+            original_start,
+            "session_started_at doit etre reinitialise sur une vraie nouvelle session",
+        )
 
     def test_verrou_court_clear_sleep_markers_apres_unlock(self):
         """
