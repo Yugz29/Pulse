@@ -375,7 +375,8 @@ Episode:
   session_id    : rattachement à la session parente
   started_at    : timestamp de début (ISO 8601)
   ended_at      : timestamp de fin (null si épisode actif)
-  boundary_reason : raison de la frontière de début
+  start_reason  : pourquoi cet épisode a commencé
+  end_reason    : pourquoi cet épisode s'est terminé (null si actif)
   duration_sec  : durée calculée (null si épisode actif)
 ```
 
@@ -404,7 +405,7 @@ Il y a au plus un épisode ACTIF par session à tout moment.
 L'épisode n'est pas clos mais est en attente de reprise ou de clôture.
 
 **CLOS** : épisode terminé. `ended_at` est posé,
-`duration_sec` est calculé, `boundary_reason` est documentée.
+`duration_sec` est calculé, `start_reason` et `end_reason` sont documentées.
 
 Un épisode clos ne peut pas être rouvert.
 Il peut être annoté rétrospectivement (Phase 2b).
@@ -418,33 +419,40 @@ Il peut être annoté rétrospectivement (Phase 2b).
 Ces signaux créent une frontière sans ambiguïté.
 Ils clôturent l'épisode courant et en ouvrent un nouveau.
 
-| Signal | Boundary reason |
-|---|---|
-| Verrou écran suivi d'un gap > seuil | `screen_lock` |
-| Changement de projet actif | `project_change` |
-| Commit git confirmé | `commit` |
-| Gap d'inactivité > `EPISODE_TIMEOUT_MIN` | `idle_timeout` |
+| Signal | End reason | Start reason du suivant |
+|---|---|---|
+| Verrou écran + gap > seuil | `screen_lock` | `screen_unlock` |
+| Commit git confirmé | `commit` | `activity_resumed` |
+| Gap d'inactivité > `EPISODE_TIMEOUT_MIN` | `idle_timeout` | `activity_resumed` |
 
 ### 11.2 Signaux mous (indice, pas frontière)
 
 Ces signaux suggèrent un possible changement d'épisode
 mais ne le déclenchent pas seuls.
-Ils sont accumulés dans un scorer d'épisode.
+Ils sont accumulés et observés, sans déclencher de frontière automatique.
 
 - Changement de type de fichier dominant (source -> docs)
 - Friction qui chute brutalement après avoir été élevée
 - Changement d'app active vers une catégorie différente
 - Gap d'activité fichier > 5 min sans verrou écran
+- Changement de projet actif (dérivé du fichier actif — trop fragile pour être signal dur)
 
 ### 11.3 Timeout d'épisode
 
-`EPISODE_TIMEOUT_MIN` : gap d'inactivité au-delà duquel
-un épisode est considéré clos.
+`EPISODE_TIMEOUT_MIN` : gap d'inactivité au-delà duquel un épisode est clos.
 
 Valeur de départ : **20 minutes**.
 
 Ce seuil est distinct de `SESSION_TIMEOUT_MIN` (10 min).
 Un épisode peut se terminer sans que la session se termine.
+
+**Sémantique de `ended_at` pour `idle_timeout` :**
+`ended_at = last_meaningful_activity_at + EPISODE_TIMEOUT_MIN`
+
+Ce timestamp est calculé au moment de la détection du timeout,
+pas au moment où une nouvelle activité reprend.
+Cela garantit que la durée de l'épisode reflète le travail réel,
+et non le gap d'inactivité qui suit.
 
 ---
 
@@ -452,9 +460,9 @@ Un épisode peut se terminer sans que la session se termine.
 
 ```
 Session
-  └── Épisode 1 (clos)
-  └── Épisode 2 (clos)
-  └── Épisode 3 (actif)
+  └── Episode 1 (clos)
+  └── Episode 2 (clos)
+  └── Episode 3 (actif)
 ```
 
 Une session contient zéro ou plusieurs épisodes.
@@ -470,9 +478,11 @@ La clôture d'une session clôture l'épisode actif en cours.
 
 - Il existe au plus un épisode ACTIF par session à tout instant
 - `EpisodeFSM` est la source de vérité des frontières — pas `SessionFSM`, pas le scorer
-- Toute frontière détectée est accompagnée d'une `boundary_reason` loggée
-- Les épisodes sont persistés en SQLite dans `~/.pulse/`
-- L'épisode courant est exposé dans `/state`
+- `EpisodeFSM` reçoit des signaux normalisés depuis l'orchestrateur — elle ne re-scanne pas le bus seule
+- Toute frontière détectée produit un `start_reason` et un `end_reason` loggés
+- La clôture d'une session clôture l'épisode actif
+- Les épisodes sont persistés en SQLite dans `~/.pulse/session.db` (même base que les sessions)
+- L'épisode courant est exposé dans `/state` comme champ top-level `current_episode`
 
 ### Ce qu'il faut éviter dans le code
 
@@ -481,6 +491,7 @@ La clôture d'une session clôture l'épisode actif en cours.
 - Confondre fin d'épisode et fin de session
 - Ajouter des champs sémantiques sur `Episode` avant Phase 2b
 - Utiliser le LLM pour détecter les frontières
+- Faire re-déduire à `EpisodeFSM` l'activité significative depuis le bus
 
 ### Ce qui est hors périmètre Phase 2a
 
@@ -489,6 +500,7 @@ La clôture d'une session clôture l'épisode actif en cours.
 - Résumé d'épisode
 - Export épisode vers mémoire ou proposals
 - Injection de l'épisode dans le contexte LLM
+- `project_change` comme signal dur
 
 ---
 
@@ -496,9 +508,9 @@ La clôture d'une session clôture l'épisode actif en cours.
 
 À la sortie de Phase 2a, dans le dashboard :
 
-- L'épisode courant est visible : début, durée en cours, raison de démarrage
+- L'épisode courant est visible : début, durée en cours, start_reason
 - L'historique des épisodes de la session est visible
-- Pour chaque épisode clos : durée, raison de frontière début et fin
+- Pour chaque épisode clos : durée, start_reason, end_reason
 - La session affiche le nombre d'épisodes qu'elle contient
 
 Si ces 4 points ne sont pas vrais, Phase 2a n'est pas terminée.
@@ -511,7 +523,9 @@ Le contrat de l'épisode en Phase 2a est le suivant :
 
 - Un épisode est une unité temporelle, pas une unité de sens
 - Ses frontières sont détectées par des signaux durs déterministes
-- Il est persisté, exposé dans `/state`, visible dans le dashboard
+- `ended_at` pour `idle_timeout` = `last_meaningful_activity_at + EPISODE_TIMEOUT_MIN`
+- `project_change` est un signal mou, pas un signal dur
+- Il est persisté dans `session.db`, exposé dans `/state`, visible dans le dashboard
 - Il ne porte pas de sémantique de tâche
 - Il ne sait pas distinguer activité utilisateur et activité assistée
 
