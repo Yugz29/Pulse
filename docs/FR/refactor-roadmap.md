@@ -40,14 +40,19 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 
 ### Ce qui vient d'être terminé
 
-- Fin de la phase `Foundation`
-- Réduction du couplage structurel dans le runtime
-- Sortie des contrats structurés minimaux
-- Unification de la gestion de session autour d'une seule source de vérité
+- Phase 0 Foundation : contrats structurés, compat legacy verrouillée, lifecycle session unifié
+- Phase 1 Observation terrain : instrumentation, dashboard technique, observations terrain documentées dans `OBS.md`
+
+### Ajouté en Phase 1
+
+- `activity_level` et `task_confidence` exposés dans `/state`
+- `session_fsm` exposé dans `/state`
+- Instrumentation : logs `CurrentContextBuilder`, fallback mémoire explicite, transitions FSM loggées
+- Dashboard technique (`DashboardWindow`) : fenêtre indépendante glassmorphism
+- Route `/memory/sessions` exposant les journaux de session
 
 ### Ce qui manque encore
 
-- Mesure terrain sur la qualité réelle des signaux et frontières
 - Système d'épisodes explicite
 - Proposition intelligente basée sur épisodes et mémoire enrichie
 - Mémoire session -> épisode -> faits plus robuste
@@ -88,7 +93,7 @@ Rendre le runtime structurable sans changer le comportement observable.
 
 ### Phase 1 — Observation terrain
 
-**Statut** : prochaine phase
+**Statut** : terminée
 
 **Objectif**
 
@@ -102,6 +107,13 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 - Validation des frontières de session sur cas terrain
 - Validation du `CurrentContext` comme vue temps réel exploitable
 - Liste priorisée des écarts observés, sans correction opportuniste
+
+**Observations terrain** (synthèse — détails dans `OBS.md`)
+
+- Timeout de session trop court hors workflows orientés fichiers : les apps non-dev sont invisibles pour la FSM
+- Injection de contexte LLM trop plate : tout est injecté sans filtre de pertinence
+- Mémoire confirmée comme principalement session-centrique en usage réel
+- Pas de continuité structurée inter-session au-delà de `last_session_context`
 
 ### Méthode d’observation
 
@@ -120,15 +132,15 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 - Refonte mémoire
 - Agentique
 
-**Condition de sortie**
+**Condition de sortie — validée**
 
-- Les frontières de session sont jugées suffisamment stables sur cas réels
-- Les zones faibles sont identifiées et classées
-- Le point d'entrée Episode System est défini à partir d'observations, pas d'intuition
+- ✓ Frontières de session stables sur cas réels
+- ✓ Zones faibles identifiées et classées (voir `OBS.md`)
+- ✓ Point d’entrée Episode System défini à partir d’observations terrain
 
 ### Phase 2 — Episode System V1
 
-**Statut** : non démarrée
+**Statut** : prochaine phase
 
 **Objectif**
 
@@ -274,16 +286,14 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
 
 ## 6. Output utilisateur attendu
 
-À ce stade, Pulse doit permettre :
+En Phase 2 — Episode System V1, Pulse doit permettre :
 
-- d’observer en temps réel :
-  - activité
-  - tâche
-  - contexte
-- de comprendre les transitions de session
-- de valider visuellement la cohérence du système
+- d’observer en temps réel l’activité, la tâche et le contexte (acquis Phase 1)
+- de visualiser l’état interne via le dashboard technique (acquis Phase 1)
+- de détecter des frontières d’épisodes intra-session
+- de distinguer plusieurs unités de sens dans une même session de travail
 
-Aucune suggestion avancée ni automatisation n’est attendue à ce stade.
+La continuité inter-session et les propositions intelligentes restent hors périmètre Phase 2.
 
 ## Référence d'usage
 

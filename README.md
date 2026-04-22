@@ -41,6 +41,7 @@ Principe fondamental :
 - **Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
 - **Interception MCP** : traduction et arbitrage de certaines commandes risquées avant exécution
 - **Chat contextuel** : injection du contexte local et de la mémoire consolidée dans les échanges assistant
+- **Dashboard technique** : fenêtre macOS indépendante pour visualiser en temps réel session, mémoire, événements, MCP et état système
 
 Ce que Pulse ne fait pas encore :
 - segmenter le travail en épisodes exploitables
@@ -161,6 +162,7 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 | GET | `/facts` | Faits utilisateur consolidés |
 | GET | `/facts/profile` | Bloc mémoire injecté dans le prompt |
 | GET | `/memory` | Entrées du `MemoryStore` |
+| GET | `/memory/sessions` | Journaux de session exposés pour le dashboard |
 | GET | `/mcp/pending` | Commande agent en attente |
 | POST | `/mcp/decision` | Autoriser ou refuser une commande |
 
@@ -293,7 +295,8 @@ L’app :
 Le projet est aujourd’hui dans une phase où :
 - la fondation runtime est stabilisée
 - la compat legacy est verrouillée
-- le système est assez structuré pour être observé sérieusement
+- la phase `Observation terrain` est clôturée
+- le système expose désormais un dashboard technique et une observabilité plus explicite
 
-La prochaine étape logique n’est pas d’ajouter des features lourdes.
-La prochaine étape logique est de mesurer le comportement réel du système stabilisé avant d’ouvrir un chantier Episode.
+La prochaine étape logique est maintenant l’ouverture de `Phase 2 — Episode System V1`.
+Les observations terrain ont confirmé des limites réelles sur la continuité inter-session, le filtrage du contexte injecté et la visibilité des workflows non orientés fichiers.

@@ -44,10 +44,15 @@ Mais toutes ces couches ne sont pas au même niveau de maturité.
 - Observation des événements locaux via l'app Swift et le daemon Python
 - Qualification d'événements côté runtime (`actor`, `noise_policy`, domaine implicite selon le type de fichier ou d'action)
 - Calcul temps réel des signaux de travail
+- `activity_level` et `task_confidence` exposés dans `/state`
+- `session_fsm` exposé dans `/state`
 - `CurrentContext` comme vue synthétique du runtime
 - `SessionSnapshot` comme projection structurée de session
 - `ProposalCandidate` comme contrat métier avant transport legacy
 - `SessionFSM` comme source de vérité du lifecycle de session
+- Dashboard technique côté app (`DashboardWindow`) dans une fenêtre indépendante avec rendu glassmorphism
+- Observabilité Phase 1 : logs `CurrentContextBuilder`, fallback mémoire explicite dans `freeze_memory()`, transitions FSM loggées
+- Route `/memory/sessions` pour exposer les journaux de session
 - Compat legacy verrouillée sur :
   - `build_context_snapshot()`
   - `/state`
@@ -394,18 +399,18 @@ Exemples actuels :
 
 ## 8. Prochaine phase logique
 
-La prochaine phase n'est pas Episode System.
+La prochaine phase logique est maintenant `Episode System V1`.
 
-La prochaine phase logique est `Observation terrain`.
+La phase `Observation terrain` est clôturée et a confirmé plusieurs limites réelles :
+- timeout de session encore trop court hors workflows orientés fichiers
+- injection de contexte LLM encore trop plate
+- mémoire toujours largement session-centrique
+- continuité inter-session encore faible
 
 Objectif :
-- mesurer le comportement réel du runtime stabilisé
-- qualifier les écarts avant toute ouverture du chantier épisode
-
-Ce que cela implique :
-- pas de feature Episode immédiate
-- pas de généralisation prématurée
-- pas de changement heuristique sans observation
+- introduire l'épisode comme unité de sens intra-session
+- mieux structurer la continuité du travail
+- préparer des proposals et une mémoire moins plats
 
 ---
 

@@ -41,14 +41,19 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 
 ### What has just been completed
 
-- End of the `Foundation` phase
-- Reduced structural coupling inside the runtime
-- Introduction of minimal structured contracts
-- Session lifecycle unified around a single source of truth
+- Phase 0 Foundation: structured contracts, locked legacy compatibility, unified session lifecycle
+- Phase 1 Field observation: instrumentation, technical dashboard, field observations documented in `OBS.md`
+
+### Added in Phase 1
+
+- `activity_level` and `task_confidence` exposed in `/state`
+- `session_fsm` exposed in `/state`
+- Instrumentation: `CurrentContextBuilder` logs, explicit memory fallback, logged FSM transitions
+- Technical dashboard (`DashboardWindow`): independent glassmorphism window to observe internal state
+- `/memory/sessions` route exposing session journals
 
 ### What is still missing
 
-- Field measurement of signal quality and session boundaries
 - An explicit episode system
 - Smarter proposals built on episodes and richer memory
 - A stronger memory chain from session -> episode -> facts
@@ -89,7 +94,7 @@ Make the runtime structurally sound without changing observable behavior.
 
 ### Phase 1 — Field observation
 
-**Status**: next phase
+**Status**: complete
 
 **Goal**
 
@@ -102,6 +107,13 @@ Measure the real behavior of the stabilized system before opening Episode System
 - Validation of session boundaries on field cases
 - Validation of `CurrentContext` as a useful real-time view
 - A prioritized list of observed gaps, without opportunistic fixes
+
+**Field observations** (summary — details in `OBS.md`)
+
+- Session timeout too short outside file-driven workflows: non-dev apps are invisible to the FSM
+- LLM context injection too flat: everything is injected without relevance filtering
+- Memory confirmed as largely session-centric in real usage
+- No structured cross-session continuity beyond `last_session_context`
 
 ### Observation method
 
@@ -120,15 +132,15 @@ Measure the real behavior of the stabilized system before opening Episode System
 - Memory redesign
 - Agentic work
 
-**Exit condition**
+**Exit condition — validated**
 
-- Session boundaries are considered stable enough on real cases
-- Weak zones are identified and classified
-- The entry point for Episode System is defined from observation, not intuition
+- ✓ Session boundaries stable on real cases
+- ✓ Weak zones identified and classified (see `OBS.md`)
+- ✓ Episode System entry point defined from field observations
 
 ### Phase 2 — Episode System V1
 
-**Status**: not started
+**Status**: next phase
 
 **Goal**
 
@@ -273,16 +285,14 @@ Open bounded action capabilities on top of a system that is already reliable in 
 
 ## 6. Expected user-facing output at this stage
 
-At this stage, Pulse should make it possible to:
+In Phase 2 — Episode System V1, Pulse should make it possible to:
 
-- observe in real time:
-  - activity
-  - task
-  - context
-- understand session transitions
-- visually validate that the system remains coherent
+- observe activity, task and context in real time (achieved in Phase 1)
+- visualize internal state through the technical dashboard (achieved in Phase 1)
+- detect episode boundaries inside a session
+- distinguish multiple units of meaning within a single work session
 
-No advanced suggestion or automation is expected at this stage.
+Cross-session continuity and smart proposals remain out of scope for Phase 2.
 
 ## Usage reference
 
