@@ -1,6 +1,6 @@
 # Contrat sémantique de Pulse
 
-Ce document définit le contrat sémantique de la mémoire de Pulse.
+Ce document définit les contrats sémantiques de Pulse.
 
 Il distingue explicitement :
 - le **contrat actuel** : ce que le code fait aujourd'hui
@@ -8,7 +8,10 @@ Il distingue explicitement :
 - les **évolutions cibles** : ce que Pulse devra faire plus tard
 
 Il ne décrit pas un système idéal.
-Il ne décrit pas non plus Episode System.
+
+---
+
+# Partie 1 — Contrat de la mémoire
 
 La mémoire actuelle de Pulse reste principalement :
 - session-centrique
@@ -167,7 +170,7 @@ Le système n'applique pas aujourd'hui :
 - un filtre sur `autonomy_level` avant injection
 - un contrôle explicite de qualité des clés au moment de `_promote_pending()`
 
-### 2.4 Rôle réel d’`autonomy_level`
+### 2.4 Rôle réel d'`autonomy_level`
 
 Dans le code actuel :
 - `autonomy_level` existe
@@ -184,7 +187,7 @@ Conclusion :
 - `autonomy_level` est actuellement une donnée persistée utile pour le futur
 - pas une contrainte active du contrat d'injection
 
-### 2.5 Règle réelle d’injection vers le contexte LLM
+### 2.5 Règle réelle d'injection vers le contexte LLM
 
 Aujourd'hui, `render_for_context()` fait exactement ceci :
 - prend les faits actifs
@@ -226,11 +229,7 @@ Cela implique :
 
 ### 3.2 Le ton peut rester plus fort que la preuve
 
-Même si `_extract_observations()` distingue aujourd'hui :
-- `obs_description`
-- `fact_description`
-
-le risque demeure :
+Le risque demeure :
 - certaines formulations de faits peuvent sembler plus solides qu'elles ne le sont
 
 Le danger n'est pas seulement le stockage.
@@ -243,9 +242,6 @@ La promotion actuelle :
 - ne requalifie pas la robustesse de l'observation
 - se contente de créer le fait si le compteur a atteint le seuil
 
-Autrement dit :
-- la qualité du fait dépend presque entièrement de la qualité de `_extract_observations()`
-
 ### 3.4 `render_for_context()` est simple, pas robuste
 
 Le filtre actuel par `confidence >= 0.60` est honnête et simple.
@@ -255,24 +251,11 @@ Mais il ne distingue pas :
 - fait confirmé plusieurs fois
 - fait à `autonomy_level` plus élevé
 
-Donc :
-- l'injection actuelle est pragmatique
-- elle n'est pas encore sémantiquement très fine
-
-### 3.5 L’absence de contradiction n’est pas une preuve
+### 3.5 L'absence de contradiction n'est pas une preuve
 
 Le système ne contredit pas activement ses propres faits.
 
-Cela veut dire :
-- un fait faible peut survivre longtemps
-- le silence ne vaut pas validation
-- la décroissance temporelle aide, mais ne résout pas tout
-
-### 3.6 La mémoire n’est pas encore structurée par continuité de travail
-
-La mémoire actuelle part principalement :
-- de la session
-- des faits dérivés de session
+### 3.6 La mémoire n'est pas encore structurée par continuité de travail
 
 Elle n'est pas encore organisée par :
 - épisodes
@@ -283,108 +266,254 @@ Cette limite est structurelle et assumée à ce stade.
 
 ---
 
-## 4. Évolutions cibles
+## 4. Évolutions cibles (mémoire)
 
 Cette section décrit ce que Pulse devra faire plus tard.
-
 Ce n'est **pas** le contrat actuel.
 
-### 4.1 Rendre l’injection plus sélective
-
-Cible possible :
-- tenir compte d’`autonomy_level`
-- distinguer plus finement les faits fraîchement promus et les faits consolidés dans le temps
-- mieux calibrer le seuil d'injection
-
-Aujourd'hui :
-- ce n'est pas fait
-
-### 4.2 Rendre la promotion moins mécanique
-
-Cible :
-- éviter qu'une clé heuristique trop large devienne un fait durable juste par répétition
-- ajouter une discipline plus forte sur la qualité des observations promues
-
-Aujourd'hui :
-- cette validation supplémentaire n'existe pas
-
-### 4.3 Mieux calibrer le langage des faits
-
-Cible :
-- rendre le ton d’un fait proportionnel à sa robustesse réelle
-- éviter les formulations qui suggèrent une compréhension plus forte que la preuve disponible
-
-Aujourd'hui :
-- ce calibrage reste partiel
-
-### 4.4 Séparer plus nettement mémoire utile et mémoire risquée
-
-Cible :
-- distinguer les faits vraiment utiles au contexte
-- réduire les faits vagues ou trop génériques
-- limiter l'injection de patterns fragiles
-
-Aujourd'hui :
-- le système repose surtout sur les seuils et la qualité des observations
-
-### 4.5 Préparer la suite sans la raconter comme déjà faite
-
-À plus long terme, Pulse devra probablement :
-- mieux articuler mémoire, propositions et validation utilisateur
-- mieux distinguer ce qui sert à parler de ce qui servira un jour à agir
-
-Mais cela ne doit pas être présenté comme déjà présent.
-
-En particulier :
-- pas d'agentique active aujourd'hui
-- pas de mémoire pilotée par épisodes aujourd'hui
-- pas de logique d'action fondée sur `autonomy_level` aujourd'hui
+- Rendre l'injection plus sélective : tenir compte d'`autonomy_level`
+- Rendre la promotion moins mécanique
+- Mieux calibrer le langage des faits
+- Séparer plus nettement mémoire utile et mémoire risquée
 
 ---
 
-## 5. Règles de lecture et de travail
+## 5. Règles de lecture et de travail (mémoire)
 
-### Ce qu’il faut considérer comme vrai aujourd’hui
+### Ce qu'il faut considérer comme vrai aujourd'hui
 
 - la mémoire est principalement dérivée des sessions
 - les faits sont promus par répétition d'observations heuristiques
 - `render_for_context()` filtre par confiance, pas par `autonomy_level`
 - le système peut produire des approximations utiles sans vraie compréhension
 
-### Ce qu’il ne faut pas supposer
+### Ce qu'il ne faut pas supposer
 
-- qu’un fait injecté est fortement validé
-- qu’`autonomy_level` pilote déjà le comportement
-- qu’une promotion implique une validation sémantique forte
+- qu'un fait injecté est fortement validé
+- qu'`autonomy_level` pilote déjà le comportement
+- qu'une promotion implique une validation sémantique forte
 - que la mémoire reflète déjà une structuration fine du travail
 
-### Ce qu’il faut éviter dans le code
+### Ce qu'il faut éviter dans le code
 
-- coder une feature mémoire en supposant que les faits sont plus robustes qu’ils ne le sont
+- coder une feature mémoire en supposant que les faits sont plus robustes qu'ils ne le sont
 - ajouter des règles implicites non documentées
 - parler de "compréhension" quand il s'agit encore d'agrégation heuristique
 - documenter comme actuel un comportement seulement souhaité
 
 ---
 
-## 6. Résumé opérationnel
-
-Le contrat actuel de la mémoire Pulse est le suivant :
+## 6. Résumé opérationnel (mémoire)
 
 - Pulse observe des sessions
 - Pulse extrait quelques observations heuristiques déterministes
 - Pulse promeut ces observations en faits selon des seuils simples
 - Pulse injecte au LLM une sous-partie des faits selon un filtre de confiance
 
-Ce contrat est utile.
+Ce contrat est utile. Il est aussi limité.
+Il doit être traité comme une base mémoire exploitable,
+pas comme un système de compréhension avancée.
 
-Il est aussi limité.
+---
 
-Il doit être traité comme :
-- une base mémoire exploitable
-- pas comme un système de compréhension avancée
+---
 
-Le bon usage de ce document est donc :
-- comprendre ce que la mémoire fait aujourd'hui
-- voir clairement ce qu'elle fait mal
-- préparer les évolutions futures sans les présupposer déjà actives
+# Partie 2 — Contrat de l'épisode (Phase 2a)
+
+Cette section définit le contrat sémantique de l'épisode pour Phase 2a — Episode Boundaries.
+
+Elle couvre uniquement les frontières temporelles.
+La sémantique de tâche et l'origine de l'activité sont documentées en Phase 2b.
+
+---
+
+## 7. Ce qu'est un épisode dans Pulse
+
+Un épisode est une **unité temporelle de travail délimitée**, à l'intérieur d'une session.
+
+Il répond à une question simple :
+> Pendant combien de temps, et sur quoi, l'utilisateur était-il concentré ?
+
+Un épisode a :
+- un début explicable
+- une fin explicable
+- une durée calculable
+- un rattachement à une session
+
+Un épisode n'est pas :
+- une session (plus large, contient plusieurs épisodes)
+- une tâche (concept interprétatif, pas encore structurel en Phase 2a)
+- un journal (résumé rétrospectif, produit après coup)
+- un fait (observation promue, pas une unité temporelle)
+- un signal (mesure ponctuelle, pas une durée)
+
+---
+
+## 8. Ce qu'un épisode n'est pas encore en Phase 2a
+
+Phase 2a ne prétend pas résoudre :
+- l'intention derrière l'activité
+- la distinction activité utilisateur vs activité assistée
+- la sémantique de tâche portée par l'épisode
+- l'enrichissement LLM de l'épisode
+- la continuité inter-session via les épisodes
+
+Ces éléments appartiennent à Phase 2b.
+
+Tout document ou code qui laisse croire que ces capacités existent
+en Phase 2a décrit la cible, pas le présent.
+
+---
+
+## 9. Modèle minimal de l'épisode
+
+En Phase 2a, un épisode porte uniquement :
+
+```
+Episode:
+  id            : identifiant unique
+  session_id    : rattachement à la session parente
+  started_at    : timestamp de début (ISO 8601)
+  ended_at      : timestamp de fin (null si épisode actif)
+  boundary_reason : raison de la frontière de début
+  duration_sec  : durée calculée (null si épisode actif)
+```
+
+Il ne porte pas encore en Phase 2a :
+- `probable_task`
+- `activity_level`
+- `origin` (user_driven / assistant_driven)
+- résumé ou enrichissement LLM
+
+---
+
+## 10. Cycle de vie d'un épisode
+
+```
+ACTIF -> SUSPENDU -> CLOS
+  |                    ^
+  +--------------------+
+     (frontière détectée)
+```
+
+**ACTIF** : un épisode en cours. Il existe un `started_at`, pas de `ended_at`.
+Il y a au plus un épisode ACTIF par session à tout moment.
+
+**SUSPENDU** : état intermédiaire optionnel pour les gaps courts
+(ex. verrou écran < seuil de frontière dure).
+L'épisode n'est pas clos mais est en attente de reprise ou de clôture.
+
+**CLOS** : épisode terminé. `ended_at` est posé,
+`duration_sec` est calculé, `boundary_reason` est documentée.
+
+Un épisode clos ne peut pas être rouvert.
+Il peut être annoté rétrospectivement (Phase 2b).
+
+---
+
+## 11. Frontières d'épisode
+
+### 11.1 Signaux durs (frontière certaine)
+
+Ces signaux créent une frontière sans ambiguïté.
+Ils clôturent l'épisode courant et en ouvrent un nouveau.
+
+| Signal | Boundary reason |
+|---|---|
+| Verrou écran suivi d'un gap > seuil | `screen_lock` |
+| Changement de projet actif | `project_change` |
+| Commit git confirmé | `commit` |
+| Gap d'inactivité > `EPISODE_TIMEOUT_MIN` | `idle_timeout` |
+
+### 11.2 Signaux mous (indice, pas frontière)
+
+Ces signaux suggèrent un possible changement d'épisode
+mais ne le déclenchent pas seuls.
+Ils sont accumulés dans un scorer d'épisode.
+
+- Changement de type de fichier dominant (source -> docs)
+- Friction qui chute brutalement après avoir été élevée
+- Changement d'app active vers une catégorie différente
+- Gap d'activité fichier > 5 min sans verrou écran
+
+### 11.3 Timeout d'épisode
+
+`EPISODE_TIMEOUT_MIN` : gap d'inactivité au-delà duquel
+un épisode est considéré clos.
+
+Valeur de départ : **20 minutes**.
+
+Ce seuil est distinct de `SESSION_TIMEOUT_MIN` (10 min).
+Un épisode peut se terminer sans que la session se termine.
+
+---
+
+## 12. Relation épisode / session
+
+```
+Session
+  └── Épisode 1 (clos)
+  └── Épisode 2 (clos)
+  └── Épisode 3 (actif)
+```
+
+Une session contient zéro ou plusieurs épisodes.
+Un épisode appartient à exactement une session.
+La clôture d'un épisode ne clôture pas la session.
+La clôture d'une session clôture l'épisode actif en cours.
+
+---
+
+## 13. Règles d'implémentation pour Phase 2a
+
+### Ce qui doit être vrai dans le code
+
+- Il existe au plus un épisode ACTIF par session à tout instant
+- `EpisodeFSM` est la source de vérité des frontières — pas `SessionFSM`, pas le scorer
+- Toute frontière détectée est accompagnée d'une `boundary_reason` loggée
+- Les épisodes sont persistés en SQLite dans `~/.pulse/`
+- L'épisode courant est exposé dans `/state`
+
+### Ce qu'il faut éviter dans le code
+
+- Déduire la frontière depuis `probable_task` (trop fragile)
+- Ouvrir plusieurs épisodes en parallèle
+- Confondre fin d'épisode et fin de session
+- Ajouter des champs sémantiques sur `Episode` avant Phase 2b
+- Utiliser le LLM pour détecter les frontières
+
+### Ce qui est hors périmètre Phase 2a
+
+- `Episode.probable_task`
+- `Episode.origin`
+- Résumé d'épisode
+- Export épisode vers mémoire ou proposals
+- Injection de l'épisode dans le contexte LLM
+
+---
+
+## 14. Ce que Phase 2a doit permettre d'observer
+
+À la sortie de Phase 2a, dans le dashboard :
+
+- L'épisode courant est visible : début, durée en cours, raison de démarrage
+- L'historique des épisodes de la session est visible
+- Pour chaque épisode clos : durée, raison de frontière début et fin
+- La session affiche le nombre d'épisodes qu'elle contient
+
+Si ces 4 points ne sont pas vrais, Phase 2a n'est pas terminée.
+
+---
+
+## 15. Résumé opérationnel (épisode Phase 2a)
+
+Le contrat de l'épisode en Phase 2a est le suivant :
+
+- Un épisode est une unité temporelle, pas une unité de sens
+- Ses frontières sont détectées par des signaux durs déterministes
+- Il est persisté, exposé dans `/state`, visible dans le dashboard
+- Il ne porte pas de sémantique de tâche
+- Il ne sait pas distinguer activité utilisateur et activité assistée
+
+Ce contrat est volontairement minimal.
+Sa valeur est dans la fiabilité des frontières, pas dans leur richesse.
