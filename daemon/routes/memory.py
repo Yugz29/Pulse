@@ -58,6 +58,28 @@ def register_memory_routes(
             "frozen_at": frozen_at.isoformat() if frozen_at else None,
         })
 
+    @app.route("/memory/sessions")
+    def memory_sessions():
+        import os
+        from pathlib import Path
+
+        sessions_dir = Path.home() / ".pulse" / "memory" / "sessions"
+        limit = min(int(request.args.get("limit", 7)), 30)
+        if not sessions_dir.exists():
+            return jsonify({"sessions": []})
+        files = sorted(sessions_dir.glob("*.md"), reverse=True)[:limit]
+        sessions = []
+        for f in files:
+            try:
+                content = f.read_text(encoding="utf-8")
+                sessions.append({
+                    "date": f.stem,
+                    "content": content,
+                })
+            except Exception:
+                pass
+        return jsonify({"sessions": sessions})
+
     @app.route("/search")
     def search_events():
         q = (request.args.get("q") or "").strip()

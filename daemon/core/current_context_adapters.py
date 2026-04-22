@@ -72,6 +72,8 @@ def current_context_to_legacy_signals_payload(
         "active_project": context.active_project,
         "active_file": context.active_file,
         "probable_task": context.probable_task,
+        "activity_level": signals.activity_level,
+        "task_confidence": signals.task_confidence,
         "friction_score": signals.friction_score,
         "focus_level": context.focus_level,
         "session_duration_min": context.session_duration_min,
