@@ -49,7 +49,6 @@ Aujourd’hui, Pulse sait surtout :
 
 Il ne sait pas encore :
 - comprendre finement la continuité du travail
-- segmenter proprement le travail en épisodes
 - proposer de manière vraiment intelligente selon le moment du travail
 - agir de manière autonome
 
@@ -183,7 +182,6 @@ La partie la plus difficile est encore devant :
 - enrichir la mémoire sans raconter des histoires
 
 En particulier, Pulse n’a pas encore :
-- de système d’épisodes exploitable
 - de mémoire structurée par épisodes
 - de moteur de proposition vraiment contextuel
 - d’agentique contrôlée
@@ -224,16 +222,16 @@ Le projet a franchi une première étape importante :
 - le lifecycle sessionnel est unifié
 - le système est assez stable pour être observé sérieusement
 
-La prochaine étape logique n’est plus l’observation terrain, qui est clôturée.
+La prochaine étape logique n'est plus d'introduire les épisodes eux-mêmes.
 
-La prochaine étape logique est désormais :
+Le système possède déjà :
+- des épisodes temporels persistés
+- un épisode courant exposé dans le runtime
+- une sémantique figée sur les épisodes clos
 
-**Episode System V1**
-
-Autrement dit :
-- introduire une vraie unité de sens intra-session
-- mieux structurer la continuité du travail
-- réduire la platitude actuelle de la mémoire et du contexte injecté
+Ce qui reste à rendre plus fort :
+- la mémoire structurée autour des épisodes
+- les propositions réellement contextualisées par continuité de travail
 
 ---
 

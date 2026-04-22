@@ -12,9 +12,9 @@ Aujourd'hui, Pulse sait :
 Pulse n'est pas :
 - un agent autonome
 - un système qui comprend parfaitement le travail utilisateur
-- un système à épisodes déjà en production
+- un système qui structure déjà toute sa mémoire et ses propositions autour des épisodes
 
-La fondation du runtime est en place. La prochaine étape logique du projet est l'observation terrain du système stabilisé, avant toute ouverture d'un vrai chantier `Episode System`.
+La fondation du runtime est en place. Pulse dispose maintenant d'épisodes temporels persistés et d'une sémantique figée sur les épisodes clos, tout en restant encore limité sur l'exploitation mémoire et proposal de cette couche.
 
 ---
 
@@ -36,6 +36,7 @@ Principe fondamental :
 - **Observation locale** : apps actives, fichiers touchés, clipboard, lock/unlock écran, événements utiles au runtime
 - **Contexte courant** : construction d’un `CurrentContext` temps réel à partir des signaux de session
 - **Cycle de session** : gestion unifiée du lifecycle via `SessionFSM`
+- **Épisodes** : frontières temporelles gérées via `EpisodeFSM`, persistance SQLite et exposition de l'épisode courant / récent
 - **Projection de session** : production d’un `SessionSnapshot` structuré, exposé avec compat legacy
 - **Mémoire locale** : extraction rétrospective de résumés de session et consolidation de faits utilisateur
 - **Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
@@ -44,7 +45,6 @@ Principe fondamental :
 - **Dashboard technique** : fenêtre macOS indépendante pour visualiser en temps réel session, mémoire, événements, MCP et état système
 
 Ce que Pulse ne fait pas encore :
-- segmenter le travail en épisodes exploitables
 - structurer la mémoire autour des épisodes
 - contextualiser finement les propositions par continuité de travail
 - agir de manière autonome
@@ -75,6 +75,7 @@ Le runtime actuel repose notamment sur :
 - `SessionSnapshot` : projection structurée de session
 - `ProposalCandidate` : contrat métier avant transport legacy
 - `SessionFSM` : source de vérité du lifecycle de session
+- `EpisodeFSM` : source de vérité des frontières temporelles d’épisode
 
 Références :
 - [Architecture](./docs/FR/architecture.md)
@@ -196,7 +197,7 @@ La mémoire actuelle reste principalement :
 - heuristique
 - locale
 
-Elle n’est pas encore structurée par épisodes.
+Elle n’est pas encore pilotée par les épisodes, même si des épisodes temporels sont maintenant persistés dans `session.db`.
 
 ---
 
@@ -298,5 +299,5 @@ Le projet est aujourd’hui dans une phase où :
 - la phase `Observation terrain` est clôturée
 - le système expose désormais un dashboard technique et une observabilité plus explicite
 
-La prochaine étape logique est maintenant l’ouverture de `Phase 2 — Episode System V1`.
-Les observations terrain ont confirmé des limites réelles sur la continuité inter-session, le filtrage du contexte injecté et la visibilité des workflows non orientés fichiers.
+Le premier périmètre Episode est maintenant en place.
+Les chantiers encore ouverts concernent surtout l’exploitation des épisodes par la mémoire et les proposals, ainsi que la lisibilité de l’historique utile.

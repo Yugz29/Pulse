@@ -49,7 +49,6 @@ Today, Pulse is mainly able to:
 
 It does not yet:
 - understand work continuity in a deep way
-- segment work into usable episodes
 - make genuinely smart proposals based on where the user is in the work
 - act autonomously
 
@@ -183,7 +182,6 @@ The hardest part is still ahead:
 - enriching memory without overclaiming
 
 In particular, Pulse does not yet have:
-- a usable episode system
 - episode-structured memory
 - a genuinely contextual proposal engine
 - controlled agentic behavior
@@ -226,14 +224,16 @@ It has crossed an important threshold:
 
 The next logical step is no longer field observation, which is now closed.
 
-The next logical step is now:
+The next logical step is no longer introducing episodes themselves.
 
-**Episode System V1**
+Pulse already has:
+- persisted temporal episodes
+- a current episode exposed in the runtime
+- frozen semantics on closed episodes
 
-In practical terms, that means:
-- introducing a real unit of meaning inside a session
-- structuring work continuity more explicitly
-- reducing the current flatness of memory and injected context
+What remains to strengthen is:
+- memory structured around episodes
+- proposals genuinely contextualized by work continuity
 
 ---
 

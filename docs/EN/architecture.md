@@ -50,6 +50,10 @@ But those layers do not all exist at the same level of maturity.
 - `SessionSnapshot` as the structured session projection
 - `ProposalCandidate` as the business contract before legacy transport
 - `SessionFSM` as the source of truth for session lifecycle
+- `EpisodeFSM` as the source of truth for temporal episode boundaries
+- SQLite persistence for episodes in `session.db`
+- `current_episode` and `recent_episodes` exposed through `/state` as a runtime projection
+- Episode semantics frozen only at closure (`probable_task`, `activity_level`, `task_confidence`)
 - Technical dashboard in the app (`DashboardWindow`) as an independent glassmorphism window
 - Phase 1 observability: `CurrentContextBuilder` logs, explicit memory fallback in `freeze_memory()`, logged FSM transitions
 - `/memory/sessions` route for session journal exposure
@@ -66,9 +70,6 @@ But those layers do not all exist at the same level of maturity.
 
 ### Not started
 
-- Episode System V1
-- a usable `current_episode` in the runtime
-- sessions structured around persisted episodes
 - proposals genuinely contextualized by episode
 - episode-driven enriched memory
 - controlled agentic behavior
@@ -83,12 +84,12 @@ But those layers do not all exist at the same level of maturity.
 | Qualification | assign source and handling policy | implemented |
 | Activity | describe what the user is doing now | partially implemented via `activity_level` |
 | Interpretation | infer task, friction, patterns | implemented |
-| Episode | segment work into units of meaning | not started |
-| Session | contain work between temporal boundaries | implemented, without episodes |
+| Episode | segment work into temporal segments and later carry frozen semantics | implemented, still limited to temporal boundaries + frozen semantics on closed episodes |
+| Session | contain work between temporal boundaries | implemented, with persisted episodes but without rich memory/proposal usage |
 | Memory | consolidate facts and retrospective summaries | implemented, still mostly session-centric |
 | Proposal | suggest explainable actions | implemented, still local and limited |
 
-The key point is simple: **Pulse does not yet have a usable Episode layer**.
+The key point is simple: **Pulse now has a usable Episode layer for temporal boundaries and recent history, but not yet a rich episode-driven memory/proposal layer**.
 
 ---
 
@@ -186,7 +187,7 @@ Session lifecycle is now centralized in `SessionFSM`.
 Important:
 - a session exists today
 - its lifecycle is unified
-- but the session does not yet contain structured episodes
+- and it now aggregates persisted episodes
 
 ### 4.6 Memory
 
@@ -224,18 +225,22 @@ But the current proposal flow is still:
 
 ### 4.8 Episode
 
-**Status**: not started
+**Status**: implemented, still limited
 
-This layer does not yet exist as a usable runtime system.
+This layer now exists as a usable runtime system for temporal boundaries.
 
-Concretely, Pulse does not currently have:
-- a stabilized `Episode` model in the runtime
-- a `current_episode` field in `CurrentContext`
-- episode persistence
-- `Session -> Episodes` aggregation
-- an episode-driven proposal flow
+Concretely, Pulse currently has:
+- a persisted `Episode` model in `session.db`
+- a top-level `current_episode` exposed through `/state`
+- `Session -> Episodes` aggregation through persistence and runtime exposure
+- frozen semantics only on closed episodes
 
-Any document that suggests otherwise is describing the target, not the present state.
+Important:
+- `EpisodeFSM` remains temporal only
+- `SignalScorer` remains the single source of semantic computation
+- the active episode remains mostly temporal; live reading comes from `signals`
+- `current_episode` is not carried by `CurrentContext`
+- memory and proposals are not episode-driven yet
 
 ---
 
@@ -306,16 +311,6 @@ Important:
 
 The following elements belong to the target architecture, not to the current system.
 
-### Episode
-
-Target:
-- a unit of meaning inside a session
-- detected continuously, then consolidated
-- usable by memory and proposals
-
-Reality today:
-- no episode system has started
-
 ### `current_episode` in `CurrentContext`
 
 Target:
@@ -331,7 +326,7 @@ Target:
 - a session will aggregate multiple episodes
 
 Reality today:
-- the session exists without that structure
+- the session already aggregates persisted episodes, but this structure is not yet used richly by `SessionSnapshot`, memory, or proposals
 
 ### Episode-enriched memory
 
@@ -383,7 +378,7 @@ Any important inference or proposal must remain tied to:
 A future concept must be documented as future.
 
 In particular:
-- an unimplemented episode must not be described as present
+- an unimplemented episode capability must not be described as present
 - memory not structured by episodes must not be described as already mature
 - an unstarted agentic layer must not be described as active
 
@@ -399,18 +394,12 @@ Current examples:
 
 ## 8. Next logical phase
 
-The next logical phase is now `Episode System V1`.
-
-`Field observation` is now complete and confirmed several real limitations:
-- session timeout remains too short outside file-driven workflows
-- LLM context injection is still too flat
-- memory remains largely session-centric
-- cross-session continuity is still weak
+The next logical phase is no longer introducing episodes themselves.
 
 Goal:
-- introduce the episode as a unit of meaning inside a session
-- better structure work continuity
-- prepare less flat memory and proposal flows
+- use episodes more effectively for proposals
+- articulate memory more clearly around episodes
+- make the separation between live signals and retrospective reading easier to read
 
 ---
 

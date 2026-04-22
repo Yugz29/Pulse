@@ -53,7 +53,6 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 
 ### Ce qui manque encore
 
-- Système d'épisodes explicite
 - Proposition intelligente basée sur épisodes et mémoire enrichie
 - Mémoire session -> épisode -> faits plus robuste
 - Cadre agentique contrôlé
@@ -138,7 +137,7 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 
 ### Phase 2a — Episode Boundaries
 
-**Statut** : prochaine phase
+**Statut** : terminée
 
 **Objectif**
 
@@ -173,7 +172,7 @@ Principe : un épisode est d'abord une unité temporelle fiable. La sémantique 
 
 ### Phase 2b — Episode Semantics
 
-**Statut** : non démarrée
+**Statut** : terminée (scope actuel)
 
 **Objectif**
 
@@ -183,8 +182,8 @@ Un épisode devient une unité de sens : quelle tâche, quel contexte, quelle or
 **Livrables**
 
 - `probable_task` et `activity_level` portés au niveau de l'épisode
-- Label d'origine : `user_driven`, `assistant_driven`, `mixed`
-- Export exploitable par mémoire et proposition
+- `task_confidence` porté au niveau de l'épisode
+- Sémantique figée à la clôture de l'épisode, sans rescoring dans `EpisodeFSM`
 - Transparence sur l'épisode courant et les épisodes clos dans le dashboard
 
 **Hors périmètre**
@@ -192,12 +191,15 @@ Un épisode devient une unité de sens : quelle tâche, quel contexte, quelle or
 - Agentique
 - Refonte complète de la mémoire
 - Détection LLM des épisodes
+- `origin`
+- Résumé d'épisode
+- Export épisode vers mémoire ou proposals
 
 **Condition de sortie**
 
 - Un épisode clos porte une sémantique lisible et auditable
-- On distingue ce que l'utilisateur a fait de ce que l'assistant a produit à sa demande
 - La sémantique est construite de façon déterministe, sans LLM obligatoire
+- Le présent continue d'être lu via `signals`, pas via la sémantique de l'épisode actif
 
 ---
 
@@ -293,7 +295,6 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
 
 - `Episode Semantics (2b) -> Smart Proposals`
   - Épisode clos avec sémantique lisible
-  - Distinction user_driven / assistant_driven opérationnelle
   - Agrégation sessionnelle stable
 
 - `Smart Proposals -> Mémoire enrichie`
@@ -325,13 +326,14 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
 
 ## 6. Output utilisateur attendu
 
-En Phase 2a — Episode Boundaries, Pulse doit permettre :
+À la fin du scope actuel de Phase 2, Pulse doit permettre :
 
 - de voir l'épisode courant dans le dashboard en temps réel
 - de comprendre pourquoi une frontière d'épisode a été détectée
-- de visualiser l'historique des épisodes d'une session
+- de visualiser un historique récent des épisodes clos
+- de lire la sémantique live via `signals` et la sémantique figée via les épisodes clos
 
-La sémantique de tâche sur les épisodes reste hors périmètre Phase 2a.
+`origin`, le résumé d'épisode et l'export vers mémoire/proposals restent hors périmètre du scope actuel.
 
 ## Référence d'usage
 

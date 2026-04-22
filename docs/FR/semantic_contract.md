@@ -318,12 +318,14 @@ pas comme un système de compréhension avancée.
 
 ---
 
-# Partie 2 — Contrat de l'épisode (Phase 2a)
+# Partie 2 — Contrat de l'épisode (Phase 2a + 2b actuel)
 
-Cette section définit le contrat sémantique de l'épisode pour Phase 2a — Episode Boundaries.
+Cette section définit le contrat actuel de l'épisode dans Pulse.
 
-Elle couvre uniquement les frontières temporelles.
-La sémantique de tâche et l'origine de l'activité sont documentées en Phase 2b.
+Elle couvre :
+- les frontières temporelles portées par `EpisodeFSM`
+- la sémantique live portée par `signals`
+- la sémantique figée portée uniquement par les épisodes clos
 
 ---
 
@@ -339,35 +341,33 @@ Un épisode a :
 - une fin explicable
 - une durée calculable
 - un rattachement à une session
+- une sémantique figée seulement lorsqu'il est clos
 
 Un épisode n'est pas :
 - une session (plus large, contient plusieurs épisodes)
-- une tâche (concept interprétatif, pas encore structurel en Phase 2a)
+- la source de vérité sémantique du présent
 - un journal (résumé rétrospectif, produit après coup)
 - un fait (observation promue, pas une unité temporelle)
 - un signal (mesure ponctuelle, pas une durée)
 
 ---
 
-## 8. Ce qu'un épisode n'est pas encore en Phase 2a
+## 8. Ce qu'un épisode n'est pas aujourd'hui
 
-Phase 2a ne prétend pas résoudre :
+Le système actuel ne prétend pas résoudre :
 - l'intention derrière l'activité
-- la distinction activité utilisateur vs activité assistée
-- la sémantique de tâche portée par l'épisode
+- la distinction fine activité utilisateur vs activité assistée au niveau épisode
+- `origin`
 - l'enrichissement LLM de l'épisode
 - la continuité inter-session via les épisodes
 
-Ces éléments appartiennent à Phase 2b.
-
-Tout document ou code qui laisse croire que ces capacités existent
-en Phase 2a décrit la cible, pas le présent.
+La lecture live du présent reste portée par `signals`, pas par `current_episode`.
 
 ---
 
-## 9. Modèle minimal de l'épisode
+## 9. Modèle actuel de l'épisode
 
-En Phase 2a, un épisode porte uniquement :
+Un épisode porte aujourd'hui :
 
 ```
 Episode:
@@ -375,14 +375,23 @@ Episode:
   session_id    : rattachement à la session parente
   started_at    : timestamp de début (ISO 8601)
   ended_at      : timestamp de fin (null si épisode actif)
-  start_reason  : pourquoi cet épisode a commencé
-  end_reason    : pourquoi cet épisode s'est terminé (null si actif)
+  boundary_reason : raison de clôture de l'épisode (null si actif)
   duration_sec  : durée calculée (null si épisode actif)
+  probable_task : sémantique figée à la clôture (null si épisode actif)
+  activity_level : sémantique figée à la clôture (null si épisode actif)
+  task_confidence : sémantique figée à la clôture (null si épisode actif)
 ```
 
-Il ne porte pas encore en Phase 2a :
-- `probable_task`
-- `activity_level`
+Règle actuelle :
+- épisode actif : vérité essentiellement temporelle ; la lecture live vient des `signals`
+- épisode clos : snapshot sémantique figé à la clôture
+
+Le runtime garantit qu'un épisode clos ne garde pas de champs sémantiques nuls :
+- `probable_task = "unknown"` si aucun snapshot valide n'existe
+- `activity_level = "idle"` si aucun snapshot valide n'existe
+- `task_confidence = 0.0` si aucun snapshot valide n'existe
+
+Il ne porte pas aujourd'hui :
 - `origin` (user_driven / assistant_driven)
 - résumé ou enrichissement LLM
 
@@ -405,10 +414,11 @@ Il y a au plus un épisode ACTIF par session à tout moment.
 L'épisode n'est pas clos mais est en attente de reprise ou de clôture.
 
 **CLOS** : épisode terminé. `ended_at` est posé,
-`duration_sec` est calculé, `start_reason` et `end_reason` sont documentées.
+`duration_sec` est calculé, `boundary_reason` est documentée,
+et la dernière sémantique live connue est figée sur l'épisode clos.
 
 Un épisode clos ne peut pas être rouvert.
-Il peut être annoté rétrospectivement (Phase 2b).
+Il peut être lu rétrospectivement, mais pas rescored par `EpisodeFSM`.
 
 ---
 
@@ -443,7 +453,7 @@ Ils sont accumulés et observés, sans déclencher de frontière automatique.
 
 Valeur de départ : **20 minutes**.
 
-Ce seuil est distinct de `SESSION_TIMEOUT_MIN` (10 min).
+Ce seuil est distinct de `SESSION_TIMEOUT_MIN` (30 min).
 Un épisode peut se terminer sans que la session se termine.
 
 **Sémantique de `ended_at` pour `idle_timeout` :**
@@ -472,30 +482,33 @@ La clôture d'une session clôture l'épisode actif en cours.
 
 ---
 
-## 13. Règles d'implémentation pour Phase 2a
+## 13. Règles d'implémentation actuelles
 
 ### Ce qui doit être vrai dans le code
 
 - Il existe au plus un épisode ACTIF par session à tout instant
 - `EpisodeFSM` est la source de vérité des frontières — pas `SessionFSM`, pas le scorer
 - `EpisodeFSM` reçoit des signaux normalisés depuis l'orchestrateur — elle ne re-scanne pas le bus seule
-- Toute frontière détectée produit un `start_reason` et un `end_reason` loggés
+- `SignalScorer` reste l'unique source du calcul sémantique (`probable_task`, `activity_level`, `task_confidence`)
+- `RuntimeOrchestrator` garantit l'ordre `events -> signals -> freeze -> persist` à la clôture
+- Toute frontière détectée produit un `boundary_reason` loggé
 - La clôture d'une session clôture l'épisode actif
 - Les épisodes sont persistés en SQLite dans `~/.pulse/session.db` (même base que les sessions)
 - L'épisode courant est exposé dans `/state` comme champ top-level `current_episode`
+- `/state` est une projection composite du runtime, pas une source de vérité
+- Un épisode clos porte toujours une sémantique figée non nulle, quitte à utiliser le fallback déterministe
 
 ### Ce qu'il faut éviter dans le code
 
 - Déduire la frontière depuis `probable_task` (trop fragile)
 - Ouvrir plusieurs épisodes en parallèle
 - Confondre fin d'épisode et fin de session
-- Ajouter des champs sémantiques sur `Episode` avant Phase 2b
+- Recalculer la sémantique dans `EpisodeFSM`
 - Utiliser le LLM pour détecter les frontières
 - Faire re-déduire à `EpisodeFSM` l'activité significative depuis le bus
 
-### Ce qui est hors périmètre Phase 2a
+### Ce qui est encore hors périmètre aujourd'hui
 
-- `Episode.probable_task`
 - `Episode.origin`
 - Résumé d'épisode
 - Export épisode vers mémoire ou proposals
@@ -504,30 +517,39 @@ La clôture d'une session clôture l'épisode actif en cours.
 
 ---
 
-## 14. Ce que Phase 2a doit permettre d'observer
+## 14. Ce que le système actuel doit permettre d'observer
 
-À la sortie de Phase 2a, dans le dashboard :
+Dans le dashboard actuel :
 
-- L'épisode courant est visible : début, durée en cours, start_reason
-- L'historique des épisodes de la session est visible
-- Pour chaque épisode clos : durée, start_reason, end_reason
-- La session affiche le nombre d'épisodes qu'elle contient
-
-Si ces 4 points ne sont pas vrais, Phase 2a n'est pas terminée.
+- L'épisode courant est visible : début, durée en cours
+- La lecture sémantique du présent vient des `signals`, pas de l'épisode actif
+- Un historique récent des épisodes clos est visible
+- Pour chaque épisode clos : durée, `boundary_reason`, sémantique figée
 
 ---
 
-## 15. Résumé opérationnel (épisode Phase 2a)
+## 14bis. Décisions figées avant implémentation
 
-Le contrat de l'épisode en Phase 2a est le suivant :
+- Un `Episode` ne porte qu’un seul `boundary_reason`, qui décrit la raison de clôture de l’épisode.
+- Pour une clôture par `idle_timeout`, `ended_at` correspond au moment exact d’expiration du seuil d’inactivité, et non au moment de la reprise détectée.
+- `project_change` est traité comme un signal opportuniste de frontière, non comme un signal dur garanti.
+- La définition de l’activité significative reste celle de la `SessionFSM`, utilisée comme source de vérité par la couche épisode.
 
-- Un épisode est une unité temporelle, pas une unité de sens
+---
+
+## 15. Résumé opérationnel (épisode actuel)
+
+Le contrat actuel de l'épisode est le suivant :
+
+- Un épisode reste d'abord une unité temporelle
 - Ses frontières sont détectées par des signaux durs déterministes
 - `ended_at` pour `idle_timeout` = `last_meaningful_activity_at + EPISODE_TIMEOUT_MIN`
 - `project_change` est un signal mou, pas un signal dur
 - Il est persisté dans `session.db`, exposé dans `/state`, visible dans le dashboard
-- Il ne porte pas de sémantique de tâche
-- Il ne sait pas distinguer activité utilisateur et activité assistée
+- `signals` restent la source live du présent
+- Un épisode clos porte une sémantique figée (`probable_task`, `activity_level`, `task_confidence`)
+- Cette sémantique est figée à la clôture depuis la dernière valeur live connue, avec fallback `unknown / idle / 0.0`
+- Il ne sait pas distinguer finement activité utilisateur et activité assistée
 
-Ce contrat est volontairement minimal.
-Sa valeur est dans la fiabilité des frontières, pas dans leur richesse.
+Ce contrat reste volontairement borné.
+Sa valeur est dans la fiabilité des frontières et dans la stabilité du snapshot des épisodes clos.

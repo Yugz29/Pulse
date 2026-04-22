@@ -50,6 +50,10 @@ Mais toutes ces couches ne sont pas au même niveau de maturité.
 - `SessionSnapshot` comme projection structurée de session
 - `ProposalCandidate` comme contrat métier avant transport legacy
 - `SessionFSM` comme source de vérité du lifecycle de session
+- `EpisodeFSM` comme source de vérité des frontières temporelles d'épisode
+- Persistance SQLite des épisodes dans `session.db`
+- `current_episode` et `recent_episodes` exposés via `/state` comme projection runtime
+- Sémantique d'épisode figée uniquement à la clôture (`probable_task`, `activity_level`, `task_confidence`)
 - Dashboard technique côté app (`DashboardWindow`) dans une fenêtre indépendante avec rendu glassmorphism
 - Observabilité Phase 1 : logs `CurrentContextBuilder`, fallback mémoire explicite dans `freeze_memory()`, transitions FSM loggées
 - Route `/memory/sessions` pour exposer les journaux de session
@@ -66,9 +70,6 @@ Mais toutes ces couches ne sont pas au même niveau de maturité.
 
 ### Non démarré
 
-- Episode System V1
-- `current_episode` exploitable dans le runtime
-- Session structurée autour d'épisodes persistés
 - Proposals réellement contextualisées par épisode
 - Mémoire enrichie pilotée par épisodes
 - Agentique contrôlée
@@ -83,12 +84,12 @@ Mais toutes ces couches ne sont pas au même niveau de maturité.
 | Qualification | attribuer source et politique de traitement | implémenté |
 | Activity | décrire ce que fait l'utilisateur maintenant | partiellement implémenté via `activity_level` |
 | Interpretation | inférer tâche, friction, patterns | implémenté |
-| Episode | segmenter le travail en unités de sens | non démarré |
-| Session | contenir le travail entre frontières temporelles | implémenté, sans épisodes |
+| Episode | segmenter le travail en segments temporels puis porter une sémantique figée | implémenté, encore limité à des frontières temporelles + snapshot figé à la clôture |
+| Session | contenir le travail entre frontières temporelles | implémenté, avec épisodes persistés mais sans exploitation riche côté mémoire/proposals |
 | Memory | consolider des faits et résumés rétrospectifs | implémenté, encore principalement session-centrique |
 | Proposal | suggérer des actions explicables | implémenté, encore local et limité |
 
-Le point clé : **Pulse ne possède pas encore de vraie couche Episode exploitable**.
+Le point clé : **Pulse possède maintenant une couche Episode exploitable pour les frontières temporelles et l'historique récent, mais pas encore une exploitation riche par mémoire et proposals**.
 
 ---
 
@@ -186,7 +187,7 @@ Le lifecycle de session est maintenant centralisé dans `SessionFSM`.
 Important :
 - une session existe aujourd'hui
 - son lifecycle est unifié
-- mais la session ne contient pas encore d'épisodes structurés
+- et elle agrège maintenant des épisodes persistés
 
 ### 4.6 Memory
 
@@ -224,18 +225,22 @@ Mais le proposal flow actuel reste encore :
 
 ### 4.8 Episode
 
-**Statut** : non démarré
+**Statut** : implémenté, encore limité
 
-Cette couche n'existe pas encore comme système runtime exploitable.
+Cette couche existe maintenant comme système runtime exploitable pour les frontières temporelles.
 
-Concrètement, Pulse n'a pas aujourd'hui :
-- de modèle `Episode` stabilisé dans le runtime
-- de `current_episode` dans `CurrentContext`
-- de persistance d'épisodes
-- d'agrégation `Session -> Episodes`
-- de proposal flow basé sur des épisodes
+Concrètement, Pulse a aujourd'hui :
+- un modèle `Episode` persisté dans `session.db`
+- un `current_episode` exposé en top-level dans `/state`
+- une agrégation `Session -> Episodes` via la persistance et l'exposition runtime
+- une sémantique figée uniquement sur les épisodes clos
 
-Tout document qui laisse penser le contraire décrit la cible, pas l'état actuel.
+Important :
+- `EpisodeFSM` reste temporelle uniquement
+- `SignalScorer` reste l'unique source du calcul sémantique
+- l'épisode actif reste essentiellement temporel ; la lecture live vient des `signals`
+- `current_episode` n'est pas porté par `CurrentContext`
+- mémoire et proposals ne sont pas encore pilotées par les épisodes
 
 ---
 
@@ -306,16 +311,6 @@ Important :
 
 Les éléments suivants appartiennent à l'architecture cible, pas au système actuel.
 
-### Episode
-
-Cible :
-- unité de sens intra-session
-- détectée en continu puis consolidée
-- exploitable par mémoire et propositions
-
-Réel aujourd'hui :
-- pas de système d'épisodes lancé
-
 ### current_episode dans CurrentContext
 
 Cible :
@@ -331,7 +326,7 @@ Cible :
 - une session agrégera plusieurs épisodes
 
 Réel aujourd'hui :
-- la session existe sans cette structure
+- la session agrège déjà des épisodes persistés, mais cette structure n'est pas encore exploitée par `SessionSnapshot`, mémoire et proposals
 
 ### Mémoire enrichie par épisodes
 
@@ -383,7 +378,7 @@ Toute proposition ou inférence importante doit pouvoir être reliée à :
 Un concept futur doit être documenté comme futur.
 
 En particulier :
-- un épisode non implémenté ne doit pas être présenté comme présent
+- une capacité épisode non implémentée ne doit pas être présentée comme présente
 - une mémoire non structurée par épisodes ne doit pas être décrite comme déjà mature
 - une agentique non lancée ne doit pas être décrite comme en place
 
@@ -399,18 +394,12 @@ Exemples actuels :
 
 ## 8. Prochaine phase logique
 
-La prochaine phase logique est maintenant `Episode System V1`.
-
-La phase `Observation terrain` est clôturée et a confirmé plusieurs limites réelles :
-- timeout de session encore trop court hors workflows orientés fichiers
-- injection de contexte LLM encore trop plate
-- mémoire toujours largement session-centrique
-- continuité inter-session encore faible
+La prochaine phase logique n'est plus l'introduction des épisodes eux-mêmes.
 
 Objectif :
-- introduire l'épisode comme unité de sens intra-session
-- mieux structurer la continuité du travail
-- préparer des proposals et une mémoire moins plats
+- mieux exploiter les épisodes pour les proposals
+- mieux articuler mémoire et épisodes
+- rendre plus lisible la séparation entre signaux live et lecture rétrospective
 
 ---
 

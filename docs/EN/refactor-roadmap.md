@@ -20,7 +20,6 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 
 ### What Pulse is not yet
 
-- A production-ready episode system
 - A proposal engine truly contextualized by work continuity
 - A rich memory layer driven by episodes
 - An autonomous agent
@@ -43,6 +42,8 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 
 - Phase 0 Foundation: structured contracts, locked legacy compatibility, unified session lifecycle
 - Phase 1 Field observation: instrumentation, technical dashboard, field observations documented in `OBS.md`
+- Phase 2a Episode Boundaries: temporal episodes, SQLite persistence, `/state` exposure, dashboard visibility
+- Phase 2b Episode Semantics (current scope): frozen semantic snapshot on closed episodes
 
 ### Added in Phase 1
 
@@ -54,7 +55,6 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 
 ### What is still missing
 
-- An explicit episode system
 - Smarter proposals built on episodes and richer memory
 - A stronger memory chain from session -> episode -> facts
 - A controlled agentic framework
@@ -138,33 +138,60 @@ Measure the real behavior of the stabilized system before opening Episode System
 - ✓ Weak zones identified and classified (see `OBS.md`)
 - ✓ Episode System entry point defined from field observations
 
-### Phase 2 — Episode System V1
+### Phase 2a — Episode Boundaries
 
-**Status**: next phase
+**Status**: complete
 
 **Goal**
 
-Introduce the episode as a unit of meaning inside a session without breaking existing layers.
+Introduce reliable and observable episode boundaries without imposing semantics yet.
 
 **Deliverables**
 
-- An explicit episode model
-- Episode detection from the stabilized runtime
+- A minimal `Episode` model
+- Boundary detection from hard signals
 - `episode -> session` integration
-- Output usable by memory and proposals
-- Minimum transparency on current and closed episodes
+- SQLite persistence
+- Transparency on the current episode in `/state` and the dashboard
 
 **Out of scope**
 
+- Episode semantics beyond the temporal model
 - Agentic work
 - Full memory rewrite
 - Automated actions
 
 **Exit condition**
 
-- Episodes have a stable semantic meaning
 - Episode boundaries are understandable and auditable
 - A session can aggregate multiple episodes without patchwork
+
+### Phase 2b — Episode Semantics
+
+**Status**: complete (current scope)
+
+**Goal**
+
+Attach deterministic semantics to closed episodes without moving scoring out of live runtime signals.
+
+**Deliverables**
+
+- `probable_task`, `activity_level`, and `task_confidence` carried by closed episodes
+- Semantics frozen only at episode closure
+- Technical dashboard transparency between live signals and closed-episode history
+
+**Out of scope**
+
+- `origin`
+- Episode summary / LLM enrichment
+- Memory/proposal exports based on episodes
+- Agentic work
+
+**Exit condition**
+
+- Closed episodes carry readable semantics
+- Live semantics still come from `signals`, not from the active episode
+- Session aggregation is stable
 
 ### Phase 3 — Smart Proposals
 
@@ -246,15 +273,20 @@ Open bounded action capabilities on top of a system that is already reliable in 
   - Legacy compatibility is locked
   - Session lifecycle is unified
 
-- `Field observation -> Episode System V1`
+- `Field observation -> Episode Boundaries (2a)`
   - Real cases have been observed and documented
   - Session boundaries are considered stable
   - Episode needs are formulated from field data
 
-- `Episode System V1 -> Smart Proposals`
-  - Current and closed episodes are usable
+- `Episode Boundaries (2a) -> Episode Semantics (2b)`
+  - Current episodes are visible and boundaries are auditable
   - Session aggregation is stable
-  - Transition transparency is sufficient
+  - Runtime behavior matches real field cases
+
+- `Episode Semantics (2b) -> Smart Proposals`
+  - Closed episodes carry readable semantics
+  - Live semantics still come from `signals`
+  - Session aggregation is stable
 
 - `Smart Proposals -> Enriched memory`
   - Proposals are contextualized but still limited by current memory
@@ -285,14 +317,14 @@ Open bounded action capabilities on top of a system that is already reliable in 
 
 ## 6. Expected user-facing output at this stage
 
-In Phase 2 — Episode System V1, Pulse should make it possible to:
+At the end of the current Phase 2 scope, Pulse should make it possible to:
 
-- observe activity, task and context in real time (achieved in Phase 1)
-- visualize internal state through the technical dashboard (achieved in Phase 1)
+- observe activity, task and context in real time through `signals`
+- visualize internal state through the technical dashboard
 - detect episode boundaries inside a session
-- distinguish multiple units of meaning within a single work session
+- inspect recent closed episodes with a frozen semantic snapshot
 
-Cross-session continuity and smart proposals remain out of scope for Phase 2.
+Cross-session continuity and smart proposals remain out of scope for the current Phase 2 scope.
 
 ## Usage reference
 
