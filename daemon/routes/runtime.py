@@ -163,6 +163,8 @@ def register_runtime_routes(
     store: Any,
     runtime_state: Any,
     get_session_fsm: Callable[[], Any] | None = None,
+    get_current_episode: Callable[[], Any] | None = None,
+    get_recent_episodes: Callable[[int], Any] | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
     shutdown_runtime: Callable[[], None],
@@ -259,6 +261,24 @@ def register_runtime_routes(
                 "last_meaningful_activity_at": fsm.last_meaningful_activity_at.isoformat() if fsm.last_meaningful_activity_at else None,
                 "last_screen_locked_at": fsm.last_screen_locked_at.isoformat() if fsm.last_screen_locked_at else None,
             }
+        if get_current_episode is not None:
+            episode = get_current_episode()
+            if episode is not None:
+                state["current_episode"] = {
+                    "id": episode.id,
+                    "session_id": episode.session_id,
+                    "started_at": episode.started_at,
+                    "ended_at": episode.ended_at,
+                    "boundary_reason": episode.boundary_reason,
+                    "duration_sec": episode.duration_sec,
+                    "probable_task": episode.probable_task,
+                    "activity_level": episode.activity_level,
+                    "task_confidence": episode.task_confidence,
+                }
+        if get_recent_episodes is not None:
+            episodes = get_recent_episodes(8)
+            if episodes:
+                state["recent_episodes"] = episodes
         return jsonify(state)
 
     @app.route("/insights")

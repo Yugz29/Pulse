@@ -69,6 +69,26 @@ class SessionSnapshot:
 
 
 @dataclass(frozen=True)
+class Episode:
+    """
+    Projection déterministe d'un épisode.
+
+    Les champs sémantiques restent des snapshots du runtime live :
+    ils sont attachés à l'épisode sans recalcul rétrospectif.
+    """
+
+    id: str
+    session_id: str
+    started_at: str
+    ended_at: Optional[str] = None
+    boundary_reason: Optional[str] = None
+    duration_sec: Optional[int] = None
+    probable_task: Optional[str] = None
+    activity_level: Optional[str] = None
+    task_confidence: Optional[float] = None
+
+
+@dataclass(frozen=True)
 class ProposalCandidate:
     """
     Contrat métier passif d'une proposition avant conversion vers le transport

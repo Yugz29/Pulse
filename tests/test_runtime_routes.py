@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from flask import Flask
 
-from daemon.core.contracts import CurrentContext, SignalSummary
+from daemon.core.contracts import CurrentContext, Episode, SignalSummary
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
 from daemon.routes.runtime import _FileEventCoalescer, register_runtime_routes
@@ -127,6 +127,8 @@ class TestRuntimeRoutes(unittest.TestCase):
                 "active_project": "Pulse",
                 "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
                 "probable_task": "coding",
+                "activity_level": "editing",
+                "task_confidence": 0.81,
                 "friction_score": 0.42,
                 "focus_level": "deep",
                 "session_duration_min": 96,
@@ -182,6 +184,51 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["active_file"], "/tmp/main.py")
         self.assertEqual(payload["signals"]["session_duration_min"], 24)
+
+    def test_state_exposes_current_and_recent_episodes_when_getters_are_provided(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_current_episode=lambda: Episode(
+                id="ep-1",
+                session_id="session-1",
+                started_at="2026-04-22T10:00:00",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.81,
+            ),
+            get_recent_episodes=lambda limit: [
+                {
+                    "id": "ep-1",
+                    "session_id": "session-1",
+                    "started_at": "2026-04-22T10:00:00",
+                    "ended_at": None,
+                    "boundary_reason": None,
+                    "duration_sec": None,
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "task_confidence": 0.81,
+                }
+            ],
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+        self.store.to_dict.return_value = {}
+
+        response = client.get("/state")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["current_episode"]["id"], "ep-1")
+        self.assertEqual(payload["current_episode"]["probable_task"], "coding")
+        self.assertEqual(payload["recent_episodes"][0]["id"], "ep-1")
+        self.assertEqual(payload["recent_episodes"][0]["activity_level"], "editing")
 
     def test_ping_returns_status_and_pause_state(self):
         self.runtime_state.set_paused(True)

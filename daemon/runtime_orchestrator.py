@@ -24,6 +24,7 @@ from daemon.core.context_formatter import (
     format_file_work_reading,
     has_informative_file_reading,
 )
+from daemon.core.episode_fsm import EpisodeFSM
 from daemon.core.current_context_adapters import current_context_to_markdown
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.contracts import ProposalCandidate
@@ -82,6 +83,7 @@ class RuntimeOrchestrator:
         self._fact_engine = get_fact_engine()
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
+        self._episode_fsm = EpisodeFSM()
 
     @property
     def session_fsm(self) -> SessionFSM:
@@ -90,6 +92,10 @@ class RuntimeOrchestrator:
     @property
     def fact_engine(self):
         return self._fact_engine
+
+    @property
+    def current_episode(self):
+        return self._episode_fsm.current_episode
 
     def llm_unload_background(self) -> None:
         self.llm_runtime.unload_background(self.log)
@@ -148,10 +154,15 @@ class RuntimeOrchestrator:
 
         if event.type == "screen_locked":
             self._session_fsm.on_screen_locked(when=event.timestamp)
+            self._episode_fsm.on_screen_locked(when=event.timestamp)
             self.runtime_state.mark_screen_locked(when=event.timestamp)
             threading.Thread(target=self.llm_unload_background, daemon=True).start()
 
         elif event.type == "screen_unlocked":
+            episode_locked_at = (
+                self._session_fsm.last_screen_locked_at
+                or self.runtime_state.get_last_screen_locked_at()
+            )
             # Shim de compat Phase 2 :
             # si RuntimeState porte encore le marqueur legacy de lock mais que la FSM
             # ne l'a pas, on réinjecte ce timestamp une seule fois avant l'unlock.
@@ -174,6 +185,13 @@ class RuntimeOrchestrator:
             if transition.should_reset_clock:
                 sleep_min = transition.sleep_minutes or 0.0
                 if transition.should_start_new_session:
+                    self._refresh_runtime_signals_for_closure(drain_pending=True)
+                    self._persist_episode_transition(
+                        self._episode_fsm.close_current(
+                            ended_at=episode_locked_at or event.timestamp,
+                            boundary_reason="screen_lock",
+                        )
+                    )
                     self.log.info("Longue veille (%.0f min) → nouvelle session", sleep_min)
                     try:
                         snapshot = self.session_memory.export_session_data()
@@ -182,6 +200,12 @@ class RuntimeOrchestrator:
                     except Exception as exc:
                         self.log.warning("sync mémoire pré-reset échouée : %s", exc)
                     self.session_memory.new_session()
+                    self._persist_episode_transition(
+                        self._episode_fsm.ensure_active(
+                            session_id=self._current_session_id(),
+                            started_at=event.timestamp,
+                        )
+                    )
                 else:
                     # Verrou court : reset du timer scorer uniquement.
                     # Le temps de veille ne doit pas s'accumuler dans session_duration_min.
@@ -190,6 +214,11 @@ class RuntimeOrchestrator:
                     self.log.debug(
                         "Verrou court (%.0f min) -> reset timer scorer, session conservee",
                         sleep_min,
+                    )
+                    self._episode_fsm.on_screen_unlocked(
+                        session_id=self._current_session_id(),
+                        when=event.timestamp,
+                        boundary_detected=False,
                     )
                 if transition.should_clear_sleep_markers:
                     self.runtime_state.clear_sleep_markers()
@@ -209,6 +238,13 @@ class RuntimeOrchestrator:
 
     def shutdown_runtime(self) -> None:
         try:
+            self._refresh_runtime_signals_for_closure(drain_pending=True)
+            self._persist_episode_transition(
+                self._episode_fsm.close_current(
+                    ended_at=datetime.now(),
+                    boundary_reason="session_end",
+                )
+            )
             snapshot = self.session_memory.export_session_data()
             if snapshot.get("duration_min", 0) > 0:
                 update_memories_from_session(snapshot)
@@ -400,6 +436,13 @@ class RuntimeOrchestrator:
             git_root.name,
             (commit_msg or "").splitlines()[0] if commit_msg else "(sans message)",
         )
+        self._refresh_runtime_signals_for_closure(drain_pending=True)
+        self._persist_episode_transition(
+            self._episode_fsm.on_commit(
+                session_id=self._current_session_id(),
+                when=datetime.now(),
+            )
+        )
 
         diff_summary: str | None = None
         try:
@@ -428,25 +471,17 @@ class RuntimeOrchestrator:
         with self._debounce_lock:
             events = self._pending_file_events[:]
             self._pending_file_events = []
+            timer = self._file_debounce_timer
             self._file_debounce_timer = None
-        if not events:
-            return
-        self.log.debug("file burst flush n=%d", len(events))
-        # On préfère le dernier event non-delete comme trigger pour _process_signals.
-        # Un burst se terminant par file_deleted (ex. refactoring avec suppression finale)
-        # ne doit pas bloquer inject_context : DecisionEngine n'accepte pas file_deleted
-        # comme trigger valide dans _can_emit_context_proposal.
-        # Fallback sur events[-1] uniquement si tout le burst est composé de deletions.
-        trigger = next(
-            (e for e in reversed(events) if e.type != "file_deleted"),
-            events[-1],
-        )
-        self._process_signals(trigger)
+        if timer is not None:
+            timer.cancel()
+        self._process_file_burst(events)
 
     def _process_signals(self, trigger_event) -> None:
         if trigger_event.type == "user_idle":
             self._session_fsm.on_user_idle()
 
+        previous_activity = self._session_fsm.last_meaningful_activity_at
         recent_events = self.scorer.bus.recent(DEFAULT_EVENT_BUS_SIZE)
         lifecycle_transition = self._session_fsm.observe_recent_events(
             recent_events=recent_events,
@@ -470,10 +505,36 @@ class RuntimeOrchestrator:
             except Exception as exc:
                 self.log.warning("session boundary flush échouée : %s", exc)
             if lifecycle_transition.should_start_new_session:
+                self._refresh_runtime_signals_for_closure(drain_pending=True)
+                if lifecycle_transition.boundary_reason == "idle":
+                    self._persist_episode_transition(
+                        self._episode_fsm.on_idle_timeout(
+                            session_id=None,
+                            last_meaningful_activity_at=previous_activity,
+                            resumed_at=None,
+                        )
+                    )
+                elif lifecycle_transition.boundary_reason == "screen_lock":
+                    locked_at = self._latest_screen_lock_after(
+                        recent_events=recent_events,
+                        since=previous_activity,
+                    )
+                    self._persist_episode_transition(
+                        self._episode_fsm.close_current(
+                            ended_at=locked_at or previous_activity or datetime.now(),
+                            boundary_reason="screen_lock",
+                        )
+                    )
                 self.session_memory.new_session()
 
         signals = self.scorer.compute(
             session_started_at=self._session_fsm.session_started_at,
+        )
+        self._persist_episode_transition(
+            self._episode_fsm.ensure_active(
+                session_id=self._current_session_id(),
+                started_at=self._session_fsm.last_meaningful_activity_at,
+            )
         )
         current_context = self._current_context_builder.build(
             state=self.store.to_dict(),
@@ -756,4 +817,91 @@ class RuntimeOrchestrator:
         reset_cooldown_for_tests()
         self._fact_engine = get_fact_engine()
         self._session_fsm.reset_for_tests()
+        self._episode_fsm.reset_for_tests()
         proposal_store.clear()
+
+    def _persist_episode_transition(self, transition) -> None:
+        if transition is None:
+            return
+        if transition.closed_episode is not None:
+            self.session_memory.save_episode(
+                self._freeze_closed_episode_semantics(transition.closed_episode)
+            )
+        if transition.opened_episode is not None:
+            self.session_memory.save_episode(transition.opened_episode)
+
+    def _freeze_closed_episode_semantics(self, episode):
+        signals, _, _ = self.runtime_state.get_signal_snapshot()
+        if episode is None:
+            return episode
+        probable_task = getattr(signals, "probable_task", None) or "unknown"
+        activity_level = getattr(signals, "activity_level", None) or "idle"
+        task_confidence = getattr(signals, "task_confidence", None)
+        if task_confidence is None:
+            task_confidence = 0.0
+        return replace(
+            episode,
+            probable_task=probable_task,
+            activity_level=activity_level,
+            task_confidence=task_confidence,
+        )
+
+    def _refresh_runtime_signals_for_closure(self, *, drain_pending: bool) -> None:
+        if drain_pending:
+            self._drain_pending_file_events()
+        signals = self.scorer.compute(
+            session_started_at=self._session_fsm.session_started_at,
+        )
+        if signals is None or not hasattr(signals, "session_duration_min"):
+            return
+        _, decision = self.runtime_state.get_context_snapshot()
+        try:
+            current_context = self._current_context_builder.build(
+                state=self.store.to_dict(),
+                signals=signals,
+                find_git_root_fn=find_git_root,
+                find_workspace_root_fn=find_workspace_root,
+            )
+        except Exception as exc:
+            self.log.warning("refresh signaux pré-fermeture échoué : %s", exc)
+            return
+        self.runtime_state.set_analysis(
+            signals=signals,
+            decision=decision,
+            current_context=current_context,
+        )
+
+    def _drain_pending_file_events(self) -> None:
+        with self._debounce_lock:
+            events = self._pending_file_events[:]
+            self._pending_file_events = []
+            timer = self._file_debounce_timer
+            self._file_debounce_timer = None
+        if timer is not None:
+            timer.cancel()
+        self._process_file_burst(events)
+
+    def _process_file_burst(self, events) -> None:
+        if not events:
+            return
+        self.log.debug("file burst flush n=%d", len(events))
+        trigger = next(
+            (e for e in reversed(events) if e.type != "file_deleted"),
+            events[-1],
+        )
+        self._process_signals(trigger)
+
+    def _current_session_id(self) -> str | None:
+        session_id = getattr(self.session_memory, "session_id", None)
+        if isinstance(session_id, str) and session_id:
+            return session_id
+        return None
+
+    @staticmethod
+    def _latest_screen_lock_after(recent_events, since):
+        if since is None:
+            return None
+        for event in reversed(recent_events):
+            if event.type == "screen_locked" and event.timestamp > since:
+                return event.timestamp
+        return None

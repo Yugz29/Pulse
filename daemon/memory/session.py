@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from daemon.core.contracts import SessionSnapshot
+from daemon.core.contracts import Episode, SessionSnapshot
 from daemon.core.event_bus import Event
 from daemon.core.signal_scorer import Signals
 from daemon.core.uid import new_uid
@@ -211,6 +211,74 @@ class SessionMemory:
         snapshot = self.build_session_snapshot()
         return session_snapshot_to_legacy_dict(snapshot)
 
+    def save_episode(self, episode: Episode) -> None:
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO episodes (
+                        id, session_id, started_at, ended_at, boundary_reason, duration_sec,
+                        probable_task, activity_level, task_confidence
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        session_id = excluded.session_id,
+                        started_at = excluded.started_at,
+                        ended_at = excluded.ended_at,
+                        boundary_reason = excluded.boundary_reason,
+                        duration_sec = excluded.duration_sec,
+                        probable_task = excluded.probable_task,
+                        activity_level = excluded.activity_level,
+                        task_confidence = excluded.task_confidence
+                    """,
+                    (
+                        episode.id,
+                        episode.session_id,
+                        episode.started_at,
+                        episode.ended_at,
+                        episode.boundary_reason,
+                        episode.duration_sec,
+                        episode.probable_task,
+                        episode.activity_level,
+                        episode.task_confidence,
+                    ),
+                )
+                conn.commit()
+
+    def get_current_episode(self, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        target_id = session_id or self.session_id
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM episodes
+                WHERE session_id = ? AND ended_at IS NULL
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (target_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_recent_episodes(
+        self,
+        *,
+        session_id: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        target_id = session_id or self.session_id
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM episodes
+                WHERE session_id = ?
+                ORDER BY started_at DESC
+                LIMIT ?
+                """,
+                (target_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def close(self) -> None:
         with self._lock:
             with self._connect() as conn:
@@ -259,6 +327,31 @@ class SessionMemory:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS episodes (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT,
+                    boundary_reason TEXT,
+                    duration_sec INTEGER,
+                    probable_task TEXT,
+                    activity_level TEXT,
+                    task_confidence REAL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                )
+                """
+            )
+            self._ensure_column(conn, "episodes", "probable_task", "TEXT")
+            self._ensure_column(conn, "episodes", "activity_level", "TEXT")
+            self._ensure_column(conn, "episodes", "task_confidence", "REAL")
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_episodes_session_started
+                ON episodes(session_id, started_at DESC)
+                """
+            )
             # Index FTS5 pour la session search.
             # payload_text = valeurs du payload en texte libre (paths, noms d'apps, etc.)
             # session_id et created_at sont UNINDEXED : utiles pour filtrer, pas à tokeniser.
@@ -297,6 +390,16 @@ class SessionMemory:
                 (self.session_id, now, now, 0),
             )
             conn.commit()
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column in existing:
+            return
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _update_session_from_event(self, conn: sqlite3.Connection, event: Event) -> None:
         active_file = None

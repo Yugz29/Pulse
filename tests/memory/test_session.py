@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+from daemon.core.contracts import Episode
 from daemon.core.event_bus import Event
 from daemon.core.signal_scorer import Signals
 from daemon.memory.session import SessionMemory
@@ -201,6 +202,79 @@ class TestSessionMemory(unittest.TestCase):
         self.memory.close()
         session = self.memory.get_session()
         self.assertIsNotNone(session["ended_at"])
+
+    def test_save_episode_persists_active_episode(self):
+        episode = Episode(
+            id="ep-1",
+            session_id="test-session",
+            started_at="2026-04-22T10:00:00",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.82,
+        )
+
+        self.memory.save_episode(episode)
+
+        current = self.memory.get_current_episode()
+        self.assertIsNotNone(current)
+        self.assertEqual(current["id"], "ep-1")
+        self.assertEqual(current["ended_at"], None)
+        self.assertEqual(current["probable_task"], "coding")
+        self.assertEqual(current["activity_level"], "editing")
+        self.assertEqual(current["task_confidence"], 0.82)
+
+    def test_save_episode_updates_closed_episode(self):
+        active = Episode(
+            id="ep-1",
+            session_id="test-session",
+            started_at="2026-04-22T10:00:00",
+        )
+        closed = Episode(
+            id="ep-1",
+            session_id="test-session",
+            started_at="2026-04-22T10:00:00",
+            ended_at="2026-04-22T10:25:00",
+            boundary_reason="commit",
+            duration_sec=1500,
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.88,
+        )
+
+        self.memory.save_episode(active)
+        self.memory.save_episode(closed)
+
+        current = self.memory.get_current_episode()
+        recent = self.memory.get_recent_episodes(limit=5)
+        self.assertIsNone(current)
+        self.assertEqual(recent[0]["boundary_reason"], "commit")
+        self.assertEqual(recent[0]["duration_sec"], 1500)
+        self.assertEqual(recent[0]["probable_task"], "coding")
+        self.assertEqual(recent[0]["activity_level"], "editing")
+        self.assertEqual(recent[0]["task_confidence"], 0.88)
+
+    def test_get_recent_episodes_orders_latest_first(self):
+        self.memory.save_episode(
+            Episode(
+                id="ep-older",
+                session_id="test-session",
+                started_at="2026-04-22T09:00:00",
+                ended_at="2026-04-22T09:30:00",
+                boundary_reason="idle_timeout",
+                duration_sec=1800,
+            )
+        )
+        self.memory.save_episode(
+            Episode(
+                id="ep-newer",
+                session_id="test-session",
+                started_at="2026-04-22T10:00:00",
+            )
+        )
+
+        recent = self.memory.get_recent_episodes(limit=5)
+
+        self.assertEqual([row["id"] for row in recent], ["ep-newer", "ep-older"])
 
 
     # ── I3 : update_signals — signals est la source de vérité pour la durée ───
