@@ -113,6 +113,7 @@ class SignalScorer:
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
         has_recent_local_exploration = self._has_recent_local_exploration(recent, now)
         probable_task, task_confidence = self._detect_task(
+            active_project=active_project,
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
             clipboard_context=clipboard_context,
@@ -349,6 +350,7 @@ class SignalScorer:
     def _collect_active_signals(
         self,
         *,
+        active_project: Optional[str],
         recent_apps: List[str],
         latest_active_app: Optional[str],
         clipboard_context: Optional[str],
@@ -376,11 +378,14 @@ class SignalScorer:
         _PATTERN_MAP = {
             "feature_candidate":  "feature_pattern",
             "refactor_candidate": "refactor_pattern",
-            "setup_candidate":    "setup_pattern",
             "debug_loop_candidate": "debug_loop_pattern",
         }
         if work_pattern_candidate in _PATTERN_MAP:
             active.add(_PATTERN_MAP[work_pattern_candidate])
+        if work_pattern_candidate == "setup_candidate":
+            has_setup_anchor = bool(active_project) or latest_active_app in self.DEV_APPS
+            if has_setup_anchor:
+                active.add("setup_pattern")
 
         if (
             docs_count >= 2
@@ -427,6 +432,7 @@ class SignalScorer:
     def _detect_task(
         self,
         *,
+        active_project: Optional[str],
         recent_apps: List[str],
         latest_active_app: Optional[str],
         clipboard_context: Optional[str],
@@ -437,6 +443,7 @@ class SignalScorer:
         work_pattern_candidate: Optional[str],
     ) -> tuple:
         active = self._collect_active_signals(
+            active_project=active_project,
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
             clipboard_context=clipboard_context,

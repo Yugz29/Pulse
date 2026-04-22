@@ -151,6 +151,30 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m["config"], 2)
         self.assertEqual(signals.work_pattern_candidate, "setup_candidate")
 
+    def test_setup_candidate_sans_ancrage_fort_retombe_sur_general(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._push("app_activated", {"app_name": "ChatGPT"})
+            self._push("file_modified", {"path": f"{tmpdir}/package.json"})
+            self._push("file_modified", {"path": f"{tmpdir}/pyproject.toml"})
+            self._push("file_modified", {"path": f"{tmpdir}/.env"})
+
+            signals = self.scorer.compute()
+
+        self.assertIsNone(signals.active_project)
+        self.assertEqual(signals.work_pattern_candidate, "setup_candidate")
+        self.assertEqual(signals.probable_task, "general")
+
+    def test_setup_candidate_avec_ancrage_projet_reste_coding(self):
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/package.json"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/pyproject.toml"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/.env"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.work_pattern_candidate, "setup_candidate")
+        self.assertEqual(signals.probable_task, "coding")
+
     def test_reduit_other_avec_extensions_config_et_source_courantes(self):
         self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/config/settings.yaml"})
         self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tsconfig.base.json"})
