@@ -91,6 +91,56 @@ extension DaemonBridge {
         guard let payload = try? decode(ProposalHistoryResponse.self, from: data) else { return [] }
         return payload.items
     }
+
+    func getFacts(limit: Int = 30) async -> FactsResponse? {
+        guard let url = URL(string: "\(base)/facts?limit=\(limit)") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard statusCode == 200 || statusCode == 503 else { return nil }
+        return try? decode(FactsResponse.self, from: data)
+    }
+
+    func getFactsStats() async -> FactsStatsResponse? {
+        guard let url = URL(string: "\(base)/facts/stats") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(FactsStatsResponse.self, from: data)
+    }
+
+    func getFactsProfile() async -> FactsProfileResponse? {
+        guard let url = URL(string: "\(base)/facts/profile") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(FactsProfileResponse.self, from: data)
+    }
+
+    func getArchivedFacts(limit: Int = 30) async -> FactsResponse? {
+        guard let url = URL(string: "\(base)/facts?limit=\(limit)&archived=true") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(FactsResponse.self, from: data)
+    }
+
+    func getMemory() async -> MemoryResponse? {
+        guard let url = URL(string: "\(base)/memory") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(MemoryResponse.self, from: data)
+    }
+
+    func getSessionJournals(limit: Int = 7) async -> SessionsResponse? {
+        guard let url = URL(string: "\(base)/memory/sessions?limit=\(limit)") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(SessionsResponse.self, from: data)
+    }
+
+    func getScoringStatus() async -> ScoringStatusResponse? {
+        guard let url = URL(string: "\(base)/scoring/status") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(ScoringStatusResponse.self, from: data)
+    }
 }
 
 // MARK: - Insight filtering

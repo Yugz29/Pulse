@@ -6,7 +6,7 @@ struct PingResponse: Codable {
     let paused: Bool?
 }
 
-struct StateResponse: Codable {
+struct StateResponse: Decodable {
     let activeApp: String?
     let activeFile: String?
     let activeProject: String?
@@ -14,6 +14,7 @@ struct StateResponse: Codable {
     let lastEventType: String?
     let runtimePaused: Bool?
     let signals: SignalsData?
+    let sessionFsm: SessionFSMData?
 
     enum CodingKeys: String, CodingKey {
         case activeApp = "active_app"
@@ -23,6 +24,7 @@ struct StateResponse: Codable {
         case lastEventType = "last_event_type"
         case runtimePaused = "runtime_paused"
         case signals
+        case sessionFsm = "session_fsm"
     }
 }
 
@@ -30,6 +32,8 @@ struct SignalsData: Codable {
     let activeProject: String?
     let activeFile: String?
     let probableTask: String?
+    let activityLevel: String?
+    let taskConfidence: Double?
     let focusLevel: String?
     let frictionScore: Double?
     let sessionDurationMin: Int?
@@ -46,6 +50,8 @@ struct SignalsData: Codable {
         case activeProject = "active_project"
         case activeFile = "active_file"
         case probableTask = "probable_task"
+        case activityLevel = "activity_level"
+        case taskConfidence = "task_confidence"
         case focusLevel = "focus_level"
         case frictionScore = "friction_score"
         case sessionDurationMin = "session_duration_min"
@@ -66,6 +72,17 @@ struct SignalsData: Codable {
         case "debug": return "Débogage"
         case "exploration", "browsing": return "Exploration"
         default: return "Général"
+        }
+    }
+
+    var activityLabel: String {
+        switch activityLevel {
+        case "editing": return "Édition"
+        case "reading": return "Lecture"
+        case "executing": return "Exécution"
+        case "navigating": return "Navigation"
+        case "idle": return "Inactif"
+        default: return "—"
         }
     }
 
@@ -203,6 +220,175 @@ struct SignalsData: Codable {
     }
 }
 
+struct SessionFSMData: Decodable {
+    let state: String?
+    let sessionStartedAt: String?
+    let lastMeaningfulActivityAt: String?
+    let lastScreenLockedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case sessionStartedAt = "session_started_at"
+        case lastMeaningfulActivityAt = "last_meaningful_activity_at"
+        case lastScreenLockedAt = "last_screen_locked_at"
+    }
+
+    var stateLabel: String {
+        switch state {
+        case "active": return "Active"
+        case "idle": return "Idle"
+        case "locked": return "Verrouillée"
+        default: return state ?? "—"
+        }
+    }
+
+    var stateColor: String {
+        switch state {
+        case "active": return "#5DCAA5"
+        case "idle": return "#EF9F27"
+        case "locked": return "#7c7c80"
+        default: return "#7c7c80"
+        }
+    }
+}
+
+struct FactsResponse: Decodable {
+    let status: String
+    let count: Int
+    let facts: [FactRecord]
+    let reason: String?
+}
+
+struct FactsProfileResponse: Decodable {
+    let profile: String
+}
+
+struct FactRecord: Decodable, Identifiable {
+    let id: String
+    let key: String
+    let value: String
+    let confidence: Double
+    let category: String?
+    let createdAt: String?
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, key, value, description, confidence, category
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        key = try container.decode(String.self, forKey: .key)
+        confidence = try container.decode(Double.self, forKey: .confidence)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+
+        if let value = try container.decodeIfPresent(String.self, forKey: .value) {
+            self.value = value
+        } else {
+            self.value = try container.decode(String.self, forKey: .description)
+        }
+    }
+
+    var confidenceLabel: String {
+        switch confidence {
+        case 0.8...: return "Fort"
+        case 0.6...: return "Moyen"
+        default: return "Faible"
+        }
+    }
+
+    var confidenceColor: String {
+        switch confidence {
+        case 0.8...: return "#5DCAA5"
+        case 0.6...: return "#EF9F27"
+        default: return "#7c7c80"
+        }
+    }
+}
+
+struct MemoryResponse: Decodable {
+    let entries: [MemoryEntry]
+    let frozenAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case entries
+        case frozenAt = "frozen_at"
+    }
+}
+
+struct MemoryEntry: Decodable, Identifiable {
+    let id: String
+    let content: String
+    let tier: String?
+    let topic: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, content, tier, topic
+        case createdAt = "created_at"
+    }
+}
+
+struct SessionsResponse: Decodable {
+    let sessions: [SessionJournal]
+}
+
+struct SessionJournal: Decodable, Identifiable {
+    var id: String { date }
+    let date: String
+    let content: String
+}
+
+struct FactsStatsResponse: Decodable {
+    let total: Int?
+    let active: Int?
+    let archived: Int?
+    let byCategory: [String: Int]?
+
+    enum CodingKeys: String, CodingKey {
+        case total
+        case active
+        case activeFacts = "active_facts"
+        case archived
+        case archivedFacts = "archived_facts"
+        case byCategory = "by_category"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        total = try container.decodeIfPresent(Int.self, forKey: .total)
+        active =
+            try container.decodeIfPresent(Int.self, forKey: .active)
+            ?? container.decodeIfPresent(Int.self, forKey: .activeFacts)
+        archived =
+            try container.decodeIfPresent(Int.self, forKey: .archived)
+            ?? container.decodeIfPresent(Int.self, forKey: .archivedFacts)
+        byCategory = try container.decodeIfPresent([String: Int].self, forKey: .byCategory)
+    }
+}
+
+struct ScoringStatusResponse: Decodable {
+    let treesitterCore: Bool?
+    let pythonAst: Bool?
+    let languages: [String: ScoringLanguageStatus]?
+
+    enum CodingKeys: String, CodingKey {
+        case treesitterCore = "treesitter_core"
+        case pythonAst = "python_ast"
+        case languages
+    }
+}
+
+struct ScoringLanguageStatus: Decodable {
+    let available: Bool?
+    let parser: String?
+}
+
 struct AskResponse: Codable {
     let ok: Bool
     let response: String?
@@ -288,9 +474,14 @@ struct ProposalRecord: Identifiable, Codable {
     let summary: String
     let rationale: String
     let status: String
+    let command: String?
+    let translated: String?
+    let riskLevel: String?
+    let riskScore: Int?
     let createdAt: String
     let updatedAt: String
     let decidedAt: String?
+    let evidence: [[String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -299,9 +490,14 @@ struct ProposalRecord: Identifiable, Codable {
         case summary
         case rationale
         case status
+        case command
+        case translated
+        case riskLevel = "risk_level"
+        case riskScore = "risk_score"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case decidedAt = "decided_at"
+        case evidence
     }
 
     private static let internetISO8601Formatter: ISO8601DateFormatter = {
