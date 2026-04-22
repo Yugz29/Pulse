@@ -33,9 +33,11 @@ Pulse is a local system that:
 - maintains a simple local memory
 - intercepts selected agent actions
 - produces explainable proposals
+- exposes an independent technical dashboard window to make internal state visible in real time
 
 In practice, Pulse is built from:
 - a Swift macOS app around the notch
+- an independent dashboard window in the app for session, memory, events, MCP, and system visibility
 - a local Python daemon
 - an optional LLM layer, used only when deterministic logic is not enough
 
@@ -139,6 +141,18 @@ The LLM is used only when needed:
 - limited enrichment
 - explicit user questions
 
+### Routes currently exposed
+
+- `/state`
+- `/insights`
+- `/facts`
+- `/facts/stats`
+- `/facts/profile`
+- `/memory`
+- `/memory/sessions`
+- `/mcp/pending`
+- `/mcp/decision`
+
 ---
 
 ## What is solid today
@@ -210,17 +224,16 @@ It has crossed an important threshold:
 - session lifecycle has a single source of truth
 - the system is stable enough to be observed seriously
 
-The next logical step is not to immediately add another ambitious layer.
+The next logical step is no longer field observation, which is now closed.
 
-The next logical step is:
+The next logical step is now:
 
-**Field observation**
+**Episode System V1**
 
 In practical terms, that means:
-- looking at what the system actually does
-- measuring where it drifts
-- observing session boundaries and context quality
-- avoiding an Episode System push on top of a runtime that has not been observed enough yet
+- introducing a real unit of meaning inside a session
+- structuring work continuity more explicitly
+- reducing the current flatness of memory and injected context
 
 ---
 

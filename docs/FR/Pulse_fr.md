@@ -33,9 +33,11 @@ Pulse est un système local qui :
 - consolide une mémoire locale simple
 - intercepte certaines actions d’agents
 - produit des propositions explicables
+- expose une fenêtre dashboard technique indépendante pour rendre l’état interne visible en temps réel
 
 Concrètement, Pulse repose sur :
 - une app macOS Swift autour de l’encoche
+- une fenêtre dashboard indépendante côté app pour visualiser session, mémoire, événements, MCP et état système
 - un daemon Python local
 - une couche LLM optionnelle, utilisée seulement quand le déterministe ne suffit plus
 
@@ -139,6 +141,18 @@ Le LLM intervient seulement quand nécessaire :
 - enrichissement limité
 - questions explicites
 
+### Routes aujourd’hui exposées
+
+- `/state`
+- `/insights`
+- `/facts`
+- `/facts/stats`
+- `/facts/profile`
+- `/memory`
+- `/memory/sessions`
+- `/mcp/pending`
+- `/mcp/decision`
+
 ---
 
 ## Ce qui est solide aujourd’hui
@@ -210,17 +224,16 @@ Le projet a franchi une première étape importante :
 - le lifecycle sessionnel est unifié
 - le système est assez stable pour être observé sérieusement
 
-La prochaine étape logique n’est pas d’ajouter immédiatement de nouvelles couches ambitieuses.
+La prochaine étape logique n’est plus l’observation terrain, qui est clôturée.
 
-La prochaine étape logique est :
+La prochaine étape logique est désormais :
 
-**Observation terrain**
+**Episode System V1**
 
 Autrement dit :
-- regarder ce que le système fait vraiment
-- mesurer ses écarts
-- observer les frontières de session et la qualité du contexte
-- éviter d’ouvrir un chantier Episode sur une base encore mal observée
+- introduire une vraie unité de sens intra-session
+- mieux structurer la continuité du travail
+- réduire la platitude actuelle de la mémoire et du contexte injecté
 
 ---
 

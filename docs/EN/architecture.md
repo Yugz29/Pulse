@@ -44,10 +44,15 @@ But those layers do not all exist at the same level of maturity.
 - Local event observation through the Swift app and the Python daemon
 - Runtime-side event qualification (`actor`, `noise_policy`, implicit domain from file or action type)
 - Real-time work signal computation
+- `activity_level` and `task_confidence` exposed through `/state`
+- `session_fsm` exposed through `/state`
 - `CurrentContext` as the runtime synthesis view
 - `SessionSnapshot` as the structured session projection
 - `ProposalCandidate` as the business contract before legacy transport
 - `SessionFSM` as the source of truth for session lifecycle
+- Technical dashboard in the app (`DashboardWindow`) as an independent glassmorphism window
+- Phase 1 observability: `CurrentContextBuilder` logs, explicit memory fallback in `freeze_memory()`, logged FSM transitions
+- `/memory/sessions` route for session journal exposure
 - Locked legacy compatibility on:
   - `build_context_snapshot()`
   - `/state`
@@ -394,18 +399,18 @@ Current examples:
 
 ## 8. Next logical phase
 
-The next phase is not Episode System.
+The next logical phase is now `Episode System V1`.
 
-The next logical phase is `Field observation`.
+`Field observation` is now complete and confirmed several real limitations:
+- session timeout remains too short outside file-driven workflows
+- LLM context injection is still too flat
+- memory remains largely session-centric
+- cross-session continuity is still weak
 
 Goal:
-- measure the behavior of the stabilized runtime in practice
-- qualify the gaps before opening an Episode effort
-
-Implications:
-- no immediate Episode feature work
-- no premature generalization
-- no heuristic changes without observation
+- introduce the episode as a unit of meaning inside a session
+- better structure work continuity
+- prepare less flat memory and proposal flows
 
 ---
 
