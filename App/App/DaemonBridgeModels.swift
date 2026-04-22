@@ -15,6 +15,8 @@ struct StateResponse: Decodable {
     let runtimePaused: Bool?
     let signals: SignalsData?
     let sessionFsm: SessionFSMData?
+    let currentEpisode: EpisodeData?
+    let recentEpisodes: [EpisodeData]?
 
     enum CodingKeys: String, CodingKey {
         case activeApp = "active_app"
@@ -25,6 +27,91 @@ struct StateResponse: Decodable {
         case runtimePaused = "runtime_paused"
         case signals
         case sessionFsm = "session_fsm"
+        case currentEpisode = "current_episode"
+        case recentEpisodes = "recent_episodes"
+    }
+}
+
+struct EpisodeData: Decodable, Identifiable {
+    let id: String
+    let sessionId: String
+    let startedAt: String
+    let endedAt: String?
+    let boundaryReason: String?
+    let durationSec: Int?
+    let probableTask: String?
+    let activityLevel: String?
+    let taskConfidence: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sessionId = "session_id"
+        case startedAt = "started_at"
+        case endedAt = "ended_at"
+        case boundaryReason = "boundary_reason"
+        case durationSec = "duration_sec"
+        case probableTask = "probable_task"
+        case activityLevel = "activity_level"
+        case taskConfidence = "task_confidence"
+    }
+
+    var isActive: Bool {
+        endedAt == nil
+    }
+
+    var boundaryLabel: String {
+        switch boundaryReason {
+        case "screen_lock": return "Verrou écran"
+        case "idle_timeout": return "Timeout inactivité"
+        case "commit": return "Commit"
+        case "session_end": return "Fin de session"
+        case nil: return "En cours"
+        default: return boundaryReason ?? "—"
+        }
+    }
+
+    var boundaryColor: String {
+        switch boundaryReason {
+        case "screen_lock": return "#5E9EFF"
+        case "idle_timeout": return "#EF9F27"
+        case "commit": return "#5DCAA5"
+        case "session_end": return "#7c7c80"
+        case nil: return "#5DCAA5"
+        default: return "#7c7c80"
+        }
+    }
+
+    var taskLabel: String {
+        switch probableTask {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "exploration", "browsing": return "Exploration"
+        case "general": return "Général"
+        case nil: return "—"
+        default: return probableTask ?? "—"
+        }
+    }
+
+    var activityLabel: String {
+        switch activityLevel {
+        case "editing": return "Édition"
+        case "reading": return "Lecture"
+        case "executing": return "Exécution"
+        case "navigating": return "Navigation"
+        case "idle": return "Inactif"
+        default: return "—"
+        }
+    }
+
+    var taskAccentHex: String {
+        switch probableTask {
+        case "coding": return "#5DCAA5"
+        case "writing": return "#5E9EFF"
+        case "debug": return "#ff453a"
+        case "exploration", "browsing": return "#EF9F27"
+        default: return "#7c7c80"
+        }
     }
 }
 
@@ -110,9 +197,12 @@ struct SignalsData: Codable {
 
     var taskEvidenceLabel: String {
         if isFileDrivenTask {
-            return "ancré dans les fichiers"
+            return "Ancré"
         }
-        return "contexte léger"
+        if probableTask == "general" || (taskConfidence ?? 0) < 0.45 {
+            return "Faible"
+        }
+        return "Ambigu"
     }
 
     var taskEvidenceSummary: String {
