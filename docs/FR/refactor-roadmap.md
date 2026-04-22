@@ -99,7 +99,6 @@ Rendre le runtime structurable sans changer le comportement observable.
 
 Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode System.
 
-
 **Livrables**
 
 - Instrumentation de debug et d'audit ciblée
@@ -115,15 +114,12 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 - Mémoire confirmée comme principalement session-centrique en usage réel
 - Pas de continuité structurée inter-session au-delà de `last_session_context`
 
-### Méthode d’observation
+**Méthode d'observation**
 
 - Utilisation réelle du système sur sessions de développement
-- Prise de notes d’observation terrain hors repo, de manière libre et systématique
-- Analyse des divergences :
-  - activité réelle vs `activity_level`
-  - tâche réelle vs `probable_task`
-  - frontières de session perçues vs FSM
-- Capture de cas concrets (courts extraits) pour audit ultérieur
+- Prise de notes d'observation terrain hors repo, de manière libre et systématique
+- Analyse des divergences : activité réelle vs `activity_level`, tâche réelle vs `probable_task`, frontières de session perçues vs FSM
+- Capture de cas concrets pour audit ultérieur
 
 **Hors périmètre**
 
@@ -136,35 +132,74 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 
 - ✓ Frontières de session stables sur cas réels
 - ✓ Zones faibles identifiées et classées (voir `OBS.md`)
-- ✓ Point d’entrée Episode System défini à partir d’observations terrain
+- ✓ Point d'entrée Episode System défini à partir d'observations terrain
 
-### Phase 2 — Episode System V1
+---
+
+### Phase 2a — Episode Boundaries
 
 **Statut** : prochaine phase
 
 **Objectif**
 
-Introduire l'épisode comme unité de sens intra-session, sans casser les couches existantes.
+Poser des frontières d'épisodes fiables et observables, sans sémantique imposée.
+La question à résoudre : délimiter du temps de travail réel de façon déterministe et auditable.
+
+Principe : un épisode est d'abord une unité temporelle fiable. La sémantique vient ensuite, en Phase 2b.
 
 **Livrables**
 
-- Modèle d'épisode explicite
-- Détection d'épisodes à partir du runtime stabilisé
-- Intégration `episode -> session`
+- Modèle `Episode` minimal : id, started_at, ended_at, session_id
+- Détection des frontières par signaux durs : gap d'inactivité, changement de projet, commit confirmé, verrou écran
+- `EpisodeFSM` : lifecycle actif / suspendu / clos, source de vérité des frontières
+- Intégration `episode -> session` : une session agrège plusieurs épisodes
+- Exposition dans `/state` : épisode courant visible dans le dashboard
+- Persistance minimale en SQLite
+
+**Hors périmètre**
+
+- Sémantique de tâche sur l'épisode (Phase 2b)
+- Injection LLM de l'épisode
+- Agentique
+- Refonte mémoire
+
+**Condition de sortie**
+
+- Les frontières d'épisode sont visibles dans le dashboard et correspondent à la réalité terrain
+- Une session agrège plusieurs épisodes sans bricolage
+- Les frontières sont auditables : on peut expliquer pourquoi un épisode a commencé ou fini
+
+---
+
+### Phase 2b — Episode Semantics
+
+**Statut** : non démarrée
+
+**Objectif**
+
+Ajouter de la sémantique sur les épisodes délimités en 2a.
+Un épisode devient une unité de sens : quelle tâche, quel contexte, quelle origine.
+
+**Livrables**
+
+- `probable_task` et `activity_level` portés au niveau de l'épisode
+- Label d'origine : `user_driven`, `assistant_driven`, `mixed`
 - Export exploitable par mémoire et proposition
-- Transparence minimale sur l'épisode courant et les épisodes clos
+- Transparence sur l'épisode courant et les épisodes clos dans le dashboard
 
 **Hors périmètre**
 
 - Agentique
 - Refonte complète de la mémoire
-- Automatisation d'actions
+- Détection LLM des épisodes
 
 **Condition de sortie**
 
-- Les épisodes ont une sémantique stable
-- Les frontières d'épisode sont compréhensibles et auditables
-- La session peut agréger plusieurs épisodes sans bricolage
+- Un épisode clos porte une sémantique lisible et auditable
+- On distingue ce que l'utilisateur a fait de ce que l'assistant a produit à sa demande
+- La sémantique est construite de façon déterministe, sans LLM obligatoire
+
+---
 
 ### Phase 3 — Smart Proposals
 
@@ -246,15 +281,20 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
   - Compat legacy verrouillée
   - Lifecycle session unifié
 
-- `Observation terrain -> Episode System V1`
+- `Observation terrain -> Episode Boundaries (2a)`
   - Cas réels observés et documentés
   - Frontières de session jugées stables
   - Besoins d'épisode formulés à partir de données terrain
 
-- `Episode System V1 -> Smart Proposals`
-  - Épisode courant et épisodes clos exploitables
+- `Episode Boundaries (2a) -> Episode Semantics (2b)`
+  - Frontières d'épisode visibles et auditables dans le dashboard
+  - Une session agrège plusieurs épisodes de façon stable
+  - Correspondance terrain validée sur plusieurs sessions réelles
+
+- `Episode Semantics (2b) -> Smart Proposals`
+  - Épisode clos avec sémantique lisible
+  - Distinction user_driven / assistant_driven opérationnelle
   - Agrégation sessionnelle stable
-  - Transparence suffisante sur les transitions
 
 - `Smart Proposals -> Mémoire enrichie`
   - Proposals contextualisées mais encore limitées par la mémoire actuelle
@@ -283,17 +323,15 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
 - Une seule source de vérité par responsabilité critique
 - Toute modification comportementale doit être assumée comme telle et sortir du simple chantier de structure
 
-
 ## 6. Output utilisateur attendu
 
-En Phase 2 — Episode System V1, Pulse doit permettre :
+En Phase 2a — Episode Boundaries, Pulse doit permettre :
 
-- d’observer en temps réel l’activité, la tâche et le contexte (acquis Phase 1)
-- de visualiser l’état interne via le dashboard technique (acquis Phase 1)
-- de détecter des frontières d’épisodes intra-session
-- de distinguer plusieurs unités de sens dans une même session de travail
+- de voir l'épisode courant dans le dashboard en temps réel
+- de comprendre pourquoi une frontière d'épisode a été détectée
+- de visualiser l'historique des épisodes d'une session
 
-La continuité inter-session et les propositions intelligentes restent hors périmètre Phase 2.
+La sémantique de tâche sur les épisodes reste hors périmètre Phase 2a.
 
 ## Référence d'usage
 
