@@ -40,6 +40,16 @@ class CurrentContext:
     task_confidence: float
     focus_level: str
     clipboard_context: Optional[str]
+    mcp_action_category: Optional[str] = None
+    mcp_is_read_only: Optional[bool] = None
+    mcp_decision: Optional[str] = None
+    mcp_summary: Optional[str] = None
+    terminal_action_category: Optional[str] = None
+    terminal_project: Optional[str] = None
+    terminal_cwd: Optional[str] = None
+    terminal_exit_code: Optional[int] = None
+    terminal_duration_ms: Optional[int] = None
+    terminal_summary: Optional[str] = None
     signal_summary: SignalSummary = field(default_factory=SignalSummary)
 
 

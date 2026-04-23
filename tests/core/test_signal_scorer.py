@@ -239,6 +239,58 @@ class TestSignalScorer(unittest.TestCase):
             self.assertEqual(signals.active_project, "workspace-app")
             self.assertEqual(signals.active_file, str(file_path))
 
+    def test_active_project_reste_sur_workspace_dominant_malgre_un_fichier_isole_plus_recent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_a = Path(tmpdir) / "repo-a"
+            repo_b = Path(tmpdir) / "repo-b"
+            (repo_a / ".git").mkdir(parents=True)
+            (repo_b / ".git").mkdir(parents=True)
+
+            a1 = repo_a / "src" / "a1.py"
+            a2 = repo_a / "src" / "a2.py"
+            a3 = repo_a / "src" / "a3.py"
+            b1 = repo_b / "src" / "b1.py"
+            for file_path in (a1, a2, a3, b1):
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text("print('ok')\n")
+
+            self._push("file_modified", {"path": str(a1)}, minutes_ago=3)
+            self._push("file_modified", {"path": str(a2)}, minutes_ago=2)
+            self._push("file_modified", {"path": str(a3)}, minutes_ago=1)
+            self._push("file_modified", {"path": str(b1)}, minutes_ago=0)
+
+            signals = self.scorer.compute()
+
+            self.assertEqual(signals.active_project, "repo-a")
+            self.assertEqual(signals.active_file, str(a3))
+
+    def test_active_project_bascule_quand_le_nouveau_workspace_domine_les_evenements_recents(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_a = Path(tmpdir) / "repo-a"
+            repo_b = Path(tmpdir) / "repo-b"
+            (repo_a / ".git").mkdir(parents=True)
+            (repo_b / ".git").mkdir(parents=True)
+
+            a1 = repo_a / "src" / "a1.py"
+            a2 = repo_a / "src" / "a2.py"
+            a3 = repo_a / "src" / "a3.py"
+            b1 = repo_b / "src" / "b1.py"
+            b2 = repo_b / "src" / "b2.py"
+            for file_path in (a1, a2, a3, b1, b2):
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text("print('ok')\n")
+
+            self._push("file_modified", {"path": str(a1)}, minutes_ago=5)
+            self._push("file_modified", {"path": str(a2)}, minutes_ago=4)
+            self._push("file_modified", {"path": str(a3)}, minutes_ago=3)
+            self._push("file_modified", {"path": str(b1)}, minutes_ago=1)
+            self._push("file_modified", {"path": str(b2)}, minutes_ago=0)
+
+            signals = self.scorer.compute()
+
+            self.assertEqual(signals.active_project, "repo-b")
+            self.assertEqual(signals.active_file, str(b2))
+
     def test_file_deleted_ne_devient_pas_le_fichier_actif(self):
         self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
         self._push("file_deleted", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/obsolete.py"})

@@ -1,12 +1,13 @@
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from .event_bus import DEFAULT_EVENT_BUS_SIZE, EventBus
 from .file_classifier import classify_file_type, file_signal_significance, is_pulse_internal_path
 from .session_fsm import SESSION_TIMEOUT_MIN
-from .workspace_context import extract_project_name
+from .workspace_context import extract_project_name, find_workspace_root
 
 
 @dataclass
@@ -34,6 +35,16 @@ class Signals:
     #   Exposé pour la décision et le debug ; non utilisé par decision_engine.
     activity_level: str = "idle"
     task_confidence: float = 0.5
+    mcp_action_category: Optional[str] = None
+    mcp_is_read_only: Optional[bool] = None
+    mcp_decision: Optional[str] = None
+    mcp_summary: Optional[str] = None
+    terminal_action_category: Optional[str] = None
+    terminal_project: Optional[str] = None
+    terminal_cwd: Optional[str] = None
+    terminal_exit_code: Optional[int] = None
+    terminal_duration_ms: Optional[int] = None
+    terminal_summary: Optional[str] = None
 
 
 class SignalScorer:
@@ -74,8 +85,19 @@ class SignalScorer:
             e for e in file_events
             if self._file_signal_significance(e.payload.get("path")) == "meaningful"
         ]
-        active_file = self._last_file_path(meaningful_file_events)
-        active_project = self._extract_project(active_file)
+        recent_file_events = self._recent_file_events(file_events, now)
+        recent_meaningful_file_events = self._recent_file_events(meaningful_file_events, now)
+
+        dominant_workspace_root = self._dominant_workspace_root(recent_meaningful_file_events)
+        if dominant_workspace_root:
+            active_file = self._last_file_path_for_workspace(
+                meaningful_file_events,
+                dominant_workspace_root,
+            )
+            active_project = self._extract_project_from_workspace(dominant_workspace_root)
+        else:
+            active_file = self._last_file_path(meaningful_file_events)
+            active_project = self._extract_project(active_file)
 
         app_events = [e for e in recent if e.type in {"app_activated", "app_switch"}]
         recent_apps = self._recent_apps(app_events, now)
@@ -84,9 +106,11 @@ class SignalScorer:
             e for e in recent if e.type in {"clipboard_updated", "clipboard_update"}
         ]
         clipboard_context = self._last_clipboard_context(clipboard_events, now)
+        mcp_signal = self._latest_mcp_signal(recent, now)
+        terminal_signal = self._latest_terminal_signal(recent, now)
 
-        recent_file_events = self._recent_file_events(file_events, now)
-        recent_meaningful_file_events = self._recent_file_events(meaningful_file_events, now)
+        if not active_project:
+            active_project = (terminal_signal or {}).get("terminal_project")
 
         # Seuls les events attribués à l'utilisateur (ou non attribués) alimentent
         # les comptages de scoring. Les events system/tool_assisted sont exclus pour
@@ -117,6 +141,8 @@ class SignalScorer:
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
             clipboard_context=clipboard_context,
+            mcp_signal=mcp_signal,
+            terminal_signal=terminal_signal,
             friction_score=friction_score,
             edited_file_count=edited_file_count_10m,
             file_type_mix=file_type_mix_10m,
@@ -130,6 +156,8 @@ class SignalScorer:
             latest_active_app=latest_active_app,
             recent_apps=recent_apps,
             has_recent_local_exploration=has_recent_local_exploration,
+            mcp_signal=mcp_signal,
+            terminal_signal=terminal_signal,
         )
 
         return Signals(
@@ -148,6 +176,16 @@ class SignalScorer:
             work_pattern_candidate=work_pattern_candidate,
             activity_level=activity_level,
             task_confidence=task_confidence,
+            mcp_action_category=(mcp_signal or {}).get("mcp_action_category"),
+            mcp_is_read_only=(mcp_signal or {}).get("mcp_is_read_only"),
+            mcp_decision=(mcp_signal or {}).get("mcp_decision"),
+            mcp_summary=(mcp_signal or {}).get("mcp_summary"),
+            terminal_action_category=(terminal_signal or {}).get("terminal_action_category"),
+            terminal_project=(terminal_signal or {}).get("terminal_project"),
+            terminal_cwd=(terminal_signal or {}).get("terminal_cwd"),
+            terminal_exit_code=(terminal_signal or {}).get("terminal_exit_code"),
+            terminal_duration_ms=(terminal_signal or {}).get("terminal_duration_ms"),
+            terminal_summary=(terminal_signal or {}).get("terminal_summary"),
         )
 
     def _file_event_types(self) -> set[str]:
@@ -161,6 +199,49 @@ class SignalScorer:
             if path and event.type != "file_deleted":
                 return path
         return None
+
+    def _last_file_path_for_workspace(self, file_events: list, workspace_root: str) -> Optional[str]:
+        for event in reversed(file_events):
+            path = event.payload.get("path")
+            if not path or event.type == "file_deleted":
+                continue
+            if self._workspace_root(path) == workspace_root:
+                return path
+        return None
+
+    def _dominant_workspace_root(self, file_events: list) -> Optional[str]:
+        """
+        Déduit un workspace dominant à partir d'une petite fenêtre récente
+        de fichiers meaningful, avec une pondération décroissante pour rester
+        réactif sans suivre aveuglément le tout dernier fichier isolé.
+        """
+        scored_candidates: dict[str, float] = {}
+        latest_rank: dict[str, int] = {}
+        recent_workspace_roots: list[str] = []
+
+        for event in reversed(file_events):
+            path = event.payload.get("path")
+            if not path:
+                continue
+            workspace_root = self._workspace_root(path)
+            if not workspace_root:
+                continue
+            recent_workspace_roots.append(workspace_root)
+            if len(recent_workspace_roots) >= 6:
+                break
+
+        if not recent_workspace_roots:
+            return None
+
+        for index, workspace_root in enumerate(recent_workspace_roots):
+            weight = 0.65 ** index
+            scored_candidates[workspace_root] = scored_candidates.get(workspace_root, 0.0) + weight
+            latest_rank.setdefault(workspace_root, index)
+
+        return max(
+            scored_candidates,
+            key=lambda root: (scored_candidates[root], -latest_rank[root]),
+        )
 
     def _recent_apps(self, app_events: list, now: datetime) -> List[str]:
         window_start = now - timedelta(minutes=30)
@@ -343,6 +424,16 @@ class SignalScorer:
         "clipboard_stacktrace":  {"debug": 3.0},
         "clipboard_error":       {"debug": 2.0},
         "clipboard_code":        {"coding": 0.5},
+        # MCP minimal : signal d'intention/outil, pas une preuve forte seule.
+        "mcp_repo_inspection":   {"exploration": 1.0},
+        "mcp_inspection":        {"exploration": 1.0},
+        "mcp_testing":           {"coding": 1.0},
+        "mcp_modification":      {"coding": 1.0},
+        "terminal_inspection":   {"exploration": 1.0},
+        "terminal_testing":      {"coding": 1.0},
+        "terminal_build":        {"coding": 1.0},
+        "terminal_setup":        {"coding": 1.0},
+        "terminal_vcs":          {"exploration": 1.0},
         # Friction seule : poids quasi-nul, jamais décisif sans autre preuve
         "high_friction":         {"debug": 0.3},
     }
@@ -354,6 +445,8 @@ class SignalScorer:
         recent_apps: List[str],
         latest_active_app: Optional[str],
         clipboard_context: Optional[str],
+        mcp_signal: Optional[dict],
+        terminal_signal: Optional[dict],
         friction_score: float,
         edited_file_count: int,
         file_type_mix: Dict[str, int],
@@ -417,6 +510,36 @@ class SignalScorer:
         elif clipboard_context == "code":
             active.add("clipboard_code")
 
+        if edited_file_count == 0 and self._is_usable_mcp_signal(mcp_signal):
+            category = (mcp_signal or {}).get("mcp_action_category")
+            if category == "repo_inspection":
+                active.add("mcp_repo_inspection")
+            elif category == "inspection":
+                active.add("mcp_inspection")
+            elif category == "testing":
+                active.add("mcp_testing")
+            elif category == "modification":
+                has_dev_anchor = bool(active_project) or latest_active_app in self.DEV_APPS
+                if has_dev_anchor:
+                    active.add("mcp_modification")
+
+        if edited_file_count == 0 and self._is_usable_terminal_signal(terminal_signal):
+            category = (terminal_signal or {}).get("terminal_action_category")
+            if category == "inspection":
+                active.add("terminal_inspection")
+            elif category == "testing":
+                active.add("terminal_testing")
+            elif category == "vcs":
+                active.add("terminal_vcs")
+            elif category == "build":
+                has_dev_anchor = bool(active_project) or latest_active_app in self.DEV_APPS
+                if has_dev_anchor:
+                    active.add("terminal_build")
+            elif category == "setup":
+                has_dev_anchor = bool(active_project) or latest_active_app in self.DEV_APPS
+                if has_dev_anchor:
+                    active.add("terminal_setup")
+
         if friction_score >= 0.75:
             active.add("high_friction")
 
@@ -436,6 +559,8 @@ class SignalScorer:
         recent_apps: List[str],
         latest_active_app: Optional[str],
         clipboard_context: Optional[str],
+        mcp_signal: Optional[dict],
+        terminal_signal: Optional[dict],
         friction_score: float,
         edited_file_count: int,
         file_type_mix: Dict[str, int],
@@ -447,6 +572,8 @@ class SignalScorer:
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
             clipboard_context=clipboard_context,
+            mcp_signal=mcp_signal,
+            terminal_signal=terminal_signal,
             friction_score=friction_score,
             edited_file_count=edited_file_count,
             file_type_mix=file_type_mix,
@@ -475,6 +602,8 @@ class SignalScorer:
         latest_active_app: Optional[str],
         recent_apps: List[str],
         has_recent_local_exploration: bool,
+        mcp_signal: Optional[dict] = None,
+        terminal_signal: Optional[dict] = None,
     ) -> str:
         """
         Activité bas niveau : ce que l'utilisateur fait concrètement.
@@ -484,6 +613,18 @@ class SignalScorer:
         """
         if focus_level == "idle":
             return "idle"
+        if self._is_usable_mcp_signal(mcp_signal):
+            category = (mcp_signal or {}).get("mcp_action_category")
+            if category in {"inspection", "repo_inspection"}:
+                return "reading"
+            if category in {"testing", "modification", "execution"}:
+                return "executing"
+        if self._is_usable_terminal_signal(terminal_signal):
+            category = (terminal_signal or {}).get("terminal_action_category")
+            is_read_only = (terminal_signal or {}).get("terminal_is_read_only")
+            if category == "inspection" or (category == "vcs" and is_read_only):
+                return "reading"
+            return "executing"
         if latest_active_app in self.TERMINAL_APPS:
             return "executing"
         if user_file_count >= 1:
@@ -533,6 +674,48 @@ class SignalScorer:
 
     def _extract_project(self, file_path: Optional[str]) -> Optional[str]:
         return extract_project_name(file_path)
+
+    def _latest_mcp_signal(self, recent: list, now: datetime, minutes: int = 10) -> Optional[dict]:
+        cutoff = now - timedelta(minutes=minutes)
+        for event in reversed(recent):
+            if event.timestamp < cutoff:
+                break
+            if event.type not in {"mcp_command_received", "mcp_decision"}:
+                continue
+            payload = event.payload or {}
+            if payload.get("mcp_action_category"):
+                return payload
+        return None
+
+    def _is_usable_mcp_signal(self, mcp_signal: Optional[dict]) -> bool:
+        if not mcp_signal:
+            return False
+        return mcp_signal.get("mcp_decision") != "deny"
+
+    def _latest_terminal_signal(self, recent: list, now: datetime, minutes: int = 10) -> Optional[dict]:
+        cutoff = now - timedelta(minutes=minutes)
+        for event in reversed(recent):
+            if event.timestamp < cutoff:
+                break
+            if event.type not in {"terminal_command_started", "terminal_command_finished"}:
+                continue
+            payload = event.payload or {}
+            if payload.get("terminal_action_category"):
+                return payload
+        return None
+
+    def _is_usable_terminal_signal(self, terminal_signal: Optional[dict]) -> bool:
+        if not terminal_signal:
+            return False
+        return True
+
+    def _extract_project_from_workspace(self, workspace_root: str) -> Optional[str]:
+        name = Path(workspace_root).name.strip()
+        return name or None
+
+    def _workspace_root(self, file_path: Optional[str]) -> Optional[str]:
+        root = find_workspace_root(file_path)
+        return str(root) if root else None
 
     def _classify_file_type(self, path: str) -> str:
         return classify_file_type(path)

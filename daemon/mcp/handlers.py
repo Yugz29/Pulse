@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import importlib
 import logging
+import shlex
 from typing import Optional
 
 from daemon.core.contracts import ProposalCandidate
@@ -10,6 +13,11 @@ from daemon.llm.unavailable import UnavailableLLMRouter
 
 log = logging.getLogger("pulse")
 interpreter = CommandInterpreter()
+
+_MCP_TEST_COMMANDS = {
+    "pytest", "tox", "nosetests", "nose2", "unittest", "xcodebuild",
+}
+_MCP_PACKAGE_MANAGERS = {"npm", "pnpm", "yarn", "uv", "poetry", "cargo", "go", "swift"}
 
 
 def _build_llm_router():
@@ -95,6 +103,27 @@ def intercept_command(command: str, tool_use_id: str) -> dict:
         **_proposal_to_api_payload(proposal_store.get(proposal.id) or proposal),
         "decision": decision,
         "allowed": decision == "allow",
+    }
+
+
+def build_runtime_signal(
+    command: str,
+    tool_use_id: str,
+    *,
+    decision: Optional[str] = None,
+    allowed: Optional[bool] = None,
+) -> dict:
+    interpretation = interpreter.interpret(command)
+    action_category = _normalize_runtime_action_category(command, interpretation)
+    summary = _runtime_summary(interpretation, action_category)
+    return {
+        "tool_use_id": tool_use_id,
+        "mcp_action_category": action_category,
+        "mcp_is_read_only": interpretation.is_read_only,
+        "mcp_affects": list(interpretation.affects),
+        "mcp_decision": decision or "pending",
+        "mcp_allowed": allowed,
+        "mcp_summary": summary,
     }
 
 
@@ -273,3 +302,50 @@ def _log_interception(command: str, translated: str, result) -> None:
         command,
         result.warning or "none",
     )
+
+
+def _normalize_runtime_action_category(command: str, interpretation) -> str:
+    base_cmd, tokens = _split_command(command)
+
+    if interpretation.is_read_only:
+        if base_cmd == "git" or base_cmd in {"rg", "grep", "find", "tree"}:
+            return "repo_inspection"
+        return "inspection"
+
+    if _looks_like_test_command(base_cmd, tokens):
+        return "testing"
+
+    if any(item in interpretation.affects for item in {"fichiers", "git", "dépendances"}):
+        return "modification"
+
+    return "execution"
+
+
+def _runtime_summary(interpretation, action_category: str) -> str | None:
+    if not interpretation.needs_llm and interpretation.translated:
+        return interpretation.translated
+
+    fallback = {
+        "inspection": "Inspection assistée via MCP",
+        "repo_inspection": "Exploration de dépôt via MCP",
+        "testing": "Exécution de tests via MCP",
+        "modification": "Modification assistée via MCP",
+        "execution": "Commande exécutée via MCP",
+    }
+    return fallback.get(action_category)
+
+
+def _looks_like_test_command(base_cmd: str, tokens: list[str]) -> bool:
+    if base_cmd in _MCP_TEST_COMMANDS:
+        return True
+    if base_cmd in _MCP_PACKAGE_MANAGERS and "test" in tokens[1:]:
+        return True
+    return False
+
+
+def _split_command(command: str) -> tuple[str, list[str]]:
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+    return (tokens[0] if tokens else "", tokens)

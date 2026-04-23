@@ -1,9 +1,10 @@
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from flask import Flask
 
-from daemon.core.contracts import CurrentContext, Episode, SignalSummary
+from daemon.core.contracts import Episode
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
 from daemon.routes.runtime import _FileEventCoalescer, register_runtime_routes
@@ -18,6 +19,19 @@ class _DummyThread:
 
     def start(self):
         self.started = True
+
+
+class _ImmediateThread:
+    def __init__(self, *args, **kwargs):
+        self.target = kwargs.get("target")
+        self.args = kwargs.get("args", ())
+        self.kwargs = kwargs.get("kwargs", {})
+        self.started = False
+
+    def start(self):
+        self.started = True
+        if self.target is not None:
+            self.target(*self.args, **self.kwargs)
 
 
 class _ManualTimer:
@@ -89,29 +103,16 @@ class TestRuntimeRoutes(unittest.TestCase):
             reason="high_friction",
             payload={"file": "PanelView.swift"},
         )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+            updated_at=datetime(2026, 4, 23, 10, 0, 0),
+        )
         self.runtime_state.set_analysis(
             signals=signals,
             decision=decision,
-            current_context=CurrentContext(
-                active_project="Pulse",
-                project_root="/Users/yugz/Projets/Pulse/Pulse",
-                active_file="/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-                active_app="Xcode",
-                session_duration_min=96,
-                activity_level="editing",
-                probable_task="coding",
-                task_confidence=0.81,
-                focus_level="deep",
-                clipboard_context="text",
-                signal_summary=SignalSummary(
-                    recent_apps=["Xcode", "Codex", "Safari"],
-                    edited_file_count_10m=4,
-                    file_type_mix_10m={"source": 2, "test": 1, "docs": 1},
-                    rename_delete_ratio_10m=0.25,
-                    dominant_file_mode="few_files",
-                    work_pattern_candidate="feature_candidate",
-                ),
-            ),
         )
 
         self.store.to_dict.return_value = {
@@ -121,8 +122,25 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         expected = {
             "active_app": "Xcode",
+            "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
+            "active_project": "Pulse",
             "session_duration_min": 96,
+            "last_event_type": None,
             "runtime_paused": True,
+            "present": {
+                "session_status": "active",
+                "awake": True,
+                "locked": False,
+                "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
+                "active_project": "Pulse",
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "focus_level": "deep",
+                "friction_score": 0.42,
+                "clipboard_context": "text",
+                "session_duration_min": 96,
+                "updated_at": "2026-04-23T10:00:00",
+            },
             "signals": {
                 "active_project": "Pulse",
                 "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
@@ -147,6 +165,42 @@ class TestRuntimeRoutes(unittest.TestCase):
                 "reason": "high_friction",
                 "payload": {"file": "PanelView.swift"},
             },
+            "debug": {
+                "store": {
+                    "active_app": "Xcode",
+                    "session_duration_min": 96,
+                },
+                "runtime": {
+                    "latest_active_app": None,
+                    "lock_marker_active": False,
+                    "last_screen_locked_at": None,
+                    "memory_synced_at": None,
+                },
+                "signals": {
+                    "active_project": "Pulse",
+                    "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "task_confidence": 0.81,
+                    "friction_score": 0.42,
+                    "focus_level": "deep",
+                    "session_duration_min": 96,
+                    "recent_apps": ["Xcode", "Codex", "Safari"],
+                    "clipboard_context": "text",
+                    "edited_file_count_10m": 4,
+                    "file_type_mix_10m": {"source": 2, "test": 1, "docs": 1},
+                    "rename_delete_ratio_10m": 0.25,
+                    "dominant_file_mode": "few_files",
+                    "work_pattern_candidate": "feature_candidate",
+                    "last_session_context": "Dernière session Pulse : hier (développement, 45 min)",
+                },
+                "decision": {
+                    "action": "notify",
+                    "level": 2,
+                    "reason": "high_friction",
+                    "payload": {"file": "PanelView.swift"},
+                },
+            },
         }
 
         with patch("daemon.routes.runtime.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
@@ -166,6 +220,12 @@ class TestRuntimeRoutes(unittest.TestCase):
             recent_apps=["Xcode"],
             clipboard_context="text",
         )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
         self.runtime_state.set_analysis(signals=signals, decision=None)
         self.store.to_dict.return_value = {
             "active_project": None,
@@ -181,9 +241,80 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         payload = response.get_json()
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["active_project"], "Pulse")
+        self.assertEqual(payload["active_file"], "/tmp/main.py")
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["active_file"], "/tmp/main.py")
         self.assertEqual(payload["signals"]["session_duration_min"], 24)
+        self.assertEqual(payload["debug"]["store"]["active_project"], None)
+
+    def test_state_builder_ignores_store_active_file_and_project(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/current.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=24,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.store.to_dict.return_value = {
+            "active_project": "OldProject",
+            "active_file": "/tmp/stale.py",
+            "active_app": "Xcode",
+            "session_duration_min": 999,
+        }
+
+        with patch("daemon.routes.runtime.last_session_context", return_value=None):
+            response = self.client.get("/state")
+
+        payload = response.get_json()
+        self.assertEqual(payload["active_project"], "Pulse")
+        self.assertEqual(payload["active_file"], "/tmp/current.py")
+        self.assertEqual(payload["signals"]["active_project"], "Pulse")
+        self.assertEqual(payload["signals"]["active_file"], "/tmp/current.py")
+
+    def test_state_uses_atomic_runtime_snapshot_read_path(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/current.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=24,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+        decision = Decision("silent", 0, "nothing_relevant")
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=decision)
+        self.store.to_dict.return_value = {
+            "active_app": "Xcode",
+            "last_event_type": "file_modified",
+        }
+
+        with patch.object(self.runtime_state, "get_signal_snapshot", side_effect=AssertionError("legacy signal snapshot must not be used")), \
+             patch.object(self.runtime_state, "get_present_snapshot", side_effect=AssertionError("legacy present snapshot must not be used")), \
+             patch("daemon.routes.runtime.last_session_context", return_value=None):
+            response = self.client.get("/state")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["present"]["active_project"], "Pulse")
+        self.assertEqual(payload["signals"]["active_project"], "Pulse")
 
     def test_state_exposes_current_and_recent_episodes_when_getters_are_provided(self):
         app = Flask(__name__)
@@ -248,6 +379,35 @@ class TestRuntimeRoutes(unittest.TestCase):
             {"ok": True, "paused": True, "ignored": True},
         )
         self.bus.publish.assert_not_called()
+
+    def test_event_endpoint_normalizes_terminal_event_and_drops_raw_command(self):
+        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _ImmediateThread(*a, **k)):
+            response = self.client.post(
+                "/event",
+                json={
+                    "type": "terminal_command_finished",
+                    "command": "git status",
+                    "cwd": "/Users/yugz/Projets/Pulse/Pulse",
+                    "shell": "zsh",
+                    "terminal_program": "Apple_Terminal",
+                    "exit_code": 0,
+                    "duration_ms": 1200,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"ok": True})
+        self.bus.publish.assert_called_once()
+        event_type, payload = self.bus.publish.call_args.args
+        self.assertEqual(event_type, "terminal_command_finished")
+        self.assertEqual(payload["source"], "terminal")
+        self.assertEqual(payload["kind"], "finished")
+        self.assertEqual(payload["terminal_action_category"], "vcs")
+        self.assertEqual(payload["terminal_project"], "Pulse")
+        self.assertEqual(payload["terminal_cwd"], "/Users/yugz/Projets/Pulse/Pulse")
+        self.assertEqual(payload["terminal_exit_code"], 0)
+        self.assertEqual(payload["terminal_duration_ms"], 1200)
+        self.assertNotIn("command", payload)
 
     def test_insights_uses_default_limit_of_twenty_five(self):
         self.bus.recent.return_value = []

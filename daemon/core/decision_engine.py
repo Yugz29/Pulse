@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from .event_bus import Event
-from .signal_scorer import Signals
+from daemon.runtime_state import PresentState
 
 
 @dataclass
@@ -22,11 +22,11 @@ class DecisionEngine:
     """
 
     def evaluate(
-        self, signals: Signals, trigger_event: Optional[Event] = None
+        self, present: PresentState, trigger_event: Optional[Event] = None
     ) -> Decision:
         # Deep focus -> ne rien faire, sauf si une commande MCP demande attention.
         if (
-            signals.focus_level == "deep"
+            present.focus_level == "deep"
             and not self._is_mcp_trigger(trigger_event)
         ):
             return Decision("silent", 0, "deep_focus")
@@ -43,33 +43,33 @@ class DecisionEngine:
         # Les signaux de debug dérivés du clipboard restent trop faibles
         # pour justifier une émission produit autonome.
         if (
-            signals.clipboard_context == "stacktrace"
-            and signals.probable_task == "debug"
+            present.clipboard_context == "stacktrace"
+            and present.probable_task == "debug"
         ):
             return Decision("silent", 0, "debug_signal_only")
 
         # Le churn sur un fichier est un signal de contexte, pas un déclencheur direct.
-        if signals.friction_score > 0.7:
+        if present.friction_score > 0.7:
             return Decision("silent", 0, "friction_signal_only")
 
         # Longue session + idle reste insuffisant tant qu'il n'existe pas
         # de surface produit claire pour cette suggestion.
         if (
-            signals.focus_level == "idle"
-            and signals.session_duration_min > 45
+            present.focus_level == "idle"
+            and present.session_duration_min > 45
         ):
             return Decision("silent", 0, "summary_signal_only")
 
         # Après un peu de contexte accumulé, Pulse peut proposer une injection,
         # mais seulement sur un vrai signal de travail local et suffisamment concret.
-        if self._can_emit_context_proposal(signals, trigger_event):
+        if self._can_emit_context_proposal(present, trigger_event):
             return Decision(
                 "inject_context",
                 1,
                 "context_ready",
                 payload={
-                    "project": signals.active_project,
-                    "task": signals.probable_task,
+                    "project": present.active_project,
+                    "task": present.probable_task,
                 },
             )
 
@@ -86,7 +86,7 @@ class DecisionEngine:
         )
 
     def _can_emit_context_proposal(
-        self, signals: Signals, trigger_event: Optional[Event]
+        self, present: PresentState, trigger_event: Optional[Event]
     ) -> bool:
         if not trigger_event or trigger_event.type not in {
             "file_created",
@@ -95,8 +95,8 @@ class DecisionEngine:
         }:
             return False
         return bool(
-            signals.active_project
-            and signals.active_file
-            and signals.session_duration_min > 10
-            and signals.focus_level == "normal"
+            present.active_project
+            and present.active_file
+            and present.session_duration_min > 10
+            and present.focus_level == "normal"
         )

@@ -21,6 +21,8 @@ def current_context_to_markdown(
     Adaptateur legacy vers le texte Markdown attendu par build_context_snapshot().
 
     Le rendu doit rester strictement identique à l'implémentation historique.
+    `signals` n'est utilisé que pour les lectures dérivées secondaires encore
+    non portées par CurrentContext.
     """
 
     lines = [
@@ -32,11 +34,12 @@ def current_context_to_markdown(
         f"- Durée session : {context.session_duration_min or 0} min",
     ]
 
+    lines += [
+        f"- Tâche probable : {context.probable_task}",
+        f"- Focus : {context.focus_level}",
+    ]
+
     if signals:
-        lines += [
-            f"- Tâche probable : {signals.probable_task}",
-            f"- Focus : {signals.focus_level}",
-        ]
         file_activity = format_file_activity_summary(signals)
         if file_activity:
             lines.append(f"- Activité fichiers : {file_activity}")
@@ -44,8 +47,9 @@ def current_context_to_markdown(
             file_reading = format_file_work_reading(signals)
             if file_reading:
                 lines.append(f"- Lecture de la session : {file_reading}")
-        if signals.recent_apps:
-            lines.append(f"- Apps récentes : {', '.join(signals.recent_apps[:4])}")
+        recent_apps = list(context.signal_summary.recent_apps)
+        if recent_apps:
+            lines.append(f"- Apps récentes : {', '.join(recent_apps[:4])}")
 
     if diff_summary:
         lines.append(f"- {diff_summary.replace(chr(10), chr(10) + '  ')}")
@@ -72,7 +76,7 @@ def current_context_to_legacy_signals_payload(
         "active_project": context.active_project,
         "active_file": context.active_file,
         "probable_task": context.probable_task,
-        "activity_level": signals.activity_level,
+        "activity_level": context.activity_level,
         "task_confidence": signals.task_confidence,
         "friction_score": signals.friction_score,
         "focus_level": context.focus_level,

@@ -17,6 +17,7 @@ from daemon.core.state_store import StateStore
 from daemon.llm.runtime import LLMRuntime
 from daemon.llm.unavailable import UnavailableLLMRouter
 from daemon.mcp.handlers import (
+    build_runtime_signal,
     configure_llm_router,
     get_available_llm_models,
     get_pending_command,
@@ -225,6 +226,11 @@ register_mcp_routes(
     get_pending_command=lambda: get_pending_command(),
     get_proposal_history=lambda limit: get_proposal_history(limit),
     intercept_command=lambda command, tool_use_id: intercept_command(command, tool_use_id),
+    build_runtime_signal=lambda command, tool_use_id, **kwargs: build_runtime_signal(
+        command,
+        tool_use_id,
+        **kwargs,
+    ),
     receive_decision=lambda tool_use_id, decision: receive_decision(tool_use_id, decision),
     get_scoring_status=lambda: get_scoring_status(),
     log=log,

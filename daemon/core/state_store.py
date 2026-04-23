@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 from .event_bus import Event
-from .file_classifier import file_signal_significance
-from .workspace_context import extract_project_name
 
 
 @dataclass
@@ -25,7 +23,8 @@ class StateStore:
         self._state.last_event_type = event.type
         self._state.last_activity = datetime.now()
 
-        # Events envoyés par SystemObserver.swift
+        # StateStore ne dérive plus le présent métier.
+        # Il garde seulement les métadonnées de surface encore lues en legacy.
         if event.type == "app_activated":
             self._state.active_app = event.payload.get("app_name")
 
@@ -33,11 +32,7 @@ class StateStore:
             pass  # Info utile pour les logs, pas pour l'état courant
 
         elif event.type in ("file_created", "file_modified", "file_renamed", "file_deleted"):
-            path = event.payload.get("path", "")
-            significance = file_signal_significance(path)
-            if significance == "meaningful" and event.type != "file_deleted":
-                self._state.active_file = path
-                self._state.active_project = extract_project_name(path)
+            pass
 
         elif event.type == "clipboard_updated":
             pass  # Géré en phase 5 (signal scorer)
@@ -49,10 +44,7 @@ class StateStore:
         elif event.type == "app_switch":
             self._state.active_app = event.payload.get("app_name")
         elif event.type == "file_change":
-            path = event.payload.get("path", "")
-            if file_signal_significance(path) == "meaningful":
-                self._state.active_file = path
-                self._state.active_project = extract_project_name(path)
+            pass
 
     def get(self) -> State:
         return self._state

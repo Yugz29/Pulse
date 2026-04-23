@@ -9,6 +9,7 @@ from .file_classifier import file_signal_significance
 SESSION_TIMEOUT_MIN = 30
 
 _MEANINGFUL_FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed"}
+_MEANINGFUL_TERMINAL_EVENT_TYPES = {"terminal_command_started", "terminal_command_finished"}
 _DEV_APPS = {
     "Xcode", "VSCode", "Visual Studio Code", "Cursor", "WebStorm",
     "PyCharm", "Terminal", "iTerm2", "Warp",
@@ -43,6 +44,7 @@ class SessionFSM:
         self._session_started_at = datetime.now()
         self._last_meaningful_activity_at: datetime | None = None
         self._last_screen_locked_at: datetime | None = None
+        self._ignored_short_lock_at: datetime | None = None
 
     @property
     def state(self) -> str:
@@ -79,15 +81,19 @@ class SessionFSM:
         unlocked_at = when or datetime.now()
         sleep_minutes: float | None = None
         boundary = False
+        locked_at = self._last_screen_locked_at
 
-        if self._last_screen_locked_at is not None:
+        if locked_at is not None:
             sleep_minutes = (
-                unlocked_at - self._last_screen_locked_at
+                unlocked_at - locked_at
             ).total_seconds() / 60
             boundary = sleep_minutes >= sleep_session_threshold_min
             if boundary:
                 self._session_started_at = unlocked_at
-            self._last_meaningful_activity_at = None
+                self._last_meaningful_activity_at = None
+                self._ignored_short_lock_at = None
+            else:
+                self._ignored_short_lock_at = locked_at
 
         self._state = self.ACTIVE
         self._last_screen_locked_at = None
@@ -134,10 +140,17 @@ class SessionFSM:
             if previous_activity is not None:
                 has_new_activity = latest_meaningful > previous_activity
                 if has_new_activity:
-                    had_screen_lock = self._has_screen_lock_after(
+                    screen_lock_at = self._latest_screen_lock_after(
                         recent_events,
                         previous_activity,
                     )
+                    had_screen_lock = self._is_session_boundary_screen_lock(screen_lock_at)
+                    if (
+                        screen_lock_at is not None
+                        and self._ignored_short_lock_at is not None
+                        and screen_lock_at == self._ignored_short_lock_at
+                    ):
+                        self._ignored_short_lock_at = None
                     gap_minutes = (
                         latest_meaningful - previous_activity
                     ).total_seconds() / 60
@@ -165,9 +178,12 @@ class SessionFSM:
         self._session_started_at = datetime.now()
         self._last_meaningful_activity_at = None
         self._last_screen_locked_at = None
+        self._ignored_short_lock_at = None
 
     def _find_latest_meaningful_activity(self, events: list) -> Optional[datetime]:
         for event in reversed(events):
+            if event.type in _MEANINGFUL_TERMINAL_EVENT_TYPES:
+                return event.timestamp
             if event.type in _MEANINGFUL_FILE_EVENT_TYPES:
                 if self._is_trackable_file_path(event.payload.get("path")):
                     return event.timestamp
@@ -176,11 +192,16 @@ class SessionFSM:
                     return event.timestamp
         return None
 
-    def _has_screen_lock_after(self, events: list, since: datetime) -> bool:
-        return any(
-            event.type == "screen_locked" and event.timestamp > since
-            for event in events
-        )
+    def _latest_screen_lock_after(self, events: list, since: datetime) -> Optional[datetime]:
+        for event in reversed(events):
+            if event.type == "screen_locked" and event.timestamp > since:
+                return event.timestamp
+        return None
+
+    def _is_session_boundary_screen_lock(self, lock_at: Optional[datetime]) -> bool:
+        if lock_at is None:
+            return False
+        return lock_at != self._ignored_short_lock_at
 
     def _is_trackable_file_path(self, path: Optional[str]) -> bool:
         return file_signal_significance(path) != "technical_noise"

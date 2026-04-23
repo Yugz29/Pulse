@@ -23,6 +23,12 @@ def _screen_lock_event(ts: datetime) -> Event:
     return event
 
 
+def _terminal_event(ts: datetime, kind: str = "terminal_command_finished") -> Event:
+    event = Event(kind, {"terminal_action_category": "inspection"})
+    event.timestamp = ts
+    return event
+
+
 class TestSessionFSM(unittest.TestCase):
     def setUp(self):
         self.fsm = SessionFSM()
@@ -125,6 +131,11 @@ class TestSessionFSM(unittest.TestCase):
         self.assertEqual(self.fsm.session_started_at, t_activity)
 
     def test_unlock_court_conserve_debut_de_session_sans_nouvelle_session(self):
+        previous_activity = self._at(15)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", previous_activity)],
+            now=previous_activity,
+        )
         original_start = self.fsm.session_started_at
         locked_at = self._at(5)
         self.fsm.on_screen_locked(when=locked_at)
@@ -140,6 +151,35 @@ class TestSessionFSM(unittest.TestCase):
         self.assertEqual(self.fsm.session_started_at, original_start)
         self.assertIsNone(self.fsm.last_screen_locked_at)
         self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
+
+    def test_unlock_court_puis_reprise_ne_cree_pas_de_nouvelle_session(self):
+        t_before = self._at(15)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", t_before)],
+            now=t_before,
+        )
+        original_start = self.fsm.session_started_at
+        locked_at = self._at(5)
+        self.fsm.on_screen_locked(when=locked_at)
+        self.fsm.on_screen_unlocked(
+            when=self._at(4),
+            sleep_session_threshold_min=30,
+        )
+
+        t_after = self._at(0)
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _file_event("/proj/main.py", t_before),
+                _screen_lock_event(locked_at),
+                _file_event("/proj/main.py", t_after),
+            ],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertEqual(self.fsm.session_started_at, original_start)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_after)
 
     def test_unlock_long_declenche_nouvelle_session(self):
         original_start = self.fsm.session_started_at
@@ -167,6 +207,18 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertEqual(self.fsm.session_started_at, t_first)
+
+    def test_evenement_terminal_est_une_activite_significative(self):
+        t_first = self._at(0)
+
+        self.fsm.observe_recent_events(
+            recent_events=[_terminal_event(t_first)],
+            now=self.base,
+        )
+
+        self.assertEqual(self.fsm.session_started_at, t_first)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_first)
+        self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
 
 
 if __name__ == "__main__":

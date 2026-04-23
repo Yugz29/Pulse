@@ -9,7 +9,7 @@ from daemon.core.contracts import Episode, SessionSnapshot
 from daemon.core.event_bus import Event
 from daemon.core.signal_scorer import Signals
 from daemon.core.uid import new_uid
-from daemon.core.workspace_context import extract_project_name
+from daemon.runtime_state import PresentState
 from daemon.memory.session_snapshot_builder import (
     build_session_snapshot as build_structured_session_snapshot,
     session_snapshot_to_legacy_dict,
@@ -79,14 +79,13 @@ class SessionMemory:
                 self._update_session_from_event(conn, event)
                 conn.commit()
 
-    def update_signals(self, signals: Signals) -> None:
-        # Signals est la source de vérité pour la durée de session :
-        # son horloge (_session_start) est resynchronisée sur chaque frontière
-        # de session via reset_session(). self._duration_min() part du démarrage
-        # de SessionMemory et peut être gonflé si les deux horloges divergent
-        # (ex. update_signals appelé avec signals post-reset avant new_session).
-        # Le max() était défensif mais pouvait écrire une durée fausse.
-        duration = signals.session_duration_min
+    def update_present_snapshot(
+        self,
+        present: PresentState,
+        *,
+        signals: Signals,
+    ) -> None:
+        duration = present.session_duration_min
 
         with self._lock:
             with self._connect() as conn:
@@ -105,10 +104,10 @@ class SessionMemory:
                     (
                         datetime.now().isoformat(),
                         duration,
-                        signals.active_project,
-                        signals.active_file,
-                        signals.probable_task,
-                        signals.focus_level,
+                        present.active_project,
+                        present.active_file,
+                        present.probable_task,
+                        present.focus_level,
                         signals.friction_score,
                         self.session_id,
                     ),
@@ -402,31 +401,16 @@ class SessionMemory:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _update_session_from_event(self, conn: sqlite3.Connection, event: Event) -> None:
-        active_file = None
-        active_project = None
-
-        if event.type in {
-            "file_created", "file_modified", "file_renamed", "file_deleted", "file_change"
-        }:
-            path = event.payload.get("path")
-            if path and event.type != "file_deleted":
-                active_file = path
-                active_project = extract_project_name(active_file)
-
         conn.execute(
             """
             UPDATE sessions
             SET updated_at = ?,
-                session_duration_min = ?,
-                active_project = COALESCE(?, active_project),
-                active_file = COALESCE(?, active_file)
+                session_duration_min = ?
             WHERE id = ?
             """,
             (
                 datetime.now().isoformat(),
                 self._duration_min(),
-                active_project,
-                active_file,
                 self.session_id,
             ),
         )

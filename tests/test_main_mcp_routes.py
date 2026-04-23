@@ -56,6 +56,14 @@ class TestMainMcpRoutes(unittest.TestCase):
         self.assertTrue(response.get_json()["allowed"])
         intercept.assert_called_once_with("ls -la", "tool-1")
         self.assertEqual(publish.call_count, 2)
+        first_event = publish.call_args_list[0]
+        self.assertEqual(first_event.args[0], "mcp_command_received")
+        self.assertEqual(first_event.args[1]["mcp_action_category"], "inspection")
+        self.assertTrue(first_event.args[1]["mcp_is_read_only"])
+        second_event = publish.call_args_list[1]
+        self.assertEqual(second_event.args[0], "mcp_decision")
+        self.assertEqual(second_event.args[1]["mcp_decision"], "allow")
+        self.assertTrue(second_event.args[1]["mcp_allowed"])
 
     def test_mcp_decision_delegates_and_publishes(self):
         with patch.object(daemon_main.bus, "publish") as publish, \

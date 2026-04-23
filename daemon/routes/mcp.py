@@ -12,6 +12,7 @@ def register_mcp_routes(
     get_pending_command: Callable[[], Any],
     get_proposal_history: Callable[[int], list[dict]],
     intercept_command: Callable[[str, str], dict],
+    build_runtime_signal: Callable[..., dict],
     receive_decision: Callable[[str | None, str | None], bool],
     get_scoring_status: Callable[[], dict],
     log: Any,
@@ -37,14 +38,25 @@ def register_mcp_routes(
         command = data.get("command", "")
         tool_use_id = data.get("tool_use_id", "unknown")
         log.info("/mcp/intercept : tool_use_id=%s command=%r", tool_use_id, command)
-        bus.publish("mcp_command_received", {"command": command, "tool_use_id": tool_use_id})
+        runtime_signal = build_runtime_signal(command, tool_use_id)
+        bus.publish(
+            "mcp_command_received",
+            {
+                "command": command,
+                **runtime_signal,
+            },
+        )
         result = intercept_command(command, tool_use_id)
         bus.publish(
             "mcp_decision",
             {
-                "tool_use_id": tool_use_id,
-                "decision": result.get("decision"),
-                "allowed": result.get("allowed"),
+                "command": command,
+                **build_runtime_signal(
+                    command,
+                    tool_use_id,
+                    decision=result.get("decision"),
+                    allowed=result.get("allowed"),
+                ),
             },
         )
         return jsonify(result)

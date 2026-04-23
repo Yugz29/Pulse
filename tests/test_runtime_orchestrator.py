@@ -55,6 +55,41 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 commit_confirm_timeout_sec=0.5,
             )
 
+    def _signals(self, **overrides):
+        payload = {
+            "active_project": "Pulse",
+            "active_file": "/tmp/pulse/main.py",
+            "probable_task": "coding",
+            "friction_score": 0.15,
+            "focus_level": "normal",
+            "session_duration_min": 24,
+            "recent_apps": ["Xcode"],
+            "clipboard_context": "text",
+            "activity_level": "editing",
+        }
+        payload.update(overrides)
+        return Signals(**payload)
+
+    def _set_runtime_analysis(
+        self,
+        signals,
+        *,
+        decision=None,
+        session_status="active",
+        awake=True,
+        locked=False,
+    ):
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status=session_status,
+            awake=awake,
+            locked=locked,
+        )
+        self.runtime_state.set_analysis(
+            signals=signals,
+            decision=decision,
+        )
+
     def test_build_context_snapshot_includes_state_signals_decision_and_memory(self):
         self.store.to_dict.return_value = {
             "active_project": "Pulse",
@@ -76,22 +111,23 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 "payload": {"path": "/tmp/main.py"},
             }
         ]
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project="Pulse",
-                active_file="/tmp/main.py",
-                probable_task="coding",
-                friction_score=0.72,
-                focus_level="deep",
-                session_duration_min=96,
-                recent_apps=["Xcode", "Codex"],
-                clipboard_context="text",
-                edited_file_count_10m=5,
-                file_type_mix_10m={"source": 3, "test": 1, "docs": 1},
-                rename_delete_ratio_10m=0.2,
-                dominant_file_mode="multi_file",
-                work_pattern_candidate="feature_candidate",
-            ),
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.72,
+            focus_level="deep",
+            session_duration_min=96,
+            recent_apps=["Xcode", "Codex"],
+            clipboard_context="text",
+            edited_file_count_10m=5,
+            file_type_mix_10m={"source": 3, "test": 1, "docs": 1},
+            rename_delete_ratio_10m=0.2,
+            dominant_file_mode="multi_file",
+            work_pattern_candidate="feature_candidate",
+        )
+        self._set_runtime_analysis(
+            signals,
             decision=Decision(
                 action="notify",
                 level=2,
@@ -109,6 +145,65 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Activité fichiers : 5 fichier(s) touché(s) sur 10 min, surtout code source (3), documentation (1), tests (1)", snapshot)
         self.assertIn("- Lecture de la session : travail réparti sur plusieurs fichiers, ça ressemble à une évolution de fonctionnalité, avec quelques changements de structure", snapshot)
 
+    def test_handle_event_updates_present_from_signals_and_session_fsm(self):
+        event = Event("screen_locked", {})
+        event.timestamp = datetime(2026, 4, 23, 10, 0, 0)
+        self.scorer.compute.return_value = self._signals(
+            active_file="/tmp/pulse/runtime.py",
+            probable_task="debug",
+            focus_level="deep",
+            session_duration_min=31,
+            activity_level="executing",
+        )
+        self.decision_engine.evaluate.return_value = Decision("silent", 0, "nothing_relevant")
+
+        self.orchestrator.handle_event(event)
+
+        present = self.runtime_state.get_present()
+        self.assertEqual(present.session_status, "locked")
+        self.assertFalse(present.awake)
+        self.assertTrue(present.locked)
+        self.assertEqual(present.active_project, "Pulse")
+        self.assertEqual(present.active_file, "/tmp/pulse/runtime.py")
+        self.assertEqual(present.probable_task, "debug")
+        self.assertEqual(present.activity_level, "executing")
+        self.assertEqual(present.focus_level, "deep")
+        self.assertEqual(present.session_duration_min, 31)
+        self.assertEqual(present.updated_at, event.timestamp)
+        current_context = self.orchestrator._render_current_context(
+            present=present,
+            signals=self.scorer.compute.return_value,
+            active_app=self.store.to_dict().get("active_app"),
+        )
+        self.assertEqual(current_context.active_project, present.active_project)
+        self.assertEqual(current_context.active_file, present.active_file)
+        self.assertEqual(current_context.probable_task, present.probable_task)
+        self.assertEqual(current_context.activity_level, present.activity_level)
+        self.assertEqual(current_context.focus_level, present.focus_level)
+        self.assertEqual(current_context.session_duration_min, present.session_duration_min)
+
+    def test_handle_event_updates_present_via_single_runtime_state_path(self):
+        event = Event("app_activated", {"app_name": "Xcode"})
+        event.timestamp = datetime(2026, 4, 23, 11, 15, 0)
+        self.scorer.bus.recent.return_value = [event]
+        self.scorer.compute.return_value = self._signals()
+        self.decision_engine.evaluate.return_value = Decision("silent", 0, "nothing_relevant")
+
+        with patch.object(
+            self.runtime_state,
+            "update_present",
+            wraps=self.runtime_state.update_present,
+        ) as update_present:
+            self.orchestrator.handle_event(event)
+
+        update_present.assert_called_once()
+        kwargs = update_present.call_args.kwargs
+        self.assertEqual(kwargs["session_status"], "active")
+        self.assertTrue(kwargs["awake"])
+        self.assertFalse(kwargs["locked"])
+        self.assertEqual(kwargs["updated_at"], event.timestamp)
+        self.assertEqual(kwargs["signals"].active_project, "Pulse")
+
     def test_build_context_snapshot_golden_legacy_markdown_output_exact(self):
         self.store.to_dict.return_value = {
             "active_project": "Pulse",
@@ -117,26 +212,24 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "session_duration_min": 96,
             "last_event_type": "file_modified",
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project="Pulse",
-                active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
-                probable_task="coding",
-                friction_score=0.72,
-                focus_level="normal",
-                session_duration_min=96,
-                recent_apps=["Cursor", "Terminal", "Safari", "Xcode", "Codex"],
-                clipboard_context="text",
-                edited_file_count_10m=5,
-                file_type_mix_10m={"source": 3, "test": 1, "docs": 1},
-                rename_delete_ratio_10m=0.2,
-                dominant_file_mode="multi_file",
-                work_pattern_candidate="feature_candidate",
-                activity_level="editing",
-                task_confidence=0.82,
-            ),
-            decision=None,
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+            probable_task="coding",
+            friction_score=0.72,
+            focus_level="normal",
+            session_duration_min=96,
+            recent_apps=["Cursor", "Terminal", "Safari", "Xcode", "Codex"],
+            clipboard_context="text",
+            edited_file_count_10m=5,
+            file_type_mix_10m={"source": 3, "test": 1, "docs": 1},
+            rename_delete_ratio_10m=0.2,
+            dominant_file_mode="multi_file",
+            work_pattern_candidate="feature_candidate",
+            activity_level="editing",
+            task_confidence=0.82,
         )
+        self._set_runtime_analysis(signals)
 
         expected = "\n".join([
             "# Contexte session",
@@ -163,6 +256,20 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertEqual(snapshot, expected)
 
+    def test_build_context_snapshot_uses_atomic_runtime_snapshot(self):
+        signals = self._signals()
+        self._set_runtime_analysis(signals)
+        self.store.to_dict.return_value = {
+            "active_app": "Cursor",
+            "last_event_type": "file_modified",
+        }
+
+        with patch.object(self.runtime_state, "get_context_snapshot", side_effect=AssertionError("legacy context snapshot must not be used")), \
+             patch.object(self.runtime_state, "get_present", side_effect=AssertionError("legacy present getter must not be used")):
+            snapshot = self.orchestrator.build_context_snapshot()
+
+        self.assertIn("- Projet : Pulse", snapshot)
+
     def test_build_context_snapshot_falls_back_to_signal_context_when_store_is_empty(self):
         self.store.to_dict.return_value = {
             "active_project": None,
@@ -171,19 +278,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "session_duration_min": 0,
             "last_event_type": None,
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project="Pulse",
-                active_file="/tmp/main.py",
-                probable_task="coding",
-                friction_score=0.15,
-                focus_level="normal",
-                session_duration_min=24,
-                recent_apps=["Xcode"],
-                clipboard_context="text",
-            ),
-            decision=None,
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/main.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=24,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
         )
+        self._set_runtime_analysis(signals)
 
         snapshot = self.orchestrator.build_context_snapshot()
 
@@ -199,19 +304,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "session_duration_min": 18,
             "last_event_type": "file_modified",
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project="client-repo",
-                active_file="/tmp/client-repo/src/main.py",
-                probable_task="coding",
-                friction_score=0.1,
-                focus_level="normal",
-                session_duration_min=18,
-                recent_apps=["Cursor"],
-                clipboard_context=None,
-            ),
-            decision=None,
+        signals = Signals(
+            active_project="client-repo",
+            active_file="/tmp/client-repo/src/main.py",
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="normal",
+            session_duration_min=18,
+            recent_apps=["Cursor"],
+            clipboard_context=None,
         )
+        self._set_runtime_analysis(signals)
 
         with patch("daemon.runtime_orchestrator.find_git_root", return_value=None), \
              patch("daemon.runtime_orchestrator.find_workspace_root", return_value=Path("/tmp/client-repo")):
@@ -904,19 +1007,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "active_app": "Xcode",
             "session_duration_min": 999,
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project="Pulse",
-                active_file="/fresh/path/current.py",  # ← Signals : fenêtre courante
-                probable_task="coding",
-                friction_score=0.1,
-                focus_level="normal",
-                session_duration_min=30,
-                recent_apps=["Xcode"],
-                clipboard_context=None,
-            ),
-            decision=None,
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/fresh/path/current.py",  # ← Present canonique
+            probable_task="coding",
+            friction_score=0.1,
+            focus_level="normal",
+            session_duration_min=30,
+            recent_apps=["Xcode"],
+            clipboard_context=None,
         )
+        self._set_runtime_analysis(signals)
 
         snapshot = self.orchestrator.build_context_snapshot()
 
@@ -928,10 +1029,10 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "signals.active_project doit primer sur state.active_project")
         self.assertNotIn("OldProject", snapshot)
 
-    def test_c4_fallback_sur_state_si_signals_active_file_est_none(self):
+    def test_c4_aucun_fallback_sur_state_si_present_n_a_pas_de_fichier(self):
         """
-        Quand signals.active_file est None (bus vide ou fenêtre vide),
-        on se rabat sur StateStore comme dernier recours.
+        Le renderer de contexte ne doit plus relire StateStore pour reconstruire
+        active_file / active_project.
         """
         self.store.to_dict.return_value = {
             "active_project": "FallbackProject",
@@ -939,25 +1040,24 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "active_app": "Terminal",
             "session_duration_min": 10,
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project=None,   # ← Signals n'a pas de fichier courant
-                active_file=None,
-                probable_task="general",
-                friction_score=0.0,
-                focus_level="normal",
-                session_duration_min=5,
-                recent_apps=[],
-                clipboard_context=None,
-            ),
-            decision=None,
+        signals = Signals(
+            active_project=None,
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=[],
+            clipboard_context=None,
         )
+        self._set_runtime_analysis(signals)
 
         snapshot = self.orchestrator.build_context_snapshot()
 
-        self.assertIn("/fallback/from_store.py", snapshot,
-            "state.active_file doit être utilisé en fallback quand signals.active_file est None")
-        self.assertIn("FallbackProject", snapshot)
+        self.assertIn("- Fichier actif : aucun", snapshot)
+        self.assertIn("- Projet : non détecté", snapshot)
+        self.assertNotIn("/fallback/from_store.py", snapshot)
+        self.assertNotIn("FallbackProject", snapshot)
 
     def test_c4_aucun_fichier_affiche_aucun_si_les_deux_sont_none(self):
         """Cas démarrage à froid : ni signals ni state n'ont de fichier."""
@@ -967,19 +1067,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "active_app": None,
             "session_duration_min": 0,
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project=None,
-                active_file=None,
-                probable_task="general",
-                friction_score=0.0,
-                focus_level="normal",
-                session_duration_min=0,
-                recent_apps=[],
-                clipboard_context=None,
-            ),
-            decision=None,
+        signals = Signals(
+            active_project=None,
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=0,
+            recent_apps=[],
+            clipboard_context=None,
         )
+        self._set_runtime_analysis(signals)
 
         snapshot = self.orchestrator.build_context_snapshot()
 
@@ -1000,19 +1098,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "active_app": "Xcode",
             "session_duration_min": 240,  # ← StateStore : depuis le démarrage du daemon
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project="Pulse",
-                active_file=None,
-                probable_task="coding",
-                friction_score=0.0,
-                focus_level="normal",
-                session_duration_min=45,  # ← Signals : vraie durée de session
-                recent_apps=["Xcode"],
-                clipboard_context=None,
-            ),
-            decision=None,
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="coding",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=45,  # ← Present canonique
+            recent_apps=["Xcode"],
+            clipboard_context=None,
         )
+        self._set_runtime_analysis(signals)
 
         snapshot = self.orchestrator.build_context_snapshot()
 
@@ -1052,19 +1148,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "active_app": "Xcode",
             "session_duration_min": 90,  # ← StateStore : ancienne valeur
         }
-        self.runtime_state.set_analysis(
-            signals=Signals(
-                active_project="Pulse",
-                active_file=None,
-                probable_task="coding",
-                friction_score=0.0,
-                focus_level="normal",
-                session_duration_min=0,  # ← Scorer vient de reset
-                recent_apps=["Xcode"],
-                clipboard_context=None,
-            ),
-            decision=None,
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="coding",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=0,  # ← Scorer vient de reset
+            recent_apps=["Xcode"],
+            clipboard_context=None,
         )
+        self._set_runtime_analysis(signals)
 
         snapshot = self.orchestrator.build_context_snapshot()
 
@@ -1196,6 +1290,42 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             original_start,
             "session_started_at doit rester stable sur un verrou court",
         )
+
+    def test_verrou_court_puis_reprise_d_activite_ne_cree_pas_de_session_fantome(self):
+        t_before = datetime.now() - timedelta(minutes=20)
+        t_lock = datetime.now() - timedelta(minutes=10)
+        t_unlock = datetime.now() - timedelta(minutes=9)
+        t_after = datetime.now()
+
+        previous_event = Event("file_modified", {"path": "/tmp/main.py"})
+        previous_event.timestamp = t_before
+        lock_event = Event("screen_locked", {})
+        lock_event.timestamp = t_lock
+        resumed_event = Event("file_modified", {"path": "/tmp/main.py"})
+        resumed_event.timestamp = t_after
+
+        self.orchestrator.session_fsm._session_started_at = t_before - timedelta(minutes=30)
+        self.orchestrator.session_fsm.observe_recent_events(
+            recent_events=[previous_event],
+            now=t_before,
+        )
+        original_start = self.orchestrator.session_fsm.session_started_at
+        self.orchestrator.session_fsm.on_screen_locked(when=t_lock)
+        transition = self.orchestrator.session_fsm.on_screen_unlocked(
+            when=t_unlock,
+            sleep_session_threshold_min=30,
+        )
+        self.assertFalse(transition.should_start_new_session)
+
+        self.scorer.bus.recent.return_value = [previous_event, lock_event, resumed_event]
+        self.scorer.compute.return_value = self._signals(session_duration_min=5)
+        self.decision_engine.evaluate.return_value = Decision("silent", 0, "nothing_relevant")
+
+        with patch.object(self.session_memory, "new_session") as mock_new_session:
+            self.orchestrator._process_signals(resumed_event)
+
+        mock_new_session.assert_not_called()
+        self.assertEqual(self.orchestrator.session_fsm.session_started_at, original_start)
 
     def test_verrou_long_reset_scorer_et_nouvelle_session(self):
         """

@@ -41,6 +41,12 @@ class TestMainRuntimeState(unittest.TestCase):
             reason="high_friction",
             payload={"file": "PanelView.swift"},
         )
+        daemon_main.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
         daemon_main.runtime_state.set_analysis(signals=signals, decision=decision)
 
         with patch.object(
@@ -54,6 +60,14 @@ class TestMainRuntimeState(unittest.TestCase):
         payload = response.get_json()
         self.assertTrue(payload["runtime_paused"])
         self.assertEqual(payload["active_app"], "Xcode")
+        self.assertEqual(payload["active_project"], "Pulse")
+        self.assertEqual(payload["present"]["session_status"], "active")
+        self.assertFalse(payload["present"]["locked"])
+        self.assertEqual(payload["present"]["active_project"], "Pulse")
+        self.assertEqual(
+            payload["present"]["active_file"],
+            "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
+        )
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["probable_task"], "coding")
         self.assertEqual(payload["signals"]["edited_file_count_10m"], 4)
@@ -62,6 +76,77 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(payload["signals"]["work_pattern_candidate"], "feature_candidate")
         self.assertEqual(payload["decision"]["action"], "notify")
         self.assertEqual(payload["decision"]["payload"]["file"], "PanelView.swift")
+        self.assertEqual(payload["debug"]["store"]["active_app"], "Xcode")
+        self.assertEqual(payload["debug"]["signals"]["active_project"], "Pulse")
+
+    def test_runtime_snapshot_is_atomic_for_present_signals_and_decision(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/pulse/main.py",
+            probable_task="coding",
+            friction_score=0.12,
+            focus_level="deep",
+            session_duration_min=42,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+            activity_level="editing",
+        )
+        decision = Decision("notify", 2, "ready")
+
+        daemon_main.runtime_state.set_latest_active_app("Xcode")
+        daemon_main.runtime_state.set_paused(True)
+        daemon_main.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        daemon_main.runtime_state.set_analysis(signals=signals, decision=decision)
+
+        snapshot = daemon_main.runtime_state.get_runtime_snapshot()
+
+        self.assertEqual(snapshot.present.active_project, "Pulse")
+        self.assertEqual(snapshot.present.active_file, "/tmp/pulse/main.py")
+        self.assertEqual(snapshot.signals.active_project, "Pulse")
+        self.assertEqual(snapshot.decision.reason, "ready")
+        self.assertTrue(snapshot.paused)
+        self.assertEqual(snapshot.latest_active_app, "Xcode")
+
+    def test_update_present_stores_canonical_runtime_snapshot(self):
+        from datetime import datetime
+
+        updated_at = datetime(2026, 4, 23, 10, 30, 0)
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/pulse/main.py",
+            probable_task="coding",
+            friction_score=0.12,
+            focus_level="deep",
+            session_duration_min=42,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+            activity_level="editing",
+        )
+
+        daemon_main.runtime_state.update_present(
+            signals=signals,
+            session_status="locked",
+            awake=False,
+            locked=True,
+            updated_at=updated_at,
+        )
+
+        present = daemon_main.runtime_state.get_present()
+        self.assertEqual(present.session_status, "locked")
+        self.assertFalse(present.awake)
+        self.assertTrue(present.locked)
+        self.assertEqual(present.active_project, "Pulse")
+        self.assertEqual(present.active_file, "/tmp/pulse/main.py")
+        self.assertEqual(present.probable_task, "coding")
+        self.assertEqual(present.activity_level, "editing")
+        self.assertEqual(present.focus_level, "deep")
+        self.assertEqual(present.session_duration_min, 42)
+        self.assertEqual(present.updated_at, updated_at)
 
     def test_event_endpoint_ignores_events_while_runtime_is_paused(self):
         daemon_main.runtime_state.set_paused(True)

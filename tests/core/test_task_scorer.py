@@ -243,6 +243,94 @@ class TestProbableTask(unittest.TestCase):
         self.assertIsNotNone(signals.activity_level)
         self.assertIn(signals.activity_level, {"idle", "editing", "reading", "executing", "navigating"})
 
+    def test_mcp_inspection_donne_exploration_sans_fichier(self):
+        """Une inspection MCP structurée enrichit le live sans activité fichier."""
+        scorer, bus = _make_scorer()
+        _push(
+            bus,
+            "mcp_command_received",
+            {
+                "tool_use_id": "tool-1",
+                "mcp_action_category": "repo_inspection",
+                "mcp_is_read_only": True,
+                "mcp_affects": ["lecture seule"],
+                "mcp_decision": "pending",
+                "mcp_allowed": None,
+                "mcp_summary": "Exploration de dépôt via MCP",
+            },
+        )
+        signals = scorer.compute()
+        self.assertEqual(signals.probable_task, "exploration")
+        self.assertEqual(signals.activity_level, "reading")
+        self.assertEqual(signals.mcp_action_category, "repo_inspection")
+
+    def test_mcp_testing_renforce_coding_sans_fichier_recent(self):
+        """Un test MCP peut ancrer le live même sans édition de fichier immédiate."""
+        scorer, bus = _make_scorer()
+        _push(
+            bus,
+            "mcp_command_received",
+            {
+                "tool_use_id": "tool-2",
+                "mcp_action_category": "testing",
+                "mcp_is_read_only": False,
+                "mcp_affects": ["git"],
+                "mcp_decision": "pending",
+                "mcp_allowed": None,
+                "mcp_summary": "Exécution de tests via MCP",
+            },
+        )
+        signals = scorer.compute()
+        self.assertEqual(signals.probable_task, "coding")
+        self.assertEqual(signals.activity_level, "executing")
+
+    def test_terminal_inspection_donne_exploration_et_projet_terminal(self):
+        """Une commande terminal de lecture enrichit le live sans fichiers récents."""
+        scorer, bus = _make_scorer()
+        _push(
+            bus,
+            "terminal_command_finished",
+            {
+                "source": "terminal",
+                "kind": "finished",
+                "terminal_action_category": "inspection",
+                "terminal_is_read_only": True,
+                "terminal_project": "Pulse",
+                "terminal_cwd": "/Users/yugz/Projets/Pulse/Pulse",
+                "terminal_summary": "Inspection terminal",
+                "terminal_duration_ms": 900,
+                "terminal_exit_code": 0,
+            },
+        )
+        signals = scorer.compute()
+        self.assertEqual(signals.probable_task, "exploration")
+        self.assertEqual(signals.activity_level, "reading")
+        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.terminal_action_category, "inspection")
+
+    def test_terminal_testing_donne_coding_sans_fichier_recent(self):
+        """Une commande de test terminale peut ancrer coding sans édition immédiate."""
+        scorer, bus = _make_scorer()
+        _push(
+            bus,
+            "terminal_command_finished",
+            {
+                "source": "terminal",
+                "kind": "finished",
+                "terminal_action_category": "testing",
+                "terminal_is_read_only": False,
+                "terminal_project": "Pulse",
+                "terminal_cwd": "/Users/yugz/Projets/Pulse/Pulse",
+                "terminal_summary": "Exécution de tests",
+                "terminal_duration_ms": 2400,
+                "terminal_exit_code": 1,
+            },
+        )
+        signals = scorer.compute()
+        self.assertEqual(signals.probable_task, "coding")
+        self.assertEqual(signals.activity_level, "executing")
+        self.assertEqual(signals.terminal_action_category, "testing")
+
 
 # ── Correction commit ─────────────────────────────────────────────────────────
 

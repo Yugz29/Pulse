@@ -11,6 +11,7 @@ from daemon.memory.session_snapshot_builder import (
     build_session_snapshot,
     session_snapshot_to_legacy_dict,
 )
+from daemon.runtime_state import PresentState
 
 
 class TestSessionMemory(unittest.TestCase):
@@ -28,7 +29,7 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(session["id"], "test-session")
         self.assertIsNotNone(session["started_at"])
 
-    def test_record_event_persiste_et_met_a_jour_fichier_actif(self):
+    def test_record_event_persiste_sans_mettre_a_jour_le_present(self):
         event = Event(
             "file_modified",
             {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"},
@@ -40,12 +41,23 @@ class TestSessionMemory(unittest.TestCase):
         session = self.memory.get_session()
         events = self.memory.get_recent_events()
 
-        self.assertEqual(session["active_project"], "Pulse")
-        self.assertEqual(session["active_file"], event.payload["path"])
+        self.assertIsNone(session["active_project"])
+        self.assertIsNone(session["active_file"])
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["type"], "file_modified")
 
-    def test_update_signals_met_a_jour_les_colonnes_de_session(self):
+    def test_update_present_snapshot_met_a_jour_les_colonnes_de_session(self):
+        present = PresentState(
+            session_status="active",
+            awake=True,
+            locked=False,
+            active_project="Pulse",
+            active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
+            probable_task="coding",
+            activity_level="editing",
+            focus_level="normal",
+            session_duration_min=12,
+        )
         signals = Signals(
             active_project="Pulse",
             active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
@@ -57,7 +69,7 @@ class TestSessionMemory(unittest.TestCase):
             clipboard_context="code",
         )
 
-        self.memory.update_signals(signals)
+        self.memory.update_present_snapshot(present, signals=signals)
 
         session = self.memory.get_session()
         self.assertEqual(session["active_project"], "Pulse")
@@ -70,17 +82,29 @@ class TestSessionMemory(unittest.TestCase):
         self.memory.record_event(
             Event("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
         )
-        self.memory.update_signals(
-            Signals(
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
+            probable_task="coding",
+            friction_score=0.8,
+            focus_level="normal",
+            session_duration_min=20,
+            recent_apps=["Cursor"],
+            clipboard_context=None,
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
                 active_project="Pulse",
                 active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
                 probable_task="coding",
-                friction_score=0.8,
+                activity_level="editing",
                 focus_level="normal",
                 session_duration_min=20,
-                recent_apps=["Cursor"],
-                clipboard_context=None,
-            )
+            ),
+            signals=signals,
         )
 
         data = self.memory.export_session_data()
@@ -103,17 +127,29 @@ class TestSessionMemory(unittest.TestCase):
         self.memory.record_event(Event("file_modified", {"path": helper_path}))
         self.memory.record_event(Event("file_modified", {"path": main_path}))
         self.memory.record_event(Event("file_deleted", {"path": deleted_path}))
-        self.memory.update_signals(
-            Signals(
+        signals = Signals(
+            active_project="Pulse",
+            active_file=main_path,
+            probable_task="coding",
+            friction_score=0.8,
+            focus_level="normal",
+            session_duration_min=20,
+            recent_apps=["Cursor", "Terminal"],
+            clipboard_context=None,
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
                 active_project="Pulse",
                 active_file=main_path,
                 probable_task="coding",
-                friction_score=0.8,
+                activity_level="editing",
                 focus_level="normal",
                 session_duration_min=20,
-                recent_apps=["Cursor", "Terminal"],
-                clipboard_context=None,
-            )
+            ),
+            signals=signals,
         )
 
         session = self.memory.get_session()
@@ -186,7 +222,7 @@ class TestSessionMemory(unittest.TestCase):
 
         self.assertEqual(legacy, expected)
 
-    def test_file_deleted_ne_remplace_pas_le_fichier_actif_de_session(self):
+    def test_file_deleted_ne_remplace_pas_le_fichier_actif_de_session_sans_snapshot(self):
         active_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"
         deleted_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/old.py"
 
@@ -195,8 +231,8 @@ class TestSessionMemory(unittest.TestCase):
 
         session = self.memory.get_session()
 
-        self.assertEqual(session["active_file"], active_path)
-        self.assertEqual(session["active_project"], "Pulse")
+        self.assertIsNone(session["active_file"])
+        self.assertIsNone(session["active_project"])
 
     def test_close_termine_la_session(self):
         self.memory.close()
@@ -277,9 +313,9 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual([row["id"] for row in recent], ["ep-newer", "ep-older"])
 
 
-    # ── I3 : update_signals — signals est la source de vérité pour la durée ───
+    # ── I3 : update_present_snapshot — present est la source de vérité du présent ───
 
-    def test_i3_signals_duration_ecrase_pas_le_max_avec_memory_duration(self):
+    def test_i3_present_duration_ecrase_pas_le_max_avec_memory_duration(self):
         """
         Cas problématique du max() :
         Si session_memory.started_at est ancien (grande _duration_min),
@@ -301,14 +337,25 @@ class TestSessionMemory(unittest.TestCase):
             clipboard_context=None,
         )
 
-        self.memory.update_signals(signals)
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                focus_level="normal",
+                session_duration_min=5,
+            ),
+            signals=signals,
+        )
 
         session = self.memory.get_session()
         self.assertEqual(session["session_duration_min"], 5,
             "signals.session_duration_min doit primer sur _duration_min() "
             "même quand _duration_min() est plus grand")
 
-    def test_i3_zero_signals_duration_ecrit_zero(self):
+    def test_i3_zero_present_duration_ecrit_zero(self):
         """
         Quand le scorer vient de reseté (duration=0), on écrit 0.
         Avec l'ancien max(), si _duration_min() > 0, on aurait écrit
@@ -328,13 +375,24 @@ class TestSessionMemory(unittest.TestCase):
             clipboard_context=None,
         )
 
-        self.memory.update_signals(signals)
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="general",
+                focus_level="normal",
+                session_duration_min=0,
+            ),
+            signals=signals,
+        )
 
         session = self.memory.get_session()
         self.assertEqual(session["session_duration_min"], 0,
             "session_duration_min=0 depuis signals doit être écrit tel quel")
 
-    def test_i3_update_signals_valeur_normale_inchangee(self):
+    def test_i3_update_present_snapshot_valeur_normale_inchangee(self):
         """Régression : cas normal sans divergence reste correct."""
         signals = Signals(
             active_project="Pulse",
@@ -347,7 +405,20 @@ class TestSessionMemory(unittest.TestCase):
             clipboard_context=None,
         )
 
-        self.memory.update_signals(signals)
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="deep",
+                session_duration_min=45,
+            ),
+            signals=signals,
+        )
 
         session = self.memory.get_session()
         self.assertEqual(session["session_duration_min"], 45)

@@ -263,15 +263,12 @@ class RuntimeOrchestrator:
         build_system_prompt() — ne pas la répéter ici.
         """
         state = self.store.to_dict()
-        signals, _ = self.runtime_state.get_context_snapshot()
-        current_context = self.runtime_state.get_current_context()
-        if current_context is None:
-            current_context = self._current_context_builder.build(
-                state=state,
-                signals=signals,
-                find_git_root_fn=find_git_root,
-                find_workspace_root_fn=find_workspace_root,
-            )
+        snapshot = self.runtime_state.get_runtime_snapshot()
+        current_context = self._render_current_context(
+            present=snapshot.present,
+            signals=snapshot.signals,
+            active_app=snapshot.latest_active_app or state.get("active_app"),
+        )
 
         diff_summary: str | None = None
         if current_context.project_root:
@@ -286,7 +283,7 @@ class RuntimeOrchestrator:
 
         return current_context_to_markdown(
             current_context,
-            signals=signals,
+            signals=snapshot.signals,
             diff_summary=diff_summary,
             last_session_line=last_session_line,
         )
@@ -530,38 +527,41 @@ class RuntimeOrchestrator:
         signals = self.scorer.compute(
             session_started_at=self._session_fsm.session_started_at,
         )
+        present = self.runtime_state.update_present(
+            signals=signals,
+            session_status=lifecycle_transition.state,
+            awake=lifecycle_transition.state != SessionFSM.LOCKED,
+            locked=lifecycle_transition.state == SessionFSM.LOCKED,
+            updated_at=trigger_event.timestamp,
+        )
+        previous_decision = self.runtime_state.get_runtime_snapshot().decision
+        decision = self.decision_engine.evaluate(present, trigger_event=trigger_event)
+        decision = self._attach_context_proposal_if_needed(
+            present=present,
+            signals=signals,
+            decision=decision,
+            previous_decision=previous_decision,
+            trigger_event=trigger_event,
+        )
         self._persist_episode_transition(
             self._episode_fsm.ensure_active(
                 session_id=self._current_session_id(),
                 started_at=self._session_fsm.last_meaningful_activity_at,
             )
         )
-        current_context = self._current_context_builder.build(
-            state=self.store.to_dict(),
+        self.session_memory.update_present_snapshot(
+            present,
             signals=signals,
-            find_git_root_fn=find_git_root,
-            find_workspace_root_fn=find_workspace_root,
-        )
-
-        self.session_memory.update_signals(signals)
-        _, previous_decision = self.runtime_state.get_context_snapshot()
-        decision = self.decision_engine.evaluate(signals, trigger_event=trigger_event)
-        decision = self._attach_context_proposal_if_needed(
-            signals=signals,
-            decision=decision,
-            previous_decision=previous_decision,
-            trigger_event=trigger_event,
         )
         previous_sync_at = self.runtime_state.get_last_memory_sync_at()
-        should_sync = self._should_sync_memory(trigger_event.type, signals, previous_sync_at)
+        should_sync = self._should_sync_memory(trigger_event.type, present, previous_sync_at)
         self.runtime_state.set_analysis(
             signals=signals,
             decision=decision,
-            current_context=current_context,
         )
         if should_sync:
             snapshot = self.session_memory.export_session_data()
-            llm = self._summary_llm_for(trigger_event.type, signals)
+            llm = self._summary_llm_for(trigger_event.type, present)
             trigger_map = {
                 "screen_locked": "screen_lock",
                 "screen_unlocked": "screen_lock",
@@ -581,11 +581,20 @@ class RuntimeOrchestrator:
                 decision.reason,
             )
 
-    def _attach_context_proposal_if_needed(self, *, signals, decision, previous_decision, trigger_event):
+    def _attach_context_proposal_if_needed(
+        self,
+        *,
+        present,
+        signals,
+        decision,
+        previous_decision,
+        trigger_event,
+    ):
         if not self._should_emit_context_proposal(decision, previous_decision):
             return decision
 
         candidate = self._build_context_injection_candidate(
+            present=present,
             signals=signals,
             decision=decision,
             trigger_event=trigger_event,
@@ -619,16 +628,23 @@ class RuntimeOrchestrator:
         normalized.pop("proposal_id", None)
         return normalized
 
-    def _build_context_injection_candidate(self, *, signals, decision, trigger_event) -> ProposalCandidate:
+    def _build_context_injection_candidate(
+        self,
+        *,
+        present,
+        signals,
+        decision,
+        trigger_event,
+    ) -> ProposalCandidate:
         payload = dict(decision.payload or {})
         evidence = [
-            {"kind": "project", "label": "Projet", "value": signals.active_project or "inconnu"},
-            {"kind": "task", "label": "Tâche", "value": signals.probable_task or "general"},
-            {"kind": "focus", "label": "Focus", "value": signals.focus_level},
+            {"kind": "project", "label": "Projet", "value": present.active_project or "inconnu"},
+            {"kind": "task", "label": "Tâche", "value": present.probable_task or "general"},
+            {"kind": "focus", "label": "Focus", "value": present.focus_level},
             {
                 "kind": "session",
                 "label": "Durée session",
-                "value": f"{signals.session_duration_min} min",
+                "value": f"{present.session_duration_min} min",
             },
         ]
         file_activity = format_file_activity_summary(signals)
@@ -646,8 +662,8 @@ class RuntimeOrchestrator:
                     "label": "Lecture de la session",
                     "value": file_reading,
                 })
-        if signals.active_file:
-            evidence.append({"kind": "file", "label": "Fichier actif", "value": signals.active_file})
+        if present.active_file:
+            evidence.append({"kind": "file", "label": "Fichier actif", "value": present.active_file})
 
         return ProposalCandidate(
             type="context_injection",
@@ -660,11 +676,11 @@ class RuntimeOrchestrator:
             details={
                 "decision_action": decision.action,
                 "decision_reason": decision.reason,
-                "project": signals.active_project,
-                "task": signals.probable_task,
-                "focus_level": signals.focus_level,
-                "session_duration_min": signals.session_duration_min,
-                "active_file": signals.active_file,
+                "project": present.active_project,
+                "task": present.probable_task,
+                "focus_level": present.focus_level,
+                "session_duration_min": present.session_duration_min,
+                "active_file": present.active_file,
                 "edited_file_count_10m": signals.edited_file_count_10m,
                 "file_type_mix_10m": dict(signals.file_type_mix_10m),
                 "rename_delete_ratio_10m": signals.rename_delete_ratio_10m,
@@ -711,12 +727,10 @@ class RuntimeOrchestrator:
                 )
                 return
 
-            signals, decision = self.runtime_state.get_context_snapshot()
-            current_context = self.runtime_state.get_current_context()
+            runtime_snapshot = self.runtime_state.get_runtime_snapshot()
             self.runtime_state.set_analysis(
-                signals=signals,
-                decision=decision,
-                current_context=current_context,
+                signals=runtime_snapshot.signals,
+                decision=runtime_snapshot.decision,
                 memory_synced_at=datetime.now(),
             )
             self.log.info(
@@ -779,8 +793,8 @@ class RuntimeOrchestrator:
                 f"reason={exc.__class__.__name__.lower()}",
             )
 
-    def _should_sync_memory(self, event_type, signals, previous_sync_at) -> bool:
-        if signals.session_duration_min < 20:
+    def _should_sync_memory(self, event_type, present, previous_sync_at) -> bool:
+        if present.session_duration_min < 20:
             return False
         if event_type in {"screen_locked", "user_idle", "screen_unlocked"}:
             # Cooldown court pour éviter les doubles syncs sur events rapprochés
@@ -793,8 +807,8 @@ class RuntimeOrchestrator:
             return True
         return datetime.now() - previous_sync_at >= timedelta(minutes=10)
 
-    def _summary_llm_for(self, event_type, signals):
-        if signals.session_duration_min < 20:
+    def _summary_llm_for(self, event_type, present):
+        if present.session_duration_min < 20:
             return None
         if event_type == "commit":
             return self.summary_llm
@@ -831,11 +845,17 @@ class RuntimeOrchestrator:
             self.session_memory.save_episode(transition.opened_episode)
 
     def _freeze_closed_episode_semantics(self, episode):
-        signals, _, _ = self.runtime_state.get_signal_snapshot()
+        snapshot = self.runtime_state.get_runtime_snapshot()
+        present = snapshot.present
+        signals = snapshot.signals
         if episode is None:
             return episode
-        probable_task = getattr(signals, "probable_task", None) or "unknown"
-        activity_level = getattr(signals, "activity_level", None) or "idle"
+        if signals is None:
+            probable_task = "unknown"
+            activity_level = "idle"
+        else:
+            probable_task = present.probable_task or "unknown"
+            activity_level = present.activity_level or "idle"
         task_confidence = getattr(signals, "task_confidence", None)
         if task_confidence is None:
             task_confidence = 0.0
@@ -854,21 +874,33 @@ class RuntimeOrchestrator:
         )
         if signals is None or not hasattr(signals, "session_duration_min"):
             return
-        _, decision = self.runtime_state.get_context_snapshot()
+        decision = self.runtime_state.get_runtime_snapshot().decision
         try:
-            current_context = self._current_context_builder.build(
-                state=self.store.to_dict(),
+            present = self.runtime_state.update_present(
                 signals=signals,
-                find_git_root_fn=find_git_root,
-                find_workspace_root_fn=find_workspace_root,
+                session_status=self._session_fsm.state,
+                awake=self._session_fsm.state != SessionFSM.LOCKED,
+                locked=self._session_fsm.state == SessionFSM.LOCKED,
             )
         except Exception as exc:
             self.log.warning("refresh signaux pré-fermeture échoué : %s", exc)
             return
+        self.session_memory.update_present_snapshot(
+            present,
+            signals=signals,
+        )
         self.runtime_state.set_analysis(
             signals=signals,
             decision=decision,
-            current_context=current_context,
+        )
+
+    def _render_current_context(self, *, present, signals, active_app: str | None):
+        return self._current_context_builder.build(
+            present=present,
+            active_app=active_app,
+            signals=signals,
+            find_git_root_fn=find_git_root,
+            find_workspace_root_fn=find_workspace_root,
         )
 
     def _drain_pending_file_events(self) -> None:
