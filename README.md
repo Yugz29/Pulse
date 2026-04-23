@@ -4,7 +4,7 @@ Pulse est une couche locale d'observation, de structuration de contexte, de mém
 
 Aujourd'hui, Pulse sait :
 - observer l'activité locale utile
-- structurer le contexte courant
+- maintenir un présent runtime canonique
 - consolider une mémoire sessionnelle et des faits utilisateur
 - intercepter certaines commandes agents via MCP
 - produire des propositions explicables
@@ -22,7 +22,7 @@ La fondation du runtime est en place. Pulse dispose maintenant d'épisodes tempo
 
 Pulse combine :
 - une app Swift macOS centrée sur l'encoche et l'observation système
-- un daemon Python local qui qualifie les événements, calcule les signaux, gère le cycle de session, produit du contexte et alimente la mémoire
+- un daemon Python local qui qualifie les événements, gère le cycle de session, calcule les signaux, met à jour le présent canonique, décide et alimente la mémoire
 - une couche LLM optionnelle pour les cas où l'approche déterministe ne suffit plus
 
 Principe fondamental :
@@ -34,10 +34,11 @@ Principe fondamental :
 ## Ce que Pulse fait aujourd’hui
 
 - **Observation locale** : apps actives, fichiers touchés, clipboard, lock/unlock écran, événements utiles au runtime
-- **Contexte courant** : construction d’un `CurrentContext` temps réel à partir des signaux de session
-- **Cycle de session** : gestion unifiée du lifecycle via `SessionFSM`
-- **Épisodes** : frontières temporelles gérées via `EpisodeFSM`, persistance SQLite et exposition de l'épisode courant / récent
-- **Projection de session** : production d’un `SessionSnapshot` structuré, exposé avec compat legacy
+- **Présent canonique** : `PresentState` dans `RuntimeState` est l'unique source de vérité du présent
+- **Cycle de session** : `SessionFSM` produit l'état de session (`active` / `idle` / `locked`)
+- **Contexte de travail** : `SignalScorer` produit `active_file`, `active_project`, `probable_task`, `activity_level`, `focus_level` et le contexte secondaire
+- **Contexte rendu** : `CurrentContextBuilder` rend un `CurrentContext` depuis `present`, avec quelques détails secondaires encore lus depuis `signals`
+- **Épisodes** : `EpisodeFSM` segmente le temps et persiste l'historique récent, mais ne pilote pas le présent
 - **Mémoire locale** : extraction rétrospective de résumés de session et consolidation de faits utilisateur
 - **Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
 - **Interception MCP** : traduction et arbitrage de certaines commandes risquées avant exécution
@@ -58,24 +59,48 @@ macOS events
     ↓
 Swift observation layer
     ↓
-Python daemon
-    ├─ qualification d’événements
-    ├─ scoring et interprétation locale
-    ├─ CurrentContext
-    ├─ SessionFSM
-    ├─ SessionSnapshot
-    ├─ ProposalCandidate
-    └─ mémoire locale
+daemon /event
     ↓
-optional LLM enrichment
+EventBus
+    ↓
+RuntimeOrchestrator
+    ↓
+SessionFSM
+    ↓
+SignalScorer
+    ↓
+RuntimeState.update_present()
+    ↓
+DecisionEngine
+    ↓
+SessionMemory
 ```
 
-Le runtime actuel repose notamment sur :
-- `CurrentContext` : vue synthétique temps réel
-- `SessionSnapshot` : projection structurée de session
-- `ProposalCandidate` : contrat métier avant transport legacy
-- `SessionFSM` : source de vérité du lifecycle de session
-- `EpisodeFSM` : source de vérité des frontières temporelles d’épisode
+Rôles structurants du runtime actuel :
+- `PresentState` : seule vérité canonique du présent
+- `SessionFSM` : seule source de vérité du lifecycle de session
+- `SignalScorer` : seule source du contexte de travail courant
+- `RuntimeOrchestrator` : orchestration du pipeline, pas source de vérité
+- `CurrentContextBuilder` : renderer pur pour les lectures assistant/UI
+- `SessionMemory` : persistance historique, pas writer du présent
+- `EpisodeFSM` : télémétrie temporelle secondaire
+
+Le runtime expose aussi un **snapshot atomique** via `RuntimeState.get_runtime_snapshot()`.
+Il contient `present`, `signals`, `decision` et quelques métadonnées runtime.
+Il existe pour éviter les lectures hybrides où `present`, `signals` et `decision` seraient lus à des instants différents.
+
+Règle d'implémentation :
+
+> toute lecture qui combine `present`, `signals` et `decision` doit passer par `get_runtime_snapshot()`
+
+Lire ces champs séparément est incorrect.
+
+Règle runtime importante :
+
+> verrou court ≠ nouvelle session
+
+Cette règle est implémentée dans `SessionFSM`.
+Un lock court conserve la session courante ; il ne doit pas créer de frontière fantôme au premier event significatif suivant.
 
 Références :
 - [Architecture](./docs/FR/architecture.md)
@@ -155,7 +180,7 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | `/ping` | Health check |
-| GET | `/state` | État courant legacy-compatible du runtime |
+| GET | `/state` | Projection du snapshot runtime : `present` canonique, top-level déprécié pour compat UI, `debug` non contractuel |
 | GET | `/insights` | Activité récente issue du bus |
 | POST | `/event` | Entrée d’événements depuis l’app Swift |
 | POST | `/ask` | Question assistant avec contexte local |
@@ -197,7 +222,17 @@ La mémoire actuelle reste principalement :
 - heuristique
 - locale
 
-Elle n’est pas encore pilotée par les épisodes, même si des épisodes temporels sont maintenant persistés dans `session.db`.
+Elle n’est pas encore pilotée par les épisodes, même si des épisodes temporels sont persistés dans `session.db`.
+
+---
+
+## Limites actuelles
+
+- `CurrentContext` reste un rendu. Il dépend encore partiellement de `signals` pour quelques champs secondaires (`task_confidence`, terminal, MCP, résumés de signaux).
+- `signals` ne sont pas une source de vérité du présent. Ils ne doivent pas être utilisés comme base d'une décision métier ou d'une nouvelle feature de contexte principal.
+- `/state` garde des champs top-level et des blocs legacy pour compat UI et debug. Ces champs top-level sont dépréciés. Toute nouvelle lecture doit passer par `present`.
+- Le marqueur de lock legacy existe encore dans `RuntimeState` pour filtrage, debug et compat. Il n'est pas canonique et ne doit jamais servir de source métier.
+- `EpisodeFSM` existe et persiste des épisodes, mais les épisodes ne participent pas aujourd'hui à la décision ni au présent runtime. Toute recentralisation des épisodes exigerait une refonte explicite du contrat runtime.
 
 ---
 
@@ -259,6 +294,7 @@ Cette commande :
 Le repo contient actuellement :
 - 43 fichiers de tests Python dans `tests/`
 - des tests ciblés sur les contrats et verrous récents :
+  - `PresentState`
   - `CurrentContext`
   - `SessionSnapshot`
   - `ProposalCandidate`

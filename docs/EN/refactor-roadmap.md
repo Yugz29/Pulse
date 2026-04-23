@@ -24,11 +24,44 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 - A rich memory layer driven by episodes
 - An autonomous agent
 
+## 1bis. Runtime state after the refocus
+
+The runtime is no longer organized around multiple competing live views.
+
+The real pipeline is:
+
+```text
+event
+→ SessionFSM
+→ SignalScorer
+→ RuntimeState.update_present()
+→ DecisionEngine
+→ SessionMemory
+```
+
+What is now true in code:
+- `PresentState` is the single canonical source of truth for the present
+- `SignalScorer` is the single source of current work context
+- `SessionFSM` is the single source of session state
+- `CurrentContext` is a rendering, not a source of truth
+- `StateStore` is a legacy shim
+- `EpisodeFSM` remains secondary and telemetry-oriented
+- `/state` exposes `present` as the canonical core, with compatibility and debug around it
+- an atomic runtime snapshot exists to avoid hybrid reads
+- short lock != new session
+
+Runtime prohibitions:
+- do not reintroduce `signals` as a source of truth for the present
+- do not build new features from top-level `/state` fields
+- do not read `present`, `signals`, and `decision` separately
+- do not recentralize episodes without an explicit runtime-contract refactor
+
 ## 2. Current state
 
 ### Stabilized
 
-- `CurrentContext` exists and feeds the runtime
+- `PresentState` carries the canonical present
+- `CurrentContext` exists as a rendering of the present
 - `SessionSnapshot` structures session projection
 - `ProposalCandidate` decouples business logic from legacy transport
 - `SessionFSM` centralizes session lifecycle
@@ -71,7 +104,8 @@ Make the runtime structurally sound without changing observable behavior.
 
 **Deliverables**
 
-- `CurrentContext`
+- `PresentState`
+- `CurrentContext` as a rendering
 - `SessionSnapshot`
 - `ProposalCandidate`
 - `SessionFSM`
@@ -87,7 +121,7 @@ Make the runtime structurally sound without changing observable behavior.
 
 **Exit condition**
 
-- A single source of truth for session lifecycle
+- A single source of truth for the present and session lifecycle
 - Structured runtime and session contracts
 - Unchanged legacy outputs
 - Documented compatibility shim
@@ -105,7 +139,7 @@ Measure the real behavior of the stabilized system before opening Episode System
 - Targeted debug and audit instrumentation
 - Real-world session scenarios
 - Validation of session boundaries on field cases
-- Validation of `CurrentContext` as a useful real-time view
+- Validation of `CurrentContext` as a useful rendering of the present
 - A prioritized list of observed gaps, without opportunistic fixes
 
 **Field observations** (summary — details in `OBS.md`)
@@ -190,7 +224,7 @@ Attach deterministic semantics to closed episodes without moving scoring out of 
 **Exit condition**
 
 - Closed episodes carry readable semantics
-- Live semantics still come from `signals`, not from the active episode
+- Live semantics still come from `PresentState`, not from the active episode
 - Session aggregation is stable
 
 ### Phase 3 — Smart Proposals
@@ -285,7 +319,7 @@ Open bounded action capabilities on top of a system that is already reliable in 
 
 - `Episode Semantics (2b) -> Smart Proposals`
   - Closed episodes carry readable semantics
-  - Live semantics still come from `signals`
+  - Live semantics still come from `PresentState`
   - Session aggregation is stable
 
 - `Smart Proposals -> Enriched memory`
@@ -319,7 +353,7 @@ Open bounded action capabilities on top of a system that is already reliable in 
 
 At the end of the current Phase 2 scope, Pulse should make it possible to:
 
-- observe activity, task and context in real time through `signals`
+- observe activity, task and context in real time through `PresentState`
 - visualize internal state through the technical dashboard
 - detect episode boundaries inside a session
 - inspect recent closed episodes with a frozen semantic snapshot

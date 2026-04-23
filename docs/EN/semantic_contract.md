@@ -17,6 +17,89 @@ Current Pulse memory is still primarily:
 
 ---
 
+# Part 0 — Runtime present contract
+
+The runtime present now has a clear contract.
+
+## 0.1 Source of truth
+
+`PresentState`, stored in `RuntimeState`, is the single canonical source of truth for the present.
+
+The canonical present currently groups:
+- session state (`session_status`, `awake`, `locked`)
+- current work context (`active_file`, `active_project`, `probable_task`, `activity_level`, `focus_level`)
+- a few directly useful surface fields (`friction_score`, `clipboard_context`, `session_duration_min`, `updated_at`)
+
+## 0.2 Allowed producers
+
+The present has only two business producers:
+- `SessionFSM` for session state
+- `SignalScorer` for current work context
+
+`RuntimeState.update_present()` stores that result.
+It does not recompute it.
+
+## 0.3 What is not canonical
+
+- `signals`: a detail and enrichment layer, useful but not canonical
+- `CurrentContext`: a rendering of the present for assistant/UI reads
+- `StateStore`: a legacy shim
+- `SessionMemory`: historical persistence
+- `EpisodeFSM`: secondary temporal segmentation
+
+Explicit prohibitions:
+- `signals` are not a source of truth for the present
+- `signals` must not be used for business decisions
+- `signals` must not be used to derive the main business context
+- episodes do not currently participate in the truth of the present or the live decision path
+
+## 0.4 Atomic snapshot
+
+The runtime exposes an atomic read snapshot.
+
+It exists to avoid reading:
+- `present`
+- `signals`
+- `decision`
+
+at different instants and creating a hybrid runtime state.
+
+Implementation rule:
+- any read path combining `present`, `signals`, and `decision` must go through `get_runtime_snapshot()`
+- reading those fields separately is incorrect
+
+## 0.5 Lock / session rule
+
+The current product rule is:
+
+> short lock ≠ new session
+
+This rule is implemented in `SessionFSM`.
+It must not be reinterpreted elsewhere.
+
+## 0.6 `/state`
+
+`/state` remains a composite projection for compatibility.
+
+Read rule:
+- `present` is the only canonical core
+- top-level fields exist for UI compatibility and are deprecated
+- `debug` is non-contractual
+- no new feature should be built from the top-level `/state` fields
+
+## 0.7 Legacy lock marker
+
+The legacy lock marker is not canonical.
+
+It must only be used for:
+- ingress filtering
+- debug
+- compatibility
+
+It must never be used as a business source.
+
+---
+
 ## 1. The problem to avoid
 
 Pulse can create the impression that it understands work when it is actually approximating from sessions and heuristics.
@@ -87,7 +170,7 @@ Status:
 What Pulse aggregates about ongoing work.
 
 Examples:
-- `CurrentContext`
+- `PresentState`
 - `probable_task`
 - `focus_level`
 - `session_duration_min`
@@ -95,11 +178,14 @@ Examples:
 Origin:
 - live runtime
 - `SignalScorer`
-- `CurrentContext`
+- `SessionFSM`
+- `RuntimeState.update_present()`
 
 Status:
 - useful for the present
 - not a durable truth
+
+`CurrentContext` is only a read rendering of that level.
 
 #### Level 3 — Heuristic observation
 

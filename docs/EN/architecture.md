@@ -1,426 +1,272 @@
-# Pulse — Progressive Architecture
+# Pulse — Current Runtime Architecture
 
-This document describes Pulse architecture in a way that is usable against the current codebase.
+This document describes the runtime as it exists in the current code.
 
-It explicitly separates:
-- what is **implemented today**
-- what is **stabilized**
-- what is still part of the **target architecture**
-- what has **not started yet**
+It does not describe a theoretical target.
+It does not describe product vision.
+If the code and this document diverge, the code wins.
 
-The reference execution document remains [refactor-roadmap.md](./refactor-roadmap.md).
+The reference roadmap remains [refactor-roadmap.md](./refactor-roadmap.md).
 
 ---
 
-## 1. Positioning
+## 1. Real pipeline
 
-Pulse is a local system for observing work that:
-- captures system and work events
-- qualifies them and turns them into usable signals
-- structures the current context
-- consolidates local memory
-- emits explainable proposals
+The actual runtime pipeline is:
 
-Pulse is not an autonomous agent.
+```text
+event
+→ SessionFSM
+→ SignalScorer
+→ RuntimeState.update_present()
+→ DecisionEngine
+→ SessionMemory
+```
 
-Today, Pulse is still primarily a system of:
-- observation
-- limited interpretation
-- local memory
-- suggestions
+More concretely:
 
-The target architecture remains:
+```text
+macOS / Swift observation
+→ POST /event
+→ EventBus
+→ RuntimeOrchestrator
+→ SessionFSM.observe_recent_events()
+→ SignalScorer.compute()
+→ RuntimeState.update_present()
+→ DecisionEngine.evaluate()
+→ SessionMemory.update_present_snapshot()
+```
 
-Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session -> Memory -> Proposal
-
-But those layers do not all exist at the same level of maturity.
-
----
-
-## 2. Real system state
-
-### Implemented and stabilized
-
-- Local event observation through the Swift app and the Python daemon
-- Runtime-side event qualification (`actor`, `noise_policy`, implicit domain from file or action type)
-- Real-time work signal computation
-- `activity_level` and `task_confidence` exposed through `/state`
-- `session_fsm` exposed through `/state`
-- `CurrentContext` as the runtime synthesis view
-- `SessionSnapshot` as the structured session projection
-- `ProposalCandidate` as the business contract before legacy transport
-- `SessionFSM` as the source of truth for session lifecycle
-- `EpisodeFSM` as the source of truth for temporal episode boundaries
-- SQLite persistence for episodes in `session.db`
-- `current_episode` and `recent_episodes` exposed through `/state` as a runtime projection
-- Episode semantics frozen only at closure (`probable_task`, `activity_level`, `task_confidence`)
-- Technical dashboard in the app (`DashboardWindow`) as an independent glassmorphism window
-- Phase 1 observability: `CurrentContextBuilder` logs, explicit memory fallback in `freeze_memory()`, logged FSM transitions
-- `/memory/sessions` route for session journal exposure
-- Locked legacy compatibility on:
-  - `build_context_snapshot()`
-  - `/state`
-  - `export_session_data()`
-
-### Implemented but still transitional
-
-- `StateStore` still exists for compatibility
-- The Markdown context snapshot is still exposed for the assistant / LLM layer
-- A compatibility shim still exists between `RuntimeState` and `SessionFSM` around the lock marker
-
-### Not started
-
-- proposals genuinely contextualized by episode
-- episode-driven enriched memory
-- controlled agentic behavior
+`RuntimeOrchestrator` exists to chain that flow.
+It must not become a parallel business source of truth again.
 
 ---
 
-## 3. Target architecture vs current state
+## 2. Source of truth for the present
 
-| Layer | Target role | Current state |
-|---|---|---|
-| Observation | capture raw events | implemented |
-| Qualification | assign source and handling policy | implemented |
-| Activity | describe what the user is doing now | partially implemented via `activity_level` |
-| Interpretation | infer task, friction, patterns | implemented |
-| Episode | segment work into temporal segments and later carry frozen semantics | implemented, still limited to temporal boundaries + frozen semantics on closed episodes |
-| Session | contain work between temporal boundaries | implemented, with persisted episodes but without rich memory/proposal usage |
-| Memory | consolidate facts and retrospective summaries | implemented, still mostly session-centric |
-| Proposal | suggest explainable actions | implemented, still local and limited |
+`PresentState`, stored in `RuntimeState`, is the single canonical source of truth for the present.
 
-The key point is simple: **Pulse now has a usable Episode layer for temporal boundaries and recent history, but not yet a rich episode-driven memory/proposal layer**.
-
----
-
-## 4. Current runtime layers
-
-### 4.1 Observation
-
-**Status**: implemented
-
-Pulse receives raw events such as:
-- `file_modified`
-- `file_created`
-- `app_activated`
-- `clipboard_updated`
-- `screen_locked`
-- `screen_unlocked`
-- commit-related events inferred from git file observation
-
-An event remains a raw observation:
-- `type`
-- `payload`
-- `timestamp`
-
-At this level there is no business interpretation.
-
-### 4.2 Qualification
-
-**Status**: implemented
-
-Before scoring, Pulse enriches some events with attribution metadata:
-- `actor`
-- `noise_policy`
-- scores or markers related to probable event origin
-
-Purpose:
-- distinguish user activity, system activity, and assisted activity
-- reduce pollution in scoring
-
-This layer already exists in the code, even if it is not yet modeled as a first-class contract.
-
-### 4.3 Activity
-
-**Status**: partially implemented
-
-Pulse currently exposes `activity_level` in signals and in `CurrentContext`.
-
-This layer answers:
-- what is the user concretely doing right now?
-
-Examples:
-- `editing`
-- `reading`
-- `executing`
-- `navigating`
-- `idle`
-
-Important:
-- `Activity` is not `Task`
-- it is computed today
-- it already exists in the runtime
-- it is a reliable part of the current context
-- but it is not yet treated as a fully independent architectural layer
-- and it does not yet carry its own structural responsibility the way a future Episode layer would
-
-### 4.4 Interpretation
-
-**Status**: implemented
-
-Pulse currently infers:
+It currently contains:
+- `session_status`
+- `awake`
+- `locked`
+- `active_file`
+- `active_project`
 - `probable_task`
-- `task_confidence`
+- `activity_level`
 - `focus_level`
 - `friction_score`
-- `work_pattern_candidate`
+- `clipboard_context`
+- `session_duration_min`
+- `updated_at`
 
-This layer remains probabilistic.
-
-It does not say:
-- "what is true"
-
-It says:
-- "what the runtime currently considers most likely from the active signals"
-
-### 4.5 Session
-
-**Status**: implemented
-
-The current session is a temporal container bounded by:
-- meaningful activity gaps
-- screen lock / unlock
-- reset rules that are now stabilized
-
-Session lifecycle is now centralized in `SessionFSM`.
-
-Important:
-- a session exists today
-- its lifecycle is unified
-- and it now aggregates persisted episodes
-
-### 4.6 Memory
-
-**Status**: implemented, still intermediate
-
-Pulse currently has:
-- session memory
-- a structured session export (`SessionSnapshot`)
-- retrospective memory extraction
-- a user fact engine
-- Markdown and SQLite outputs
-
-Current memory is still largely:
-- session-centric
-- summary- and fact-oriented
-
-It is not yet:
-- organized around episodes
-- fine-grained enough to support more advanced proposals on its own
-
-### 4.7 Proposal
-
-**Status**: implemented, limited scope
-
-Pulse currently knows how to:
-- produce local decisions
-- build `ProposalCandidate`
-- convert candidates into the legacy `Proposal` transport
-- preserve transparency and evidence
-
-But the current proposal flow is still:
-- local
-- weakly contextualized by work continuity
-- not driven by episodes
-
-### 4.8 Episode
-
-**Status**: implemented, still limited
-
-This layer now exists as a usable runtime system for temporal boundaries.
-
-Concretely, Pulse currently has:
-- a persisted `Episode` model in `session.db`
-- a top-level `current_episode` exposed through `/state`
-- `Session -> Episodes` aggregation through persistence and runtime exposure
-- frozen semantics only on closed episodes
-
-Important:
-- `EpisodeFSM` remains temporal only
-- `SignalScorer` remains the single source of semantic computation
-- the active episode remains mostly temporal; live reading comes from `signals`
-- `current_episode` is not carried by `CurrentContext`
-- memory and proposals are not episode-driven yet
+Read rule:
+- if a reader needs to know what is true now, it must read `RuntimeState.present`
+- it must not rebuild the present from `signals`, `StateStore`, `SessionMemory`, or `CurrentContext`
 
 ---
 
-## 5. Current structural contracts
+## 3. Real responsibilities by layer
 
-### CurrentContext
-
-**Status**: implemented
-
-`CurrentContext` is the real-time synthesized runtime view.
-
-It is used to:
-- provide a unified entry point to current context
-- feed `build_context_snapshot()`
-- feed `/state` through a legacy adapter
-
-Important:
-- `CurrentContext` must not become an active object
-- it does not contain `current_episode`
-- it must not carry retrospective memory
-
-### SessionSnapshot
-
-**Status**: implemented
-
-`SessionSnapshot` is the structured projection of the current or closed session.
-
-It is used to:
-- structure the handoff to the memory layer
-- preserve strict compatibility with `export_session_data()`
-
-Important:
-- it does not contain episodes today
-- it remains a session snapshot, not a complete future memory model
-
-### ProposalCandidate
-
-**Status**: implemented
-
-`ProposalCandidate` decouples:
-- the business construction of a proposal
-- its final legacy transport
-
-It does not carry:
-- `id`
-- `status`
-- persistence lifecycle
-
-### SessionFSM
-
-**Status**: implemented
-
-`SessionFSM` is the source of truth for session lifecycle.
-
-It centralizes:
-- `active`
-- `idle`
-- `locked`
-- session boundary transitions
-
-Important:
-- `RuntimeState` may still carry compatibility markers
-- but it must no longer decide lifecycle behavior
+| Layer | Real role today | What it must not do |
+|---|---|---|
+| `EventBus` | transport recent events | carry business state |
+| `SessionFSM` | produce session state and session boundaries | compute work context |
+| `SignalScorer` | produce the current work context | store the present |
+| `RuntimeState` | store `PresentState` and expose an atomic read snapshot | recompute semantics |
+| `RuntimeOrchestrator` | coordinate the runtime pipeline | become a god-source of truth |
+| `DecisionEngine` | decide from `PresentState` | consume `signals` directly as the main source |
+| `CurrentContextBuilder` | render `CurrentContext` from `present` | become a source of truth |
+| `SessionMemory` | persist history and snapshots | correct or write the present |
+| `StateStore` | passive legacy shim | derive `active_file`, `active_project`, or session state |
+| `EpisodeFSM` | segment time and persist episodes | drive the present |
 
 ---
 
-## 6. Target concepts not yet implemented
+## 4. Producers of the present
 
-The following elements belong to the target architecture, not to the current system.
+The present has only two business producers:
 
-### `current_episode` in `CurrentContext`
+- `SessionFSM` produces session state:
+  - `session_status`
+  - `awake`
+  - `locked`
+- `SignalScorer` produces work context:
+  - `active_file`
+  - `active_project`
+  - `probable_task`
+  - `activity_level`
+  - `focus_level`
+  - `friction_score`
+  - `clipboard_context`
+  - `session_duration_min`
 
-Target:
-- a real-time view of a provisional ongoing episode
-
-Reality today:
-- intentionally absent
-- not introduced during `Foundation`
-
-### Session containing episodes
-
-Target:
-- a session will aggregate multiple episodes
-
-Reality today:
-- the session already aggregates persisted episodes, but this structure is not yet used richly by `SessionSnapshot`, memory, or proposals
-
-### Episode-enriched memory
-
-Target:
-- finer, more contextual, less flat memory
-
-Reality today:
-- memory is still mostly built from sessions and facts
-
-### Smart Proposals
-
-Target:
-- proposals contextualized by actual work continuity
-
-Reality today:
-- proposals are still local and limited
-
-### Controlled agentic behavior
-
-Target:
-- bounded, explainable, validated actions
-
-Reality today:
-- not started
+`RuntimeState.update_present()` assembles those outputs and stores them.
+It does not recompute anything.
 
 ---
 
-## 7. Design principles
+## 5. Atomic runtime snapshot
 
-### Strict separation between real-time and retrospective layers
+The runtime exposes an atomic read snapshot through `RuntimeState.get_runtime_snapshot()`.
 
-The runtime must not mix:
-- current context computation
-- memory consolidation
-- retrospective projection
+It currently contains:
+- `present`
+- `signals`
+- `decision`
+- `paused`
+- `memory_synced_at`
+- `latest_active_app`
+- `lock_marker_active`
+- `last_screen_locked_at`
 
-Real-time exists to observe and qualify.
-Retrospective logic exists to summarize, consolidate, correct, and remember.
+Why it exists:
+- to prevent a route or helper from reading `present`, then `signals`, then `decision` at different instants
+- to prevent hybrid responses where the present and the decision do not belong to the same logical instant
 
-### Transparency is mandatory
-
-Any important inference or proposal must remain tied to:
-- its signals
-- its confidence
-- its evidence set
-
-### No future washing in code or docs
-
-A future concept must be documented as future.
-
-In particular:
-- an unimplemented episode capability must not be described as present
-- memory not structured by episodes must not be described as already mature
-- an unstarted agentic layer must not be described as active
-
-### One source of truth per critical responsibility
-
-Current examples:
-- session lifecycle -> `SessionFSM`
-- real-time context -> `CurrentContext`
-- session projection -> `SessionSnapshot`
-- proposal transport -> `Proposal`
+Rule:
+- runtime read paths should read this atomic snapshot
+- they should no longer assemble runtime state from multiple separate `RuntimeState` getters
+- any read path combining `present`, `signals`, and `decision` must go through `get_runtime_snapshot()`
+- reading `present`, `signals`, and `decision` separately is incorrect
 
 ---
 
-## 8. Next logical phase
+## 6. Reading and exposure
 
-The next logical phase is no longer introducing episodes themselves.
+### `CurrentContext`
 
-Goal:
-- use episodes more effectively for proposals
-- articulate memory more clearly around episodes
-- make the separation between live signals and retrospective reading easier to read
+`CurrentContext` is no longer a source of truth.
+
+It is a rendering of the present for assistant/UI layers.
+
+What it reads from `present`:
+- `active_project`
+- `active_file`
+- `session_duration_min`
+- `activity_level`
+- `probable_task`
+- `focus_level`
+- `clipboard_context`
+
+What it still reads from `signals`:
+- `task_confidence`
+- terminal metadata
+- MCP metadata
+- `signal_summary`
+
+So:
+- `CurrentContext` is useful
+- `CurrentContext` is not canonical
+- `signals` remain a bounded secondary dependency
+- `signals` are not a source of truth for the present
+- `signals` must not be used for business decisions
+- `signals` must not be used to derive the main business context
+
+### `/state`
+
+`/state` is a projection of the runtime snapshot.
+
+Read rule:
+- `present` = canonical
+- top-level = temporary compatibility and deprecated
+- `debug` = non-contractual
+
+Do not use `signals` as the main source of truth.
+Do not use top-level fields as the basis of new features.
+
+The current `/state` payload still mixes:
+- a canonical core:
+  - `present`
+- top-level compatibility fields:
+  - `active_app`
+  - `active_file`
+  - `active_project`
+  - `session_duration_min`
+  - `runtime_paused`
+- compatibility/debug blocks:
+  - `signals`
+  - `decision`
+  - `session_fsm`
+  - `current_episode`
+  - `recent_episodes`
+  - `debug`
 
 ---
 
-## 9. How to read this document
+## 7. Lock / session rule
 
-This document must be read as a progressive architecture document.
+The current product rule is:
 
-It does not say:
-- "all of this already exists"
+> short lock ≠ new session
 
-It says:
-- "this is the target structure"
-- "this is what really exists today"
-- "these are the layers that are still future"
+This rule is implemented in `SessionFSM`.
 
-If ambiguity appears between:
-- this document
-- the actual code
-- the roadmap
+Concretely:
+- a long lock can close the current session and start another one on resume
+- a short lock keeps the current session
+- the first meaningful event after a short lock must not create a ghost session
 
-priority is:
-1. the actual code
-2. [refactor-roadmap.md](./refactor-roadmap.md)
-3. this document
+The orchestrator does not patch that rule after the fact.
+The boundary decision lives in `SessionFSM`.
+
+---
+
+## 8. Episodes
+
+`EpisodeFSM` exists and works, but it remains secondary.
+
+What it does today:
+- open / close temporal episodes
+- persist those episodes
+- expose `current_episode` and `recent_episodes`
+- freeze minimal semantics on closed episodes
+
+What it does not do:
+- produce the present
+- directly feed the current decision path
+- drive memory as the main source
+- act as an implicit new center of runtime truth
+
+The episode layer should be read as:
+- useful temporal segmentation
+- observability
+- enriched runtime telemetry
+
+Not as the core of the system.
+Any change that would make episodes central for the present or decision path would require an explicit runtime-contract refactor.
+
+---
+
+## 9. Remaining legacy layers
+
+The following leftovers still exist:
+
+- `StateStore`: passive compatibility shim
+- legacy lock marker in `RuntimeState`: useful for ingress filtering / debug / compatibility, not canonical
+- top-level `/state` payload: kept for UI compatibility and deprecated
+- markdown / legacy adapters: still fed by `signals` for a few secondary details
+
+Those leftovers must not be treated as concurrent sources of truth.
+
+---
+
+## 10. Current limits
+
+- `CurrentContext` still depends partly on `signals`
+- `/state` still keeps legacy payload for UI compatibility and debug
+- the legacy lock marker still exists alongside `present.locked`
+- episodes are not central for memory, decision, or proposals
+- `SessionSnapshot` remains a compatibility projection, not the canonical shape of the present
+
+---
+
+## 11. Correct reading rule
+
+To read the runtime correctly today:
+
+1. read `RuntimeState.present` for the canonical present
+2. read the atomic runtime snapshot for complete read paths
+3. read `CurrentContext` as a rendering
+4. read `signals` as a secondary-detail layer
+5. read `StateStore` and top-level `/state` fields as compatibility, not truth

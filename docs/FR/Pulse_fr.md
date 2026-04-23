@@ -29,7 +29,7 @@ L’idée centrale est simple :
 
 Pulse est un système local qui :
 - observe l’activité utile sur le poste
-- structure un contexte courant exploitable
+- maintient un présent runtime canonique exploitable
 - consolide une mémoire locale simple
 - intercepte certaines actions d’agents
 - produit des propositions explicables
@@ -106,22 +106,28 @@ L’app Swift observe le système :
 Elle n’interprète pas.
 Elle remonte des événements.
 
-### 2. Structuration locale
+### 2. Runtime local
 
-Le daemon Python transforme ces événements en couches plus utiles :
-- signaux de travail
-- contexte courant
-- cycle de session
-- projection de session
-- propositions locales
+Le daemon Python suit aujourd’hui ce pipeline réel :
+
+```text
+event
+→ SessionFSM
+→ SignalScorer
+→ RuntimeState.update_present()
+→ DecisionEngine
+→ SessionMemory
+```
+
+Les responsabilités nettes sont :
+- `PresentState` = vérité canonique du présent
+- `SessionFSM` = état de session
+- `SignalScorer` = contexte de travail courant
+- `RuntimeOrchestrator` = orchestration uniquement
+- `CurrentContextBuilder` = rendu pour lecture assistant/UI
+- `SessionMemory` = persistance historique
 
 Cette partie est aujourd’hui la fondation la plus solide du projet.
-
-Elle repose notamment sur :
-- `CurrentContext`
-- `SessionSnapshot`
-- `ProposalCandidate`
-- `SessionFSM`
 
 ### 3. Mémoire et enrichissement
 
@@ -160,9 +166,10 @@ La fondation du système est maintenant en place.
 
 Cela veut dire que Pulse possède déjà :
 - un runtime structuré
-- un cycle de session unifié
-- un contexte courant cohérent
-- une projection de session propre
+- un présent canonique unique via `PresentState`
+- un cycle de session unifié via `SessionFSM`
+- un contexte de travail cohérent via `SignalScorer`
+- un snapshot runtime atomique pour les lectures
 - une compat legacy verrouillée sur les sorties critiques
 
 Ce n’est pas encore une intelligence aboutie.
@@ -228,6 +235,10 @@ Le système possède déjà :
 - des épisodes temporels persistés
 - un épisode courant exposé dans le runtime
 - une sémantique figée sur les épisodes clos
+
+Mais ces épisodes restent secondaires :
+- ils n'alimentent pas la vérité du présent
+- ils ne pilotent pas encore la mémoire ni les décisions
 
 Ce qui reste à rendre plus fort :
 - la mémoire structurée autour des épisodes

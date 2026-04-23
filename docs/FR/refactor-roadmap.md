@@ -24,11 +24,44 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 - Une mémoire consolidée riche et pilotée par épisodes
 - Un agent autonome
 
+## 1bis. État runtime après refocus
+
+Le runtime actuel n'est plus organisé autour de plusieurs vues concurrentes.
+
+Le pipeline réel est :
+
+```text
+event
+→ SessionFSM
+→ SignalScorer
+→ RuntimeState.update_present()
+→ DecisionEngine
+→ SessionMemory
+```
+
+Points actés dans le code :
+- `PresentState` est la seule source de vérité canonique du présent
+- `SignalScorer` est la seule source du contexte de travail courant
+- `SessionFSM` est la seule source de l'état de session
+- `CurrentContext` est un rendu, pas une source de vérité
+- `StateStore` est un shim legacy
+- `EpisodeFSM` reste secondaire et télémétrique
+- `/state` expose `present` comme noyau canonique, avec compat et debug autour
+- un snapshot runtime atomique existe pour éviter les lectures hybrides
+- verrou court != nouvelle session
+
+Interdits runtime :
+- ne pas réintroduire `signals` comme source de vérité du présent
+- ne pas construire de nouvelle feature depuis les champs top-level de `/state`
+- ne pas lire `present`, `signals` et `decision` séparément
+- ne pas recentraliser les épisodes sans refonte explicite du contrat runtime
+
 ## 2. État actuel
 
 ### Stabilisé
 
-- `CurrentContext` existe et alimente le runtime
+- `PresentState` porte le présent canonique
+- `CurrentContext` existe comme rendu du présent
 - `SessionSnapshot` structure la projection de session
 - `ProposalCandidate` découple le métier du transport legacy
 - `SessionFSM` centralise le lifecycle de session
@@ -69,7 +102,8 @@ Rendre le runtime structurable sans changer le comportement observable.
 
 **Livrables**
 
-- `CurrentContext`
+- `PresentState`
+- `CurrentContext` comme rendu
 - `SessionSnapshot`
 - `ProposalCandidate`
 - `SessionFSM`
@@ -85,7 +119,7 @@ Rendre le runtime structurable sans changer le comportement observable.
 
 **Condition de sortie**
 
-- Une source de vérité sessionnelle
+- Une source de vérité du présent et du lifecycle sessionnel
 - Contrats runtime et session structurés
 - Sorties legacy inchangées
 - Shim de compat documenté
@@ -103,7 +137,7 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 - Instrumentation de debug et d'audit ciblée
 - Jeux de scénarios réels de sessions
 - Validation des frontières de session sur cas terrain
-- Validation du `CurrentContext` comme vue temps réel exploitable
+- Validation du rendu `CurrentContext` comme projection utile du présent
 - Liste priorisée des écarts observés, sans correction opportuniste
 
 **Observations terrain** (synthèse — détails dans `OBS.md`)
@@ -199,7 +233,7 @@ Un épisode devient une unité de sens : quelle tâche, quel contexte, quelle or
 
 - Un épisode clos porte une sémantique lisible et auditable
 - La sémantique est construite de façon déterministe, sans LLM obligatoire
-- Le présent continue d'être lu via `signals`, pas via la sémantique de l'épisode actif
+- Le présent continue d'être lu via `PresentState`, pas via la sémantique de l'épisode actif
 
 ---
 
@@ -330,6 +364,7 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
 
 - de voir l'épisode courant dans le dashboard en temps réel
 - de comprendre pourquoi une frontière d'épisode a été détectée
+- de lire le présent canonique via `PresentState`
 - de visualiser un historique récent des épisodes clos
 - de lire la sémantique live via `signals` et la sémantique figée via les épisodes clos
 

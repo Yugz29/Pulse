@@ -35,7 +35,7 @@ What it covers:
 - signal scorer
 - decision engine
 - state store
-- `CurrentContext` builders and legacy adapters
+- `PresentState`, `CurrentContext` builders and legacy adapters
 - `SessionSnapshot` builders and legacy adapters
 - `ProposalCandidate` adapters
 - `SessionFSM`
@@ -58,9 +58,13 @@ These tests exist to prevent structural regressions during refactors. They are n
 
 Current locked outputs include:
 - `build_context_snapshot()` -> exact Markdown output
-- `/state` -> exact JSON output
+- `/state` -> exact JSON output (`present` canonical core + compat/debug)
 - `export_session_data()` -> exact legacy dict output
 - proposal generation output -> exact payload / structure / evidence output
+
+Important:
+- legacy `/state` fields may be tested for compatibility
+- they must not be used as the basis of new features
 
 These tests are used when Pulse must preserve behavior while changing internal
 structure. If one of these assertions fails, the default assumption is that the
@@ -71,6 +75,7 @@ change is breaking until proven otherwise.
 The current runtime foundation introduces several structural artifacts that are now
 tested directly:
 
+- `PresentState`
 - `CurrentContext`
 - `SessionSnapshot`
 - `ProposalCandidate`
@@ -85,6 +90,7 @@ They are not tested to justify behavior drift. They are tested to lock:
 Typical expectations:
 - a builder can replace inline assembly without changing output
 - a legacy adapter reproduces the exact previous contract
+- `RuntimeState.present` remains the canonical truth of the present
 - the session lifecycle has a single source of truth
 - a candidate-to-transport conversion does not mutate the final external payload
 

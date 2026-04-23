@@ -11,6 +11,89 @@ Il ne décrit pas un système idéal.
 
 ---
 
+# Partie 0 — Contrat du présent runtime
+
+Le présent runtime a maintenant un contrat clair.
+
+## 0.1 Source de vérité
+
+`PresentState`, stocké dans `RuntimeState`, est la seule source de vérité canonique du présent.
+
+Le présent canonique regroupe aujourd'hui :
+- l'état de session (`session_status`, `awake`, `locked`)
+- le contexte de travail courant (`active_file`, `active_project`, `probable_task`, `activity_level`, `focus_level`)
+- quelques champs de surface directement utiles (`friction_score`, `clipboard_context`, `session_duration_min`, `updated_at`)
+
+## 0.2 Producteurs autorisés
+
+Le présent n'a que deux producteurs métier :
+- `SessionFSM` pour l'état de session
+- `SignalScorer` pour le contexte de travail courant
+
+`RuntimeState.update_present()` stocke ce résultat.
+Il ne le recalcule pas.
+
+## 0.3 Ce qui n'est pas canonique
+
+- `signals` : couche de détails et d'enrichissement, utile mais non canonique
+- `CurrentContext` : rendu du présent pour la lecture assistant/UI
+- `StateStore` : shim legacy
+- `SessionMemory` : persistance historique
+- `EpisodeFSM` : segmentation temporelle secondaire
+
+Interdits explicites :
+- `signals` ne sont pas une source de vérité du présent
+- `signals` ne doivent pas être utilisés pour une décision métier
+- `signals` ne doivent pas servir à dériver le contexte métier principal
+- les épisodes ne participent pas aujourd'hui à la vérité du présent ni à la décision courante
+
+## 0.4 Snapshot atomique
+
+Le runtime expose un snapshot atomique de lecture.
+
+Il existe pour éviter de lire :
+- `present`
+- `signals`
+- `decision`
+
+à des instants différents et de fabriquer un état hybride.
+
+Règle d'implémentation :
+- toute lecture qui combine `present`, `signals` et `decision` doit passer par `get_runtime_snapshot()`
+- lire ces champs séparément est incorrect
+
+## 0.5 Règle lock / session
+
+Règle produit actuelle :
+
+> verrou court ≠ nouvelle session
+
+Cette règle est implémentée dans `SessionFSM`.
+Elle ne doit pas être réinterprétée ailleurs.
+
+## 0.6 `/state`
+
+`/state` reste une projection composite pour compatibilité.
+
+Règle de lecture :
+- `present` est le seul noyau canonique
+- les champs top-level existent pour compat UI et sont dépréciés
+- `debug` est non contractuel
+- une nouvelle feature ne doit jamais partir des champs top-level de `/state`
+
+## 0.7 Marqueur de lock legacy
+
+Le marqueur de lock legacy n'est pas canonique.
+
+Il ne doit être utilisé que pour :
+- filtrage d'ingress
+- debug
+- compat
+
+Il ne doit jamais être utilisé comme source métier.
+
+---
+
 # Partie 1 — Contrat de la mémoire
 
 La mémoire actuelle de Pulse reste principalement :
@@ -90,19 +173,22 @@ Statut :
 Ce que Pulse agrège sur le travail en cours.
 
 Exemples :
-- `CurrentContext`
+- `PresentState`
 - `probable_task`
 - `focus_level`
 - `session_duration_min`
 
 Origine :
 - runtime live
+- `SessionFSM`
 - `SignalScorer`
-- `CurrentContext`
+- `RuntimeState.update_present()`
 
 Statut :
 - utile pour le présent
 - pas une vérité durable
+
+`CurrentContext` n'est qu'un rendu de lecture de ce niveau.
 
 #### Niveau 3 — Observation heuristique
 
@@ -324,7 +410,7 @@ Cette section définit le contrat actuel de l'épisode dans Pulse.
 
 Elle couvre :
 - les frontières temporelles portées par `EpisodeFSM`
-- la sémantique live portée par `signals`
+- la sémantique live portée par `PresentState`, avec `signals` comme enrichissement secondaire
 - la sémantique figée portée uniquement par les épisodes clos
 
 ---
@@ -346,6 +432,7 @@ Un épisode a :
 Un épisode n'est pas :
 - une session (plus large, contient plusieurs épisodes)
 - la source de vérité sémantique du présent
+- la source de vérité du présent
 - un journal (résumé rétrospectif, produit après coup)
 - un fait (observation promue, pas une unité temporelle)
 - un signal (mesure ponctuelle, pas une durée)
@@ -361,7 +448,7 @@ Le système actuel ne prétend pas résoudre :
 - l'enrichissement LLM de l'épisode
 - la continuité inter-session via les épisodes
 
-La lecture live du présent reste portée par `signals`, pas par `current_episode`.
+La lecture live du présent reste portée par `PresentState`, pas par `current_episode`.
 
 ---
 
@@ -383,7 +470,7 @@ Episode:
 ```
 
 Règle actuelle :
-- épisode actif : vérité essentiellement temporelle ; la lecture live vient des `signals`
+- épisode actif : vérité essentiellement temporelle ; la lecture live vient de `PresentState`
 - épisode clos : snapshot sémantique figé à la clôture
 
 Le runtime garantit qu'un épisode clos ne garde pas de champs sémantiques nuls :
@@ -522,7 +609,7 @@ La clôture d'une session clôture l'épisode actif en cours.
 Dans le dashboard actuel :
 
 - L'épisode courant est visible : début, durée en cours
-- La lecture sémantique du présent vient des `signals`, pas de l'épisode actif
+- La lecture sémantique du présent vient de `PresentState`, pas de l'épisode actif
 - Un historique récent des épisodes clos est visible
 - Pour chaque épisode clos : durée, `boundary_reason`, sémantique figée
 
@@ -546,7 +633,7 @@ Le contrat actuel de l'épisode est le suivant :
 - `ended_at` pour `idle_timeout` = `last_meaningful_activity_at + EPISODE_TIMEOUT_MIN`
 - `project_change` est un signal mou, pas un signal dur
 - Il est persisté dans `session.db`, exposé dans `/state`, visible dans le dashboard
-- `signals` restent la source live du présent
+- `PresentState` reste la source live du présent
 - Un épisode clos porte une sémantique figée (`probable_task`, `activity_level`, `task_confidence`)
 - Cette sémantique est figée à la clôture depuis la dernière valeur live connue, avec fallback `unknown / idle / 0.0`
 - Il ne sait pas distinguer finement activité utilisateur et activité assistée

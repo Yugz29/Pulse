@@ -35,7 +35,7 @@ Ce que cela couvre :
 - signal scorer
 - decision engine
 - state store
-- builders `CurrentContext` et adaptateurs legacy
+- `PresentState`, builders `CurrentContext` et adaptateurs legacy
 - builders `SessionSnapshot` et adaptateurs legacy
 - adaptateurs `ProposalCandidate`
 - `SessionFSM`
@@ -58,9 +58,13 @@ Ce ne sont pas des tests "nice to have".
 
 Sorties actuellement verrouillées :
 - `build_context_snapshot()` -> sortie Markdown exacte
-- `/state` -> sortie JSON exacte
+- `/state` -> sortie JSON exacte (`present` canonique + compat/debug)
 - `export_session_data()` -> dict legacy exact
 - sortie de génération de proposal -> payload / structure / evidence exacts
+
+Important :
+- les champs legacy de `/state` peuvent être testés pour compatibilité
+- ils ne doivent pas servir de base à de nouvelles features
 
 Ces tests servent quand Pulse doit conserver le même comportement tout en changeant sa structure interne.
 Si l’un de ces tests casse, l’hypothèse par défaut est que le changement est cassant tant que le contraire n’est pas démontré.
@@ -69,6 +73,7 @@ Si l’un de ces tests casse, l’hypothèse par défaut est que le changement e
 
 La fondation actuelle du runtime introduit plusieurs artéfacts structurels qui sont maintenant testés directement :
 
+- `PresentState`
 - `CurrentContext`
 - `SessionSnapshot`
 - `ProposalCandidate`
@@ -84,6 +89,7 @@ Ils sont testés pour verrouiller :
 Attendus typiques :
 - un builder peut remplacer un assemblage inline sans changer la sortie
 - un adaptateur legacy reproduit exactement le contrat précédent
+- `RuntimeState.present` reste la vérité canonique du présent
 - le lifecycle de session garde une seule source de vérité
 - une conversion candidate -> transport ne modifie pas le payload externe final
 

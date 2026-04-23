@@ -29,7 +29,7 @@ The core idea is straightforward:
 
 Pulse is a local system that:
 - observes useful activity on the machine
-- builds a usable current context
+- maintains a usable canonical runtime present
 - maintains a simple local memory
 - intercepts selected agent actions
 - produces explainable proposals
@@ -106,22 +106,28 @@ The Swift app observes the system:
 It does not interpret.
 It emits events.
 
-### 2. Local structuring
+### 2. Local runtime
 
-The Python daemon turns those events into more useful layers:
-- work signals
-- current context
-- session lifecycle
-- session projection
-- local proposals
+The Python daemon now follows this real pipeline:
+
+```text
+event
+→ SessionFSM
+→ SignalScorer
+→ RuntimeState.update_present()
+→ DecisionEngine
+→ SessionMemory
+```
+
+The clear responsibilities are:
+- `PresentState` = canonical truth of the present
+- `SessionFSM` = session state
+- `SignalScorer` = current work context
+- `RuntimeOrchestrator` = orchestration only
+- `CurrentContextBuilder` = rendering for assistant/UI reads
+- `SessionMemory` = historical persistence
 
 This is currently the strongest part of the project.
-
-It is built around:
-- `CurrentContext`
-- `SessionSnapshot`
-- `ProposalCandidate`
-- `SessionFSM`
 
 ### 3. Memory and enrichment
 
@@ -160,9 +166,10 @@ The foundation is now in place.
 
 That means Pulse already has:
 - a structured runtime
-- a unified session lifecycle
-- a coherent current context
-- a clean session projection
+- a single canonical present through `PresentState`
+- a unified session lifecycle through `SessionFSM`
+- a coherent work context through `SignalScorer`
+- an atomic runtime snapshot for reads
 - locked legacy compatibility on critical outputs
 
 This is not a finished intelligence layer.
@@ -230,6 +237,10 @@ Pulse already has:
 - persisted temporal episodes
 - a current episode exposed in the runtime
 - frozen semantics on closed episodes
+
+But those episodes remain secondary:
+- they do not define the truth of the present
+- they do not yet drive memory or decisions
 
 What remains to strengthen is:
 - memory structured around episodes
