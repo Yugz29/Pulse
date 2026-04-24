@@ -18,9 +18,9 @@ from typing import Optional
 # ── Bruit récurrent à faible valeur produit ──────────────────────────────────
 
 _SCREENSHOT_MARKERS = (
-    "capture d’écran",
+    "capture d\u2019\u00e9cran",  # apostrophe curly macOS (U+2019)
     "capture d'ecran",
-    "capture d'écran",
+    "capture d'\u00e9cran",
     "screenshot",
 )
 
@@ -40,6 +40,16 @@ def _is_screenshot_capture(name: str) -> bool:
         lower_name.endswith(_SCREENSHOT_EXTENSIONS)
         and any(marker in lower_name for marker in _SCREENSHOT_MARKERS)
     )
+
+
+def _is_git_hash_filename(name: str) -> bool:
+    """
+    Retourne True si le nom de fichier est un hash git
+    (40 caractères hexadécimaux, avec ou sans extension).
+    Ex : b0ea68e2170702581ea23134b2f69d16a2bfd5ab.json
+    """
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    return len(stem) == 40 and all(c in "0123456789abcdef" for c in stem.lower())
 
 
 # ── Pulse interne ─────────────────────────────────────────────────────────────
@@ -152,6 +162,10 @@ def file_signal_significance(path: Optional[str]) -> str:
     name = path.split("/")[-1]
     lower_name = name.lower()
     lower_path = path.lower()
+
+    # Hashes git (ex. b0ea68e2170702581ea23134b2f69d16a2bfd5ab.json)
+    if _is_git_hash_filename(name):
+        return "technical_noise"
 
     # Bruit système
     if name.startswith("."):
