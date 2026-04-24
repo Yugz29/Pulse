@@ -644,6 +644,163 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("## Activité faible / bruit", journal)
         self.assertIn("models_cache.json", journal)
 
+    def test_journal_rend_un_episode_sans_projet_clair_dans_hors_projet(self):
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "duration_min": 40,
+                "probable_task": "general",
+                "recent_apps": ["Safari", "zoom.us"],
+                "files_changed": 0,
+                "top_files": [],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## Hors projet", journal)
+        self.assertNotIn("## Pulse", journal)
+
+    def test_journal_conserve_un_episode_projet_fort_avec_commit(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 35,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor", "Terminal"],
+                "top_files": ["runtime_orchestrator.py", "episode_fsm.py"],
+                "files_changed": 2,
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: split sémantique des épisodes",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## Pulse", journal)
+        self.assertIn("feat: split sémantique des épisodes", journal)
+
+    def test_journal_declasse_un_episode_inconnu_general_qui_chevauche_un_projet_fort(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 60,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor", "Terminal"],
+                "top_files": ["runtime_orchestrator.py", "episode_fsm.py"],
+                "files_changed": 2,
+                "closed_episodes": [
+                    {
+                        "episode_id": "ep-strong",
+                        "session_id": "sess-1",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "editing",
+                        "task_confidence": 0.91,
+                        "started_at": "2026-04-24T10:00:00",
+                        "ended_at": "2026-04-24T11:00:00",
+                        "duration_sec": 3600,
+                        "boundary_reason": "commit",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: bloc fort",
+        )
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "duration_min": 30,
+                "probable_task": "general",
+                "recent_apps": ["Safari"],
+                "files_changed": 0,
+                "top_files": [],
+                "closed_episodes": [
+                    {
+                        "episode_id": "ep-weak",
+                        "session_id": "sess-2",
+                        "active_project": None,
+                        "probable_task": "general",
+                        "activity_level": "unknown",
+                        "task_confidence": 0.0,
+                        "started_at": "2026-04-24T10:15:00",
+                        "ended_at": "2026-04-24T10:45:00",
+                        "duration_sec": 1800,
+                        "boundary_reason": "idle_timeout",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## Pulse", journal)
+        self.assertIn("## Activité faible / bruit", journal)
+        self.assertIn("10:15 → 10:45", journal)
+
+    def test_journal_declasse_un_episode_projet_faible_quand_hors_projet_est_plus_plausible(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 30,
+                "probable_task": "general",
+                "recent_apps": ["Safari"],
+                "files_changed": 1,
+                "top_files": ["models_cache.json"],
+                "closed_episodes": [
+                    {
+                        "episode_id": "ep-project-weak",
+                        "session_id": "sess-1",
+                        "active_project": "Pulse",
+                        "probable_task": "general",
+                        "activity_level": "unknown",
+                        "task_confidence": 0.0,
+                        "started_at": "2026-04-24T09:30:00",
+                        "ended_at": "2026-04-24T10:00:00",
+                        "duration_sec": 1800,
+                        "boundary_reason": "idle_timeout",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "duration_min": 35,
+                "probable_task": "general",
+                "recent_apps": ["Safari", "zoom.us"],
+                "files_changed": 0,
+                "top_files": [],
+                "closed_episodes": [
+                    {
+                        "episode_id": "ep-off-project",
+                        "session_id": "sess-2",
+                        "active_project": None,
+                        "probable_task": "general",
+                        "activity_level": "unknown",
+                        "task_confidence": 0.0,
+                        "started_at": "2026-04-24T09:35:00",
+                        "ended_at": "2026-04-24T10:10:00",
+                        "duration_sec": 2100,
+                        "boundary_reason": "idle_timeout",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## Hors projet", journal)
+        self.assertNotIn("## Pulse", journal)
+        self.assertIn("## Activité faible / bruit", journal)
+        self.assertIn("models_cache.json", journal)
+
     def test_commit_peut_etre_enrichi_apres_ecriture_initiale(self):
         session = {
             "active_project": "Pulse",

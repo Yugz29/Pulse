@@ -120,6 +120,12 @@ _TECHNICAL_FILE_PATTERNS = (
     ".log",
     ".tmp",
 )
+_UNKNOWN_PROJECT_NAMES = {"", "inconnu", "unknown", "autre", "none", "null"}
+_BROWSER_APPS = {"Safari", "Google Chrome", "Chrome", "Arc", "Firefox", "Brave Browser", "Brave"}
+_ADMIN_APPS = {
+    "Mail", "Gmail", "Outlook", "Calendar", "Calendrier",
+    "zoom.us", "Zoom", "Microsoft Teams", "Teams", "Meet", "Slack",
+}
 
 
 def _load_cooldown() -> None:
@@ -627,6 +633,7 @@ def _write_session_report(
         duration_min=duration,
         body=body,
         commit_message=commit_message,
+        recent_apps=apps,
         top_files=top_files,
         files_count=files_count,
         started_at=started_at,
@@ -830,6 +837,7 @@ def _build_journal_entry(
     duration_min: int,
     body: str,
     commit_message: Optional[str],
+    recent_apps: List[str],
     top_files: List[str],
     files_count: int,
     started_at: str,
@@ -845,6 +853,7 @@ def _build_journal_entry(
         "duration_min": int(max(duration_min, 0)),
         "body": body.strip(),
         "commit_message": (commit_message or "").strip(),
+        "recent_apps": _compact_strings(recent_apps[:6]),
         "top_files": list(top_files[:5]),
         "files_count": int(max(files_count or 0, 0)),
         "started_at": started_at,
@@ -890,6 +899,7 @@ def _write_journal_document(journal_file: Path, journal_date: str, entries: List
 def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -> str:
     ordered_entries = sorted(entries, key=_journal_entry_sort_key)
     merged_entries = _merge_journal_entries(ordered_entries)
+    merged_entries = _resolve_journal_entry_overlaps(merged_entries)
 
     project_sections: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
     noise_entries: List[Dict[str, Any]] = []
@@ -897,8 +907,8 @@ def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -
         if _is_noise_journal_entry(entry):
             noise_entries.append(entry)
             continue
-        project = entry.get("active_project") or "Autre"
-        project_sections.setdefault(project, []).append(entry)
+        section_title = _journal_section_title(entry)
+        project_sections.setdefault(section_title, []).append(entry)
 
     lines = [f"# Journal Pulse — {journal_date}"]
     for project, project_entries in project_sections.items():
@@ -932,7 +942,7 @@ def _render_journal_project_entry(entry: Dict[str, Any]) -> List[str]:
 
 
 def _render_noise_line(entry: Dict[str, Any]) -> str:
-    project = entry.get("active_project") or "Autre"
+    project = _journal_section_title(entry)
     title = _journal_entry_title(entry)
     duration = int(entry.get("duration_min") or 0)
     scope = _journal_entry_scope(entry)
@@ -960,12 +970,14 @@ def _merge_journal_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized = dict(entry)
-    normalized["active_project"] = normalized.get("active_project") or "Autre"
+    normalized["active_project"] = _normalize_project_name(normalized.get("active_project"))
     normalized["probable_task"] = normalized.get("probable_task") or "general"
+    normalized["activity_level"] = normalized.get("activity_level") or "unknown"
     normalized["top_files"] = [
         str(item) for item in normalized.get("top_files", [])
         if isinstance(item, str) and item.strip()
     ]
+    normalized["recent_apps"] = _compact_strings(normalized.get("recent_apps", []))
     normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
     normalized["commit_messages"] = _compact_strings([
         normalized.get("commit_message"),
@@ -999,6 +1011,10 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged["commit_messages"] = _merge_unique_strings(
         left.get("commit_messages", []),
         right.get("commit_messages", []),
+    )
+    merged["recent_apps"] = _merge_unique_strings(
+        left.get("recent_apps", []),
+        right.get("recent_apps", []),
     )
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
     merged["body"] = "\n".join(_compact_strings([left.get("body"), right.get("body")]))
@@ -1071,18 +1087,182 @@ def _format_journal_time(value: Any) -> str:
         return text[:5]
 
 
+def _journal_section_title(entry: Dict[str, Any]) -> str:
+    project = _normalize_project_name(entry.get("active_project"))
+    if project is None:
+        return _off_project_section_title(entry)
+    if _is_off_project_entry(entry):
+        return _off_project_section_title(entry)
+    return project
+
+
+def _normalize_project_name(value: Any) -> Optional[str]:
+    text = str(value or "").strip()
+    if text.lower() in _UNKNOWN_PROJECT_NAMES:
+        return None
+    return text or None
+
+
+def _off_project_section_title(entry: Dict[str, Any]) -> str:
+    apps = set(_compact_strings(entry.get("recent_apps", [])))
+    if apps and apps.issubset(_BROWSER_APPS):
+        return "Recherche / navigation"
+    if apps and apps.issubset(_ADMIN_APPS):
+        return "Administratif / veille"
+    return "Hors projet"
+
+
+def _is_off_project_entry(entry: Dict[str, Any]) -> bool:
+    if _normalize_project_name(entry.get("active_project")) is None:
+        return True
+
+    task = str(entry.get("probable_task") or "general")
+    activity = str(entry.get("activity_level") or "unknown")
+    commit_messages = _compact_strings(entry.get("commit_messages", []))
+    top_files = _compact_strings(entry.get("top_files", []))
+    apps = _compact_strings(entry.get("recent_apps", []))
+
+    return (
+        task == "general"
+        and activity == "unknown"
+        and not commit_messages
+        and _looks_like_navigation_or_admin(apps)
+    )
+
+
+def _looks_like_navigation_or_admin(apps: List[str]) -> bool:
+    if not apps:
+        return False
+    return any(app in _BROWSER_APPS or app in _ADMIN_APPS for app in apps)
+
+
+def _is_strong_project_entry(entry: Dict[str, Any]) -> bool:
+    if _normalize_project_name(entry.get("active_project")) is None:
+        return False
+    if _compact_strings(entry.get("commit_messages", [])):
+        return True
+    if _has_non_technical_scope(entry):
+        return True
+    confidence = _float_or_zero(entry.get("task_confidence"))
+    task = str(entry.get("probable_task") or "general")
+    return task != "general" and confidence >= 0.65
+
+
+def _is_weak_project_entry(entry: Dict[str, Any]) -> bool:
+    return (
+        _normalize_project_name(entry.get("active_project")) is not None
+        and not _is_strong_project_entry(entry)
+    )
+
+
+def _has_non_technical_scope(entry: Dict[str, Any]) -> bool:
+    top_files = _compact_strings(entry.get("top_files", []))
+    return bool(top_files) and not _all_files_technical(top_files)
+
+
+def _resolve_journal_entry_overlaps(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if len(entries) < 2:
+        return entries
+
+    suppressed_ids: set[str] = set()
+    for index, entry in enumerate(entries):
+        if entry.get("entry_id") in suppressed_ids:
+            continue
+        for other in entries[index + 1:]:
+            if other.get("entry_id") in suppressed_ids:
+                continue
+            if not _entries_heavily_overlap(entry, other):
+                continue
+            weaker, stronger = _choose_weaker_overlapping_entry(entry, other)
+            if weaker is None or stronger is None:
+                continue
+            suppressed_ids.add(str(weaker.get("entry_id") or ""))
+
+    return [
+        _mark_overlap_demoted(entry)
+        if entry.get("entry_id") in suppressed_ids
+        else entry
+        for entry in entries
+    ]
+
+
+def _entries_heavily_overlap(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+    left_start, left_end = _entry_bounds(left)
+    right_start, right_end = _entry_bounds(right)
+    if left_start is None or left_end is None or right_start is None or right_end is None:
+        return False
+    overlap_start = max(left_start, right_start)
+    overlap_end = min(left_end, right_end)
+    if overlap_end <= overlap_start:
+        return False
+    overlap_seconds = (overlap_end - overlap_start).total_seconds()
+    shortest_seconds = min(
+        max((left_end - left_start).total_seconds(), 60.0),
+        max((right_end - right_start).total_seconds(), 60.0),
+    )
+    return (overlap_seconds / shortest_seconds) >= 0.5
+
+
+def _entry_bounds(entry: Dict[str, Any]) -> tuple[Optional[datetime], Optional[datetime]]:
+    start = _parse_entry_datetime(entry.get("started_at"))
+    end = _parse_entry_datetime(entry.get("ended_at"))
+    return start, end
+
+
+def _parse_entry_datetime(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _choose_weaker_overlapping_entry(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    left_project = _is_strong_project_entry(left)
+    right_project = _is_strong_project_entry(right)
+    left_off = _is_off_project_entry(left)
+    right_off = _is_off_project_entry(right)
+
+    if left_project and right_off and _is_weak_unknown_entry(right):
+        return right, left
+    if right_project and left_off and _is_weak_unknown_entry(left):
+        return left, right
+    if left_off and _is_weak_project_entry(right):
+        return right, left
+    if right_off and _is_weak_project_entry(left):
+        return left, right
+    return None, None
+
+
+def _is_weak_unknown_entry(entry: Dict[str, Any]) -> bool:
+    return _is_off_project_entry(entry) and not _compact_strings(entry.get("commit_messages", []))
+
+
+def _mark_overlap_demoted(entry: Dict[str, Any]) -> Dict[str, Any]:
+    demoted = dict(entry)
+    demoted["overlap_demoted"] = True
+    return demoted
+
+
 def _is_noise_journal_entry(entry: Dict[str, Any]) -> bool:
     duration = int(entry.get("duration_min") or 0)
     task = str(entry.get("probable_task") or "general")
     commit_messages = _compact_strings(entry.get("commit_messages", []))
     body = str(entry.get("body") or "").strip()
     top_files = _compact_strings(entry.get("top_files", []))
+    off_project = _is_off_project_entry(entry)
 
     if duration < 3 and not commit_messages and not _has_useful_journal_body(body):
         return True
-    if task == "general" and not commit_messages and not _has_useful_journal_body(body):
+    if entry.get("overlap_demoted"):
         return True
-    if task == "general" and not commit_messages and top_files and _all_files_technical(top_files):
+    if task == "general" and not commit_messages and not off_project and not _has_useful_journal_body(body):
+        return True
+    if task == "general" and not commit_messages and not off_project and top_files and _all_files_technical(top_files):
         return True
     if duration < 5 and not commit_messages and top_files and _all_files_technical(top_files):
         return True
