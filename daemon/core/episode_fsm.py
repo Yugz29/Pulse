@@ -10,6 +10,7 @@ from daemon.core.uid import new_uid
 
 EPISODE_TIMEOUT_MIN = 20
 SEMANTIC_TASK_CONFIDENCE_MIN = 0.65
+_SEMANTIC_PENDING_TIMEOUT_SEC = 600
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,6 @@ class EpisodeFSM:
             return EpisodeTransition(current_episode=None)
         self._state = self.SUSPENDED
         self._suspended_at = when or datetime.now()
-        self._clear_pending_semantic_boundary()
         return EpisodeTransition(current_episode=self._current_episode)
 
     def on_screen_unlocked(
@@ -86,7 +86,6 @@ class EpisodeFSM:
         if not boundary_detected:
             self._state = self.ACTIVE if self._current_episode is not None else self.CLOSED
             self._suspended_at = None
-            self._clear_pending_semantic_boundary()
             return EpisodeTransition(current_episode=self._current_episode)
 
         closed = self._close_current(
@@ -210,6 +209,14 @@ class EpisodeFSM:
             self._pending_semantic_since = when
             return EpisodeTransition(current_episode=self._current_episode)
 
+        if (
+            self._pending_semantic_since is not None
+            and (when - self._pending_semantic_since).total_seconds() > _SEMANTIC_PENDING_TIMEOUT_SEC
+        ):
+            self._pending_semantic_key = pending_key
+            self._pending_semantic_since = when
+            return EpisodeTransition(current_episode=self._current_episode)
+
         return self._split_current(
             session_id=session_id,
             when=when,
@@ -231,7 +238,6 @@ class EpisodeFSM:
         self._current_episode = opened
         self._state = self.ACTIVE
         self._suspended_at = None
-        self._clear_pending_semantic_boundary()
         return opened
 
     def _close_current(self, *, ended_at: datetime, boundary_reason: str) -> Episode | None:
