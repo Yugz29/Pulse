@@ -45,6 +45,7 @@ class RuntimeSnapshot:
     decision: Any = None
     paused: bool = False
     memory_synced_at: datetime | None = None
+    last_diff_summary: str | None = None
     latest_active_app: str | None = None
     lock_marker_active: bool = False
     last_screen_locked_at: datetime | None = None
@@ -58,6 +59,9 @@ class RuntimeState:
         self._last_signals = None
         self._last_decision = None
         self._last_memory_sync_at: datetime | None = None
+        self._last_diff_summary: str | None = None
+        self._last_diff_workspace: str | None = None
+        self._last_diff_computed_at: datetime | None = None
         self._last_screen_locked_at: datetime | None = None
         self._recent_file_events: dict[str, datetime] = {}
         self._screen_is_locked: bool = False
@@ -134,10 +138,21 @@ class RuntimeState:
                 decision=self._last_decision,
                 paused=self._paused,
                 memory_synced_at=self._last_memory_sync_at,
+                last_diff_summary=self._last_diff_summary,
                 latest_active_app=self._latest_active_app,
                 lock_marker_active=self._screen_is_locked,
                 last_screen_locked_at=self._last_screen_locked_at,
             )
+
+    def set_diff_summary(self, workspace: str, summary: str) -> None:
+        with self._lock:
+            self._last_diff_summary = summary
+            self._last_diff_workspace = workspace
+            self._last_diff_computed_at = datetime.now()
+
+    def get_diff_summary(self) -> str | None:
+        with self._lock:
+            return self._last_diff_summary
 
     def set_analysis(
         self,
@@ -222,6 +237,9 @@ class RuntimeState:
             self._last_signals = None
             self._last_decision = None
             self._last_memory_sync_at = None
+            self._last_diff_summary = None
+            self._last_diff_workspace = None
+            self._last_diff_computed_at = None
             self._last_screen_locked_at = None
             self._screen_is_locked = False
             self._recent_file_events = {}
