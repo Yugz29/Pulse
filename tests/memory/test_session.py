@@ -46,6 +46,43 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["type"], "file_modified")
 
+    def test_record_event_persiste_le_timestamp_source(self):
+        source_ts = datetime(2026, 4, 23, 16, 5, 0)
+        event = Event(
+            "app_activated",
+            {"app_name": "Cursor"},
+            timestamp=source_ts,
+        )
+
+        self.memory.record_event(event)
+
+        events = self.memory.get_recent_events()
+        self.assertEqual(events[0]["timestamp"], source_ts.isoformat())
+
+    def test_record_event_aligne_started_at_updated_at_et_duree_sur_temps_observe(self):
+        older = datetime(2026, 4, 23, 16, 0, 0)
+        newer = datetime(2026, 4, 23, 16, 10, 0)
+
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=newer))
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=older))
+
+        session = self.memory.get_session()
+
+        self.assertEqual(session["started_at"], older.isoformat())
+        self.assertEqual(session["updated_at"], newer.isoformat())
+        self.assertEqual(session["session_duration_min"], 10)
+
+    def test_get_recent_events_reste_ordre_par_timestamp_meme_hors_ordre_arrivee(self):
+        older = datetime(2026, 4, 23, 16, 0, 0)
+        newer = datetime(2026, 4, 23, 16, 5, 0)
+
+        self.memory.record_event(Event("app_activated", {"app_name": "Chrome"}, timestamp=newer))
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=older))
+
+        events = self.memory.get_recent_events()
+
+        self.assertEqual([event["timestamp"] for event in events], [older.isoformat(), newer.isoformat()])
+
     def test_update_present_snapshot_met_a_jour_les_colonnes_de_session(self):
         present = PresentState(
             session_status="active",
@@ -235,15 +272,18 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIsNone(session["active_project"])
 
     def test_close_termine_la_session(self):
+        observed_end = datetime(2026, 4, 23, 16, 5, 0)
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=observed_end))
         self.memory.close()
         session = self.memory.get_session()
-        self.assertIsNotNone(session["ended_at"])
+        self.assertEqual(session["ended_at"], observed_end.isoformat())
 
     def test_save_episode_persists_active_episode(self):
         episode = Episode(
             id="ep-1",
             session_id="test-session",
             started_at="2026-04-22T10:00:00",
+            active_project="Pulse",
             probable_task="coding",
             activity_level="editing",
             task_confidence=0.82,
@@ -255,6 +295,7 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIsNotNone(current)
         self.assertEqual(current["id"], "ep-1")
         self.assertEqual(current["ended_at"], None)
+        self.assertEqual(current["active_project"], "Pulse")
         self.assertEqual(current["probable_task"], "coding")
         self.assertEqual(current["activity_level"], "editing")
         self.assertEqual(current["task_confidence"], 0.82)
@@ -272,6 +313,7 @@ class TestSessionMemory(unittest.TestCase):
             ended_at="2026-04-22T10:25:00",
             boundary_reason="commit",
             duration_sec=1500,
+            active_project="Pulse",
             probable_task="coding",
             activity_level="editing",
             task_confidence=0.88,
@@ -285,6 +327,7 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIsNone(current)
         self.assertEqual(recent[0]["boundary_reason"], "commit")
         self.assertEqual(recent[0]["duration_sec"], 1500)
+        self.assertEqual(recent[0]["active_project"], "Pulse")
         self.assertEqual(recent[0]["probable_task"], "coding")
         self.assertEqual(recent[0]["activity_level"], "editing")
         self.assertEqual(recent[0]["task_confidence"], 0.88)
@@ -311,6 +354,70 @@ class TestSessionMemory(unittest.TestCase):
         recent = self.memory.get_recent_episodes(limit=5)
 
         self.assertEqual([row["id"] for row in recent], ["ep-newer", "ep-older"])
+
+    def test_get_recent_closed_episodes_returns_minimal_consolidated_rows(self):
+        self.memory.save_episode(
+            Episode(
+                id="ep-open",
+                session_id="test-session",
+                started_at="2026-04-22T11:00:00",
+                active_project="Pulse",
+                probable_task="coding",
+            )
+        )
+        self.memory.save_episode(
+            Episode(
+                id="ep-closed",
+                session_id="test-session",
+                started_at="2026-04-22T10:00:00",
+                ended_at="2026-04-22T10:25:00",
+                boundary_reason="commit",
+                duration_sec=1500,
+                active_project="Pulse",
+                probable_task="debug",
+                activity_level="executing",
+                task_confidence=0.87,
+            )
+        )
+
+        episodes = self.memory.get_recent_closed_episodes(limit=5)
+
+        self.assertEqual(len(episodes), 1)
+        self.assertEqual(episodes[0].episode_id, "ep-closed")
+        self.assertEqual(episodes[0].session_id, "test-session")
+        self.assertEqual(episodes[0].active_project, "Pulse")
+        self.assertEqual(episodes[0].probable_task, "debug")
+        self.assertEqual(episodes[0].activity_level, "executing")
+        self.assertEqual(episodes[0].task_confidence, 0.87)
+        self.assertEqual(episodes[0].ended_at, "2026-04-22T10:25:00")
+        self.assertEqual(episodes[0].duration_sec, 1500)
+        self.assertEqual(episodes[0].boundary_reason, "commit")
+
+    def test_export_memory_payload_adds_closed_episodes_without_changing_legacy_export(self):
+        self.memory.save_episode(
+            Episode(
+                id="ep-closed",
+                session_id="test-session",
+                started_at="2026-04-22T10:00:00",
+                ended_at="2026-04-22T10:15:00",
+                boundary_reason="idle_timeout",
+                duration_sec=900,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.78,
+            )
+        )
+
+        legacy = self.memory.export_session_data()
+        payload = self.memory.export_memory_payload()
+
+        self.assertNotIn("closed_episodes", legacy)
+        self.assertIn("closed_episodes", payload)
+        self.assertEqual(payload["session_id"], legacy["session_id"])
+        self.assertEqual(payload["closed_episodes"][0]["episode_id"], "ep-closed")
+        self.assertEqual(payload["closed_episodes"][0]["active_project"], "Pulse")
+        self.assertEqual(payload["closed_episodes"][0]["probable_task"], "coding")
 
 
     # ── I3 : update_present_snapshot — present est la source de vérité du présent ───

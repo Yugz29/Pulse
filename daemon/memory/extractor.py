@@ -27,6 +27,7 @@ import json
 import logging
 import re
 import threading
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -104,6 +105,21 @@ class _CooldownState:
 
 _cooldown = _CooldownState()
 _memory_write_lock = threading.Lock()
+_JOURNAL_DATA_START = "<!-- pulse-journal-data:start"
+_JOURNAL_DATA_END = "pulse-journal-data:end -->"
+_JOURNAL_HIDDEN_RE = re.compile(
+    rf"\n?{re.escape(_JOURNAL_DATA_START)}\n(.*?)\n{re.escape(_JOURNAL_DATA_END)}\s*\Z",
+    re.DOTALL,
+)
+_TECHNICAL_FILE_PATTERNS = (
+    "cache",
+    ".json",
+    ".sqlite",
+    ".db",
+    ".lock",
+    ".log",
+    ".tmp",
+)
 
 
 def _load_cooldown() -> None:
@@ -245,7 +261,12 @@ def update_memories_from_session(
             session_data["probable_task"] = corrected
             session_data["task_source"] = "commit_correction"
 
-    _update_projects(base_dir, session_data)
+    consolidation = _build_consolidation_frame(
+        session_data,
+        commit_message=commit_message,
+    )
+
+    _update_projects(base_dir, session_data, consolidation=consolidation)
 
     # Moteur de faits : observe la session et tente une promotion
     try:
@@ -262,8 +283,8 @@ def update_memories_from_session(
         else:
             log.error("Facts : erreur structurelle observe_session : %s", info["reason"])
 
-    project  = session_data.get("active_project") or "inconnu"
-    duration = session_data.get("duration_min", 0)
+    project  = consolidation["active_project"] or "inconnu"
+    duration = consolidation["duration_min"]
     top_files = _clean_files(session_data.get("top_files", []))
     files_count = session_data.get("files_changed", 0)
     substantive_commit = trigger == "commit" and _has_substantive_commit_signal(
@@ -308,6 +329,7 @@ def update_memories_from_session(
     report_ref = _write_session_report(
         base_dir,
         session_data,
+        consolidation=consolidation,
         llm=effective_llm,
         commit_message=commit_message,
         trigger=trigger,
@@ -417,7 +439,7 @@ def last_session_context(
             "exploration": "exploration",
             "browsing": "exploration",
         }
-        raw_task = entry.get("task") or "general"
+        raw_task = entry.get("last_task") or entry.get("task") or "general"
         task = _task_labels.get(raw_task, raw_task)
         duration = int(entry.get("last_duration") or 0)
 
@@ -436,6 +458,23 @@ def load_memory_context(memory_dir: Optional[Path] = None) -> str:
         if path.exists():
             parts.append(path.read_text())
     return "\n---\n".join(parts)[:2000]
+
+
+def render_project_memory(memory_dir: Optional[Path] = None) -> str:
+    """
+    Rend la mémoire projet consolidée pour l'assistant.
+
+    Source principale : projects.md, désormais nourri par les épisodes clos.
+    Retourne une chaîne vide si aucune projection projet n'existe encore.
+    """
+    base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
+    path = base_dir / "projects.md"
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
 
 
 def find_git_root(file_path: str) -> Optional[Path]:
@@ -527,6 +566,8 @@ def read_commit_message(git_root: Path) -> Optional[str]:
 def _write_session_report(
     base_dir: Path,
     session: Dict[str, Any],
+    *,
+    consolidation: Dict[str, Any],
     llm: Optional[Any],
     commit_message: Optional[str],
     trigger: str,
@@ -534,21 +575,20 @@ def _write_session_report(
 ):
     """
     Journal quotidien : un seul fichier par jour (YYYY-MM-DD.md).
-    Chaque session ajoute une section ## HH:MM en bas du fichier.
-    Plus de fichiers -2, -3, -4...
+    Les entrées brutes sont stockées dans un bloc caché, puis rendues
+    comme une lecture projet-first / épisode-first de la journée.
     """
     now      = datetime.now()
     today    = now.strftime("%Y-%m-%d")
-    time_str = now.strftime("%H:%M")
 
     sessions_dir = base_dir / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
 
     journal_file = sessions_dir / f"{today}.md"
 
-    project     = session.get("active_project") or "inconnu"
-    duration    = session.get("duration_min", 0)
-    task        = session.get("probable_task", "general")
+    project     = consolidation["active_project"] or "inconnu"
+    duration    = consolidation["duration_min"]
+    task        = consolidation["probable_task"]
     focus       = session.get("focus_level", "normal")
     friction    = float(session.get("max_friction", 0.0))
     apps        = session.get("recent_apps", [])
@@ -571,35 +611,33 @@ def _write_session_report(
             duration, task, focus, friction, top_files, files_count, commit_message,
         )
 
-    # En-tête de section : ## HH:MM — coding, 45 min
-    task_labels = {
-        "coding":   "développement",
-        "debug":    "débogage",
-        "writing":  "rédaction",
-        "exploration": "exploration",
-        "browsing": "exploration",
-    }
-    section_header = f"## {time_str} — {task_labels.get(task, task)}, {duration} min"
     entry_id = _new_entry_id(now)
-
-    entry = "\n".join([
-        "",
-        section_header,
-        f"<!-- pulse-entry:{entry_id}:start -->",
-        body.strip(),
-        f"<!-- pulse-entry:{entry_id}:end -->",
-        "",
-    ])
+    episode = consolidation.get("episode") or {}
+    ended_at = str(episode.get("ended_at") or now.isoformat())
+    started_at = str(
+        episode.get("started_at")
+        or (now - timedelta(minutes=max(duration, 0))).isoformat()
+    )
+    entry = _build_journal_entry(
+        entry_id=entry_id,
+        active_project=project,
+        probable_task=task,
+        activity_level=consolidation.get("activity_level"),
+        task_confidence=consolidation.get("task_confidence"),
+        duration_min=duration,
+        body=body,
+        commit_message=commit_message,
+        top_files=top_files,
+        files_count=files_count,
+        started_at=started_at,
+        ended_at=ended_at,
+        boundary_reason=str(episode.get("boundary_reason") or trigger or "unknown"),
+    )
 
     with _memory_write_lock:
-        if journal_file.exists():
-            # Append au journal existant
-            with journal_file.open("a", encoding="utf-8") as fh:
-                fh.write(entry)
-        else:
-            # Créer le journal du jour avec en-tête
-            header = f"# Journal Pulse — {today}\n"
-            journal_file.write_text(header + entry, encoding="utf-8")
+        entries = _load_journal_entries(journal_file)
+        entries.append(entry)
+        _write_journal_document(journal_file, today, entries)
 
     return (journal_file, entry_id)
 
@@ -763,19 +801,18 @@ def _replace_journal_entry(journal_file: Path, entry_id: str, body: str) -> bool
         if not journal_file.exists():
             return False
 
-        start = f"<!-- pulse-entry:{entry_id}:start -->"
-        end = f"<!-- pulse-entry:{entry_id}:end -->"
-        pattern = re.compile(
-            rf"({re.escape(start)}\n)(.*?)((?:\n)?{re.escape(end)})",
-            re.DOTALL,
-        )
-
-        content = journal_file.read_text(encoding="utf-8")
-        replaced, count = pattern.subn(rf"\1{body.strip()}\3", content, count=1)
-        if count == 0:
+        entries = _load_journal_entries(journal_file)
+        updated = False
+        for entry in entries:
+            if entry.get("entry_id") == entry_id:
+                entry["body"] = body.strip()
+                updated = True
+                break
+        if not updated:
             return False
 
-        journal_file.write_text(replaced, encoding="utf-8")
+        journal_date = _journal_date_from_path(journal_file)
+        _write_journal_document(journal_file, journal_date, entries)
         return True
 
 
@@ -783,10 +820,334 @@ def _new_entry_id(now: datetime) -> str:
     return now.strftime("%Y%m%d%H%M%S%f")
 
 
+def _build_journal_entry(
+    *,
+    entry_id: str,
+    active_project: str,
+    probable_task: str,
+    activity_level: Optional[str],
+    task_confidence: Optional[float],
+    duration_min: int,
+    body: str,
+    commit_message: Optional[str],
+    top_files: List[str],
+    files_count: int,
+    started_at: str,
+    ended_at: str,
+    boundary_reason: str,
+) -> Dict[str, Any]:
+    return {
+        "entry_id": entry_id,
+        "active_project": active_project or "Autre",
+        "probable_task": probable_task or "general",
+        "activity_level": activity_level or "unknown",
+        "task_confidence": task_confidence,
+        "duration_min": int(max(duration_min, 0)),
+        "body": body.strip(),
+        "commit_message": (commit_message or "").strip(),
+        "top_files": list(top_files[:5]),
+        "files_count": int(max(files_count or 0, 0)),
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "boundary_reason": boundary_reason or "unknown",
+    }
+
+
+def _load_journal_entries(journal_file: Path) -> List[Dict[str, Any]]:
+    if not journal_file.exists():
+        return []
+    content = journal_file.read_text(encoding="utf-8")
+    match = _JOURNAL_HIDDEN_RE.search(content)
+    if match is not None:
+        try:
+            raw_entries = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            return []
+        return [
+            entry for entry in raw_entries
+            if isinstance(entry, dict) and entry.get("entry_id")
+        ]
+    return []
+
+
+def _journal_date_from_path(journal_file: Path) -> str:
+    return journal_file.stem
+
+
+def _write_journal_document(journal_file: Path, journal_date: str, entries: List[Dict[str, Any]]) -> None:
+    rendered = _render_journal_document(journal_date, entries)
+    payload = json.dumps(entries, ensure_ascii=False, indent=2)
+    hidden_block = "\n".join([
+        "",
+        _JOURNAL_DATA_START,
+        payload,
+        _JOURNAL_DATA_END,
+        "",
+    ])
+    journal_file.write_text(rendered.rstrip() + hidden_block, encoding="utf-8")
+
+
+def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -> str:
+    ordered_entries = sorted(entries, key=_journal_entry_sort_key)
+    merged_entries = _merge_journal_entries(ordered_entries)
+
+    project_sections: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
+    noise_entries: List[Dict[str, Any]] = []
+    for entry in merged_entries:
+        if _is_noise_journal_entry(entry):
+            noise_entries.append(entry)
+            continue
+        project = entry.get("active_project") or "Autre"
+        project_sections.setdefault(project, []).append(entry)
+
+    lines = [f"# Journal Pulse — {journal_date}"]
+    for project, project_entries in project_sections.items():
+        lines.extend(["", f"## {project}", ""])
+        for index, entry in enumerate(project_entries):
+            lines.extend(_render_journal_project_entry(entry))
+            if index < len(project_entries) - 1:
+                lines.extend(["", "---", ""])
+
+    if noise_entries:
+        lines.extend(["", "## Activité faible / bruit", ""])
+        for entry in noise_entries:
+            lines.append(f"- {_render_noise_line(entry)}")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_journal_project_entry(entry: Dict[str, Any]) -> List[str]:
+    title = _journal_entry_title(entry)
+    duration = int(entry.get("duration_min") or 0)
+    time_range = _journal_entry_time_range(entry)
+    lines = [f"### {time_range} — {title} ({duration} min)"]
+
+    description = _journal_entry_description(entry)
+    if description:
+        lines.extend(description.splitlines())
+
+    scope = _journal_entry_scope(entry)
+    lines.append(f"Portée : {scope}")
+    return lines
+
+
+def _render_noise_line(entry: Dict[str, Any]) -> str:
+    project = entry.get("active_project") or "Autre"
+    title = _journal_entry_title(entry)
+    duration = int(entry.get("duration_min") or 0)
+    scope = _journal_entry_scope(entry)
+    return f"{_journal_entry_time_range(entry)} — {project} / {title} ({duration} min) — {scope}"
+
+
+def _journal_entry_sort_key(entry: Dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(entry.get("started_at") or ""),
+        str(entry.get("ended_at") or ""),
+        str(entry.get("entry_id") or ""),
+    )
+
+
+def _merge_journal_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    merged: List[Dict[str, Any]] = []
+    for raw_entry in entries:
+        entry = _normalize_journal_entry(raw_entry)
+        if merged and _can_merge_journal_entries(merged[-1], entry):
+            merged[-1] = _merge_journal_pair(merged[-1], entry)
+        else:
+            merged.append(entry)
+    return merged
+
+
+def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(entry)
+    normalized["active_project"] = normalized.get("active_project") or "Autre"
+    normalized["probable_task"] = normalized.get("probable_task") or "general"
+    normalized["top_files"] = [
+        str(item) for item in normalized.get("top_files", [])
+        if isinstance(item, str) and item.strip()
+    ]
+    normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
+    normalized["commit_messages"] = _compact_strings([
+        normalized.get("commit_message"),
+        *normalized.get("commit_messages", []),
+    ])
+    return normalized
+
+
+def _can_merge_journal_entries(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+    return (
+        left.get("active_project") == right.get("active_project")
+        and left.get("probable_task") == right.get("probable_task")
+    )
+
+
+def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(left)
+    merged["entry_id"] = str(left.get("entry_id") or right.get("entry_id") or "")
+    merged["ended_at"] = right.get("ended_at") or left.get("ended_at")
+    merged["duration_min"] = int(left.get("duration_min") or 0) + int(right.get("duration_min") or 0)
+    merged["task_confidence"] = max(
+        _float_or_zero(left.get("task_confidence")),
+        _float_or_zero(right.get("task_confidence")),
+    )
+    merged["files_count"] = max(
+        int(left.get("files_count") or 0),
+        len(_merge_unique_strings(left.get("top_files", []), right.get("top_files", []))),
+        int(right.get("files_count") or 0),
+    )
+    merged["top_files"] = _merge_unique_strings(left.get("top_files", []), right.get("top_files", []))
+    merged["commit_messages"] = _merge_unique_strings(
+        left.get("commit_messages", []),
+        right.get("commit_messages", []),
+    )
+    merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
+    merged["body"] = "\n".join(_compact_strings([left.get("body"), right.get("body")]))
+    return merged
+
+
+def _journal_entry_title(entry: Dict[str, Any]) -> str:
+    task_labels = {
+        "coding": "développement",
+        "debug": "débogage",
+        "writing": "rédaction",
+        "exploration": "exploration",
+        "browsing": "exploration",
+        "general": "travail général",
+    }
+    task = str(entry.get("probable_task") or "general")
+    return task_labels.get(task, task.replace("_", " "))
+
+
+def _journal_entry_description(entry: Dict[str, Any]) -> str:
+    lines: List[str] = []
+    commit_messages = _compact_strings(entry.get("commit_messages", []))
+    if commit_messages:
+        if len(commit_messages) == 1:
+            lines.append(f"Commit : {commit_messages[0]}")
+        else:
+            lines.append("Commits : " + " · ".join(commit_messages))
+
+    body = str(entry.get("body") or "").strip()
+    body = _strip_commit_sentence(body, commit_messages)
+    if body.startswith("Portée : ") and not commit_messages:
+        body = ""
+    if body:
+        lines.append(body)
+
+    if not lines:
+        duration = int(entry.get("duration_min") or 0)
+        lines.append(f"Travail observé sur {_journal_entry_title(entry)} pendant {duration} min.")
+
+    return "\n".join(lines)
+
+
+def _journal_entry_scope(entry: Dict[str, Any]) -> str:
+    top_files = _compact_strings(entry.get("top_files", []))
+    if top_files:
+        return ", ".join(top_files[:4])
+    files_count = int(entry.get("files_count") or 0)
+    if files_count > 0:
+        return f"{files_count} fichier(s) / module(s)"
+    return "non déterminée"
+
+
+def _journal_entry_time_range(entry: Dict[str, Any]) -> str:
+    start = _format_journal_time(entry.get("started_at"))
+    end = _format_journal_time(entry.get("ended_at"))
+    return f"{start} → {end}"
+
+
+def _format_journal_time(value: Any) -> str:
+    if not value:
+        return "??:??"
+    text = str(value)
+    try:
+        return datetime.fromisoformat(text).strftime("%H:%M")
+    except ValueError:
+        if "T" in text:
+            return text.split("T", 1)[1][:5]
+        if " " in text:
+            return text.split(" ", 1)[1][:5]
+        return text[:5]
+
+
+def _is_noise_journal_entry(entry: Dict[str, Any]) -> bool:
+    duration = int(entry.get("duration_min") or 0)
+    task = str(entry.get("probable_task") or "general")
+    commit_messages = _compact_strings(entry.get("commit_messages", []))
+    body = str(entry.get("body") or "").strip()
+    top_files = _compact_strings(entry.get("top_files", []))
+
+    if duration < 3 and not commit_messages and not _has_useful_journal_body(body):
+        return True
+    if task == "general" and not commit_messages and not _has_useful_journal_body(body):
+        return True
+    if task == "general" and not commit_messages and top_files and _all_files_technical(top_files):
+        return True
+    if duration < 5 and not commit_messages and top_files and _all_files_technical(top_files):
+        return True
+    return False
+
+
+def _has_useful_journal_body(body: str) -> bool:
+    if not body:
+        return False
+    normalized = body.strip()
+    weak_prefixes = (
+        "Session de ",
+        "Travail observé sur ",
+    )
+    return len(normalized) >= 20 and not normalized.startswith(weak_prefixes)
+
+
+def _all_files_technical(files: List[str]) -> bool:
+    if not files:
+        return False
+    lowered = [name.lower() for name in files]
+    return all(any(pattern in name for pattern in _TECHNICAL_FILE_PATTERNS) for name in lowered)
+
+
+def _strip_commit_sentence(body: str, commit_messages: List[str]) -> str:
+    if not body:
+        return ""
+    cleaned = body
+    for message in commit_messages:
+        if not message:
+            continue
+        escaped = re.escape(message)
+        cleaned = re.sub(
+            rf"^Livraison : « {escaped} »\.\s*",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+    return cleaned.strip()
+
+
+def _compact_strings(values: List[Any]) -> List[str]:
+    result: List[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _merge_unique_strings(left: List[Any], right: List[Any]) -> List[str]:
+    return _compact_strings([*left, *right])[:5]
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 # ── Projets et habitudes ──────────────────────────────────────────────────────
 
-def _update_projects(base_dir: Path, session: Dict[str, Any]) -> None:
-    project = session.get("active_project")
+def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: Dict[str, Any]) -> None:
+    project = consolidation["active_project"]
     if not project:
         return
 
@@ -794,17 +1155,41 @@ def _update_projects(base_dir: Path, session: Dict[str, Any]) -> None:
     with _memory_write_lock:
         current  = _parse_project_sections(projects_file)
         today    = datetime.now().strftime("%Y-%m-%d")
-        duration = session.get("duration_min", 0)
-        task     = session.get("probable_task", "general")
+        duration = consolidation["duration_min"]
+        task     = consolidation["probable_task"]
+        latest_episode = _normalize_project_episode(consolidation.get("episode"))
 
         entry = current.get(project)
         if entry is None:
-            current[project] = {"first_session": today, "last_session": today,
-                                 "last_duration": duration, "task": task}
+            current[project] = {
+                "first_session": today,
+                "last_session": today,
+                "last_duration": duration,
+                "last_task": task,
+                "task": task,
+                "recent_episodes": [],
+            }
         else:
             entry["last_session"]  = today
             entry["last_duration"] = duration
+            entry["last_task"]     = task
             entry["task"]          = task
+            entry.setdefault("recent_episodes", [])
+
+        entry = current[project]
+        entry["recent_episodes"] = _merge_project_recent_episodes(
+            entry.get("recent_episodes", []),
+            latest_episode,
+        )
+
+        latest_known = entry["recent_episodes"][0] if entry["recent_episodes"] else None
+        if latest_known is not None:
+            entry["last_session"] = latest_known["date"]
+            entry["last_duration"] = latest_known["duration_min"]
+            entry["last_task"] = latest_known["probable_task"]
+
+        dominant_task = _dominant_project_task(entry["recent_episodes"]) or entry["task"]
+        entry["task"] = dominant_task
 
         lines = ["# Projets\n"]
         for name in sorted(current):
@@ -812,9 +1197,19 @@ def _update_projects(base_dir: Path, session: Dict[str, Any]) -> None:
             lines.extend([
                 "", f"## {name}", "",
                 f"- Première session : {item['first_session']}",
-                f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item['task']})",
+                f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
                 f"- Type de travail détecté : {item['task']}",
             ])
+            recent_episodes = item.get("recent_episodes", [])
+            if recent_episodes:
+                lines.append("- Épisodes récents :")
+                for episode in recent_episodes[:5]:
+                    lines.append(
+                        "  - "
+                        f"{episode['date_time']} | {episode['probable_task']} | "
+                        f"{episode['activity_level']} | {episode['duration_min']} min | "
+                        f"{episode['boundary_reason']} | {episode['episode_id']}"
+                    )
         projects_file.write_text("\n".join(lines).strip() + "\n")
 
 
@@ -840,24 +1235,192 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
 
     result: Dict[str, Dict[str, Any]] = {}
     current_name = None
+    in_recent_episodes = False
 
     for raw_line in projects_file.read_text().splitlines():
         line = raw_line.strip()
         if line.startswith("## "):
             current_name = line[3:]
-            result[current_name] = {}
+            result[current_name] = {"recent_episodes": []}
+            in_recent_episodes = False
         elif current_name and line.startswith("- Première session : "):
             result[current_name]["first_session"] = line.split(": ", 1)[1]
+            in_recent_episodes = False
         elif current_name and line.startswith("- Dernière session : "):
             value = line.split(": ", 1)[1]
             date_part, details = _split_last_session(value)
             result[current_name]["last_session"]  = date_part
             result[current_name]["last_duration"] = details["duration"]
-            result[current_name]["task"]           = details["task"]
+            result[current_name]["last_task"]      = details["task"]
+            in_recent_episodes = False
         elif current_name and line.startswith("- Type de travail détecté : "):
             result[current_name]["task"] = line.split(": ", 1)[1]
+            in_recent_episodes = False
+        elif current_name and line == "- Épisodes récents :":
+            in_recent_episodes = True
+        elif current_name and in_recent_episodes and raw_line.startswith("  - "):
+            episode = _parse_project_episode_line(raw_line.strip()[2:].strip())
+            if episode is not None:
+                result[current_name]["recent_episodes"].append(episode)
+        elif line:
+            in_recent_episodes = False
 
     return result
+
+
+def _build_consolidation_frame(
+    session_data: Dict[str, Any],
+    *,
+    commit_message: Optional[str] = None,
+) -> Dict[str, Any]:
+    episode = _latest_closed_episode(session_data.get("closed_episodes"))
+    active_project = (
+        (episode or {}).get("active_project")
+        or session_data.get("active_project")
+    )
+    probable_task = (
+        (episode or {}).get("probable_task")
+        or session_data.get("probable_task")
+        or "general"
+    )
+    if commit_message:
+        probable_task = _commit_task_correction(commit_message, probable_task)
+
+    duration_min = _episode_duration_min(episode)
+    if duration_min is None:
+        duration_min = int(session_data.get("duration_min", 0) or 0)
+
+    return {
+        "episode": episode,
+        "active_project": active_project,
+        "probable_task": probable_task,
+        "activity_level": (episode or {}).get("activity_level"),
+        "task_confidence": (episode or {}).get("task_confidence"),
+        "duration_min": duration_min,
+    }
+
+
+def _latest_closed_episode(closed_episodes: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(closed_episodes, list):
+        return None
+
+    def _sort_key(item: Dict[str, Any]) -> tuple[str, str]:
+        ended_at = str(item.get("ended_at") or "")
+        started_at = str(item.get("started_at") or "")
+        return (ended_at, started_at)
+
+    candidates = [
+        item for item in closed_episodes
+        if isinstance(item, dict) and item.get("ended_at")
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=_sort_key)
+
+
+def _episode_duration_min(episode: Optional[Dict[str, Any]]) -> Optional[int]:
+    if episode is None:
+        return None
+    duration_sec = episode.get("duration_sec")
+    if duration_sec is None:
+        return None
+    try:
+        return max(int(round(float(duration_sec) / 60.0)), 0)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_project_episode(episode: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(episode, dict):
+        return None
+    ended_at = episode.get("ended_at")
+    started_at = episode.get("started_at")
+    timestamp = ended_at or started_at
+    if not timestamp:
+        return None
+    duration_min = _episode_duration_min(episode)
+    if duration_min is None:
+        return None
+    date, date_time = _format_project_episode_timestamp(str(timestamp))
+    return {
+        "episode_id": str(episode.get("episode_id") or episode.get("id") or ""),
+        "date": date,
+        "date_time": date_time,
+        "probable_task": str(episode.get("probable_task") or "general"),
+        "activity_level": str(episode.get("activity_level") or "unknown"),
+        "duration_min": duration_min,
+        "boundary_reason": str(episode.get("boundary_reason") or "unknown"),
+    }
+
+
+def _merge_project_recent_episodes(existing: List[Dict[str, Any]], latest: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    episodes = [episode for episode in existing if isinstance(episode, dict)]
+    if latest is not None:
+        episodes = [episode for episode in episodes if episode.get("episode_id") != latest["episode_id"]]
+        episodes.append(latest)
+    episodes.sort(
+        key=lambda item: (
+            str(item.get("date_time") or ""),
+            str(item.get("episode_id") or ""),
+        ),
+        reverse=True,
+    )
+    return episodes[:5]
+
+
+def _dominant_project_task(episodes: List[Dict[str, Any]]) -> Optional[str]:
+    counts: Dict[str, int] = {}
+    for episode in episodes:
+        task = str(episode.get("probable_task") or "general")
+        counts[task] = counts.get(task, 0) + 1
+    if not counts:
+        return None
+    return max(
+        counts,
+        key=lambda task: (
+            counts[task],
+            next(
+                (
+                    index
+                    for index, episode in enumerate(episodes)
+                    if episode.get("probable_task") == task
+                ),
+                len(episodes),
+            ) * -1,
+        ),
+    )
+
+
+def _format_project_episode_timestamp(timestamp: str) -> tuple[str, str]:
+    try:
+        dt = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return timestamp[:10], timestamp.replace("T", " ")[:16]
+    return dt.strftime("%Y-%m-%d"), dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _parse_project_episode_line(value: str) -> Optional[Dict[str, Any]]:
+    parts = [part.strip() for part in value.split("|")]
+    if len(parts) != 6:
+        return None
+    duration_text = parts[3]
+    if not duration_text.endswith(" min"):
+        return None
+    try:
+        duration_min = int(duration_text[:-4].strip())
+    except ValueError:
+        return None
+    date_time = parts[0]
+    date = date_time[:10]
+    return {
+        "date": date,
+        "date_time": date_time,
+        "probable_task": parts[1] or "general",
+        "activity_level": parts[2] or "unknown",
+        "duration_min": duration_min,
+        "boundary_reason": parts[4] or "unknown",
+        "episode_id": parts[5],
+    }
 
 
 def _split_last_session(value: str) -> tuple:

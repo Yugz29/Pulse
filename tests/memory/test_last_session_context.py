@@ -133,6 +133,25 @@ class TestLastSessionContext(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIn("exploration", result)
 
+    def test_ignore_les_episodes_recents_dans_projects_md_enrichi(self):
+        yesterday = self.today - timedelta(days=1)
+        _write_projects_md(self.memory_dir, f"""# Projets
+
+## Pulse
+
+- Première session : 2026-01-01
+- Dernière session : {yesterday.strftime('%Y-%m-%d')} (25 min, browsing)
+- Type de travail détecté : debug
+- Épisodes récents :
+  - 2026-04-17 10:45 | debug | executing | 25 min | commit | ep-2
+  - 2026-04-16 09:20 | coding | editing | 20 min | idle_timeout | ep-1
+""")
+        result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
+        self.assertIsNotNone(result)
+        self.assertIn("hier", result)
+        self.assertIn("exploration", result)
+        self.assertIn("25", result)
+
     # ── Robustesse ────────────────────────────────────────────────────────────
 
     def test_retourne_none_si_projet_inconnu(self):

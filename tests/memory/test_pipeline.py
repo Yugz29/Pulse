@@ -128,7 +128,10 @@ class TestMemoryPipeline(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         content = session_files[0].read_text()
-        self.assertIn("développement, 20 min", content)
+        self.assertIn("# Journal Pulse —", content)
+        self.assertIn("## Pulse", content)
+        self.assertIn("### ", content)
+        self.assertIn("développement (20 min)", content)
 
     def test_pipeline_top_files_dans_journal(self):
         """Les fichiers les plus édités apparaissent dans le résumé de session."""
@@ -180,8 +183,8 @@ class TestMemoryPipeline(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)  # un seul fichier jour
         content = session_files[0].read_text()
-        # Deux sections ## dans le journal
-        self.assertGreaterEqual(content.count("## "), 2)
+        self.assertEqual(content.count("### "), 1)
+        self.assertIn("développement (60 min)", content)
         self.assertIn("ajout du pipeline m\u00e9moire", content)
 
     def test_pipeline_session_sans_projet_ne_plante_pas(self):
