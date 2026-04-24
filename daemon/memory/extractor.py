@@ -36,12 +36,10 @@ from daemon.memory.facts import FactEngine
 
 log = logging.getLogger("pulse")
 
-# Instance partagée du moteur de faits (initialisée une seule fois)
 _fact_engine: Optional[FactEngine] = None
 
 
 def get_fact_engine() -> FactEngine:
-    """Retourne l'instance partagée du FactEngine (lazy init)."""
     global _fact_engine
     if _fact_engine is None:
         _fact_engine = FactEngine()
@@ -49,50 +47,39 @@ def get_fact_engine() -> FactEngine:
 
 
 def reset_fact_engine_for_tests() -> None:
-    """Réinitialise le singleton partagé pour isoler les suites de tests."""
     global _fact_engine
     _fact_engine = None
 
 
 def reset_cooldown_for_tests() -> None:
-    """Réinitialise le curseur anti-doublon pour isoler les suites de tests."""
     _cooldown.reset()
 
 
 MEMORY_DIR = Path.home() / ".pulse" / "memory"
-
-# Cooldown minimum entre deux rapports pour un même projet (en minutes).
 REPORT_COOLDOWN_MIN = 30
-
-# Durée maximum d'une session rapportée.
-# Au-delà, la donnée est aberrante (daemon jamais redémarré, veille longue, etc.)
-MAX_SESSION_DURATION_MIN = 480  # 8h
-
-# Fichier de persistance du curseur anti-doublon.
-# Survit aux redémarrages du daemon — fix principal pour l'explosion de fichiers.
+MAX_SESSION_DURATION_MIN = 480
 _COOLDOWN_FILE = Path.home() / ".pulse" / "cooldown.json"
 
-# Suffixes à exclure des top_files
 _NOISE_SUFFIXES = {
     ".tmp", ".swp", ".swo", ".orig", ".bak",
     ".xcuserstate", ".DS_Store", "~",
-    # Images et médias — jamais du code source
     ".png", ".jpg", ".jpeg", ".gif", ".tiff", ".heic", ".webp",
     ".mp4", ".mov", ".avi", ".pdf", ".zip", ".tar", ".gz",
 }
 _NOISE_PATTERNS = {
     "COMMIT_EDITMSG", "MERGE_MSG", "FETCH_HEAD", "ORIG_HEAD",
     "packed-refs", "index",
-    # Fichiers système macOS
     "loginwindow", "Desktop", "Downloads", "Documents",
 }
 _NOISE_SUBSTRINGS = {
     ".sb-", "__pycache__", "DerivedData", "xcuserdata",
     # Captures d'écran macOS (deux variantes typographiques)
     "Capture d\u2019\u00e9cran", "Capture d'\u00e9cran", "Screenshot",
+    # Fichiers d'outils IA (Codex, contexts auto-générés)
+    "globalContext.json", "openai_yaml",
 }
 
-# Curseur anti-doublon encapsulé pour permettre le reset en test.
+
 class _CooldownState:
     def __init__(self) -> None:
         self.last_report_at: Dict[str, datetime] = {}
@@ -112,13 +99,7 @@ _JOURNAL_HIDDEN_RE = re.compile(
     re.DOTALL,
 )
 _TECHNICAL_FILE_PATTERNS = (
-    "cache",
-    ".json",
-    ".sqlite",
-    ".db",
-    ".lock",
-    ".log",
-    ".tmp",
+    "cache", ".json", ".sqlite", ".db", ".lock", ".log", ".tmp",
 )
 _UNKNOWN_PROJECT_NAMES = {"", "inconnu", "unknown", "autre", "none", "null"}
 _BROWSER_APPS = {"Safari", "Google Chrome", "Chrome", "Arc", "Firefox", "Brave Browser", "Brave"}
@@ -129,7 +110,6 @@ _ADMIN_APPS = {
 
 
 def _load_cooldown() -> None:
-    """Charge le curseur depuis le fichier JSON (une seule fois par processus)."""
     if _cooldown.loaded:
         return
     _cooldown.loaded = True
@@ -140,39 +120,28 @@ def _load_cooldown() -> None:
             for project, iso in raw.items():
                 try:
                     dt = datetime.fromisoformat(iso)
-                    if dt > cutoff:  # ignorer les entrées expirées
+                    if dt > cutoff:
                         _cooldown.last_report_at[project] = dt
                 except ValueError:
                     pass
     except Exception:
-        pass  # cooldown.json corrompu ou absent — on repart de zéro
+        pass
 
 
 def _save_cooldown() -> None:
-    """Persiste le curseur dans cooldown.json."""
     try:
         _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = {p: dt.isoformat() for p, dt in _cooldown.last_report_at.items()}
         _COOLDOWN_FILE.write_text(json.dumps(data))
     except Exception:
-        pass  # non-bloquant
+        pass
 
-
-# ── Correction de tâche par préfixe de commit ─────────────────────────────────
 
 _COMMIT_PREFIX_TASK: Dict[str, Optional[str]] = {
-    "fix":      "debug",
-    "feat":     "coding",
-    "docs":     "writing",
-    "refactor": "coding",
-    "test":     "coding",
-    "perf":     "coding",
-    "style":    "coding",
-    "chore":    None,
-    "build":    None,
-    "ci":       None,
+    "fix": "debug", "feat": "coding", "docs": "writing",
+    "refactor": "coding", "test": "coding", "perf": "coding",
+    "style": "coding", "chore": None, "build": None, "ci": None,
 }
-
 _COMMIT_CORRECTION_FROM: Dict[str, set] = {
     "debug":   {"general", "exploration", "coding"},
     "coding":  {"general", "exploration"},
@@ -213,25 +182,16 @@ def update_memories_from_session(
 
     if "duration_min" in session_data:
         session_data = dict(session_data)
-        session_data["duration_min"] = min(
-            session_data["duration_min"], MAX_SESSION_DURATION_MIN
-        )
+        session_data["duration_min"] = min(session_data["duration_min"], MAX_SESSION_DURATION_MIN)
 
     if trigger == "commit" and commit_message:
-        corrected = _commit_task_correction(
-            commit_message,
-            session_data.get("probable_task", "general"),
-        )
+        corrected = _commit_task_correction(commit_message, session_data.get("probable_task", "general"))
         if corrected != session_data.get("probable_task"):
             session_data = dict(session_data)
             session_data["probable_task"] = corrected
             session_data["task_source"] = "commit_correction"
 
-    consolidation = _build_consolidation_frame(
-        session_data,
-        commit_message=commit_message,
-    )
-
+    consolidation = _build_consolidation_frame(session_data, commit_message=commit_message)
     _update_projects(base_dir, session_data, consolidation=consolidation)
 
     try:
@@ -253,10 +213,8 @@ def update_memories_from_session(
     top_files = _clean_files(session_data.get("top_files", []))
     files_count = session_data.get("files_changed", 0)
     substantive_commit = trigger == "commit" and _has_substantive_commit_signal(
-        commit_message=commit_message,
-        diff_summary=diff_summary,
-        top_files=top_files,
-        files_count=files_count,
+        commit_message=commit_message, diff_summary=diff_summary,
+        top_files=top_files, files_count=files_count,
     )
 
     should_write = (duration >= 15 or substantive_commit)
@@ -274,25 +232,15 @@ def update_memories_from_session(
 
     effective_llm = (
         llm
-        if trigger == "commit"
-        and substantive_commit
-        and should_use_llm_for_commit(
-            diff_summary=diff_summary,
-            top_files=top_files,
-            files_count=files_count,
-        )
+        if trigger == "commit" and substantive_commit
+        and should_use_llm_for_commit(diff_summary=diff_summary, top_files=top_files, files_count=files_count)
         and not defer_llm_enrichment
         else None
     )
 
     report_ref = _write_session_report(
-        base_dir,
-        session_data,
-        consolidation=consolidation,
-        llm=effective_llm,
-        commit_message=commit_message,
-        trigger=trigger,
-        diff_summary=diff_summary,
+        base_dir, session_data, consolidation=consolidation,
+        llm=effective_llm, commit_message=commit_message, trigger=trigger, diff_summary=diff_summary,
     )
 
     _cooldown.last_report_at[project] = datetime.now()
@@ -302,16 +250,11 @@ def update_memories_from_session(
 
 
 def enrich_session_report(
-    report_ref,
-    session_data: Dict[str, Any],
-    llm: Any,
-    *,
-    commit_message: Optional[str] = None,
-    diff_summary: Optional[str] = None,
+    report_ref, session_data: Dict[str, Any], llm: Any,
+    *, commit_message: Optional[str] = None, diff_summary: Optional[str] = None,
 ) -> bool:
     if report_ref is None or llm is None:
         return False
-
     journal_file, entry_id = report_ref
     project     = session_data.get("active_project") or "inconnu"
     duration    = session_data.get("duration_min", 0)
@@ -321,58 +264,33 @@ def enrich_session_report(
     apps        = session_data.get("recent_apps", [])
     top_files   = _clean_files(session_data.get("top_files", []))
     files_count = session_data.get("files_changed", 0)
-
-    body = _llm_summary(
-        llm, project, duration, task, focus, friction,
-        apps, top_files, files_count, commit_message, diff_summary,
-    )
+    body = _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary)
     return _replace_journal_entry(journal_file, entry_id, body)
 
 
-def last_session_context(
-    project: str,
-    memory_dir: Optional[Path] = None,
-    today: Optional["date"] = None,
-) -> Optional[str]:
+def last_session_context(project: str, memory_dir: Optional[Path] = None, today: Optional["date"] = None) -> Optional[str]:
     from datetime import date as _date
-
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     sections = _parse_project_sections(base_dir / "projects.md")
     entry = sections.get(project)
     if not entry or not entry.get("last_session"):
         return None
-
     try:
         last_date = datetime.strptime(entry["last_session"], "%Y-%m-%d").date()
         ref_today = today if today is not None else datetime.now().date()
         delta = (ref_today - last_date).days
-
         if delta < 0:
             return None
-        elif delta == 0:
-            age = "aujourd'hui"
-        elif delta == 1:
-            age = "hier"
-        elif delta <= 6:
-            age = f"il y a {delta} jours"
-        elif delta <= 13:
-            age = "la semaine dernière"
-        else:
-            age = f"il y a {delta // 7} semaine(s)"
-
-        _task_labels = {
-            "coding":   "développement",
-            "debug":    "débogage",
-            "writing":  "rédaction",
-            "exploration": "exploration",
-            "browsing": "exploration",
-        }
+        elif delta == 0: age = "aujourd'hui"
+        elif delta == 1: age = "hier"
+        elif delta <= 6: age = f"il y a {delta} jours"
+        elif delta <= 13: age = "la semaine dernière"
+        else: age = f"il y a {delta // 7} semaine(s)"
+        _task_labels = {"coding": "développement", "debug": "débogage", "writing": "rédaction", "exploration": "exploration", "browsing": "exploration"}
         raw_task = entry.get("last_task") or entry.get("task") or "general"
         task = _task_labels.get(raw_task, raw_task)
         duration = int(entry.get("last_duration") or 0)
-
         return f"Dernière session {project} : {age} ({task}, {duration} min)"
-
     except (ValueError, TypeError, AttributeError):
         return None
 
@@ -466,17 +384,11 @@ def read_commit_message(git_root: Path) -> Optional[str]:
 # ── Rapport de session ────────────────────────────────────────────────────────
 
 def _write_session_report(
-    base_dir: Path,
-    session: Dict[str, Any],
-    *,
-    consolidation: Dict[str, Any],
-    llm: Optional[Any],
-    commit_message: Optional[str],
-    trigger: str,
-    diff_summary: Optional[str] = None,
+    base_dir: Path, session: Dict[str, Any], *, consolidation: Dict[str, Any],
+    llm: Optional[Any], commit_message: Optional[str], trigger: str, diff_summary: Optional[str] = None,
 ):
-    now      = datetime.now()
-    today    = now.strftime("%Y-%m-%d")
+    now   = datetime.now()
+    today = now.strftime("%Y-%m-%d")
     sessions_dir = base_dir / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
     journal_file = sessions_dir / f"{today}.md"
@@ -492,43 +404,22 @@ def _write_session_report(
 
     if llm is not None:
         try:
-            body = _llm_summary(
-                llm, project, duration, task, focus, friction,
-                apps, top_files, files_count, commit_message, diff_summary,
-            )
+            body = _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary)
         except Exception as exc:
             log.warning("Memory : erreur résumé LLM, fallback déterministe utilisé : %s", exc)
-            body = _deterministic_summary(
-                duration, task, focus, friction, top_files, files_count, commit_message,
-                diff_summary=diff_summary,
-            )
+            body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary)
     else:
-        body = _deterministic_summary(
-            duration, task, focus, friction, top_files, files_count, commit_message,
-            diff_summary=diff_summary,
-        )
+        body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary)
 
     entry_id = _new_entry_id(now)
     episode = consolidation.get("episode") or {}
     ended_at = str(episode.get("ended_at") or now.isoformat())
-    started_at = str(
-        episode.get("started_at")
-        or (now - timedelta(minutes=max(duration, 0))).isoformat()
-    )
+    started_at = str(episode.get("started_at") or (now - timedelta(minutes=max(duration, 0))).isoformat())
     entry = _build_journal_entry(
-        entry_id=entry_id,
-        active_project=project,
-        probable_task=task,
-        activity_level=consolidation.get("activity_level"),
-        task_confidence=consolidation.get("task_confidence"),
-        duration_min=duration,
-        body=body,
-        commit_message=commit_message,
-        recent_apps=apps,
-        top_files=top_files,
-        files_count=files_count,
-        started_at=started_at,
-        ended_at=ended_at,
+        entry_id=entry_id, active_project=project, probable_task=task,
+        activity_level=consolidation.get("activity_level"), task_confidence=consolidation.get("task_confidence"),
+        duration_min=duration, body=body, commit_message=commit_message, recent_apps=apps,
+        top_files=top_files, files_count=files_count, started_at=started_at, ended_at=ended_at,
         boundary_reason=str(episode.get("boundary_reason") or trigger or "unknown"),
     )
 
@@ -540,23 +431,8 @@ def _write_session_report(
     return (journal_file, entry_id)
 
 
-def _llm_summary(
-    llm: Any,
-    project: str,
-    duration: int,
-    task: str,
-    focus: str,
-    friction: float,
-    apps: List[str],
-    top_files: List[str],
-    files_count: int,
-    commit_message: Optional[str],
-    diff_summary: Optional[str],
-) -> str:
-    facts: List[str] = [
-        f"Projet : {project}",
-        f"Durée : {duration} minutes",
-    ]
+def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary) -> str:
+    facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
     if commit_message:
         facts.append(f'Commit : "{commit_message.splitlines()[0]}"')
     if diff_summary:
@@ -583,24 +459,8 @@ N'invente aucun fait absent des données ci-dessus."""
     return _llm_complete(llm, prompt, max_tokens=256, think=False)
 
 
-def _deterministic_summary(
-    duration: int,
-    task: str,
-    focus: str,
-    friction: float,
-    top_files: List[str],
-    files_count: int,
-    commit_message: Optional[str],
-    *,
-    diff_summary: Optional[str] = None,
-) -> str:
-    focus_str = {
-        "deep":      "focus profond",
-        "scattered": "travail dispersé",
-        "idle":      "session légère",
-        "normal":    "",
-    }.get(focus, "")
-
+def _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, *, diff_summary=None) -> str:
+    focus_str = {"deep": "focus profond", "scattered": "travail dispersé", "idle": "session légère", "normal": ""}.get(focus, "")
     parts = []
     if commit_message:
         parts.append(f"Livraison : « {commit_message.splitlines()[0]} ».")
@@ -621,13 +481,7 @@ def _deterministic_summary(
     return " ".join(parts)
 
 
-def _has_substantive_commit_signal(
-    *,
-    commit_message: Optional[str],
-    diff_summary: Optional[str],
-    top_files: List[str],
-    files_count: int,
-) -> bool:
+def _has_substantive_commit_signal(*, commit_message, diff_summary, top_files, files_count) -> bool:
     if diff_summary and diff_summary.strip():
         return True
     if len(top_files) >= 2 or files_count >= 2:
@@ -637,12 +491,7 @@ def _has_substantive_commit_signal(
     return False
 
 
-def should_use_llm_for_commit(
-    *,
-    diff_summary: Optional[str],
-    top_files: List[str],
-    files_count: int,
-) -> bool:
+def should_use_llm_for_commit(*, diff_summary, top_files, files_count) -> bool:
     if diff_summary and diff_summary.strip():
         return True
     if len(top_files) >= 2 or files_count >= 3:
@@ -688,23 +537,8 @@ def _new_entry_id(now: datetime) -> str:
     return now.strftime("%Y%m%d%H%M%S%f")
 
 
-def _build_journal_entry(
-    *,
-    entry_id: str,
-    active_project: str,
-    probable_task: str,
-    activity_level: Optional[str],
-    task_confidence: Optional[float],
-    duration_min: int,
-    body: str,
-    commit_message: Optional[str],
-    recent_apps: List[str],
-    top_files: List[str],
-    files_count: int,
-    started_at: str,
-    ended_at: str,
-    boundary_reason: str,
-) -> Dict[str, Any]:
+def _build_journal_entry(*, entry_id, active_project, probable_task, activity_level, task_confidence,
+    duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason) -> Dict[str, Any]:
     return {
         "entry_id": entry_id,
         "active_project": active_project or "Autre",
@@ -733,10 +567,7 @@ def _load_journal_entries(journal_file: Path) -> List[Dict[str, Any]]:
             raw_entries = json.loads(match.group(1))
         except json.JSONDecodeError:
             return []
-        return [
-            entry for entry in raw_entries
-            if isinstance(entry, dict) and entry.get("entry_id")
-        ]
+        return [entry for entry in raw_entries if isinstance(entry, dict) and entry.get("entry_id")]
     return []
 
 
@@ -747,13 +578,7 @@ def _journal_date_from_path(journal_file: Path) -> str:
 def _write_journal_document(journal_file: Path, journal_date: str, entries: List[Dict[str, Any]]) -> None:
     rendered = _render_journal_document(journal_date, entries)
     payload = json.dumps(entries, ensure_ascii=False, indent=2)
-    hidden_block = "\n".join([
-        "",
-        _JOURNAL_DATA_START,
-        payload,
-        _JOURNAL_DATA_END,
-        "",
-    ])
+    hidden_block = "\n".join(["", _JOURNAL_DATA_START, payload, _JOURNAL_DATA_END, ""])
     journal_file.write_text(rendered.rstrip() + hidden_block, encoding="utf-8")
 
 
@@ -795,8 +620,7 @@ def _render_journal_project_entry(entry: Dict[str, Any]) -> List[str]:
     description = _journal_entry_description(entry)
     if description:
         lines.extend(description.splitlines())
-    scope = _journal_entry_scope(entry)
-    lines.append(f"Portée : {scope}")
+    lines.append(f"Portée : {_journal_entry_scope(entry)}")
     return lines
 
 
@@ -809,11 +633,7 @@ def _render_noise_line(entry: Dict[str, Any]) -> str:
 
 
 def _journal_entry_sort_key(entry: Dict[str, Any]) -> tuple[str, str, str]:
-    return (
-        str(entry.get("started_at") or ""),
-        str(entry.get("ended_at") or ""),
-        str(entry.get("entry_id") or ""),
-    )
+    return (str(entry.get("started_at") or ""), str(entry.get("ended_at") or ""), str(entry.get("entry_id") or ""))
 
 
 def _merge_journal_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -832,24 +652,15 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized["active_project"] = _normalize_project_name(normalized.get("active_project"))
     normalized["probable_task"] = normalized.get("probable_task") or "general"
     normalized["activity_level"] = normalized.get("activity_level") or "unknown"
-    normalized["top_files"] = [
-        str(item) for item in normalized.get("top_files", [])
-        if isinstance(item, str) and item.strip()
-    ]
+    normalized["top_files"] = [str(item) for item in normalized.get("top_files", []) if isinstance(item, str) and item.strip()]
     normalized["recent_apps"] = _compact_strings(normalized.get("recent_apps", []))
     normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
-    normalized["commit_messages"] = _compact_strings([
-        normalized.get("commit_message"),
-        *normalized.get("commit_messages", []),
-    ])
+    normalized["commit_messages"] = _compact_strings([normalized.get("commit_message"), *normalized.get("commit_messages", [])])
     return normalized
 
 
 def _can_merge_journal_entries(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
-    return (
-        left.get("active_project") == right.get("active_project")
-        and left.get("probable_task") == right.get("probable_task")
-    )
+    return left.get("active_project") == right.get("active_project") and left.get("probable_task") == right.get("probable_task")
 
 
 def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
@@ -857,38 +668,18 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged["entry_id"] = str(left.get("entry_id") or right.get("entry_id") or "")
     merged["ended_at"] = right.get("ended_at") or left.get("ended_at")
     merged["duration_min"] = int(left.get("duration_min") or 0) + int(right.get("duration_min") or 0)
-    merged["task_confidence"] = max(
-        _float_or_zero(left.get("task_confidence")),
-        _float_or_zero(right.get("task_confidence")),
-    )
-    merged["files_count"] = max(
-        int(left.get("files_count") or 0),
-        len(_merge_unique_strings(left.get("top_files", []), right.get("top_files", []))),
-        int(right.get("files_count") or 0),
-    )
+    merged["task_confidence"] = max(_float_or_zero(left.get("task_confidence")), _float_or_zero(right.get("task_confidence")))
+    merged["files_count"] = max(int(left.get("files_count") or 0), len(_merge_unique_strings(left.get("top_files", []), right.get("top_files", []))), int(right.get("files_count") or 0))
     merged["top_files"] = _merge_unique_strings(left.get("top_files", []), right.get("top_files", []))
-    merged["commit_messages"] = _merge_unique_strings(
-        left.get("commit_messages", []),
-        right.get("commit_messages", []),
-    )
-    merged["recent_apps"] = _merge_unique_strings(
-        left.get("recent_apps", []),
-        right.get("recent_apps", []),
-    )
+    merged["commit_messages"] = _merge_unique_strings(left.get("commit_messages", []), right.get("commit_messages", []))
+    merged["recent_apps"] = _merge_unique_strings(left.get("recent_apps", []), right.get("recent_apps", []))
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
     merged["body"] = "\n".join(_compact_strings([left.get("body"), right.get("body")]))
     return merged
 
 
 def _journal_entry_title(entry: Dict[str, Any]) -> str:
-    task_labels = {
-        "coding": "développement",
-        "debug": "débogage",
-        "writing": "rédaction",
-        "exploration": "exploration",
-        "browsing": "exploration",
-        "general": "travail général",
-    }
+    task_labels = {"coding": "développement", "debug": "débogage", "writing": "rédaction", "exploration": "exploration", "browsing": "exploration", "general": "travail général"}
     task = str(entry.get("probable_task") or "general")
     return task_labels.get(task, task.replace("_", " "))
 
@@ -924,9 +715,7 @@ def _journal_entry_scope(entry: Dict[str, Any]) -> str:
 
 
 def _journal_entry_time_range(entry: Dict[str, Any]) -> str:
-    start = _format_journal_time(entry.get("started_at"))
-    end = _format_journal_time(entry.get("ended_at"))
-    return f"{start} \u2192 {end}"
+    return f"{_format_journal_time(entry.get('started_at'))} \u2192 {_format_journal_time(entry.get('ended_at'))}"
 
 
 def _format_journal_time(value: Any) -> str:
@@ -936,10 +725,8 @@ def _format_journal_time(value: Any) -> str:
     try:
         return datetime.fromisoformat(text).strftime("%H:%M")
     except ValueError:
-        if "T" in text:
-            return text.split("T", 1)[1][:5]
-        if " " in text:
-            return text.split(" ", 1)[1][:5]
+        if "T" in text: return text.split("T", 1)[1][:5]
+        if " " in text: return text.split(" ", 1)[1][:5]
         return text[:5]
 
 
@@ -974,14 +761,8 @@ def _is_off_project_entry(entry: Dict[str, Any]) -> bool:
     task = str(entry.get("probable_task") or "general")
     activity = str(entry.get("activity_level") or "unknown")
     commit_messages = _compact_strings(entry.get("commit_messages", []))
-    top_files = _compact_strings(entry.get("top_files", []))
     apps = _compact_strings(entry.get("recent_apps", []))
-    return (
-        task == "general"
-        and activity == "unknown"
-        and not commit_messages
-        and _looks_like_navigation_or_admin(apps)
-    )
+    return (task == "general" and activity == "unknown" and not commit_messages and _looks_like_navigation_or_admin(apps))
 
 
 def _looks_like_navigation_or_admin(apps: List[str]) -> bool:
@@ -1003,10 +784,7 @@ def _is_strong_project_entry(entry: Dict[str, Any]) -> bool:
 
 
 def _is_weak_project_entry(entry: Dict[str, Any]) -> bool:
-    return (
-        _normalize_project_name(entry.get("active_project")) is not None
-        and not _is_strong_project_entry(entry)
-    )
+    return _normalize_project_name(entry.get("active_project")) is not None and not _is_strong_project_entry(entry)
 
 
 def _has_non_technical_scope(entry: Dict[str, Any]) -> bool:
@@ -1052,17 +830,10 @@ def _resolve_journal_entry_overlaps(entries: List[Dict[str, Any]]) -> List[Dict[
             j += 1
         i += 1
 
-    return [
-        _mark_overlap_demoted(e) if str(e.get("entry_id") or "") in removed_ids else e
-        for e in result
-    ]
+    return [_mark_overlap_demoted(e) if str(e.get("entry_id") or "") in removed_ids else e for e in result]
 
 
 def _should_fuse_overlapping_entries(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
-    """
-    Retourne True si deux entrées qui se chevauchent méritent une fusion.
-    Condition : aucune n'a de commit, même projet, même tâche.
-    """
     return (
         not _compact_strings(left.get("commit_messages", []))
         and not _compact_strings(right.get("commit_messages", []))
@@ -1072,25 +843,13 @@ def _should_fuse_overlapping_entries(left: Dict[str, Any], right: Dict[str, Any]
 
 
 def _fuse_overlapping_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Fusionne deux entrées qui se chevauchent.
-    - started_at : le plus ancien des deux
-    - ended_at   : le plus récent des deux
-    - duration   : recalculé depuis les bornes réelles (pas de double-comptage)
-    """
     fused = _merge_journal_pair(left, right)
     left_start = str(left.get("started_at") or "")
     right_start = str(right.get("started_at") or "")
     left_end = str(left.get("ended_at") or "")
     right_end = str(right.get("ended_at") or "")
-    fused["started_at"] = (
-        min(left_start, right_start) if left_start and right_start
-        else left_start or right_start
-    )
-    fused["ended_at"] = (
-        max(left_end, right_end) if left_end and right_end
-        else left_end or right_end
-    )
+    fused["started_at"] = min(left_start, right_start) if left_start and right_start else left_start or right_start
+    fused["ended_at"] = max(left_end, right_end) if left_end and right_end else left_end or right_end
     start_dt = _parse_entry_datetime(fused["started_at"])
     end_dt = _parse_entry_datetime(fused["ended_at"])
     if start_dt and end_dt and end_dt > start_dt:
@@ -1108,17 +867,12 @@ def _entries_heavily_overlap(left: Dict[str, Any], right: Dict[str, Any]) -> boo
     if overlap_end <= overlap_start:
         return False
     overlap_seconds = (overlap_end - overlap_start).total_seconds()
-    shortest_seconds = min(
-        max((left_end - left_start).total_seconds(), 60.0),
-        max((right_end - right_start).total_seconds(), 60.0),
-    )
+    shortest_seconds = min(max((left_end - left_start).total_seconds(), 60.0), max((right_end - right_start).total_seconds(), 60.0))
     return (overlap_seconds / shortest_seconds) >= 0.5
 
 
 def _entry_bounds(entry: Dict[str, Any]) -> tuple[Optional[datetime], Optional[datetime]]:
-    start = _parse_entry_datetime(entry.get("started_at"))
-    end = _parse_entry_datetime(entry.get("ended_at"))
-    return start, end
+    return _parse_entry_datetime(entry.get("started_at")), _parse_entry_datetime(entry.get("ended_at"))
 
 
 def _parse_entry_datetime(value: Any) -> Optional[datetime]:
@@ -1130,24 +884,16 @@ def _parse_entry_datetime(value: Any) -> Optional[datetime]:
         return None
 
 
-def _choose_weaker_overlapping_entry(
-    left: Dict[str, Any],
-    right: Dict[str, Any],
-) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+def _choose_weaker_overlapping_entry(left: Dict[str, Any], right: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
     left_project = _is_strong_project_entry(left)
     right_project = _is_strong_project_entry(right)
     left_off = _is_off_project_entry(left)
     right_off = _is_off_project_entry(right)
 
-    if left_project and right_off and _is_weak_unknown_entry(right):
-        return right, left
-    if right_project and left_off and _is_weak_unknown_entry(left):
-        return left, right
-    if left_off and _is_weak_project_entry(right):
-        return right, left
-    if right_off and _is_weak_project_entry(left):
-        return left, right
-
+    if left_project and right_off and _is_weak_unknown_entry(right): return right, left
+    if right_project and left_off and _is_weak_unknown_entry(left): return left, right
+    if left_off and _is_weak_project_entry(right): return right, left
+    if right_off and _is_weak_project_entry(left): return left, right
     return None, None
 
 
@@ -1169,16 +915,11 @@ def _is_noise_journal_entry(entry: Dict[str, Any]) -> bool:
     top_files = _compact_strings(entry.get("top_files", []))
     off_project = _is_off_project_entry(entry)
 
-    if duration < 3 and not commit_messages and not _has_useful_journal_body(body):
-        return True
-    if entry.get("overlap_demoted"):
-        return True
-    if task == "general" and not commit_messages and not off_project and not _has_useful_journal_body(body):
-        return True
-    if task == "general" and not commit_messages and not off_project and top_files and _all_files_technical(top_files):
-        return True
-    if duration < 5 and not commit_messages and top_files and _all_files_technical(top_files):
-        return True
+    if duration < 3 and not commit_messages and not _has_useful_journal_body(body): return True
+    if entry.get("overlap_demoted"): return True
+    if task == "general" and not commit_messages and not off_project and not _has_useful_journal_body(body): return True
+    if task == "general" and not commit_messages and not off_project and top_files and _all_files_technical(top_files): return True
+    if duration < 5 and not commit_messages and top_files and _all_files_technical(top_files): return True
     return False
 
 
@@ -1186,8 +927,7 @@ def _has_useful_journal_body(body: str) -> bool:
     if not body:
         return False
     normalized = body.strip()
-    weak_prefixes = ("Session de ", "Travail observé sur ")
-    return len(normalized) >= 20 and not normalized.startswith(weak_prefixes)
+    return len(normalized) >= 20 and not normalized.startswith(("Session de ", "Travail observé sur "))
 
 
 def _all_files_technical(files: List[str]) -> bool:
@@ -1205,12 +945,7 @@ def _strip_commit_sentence(body: str, commit_messages: List[str]) -> str:
         if not message:
             continue
         escaped = re.escape(message)
-        cleaned = re.sub(
-            rf"^Livraison : \u00ab {escaped} \u00bb\.\s*",
-            "",
-            cleaned,
-            flags=re.IGNORECASE,
-        )
+        cleaned = re.sub(rf"^Livraison : \u00ab {escaped} \u00bb\.\s*", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
 
 
@@ -1251,26 +986,16 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
 
         entry = current.get(project)
         if entry is None:
-            current[project] = {
-                "first_session": today,
-                "last_session": today,
-                "last_duration": duration,
-                "last_task": task,
-                "task": task,
-                "recent_episodes": [],
-            }
+            current[project] = {"first_session": today, "last_session": today, "last_duration": duration, "last_task": task, "task": task, "recent_episodes": []}
         else:
-            entry["last_session"]  = today
+            entry["last_session"] = today
             entry["last_duration"] = duration
-            entry["last_task"]     = task
-            entry["task"]          = task
+            entry["last_task"] = task
+            entry["task"] = task
             entry.setdefault("recent_episodes", [])
 
         entry = current[project]
-        entry["recent_episodes"] = _merge_project_recent_episodes(
-            entry.get("recent_episodes", []),
-            latest_episode,
-        )
+        entry["recent_episodes"] = _merge_project_recent_episodes(entry.get("recent_episodes", []), latest_episode)
 
         latest_known = entry["recent_episodes"][0] if entry["recent_episodes"] else None
         if latest_known is not None:
@@ -1284,8 +1009,7 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
         lines = ["# Projets\n"]
         for name in sorted(current):
             item = current[name]
-            lines.extend([
-                "", f"## {name}", "",
+            lines.extend(["", f"## {name}", "",
                 f"- Premi\u00e8re session : {item['first_session']}",
                 f"- Derni\u00e8re session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
                 f"- Type de travail d\u00e9tect\u00e9 : {item['task']}",
@@ -1294,23 +1018,14 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
             if recent_episodes:
                 lines.append("- \u00c9pisodes r\u00e9cents :")
                 for episode in recent_episodes[:5]:
-                    lines.append(
-                        "  - "
-                        f"{episode['date_time']} | {episode['probable_task']} | "
-                        f"{episode['activity_level']} | {episode['duration_min']} min | "
-                        f"{episode['boundary_reason']} | {episode['episode_id']}"
-                    )
+                    lines.append(f"  - {episode['date_time']} | {episode['probable_task']} | {episode['activity_level']} | {episode['duration_min']} min | {episode['boundary_reason']} | {episode['episode_id']}")
         projects_file.write_text("\n".join(lines).strip() + "\n")
 
 
 def _update_index(base_dir: Path) -> None:
     index_file = base_dir / "MEMORY.md"
     with _memory_write_lock:
-        entries = [
-            f"- [{f.stem}]({f.name})"
-            for f in sorted(base_dir.glob("*.md"))
-            if f.name != "MEMORY.md"
-        ]
+        entries = [f"- [{f.stem}]({f.name})" for f in sorted(base_dir.glob("*.md")) if f.name != "MEMORY.md"]
         content = "# Index m\u00e9moire Pulse\n\n" + "\n".join(entries)
         if entries:
             content += "\n"
@@ -1339,9 +1054,9 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
         elif current_name and line.startswith("- Derni\u00e8re session : "):
             value = line.split(": ", 1)[1]
             date_part, details = _split_last_session(value)
-            result[current_name]["last_session"]  = date_part
+            result[current_name]["last_session"] = date_part
             result[current_name]["last_duration"] = details["duration"]
-            result[current_name]["last_task"]      = details["task"]
+            result[current_name]["last_task"] = details["task"]
             in_recent_episodes = False
         elif current_name and line.startswith("- Type de travail d\u00e9tect\u00e9 : "):
             result[current_name]["task"] = line.split(": ", 1)[1]
@@ -1358,28 +1073,15 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
     return result
 
 
-def _build_consolidation_frame(
-    session_data: Dict[str, Any],
-    *,
-    commit_message: Optional[str] = None,
-) -> Dict[str, Any]:
+def _build_consolidation_frame(session_data: Dict[str, Any], *, commit_message: Optional[str] = None) -> Dict[str, Any]:
     episode = _latest_closed_episode(session_data.get("closed_episodes"))
-    active_project = (
-        (episode or {}).get("active_project")
-        or session_data.get("active_project")
-    )
-    probable_task = (
-        (episode or {}).get("probable_task")
-        or session_data.get("probable_task")
-        or "general"
-    )
+    active_project = (episode or {}).get("active_project") or session_data.get("active_project")
+    probable_task = (episode or {}).get("probable_task") or session_data.get("probable_task") or "general"
     if commit_message:
         probable_task = _commit_task_correction(commit_message, probable_task)
-
     duration_min = _episode_duration_min(episode)
     if duration_min is None:
         duration_min = int(session_data.get("duration_min", 0) or 0)
-
     return {
         "episode": episode,
         "active_project": active_project,
@@ -1395,16 +1097,8 @@ def _build_consolidation_frame(
 def _latest_closed_episode(closed_episodes: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(closed_episodes, list):
         return None
-
-    def _sort_key(item: Dict[str, Any]) -> tuple[str, str]:
-        ended_at = str(item.get("ended_at") or "")
-        started_at = str(item.get("started_at") or "")
-        return (ended_at, started_at)
-
-    candidates = [
-        item for item in closed_episodes
-        if isinstance(item, dict) and item.get("ended_at")
-    ]
+    def _sort_key(item): return (str(item.get("ended_at") or ""), str(item.get("started_at") or ""))
+    candidates = [item for item in closed_episodes if isinstance(item, dict) and item.get("ended_at")]
     if not candidates:
         return None
     return max(candidates, key=_sort_key)
@@ -1436,8 +1130,7 @@ def _normalize_project_episode(episode: Optional[Dict[str, Any]]) -> Optional[Di
     date, date_time = _format_project_episode_timestamp(str(timestamp))
     return {
         "episode_id": str(episode.get("episode_id") or episode.get("id") or ""),
-        "date": date,
-        "date_time": date_time,
+        "date": date, "date_time": date_time,
         "probable_task": str(episode.get("probable_task") or "general"),
         "activity_level": str(episode.get("activity_level") or "unknown"),
         "duration_min": duration_min,
@@ -1450,13 +1143,7 @@ def _merge_project_recent_episodes(existing: List[Dict[str, Any]], latest: Optio
     if latest is not None:
         episodes = [episode for episode in episodes if episode.get("episode_id") != latest["episode_id"]]
         episodes.append(latest)
-    episodes.sort(
-        key=lambda item: (
-            str(item.get("date_time") or ""),
-            str(item.get("episode_id") or ""),
-        ),
-        reverse=True,
-    )
+    episodes.sort(key=lambda item: (str(item.get("date_time") or ""), str(item.get("episode_id") or "")), reverse=True)
     return episodes[:5]
 
 
@@ -1467,20 +1154,7 @@ def _dominant_project_task(episodes: List[Dict[str, Any]]) -> Optional[str]:
         counts[task] = counts.get(task, 0) + 1
     if not counts:
         return None
-    return max(
-        counts,
-        key=lambda task: (
-            counts[task],
-            next(
-                (
-                    index
-                    for index, episode in enumerate(episodes)
-                    if episode.get("probable_task") == task
-                ),
-                len(episodes),
-            ) * -1,
-        ),
-    )
+    return max(counts, key=lambda task: (counts[task], next((index for index, episode in enumerate(episodes) if episode.get("probable_task") == task), len(episodes)) * -1))
 
 
 def _format_project_episode_timestamp(timestamp: str) -> tuple[str, str]:
@@ -1503,15 +1177,10 @@ def _parse_project_episode_line(value: str) -> Optional[Dict[str, Any]]:
     except ValueError:
         return None
     date_time = parts[0]
-    date = date_time[:10]
     return {
-        "date": date,
-        "date_time": date_time,
-        "probable_task": parts[1] or "general",
-        "activity_level": parts[2] or "unknown",
-        "duration_min": duration_min,
-        "boundary_reason": parts[4] or "unknown",
-        "episode_id": parts[5],
+        "date": date_time[:10], "date_time": date_time,
+        "probable_task": parts[1] or "general", "activity_level": parts[2] or "unknown",
+        "duration_min": duration_min, "boundary_reason": parts[4] or "unknown", "episode_id": parts[5],
     }
 
 
@@ -1531,17 +1200,12 @@ def _split_last_session(value: str) -> tuple:
 
 
 def _time_slot(hour: int) -> str:
-    if 6 <= hour < 12:   return "matin"
-    if 12 <= hour < 18:  return "apr\u00e8s-midi"
+    if 6 <= hour < 12: return "matin"
+    if 12 <= hour < 18: return "apr\u00e8s-midi"
     return "soir"
 
 
-def _llm_complete(
-    llm: Any,
-    prompt: str,
-    max_tokens: int = 150,
-    think: Optional[bool] = None,
-) -> str:
+def _llm_complete(llm: Any, prompt: str, max_tokens: int = 150, think: Optional[bool] = None) -> str:
     if hasattr(llm, "complete"):
         kwargs = {"max_tokens": max_tokens}
         if think is not None:

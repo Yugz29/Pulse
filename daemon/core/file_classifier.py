@@ -210,6 +210,10 @@ def file_signal_significance(path: Optional[str]) -> str:
         return "technical_noise"
     if ".sb-" in name:
         return "technical_noise"
+    # Fichiers de déclaration TypeScript — toujours auto-générés, jamais édités manuellement.
+    # Doivent être filtrés avant le check source (.ts → meaningful).
+    if lower_name.endswith(".d.ts"):
+        return "technical_noise"
     if any(
         segment in path
         for segment in (
