@@ -324,13 +324,27 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.recentProposals[0].displayTitle, "Contexte de session prêt à être injecté")
     }
 
-    func testRefreshStateUsesSessionDurationFromSignalsInsteadOfLegacyTopLevelField() async {
+    func testRefreshStateUsesPresentSessionDurationBeforeSignalsAndLegacyTopLevelField() async {
         let json = """
         {
           "active_app": "Xcode",
           "active_project": "Pulse",
           "active_file": "/tmp/runtime_orchestrator.py",
           "session_duration_min": 240,
+          "present": {
+            "session_status": "active",
+            "awake": true,
+            "locked": false,
+            "active_file": "/tmp/runtime_orchestrator.py",
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "activity_level": "editing",
+            "focus_level": "normal",
+            "friction_score": 0.2,
+            "clipboard_context": null,
+            "session_duration_min": 33,
+            "updated_at": "2026-04-15T12:00:00"
+          },
           "signals": {
             "probable_task": "coding",
             "focus_level": "normal",
@@ -343,12 +357,12 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         let vm = PulseViewModel(bridge: makeJSONBridge(json: json, path: "/state"))
 
         vm.refreshState()
-        await waitUntil { vm.sessionDuration == 45 }
+        await waitUntil { vm.sessionDuration == 33 }
 
-        XCTAssertEqual(vm.sessionDuration, 45)
+        XCTAssertEqual(vm.sessionDuration, 33)
     }
 
-    func testRefreshStateShowsZeroWhenSignalsAreMissingEvenIfLegacyDurationIsHigh() async {
+    func testRefreshStateFallsBackToLegacyDurationWhenPresentIsMissing() async {
         let json = """
         {
           "active_app": "Xcode",
@@ -360,22 +374,36 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         vm.sessionDuration = 12
 
         vm.refreshState()
-        await waitUntil { vm.sessionDuration == 0 }
+        await waitUntil { vm.sessionDuration == 90 }
 
-        XCTAssertEqual(vm.sessionDuration, 0)
+        XCTAssertEqual(vm.sessionDuration, 90)
     }
 
-    func testRefreshStateKeepsZeroWhenSignalsSessionDurationIsZero() async {
+    func testRefreshStateKeepsZeroWhenPresentSessionDurationIsZero() async {
         let json = """
         {
           "active_app": "Xcode",
           "active_project": "Pulse",
           "session_duration_min": 90,
+          "present": {
+            "session_status": "active",
+            "awake": true,
+            "locked": false,
+            "active_file": "/tmp/runtime_orchestrator.py",
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "activity_level": "editing",
+            "focus_level": "normal",
+            "friction_score": 0.2,
+            "clipboard_context": null,
+            "session_duration_min": 0,
+            "updated_at": "2026-04-15T12:00:00"
+          },
           "signals": {
             "probable_task": "coding",
             "focus_level": "normal",
             "friction_score": 0.2,
-            "session_duration_min": 0,
+            "session_duration_min": 45,
             "recent_apps": ["Xcode"]
           }
         }
@@ -501,9 +529,14 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             summary: "Supprime le dossier build.",
             rationale: "Commande destructive détectée.",
             status: "pending",
+            command: nil,
+            translated: nil,
+            riskLevel: nil,
+            riskScore: nil,
             createdAt: "2026-04-15T12:00:00",
             updatedAt: "2026-04-15T12:00:00",
-            decidedAt: nil
+            decidedAt: nil,
+            evidence: nil
         )
         let automatic = ProposalRecord(
             id: "proposal-2",
@@ -512,9 +545,14 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             summary: "Le contexte local est jugé assez riche pour une réponse assistée.",
             rationale: "La session a accumulé assez de contexte local.",
             status: "executed",
+            command: nil,
+            translated: nil,
+            riskLevel: nil,
+            riskScore: nil,
             createdAt: "2026-04-15T12:00:00",
             updatedAt: "2026-04-15T12:01:00",
-            decidedAt: "2026-04-15T12:01:00"
+            decidedAt: "2026-04-15T12:01:00",
+            evidence: nil
         )
 
         XCTAssertEqual(blocking.typeLabel, "Commande risquée")
@@ -536,9 +574,14 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             summary: "Contexte prêt",
             rationale: "Le contexte de session est assez riche pour aider la prochaine réponse.",
             status: "executed",
+            command: nil,
+            translated: nil,
+            riskLevel: nil,
+            riskScore: nil,
             createdAt: "2026-04-15T12:00:00",
             updatedAt: "2026-04-15T12:01:00",
-            decidedAt: "2026-04-15T12:01:00"
+            decidedAt: "2026-04-15T12:01:00",
+            evidence: nil
         )
 
         XCTAssertTrue(proposal.detailText?.contains("Pourquoi :") == true)
@@ -550,6 +593,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             activeProject: "Pulse",
             activeFile: "/tmp/main.py",
             probableTask: "coding",
+            activityLevel: "editing",
+            taskConfidence: 0.92,
             focusLevel: "normal",
             frictionScore: 0.2,
             sessionDurationMin: 42,
@@ -564,7 +609,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         )
 
         XCTAssertEqual(signals.taskLabel, "Développement")
-        XCTAssertEqual(signals.taskEvidenceLabel, "ancré dans les fichiers")
+        XCTAssertEqual(signals.taskEvidenceLabel, "Ancré")
         XCTAssertEqual(
             signals.fileActivitySummary,
             "5 fichier(s) touché(s) sur 10 min, surtout code source (3), tests (1), documentation (1)"
@@ -578,6 +623,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             activeProject: nil,
             activeFile: nil,
             probableTask: "exploration",
+            activityLevel: "reading",
+            taskConfidence: 0.61,
             focusLevel: "normal",
             frictionScore: 0.0,
             sessionDurationMin: 6,
@@ -600,6 +647,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             activeProject: nil,
             activeFile: nil,
             probableTask: "writing",
+            activityLevel: "reading",
+            taskConfidence: 0.3,
             focusLevel: "normal",
             frictionScore: 0.0,
             sessionDurationMin: 4,
@@ -613,7 +662,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             lastSessionContext: nil
         )
 
-        XCTAssertEqual(signals.taskEvidenceLabel, "contexte léger")
+        XCTAssertEqual(signals.taskEvidenceLabel, "Faible")
         XCTAssertEqual(
             signals.taskEvidenceSummary,
             "Le libellé vient surtout de l’app récente (Notes) car l’activité fichiers reste faible."
@@ -626,6 +675,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             activeProject: "Pulse",
             activeFile: "/tmp/main.py",
             probableTask: "coding",
+            activityLevel: "editing",
+            taskConfidence: 0.9,
             focusLevel: "normal",
             frictionScore: 0.2,
             sessionDurationMin: 12,
@@ -650,6 +701,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             activeProject: "Pulse",
             activeFile: "/tmp/main.py",
             probableTask: "general",
+            activityLevel: "editing",
+            taskConfidence: 0.22,
             focusLevel: "normal",
             frictionScore: 0.0,
             sessionDurationMin: 8,
@@ -701,5 +754,127 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.selectedModel, "mistral")
         XCTAssertEqual(vm.selectedCommandModel, "mistral")
         XCTAssertEqual(vm.selectedSummaryModel, "mistral")
+    }
+
+    func testStateResponseDecodesPresentAndEpisodeHierarchy() throws {
+        let json = """
+        {
+          "active_app": "Xcode",
+          "active_file": "/tmp/legacy.swift",
+          "active_project": "LegacyProject",
+          "session_duration_min": 42,
+          "runtime_paused": false,
+          "present": {
+            "session_status": "active",
+            "awake": true,
+            "locked": false,
+            "active_file": "/tmp/live.swift",
+            "active_project": "Pulse",
+            "probable_task": "debug",
+            "activity_level": "executing",
+            "focus_level": "deep",
+            "friction_score": 0.18,
+            "clipboard_context": "code",
+            "session_duration_min": 33,
+            "updated_at": "2026-04-23T12:00:00"
+          },
+          "current_episode": {
+            "id": "ep-1",
+            "session_id": "session-1",
+            "started_at": "2026-04-23T11:50:00",
+            "ended_at": null,
+            "boundary_reason": null,
+            "duration_sec": null,
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "activity_level": "editing",
+            "task_confidence": 0.86
+          },
+          "signals": {
+            "active_project": "SignalsProject",
+            "active_file": "/tmp/signals.swift",
+            "probable_task": "general",
+            "activity_level": "reading",
+            "task_confidence": 0.12,
+            "focus_level": "scattered",
+            "friction_score": 0.72,
+            "session_duration_min": 12,
+            "recent_apps": ["Chrome"],
+            "clipboard_context": "text"
+          }
+        }
+        """
+
+        let state = try JSONDecoder().decode(StateResponse.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.present?.activeProject, "Pulse")
+        XCTAssertEqual(state.present?.probableTask, "debug")
+        XCTAssertEqual(state.currentEpisode?.activeProject, "Pulse")
+        XCTAssertEqual(state.currentEpisode?.probableTask, "coding")
+        XCTAssertEqual(state.signals?.activeProject, "SignalsProject")
+    }
+
+    func testRefreshStateBuildsProductStateFromEpisodeAndPresentBeforeSignals() async {
+        let json = """
+        {
+          "active_app": "Xcode",
+          "active_file": "/tmp/legacy.swift",
+          "active_project": "LegacyProject",
+          "session_duration_min": 42,
+          "runtime_paused": false,
+          "present": {
+            "session_status": "active",
+            "awake": true,
+            "locked": false,
+            "active_file": "/tmp/live.swift",
+            "active_project": "Pulse",
+            "probable_task": "debug",
+            "activity_level": "executing",
+            "focus_level": "deep",
+            "friction_score": 0.18,
+            "clipboard_context": "code",
+            "session_duration_min": 33,
+            "updated_at": "2026-04-23T12:00:00"
+          },
+          "current_episode": {
+            "id": "ep-1",
+            "session_id": "session-1",
+            "started_at": "2026-04-23T11:50:00",
+            "ended_at": null,
+            "boundary_reason": null,
+            "duration_sec": null,
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "activity_level": "editing",
+            "task_confidence": 0.86
+          },
+          "signals": {
+            "active_project": "SignalsProject",
+            "active_file": "/tmp/signals.swift",
+            "probable_task": "general",
+            "activity_level": "reading",
+            "task_confidence": 0.12,
+            "focus_level": "scattered",
+            "friction_score": 0.72,
+            "session_duration_min": 12,
+            "recent_apps": ["Chrome"],
+            "clipboard_context": "text"
+          }
+        }
+        """
+        let vm = PulseViewModel(bridge: makeJSONBridge(json: json, path: "/state"))
+
+        vm.refreshState()
+        await waitUntil { vm.currentEpisode != nil && vm.currentPresent != nil }
+
+        XCTAssertEqual(vm.currentEpisode?.activeProject, "Pulse")
+        XCTAssertEqual(vm.currentPresent?.probableTask, "debug")
+        XCTAssertEqual(vm.activeProject, "Pulse")
+        XCTAssertEqual(vm.probableTask, "coding")
+        XCTAssertEqual(vm.activeFile, "/tmp/live.swift")
+        XCTAssertEqual(vm.sessionDuration, 33)
+        XCTAssertEqual(vm.focusLevel, "deep")
+        XCTAssertEqual(vm.frictionScore, 0.18, accuracy: 0.001)
+        XCTAssertEqual(vm.recentApps, ["Chrome"])
     }
 }

@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 _TEST_HOME = tempfile.mkdtemp(prefix="pulse-tests-home-")
@@ -113,8 +114,6 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(snapshot.latest_active_app, "Xcode")
 
     def test_update_present_stores_canonical_runtime_snapshot(self):
-        from datetime import datetime
-
         updated_at = datetime(2026, 4, 23, 10, 30, 0)
         signals = Signals(
             active_project="Pulse",
@@ -147,6 +146,30 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(present.focus_level, "deep")
         self.assertEqual(present.session_duration_min, 42)
         self.assertEqual(present.updated_at, updated_at)
+
+    def test_should_ignore_file_event_reste_base_sur_temps_local_de_reception(self):
+        first_seen = datetime(2026, 4, 23, 10, 0, 0)
+        second_seen = first_seen + timedelta(milliseconds=500)
+        later_seen = first_seen + timedelta(seconds=2)
+
+        self.assertFalse(
+            daemon_main.runtime_state.should_ignore_file_event(
+                dedupe_key="file_modified:/tmp/main.py",
+                now=first_seen,
+            )
+        )
+        self.assertTrue(
+            daemon_main.runtime_state.should_ignore_file_event(
+                dedupe_key="file_modified:/tmp/main.py",
+                now=second_seen,
+            )
+        )
+        self.assertFalse(
+            daemon_main.runtime_state.should_ignore_file_event(
+                dedupe_key="file_modified:/tmp/main.py",
+                now=later_seen,
+            )
+        )
 
     def test_event_endpoint_ignores_events_while_runtime_is_paused(self):
         daemon_main.runtime_state.set_paused(True)

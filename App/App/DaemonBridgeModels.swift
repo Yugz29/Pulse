@@ -13,6 +13,7 @@ struct StateResponse: Decodable {
     let sessionDurationMin: Int
     let lastEventType: String?
     let runtimePaused: Bool?
+    let present: PresentData?
     let signals: SignalsData?
     let sessionFsm: SessionFSMData?
     let currentEpisode: EpisodeData?
@@ -25,10 +26,73 @@ struct StateResponse: Decodable {
         case sessionDurationMin = "session_duration_min"
         case lastEventType = "last_event_type"
         case runtimePaused = "runtime_paused"
+        case present
         case signals
         case sessionFsm = "session_fsm"
         case currentEpisode = "current_episode"
         case recentEpisodes = "recent_episodes"
+    }
+}
+
+struct PresentData: Decodable {
+    let sessionStatus: String
+    let awake: Bool
+    let locked: Bool
+    let activeFile: String?
+    let activeProject: String?
+    let probableTask: String
+    let activityLevel: String
+    let focusLevel: String
+    let frictionScore: Double
+    let clipboardContext: String?
+    let sessionDurationMin: Int
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case sessionStatus = "session_status"
+        case awake
+        case locked
+        case activeFile = "active_file"
+        case activeProject = "active_project"
+        case probableTask = "probable_task"
+        case activityLevel = "activity_level"
+        case focusLevel = "focus_level"
+        case frictionScore = "friction_score"
+        case clipboardContext = "clipboard_context"
+        case sessionDurationMin = "session_duration_min"
+        case updatedAt = "updated_at"
+    }
+
+    var taskLabel: String {
+        switch probableTask {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "exploration", "browsing": return "Exploration"
+        case "general": return "Général"
+        default: return probableTask
+        }
+    }
+
+    var activityLabel: String {
+        switch activityLevel {
+        case "editing": return "Édition"
+        case "reading": return "Lecture"
+        case "executing": return "Exécution"
+        case "navigating": return "Navigation"
+        case "idle": return "Inactif"
+        default: return activityLevel
+        }
+    }
+
+    var taskAccentHex: String {
+        switch probableTask {
+        case "coding": return "#5DCAA5"
+        case "writing": return "#5E9EFF"
+        case "debug": return "#ff453a"
+        case "exploration", "browsing": return "#EF9F27"
+        default: return "#7c7c80"
+        }
     }
 }
 
@@ -39,6 +103,7 @@ struct EpisodeData: Decodable, Identifiable {
     let endedAt: String?
     let boundaryReason: String?
     let durationSec: Int?
+    let activeProject: String?
     let probableTask: String?
     let activityLevel: String?
     let taskConfidence: Double?
@@ -50,6 +115,7 @@ struct EpisodeData: Decodable, Identifiable {
         case endedAt = "ended_at"
         case boundaryReason = "boundary_reason"
         case durationSec = "duration_sec"
+        case activeProject = "active_project"
         case probableTask = "probable_task"
         case activityLevel = "activity_level"
         case taskConfidence = "task_confidence"

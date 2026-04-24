@@ -102,6 +102,132 @@ class TestEpisodeFSM(unittest.TestCase):
         self.assertIsNone(self.fsm.current_episode)
         self.assertEqual(self.fsm.state, EpisodeFSM.CLOSED)
 
+    def test_sync_current_semantics_updates_active_episode(self):
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.fsm.ensure_active(session_id="session-1", started_at=self._at(5))
+
+        updated = self.fsm.sync_current_semantics(
+            active_project="Pulse",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.84,
+        )
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.active_project, "Pulse")
+        self.assertEqual(updated.probable_task, "coding")
+        self.assertEqual(updated.activity_level, "editing")
+        self.assertEqual(updated.task_confidence, 0.84)
+        self.assertEqual(self.fsm.current_episode, updated)
+
+    def test_close_current_preserves_episode_semantics(self):
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.fsm.ensure_active(session_id="session-1", started_at=self._at(5))
+        self.fsm.sync_current_semantics(
+            active_project="Pulse",
+            probable_task="debug",
+            activity_level="executing",
+            task_confidence=0.91,
+        )
+
+        transition = self.fsm.close_current(
+            ended_at=self.base,
+            boundary_reason="session_end",
+        )
+
+        self.assertEqual(transition.closed_episode.active_project, "Pulse")
+        self.assertEqual(transition.closed_episode.probable_task, "debug")
+        self.assertEqual(transition.closed_episode.activity_level, "executing")
+        self.assertEqual(transition.closed_episode.task_confidence, 0.91)
+
+    def test_project_change_requires_confirmation_before_split(self):
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.fsm.ensure_active(session_id="session-1", started_at=self._at(10))
+            self.fsm.sync_current_semantics(
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.91,
+            )
+            first = self.fsm.on_semantic_signal(
+                session_id="session-1",
+                when=self._at(1),
+                active_project="Client",
+                probable_task="coding",
+                task_confidence=0.91,
+            )
+            second = self.fsm.on_semantic_signal(
+                session_id="session-1",
+                when=self.base,
+                active_project="Client",
+                probable_task="coding",
+                task_confidence=0.91,
+            )
+
+        self.assertFalse(first.boundary_detected)
+        self.assertEqual(first.current_episode.id, "ep-1")
+        self.assertTrue(second.boundary_detected)
+        self.assertEqual(second.boundary_reason, "project_change")
+        self.assertEqual(second.closed_episode.id, "ep-1")
+        self.assertEqual(second.opened_episode.id, "ep-2")
+
+    def test_task_change_requires_confident_confirmation_before_split(self):
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.fsm.ensure_active(session_id="session-1", started_at=self._at(10))
+            self.fsm.sync_current_semantics(
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.91,
+            )
+            first = self.fsm.on_semantic_signal(
+                session_id="session-1",
+                when=self._at(1),
+                active_project="Pulse",
+                probable_task="debug",
+                task_confidence=0.88,
+            )
+            second = self.fsm.on_semantic_signal(
+                session_id="session-1",
+                when=self.base,
+                active_project="Pulse",
+                probable_task="debug",
+                task_confidence=0.88,
+            )
+
+        self.assertFalse(first.boundary_detected)
+        self.assertTrue(second.boundary_detected)
+        self.assertEqual(second.boundary_reason, "task_change")
+
+    def test_task_change_low_confidence_does_not_split(self):
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.fsm.ensure_active(session_id="session-1", started_at=self._at(10))
+        self.fsm.sync_current_semantics(
+            active_project="Pulse",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.91,
+        )
+
+        first = self.fsm.on_semantic_signal(
+            session_id="session-1",
+            when=self._at(1),
+            active_project="Pulse",
+            probable_task="debug",
+            task_confidence=0.4,
+        )
+        second = self.fsm.on_semantic_signal(
+            session_id="session-1",
+            when=self.base,
+            active_project="Pulse",
+            probable_task="debug",
+            task_confidence=0.4,
+        )
+
+        self.assertFalse(first.boundary_detected)
+        self.assertFalse(second.boundary_detected)
+        self.assertEqual(self.fsm.current_episode.probable_task, "coding")
+
 
 if __name__ == "__main__":
     unittest.main()

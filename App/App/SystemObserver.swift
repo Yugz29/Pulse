@@ -2,6 +2,18 @@ import AppKit
 import CoreGraphics
 import Foundation
 
+actor EventDeliveryQueue {
+    private let bridge: DaemonBridge
+
+    init(bridge: DaemonBridge) {
+        self.bridge = bridge
+    }
+
+    func send(_ payload: [String: String]) async {
+        try? await bridge.sendEvent(payload)
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - SystemObserver
 // Observe le système macOS et envoie des events au daemon Python.
@@ -13,6 +25,7 @@ class SystemObserver {
     // MARK: - Dépendances
 
     private let bridge: DaemonBridge
+    private let eventDeliveryQueue: EventDeliveryQueue
 
     // MARK: - État interne
 
@@ -36,6 +49,7 @@ class SystemObserver {
 
     init(bridge: DaemonBridge = DaemonBridge()) {
         self.bridge = bridge
+        self.eventDeliveryQueue = EventDeliveryQueue(bridge: bridge)
     }
 
     // MARK: - Lifecycle
@@ -414,7 +428,7 @@ class SystemObserver {
 
     private func sendEvent(_ payload: [String: String]) {
         Task(priority: .utility) {
-            try? await bridge.sendEvent(payload)
+            await eventDeliveryQueue.send(payload)
         }
     }
 

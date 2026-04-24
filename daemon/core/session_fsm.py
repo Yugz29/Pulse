@@ -14,6 +14,11 @@ _DEV_APPS = {
     "Xcode", "VSCode", "Visual Studio Code", "Cursor", "WebStorm",
     "PyCharm", "Terminal", "iTerm2", "Warp",
 }
+_SUPPORTIVE_APPS = {
+    "Safari", "Google Chrome", "Chrome", "Firefox", "Arc",
+    "Notion", "Obsidian", "Bear", "Notes", "Pages",
+}
+_SUPPORTIVE_EVENT_TYPES = {"local_exploration", "mcp_command_received", "mcp_decision"}
 
 
 @dataclass(frozen=True)
@@ -181,27 +186,77 @@ class SessionFSM:
         self._ignored_short_lock_at = None
 
     def _find_latest_meaningful_activity(self, events: list) -> Optional[datetime]:
-        for event in reversed(events):
+        latest_strong: datetime | None = None
+        latest_supportive: datetime | None = None
+        for event in events:
             if event.type in _MEANINGFUL_TERMINAL_EVENT_TYPES:
-                return event.timestamp
+                if latest_strong is None or event.timestamp > latest_strong:
+                    latest_strong = event.timestamp
+                continue
             if event.type in _MEANINGFUL_FILE_EVENT_TYPES:
                 if self._is_trackable_file_path(event.payload.get("path")):
-                    return event.timestamp
+                    if latest_strong is None or event.timestamp > latest_strong:
+                        latest_strong = event.timestamp
+                    continue
             if event.type in {"app_activated", "app_switch"}:
                 if event.payload.get("app_name") in _DEV_APPS:
-                    return event.timestamp
+                    if latest_strong is None or event.timestamp > latest_strong:
+                        latest_strong = event.timestamp
+                    continue
+                if (
+                    event.payload.get("app_name") in _SUPPORTIVE_APPS
+                    and (
+                        latest_supportive is None
+                        or event.timestamp > latest_supportive
+                    )
+                ):
+                    latest_supportive = event.timestamp
+            elif (
+                event.type in _SUPPORTIVE_EVENT_TYPES
+                and (
+                    latest_supportive is None
+                    or event.timestamp > latest_supportive
+                )
+            ):
+                latest_supportive = event.timestamp
+        if (
+            latest_supportive is not None
+            and self._can_extend_session_with_supportive_activity(latest_supportive)
+            and (latest_strong is None or latest_supportive > latest_strong)
+        ):
+            return latest_supportive
+        if latest_strong is not None:
+            return latest_strong
+        if self._can_extend_session_with_supportive_activity(latest_supportive):
+            return latest_supportive
         return None
 
     def _latest_screen_lock_after(self, events: list, since: datetime) -> Optional[datetime]:
-        for event in reversed(events):
-            if event.type == "screen_locked" and event.timestamp > since:
-                return event.timestamp
-        return None
+        lock_at: datetime | None = None
+        for event in events:
+            if event.type != "screen_locked" or event.timestamp <= since:
+                continue
+            if lock_at is None or event.timestamp > lock_at:
+                lock_at = event.timestamp
+        return lock_at
 
     def _is_session_boundary_screen_lock(self, lock_at: Optional[datetime]) -> bool:
         if lock_at is None:
             return False
         return lock_at != self._ignored_short_lock_at
+
+    def _can_extend_session_with_supportive_activity(
+        self,
+        candidate_at: datetime | None,
+    ) -> bool:
+        if candidate_at is None or self._last_meaningful_activity_at is None:
+            return False
+        if candidate_at < self._last_meaningful_activity_at:
+            return False
+        gap_minutes = (
+            candidate_at - self._last_meaningful_activity_at
+        ).total_seconds() / 60
+        return gap_minutes <= SESSION_TIMEOUT_MIN
 
     def _is_trackable_file_path(self, path: Optional[str]) -> bool:
         return file_signal_significance(path) != "technical_noise"

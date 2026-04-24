@@ -1,11 +1,12 @@
 import json
 import sqlite3
 import threading
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from daemon.core.contracts import Episode, SessionSnapshot
+from daemon.core.contracts import ConsolidatedEpisode, Episode, SessionSnapshot
 from daemon.core.event_bus import Event
 from daemon.core.signal_scorer import Signals
 from daemon.core.uid import new_uid
@@ -28,16 +29,25 @@ class SessionMemory:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.session_id = session_id or new_uid()
         self.started_at = datetime.now()
+        self._latest_observed_at: datetime | None = None
+        self._has_observed_activity = False
         self._lock = threading.Lock()
 
         self._init_db()
         self._ensure_current_session()
 
-    def new_session(self) -> None:
+    def new_session(
+        self,
+        *,
+        started_at: Optional[datetime] = None,
+        ended_at: Optional[datetime] = None,
+    ) -> None:
         """Clôture la session courante et en démarre une nouvelle."""
-        self.close()
+        self.close(ended_at=ended_at)
         self.session_id = new_uid()
-        self.started_at = datetime.now()
+        self.started_at = started_at or datetime.now()
+        self._latest_observed_at = self.started_at if started_at is not None else None
+        self._has_observed_activity = started_at is not None
         self._ensure_current_session()
 
     def record_event(self, event: Event) -> None:
@@ -45,6 +55,7 @@ class SessionMemory:
         payload_text = self._payload_to_text(event.payload)
 
         with self._lock:
+            self._observe_timestamp(event.timestamp, bootstrap_if_empty=True)
             with self._connect() as conn:
                 cursor = conn.execute(
                     """
@@ -76,7 +87,7 @@ class SessionMemory:
                     )
                 except Exception:
                     pass  # FTS5 indisponible — on continue sans planter
-                self._update_session_from_event(conn, event)
+                self._update_session_from_event(conn, event.timestamp)
                 conn.commit()
 
     def update_present_snapshot(
@@ -86,8 +97,10 @@ class SessionMemory:
         signals: Signals,
     ) -> None:
         duration = present.session_duration_min
+        observed_at = present.updated_at or self._latest_observed_at or datetime.now()
 
         with self._lock:
+            self._observe_timestamp(observed_at, bootstrap_if_empty=False)
             with self._connect() as conn:
                 conn.execute(
                     """
@@ -102,7 +115,7 @@ class SessionMemory:
                     WHERE id = ?
                     """,
                     (
-                        datetime.now().isoformat(),
+                        self._effective_updated_at(observed_at).isoformat(),
                         duration,
                         present.active_project,
                         present.active_file,
@@ -180,7 +193,7 @@ class SessionMemory:
                 SELECT event_type, payload_json, created_at
                 FROM events
                 WHERE session_id = ?
-                ORDER BY id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT ?
                 """,
                 (self.session_id, limit),
@@ -210,6 +223,14 @@ class SessionMemory:
         snapshot = self.build_session_snapshot()
         return session_snapshot_to_legacy_dict(snapshot)
 
+    def export_memory_payload(self, *, closed_episode_limit: int = 8) -> Dict[str, Any]:
+        payload = self.export_session_data()
+        payload["closed_episodes"] = [
+            asdict(episode)
+            for episode in self.get_recent_closed_episodes(limit=closed_episode_limit)
+        ]
+        return payload
+
     def save_episode(self, episode: Episode) -> None:
         with self._lock:
             with self._connect() as conn:
@@ -217,14 +238,15 @@ class SessionMemory:
                     """
                     INSERT INTO episodes (
                         id, session_id, started_at, ended_at, boundary_reason, duration_sec,
-                        probable_task, activity_level, task_confidence
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        active_project, probable_task, activity_level, task_confidence
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         session_id = excluded.session_id,
                         started_at = excluded.started_at,
                         ended_at = excluded.ended_at,
                         boundary_reason = excluded.boundary_reason,
                         duration_sec = excluded.duration_sec,
+                        active_project = excluded.active_project,
                         probable_task = excluded.probable_task,
                         activity_level = excluded.activity_level,
                         task_confidence = excluded.task_confidence
@@ -236,6 +258,7 @@ class SessionMemory:
                         episode.ended_at,
                         episode.boundary_reason,
                         episode.duration_sec,
+                        episode.active_project,
                         episode.probable_task,
                         episode.activity_level,
                         episode.task_confidence,
@@ -278,8 +301,44 @@ class SessionMemory:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def close(self) -> None:
+    def get_recent_closed_episodes(
+        self,
+        *,
+        session_id: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[ConsolidatedEpisode]:
+        target_id = session_id or self.session_id
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM episodes
+                WHERE session_id = ? AND ended_at IS NOT NULL
+                ORDER BY ended_at DESC, started_at DESC
+                LIMIT ?
+                """,
+                (target_id, limit),
+            ).fetchall()
+        return [
+            ConsolidatedEpisode(
+                episode_id=row["id"],
+                session_id=row["session_id"],
+                active_project=row["active_project"],
+                probable_task=row["probable_task"],
+                activity_level=row["activity_level"],
+                task_confidence=row["task_confidence"],
+                started_at=row["started_at"],
+                ended_at=row["ended_at"],
+                duration_sec=row["duration_sec"],
+                boundary_reason=row["boundary_reason"],
+            )
+            for row in rows
+        ]
+
+    def close(self, *, ended_at: Optional[datetime] = None) -> None:
         with self._lock:
+            effective_end = ended_at or self._latest_observed_at or datetime.now()
+            self._observe_timestamp(effective_end, bootstrap_if_empty=False)
             with self._connect() as conn:
                 conn.execute(
                     """
@@ -288,9 +347,9 @@ class SessionMemory:
                     WHERE id = ?
                     """,
                     (
-                        datetime.now().isoformat(),
-                        datetime.now().isoformat(),
-                        self._duration_min(),
+                        effective_end.isoformat(),
+                        effective_end.isoformat(),
+                        self._duration_min(end_at=effective_end),
                         self.session_id,
                     ),
                 )
@@ -335,6 +394,7 @@ class SessionMemory:
                     ended_at TEXT,
                     boundary_reason TEXT,
                     duration_sec INTEGER,
+                    active_project TEXT,
                     probable_task TEXT,
                     activity_level TEXT,
                     task_confidence REAL,
@@ -342,6 +402,7 @@ class SessionMemory:
                 )
                 """
             )
+            self._ensure_column(conn, "episodes", "active_project", "TEXT")
             self._ensure_column(conn, "episodes", "probable_task", "TEXT")
             self._ensure_column(conn, "episodes", "activity_level", "TEXT")
             self._ensure_column(conn, "episodes", "task_confidence", "REAL")
@@ -400,17 +461,20 @@ class SessionMemory:
             return
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
-    def _update_session_from_event(self, conn: sqlite3.Connection, event: Event) -> None:
+    def _update_session_from_event(self, conn: sqlite3.Connection, observed_at: datetime) -> None:
+        effective_updated_at = self._effective_updated_at(observed_at)
         conn.execute(
             """
             UPDATE sessions
-            SET updated_at = ?,
+            SET started_at = ?,
+                updated_at = ?,
                 session_duration_min = ?
             WHERE id = ?
             """,
             (
-                datetime.now().isoformat(),
-                self._duration_min(),
+                self.started_at.isoformat(),
+                effective_updated_at.isoformat(),
+                self._duration_min(end_at=effective_updated_at),
                 self.session_id,
             ),
         )
@@ -434,5 +498,27 @@ class SessionMemory:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _duration_min(self) -> int:
-        return int((datetime.now() - self.started_at).total_seconds() / 60)
+    def _duration_min(self, *, end_at: Optional[datetime] = None) -> int:
+        effective_end = end_at or self._latest_observed_at or datetime.now()
+        delta_seconds = (effective_end - self.started_at).total_seconds()
+        return max(int(delta_seconds / 60), 0)
+
+    def _observe_timestamp(self, observed_at: datetime, *, bootstrap_if_empty: bool) -> None:
+        if bootstrap_if_empty and not self._has_observed_activity:
+            self.started_at = observed_at
+            self._latest_observed_at = observed_at
+            self._has_observed_activity = True
+            return
+        if observed_at < self.started_at:
+            self.started_at = observed_at
+        if self._latest_observed_at is None or observed_at > self._latest_observed_at:
+            self._latest_observed_at = observed_at
+        if bootstrap_if_empty:
+            self._has_observed_activity = True
+
+    def _effective_updated_at(self, observed_at: Optional[datetime] = None) -> datetime:
+        if observed_at is not None and (
+            self._latest_observed_at is None or observed_at > self._latest_observed_at
+        ):
+            return observed_at
+        return self._latest_observed_at or observed_at or self.started_at

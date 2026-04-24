@@ -68,12 +68,18 @@ class SignalScorer:
         """
         return None
 
-    def compute(self, *, session_started_at: Optional[datetime] = None) -> Signals:
+    def compute(
+        self,
+        *,
+        session_started_at: Optional[datetime] = None,
+        observed_now: Optional[datetime] = None,
+        project_hint: Optional[str] = None,
+    ) -> Signals:
         # Les fenêtres de calcul montent jusqu'à 30 min. En session active,
         # une coupe fixe à 100 tronque artificiellement ce signal bien avant
         # la saturation du bus.
         recent = self.bus.recent(DEFAULT_EVENT_BUS_SIZE)
-        now = datetime.now()
+        now = observed_now or datetime.now()
         effective_session_start = session_started_at or now
 
         file_events = [
@@ -108,9 +114,19 @@ class SignalScorer:
         clipboard_context = self._last_clipboard_context(clipboard_events, now)
         mcp_signal = self._latest_mcp_signal(recent, now)
         terminal_signal = self._latest_terminal_signal(recent, now)
+        latest_active_app = self._latest_active_app(app_events, now, minutes=5)
+        has_recent_local_exploration = self._has_recent_local_exploration(recent, now)
 
         if not active_project:
             active_project = (terminal_signal or {}).get("terminal_project")
+        if not active_project and project_hint:
+            if self._should_keep_project_hint(
+                latest_active_app=latest_active_app,
+                has_recent_local_exploration=has_recent_local_exploration,
+                mcp_signal=mcp_signal,
+                terminal_signal=terminal_signal,
+            ):
+                active_project = project_hint
 
         # Seuls les events attribués à l'utilisateur (ou non attribués) alimentent
         # les comptages de scoring. Les events system/tool_assisted sont exclus pour
@@ -134,8 +150,6 @@ class SignalScorer:
             dominant_file_mode=dominant_file_mode,
             friction_score=friction_score,
         )
-        latest_active_app = self._latest_active_app(app_events, now, minutes=5)
-        has_recent_local_exploration = self._has_recent_local_exploration(recent, now)
         probable_task, task_confidence = self._detect_task(
             active_project=active_project,
             recent_apps=recent_apps,
@@ -194,20 +208,25 @@ class SignalScorer:
         }
 
     def _last_file_path(self, file_events: list) -> Optional[str]:
-        for event in reversed(file_events):
-            path = event.payload.get("path")
-            if path and event.type != "file_deleted":
-                return path
-        return None
+        event = self._latest_event(
+            file_events,
+            predicate=lambda item: bool(item.payload.get("path")) and item.type != "file_deleted",
+        )
+        if event is None:
+            return None
+        return event.payload.get("path")
 
     def _last_file_path_for_workspace(self, file_events: list, workspace_root: str) -> Optional[str]:
-        for event in reversed(file_events):
-            path = event.payload.get("path")
-            if not path or event.type == "file_deleted":
-                continue
-            if self._workspace_root(path) == workspace_root:
-                return path
-        return None
+        event = self._latest_event(
+            file_events,
+            predicate=lambda item: self._file_event_matches_workspace(
+                item,
+                workspace_root,
+            ),
+        )
+        if event is None:
+            return None
+        return event.payload.get("path")
 
     def _dominant_workspace_root(self, file_events: list) -> Optional[str]:
         """
@@ -219,7 +238,7 @@ class SignalScorer:
         latest_rank: dict[str, int] = {}
         recent_workspace_roots: list[str] = []
 
-        for event in reversed(file_events):
+        for event in self._sort_events_by_timestamp(file_events, reverse=True):
             path = event.payload.get("path")
             if not path:
                 continue
@@ -245,22 +264,20 @@ class SignalScorer:
 
     def _recent_apps(self, app_events: list, now: datetime) -> List[str]:
         window_start = now - timedelta(minutes=30)
-        # On veut que apps[-1] soit la DERNIÈRE app réellement activée dans la fenêtre,
-        # pas la première fois qu'elle a été vue. Un dict ordonné permet de déplacer
-        # chaque app à la fin à chaque nouvelle occurrence via pop + réinsertion.
-        # Xcode → Chrome → Xcode donne [Chrome, Xcode], pas [Xcode, Chrome].
-        ordered: dict = {}
-
-        for event in app_events:
+        last_seen: dict[str, tuple[datetime, int]] = {}
+        for index, event in enumerate(app_events):
             if event.timestamp < window_start:
                 continue
             app_name = event.payload.get("app_name")
             if not app_name:
                 continue
-            ordered.pop(app_name, None)  # supprime l'occurrence précédente si présente
-            ordered[app_name] = None     # réinsère à la fin
+            seen = last_seen.get(app_name)
+            candidate = (event.timestamp, index)
+            if seen is None or candidate > seen:
+                last_seen[app_name] = candidate
 
-        return list(ordered)[-10:]
+        ordered = sorted(last_seen.items(), key=lambda item: item[1])
+        return [app_name for app_name, _ in ordered][-10:]
 
     def _latest_active_app(self, app_events: list, now: datetime, minutes: int) -> Optional[str]:
         """
@@ -269,13 +286,32 @@ class SignalScorer:
         soit vraiment l'app courante, pas juste la derniere vue sur 30 min.
         """
         cutoff = now - timedelta(minutes=minutes)
-        for event in reversed(app_events):
-            if event.timestamp < cutoff:
-                break
-            name = event.payload.get("app_name")
-            if name:
-                return name
-        return None
+        event = self._latest_event(
+            app_events,
+            predicate=lambda item: bool(item.payload.get("app_name")),
+            cutoff=cutoff,
+        )
+        if event is None:
+            return None
+        return event.payload.get("app_name")
+
+    def _should_keep_project_hint(
+        self,
+        *,
+        latest_active_app: Optional[str],
+        has_recent_local_exploration: bool,
+        mcp_signal: Optional[dict],
+        terminal_signal: Optional[dict],
+    ) -> bool:
+        if latest_active_app in (self.DEV_APPS | self.BROWSER_APPS | self.WRITING_APPS):
+            return True
+        if has_recent_local_exploration:
+            return True
+        if self._is_usable_mcp_signal(mcp_signal):
+            return True
+        if self._is_usable_terminal_signal(terminal_signal):
+            return True
+        return False
 
     def _last_clipboard_context(self, clipboard_events: list, now: datetime) -> Optional[str]:
         # Le clipboard n'est un signal actif que s'il est récent.
@@ -283,13 +319,16 @@ class SignalScorer:
         # Fenêtre de 5 min : un copier-coller pertinent est généralement utilisé
         # dans la minute qui suit, pas un quart d'heure plus tard.
         recent_window = now - timedelta(minutes=5)
-        for event in reversed(clipboard_events):
-            if event.timestamp < recent_window:
-                break
-            kind = event.payload.get("content_kind") or event.payload.get("content_type")
-            if kind:
-                return kind
-        return None
+        event = self._latest_event(
+            clipboard_events,
+            predicate=lambda item: bool(
+                item.payload.get("content_kind") or item.payload.get("content_type")
+            ),
+            cutoff=recent_window,
+        )
+        if event is None:
+            return None
+        return event.payload.get("content_kind") or event.payload.get("content_type")
 
     def _has_recent_local_exploration(self, recent: list, now: datetime) -> bool:
         recent_window = now - timedelta(minutes=5)
@@ -645,7 +684,11 @@ class SignalScorer:
         recent_file_edits = [
             event for event in file_events if event.timestamp >= now - timedelta(minutes=10)
         ]
-        has_recent_idle_signal = any(event.type in {"screen_locked", "user_idle"} for event in recent[-5:])
+        recent_by_timestamp = self._sort_events_by_timestamp(recent)
+        has_recent_idle_signal = any(
+            event.type in {"screen_locked", "user_idle"}
+            for event in recent_by_timestamp[-5:]
+        )
 
         if has_recent_idle_signal:
             if self._has_meaningful_recent_file_activity(recent_file_edits):
@@ -677,15 +720,17 @@ class SignalScorer:
 
     def _latest_mcp_signal(self, recent: list, now: datetime, minutes: int = 10) -> Optional[dict]:
         cutoff = now - timedelta(minutes=minutes)
-        for event in reversed(recent):
-            if event.timestamp < cutoff:
-                break
-            if event.type not in {"mcp_command_received", "mcp_decision"}:
-                continue
-            payload = event.payload or {}
-            if payload.get("mcp_action_category"):
-                return payload
-        return None
+        event = self._latest_event(
+            recent,
+            predicate=lambda item: (
+                item.type in {"mcp_command_received", "mcp_decision"}
+                and bool((item.payload or {}).get("mcp_action_category"))
+            ),
+            cutoff=cutoff,
+        )
+        if event is None:
+            return None
+        return event.payload or {}
 
     def _is_usable_mcp_signal(self, mcp_signal: Optional[dict]) -> bool:
         if not mcp_signal:
@@ -694,15 +739,17 @@ class SignalScorer:
 
     def _latest_terminal_signal(self, recent: list, now: datetime, minutes: int = 10) -> Optional[dict]:
         cutoff = now - timedelta(minutes=minutes)
-        for event in reversed(recent):
-            if event.timestamp < cutoff:
-                break
-            if event.type not in {"terminal_command_started", "terminal_command_finished"}:
-                continue
-            payload = event.payload or {}
-            if payload.get("terminal_action_category"):
-                return payload
-        return None
+        event = self._latest_event(
+            recent,
+            predicate=lambda item: (
+                item.type in {"terminal_command_started", "terminal_command_finished"}
+                and bool((item.payload or {}).get("terminal_action_category"))
+            ),
+            cutoff=cutoff,
+        )
+        if event is None:
+            return None
+        return event.payload or {}
 
     def _is_usable_terminal_signal(self, terminal_signal: Optional[dict]) -> bool:
         if not terminal_signal:
@@ -728,3 +775,37 @@ class SignalScorer:
 
     def _is_pulse_internal_path(self, path: str) -> bool:
         return is_pulse_internal_path(path)
+
+    def _sort_events_by_timestamp(self, events: list, *, reverse: bool = False) -> list:
+        indexed = list(enumerate(events))
+        indexed.sort(
+            key=lambda item: (item[1].timestamp, item[0]),
+            reverse=reverse,
+        )
+        return [event for _, event in indexed]
+
+    def _latest_event(
+        self,
+        events: list,
+        *,
+        predicate=None,
+        cutoff: Optional[datetime] = None,
+    ):
+        best_event = None
+        best_key: tuple[datetime, int] | None = None
+        for index, event in enumerate(events):
+            if cutoff is not None and event.timestamp < cutoff:
+                continue
+            if predicate is not None and not predicate(event):
+                continue
+            candidate = (event.timestamp, index)
+            if best_key is None or candidate > best_key:
+                best_event = event
+                best_key = candidate
+        return best_event
+
+    def _file_event_matches_workspace(self, event, workspace_root: str) -> bool:
+        path = event.payload.get("path")
+        if not path or event.type == "file_deleted":
+            return False
+        return self._workspace_root(path) == workspace_root

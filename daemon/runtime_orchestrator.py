@@ -12,6 +12,7 @@ from daemon.memory.extractor import (
     get_fact_engine,
     last_session_context,
     load_memory_context,
+    render_project_memory,
     read_commit_message,
     read_head_sha,
     reset_cooldown_for_tests,
@@ -74,8 +75,16 @@ class RuntimeOrchestrator:
         self._frozen_memory_at: datetime | None = None
         self._runtime_lock = threading.Lock()
         self._debounce_lock = threading.Lock()
-        self._file_debounce_timer: threading.Timer | None = None
         self._pending_file_events = []
+        self._file_flush_deadline: float | None = None
+        self._file_flush_condition = threading.Condition(self._debounce_lock)
+        self._file_flush_stopped = False
+        self._file_flush_worker = threading.Thread(
+            target=self._file_flush_loop,
+            daemon=True,
+            name="pulse-file-burst",
+        )
+        self._file_flush_worker.start()
         self._last_head_sha: dict[str, str] = {}
         self._head_sha_lock = threading.Lock()
         self._commit_watch_lock = threading.Lock()
@@ -112,12 +121,22 @@ class RuntimeOrchestrator:
 
     def freeze_memory(self) -> None:
         captured_at = datetime.now()
-        structured = self.memory_store.render(captured_at=captured_at)
-        if not structured:
-            self.log.warning("freeze_memory: mémoire structurée vide — fallback vers legacy context")
+        project_memory = ""
+        try:
+            project_memory = render_project_memory()
+        except Exception as exc:
+            self.log.warning("freeze_memory: render mémoire projet échoué : %s", exc)
+
+        support_memory = ""
+        try:
+            support_memory = self.memory_store.render(captured_at=captured_at) or ""
+        except Exception as exc:
+            self.log.warning("freeze_memory: render support technique échoué : %s", exc)
+
+        legacy = ""
+        if not project_memory and not support_memory:
+            self.log.warning("freeze_memory: mémoire projet absente — fallback vers legacy context")
             legacy = load_memory_context()
-        else:
-            legacy = ""
 
         # Profil utilisateur issu des faits consolidés (facts.db)
         facts_profile = ""
@@ -126,7 +145,11 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("freeze_memory: facts render échoué : %s", exc)
 
-        blocks = [b for b in [structured or legacy, facts_profile] if b.strip()]
+        blocks = [
+            block
+            for block in [project_memory, facts_profile, support_memory, legacy]
+            if block.strip()
+        ]
         frozen = "\n\n".join(blocks)
 
         with self._runtime_lock:
@@ -138,6 +161,12 @@ class RuntimeOrchestrator:
             captured_at.strftime("%H:%M:%S"),
             f" — {len(facts_profile)} car. de profil utilisateur" if facts_profile else "",
         )
+
+    def _export_memory_payload(self) -> dict:
+        payload = self.session_memory.export_memory_payload()
+        if isinstance(payload, dict):
+            return payload
+        return self.session_memory.export_session_data()
 
     def handle_event(self, event) -> None:
         if self._should_ignore_event(event):
@@ -186,20 +215,24 @@ class RuntimeOrchestrator:
                 sleep_min = transition.sleep_minutes or 0.0
                 if transition.should_start_new_session:
                     self._refresh_runtime_signals_for_closure(drain_pending=True)
+                    session_ended_at = episode_locked_at or event.timestamp
                     self._persist_episode_transition(
                         self._episode_fsm.close_current(
-                            ended_at=episode_locked_at or event.timestamp,
+                            ended_at=session_ended_at,
                             boundary_reason="screen_lock",
                         )
                     )
                     self.log.info("Longue veille (%.0f min) → nouvelle session", sleep_min)
                     try:
-                        snapshot = self.session_memory.export_session_data()
+                        snapshot = self._export_memory_payload()
                         if snapshot.get("duration_min", 0) > 0:
                             update_memories_from_session(snapshot, llm=self.summary_llm)
                     except Exception as exc:
                         self.log.warning("sync mémoire pré-reset échouée : %s", exc)
-                    self.session_memory.new_session()
+                    self.session_memory.new_session(
+                        started_at=self._session_fsm.session_started_at,
+                        ended_at=session_ended_at,
+                    )
                     self._persist_episode_transition(
                         self._episode_fsm.ensure_active(
                             session_id=self._current_session_id(),
@@ -238,6 +271,9 @@ class RuntimeOrchestrator:
 
     def shutdown_runtime(self) -> None:
         try:
+            with self._file_flush_condition:
+                self._file_flush_stopped = True
+                self._file_flush_condition.notify_all()
             self._refresh_runtime_signals_for_closure(drain_pending=True)
             self._persist_episode_transition(
                 self._episode_fsm.close_current(
@@ -245,7 +281,7 @@ class RuntimeOrchestrator:
                     boundary_reason="session_end",
                 )
             )
-            snapshot = self.session_memory.export_session_data()
+            snapshot = self._export_memory_payload()
             if snapshot.get("duration_min", 0) > 0:
                 update_memories_from_session(snapshot)
             self.session_memory.close()
@@ -447,7 +483,7 @@ class RuntimeOrchestrator:
         except Exception:
             pass
 
-        snapshot = self.session_memory.export_session_data()
+        snapshot = self._export_memory_payload()
         threading.Thread(
             target=self._sync_memory_background,
             args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),
@@ -455,23 +491,33 @@ class RuntimeOrchestrator:
         ).start()
 
     def _enqueue_file_event(self, event) -> None:
-        with self._debounce_lock:
+        with self._file_flush_condition:
             self._pending_file_events.append(event)
-            if self._file_debounce_timer is not None:
-                self._file_debounce_timer.cancel()
-            timer = threading.Timer(self.file_debounce_sec, self._flush_file_events)
-            timer.daemon = True
-            self._file_debounce_timer = timer
-            timer.start()
+            self._file_flush_deadline = time.monotonic() + self.file_debounce_sec
+            self._file_flush_condition.notify_all()
+
+    def _file_flush_loop(self) -> None:
+        while True:
+            with self._file_flush_condition:
+                while not self._file_flush_stopped and not self._pending_file_events:
+                    self._file_flush_condition.wait()
+                if self._file_flush_stopped:
+                    return
+                deadline = self._file_flush_deadline
+                if deadline is None:
+                    self._file_flush_condition.wait()
+                    continue
+                wait_sec = max(deadline - time.monotonic(), 0.0)
+                if wait_sec > 0:
+                    self._file_flush_condition.wait(timeout=wait_sec)
+                    continue
+            self._flush_file_events()
 
     def _flush_file_events(self) -> None:
         with self._debounce_lock:
             events = self._pending_file_events[:]
             self._pending_file_events = []
-            timer = self._file_debounce_timer
-            self._file_debounce_timer = None
-        if timer is not None:
-            timer.cancel()
+            self._file_flush_deadline = None
         self._process_file_burst(events)
 
     def _process_signals(self, trigger_event) -> None:
@@ -479,9 +525,16 @@ class RuntimeOrchestrator:
             self._session_fsm.on_user_idle()
 
         previous_activity = self._session_fsm.last_meaningful_activity_at
+        previous_present = self.runtime_state.get_runtime_snapshot().present
         recent_events = self.scorer.bus.recent(DEFAULT_EVENT_BUS_SIZE)
+        observed_now = self._observed_now(
+            trigger_event=trigger_event,
+            recent_events=recent_events,
+            previous_present=previous_present,
+        )
         lifecycle_transition = self._session_fsm.observe_recent_events(
             recent_events=recent_events,
+            now=observed_now,
         )
 
         if lifecycle_transition.boundary_detected:
@@ -492,7 +545,7 @@ class RuntimeOrchestrator:
                 lifecycle_transition.should_start_new_session,
             )
             try:
-                snapshot = self.session_memory.export_session_data()
+                snapshot = self._export_memory_payload()
                 if snapshot.get("duration_min", 0) >= 5:
                     threading.Thread(
                         target=self._sync_memory_background,
@@ -503,6 +556,7 @@ class RuntimeOrchestrator:
                 self.log.warning("session boundary flush échouée : %s", exc)
             if lifecycle_transition.should_start_new_session:
                 self._refresh_runtime_signals_for_closure(drain_pending=True)
+                session_ended_at = previous_activity
                 if lifecycle_transition.boundary_reason == "idle":
                     self._persist_episode_transition(
                         self._episode_fsm.on_idle_timeout(
@@ -516,23 +570,36 @@ class RuntimeOrchestrator:
                         recent_events=recent_events,
                         since=previous_activity,
                     )
+                    session_ended_at = locked_at or previous_activity or datetime.now()
                     self._persist_episode_transition(
                         self._episode_fsm.close_current(
-                            ended_at=locked_at or previous_activity or datetime.now(),
+                            ended_at=session_ended_at,
                             boundary_reason="screen_lock",
                         )
                     )
-                self.session_memory.new_session()
+                self.session_memory.new_session(
+                    started_at=self._session_fsm.session_started_at,
+                    ended_at=session_ended_at,
+                )
+
+        project_hint = None
+        if (
+            not lifecycle_transition.should_start_new_session
+            and lifecycle_transition.state != SessionFSM.LOCKED
+        ):
+            project_hint = previous_present.active_project
 
         signals = self.scorer.compute(
             session_started_at=self._session_fsm.session_started_at,
+            observed_now=observed_now,
+            project_hint=project_hint,
         )
         present = self.runtime_state.update_present(
             signals=signals,
             session_status=lifecycle_transition.state,
             awake=lifecycle_transition.state != SessionFSM.LOCKED,
             locked=lifecycle_transition.state == SessionFSM.LOCKED,
-            updated_at=trigger_event.timestamp,
+            updated_at=observed_now,
         )
         previous_decision = self.runtime_state.get_runtime_snapshot().decision
         decision = self.decision_engine.evaluate(present, trigger_event=trigger_event)
@@ -543,12 +610,29 @@ class RuntimeOrchestrator:
             previous_decision=previous_decision,
             trigger_event=trigger_event,
         )
-        self._persist_episode_transition(
-            self._episode_fsm.ensure_active(
-                session_id=self._current_session_id(),
-                started_at=self._session_fsm.last_meaningful_activity_at,
-            )
+        episode_transition = self._episode_fsm.ensure_active(
+            session_id=self._current_session_id(),
+            started_at=self._session_fsm.last_meaningful_activity_at,
         )
+        semantic_transition = self._episode_fsm.on_semantic_signal(
+            session_id=self._current_session_id(),
+            when=observed_now,
+            active_project=present.active_project,
+            probable_task=present.probable_task,
+            task_confidence=getattr(signals, "task_confidence", 0.0),
+        )
+        if (
+            semantic_transition.boundary_detected
+            or semantic_transition.closed_episode is not None
+            or semantic_transition.opened_episode is not None
+        ):
+            episode_transition = semantic_transition
+        episode_transition = self._bind_live_semantics_to_active_episode(
+            episode_transition,
+            present=present,
+            signals=signals,
+        )
+        self._persist_episode_transition(episode_transition)
         self.session_memory.update_present_snapshot(
             present,
             signals=signals,
@@ -560,7 +644,7 @@ class RuntimeOrchestrator:
             decision=decision,
         )
         if should_sync:
-            snapshot = self.session_memory.export_session_data()
+            snapshot = self._export_memory_payload()
             llm = self._summary_llm_for(trigger_event.type, present)
             trigger_map = {
                 "screen_locked": "screen_lock",
@@ -816,10 +900,16 @@ class RuntimeOrchestrator:
 
     def reset_for_tests(self) -> None:
         with self._debounce_lock:
-            if self._file_debounce_timer is not None:
-                self._file_debounce_timer.cancel()
-            self._file_debounce_timer = None
             self._pending_file_events = []
+            self._file_flush_deadline = None
+            self._file_flush_stopped = False
+        if self._file_flush_worker is None or not self._file_flush_worker.is_alive():
+            self._file_flush_worker = threading.Thread(
+                target=self._file_flush_loop,
+                daemon=True,
+                name="pulse-file-burst",
+            )
+            self._file_flush_worker.start()
         with self._commit_watch_lock:
             self._pending_commit_watch = set()
         with self._head_sha_lock:
@@ -843,6 +933,36 @@ class RuntimeOrchestrator:
             )
         if transition.opened_episode is not None:
             self.session_memory.save_episode(transition.opened_episode)
+        elif transition.current_episode is not None:
+            self.session_memory.save_episode(transition.current_episode)
+
+    def _bind_live_semantics_to_active_episode(self, transition, *, present, signals):
+        if transition is None:
+            return transition
+        if (
+            self._episode_fsm.semantic_boundary_pending
+            and transition.opened_episode is None
+            and transition.closed_episode is None
+        ):
+            return None
+        updated = self._episode_fsm.sync_current_semantics(
+            active_project=present.active_project,
+            probable_task=present.probable_task,
+            activity_level=present.activity_level,
+            task_confidence=getattr(signals, "task_confidence", 0.0),
+        )
+        if updated is None:
+            if transition.opened_episode is None and transition.closed_episode is None:
+                return None
+            return transition
+        opened_episode = transition.opened_episode
+        if opened_episode is not None and opened_episode.id == updated.id:
+            opened_episode = updated
+        return replace(
+            transition,
+            opened_episode=opened_episode,
+            current_episode=updated,
+        )
 
     def _freeze_closed_episode_semantics(self, episode):
         snapshot = self.runtime_state.get_runtime_snapshot()
@@ -850,17 +970,28 @@ class RuntimeOrchestrator:
         signals = snapshot.signals
         if episode is None:
             return episode
-        if signals is None:
+        active_project = episode.active_project or present.active_project
+        if episode.probable_task is not None:
+            probable_task = episode.probable_task
+        elif signals is None:
             probable_task = "unknown"
-            activity_level = "idle"
         else:
             probable_task = present.probable_task or "unknown"
+        if episode.activity_level is not None:
+            activity_level = episode.activity_level
+        elif signals is None:
+            activity_level = "idle"
+        else:
             activity_level = present.activity_level or "idle"
-        task_confidence = getattr(signals, "task_confidence", None)
-        if task_confidence is None:
-            task_confidence = 0.0
+        if episode.task_confidence is not None:
+            task_confidence = episode.task_confidence
+        else:
+            task_confidence = getattr(signals, "task_confidence", None)
+            if task_confidence is None:
+                task_confidence = 0.0
         return replace(
             episode,
+            active_project=active_project,
             probable_task=probable_task,
             activity_level=activity_level,
             task_confidence=task_confidence,
@@ -869,8 +1000,14 @@ class RuntimeOrchestrator:
     def _refresh_runtime_signals_for_closure(self, *, drain_pending: bool) -> None:
         if drain_pending:
             self._drain_pending_file_events()
+        snapshot = self.runtime_state.get_runtime_snapshot()
         signals = self.scorer.compute(
             session_started_at=self._session_fsm.session_started_at,
+            observed_now=(
+                snapshot.present.updated_at
+                or self._session_fsm.last_meaningful_activity_at
+            ),
+            project_hint=snapshot.present.active_project,
         )
         if signals is None or not hasattr(signals, "session_duration_min"):
             return
@@ -885,6 +1022,14 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("refresh signaux pré-fermeture échoué : %s", exc)
             return
+        semantic_update = self._episode_fsm.sync_current_semantics(
+            active_project=present.active_project,
+            probable_task=present.probable_task,
+            activity_level=present.activity_level,
+            task_confidence=getattr(signals, "task_confidence", 0.0),
+        )
+        if semantic_update is not None:
+            self.session_memory.save_episode(semantic_update)
         self.session_memory.update_present_snapshot(
             present,
             signals=signals,
@@ -907,21 +1052,43 @@ class RuntimeOrchestrator:
         with self._debounce_lock:
             events = self._pending_file_events[:]
             self._pending_file_events = []
-            timer = self._file_debounce_timer
-            self._file_debounce_timer = None
-        if timer is not None:
-            timer.cancel()
+            self._file_flush_deadline = None
         self._process_file_burst(events)
 
     def _process_file_burst(self, events) -> None:
         if not events:
             return
         self.log.debug("file burst flush n=%d", len(events))
-        trigger = next(
-            (e for e in reversed(events) if e.type != "file_deleted"),
-            events[-1],
+        trigger = self._latest_event_by_timestamp(
+            events,
+            predicate=lambda event: event.type != "file_deleted",
         )
+        if trigger is None:
+            trigger = self._latest_event_by_timestamp(events) or events[-1]
         self._process_signals(trigger)
+
+    @staticmethod
+    def _latest_event_by_timestamp(events, predicate=None):
+        best_event = None
+        best_key = None
+        for index, event in enumerate(events):
+            if predicate is not None and not predicate(event):
+                continue
+            candidate = (event.timestamp, index)
+            if best_key is None or candidate > best_key:
+                best_event = event
+                best_key = candidate
+        return best_event
+
+    @classmethod
+    def _observed_now(cls, *, trigger_event, recent_events, previous_present):
+        candidates = [trigger_event.timestamp]
+        latest_recent = cls._latest_event_by_timestamp(recent_events)
+        if latest_recent is not None:
+            candidates.append(latest_recent.timestamp)
+        if previous_present.updated_at is not None:
+            candidates.append(previous_present.updated_at)
+        return max(candidates)
 
     def _current_session_id(self) -> str | None:
         session_id = getattr(self.session_memory, "session_id", None)
@@ -933,7 +1100,10 @@ class RuntimeOrchestrator:
     def _latest_screen_lock_after(recent_events, since):
         if since is None:
             return None
-        for event in reversed(recent_events):
-            if event.type == "screen_locked" and event.timestamp > since:
-                return event.timestamp
-        return None
+        lock_at = None
+        for event in recent_events:
+            if event.type != "screen_locked" or event.timestamp <= since:
+                continue
+            if lock_at is None or event.timestamp > lock_at:
+                lock_at = event.timestamp
+        return lock_at

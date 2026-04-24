@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from daemon.core.context_formatter import format_file_activity_summary
+from daemon.core.contracts import Episode
 from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
 from daemon.core.proposals import proposal_store
@@ -364,46 +365,62 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertEqual(summary, "13 fichier(s) touché(s) sur 10 min")
 
-    def test_freeze_memory_uses_structured_memory_first(self):
+    def test_freeze_memory_uses_project_memory_before_support_layers(self):
         self.memory_store.render.return_value = "Structured memory"
 
-        self.orchestrator.freeze_memory()
+        with patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse"):
+            self.orchestrator.freeze_memory()
 
-        self.assertEqual(self.orchestrator.get_frozen_memory(), "Structured memory")
+        self.assertEqual(self.orchestrator.get_frozen_memory(), "# Projets\n\n## Pulse\n\nStructured memory")
         self.assertIsInstance(self.orchestrator.get_frozen_memory_at(), datetime)
 
     def test_freeze_memory_mis_a_jour_apres_sync(self):
         """freeze_memory() reflète toujours le contenu le plus récent."""
         self.memory_store.render.return_value = "Avant sync"
-        self.orchestrator.freeze_memory()
-        self.assertEqual(self.orchestrator.get_frozen_memory(), "Avant sync")
+        with patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse"):
+            self.orchestrator.freeze_memory()
+        self.assertEqual(self.orchestrator.get_frozen_memory(), "# Projets\n\n## Pulse\n\nAvant sync")
 
         # Simule une mise à jour de la mémoire après une sync
         self.memory_store.render.return_value = "Après sync"
-        self.orchestrator.freeze_memory()
+        with patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse"):
+            self.orchestrator.freeze_memory()
 
-        self.assertEqual(self.orchestrator.get_frozen_memory(), "Après sync")
+        self.assertEqual(self.orchestrator.get_frozen_memory(), "# Projets\n\n## Pulse\n\nAprès sync")
         self.assertIsInstance(self.orchestrator.get_frozen_memory_at(), datetime)
 
-    def test_freeze_memory_inclut_facts_profile_si_disponible(self):
-        """Le profil utilisateur du FactEngine est concaténé à la mémoire structurée."""
+    def test_freeze_memory_inclut_memoire_comportementale_apres_memoire_projet(self):
+        """Le profil utilisateur vient après la mémoire projet et avant le support technique."""
         self.memory_store.render.return_value = "Structured memory"
         self.mock_fact_engine.render_for_context.return_value = "── Profil utilisateur ──\n• [workflow] Coding le soir"
 
-        self.orchestrator.freeze_memory()
+        with patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse"):
+            self.orchestrator.freeze_memory()
 
         frozen = self.orchestrator.get_frozen_memory()
-        self.assertIn("Structured memory", frozen)
-        self.assertIn("Profil utilisateur", frozen)
+        self.assertEqual(
+            frozen,
+            "# Projets\n\n## Pulse\n\n── Profil utilisateur ──\n• [workflow] Coding le soir\n\nStructured memory",
+        )
 
-    def test_freeze_memory_fonctionne_sans_memory_store(self):
-        """Si memory_store.render() retourne vide, legacy load_memory_context est utilisé."""
+    def test_freeze_memory_fallback_legacy_si_projet_et_support_absents(self):
+        """Le fallback legacy ne s'active que si mémoire projet et support sont absents."""
         self.memory_store.render.return_value = ""
 
-        with patch("daemon.runtime_orchestrator.load_memory_context", return_value="Legacy memory"):
+        with patch("daemon.runtime_orchestrator.render_project_memory", return_value=""), \
+             patch("daemon.runtime_orchestrator.load_memory_context", return_value="Legacy memory"):
             self.orchestrator.freeze_memory()
 
         self.assertEqual(self.orchestrator.get_frozen_memory(), "Legacy memory")
+
+    def test_freeze_memory_ignore_legacy_si_memoire_projet_disponible(self):
+        self.memory_store.render.return_value = ""
+
+        with patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse"), \
+             patch("daemon.runtime_orchestrator.load_memory_context", return_value="Legacy memory"):
+            self.orchestrator.freeze_memory()
+
+        self.assertEqual(self.orchestrator.get_frozen_memory(), "# Projets\n\n## Pulse")
 
     def test_deferred_startup_loads_models_purges_memory_and_warms_provider(self):
         provider = MagicMock()
@@ -461,9 +478,221 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(saved.id, "ep-1")
         self.assertEqual(saved.session_id, "session-1")
         self.assertEqual(saved.started_at, event.timestamp.isoformat())
-        self.assertIsNone(saved.probable_task)
-        self.assertIsNone(saved.activity_level)
-        self.assertIsNone(saved.task_confidence)
+        self.assertEqual(saved.active_project, "Pulse")
+        self.assertEqual(saved.probable_task, "coding")
+        self.assertEqual(saved.activity_level, "editing")
+        self.assertEqual(saved.task_confidence, 0.83)
+        self.assertEqual(self.orchestrator.current_episode, saved)
+
+    def test_process_signals_updates_active_episode_semantics_from_present(self):
+        started_at = datetime(2026, 4, 23, 17, 0, 0)
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=started_at,
+            )
+        event = Event("app_activated", {"app_name": "Cursor"}, timestamp=started_at + timedelta(minutes=3))
+        self.scorer.bus.recent.return_value = [event]
+        self.scorer.compute.return_value = self._signals(
+            probable_task="debug",
+            activity_level="executing",
+            session_duration_min=8,
+            task_confidence=0.82,
+        )
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+
+        self.session_memory.save_episode.reset_mock()
+        self.orchestrator._process_signals(event)
+
+        saved = self.session_memory.save_episode.call_args[0][0]
+        present = self.runtime_state.get_runtime_snapshot().present
+        self.assertEqual(saved.id, "ep-1")
+        self.assertEqual(saved.active_project, present.active_project)
+        self.assertEqual(saved.probable_task, present.probable_task)
+        self.assertEqual(saved.activity_level, present.activity_level)
+        self.assertEqual(saved.task_confidence, 0.82)
+
+    def test_process_signals_stable_task_change_opens_new_episode(self):
+        start = datetime.now()
+        first = Event("file_modified", {"path": "/tmp/main.py"}, timestamp=start)
+        second = Event("app_activated", {"app_name": "Terminal"}, timestamp=start + timedelta(minutes=2))
+        third = Event("app_activated", {"app_name": "Terminal"}, timestamp=start + timedelta(minutes=3))
+
+        self.scorer.bus.recent.return_value = [first]
+        self.scorer.compute.return_value = self._signals(
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.91,
+        )
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._process_signals(first)
+            self.session_memory.save_episode.reset_mock()
+
+            self.scorer.bus.recent.return_value = [first, second]
+            self.scorer.compute.return_value = self._signals(
+                probable_task="debug",
+                activity_level="executing",
+                task_confidence=0.89,
+                active_file="/tmp/main.py",
+            )
+            self.orchestrator._process_signals(second)
+            self.session_memory.save_episode.assert_not_called()
+            self.assertEqual(self.orchestrator.current_episode.id, "ep-1")
+            self.assertEqual(self.orchestrator.current_episode.probable_task, "coding")
+
+            self.scorer.bus.recent.return_value = [first, second, third]
+            self.scorer.compute.return_value = self._signals(
+                probable_task="debug",
+                activity_level="executing",
+                task_confidence=0.89,
+                active_file="/tmp/main.py",
+            )
+            self.orchestrator._process_signals(third)
+
+        self.assertEqual(self.session_memory.save_episode.call_count, 2)
+        saved_episodes = [call[0][0] for call in self.session_memory.save_episode.call_args_list]
+        closed = next(episode for episode in saved_episodes if episode.boundary_reason == "task_change")
+        opened = next(episode for episode in saved_episodes if episode.ended_at is None and episode.id != closed.id)
+        self.assertEqual(closed.probable_task, "coding")
+        self.assertEqual(opened.probable_task, "debug")
+        self.assertEqual(opened.activity_level, "executing")
+
+    def test_process_signals_stable_project_change_opens_new_episode(self):
+        start = datetime.now()
+        first = Event("file_modified", {"path": "/tmp/pulse/main.py"}, timestamp=start)
+        second = Event("browser_active", {"app_name": "Chrome"}, timestamp=start + timedelta(minutes=2))
+        third = Event("browser_active", {"app_name": "Chrome"}, timestamp=start + timedelta(minutes=3))
+
+        self.scorer.bus.recent.return_value = [first]
+        self.scorer.compute.return_value = self._signals(
+            active_project="Pulse",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.91,
+        )
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._process_signals(first)
+            self.session_memory.save_episode.reset_mock()
+
+            self.scorer.bus.recent.return_value = [first, second]
+            self.scorer.compute.return_value = self._signals(
+                active_project="Client",
+                probable_task="coding",
+                activity_level="reading",
+                task_confidence=0.91,
+                active_file="/tmp/client/main.py",
+                recent_apps=["Chrome"],
+            )
+            self.orchestrator._process_signals(second)
+            self.session_memory.save_episode.assert_not_called()
+
+            self.scorer.bus.recent.return_value = [first, second, third]
+            self.scorer.compute.return_value = self._signals(
+                active_project="Client",
+                probable_task="coding",
+                activity_level="reading",
+                task_confidence=0.91,
+                active_file="/tmp/client/main.py",
+                recent_apps=["Chrome"],
+            )
+            self.orchestrator._process_signals(third)
+
+        saved_episodes = [call[0][0] for call in self.session_memory.save_episode.call_args_list]
+        closed = next(episode for episode in saved_episodes if episode.boundary_reason == "project_change")
+        opened = next(episode for episode in saved_episodes if episode.ended_at is None and episode.id != closed.id)
+        self.assertEqual(closed.active_project, "Pulse")
+        self.assertEqual(opened.active_project, "Client")
+        self.assertEqual(opened.probable_task, "coding")
+
+    def test_process_signals_mode_oscillation_does_not_split_episode(self):
+        start = datetime.now()
+        first = Event("file_modified", {"path": "/tmp/main.py"}, timestamp=start)
+        second = Event("browser_active", {"app_name": "Chrome"}, timestamp=start + timedelta(minutes=1))
+
+        self.scorer.bus.recent.return_value = [first]
+        self.scorer.compute.return_value = self._signals(
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.91,
+        )
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.orchestrator._process_signals(first)
+
+        self.session_memory.save_episode.reset_mock()
+        self.scorer.bus.recent.return_value = [first, second]
+        self.scorer.compute.return_value = self._signals(
+            probable_task="coding",
+            activity_level="reading",
+            task_confidence=0.91,
+            recent_apps=["Chrome"],
+        )
+        self.orchestrator._process_signals(second)
+
+        self.assertEqual(self.session_memory.save_episode.call_count, 1)
+        saved = self.session_memory.save_episode.call_args[0][0]
+        self.assertIsNone(saved.boundary_reason)
+        self.assertEqual(saved.id, "ep-1")
+        self.assertEqual(saved.probable_task, "coding")
+        self.assertEqual(saved.activity_level, "reading")
+
+    def test_process_signals_navigation_dans_le_meme_bloc_ne_split_pas(self):
+        start = datetime.now()
+        first = Event("file_modified", {"path": "/tmp/main.py"}, timestamp=start)
+        second = Event("browser_active", {"app_name": "Chrome"}, timestamp=start + timedelta(minutes=1))
+
+        self.scorer.bus.recent.return_value = [first]
+        self.scorer.compute.return_value = self._signals(
+            active_project="Pulse",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.91,
+        )
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        with patch("daemon.core.episode_fsm.new_uid", return_value="ep-1"):
+            self.orchestrator._process_signals(first)
+
+        self.session_memory.save_episode.reset_mock()
+        self.scorer.bus.recent.return_value = [first, second]
+        self.scorer.compute.return_value = self._signals(
+            active_project="Pulse",
+            probable_task="coding",
+            activity_level="navigating",
+            task_confidence=0.91,
+            recent_apps=["Chrome"],
+        )
+        self.orchestrator._process_signals(second)
+
+        saved = self.session_memory.save_episode.call_args[0][0]
+        self.assertIsNone(saved.boundary_reason)
+        self.assertEqual(saved.id, "ep-1")
+        self.assertEqual(saved.active_project, "Pulse")
+        self.assertEqual(saved.probable_task, "coding")
+        self.assertEqual(saved.activity_level, "navigating")
+
+    def test_process_signals_ne_fait_pas_regresser_observed_now_si_event_ancien_arrive_en_retard(self):
+        newer = Event("app_activated", {"app_name": "Chrome"})
+        newer.timestamp = datetime(2026, 4, 23, 18, 10, 0)
+        older = Event("app_activated", {"app_name": "Cursor"})
+        older.timestamp = datetime(2026, 4, 23, 18, 5, 0)
+
+        self.scorer.bus.recent.return_value = [newer, older]
+        self.scorer.compute.return_value = self._signals(session_duration_min=10)
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+
+        with patch.object(self.runtime_state, "update_present", wraps=self.runtime_state.update_present) as update_present:
+            self.orchestrator._process_signals(older)
+
+        self.assertEqual(
+            self.scorer.compute.call_args.kwargs["observed_now"],
+            newer.timestamp,
+        )
+        self.assertEqual(
+            update_present.call_args.kwargs["updated_at"],
+            newer.timestamp,
+        )
 
     def test_process_confirmed_commit_closes_and_reopens_episode(self):
         git_root = Path("/tmp/Pulse")
@@ -501,11 +730,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
              patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="diff"):
             self.orchestrator._process_confirmed_commit(git_root)
 
-        self.assertEqual(self.session_memory.save_episode.call_count, 2)
-        closed = self.session_memory.save_episode.call_args_list[0][0][0]
-        opened = self.session_memory.save_episode.call_args_list[1][0][0]
+        self.assertEqual(self.session_memory.save_episode.call_count, 3)
+        saved_episodes = [call[0][0] for call in self.session_memory.save_episode.call_args_list]
+        closed = next(episode for episode in saved_episodes if episode.boundary_reason == "commit")
+        opened = next(
+            episode
+            for episode in saved_episodes
+            if episode.ended_at is None and episode.id != closed.id
+        )
         self.assertEqual(closed.boundary_reason, "commit")
         self.assertIsNotNone(closed.ended_at)
+        self.assertEqual(closed.active_project, "Pulse")
         self.assertEqual(closed.probable_task, "coding")
         self.assertEqual(closed.activity_level, "editing")
         self.assertEqual(closed.task_confidence, 0.87)
@@ -588,7 +823,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.orchestrator._process_signals(resumed_event)
 
-        closed = self.session_memory.save_episode.call_args_list[0][0][0]
+        closed = next(
+            episode
+            for episode in (call[0][0] for call in self.session_memory.save_episode.call_args_list)
+            if episode.boundary_reason == "idle_timeout"
+        )
         self.assertEqual(closed.boundary_reason, "idle_timeout")
         self.assertEqual(closed.probable_task, "coding")
         self.assertEqual(closed.activity_level, "editing")
@@ -623,7 +862,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
              patch.object(self.orchestrator, "_process_signals"):
             self.orchestrator.handle_event(unlock_event)
 
-        closed = self.session_memory.save_episode.call_args_list[0][0][0]
+        closed = next(
+            episode
+            for episode in (call[0][0] for call in self.session_memory.save_episode.call_args_list)
+            if episode.boundary_reason == "screen_lock"
+        )
         self.assertEqual(closed.boundary_reason, "screen_lock")
         self.assertEqual(closed.probable_task, "coding")
         self.assertEqual(closed.activity_level, "editing")
@@ -647,6 +890,48 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(closed.probable_task, "unknown")
         self.assertEqual(closed.activity_level, "idle")
         self.assertEqual(closed.task_confidence, 0.0)
+
+    def test_freeze_closed_episode_preserves_existing_semantics(self):
+        self.runtime_state.update_present(
+            signals=self._signals(
+                active_project="Other",
+                probable_task="writing",
+                activity_level="reading",
+                task_confidence=0.25,
+            ),
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(
+            signals=self._signals(
+                active_project="Other",
+                probable_task="writing",
+                activity_level="reading",
+                task_confidence=0.25,
+            ),
+            decision=Decision(action="silent", level=0, reason="ok", payload={}),
+        )
+
+        frozen = self.orchestrator._freeze_closed_episode_semantics(
+            Episode(
+                id="ep-1",
+                session_id="session-1",
+                started_at="2026-04-23T16:00:00",
+                ended_at="2026-04-23T16:20:00",
+                boundary_reason="commit",
+                duration_sec=1200,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.91,
+            )
+        )
+
+        self.assertEqual(frozen.active_project, "Pulse")
+        self.assertEqual(frozen.probable_task, "coding")
+        self.assertEqual(frozen.activity_level, "editing")
+        self.assertEqual(frozen.task_confidence, 0.91)
 
     def test_handle_commit_event_processes_recent_head_immediately_on_first_seen_commit(self):
         git_root = Path("/tmp/Pulse")
@@ -1258,6 +1543,32 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertEqual(captured_triggers[0].type, "file_renamed")
         self.assertEqual(captured_triggers[0].payload["path"], "/tmp/c.py")
+
+    def test_i2_burst_hors_ordre_choisit_le_plus_recent_par_timestamp(self):
+        from datetime import datetime, timedelta
+        from daemon.core.event_bus import Event
+        from unittest.mock import patch
+
+        base = datetime.now()
+        latest = Event("file_modified", {"path": "/tmp/new.py"})
+        latest.timestamp = base
+        older = Event("file_modified", {"path": "/tmp/old.py"})
+        older.timestamp = base - timedelta(minutes=2)
+
+        events = [latest, older]
+        captured_triggers = []
+
+        def fake_process_signals(trigger_event):
+            captured_triggers.append(trigger_event)
+
+        with self.orchestrator._debounce_lock:
+            self.orchestrator._pending_file_events = events[:]
+
+        with patch.object(self.orchestrator, "_process_signals", side_effect=fake_process_signals):
+            self.orchestrator._flush_file_events()
+
+        self.assertEqual(len(captured_triggers), 1)
+        self.assertEqual(captured_triggers[0].payload["path"], "/tmp/new.py")
 
 
     # -- Verrou court : session_duration_min ne doit pas inclure le temps de veille ---

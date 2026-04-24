@@ -191,6 +191,9 @@ class RuntimeState:
         cleanup_ttl: timedelta = timedelta(seconds=5),
         dedupe_window: timedelta = timedelta(seconds=1),
     ) -> bool:
+        # Dédoublonnage purement technique, calé sur le temps local de réception.
+        # Il ne porte aucune sémantique métier : le timestamp source reste
+        # persistant dans l'event lui-même pour le scoring et la mémoire.
         current = now or datetime.now()
         with self._lock:
             last_seen = self._recent_file_events.get(dedupe_key)

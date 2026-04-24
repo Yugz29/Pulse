@@ -3,6 +3,8 @@ import SwiftUI
 struct CurrentStateView: View {
     @ObservedObject var vm: PulseViewModel
     private let proposalLimit = 4
+    private var currentPresent: PresentData? { vm.currentPresent }
+    private var currentEpisode: EpisodeData? { vm.currentEpisode }
     private var currentSignals: SignalsData? { vm.currentSignals }
 
     private var visibleProposals: [ProposalRecord] {
@@ -11,7 +13,7 @@ struct CurrentStateView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if currentSignals == nil && visibleProposals.isEmpty {
+            if currentPresent == nil && currentEpisode == nil && visibleProposals.isEmpty {
                 HStack {
                     Spacer()
                     Text("Aucune lecture courante ni proposition récente")
@@ -30,14 +32,18 @@ struct CurrentStateView: View {
                         currentContextRow
                             .padding(.horizontal, 18)
 
-                        if let currentSignals {
+                        if currentEpisode != nil || currentPresent != nil {
                             Divider().background(Color.white.opacity(0.05))
 
-                            sectionHeader("Lecture courante")
+                            sectionHeader("Bloc courant")
                                 .padding(.horizontal, 18)
                                 .padding(.top, 8)
 
-                            currentInterpretationRow(currentSignals)
+                            currentInterpretationRow(
+                                episode: currentEpisode,
+                                present: currentPresent,
+                                signals: currentSignals
+                            )
                                 .padding(.horizontal, 18)
                         }
 
@@ -201,41 +207,55 @@ struct CurrentStateView: View {
         .padding(.vertical, 8)
     }
 
-    private func currentInterpretationRow(_ signals: SignalsData) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+    private func currentInterpretationRow(
+        episode: EpisodeData?,
+        present: PresentData?,
+        signals: SignalsData?
+    ) -> some View {
+        let accent = episode?.taskAccentHex ?? present?.taskAccentHex ?? "#7c7c80"
+        let taskTitle = currentTaskTitle(episode: episode, present: present)
+
+        return HStack(alignment: .top, spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: signals.taskAccentHex).opacity(0.18))
+                    .fill(Color(hex: accent).opacity(0.18))
                     .frame(width: 24, height: 24)
                 Image(systemName: "waveform.path.ecg")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color(hex: signals.taskAccentHex))
+                    .foregroundColor(Color(hex: accent))
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(signals.taskLabel)
+                    Text(taskTitle)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.78))
                         .lineLimit(1)
 
                     Spacer(minLength: 8)
 
-                    Text(signals.taskEvidenceLabel)
+                    Text(episode != nil ? "Épisode" : "Live")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(Color(hex: signals.taskAccentHex))
+                        .foregroundColor(Color(hex: accent))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Color(hex: signals.taskAccentHex).opacity(0.10))
+                        .background(Color(hex: accent).opacity(0.10))
                         .clipShape(Capsule())
                 }
 
-                Text(signals.taskEvidenceSummary)
+                Text(currentTaskSummary(episode: episode, present: present))
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.52))
                     .lineLimit(3)
 
-                if let fileActivity = signals.fileActivitySummary {
+                if let signals {
+                    Text(signals.taskEvidenceSummary)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.36))
+                        .lineLimit(3)
+                }
+
+                if let fileActivity = signals?.fileActivitySummary {
                     Text("Activité fichiers : \(fileActivity)")
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.36))
@@ -244,5 +264,27 @@ struct CurrentStateView: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    private func currentTaskTitle(episode: EpisodeData?, present: PresentData?) -> String {
+        if let episode, episode.taskLabel != "—" {
+            return episode.taskLabel
+        }
+        if let present {
+            return present.taskLabel == "Général" ? "Contexte faible" : present.taskLabel
+        }
+        return "Contexte faible"
+    }
+
+    private func currentTaskSummary(episode: EpisodeData?, present: PresentData?) -> String {
+        let project = episode?.activeProject ?? present?.activeProject ?? "—"
+        let activity = present?.activityLabel ?? episode?.activityLabel ?? "—"
+        if let episode {
+            return "Bloc courant sur \(project) · \(episode.taskLabel) · \(activity)"
+        }
+        if let present {
+            return "Lecture live sur \(project) · \(present.taskLabel) · \(activity)"
+        }
+        return "Pas encore assez de contexte local."
     }
 }

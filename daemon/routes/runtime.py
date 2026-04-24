@@ -55,9 +55,9 @@ class _PendingFileEvent:
     path: str
     event_type: str
     payload: dict[str, Any]
+    timestamp: datetime | None
     started_at: float
-    token: int
-    timer: Any
+    due_at: float
 
 
 class _FileEventCoalescer:
@@ -69,60 +69,82 @@ class _FileEventCoalescer:
     - meme type (modify + modify) : pas de fusion, les events restent distincts
     - types heterogenes : l'event de priorite la plus forte gagne
       (renamed > created > modified)
+
+    Important : cette fenetre est volontairement basee sur le temps local
+    d'ingestion daemon (monotonic), pas sur le timestamp source. Le but est
+    purement technique : absorber un burst HTTP/FSEvents local sans laisser
+    l'ordre ou l'age source reconfigurer la logique de transport.
     """
 
     def __init__(
         self,
         *,
-        publisher: Callable[[str, dict[str, Any]], None],
+        publisher: Callable[[str, dict[str, Any], datetime | None], None],
         window_sec: float = _FILE_EVENT_COHERENCE_WINDOW_SEC,
-        timer_factory: Callable[..., Any] | None = None,
         time_fn: Callable[[], float] | None = None,
+        start_worker: bool = True,
     ) -> None:
         self._publisher = publisher
         self._window_sec = window_sec
-        self._timer_factory = timer_factory or threading.Timer
         self._time_fn = time_fn or time.monotonic
         self._lock = threading.Lock()
+        self._condition = threading.Condition(self._lock)
         self._pending_by_path: dict[str, _PendingFileEvent] = {}
-        self._next_token = 0
+        self._stopped = False
+        self._worker: threading.Thread | None = None
+        if start_worker:
+            self._worker = threading.Thread(
+                target=self._run_loop,
+                daemon=True,
+                name="pulse-file-coalescer",
+            )
+            self._worker.start()
 
-    def publish(self, event_type: str, payload: dict[str, Any]) -> None:
+    def publish(
+        self,
+        event_type: str,
+        payload: dict[str, Any],
+        timestamp: datetime | None = None,
+    ) -> None:
         path = payload.get("path")
         if not self._is_coalescible(event_type, path):
-            self._publisher(event_type, payload)
+            self._publisher(event_type, payload, timestamp)
             return
 
-        emit_now: tuple[str, dict[str, Any]] | None = None
+        emit_now: tuple[str, dict[str, Any], datetime | None] | None = None
         now = self._time_fn()
 
-        with self._lock:
+        with self._condition:
             pending = self._pending_by_path.get(path)
             if pending is None:
                 self._pending_by_path[path] = self._new_pending(
                     path=path,
                     event_type=event_type,
                     payload=dict(payload),
+                    timestamp=timestamp,
                     started_at=now,
                 )
+                self._condition.notify_all()
                 return
 
             expired = (now - pending.started_at) > self._window_sec
             same_type = pending.event_type == event_type
 
             if expired or same_type:
-                pending.timer.cancel()
-                emit_now = (pending.event_type, pending.payload)
+                emit_now = (pending.event_type, pending.payload, pending.timestamp)
                 self._pending_by_path[path] = self._new_pending(
                     path=path,
                     event_type=event_type,
                     payload=dict(payload),
+                    timestamp=timestamp,
                     started_at=now,
                 )
             else:
                 if self._priority(event_type) > self._priority(pending.event_type):
                     pending.event_type = event_type
                     pending.payload = dict(payload)
+                    pending.timestamp = timestamp
+            self._condition.notify_all()
 
         if emit_now is not None:
             self._publisher(*emit_now)
@@ -133,38 +155,54 @@ class _FileEventCoalescer:
         path: str,
         event_type: str,
         payload: dict[str, Any],
+        timestamp: datetime | None,
         started_at: float,
     ) -> _PendingFileEvent:
-        token = self._next_token
-        self._next_token += 1
-        timer = self._timer_factory(
-            self._window_sec,
-            self._flush_pending,
-            args=(path, token),
-        )
-        timer.daemon = True
-        pending = _PendingFileEvent(
+        return _PendingFileEvent(
             path=path,
             event_type=event_type,
             payload=payload,
+            timestamp=timestamp,
             started_at=started_at,
-            token=token,
-            timer=timer,
+            due_at=started_at + self._window_sec,
         )
-        timer.start()
-        return pending
 
-    def _flush_pending(self, path: str, token: int) -> None:
-        emit: tuple[str, dict[str, Any]] | None = None
-        with self._lock:
-            pending = self._pending_by_path.get(path)
-            if pending is None or pending.token != token:
-                return
-            emit = (pending.event_type, pending.payload)
-            self._pending_by_path.pop(path, None)
+    def _flush_due(self) -> list[tuple[str, dict[str, Any], datetime | None]]:
+        now = self._time_fn()
+        due_paths = [
+            path
+            for path, pending in self._pending_by_path.items()
+            if pending.due_at <= now
+        ]
+        emits: list[tuple[str, dict[str, Any], datetime | None]] = []
+        for path in due_paths:
+            pending = self._pending_by_path.pop(path, None)
+            if pending is None:
+                continue
+            emits.append((pending.event_type, pending.payload, pending.timestamp))
+        return emits
 
-        if emit is not None:
-            self._publisher(*emit)
+    def _run_loop(self) -> None:
+        while True:
+            with self._condition:
+                while not self._stopped and not self._pending_by_path:
+                    self._condition.wait()
+                if self._stopped:
+                    return
+                next_due = min(pending.due_at for pending in self._pending_by_path.values())
+                wait_sec = max(next_due - self._time_fn(), 0.0)
+                if wait_sec > 0:
+                    self._condition.wait(timeout=wait_sec)
+                    continue
+                emits = self._flush_due()
+
+            for emit in emits:
+                self._publisher(*emit)
+
+    def close(self) -> None:
+        with self._condition:
+            self._stopped = True
+            self._condition.notify_all()
 
     def _is_coalescible(self, event_type: str, path: Any) -> bool:
         return bool(path) and event_type in _COALESCIBLE_FILE_EVENT_TYPES
@@ -187,12 +225,18 @@ def register_runtime_routes(
     shutdown_runtime: Callable[[], None],
     log: Any,
 ) -> None:
+    def _publish_to_bus(
+        event_type: str,
+        payload: dict[str, Any],
+        timestamp: datetime | None = None,
+    ) -> None:
+        if timestamp is None:
+            bus.publish(event_type, payload)
+        else:
+            bus.publish(event_type, payload, timestamp)
+
     file_event_coalescer = _FileEventCoalescer(
-        publisher=lambda event_type, payload: threading.Thread(
-            target=bus.publish,
-            args=(event_type, payload),
-            daemon=True,
-        ).start()
+        publisher=_publish_to_bus,
     )
 
     @app.route("/ping")
@@ -204,7 +248,12 @@ def register_runtime_routes(
     def receive_event():
         data = request.get_json() or {}
         event_type = data.get("type", "unknown")
-        payload = {key: value for key, value in data.items() if key != "type"}
+        observed_at = _parse_event_timestamp(data.get("timestamp"))
+        payload = {
+            key: value
+            for key, value in data.items()
+            if key not in {"type", "timestamp"}
+        }
         if runtime_state.is_paused():
             return jsonify({"ok": True, "paused": True, "ignored": True})
 
@@ -240,7 +289,7 @@ def register_runtime_routes(
         # Répond immédiatement — Swift ne doit jamais attendre le pipeline SQLite.
         # Les bursts heterogenes create/modify/rename sont coalesces ici,
         # juste avant l'injection dans l'EventBus.
-        file_event_coalescer.publish(event_type, payload)
+        file_event_coalescer.publish(event_type, payload, observed_at)
         return jsonify({"ok": True})
 
     @app.route("/state")
@@ -276,25 +325,6 @@ def register_runtime_routes(
             },
         }
 
-        if runtime_snapshot.signals:
-            current_context = _current_context_builder.build(
-                present=present,
-                active_app=state.get("active_app"),
-                signals=runtime_snapshot.signals,
-                find_git_root_fn=find_git_root,
-                find_workspace_root_fn=find_workspace_root,
-            )
-            legacy_signals = current_context_to_legacy_signals_payload(
-                current_context,
-                signals=runtime_snapshot.signals,
-                last_session_line=(
-                    last_session_context(current_context.active_project)
-                    if current_context.active_project
-                    else None
-                ),
-            )
-            state["signals"] = legacy_signals
-            debug["signals"] = legacy_signals
         if runtime_snapshot.decision:
             decision_payload = {
                 "action": runtime_snapshot.decision.action,
@@ -324,12 +354,35 @@ def register_runtime_routes(
                     "ended_at": episode.ended_at,
                     "boundary_reason": episode.boundary_reason,
                     "duration_sec": episode.duration_sec,
+                    "active_project": episode.active_project,
                     "probable_task": episode.probable_task,
                     "activity_level": episode.activity_level,
                     "task_confidence": episode.task_confidence,
                 }
                 state["current_episode"] = episode_payload
                 debug["current_episode"] = episode_payload
+        if runtime_snapshot.signals:
+            current_context = _current_context_builder.build(
+                present=present,
+                active_app=state.get("active_app"),
+                signals=runtime_snapshot.signals,
+                find_git_root_fn=find_git_root,
+                find_workspace_root_fn=find_workspace_root,
+            )
+            legacy_signals = current_context_to_legacy_signals_payload(
+                current_context,
+                signals=runtime_snapshot.signals,
+                last_session_line=(
+                    last_session_context(current_context.active_project)
+                    if current_context.active_project
+                    else None
+                ),
+            )
+            # Compat / debug : la lecture produit doit passer d'abord par
+            # current_episode puis present. Les signaux restent exposés
+            # pour instrumentation et explication locale.
+            state["signals"] = legacy_signals
+            debug["signals"] = legacy_signals
         if get_recent_episodes is not None:
             episodes = get_recent_episodes(8)
             if episodes:
@@ -485,6 +538,18 @@ def _normalize_terminal_event_payload(event_type: str, payload: dict[str, Any]) 
         }
     )
     return normalized
+
+
+def _parse_event_timestamp(raw: Any) -> datetime | None:
+    if raw is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone().replace(tzinfo=None)
+    return parsed
 
 
 def _terminal_action_category(command: str, interpretation) -> str:

@@ -79,6 +79,27 @@ class SessionSnapshot:
 
 
 @dataclass(frozen=True)
+class ConsolidatedEpisode:
+    """
+    Brique minimale de consolidation mémoire pour un épisode clos.
+
+    Elle reste passive : aucune logique de calcul, seulement les champs
+    nécessaires pour alimenter la mémoire rétrospective.
+    """
+
+    episode_id: str
+    session_id: str
+    active_project: Optional[str]
+    probable_task: Optional[str]
+    activity_level: Optional[str]
+    task_confidence: Optional[float]
+    started_at: str
+    ended_at: str
+    duration_sec: Optional[int]
+    boundary_reason: Optional[str]
+
+
+@dataclass(frozen=True)
 class Episode:
     """
     Projection déterministe d'un épisode.
@@ -93,6 +114,7 @@ class Episode:
     ended_at: Optional[str] = None
     boundary_reason: Optional[str] = None
     duration_sec: Optional[int] = None
+    active_project: Optional[str] = None
     probable_task: Optional[str] = None
     activity_level: Optional[str] = None
     task_confidence: Optional[float] = None

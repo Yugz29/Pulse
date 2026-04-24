@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from daemon.core.event_bus import EventBus, Event
 
 
@@ -66,6 +67,14 @@ class TestEventBus(unittest.TestCase):
         event = self.bus.recent(1)[0]
         self.assertEqual(event.payload["path"], "/Users/yugz/test.py")
         self.assertEqual(event.payload["size"], 1024)
+
+    def test_publish_conserve_le_timestamp_source_quand_il_est_fourni(self):
+        source_ts = datetime(2026, 4, 23, 14, 30, 0)
+
+        self.bus.publish("file_change", {"path": "/test.py"}, timestamp=source_ts)
+
+        event = self.bus.recent(1)[0]
+        self.assertEqual(event.timestamp, source_ts)
 
 
 if __name__ == "__main__":

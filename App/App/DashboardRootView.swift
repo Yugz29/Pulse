@@ -235,8 +235,8 @@ struct DashboardRootView: View {
 
     private var episodeCurrentCard: some View {
         let episode = vm.state?.currentEpisode
+        let present = vm.state?.present
         let liveSignals = vm.state?.signals
-        let weakLiveTask = isWeakLiveTask(liveSignals)
 
         return GlassCard(accent: episode?.boundaryColor ?? gBlue) {
             VStack(alignment: .leading, spacing: 12) {
@@ -258,31 +258,49 @@ struct DashboardRootView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
-                            Image(systemName: "dot.radiowaves.left.and.right")
+                            Image(systemName: "shippingbox")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
-                            Text("Contexte actuel (live)")
+                            Text("Bloc courant")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
 
+                        signalRow("Projet", episode.activeProject ?? present?.activeProject ?? "—")
+                        signalRow("Session", episode.sessionId)
+                        signalRow("Statut", episode.isActive ? "Actif" : "Clos")
+                        signalRow("Tâche", episode.taskLabel)
+                        signalRow("Activité", episode.activityLabel)
+                        signalRow("Confiance", dashboardPercent(episode.taskConfidence))
+                        signalRow("Frontière", episode.boundaryLabel)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text("Tête live")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        signalRow("Tâche live", liveTaskTitle(present))
+                        signalRow("Activité live", present?.activityLabel ?? "—")
+                        signalRow("Focus", focusLabel(present?.focusLevel))
+                        signalRow("Mise à jour", dashboardRelativeTimestamp(present?.updatedAt))
+
                         if let liveSignals {
-                            evidenceBadge(liveSignals.taskEvidenceLabel, weak: weakLiveTask)
+                            Divider()
+                            evidenceBadge(liveSignals.taskEvidenceLabel, weak: isWeakLiveTask(liveSignals))
                             Text(liveSignals.taskEvidenceSummary)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-
-                    Divider()
-
-                    signalRow("Session", episode.sessionId)
-                    signalRow("Statut", episode.isActive ? "Actif" : "Clos")
-                    signalRow("Tâche", liveTaskTitle(liveSignals))
-                    signalRow("Activité", liveSignals?.activityLabel ?? "—")
-                    signalRow("Confiance", dashboardPercent(liveSignals?.taskConfidence))
-                    signalRow("Frontière", episode.boundaryLabel)
                 } else {
                     emptyState("Aucun épisode actif")
                 }
@@ -341,17 +359,20 @@ struct DashboardRootView: View {
     }
 
     private var taskCard: some View {
+        let episode = vm.state?.currentEpisode
+        let present = vm.state?.present
         let signals = vm.state?.signals
-        let confidence = signals?.taskConfidence ?? 0
-        let weakTask = isWeakLiveTask(signals)
+        let confidence = episode?.taskConfidence ?? signals?.taskConfidence ?? 0
+        let weakTask = isWeakProductTask(episode, present)
+        let accent = episode?.taskAccentHex ?? present?.taskAccentHex ?? gGray
 
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Tâche", icon: "target")
+                cardTitle("Bloc de travail", icon: "target")
 
-                Text(liveTaskTitle(signals))
+                Text(productTaskTitle(episode, present))
                     .font(.system(size: weakTask ? 18 : 22, weight: weakTask ? .semibold : .bold, design: .rounded))
-                    .foregroundStyle(weakTask ? .secondary : Color(hex: signals?.taskAccentHex ?? gGray))
+                    .foregroundStyle(weakTask ? .secondary : Color(hex: accent))
 
                 if let signals {
                     VStack(alignment: .leading, spacing: 6) {
@@ -367,19 +388,19 @@ struct DashboardRootView: View {
                     HStack {
                         metaLabel("Confiance")
                         Spacer()
-                        Text(dashboardPercent(signals?.taskConfidence))
+                        Text(dashboardPercent(episode?.taskConfidence ?? signals?.taskConfidence))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
                     ProgressView(value: confidence)
-                        .tint(Color(hex: signals?.taskAccentHex ?? gGray))
+                        .tint(Color(hex: accent))
                 }
 
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                    Text(signals?.activityLabel ?? "—")
+                    Text((present?.activityLabel ?? episode?.activityLabel) ?? "—")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -394,7 +415,7 @@ struct DashboardRootView: View {
 
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Signaux", icon: "waveform")
+                cardTitle("Signaux support", icon: "waveform")
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -431,10 +452,16 @@ struct DashboardRootView: View {
                 cardTitle("Contexte actif", icon: "scope")
                 HStack(spacing: 16) {
                     contextItem("App", state?.activeApp ?? "—")
-                    contextItem("Projet", state?.signals?.activeProject ?? "—")
+                    contextItem(
+                        "Projet",
+                        state?.currentEpisode?.activeProject
+                            ?? state?.present?.activeProject
+                            ?? state?.activeProject
+                            ?? "—"
+                    )
                     contextItem(
                         "Fichier",
-                        (state?.activeFile).map { URL(fileURLWithPath: $0).lastPathComponent } ?? "—",
+                        (state?.present?.activeFile ?? state?.activeFile).map { URL(fileURLWithPath: $0).lastPathComponent } ?? "—",
                         monospace: true
                     )
                 }
@@ -822,9 +849,26 @@ struct DashboardRootView: View {
             )
     }
 
-    private func liveTaskTitle(_ signals: SignalsData?) -> String {
-        guard let signals else { return "Contexte faible" }
-        return signals.taskLabel == "Général" ? "Contexte faible" : signals.taskLabel
+    private func productTaskTitle(_ episode: EpisodeData?, _ present: PresentData?) -> String {
+        if let episode, episode.taskLabel != "Général", episode.taskLabel != "—" {
+            return episode.taskLabel
+        }
+        return liveTaskTitle(present)
+    }
+
+    private func liveTaskTitle(_ present: PresentData?) -> String {
+        guard let present else { return "Contexte faible" }
+        return present.taskLabel == "Général" ? "Contexte faible" : present.taskLabel
+    }
+
+    private func isWeakProductTask(_ episode: EpisodeData?, _ present: PresentData?) -> Bool {
+        if let episode {
+            if episode.taskLabel == "Général" || episode.taskLabel == "—" { return true }
+            return (episode.taskConfidence ?? 0) < 0.45
+        }
+        guard let present else { return true }
+        if present.taskLabel == "Général" { return true }
+        return false
     }
 
     private func isWeakLiveTask(_ signals: SignalsData?) -> Bool {

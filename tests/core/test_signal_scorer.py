@@ -36,6 +36,17 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m["source"], 1)
         self.assertEqual(signals.dominant_file_mode, "single_file")
 
+    def test_compute_peut_utiliser_un_now_observe_pour_la_duree_de_session(self):
+        observed_now = datetime(2026, 4, 23, 15, 0, 0)
+        session_started_at = observed_now - timedelta(minutes=7)
+
+        signals = self.scorer.compute(
+            session_started_at=session_started_at,
+            observed_now=observed_now,
+        )
+
+        self.assertEqual(signals.session_duration_min, 7)
+
     def test_detecte_debug_si_stacktrace(self):
         self._push("app_activated", {"app_name": "Terminal"})
         self._push("clipboard_updated", {"content_kind": "stacktrace"})
@@ -290,6 +301,87 @@ class TestSignalScorer(unittest.TestCase):
 
             self.assertEqual(signals.active_project, "repo-b")
             self.assertEqual(signals.active_file, str(b2))
+
+    def test_project_hint_stabilise_le_projet_pendant_une_phase_browser_utile(self):
+        self._push("app_activated", {"app_name": "Chrome"})
+
+        signals = self.scorer.compute(project_hint="Pulse")
+
+        self.assertEqual(signals.active_project, "Pulse")
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.activity_level, "navigating")
+
+    def test_project_hint_necree_pas_de_projet_sans_signal_de_continuite(self):
+        signals = self.scorer.compute(project_hint="Pulse")
+
+        self.assertIsNone(signals.active_project)
+
+    def test_active_file_choisit_le_plus_recent_par_timestamp_meme_hors_ordre(self):
+        now = datetime(2026, 4, 23, 18, 0, 0)
+        newer = Event(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/new.py"},
+            timestamp=now,
+        )
+        older = Event(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/old.py"},
+            timestamp=now - timedelta(minutes=2),
+        )
+        self.bus._queue.append(newer)
+        self.bus._queue.append(older)
+
+        signals = self.scorer.compute(observed_now=now)
+
+        self.assertEqual(
+            signals.active_file,
+            "/Users/yugz/Projets/Pulse/Pulse/daemon/new.py",
+        )
+
+    def test_recent_apps_reflète_le_plus_recent_par_timestamp_meme_hors_ordre(self):
+        now = datetime(2026, 4, 23, 18, 0, 0)
+        newer = Event(
+            "app_activated",
+            {"app_name": "Chrome"},
+            timestamp=now,
+        )
+        older = Event(
+            "app_activated",
+            {"app_name": "Xcode"},
+            timestamp=now - timedelta(minutes=2),
+        )
+        self.bus._queue.append(newer)
+        self.bus._queue.append(older)
+
+        signals = self.scorer.compute(observed_now=now)
+
+        self.assertEqual(signals.recent_apps[-1], "Chrome")
+
+    def test_terminal_signal_choisit_le_plus_recent_par_timestamp_meme_hors_ordre(self):
+        now = datetime(2026, 4, 23, 18, 0, 0)
+        newer = Event(
+            "terminal_command_finished",
+            {
+                "terminal_action_category": "testing",
+                "terminal_project": "Pulse",
+            },
+            timestamp=now,
+        )
+        older = Event(
+            "terminal_command_finished",
+            {
+                "terminal_action_category": "inspection",
+                "terminal_project": "Other",
+            },
+            timestamp=now - timedelta(minutes=3),
+        )
+        self.bus._queue.append(newer)
+        self.bus._queue.append(older)
+
+        signals = self.scorer.compute(observed_now=now)
+
+        self.assertEqual(signals.terminal_action_category, "testing")
+        self.assertEqual(signals.terminal_project, "Pulse")
 
     def test_file_deleted_ne_devient_pas_le_fichier_actif(self):
         self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})

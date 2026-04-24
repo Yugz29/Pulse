@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import threading
 from collections import deque
 from dataclasses import dataclass, field
@@ -28,9 +30,18 @@ class EventBus:
         # Lock = verrou pour éviter les conflits entre threads
         self._lock = threading.Lock()
 
-    def publish(self, event_type: str, payload: dict):
+    def publish(
+        self,
+        event_type: str,
+        payload: dict,
+        timestamp: datetime | None = None,
+    ):
         """Publie un event et notifie tous les abonnés."""
-        event = Event(type=event_type, payload=payload)
+        event = Event(
+            type=event_type,
+            payload=payload,
+            timestamp=timestamp or datetime.now(),
+        )
 
         with self._lock:
             self._queue.append(event)

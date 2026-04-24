@@ -90,17 +90,33 @@ extension PulseViewModel {
 
 private extension PulseViewModel {
     func applyState(_ state: StateResponse) {
-        activeProject = state.activeProject
-        activeApp = state.activeApp
-        sessionDuration = max(state.signals?.sessionDurationMin ?? 0, 0)
-        activeFile = state.activeFile
+        currentPresent = state.present
+        currentEpisode = state.currentEpisode
         currentSignals = state.signals
-        if let sig = state.signals {
-            probableTask = sig.probableTask ?? "general"
-            focusLevel = sig.focusLevel ?? "normal"
-            frictionScore = sig.frictionScore ?? 0.0
-            recentApps = sig.recentApps ?? []
-        }
+
+        let productProject = state.currentEpisode?.activeProject
+            ?? state.present?.activeProject
+            ?? state.activeProject
+        let productTask = state.currentEpisode?.probableTask
+            ?? state.present?.probableTask
+            ?? "general"
+        let liveFocus = state.present?.focusLevel
+            ?? state.signals?.focusLevel
+            ?? "normal"
+        let liveFriction = state.present?.frictionScore
+            ?? state.signals?.frictionScore
+            ?? 0.0
+        let liveDuration = state.present?.sessionDurationMin ?? state.sessionDurationMin
+        let liveFile = state.present?.activeFile ?? state.activeFile
+
+        activeProject = productProject
+        activeApp = state.activeApp
+        sessionDuration = max(liveDuration, 0)
+        activeFile = liveFile
+        probableTask = productTask
+        focusLevel = liveFocus
+        frictionScore = liveFriction
+        recentApps = state.signals?.recentApps ?? []
     }
 
     func shouldRefreshModels(force: Bool = false) -> Bool {

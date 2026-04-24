@@ -327,6 +327,7 @@ class TestRuntimeRoutes(unittest.TestCase):
                 id="ep-1",
                 session_id="session-1",
                 started_at="2026-04-22T10:00:00",
+                active_project="Pulse",
                 probable_task="coding",
                 activity_level="editing",
                 task_confidence=0.81,
@@ -339,6 +340,7 @@ class TestRuntimeRoutes(unittest.TestCase):
                     "ended_at": None,
                     "boundary_reason": None,
                     "duration_sec": None,
+                    "active_project": "Pulse",
                     "probable_task": "coding",
                     "activity_level": "editing",
                     "task_confidence": 0.81,
@@ -357,9 +359,83 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["current_episode"]["id"], "ep-1")
+        self.assertEqual(payload["current_episode"]["active_project"], "Pulse")
         self.assertEqual(payload["current_episode"]["probable_task"], "coding")
         self.assertEqual(payload["recent_episodes"][0]["id"], "ep-1")
+        self.assertEqual(payload["recent_episodes"][0]["active_project"], "Pulse")
         self.assertEqual(payload["recent_episodes"][0]["activity_level"], "editing")
+
+    def test_state_keeps_product_hierarchy_with_present_episode_and_signals(self):
+        signals = Signals(
+            active_project="SignalsProject",
+            active_file="/tmp/signals.py",
+            probable_task="general",
+            activity_level="reading",
+            task_confidence=0.22,
+            friction_score=0.61,
+            focus_level="scattered",
+            session_duration_min=12,
+            recent_apps=["Chrome"],
+            clipboard_context="text",
+        )
+        self.runtime_state.update_present(
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/live.py",
+                probable_task="debug",
+                activity_level="executing",
+                task_confidence=0.88,
+                friction_score=0.18,
+                focus_level="deep",
+                session_duration_min=33,
+                recent_apps=["Terminal"],
+                clipboard_context="code",
+            ),
+            session_status="active",
+            awake=True,
+            locked=False,
+            updated_at=datetime(2026, 4, 23, 12, 0, 0),
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_current_episode=lambda: Episode(
+                id="ep-1",
+                session_id="session-1",
+                started_at="2026-04-23T11:50:00",
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.86,
+            ),
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+        self.store.to_dict.return_value = {"active_app": "Terminal"}
+
+        with patch("daemon.routes.runtime.last_session_context", return_value=None):
+            response = client.get("/state")
+
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["current_episode"]["active_project"], "Pulse")
+        self.assertEqual(payload["current_episode"]["probable_task"], "coding")
+        self.assertEqual(payload["present"]["active_project"], "Pulse")
+        self.assertEqual(payload["present"]["probable_task"], "debug")
+        self.assertIn("signals", payload)
+        self.assertEqual(payload["signals"]["probable_task"], "debug")
+        self.assertEqual(payload["signals"]["focus_level"], "deep")
+        self.assertEqual(payload["signals"]["friction_score"], 0.61)
+        self.assertEqual(payload["active_project"], payload["present"]["active_project"])
+        self.assertEqual(payload["active_file"], payload["present"]["active_file"])
 
     def test_ping_returns_status_and_pause_state(self):
         self.runtime_state.set_paused(True)
@@ -381,19 +457,18 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.bus.publish.assert_not_called()
 
     def test_event_endpoint_normalizes_terminal_event_and_drops_raw_command(self):
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _ImmediateThread(*a, **k)):
-            response = self.client.post(
-                "/event",
-                json={
-                    "type": "terminal_command_finished",
-                    "command": "git status",
-                    "cwd": "/Users/yugz/Projets/Pulse/Pulse",
-                    "shell": "zsh",
-                    "terminal_program": "Apple_Terminal",
-                    "exit_code": 0,
-                    "duration_ms": 1200,
-                },
-            )
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "terminal_command_finished",
+                "command": "git status",
+                "cwd": "/Users/yugz/Projets/Pulse/Pulse",
+                "shell": "zsh",
+                "terminal_program": "Apple_Terminal",
+                "exit_code": 0,
+                "duration_ms": 1200,
+            },
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"ok": True})
@@ -408,6 +483,25 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["terminal_exit_code"], 0)
         self.assertEqual(payload["terminal_duration_ms"], 1200)
         self.assertNotIn("command", payload)
+
+    def test_event_endpoint_transmet_le_timestamp_source_au_bus(self):
+        source_ts = "2026-04-23T10:15:30"
+
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "app_activated",
+                "app_name": "Cursor",
+                "timestamp": source_ts,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.bus.publish.assert_called_once()
+        event_type, payload, observed_at = self.bus.publish.call_args.args
+        self.assertEqual(event_type, "app_activated")
+        self.assertEqual(payload, {"app_name": "Cursor"})
+        self.assertEqual(observed_at.isoformat(), "2026-04-23T10:15:30")
 
     def test_insights_uses_default_limit_of_twenty_five(self):
         self.bus.recent.return_value = []
@@ -480,21 +574,19 @@ class TestFileEventCoalescer(unittest.TestCase):
     def setUp(self):
         self.emitted = []
         self.now = 100.0
-        self.timers = []
-
-        def timer_factory(interval, callback, args=None, kwargs=None):
-            timer = _ManualTimer(interval, callback, args=args, kwargs=kwargs)
-            self.timers.append(timer)
-            return timer
 
         self.coalescer = _FileEventCoalescer(
-            publisher=lambda event_type, payload: self.emitted.append((event_type, dict(payload))),
-            timer_factory=timer_factory,
+            publisher=lambda event_type, payload, timestamp=None: self.emitted.append(
+                (event_type, dict(payload), timestamp)
+            ),
             time_fn=lambda: self.now,
+            start_worker=False,
         )
 
     def _flush_last_pending(self):
-        self.timers[-1].fire()
+        self.now += 2.0
+        for emitted in self.coalescer._flush_due():
+            self.emitted.append(emitted)
 
     def test_heterogeneous_burst_created_then_modified_emits_one_created(self):
         path = "/tmp/screenshot.png"
@@ -503,7 +595,7 @@ class TestFileEventCoalescer(unittest.TestCase):
         self.coalescer.publish("file_modified", {"path": path})
         self._flush_last_pending()
 
-        self.assertEqual(self.emitted, [("file_created", {"path": path})])
+        self.assertEqual(self.emitted, [("file_created", {"path": path}, None)])
 
     def test_heterogeneous_burst_renamed_then_modified_emits_one_renamed(self):
         path = "/tmp/screenshot.png"
@@ -512,7 +604,7 @@ class TestFileEventCoalescer(unittest.TestCase):
         self.coalescer.publish("file_modified", {"path": path})
         self._flush_last_pending()
 
-        self.assertEqual(self.emitted, [("file_renamed", {"path": path})])
+        self.assertEqual(self.emitted, [("file_renamed", {"path": path}, None)])
 
     def test_events_outside_window_remain_distinct(self):
         path = "/tmp/screenshot.png"
@@ -527,8 +619,8 @@ class TestFileEventCoalescer(unittest.TestCase):
         self.assertEqual(
             self.emitted,
             [
-                ("file_created", {"path": path}),
-                ("file_modified", {"path": path}),
+                ("file_created", {"path": path}, None),
+                ("file_modified", {"path": path}, None),
             ],
         )
 
@@ -542,9 +634,37 @@ class TestFileEventCoalescer(unittest.TestCase):
         self.assertEqual(
             self.emitted,
             [
-                ("file_modified", {"path": path, "seq": 1}),
-                ("file_modified", {"path": path, "seq": 2}),
+                ("file_modified", {"path": path, "seq": 1}, None),
+                ("file_modified", {"path": path, "seq": 2}, None),
             ],
+        )
+
+    def test_coalescer_conserve_le_timestamp_source_retenu(self):
+        path = "/tmp/main.py"
+        created_at = datetime(2026, 4, 23, 9, 0, 0)
+        modified_at = datetime(2026, 4, 23, 9, 0, 1)
+
+        self.coalescer.publish("file_created", {"path": path}, created_at)
+        self.coalescer.publish("file_modified", {"path": path}, modified_at)
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [("file_created", {"path": path}, created_at)],
+        )
+
+    def test_coalescer_reste_base_sur_fenetre_locale_pas_sur_ecart_source(self):
+        path = "/tmp/main.py"
+        created_at = datetime(2026, 4, 23, 9, 0, 0)
+        modified_at = datetime(2026, 4, 23, 9, 15, 0)
+
+        self.coalescer.publish("file_created", {"path": path}, created_at)
+        self.coalescer.publish("file_modified", {"path": path}, modified_at)
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [("file_created", {"path": path}, created_at)],
         )
 
 

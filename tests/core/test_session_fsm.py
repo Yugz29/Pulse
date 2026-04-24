@@ -29,6 +29,12 @@ def _terminal_event(ts: datetime, kind: str = "terminal_command_finished") -> Ev
     return event
 
 
+def _local_exploration_event(ts: datetime) -> Event:
+    event = Event("local_exploration", {"app_name": "Finder"})
+    event.timestamp = ts
+    return event
+
+
 class TestSessionFSM(unittest.TestCase):
     def setUp(self):
         self.fsm = SessionFSM()
@@ -219,6 +225,61 @@ class TestSessionFSM(unittest.TestCase):
         self.assertEqual(self.fsm.session_started_at, t_first)
         self.assertEqual(self.fsm.last_meaningful_activity_at, t_first)
         self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
+
+    def test_navigation_utile_prolonge_une_session_deja_ancree(self):
+        t_code = self._at(8)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", t_code)],
+            now=t_code,
+        )
+
+        t_browser = self._at(0)
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _file_event("/proj/main.py", t_code),
+                _app_event("Safari", t_browser),
+            ],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertEqual(self.fsm.session_started_at, t_code)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_browser)
+        self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
+
+    def test_local_exploration_ne_demarre_pas_une_session_sans_ancrage(self):
+        t_explore = self._at(0)
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[_local_exploration_event(t_explore)],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(self.fsm.last_meaningful_activity_at)
+        self.assertEqual(self.fsm.state, SessionFSM.IDLE)
+
+    def test_screen_lock_hors_ordre_reste_detecte_par_timestamp(self):
+        t_before = self._at(8)
+        t_lock = self._at(4)
+        t_after = self._at(0)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", t_before)],
+            now=self.base,
+        )
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _file_event("/proj/main.py", t_after),
+                _screen_lock_event(t_lock),
+                _file_event("/proj/main.py", t_before),
+            ],
+            now=self.base,
+        )
+
+        self.assertTrue(transition.boundary_detected)
+        self.assertEqual(transition.boundary_reason, "screen_lock")
+        self.assertEqual(self.fsm.session_started_at, t_after)
 
 
 if __name__ == "__main__":
