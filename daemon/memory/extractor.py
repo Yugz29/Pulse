@@ -89,7 +89,7 @@ _NOISE_PATTERNS = {
 _NOISE_SUBSTRINGS = {
     ".sb-", "__pycache__", "DerivedData", "xcuserdata",
     # Captures d'écran macOS (deux variantes typographiques)
-    "Capture d’écran", "Capture d'écran", "Screenshot",
+    "Capture d\u2019\u00e9cran", "Capture d'\u00e9cran", "Screenshot",
 }
 
 # Curseur anti-doublon encapsulé pour permettre le reset en test.
@@ -611,10 +611,12 @@ def _write_session_report(
             log.warning("Memory : erreur résumé LLM, fallback déterministe utilisé : %s", exc)
             body = _deterministic_summary(
                 duration, task, focus, friction, top_files, files_count, commit_message,
+                diff_summary=diff_summary,
             )
     else:
         body = _deterministic_summary(
             duration, task, focus, friction, top_files, files_count, commit_message,
+            diff_summary=diff_summary,
         )
 
     entry_id = _new_entry_id(now)
@@ -716,10 +718,12 @@ def _deterministic_summary(
     top_files: List[str],
     files_count: int,
     commit_message: Optional[str],
+    *,
+    diff_summary: Optional[str] = None,
 ) -> str:
     """
     Résumé honnête sans LLM.
-    Préfère le commit quand il existe, sinon décrit l'activité observée.
+    Préfère le diff git quand disponible, sinon le commit, sinon l'activité observée.
     """
     focus_str = {
         "deep":      "focus profond",
@@ -734,15 +738,16 @@ def _deterministic_summary(
     if commit_message:
         parts.append(f"Livraison : « {commit_message.splitlines()[0]} ».")
 
+    # Diff git — contenu réel des modifications
+    if diff_summary:
+        parts.append(diff_summary.splitlines()[0])
+
     # Portée principale touchée
-    if top_files:
+    if top_files and not diff_summary:
         main_file = top_files[0]
-        if len(top_files) > 1:
-            others = f" (+{len(top_files) - 1})"
-        else:
-            others = ""
+        others = f" (+{len(top_files) - 1})" if len(top_files) > 1 else ""
         parts.append(f"Portée : {main_file}{others}.")
-    elif files_count:
+    elif files_count and not diff_summary:
         parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
 
     # Focus et friction
@@ -1045,7 +1050,7 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
 
     body = str(entry.get("body") or "").strip()
     body = _strip_commit_sentence(body, commit_messages)
-    if body.startswith("Portée : ") and not commit_messages:
+    if body.startswith("Port\u00e9e : ") and not commit_messages:
         body = ""
     if body:
         lines.append(body)
@@ -1070,7 +1075,7 @@ def _journal_entry_scope(entry: Dict[str, Any]) -> str:
 def _journal_entry_time_range(entry: Dict[str, Any]) -> str:
     start = _format_journal_time(entry.get("started_at"))
     end = _format_journal_time(entry.get("ended_at"))
-    return f"{start} → {end}"
+    return f"{start} \u2192 {end}"
 
 
 def _format_journal_time(value: Any) -> str:
@@ -1164,26 +1169,87 @@ def _resolve_journal_entry_overlaps(entries: List[Dict[str, Any]]) -> List[Dict[
     if len(entries) < 2:
         return entries
 
-    suppressed_ids: set[str] = set()
-    for index, entry in enumerate(entries):
-        if entry.get("entry_id") in suppressed_ids:
+    result: List[Dict[str, Any]] = list(entries)
+    removed_ids: set[str] = set()
+
+    i = 0
+    while i < len(result):
+        entry = result[i]
+        if str(entry.get("entry_id") or "") in removed_ids:
+            i += 1
             continue
-        for other in entries[index + 1:]:
-            if other.get("entry_id") in suppressed_ids:
+        j = i + 1
+        while j < len(result):
+            other = result[j]
+            if str(other.get("entry_id") or "") in removed_ids:
+                j += 1
                 continue
             if not _entries_heavily_overlap(entry, other):
+                j += 1
                 continue
-            weaker, stronger = _choose_weaker_overlapping_entry(entry, other)
-            if weaker is None or stronger is None:
+            if _should_fuse_overlapping_entries(entry, other):
+                fused = _fuse_overlapping_pair(entry, other)
+                result[i] = fused
+                entry = fused
+                removed_ids.add(str(other.get("entry_id") or ""))
+                j += 1
                 continue
-            suppressed_ids.add(str(weaker.get("entry_id") or ""))
+            weaker, _ = _choose_weaker_overlapping_entry(entry, other)
+            if weaker is not None:
+                weaker_id = str(weaker.get("entry_id") or "")
+                removed_ids.add(weaker_id)
+                if weaker_id == str(entry.get("entry_id") or ""):
+                    break
+            j += 1
+        i += 1
 
     return [
-        _mark_overlap_demoted(entry)
-        if entry.get("entry_id") in suppressed_ids
-        else entry
-        for entry in entries
+        _mark_overlap_demoted(e) if str(e.get("entry_id") or "") in removed_ids else e
+        for e in result
     ]
+
+
+def _should_fuse_overlapping_entries(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+    """
+    Retourne True si deux entrées qui se chevauchent méritent une fusion.
+    Condition : aucune n'a de commit, même projet, même tâche.
+    Cas typique : syncs répétés sur la même session (cooldown expiré,
+    screen_lock multiples). Fusionner préserve tous les fichiers et apps.
+    """
+    return (
+        not _compact_strings(left.get("commit_messages", []))
+        and not _compact_strings(right.get("commit_messages", []))
+        and left.get("active_project") == right.get("active_project")
+        and left.get("probable_task") == right.get("probable_task")
+    )
+
+
+def _fuse_overlapping_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Fusionne deux entrées qui se chevauchent.
+    - started_at : le plus ancien des deux
+    - ended_at   : le plus récent des deux
+    - duration   : recalculé depuis les bornes réelles (pas de double-comptage)
+    - top_files, recent_apps, body : union des deux via _merge_journal_pair
+    """
+    fused = _merge_journal_pair(left, right)
+    left_start = str(left.get("started_at") or "")
+    right_start = str(right.get("started_at") or "")
+    left_end = str(left.get("ended_at") or "")
+    right_end = str(right.get("ended_at") or "")
+    fused["started_at"] = (
+        min(left_start, right_start) if left_start and right_start
+        else left_start or right_start
+    )
+    fused["ended_at"] = (
+        max(left_end, right_end) if left_end and right_end
+        else left_end or right_end
+    )
+    start_dt = _parse_entry_datetime(fused["started_at"])
+    end_dt = _parse_entry_datetime(fused["ended_at"])
+    if start_dt and end_dt and end_dt > start_dt:
+        fused["duration_min"] = max(int((end_dt - start_dt).total_seconds() / 60), 0)
+    return fused
 
 
 def _entries_heavily_overlap(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
@@ -1227,6 +1293,7 @@ def _choose_weaker_overlapping_entry(
     left_off = _is_off_project_entry(left)
     right_off = _is_off_project_entry(right)
 
+    # Cas 1-4 : fort vs faible, projet vs hors-projet
     if left_project and right_off and _is_weak_unknown_entry(right):
         return right, left
     if right_project and left_off and _is_weak_unknown_entry(left):
@@ -1235,6 +1302,7 @@ def _choose_weaker_overlapping_entry(
         return right, left
     if right_off and _is_weak_project_entry(left):
         return left, right
+
     return None, None
 
 
@@ -1296,7 +1364,7 @@ def _strip_commit_sentence(body: str, commit_messages: List[str]) -> str:
             continue
         escaped = re.escape(message)
         cleaned = re.sub(
-            rf"^Livraison : « {escaped} »\.\s*",
+            rf"^Livraison : \u00ab {escaped} \u00bb\.\s*",
             "",
             cleaned,
             flags=re.IGNORECASE,
@@ -1376,13 +1444,13 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
             item = current[name]
             lines.extend([
                 "", f"## {name}", "",
-                f"- Première session : {item['first_session']}",
-                f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
-                f"- Type de travail détecté : {item['task']}",
+                f"- Premi\u00e8re session : {item['first_session']}",
+                f"- Derni\u00e8re session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
+                f"- Type de travail d\u00e9tect\u00e9 : {item['task']}",
             ])
             recent_episodes = item.get("recent_episodes", [])
             if recent_episodes:
-                lines.append("- Épisodes récents :")
+                lines.append("- \u00c9pisodes r\u00e9cents :")
                 for episode in recent_episodes[:5]:
                     lines.append(
                         "  - "
@@ -1401,7 +1469,7 @@ def _update_index(base_dir: Path) -> None:
             for f in sorted(base_dir.glob("*.md"))
             if f.name != "MEMORY.md"
         ]
-        content = "# Index mémoire Pulse\n\n" + "\n".join(entries)
+        content = "# Index m\u00e9moire Pulse\n\n" + "\n".join(entries)
         if entries:
             content += "\n"
         index_file.write_text(content)
@@ -1423,20 +1491,20 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
             current_name = line[3:]
             result[current_name] = {"recent_episodes": []}
             in_recent_episodes = False
-        elif current_name and line.startswith("- Première session : "):
+        elif current_name and line.startswith("- Premi\u00e8re session : "):
             result[current_name]["first_session"] = line.split(": ", 1)[1]
             in_recent_episodes = False
-        elif current_name and line.startswith("- Dernière session : "):
+        elif current_name and line.startswith("- Derni\u00e8re session : "):
             value = line.split(": ", 1)[1]
             date_part, details = _split_last_session(value)
             result[current_name]["last_session"]  = date_part
             result[current_name]["last_duration"] = details["duration"]
             result[current_name]["last_task"]      = details["task"]
             in_recent_episodes = False
-        elif current_name and line.startswith("- Type de travail détecté : "):
+        elif current_name and line.startswith("- Type de travail d\u00e9tect\u00e9 : "):
             result[current_name]["task"] = line.split(": ", 1)[1]
             in_recent_episodes = False
-        elif current_name and line == "- Épisodes récents :":
+        elif current_name and line == "- \u00c9pisodes r\u00e9cents :":
             in_recent_episodes = True
         elif current_name and in_recent_episodes and raw_line.startswith("  - "):
             episode = _parse_project_episode_line(raw_line.strip()[2:].strip())
@@ -1620,7 +1688,7 @@ def _split_last_session(value: str) -> tuple:
 
 def _time_slot(hour: int) -> str:
     if 6 <= hour < 12:   return "matin"
-    if 12 <= hour < 18:  return "après-midi"
+    if 12 <= hour < 18:  return "apr\u00e8s-midi"
     return "soir"
 
 
