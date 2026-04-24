@@ -11,6 +11,7 @@ Importé par :
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +34,15 @@ _SCREENSHOT_EXTENSIONS = (
     ".webp",
 )
 
+# Regex UUID standard (8-4-4-4-12 hex).
+# Tout fichier dont le nom contient un UUID est du bruit système
+# (télémétrie, events, cache applicatif) — jamais du code utilisateur.
+# Ex : 1p_failed_events.bd63bb8f-c123-4dbe-8641-619c47b09fa0.json
+_UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
+
 
 def _is_screenshot_capture(name: str) -> bool:
     lower_name = name.lower()
@@ -50,6 +60,14 @@ def _is_git_hash_filename(name: str) -> bool:
     """
     stem = name.rsplit(".", 1)[0] if "." in name else name
     return len(stem) == 40 and all(c in "0123456789abcdef" for c in stem.lower())
+
+
+def _contains_uuid(name: str) -> bool:
+    """
+    Retourne True si le nom de fichier contient un UUID.
+    Ex : 1p_failed_events.bd63bb8f-c123-4dbe-8641-619c47b09fa0.9f22...json
+    """
+    return bool(_UUID_RE.search(name))
 
 
 # ── Pulse interne ─────────────────────────────────────────────────────────────
@@ -114,9 +132,6 @@ def classify_file_type(path: str) -> str:
         return "config"
 
     # Plists : seulement les fichiers de projet connus
-    # Les plists systèmes (appPrivateData, syncstatus, metrics, etc.) génèrent
-    # du bruit constant en arrière-plan — ils ne constituent pas un signal de travail.
-    # Comparaison sur le nom original (case-sensitive) — name est en lowercase.
     original_name = path.split("/")[-1]
     if original_name.endswith(".plist") and original_name in {
         "Info.plist", "Entitlements.plist",
@@ -167,6 +182,10 @@ def file_signal_significance(path: Optional[str]) -> str:
     if _is_git_hash_filename(name):
         return "technical_noise"
 
+    # Fichiers contenant un UUID — télémétrie, events, cache applicatif
+    if _contains_uuid(name):
+        return "technical_noise"
+
     # Bruit système
     if name.startswith("."):
         return "technical_noise"
@@ -181,8 +200,6 @@ def file_signal_significance(path: Optional[str]) -> str:
         ".log", ".jsonl", ".tmp", ".temp", ".swp", ".swo",
     )):
         return "technical_noise"
-    # JSON de cache auto-générés : bruit technique récurrent qui ne doit pas
-    # piloter le contexte courant ni la tâche probable.
     if lower_name == "models_cache.json":
         return "technical_noise"
     if lower_name.endswith(("_cache.json", "-cache.json", ".cache.json")):
@@ -196,12 +213,9 @@ def file_signal_significance(path: Optional[str]) -> str:
     if any(
         segment in path
         for segment in (
-            # Outils de développement
             "/.git/", "/node_modules/", "/__pycache__/",
             "/xcuserdata/", "/DerivedData/",
-            # Environnements Python
             "/site-packages/", "/dist-packages/", "/.venv/", "/venv/",
-            # Librairies système macOS / Homebrew
             "/opt/homebrew/Cellar/", "/opt/homebrew/lib/",
             "/usr/local/lib/", "/usr/lib/", "/usr/share/",
             "/System/Library/", "/private/var/",
@@ -209,11 +223,11 @@ def file_signal_significance(path: Optional[str]) -> str:
     ):
         return "technical_noise"
 
-    # Téléchargements — fichier déposé par le système, pas en cours d'édition
+    # Téléchargements
     if "/Downloads/" in path:
         return "neutral"
 
-    # Lockfiles — auto-générés, pas d'action utilisateur directe
+    # Lockfiles
     _LOCKFILE_NAMES = {
         "poetry.lock", "pipfile.lock", "cargo.lock",
         "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
@@ -227,7 +241,7 @@ def file_signal_significance(path: Optional[str]) -> str:
     if file_type in {"source", "test", "config", "docs", "assets"}:
         return "meaningful"
 
-    # Neutral — lockfiles, csv, etc.
+    # Neutral
     if lower_path.endswith((".lock", ".csv")):
         return "neutral"
 
