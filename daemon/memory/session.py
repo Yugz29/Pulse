@@ -160,8 +160,9 @@ class SessionMemory:
                 """
                 params = (query, limit)
 
-            with self._connect() as conn:
-                rows = conn.execute(sql, params).fetchall()
+            with self._lock:
+                with self._connect() as conn:
+                    rows = conn.execute(sql, params).fetchall()
 
             return [
                 {
@@ -179,25 +180,27 @@ class SessionMemory:
 
     def get_session(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         target_id = session_id or self.session_id
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM sessions WHERE id = ?",
-                (target_id,),
-            ).fetchone()
+        with self._lock:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT * FROM sessions WHERE id = ?",
+                    (target_id,),
+                ).fetchone()
         return dict(row) if row else {}
 
     def get_recent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT event_type, payload_json, created_at
-                FROM events
-                WHERE session_id = ?
-                ORDER BY created_at DESC, id DESC
-                LIMIT ?
-                """,
-                (self.session_id, limit),
-            ).fetchall()
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT event_type, payload_json, created_at
+                    FROM events
+                    WHERE session_id = ?
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (self.session_id, limit),
+                ).fetchall()
 
         result = []
         for row in reversed(rows):
@@ -268,17 +271,18 @@ class SessionMemory:
 
     def get_current_episode(self, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         target_id = session_id or self.session_id
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT *
-                FROM episodes
-                WHERE session_id = ? AND ended_at IS NULL
-                ORDER BY started_at DESC
-                LIMIT 1
-                """,
-                (target_id,),
-            ).fetchone()
+        with self._lock:
+            with self._connect() as conn:
+                row = conn.execute(
+                    """
+                    SELECT *
+                    FROM episodes
+                    WHERE session_id = ? AND ended_at IS NULL
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (target_id,),
+                ).fetchone()
         return dict(row) if row else None
 
     def get_recent_episodes(
@@ -288,17 +292,18 @@ class SessionMemory:
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
         target_id = session_id or self.session_id
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM episodes
-                WHERE session_id = ?
-                ORDER BY started_at DESC
-                LIMIT ?
-                """,
-                (target_id, limit),
-            ).fetchall()
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM episodes
+                    WHERE session_id = ?
+                    ORDER BY started_at DESC
+                    LIMIT ?
+                    """,
+                    (target_id, limit),
+                ).fetchall()
         return [dict(row) for row in rows]
 
     def get_recent_closed_episodes(
@@ -308,17 +313,18 @@ class SessionMemory:
         limit: int = 10,
     ) -> List[ConsolidatedEpisode]:
         target_id = session_id or self.session_id
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM episodes
-                WHERE session_id = ? AND ended_at IS NOT NULL
-                ORDER BY ended_at DESC, started_at DESC
-                LIMIT ?
-                """,
-                (target_id, limit),
-            ).fetchall()
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM episodes
+                    WHERE session_id = ? AND ended_at IS NOT NULL
+                    ORDER BY ended_at DESC, started_at DESC
+                    LIMIT ?
+                    """,
+                    (target_id, limit),
+                ).fetchall()
         return [
             ConsolidatedEpisode(
                 episode_id=row["id"],
@@ -496,6 +502,8 @@ class SessionMemory:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
     def _duration_min(self, *, end_at: Optional[datetime] = None) -> int:
