@@ -89,6 +89,9 @@ class RuntimeOrchestrator:
         self._head_sha_lock = threading.Lock()
         self._commit_watch_lock = threading.Lock()
         self._pending_commit_watch: set[str] = set()
+        self._diff_cooldown_sec: float = 120.0
+        self._last_diff_triggered: dict[str, float] = {}
+        self._diff_trigger_lock = threading.Lock()
         self._fact_engine = get_fact_engine()
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
@@ -386,6 +389,26 @@ class RuntimeOrchestrator:
             args=(path,),
             daemon=True,
         ).start()
+
+    def _trigger_diff_background(self, workspace: str) -> None:
+        """Lance read_diff_summary en background avec cooldown par workspace."""
+        now = time.monotonic()
+        with self._diff_trigger_lock:
+            last = self._last_diff_triggered.get(workspace)
+            if last is not None and now - last < self._diff_cooldown_sec:
+                return
+            self._last_diff_triggered[workspace] = now
+
+        def _compute() -> None:
+            try:
+                summary = read_diff_summary(workspace)
+                if summary:
+                    self.runtime_state.set_diff_summary(workspace, summary)
+                    self.log.debug("diff mis à jour : %s", workspace)
+            except Exception as exc:
+                self.log.debug("diff échoué (%s) : %s", workspace, exc)
+
+        threading.Thread(target=_compute, daemon=True, name="pulse-diff").start()
 
     def _handle_commit_event(self, path: str) -> None:
         git_root = find_git_root(path)
@@ -783,6 +806,8 @@ class RuntimeOrchestrator:
         diff_summary: str | None = None,
     ) -> None:
         try:
+            if diff_summary is None:
+                diff_summary = self.runtime_state.get_diff_summary() or None
             top_files = snapshot.get("top_files", []) or []
             files_count = snapshot.get("files_changed", 0) or 0
             defer_llm = (
@@ -879,7 +904,8 @@ class RuntimeOrchestrator:
 
     def _should_sync_memory(self, event_type, present, previous_sync_at) -> bool:
         if present.session_duration_min < 20:
-            return False
+            if not self.runtime_state.get_diff_summary():
+                return False
         if event_type in {"screen_locked", "user_idle", "screen_unlocked"}:
             # Cooldown court pour éviter les doubles syncs sur events rapprochés
             if previous_sync_at is not None:
@@ -914,6 +940,8 @@ class RuntimeOrchestrator:
             self._pending_commit_watch = set()
         with self._head_sha_lock:
             self._last_head_sha = {}
+        with self._diff_trigger_lock:
+            self._last_diff_triggered = {}
         with self._runtime_lock:
             self._frozen_memory = None
             self._frozen_memory_at = None
@@ -1066,6 +1094,14 @@ class RuntimeOrchestrator:
         if trigger is None:
             trigger = self._latest_event_by_timestamp(events) or events[-1]
         self._process_signals(trigger)
+        snapshot = self.runtime_state.get_runtime_snapshot()
+        workspace = None
+        if snapshot.present.active_file:
+            root = find_workspace_root(snapshot.present.active_file)
+            if root:
+                workspace = str(root)
+        if workspace:
+            self._trigger_diff_background(workspace)
 
     @staticmethod
     def _latest_event_by_timestamp(events, predicate=None):
