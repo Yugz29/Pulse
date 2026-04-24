@@ -160,8 +160,6 @@ def _save_cooldown() -> None:
 
 # ── Correction de tâche par préfixe de commit ─────────────────────────────────
 
-# Mappage préfixe conventionnel → tâche cible.
-# None = pas de correction (chore, build, ci sont trop ambigus).
 _COMMIT_PREFIX_TASK: Dict[str, Optional[str]] = {
     "fix":      "debug",
     "feat":     "coding",
@@ -175,9 +173,6 @@ _COMMIT_PREFIX_TASK: Dict[str, Optional[str]] = {
     "ci":       None,
 }
 
-# Tâches source compatibles avec chaque tâche cible.
-# La correction s'applique uniquement si la tâche actuelle est ambiguë
-# (general, exploration) ou compatible avec la cible.
 _COMMIT_CORRECTION_FROM: Dict[str, set] = {
     "debug":   {"general", "exploration", "coding"},
     "coding":  {"general", "exploration"},
@@ -186,37 +181,18 @@ _COMMIT_CORRECTION_FROM: Dict[str, set] = {
 
 
 def _commit_task_correction(commit_message: str, current_task: str) -> str:
-    """
-    Retourne la tâche corrigée selon le préfixe du message de commit.
-
-    Corrections applicables :
-      fix:      → debug   (si session coding/general/exploration)
-      feat:     → coding  (si session general/exploration)
-      docs:     → writing (si session general/exploration)
-      refactor: → coding  (si session general/exploration)
-      test/perf/style: → coding  (si session general/exploration)
-      chore/build/ci: pas de correction
-
-    La correction est rétroactive — appliquée lors de l'écriture mémoire,
-    pas en temps réel. Elle n'écrase jamais une tâche contradictoire
-    (ex. writing → debug sur un commit fix: dans une session docs).
-    """
     if not commit_message or not current_task:
         return current_task
-
     match = re.match(r'^(\w+)(?:\([^)]*\))?!?:', commit_message.strip().lower())
     if not match:
         return current_task
-
     prefix = match.group(1)
     target = _COMMIT_PREFIX_TASK.get(prefix)
     if target is None:
         return current_task
-
     compatible = _COMMIT_CORRECTION_FROM.get(target, set())
     if current_task in compatible:
         return target
-
     return current_task
 
 
@@ -231,39 +207,23 @@ def update_memories_from_session(
     diff_summary: Optional[str] = None,
     defer_llm_enrichment: bool = False,
 ):
-    """
-    Met à jour la mémoire de session et génère un rapport si nécessaire.
-
-    Le LLM n'est utilisé que pour les triggers 'commit'.
-    Pour 'screen_lock', 'user_idle' et 'manual', le fallback déterministe
-    est appliqué directement — plus honnête et sans risque d'hallucination.
-
-    Le curseur _last_report_at garantit qu'un rapport ne se génère pas deux
-    fois en moins de REPORT_COOLDOWN_MIN minutes pour le même projet.
-    """
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     base_dir.mkdir(parents=True, exist_ok=True)
-
-    # Charge le curseur persisté (une fois par processus)
     _load_cooldown()
 
-    # Cap de durée — évite les sessions aberrantes (766 min, 2628 min, etc.)
     if "duration_min" in session_data:
         session_data = dict(session_data)
         session_data["duration_min"] = min(
             session_data["duration_min"], MAX_SESSION_DURATION_MIN
         )
 
-    # Correction rétroactive de la tâche selon le préfixe du commit.
-    # Appliquée uniquement sur trigger commit et si la tâche actuelle est compatible.
-    # Mutualise la copie de session_data déjà faite au-dessus si nécessaire.
     if trigger == "commit" and commit_message:
         corrected = _commit_task_correction(
             commit_message,
             session_data.get("probable_task", "general"),
         )
         if corrected != session_data.get("probable_task"):
-            session_data = dict(session_data)  # ne pas muter le dict de l'appelant
+            session_data = dict(session_data)
             session_data["probable_task"] = corrected
             session_data["task_source"] = "commit_correction"
 
@@ -274,7 +234,6 @@ def update_memories_from_session(
 
     _update_projects(base_dir, session_data, consolidation=consolidation)
 
-    # Moteur de faits : observe la session et tente une promotion
     try:
         engine = get_fact_engine()
         new_facts = engine.observe_session(session_data)
@@ -300,14 +259,11 @@ def update_memories_from_session(
         files_count=files_count,
     )
 
-    # Vérifie si un rapport est nécessaire
     should_write = (duration >= 15 or substantive_commit)
     if not should_write:
         _update_index(base_dir)
         return None
 
-    # Curseur anti-doublon — pas deux rapports en moins de REPORT_COOLDOWN_MIN
-    # pour le même projet, sauf sur commit (unité de travail explicite).
     if trigger != "commit":
         last = _cooldown.last_report_at.get(project)
         if last is not None:
@@ -316,9 +272,6 @@ def update_memories_from_session(
                 _update_index(base_dir)
                 return None
 
-    # LLM uniquement sur commit — seul trigger avec assez de signal.
-    # En mode defer, on écrit d'abord une version déterministe immédiate,
-    # puis le LLM enrichit l'entrée existante hors chemin critique.
     effective_llm = (
         llm
         if trigger == "commit"
@@ -342,10 +295,8 @@ def update_memories_from_session(
         diff_summary=diff_summary,
     )
 
-    # Avance le curseur après écriture réussie et le persiste sur disque
     _cooldown.last_report_at[project] = datetime.now()
     _save_cooldown()
-
     _update_index(base_dir)
     return report_ref
 
@@ -358,11 +309,6 @@ def enrich_session_report(
     commit_message: Optional[str] = None,
     diff_summary: Optional[str] = None,
 ) -> bool:
-    """
-    Enrichit a posteriori une entrée de journal déjà écrite.
-    Utilisé pour les commits : le fallback déterministe est immédiat,
-    puis le LLM remplace le corps quand sa réponse complète arrive.
-    """
     if report_ref is None or llm is None:
         return False
 
@@ -377,17 +323,8 @@ def enrich_session_report(
     files_count = session_data.get("files_changed", 0)
 
     body = _llm_summary(
-        llm,
-        project,
-        duration,
-        task,
-        focus,
-        friction,
-        apps,
-        top_files,
-        files_count,
-        commit_message,
-        diff_summary,
+        llm, project, duration, task, focus, friction,
+        apps, top_files, files_count, commit_message, diff_summary,
     )
     return _replace_journal_entry(journal_file, entry_id, body)
 
@@ -397,21 +334,6 @@ def last_session_context(
     memory_dir: Optional[Path] = None,
     today: Optional["date"] = None,
 ) -> Optional[str]:
-    """
-    Retourne une ligne de contexte sur la dernière session connue pour ce projet.
-
-    Lit projects.md (déjà écrit par _update_projects) — aucune nouvelle donnée.
-    Exemple : "Dernière session Pulse : hier (développement, 45 min)"
-
-    Retourne None si le projet est inconnu, si les données sont absentes,
-    ou si le parsing échoue. Ne lève jamais d'exception.
-
-    Paramètres :
-      project    : nom du projet actif
-      memory_dir : répertoire mémoire (défaut : MEMORY_DIR)
-      today      : date de référence pour le calcul d'âge (défaut : aujourd'hui)
-                   injecté pour les tests sans mock de datetime
-    """
     from datetime import date as _date
 
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
@@ -426,7 +348,7 @@ def last_session_context(
         delta = (ref_today - last_date).days
 
         if delta < 0:
-            return None  # date future — donnée corrompue
+            return None
         elif delta == 0:
             age = "aujourd'hui"
         elif delta == 1:
@@ -456,7 +378,6 @@ def last_session_context(
 
 
 def load_memory_context(memory_dir: Optional[Path] = None) -> str:
-    """Fallback legacy : lit projects.md uniquement (habits.md = bruit pur)."""
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     parts = []
     for filename in ("projects.md", "preferences.md"):
@@ -467,12 +388,6 @@ def load_memory_context(memory_dir: Optional[Path] = None) -> str:
 
 
 def render_project_memory(memory_dir: Optional[Path] = None) -> str:
-    """
-    Rend la mémoire projet consolidée pour l'assistant.
-
-    Source principale : projects.md, désormais nourri par les épisodes clos.
-    Retourne une chaîne vide si aucune projection projet n'existe encore.
-    """
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     path = base_dir / "projects.md"
     if not path.exists():
@@ -484,10 +399,6 @@ def render_project_memory(memory_dir: Optional[Path] = None) -> str:
 
 
 def find_git_root(file_path: str) -> Optional[Path]:
-    """
-    Remonte l'arborescence depuis file_path pour trouver un dépôt git.
-    Supporte les worktrees et submodules (où .git est un fichier, pas un dossier).
-    """
     path = Path(file_path)
     if path.is_file():
         path = path.parent
@@ -499,29 +410,18 @@ def find_git_root(file_path: str) -> Optional[Path]:
 
 
 def _resolve_git_dir(git_root: Path) -> Optional[Path]:
-    """
-    Résout le vrai répertoire git pour un dépôt standard ou un worktree.
-    Supporte:
-      - .git dossier
-      - .git fichier contenant 'gitdir: ...'
-      - chemin relatif vers le vrai gitdir
-    Retourne None si la résolution échoue.
-    """
     try:
         git_entry = git_root / ".git"
         if git_entry.is_dir():
             return git_entry
         if not git_entry.is_file():
             return None
-
         content = git_entry.read_text(encoding="utf-8").strip()
         if not content.startswith("gitdir:"):
             return None
-
         gitdir_text = content[7:].strip()
         if not gitdir_text:
             return None
-
         gitdir = Path(gitdir_text)
         if not gitdir.is_absolute():
             gitdir = (git_entry.parent / gitdir).resolve()
@@ -531,16 +431,13 @@ def _resolve_git_dir(git_root: Path) -> Optional[Path]:
 
 
 def read_head_sha(git_root: Path) -> Optional[str]:
-    """Lit le SHA courant de HEAD. Retourne None si indisponible."""
     try:
         git_dir = _resolve_git_dir(git_root)
         if git_dir is None:
             return None
-
         head_file = git_dir / "HEAD"
         if not head_file.exists():
             return None
-
         ref = head_file.read_text().strip()
         if ref.startswith("ref: "):
             ref_path = git_dir / ref[5:]
@@ -553,7 +450,6 @@ def read_head_sha(git_root: Path) -> Optional[str]:
 
 
 def read_commit_message(git_root: Path) -> Optional[str]:
-    """Lit le message du dernier commit depuis COMMIT_EDITMSG."""
     try:
         git_dir = _resolve_git_dir(git_root)
         if git_dir is None:
@@ -579,17 +475,10 @@ def _write_session_report(
     trigger: str,
     diff_summary: Optional[str] = None,
 ):
-    """
-    Journal quotidien : un seul fichier par jour (YYYY-MM-DD.md).
-    Les entrées brutes sont stockées dans un bloc caché, puis rendues
-    comme une lecture projet-first / épisode-first de la journée.
-    """
     now      = datetime.now()
     today    = now.strftime("%Y-%m-%d")
-
     sessions_dir = base_dir / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
-
     journal_file = sessions_dir / f"{today}.md"
 
     project     = consolidation["active_project"] or "inconnu"
@@ -664,24 +553,12 @@ def _llm_summary(
     commit_message: Optional[str],
     diff_summary: Optional[str],
 ) -> str:
-    """
-    Prompt de résumé LLM uniquement sur commit.
-    Exploit le diff réel du commit pour un résumé vraiment informatif.
-
-    Contraintes :
-    - 1 à 2 phrases maximum
-    - Ce qui a été livré, pas comment
-    - Aucun fait inventé
-    """
     facts: List[str] = [
         f"Projet : {project}",
         f"Durée : {duration} minutes",
     ]
-
     if commit_message:
         facts.append(f'Commit : "{commit_message.splitlines()[0]}"')
-
-    # Diff du commit — source la plus fiable de ce qui a changé
     if diff_summary:
         for line in diff_summary.splitlines():
             facts.append(line)
@@ -689,12 +566,9 @@ def _llm_summary(
         facts.append(f"Fichiers modifiés : {', '.join(top_files[:5])}")
     elif files_count:
         facts.append(f"Fichiers modifiés : {files_count}")
-
     if friction >= 0.7:
         facts.append("Friction : élevée")
-
     facts_block = "\n".join(f"- {f}" for f in facts)
-
     prompt = f"""\
 Voici les données factuelles du commit livré :
 
@@ -706,7 +580,6 @@ Dis ce qui a été livré et la portée principale — pas comment ni les détai
 Évite les tournures emphatiques comme « Ce commit améliore... ».
 Si le message de commit est explicite, reformule-le naturellement dans ce ton.
 N'invente aucun fait absent des données ci-dessus."""
-
     return _llm_complete(llm, prompt, max_tokens=256, think=False)
 
 
@@ -721,10 +594,6 @@ def _deterministic_summary(
     *,
     diff_summary: Optional[str] = None,
 ) -> str:
-    """
-    Résumé honnête sans LLM.
-    Préfère le diff git quand disponible, sinon le commit, sinon l'activité observée.
-    """
     focus_str = {
         "deep":      "focus profond",
         "scattered": "travail dispersé",
@@ -733,33 +602,22 @@ def _deterministic_summary(
     }.get(focus, "")
 
     parts = []
-
-    # Commit — signal le plus fort, on le met en avant
     if commit_message:
         parts.append(f"Livraison : « {commit_message.splitlines()[0]} ».")
-
-    # Diff git — contenu réel des modifications
     if diff_summary:
         parts.append(diff_summary.splitlines()[0])
-
-    # Portée principale touchée
     if top_files and not diff_summary:
         main_file = top_files[0]
         others = f" (+{len(top_files) - 1})" if len(top_files) > 1 else ""
         parts.append(f"Portée : {main_file}{others}.")
     elif files_count and not diff_summary:
         parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
-
-    # Focus et friction
     if focus_str:
         parts.append(f"Rythme : {focus_str}.")
     if friction >= 0.7:
         parts.append("Friction : élevée.")
-
-    # Fallback si rien à dire
     if not parts:
         parts.append(f"Session de {duration} min.")
-
     return " ".join(parts)
 
 
@@ -812,7 +670,6 @@ def _replace_journal_entry(journal_file: Path, entry_id: str, body: str) -> bool
     with _memory_write_lock:
         if not journal_file.exists():
             return False
-
         entries = _load_journal_entries(journal_file)
         updated = False
         for entry in entries:
@@ -822,7 +679,6 @@ def _replace_journal_entry(journal_file: Path, entry_id: str, body: str) -> bool
                 break
         if not updated:
             return False
-
         journal_date = _journal_date_from_path(journal_file)
         _write_journal_document(journal_file, journal_date, entries)
         return True
@@ -936,11 +792,9 @@ def _render_journal_project_entry(entry: Dict[str, Any]) -> List[str]:
     duration = int(entry.get("duration_min") or 0)
     time_range = _journal_entry_time_range(entry)
     lines = [f"### {time_range} — {title} ({duration} min)"]
-
     description = _journal_entry_description(entry)
     if description:
         lines.extend(description.splitlines())
-
     scope = _journal_entry_scope(entry)
     lines.append(f"Portée : {scope}")
     return lines
@@ -1047,18 +901,15 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
             lines.append(f"Commit : {commit_messages[0]}")
         else:
             lines.append("Commits : " + " · ".join(commit_messages))
-
     body = str(entry.get("body") or "").strip()
     body = _strip_commit_sentence(body, commit_messages)
     if body.startswith("Port\u00e9e : ") and not commit_messages:
         body = ""
     if body:
         lines.append(body)
-
     if not lines:
         duration = int(entry.get("duration_min") or 0)
         lines.append(f"Travail observé sur {_journal_entry_title(entry)} pendant {duration} min.")
-
     return "\n".join(lines)
 
 
@@ -1120,13 +971,11 @@ def _off_project_section_title(entry: Dict[str, Any]) -> str:
 def _is_off_project_entry(entry: Dict[str, Any]) -> bool:
     if _normalize_project_name(entry.get("active_project")) is None:
         return True
-
     task = str(entry.get("probable_task") or "general")
     activity = str(entry.get("activity_level") or "unknown")
     commit_messages = _compact_strings(entry.get("commit_messages", []))
     top_files = _compact_strings(entry.get("top_files", []))
     apps = _compact_strings(entry.get("recent_apps", []))
-
     return (
         task == "general"
         and activity == "unknown"
@@ -1213,8 +1062,6 @@ def _should_fuse_overlapping_entries(left: Dict[str, Any], right: Dict[str, Any]
     """
     Retourne True si deux entrées qui se chevauchent méritent une fusion.
     Condition : aucune n'a de commit, même projet, même tâche.
-    Cas typique : syncs répétés sur la même session (cooldown expiré,
-    screen_lock multiples). Fusionner préserve tous les fichiers et apps.
     """
     return (
         not _compact_strings(left.get("commit_messages", []))
@@ -1230,7 +1077,6 @@ def _fuse_overlapping_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[
     - started_at : le plus ancien des deux
     - ended_at   : le plus récent des deux
     - duration   : recalculé depuis les bornes réelles (pas de double-comptage)
-    - top_files, recent_apps, body : union des deux via _merge_journal_pair
     """
     fused = _merge_journal_pair(left, right)
     left_start = str(left.get("started_at") or "")
@@ -1293,7 +1139,6 @@ def _choose_weaker_overlapping_entry(
     left_off = _is_off_project_entry(left)
     right_off = _is_off_project_entry(right)
 
-    # Cas 1-4 : fort vs faible, projet vs hors-projet
     if left_project and right_off and _is_weak_unknown_entry(right):
         return right, left
     if right_project and left_off and _is_weak_unknown_entry(left):
@@ -1341,10 +1186,7 @@ def _has_useful_journal_body(body: str) -> bool:
     if not body:
         return False
     normalized = body.strip()
-    weak_prefixes = (
-        "Session de ",
-        "Travail observé sur ",
-    )
+    weak_prefixes = ("Session de ", "Travail observé sur ")
     return len(normalized) >= 20 and not normalized.startswith(weak_prefixes)
 
 
@@ -1542,8 +1384,10 @@ def _build_consolidation_frame(
         "episode": episode,
         "active_project": active_project,
         "probable_task": probable_task,
-        "activity_level": (episode or {}).get("activity_level"),
-        "task_confidence": (episode or {}).get("task_confidence"),
+        # Fallback sur session_data quand l'épisode est encore ouvert
+        # (cas screen_lock court) — évite activity_level: "unknown" dans le journal.
+        "activity_level": (episode or {}).get("activity_level") or session_data.get("activity_level"),
+        "task_confidence": (episode or {}).get("task_confidence") or session_data.get("task_confidence"),
         "duration_min": duration_min,
     }
 
