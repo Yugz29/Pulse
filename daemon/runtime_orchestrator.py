@@ -808,13 +808,6 @@ class RuntimeOrchestrator:
         try:
             if diff_summary is None:
                 diff_summary = self.runtime_state.get_diff_summary() or None
-            # Fallback : si top_files est vide sur un commit, extraire les fichiers
-            # depuis le diff — git est la source la plus fiable des fichiers modifiés.
-            if trigger == "commit" and diff_summary and not snapshot.get("top_files"):
-                files_from_diff = extract_file_names_from_diff_summary(diff_summary)
-                if files_from_diff:
-                    snapshot = dict(snapshot)
-                    snapshot["top_files"] = files_from_diff[:5]
             top_files = snapshot.get("top_files", []) or []
             files_count = snapshot.get("files_changed", 0) or 0
             defer_llm = (

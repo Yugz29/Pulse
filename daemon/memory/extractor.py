@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from daemon.core.file_cluster import cluster_files_for_display
+from daemon.core.git_diff import extract_file_names_from_diff_summary
 from daemon.memory.facts import FactEngine
 
 log = logging.getLogger("pulse")
@@ -400,6 +401,15 @@ def _write_session_report(
     apps        = session.get("recent_apps", [])
     top_files   = _clean_files(session.get("top_files", []))
     files_count = session.get("files_changed", 0)
+
+    # Fallback : si top_files est vide après nettoyage et qu'on a un diff commit,
+    # extraire les fichiers depuis le diff — git est la source la plus fiable.
+    # Ce fallback est placé ICI (après _clean_files) pour éviter qu'un fichier
+    # bruit dans le snapshot ne masque le fallback sans survivre au nettoyage.
+    if not top_files and diff_summary and trigger in {"commit", None}:
+        files_from_diff = extract_file_names_from_diff_summary(diff_summary)
+        if files_from_diff:
+            top_files = files_from_diff[:5]
 
     if llm is not None:
         try:
