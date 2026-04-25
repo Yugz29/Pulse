@@ -325,6 +325,22 @@ class SessionMemory:
                     """,
                     (target_id, limit),
                 ).fetchall()
+
+                # Fallback cross-session : après un redémarrage du daemon,
+                # la session courante n'a aucun épisode clos. On lit les plus
+                # récents toutes sessions confondues pour que le premier commit
+                # post-redémarrage ait accès au contexte réel.
+                if not rows:
+                    rows = conn.execute(
+                        """
+                        SELECT *
+                        FROM episodes
+                        WHERE ended_at IS NOT NULL
+                        ORDER BY ended_at DESC, started_at DESC
+                        LIMIT ?
+                        """,
+                        (limit,),
+                    ).fetchall()
         return [
             ConsolidatedEpisode(
                 episode_id=row["id"],
