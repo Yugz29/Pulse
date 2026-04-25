@@ -77,6 +77,8 @@ _NOISE_SUBSTRINGS = {
     ".sb-", "__pycache__", "DerivedData", "xcuserdata",
     "Capture d\u2019\u00e9cran", "Capture d'\u00e9cran", "Screenshot",
     "globalContext.json", "openai_yaml",
+    # Fichiers de config éditeur locaux — jamais du vrai travail
+    "settings.local.json",
 }
 
 

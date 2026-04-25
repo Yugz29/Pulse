@@ -266,13 +266,16 @@ class SignalScorer:
         )
 
     def _recent_apps(self, app_events: list, now: datetime) -> List[str]:
+        # Apps à exclure du scoring — l'app UI de Pulse elle-même ne doit pas
+        # influencer la détection de patterns de workflow.
+        _IGNORED_APPS = {"Pulse", "PulseApp"}
         window_start = now - timedelta(minutes=30)
         last_seen: dict[str, tuple[datetime, int]] = {}
         for index, event in enumerate(app_events):
             if event.timestamp < window_start:
                 continue
             app_name = event.payload.get("app_name")
-            if not app_name:
+            if not app_name or app_name in _IGNORED_APPS:
                 continue
             seen = last_seen.get(app_name)
             candidate = (event.timestamp, index)
@@ -378,7 +381,9 @@ class SignalScorer:
         return dict(mix)
 
     def _rename_delete_ratio_10m(self, recent_file_events: list) -> float:
-        if not recent_file_events:
+        # Seuil minimum de 3 events pour que le ratio soit significatif.
+        # Avec 1-2 events, un seul rename donne 1.0 — trop bruité.
+        if len(recent_file_events) < 3:
             return 0.0
         structural = sum(
             1
