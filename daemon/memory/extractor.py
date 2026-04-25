@@ -404,8 +404,6 @@ def _write_session_report(
 
     # Fallback : si top_files est vide après nettoyage et qu'on a un diff commit,
     # extraire les fichiers depuis le diff — git est la source la plus fiable.
-    # Ce fallback est placé ICI (après _clean_files) pour éviter qu'un fichier
-    # bruit dans le snapshot ne masque le fallback sans survivre au nettoyage.
     if not top_files and diff_summary and trigger in {"commit", None}:
         files_from_diff = extract_file_names_from_diff_summary(diff_summary)
         if files_from_diff:
@@ -472,11 +470,10 @@ def _deterministic_summary(duration, task, focus, friction, top_files, files_cou
     focus_str = {"deep": "focus profond", "scattered": "travail dispersé", "idle": "session légère", "normal": ""}.get(focus, "")
     parts = []
     if commit_message:
-        parts.append(f"Livraison : « {commit_message.splitlines()[0]} ».")
+        parts.append(f"Livraison : \u00ab {commit_message.splitlines()[0]} \u00bb.")
     if diff_summary:
         parts.append(diff_summary.splitlines()[0])
     if top_files and not diff_summary:
-        # Regroupement sémantique par langage au lieu d'une liste plate.
         parts.append(f"Portée : {cluster_files_for_display(top_files)}.")
     elif files_count and not diff_summary:
         parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
@@ -695,28 +692,42 @@ def _journal_entry_title(entry: Dict[str, Any]) -> str:
 def _journal_entry_description(entry: Dict[str, Any]) -> str:
     lines: List[str] = []
     commit_messages = _compact_strings(entry.get("commit_messages", []))
-    if commit_messages:
-        if len(commit_messages) == 1:
-            lines.append(f"Commit : {commit_messages[0]}")
-        else:
-            lines.append("Commits : " + " · ".join(commit_messages))
     body = str(entry.get("body") or "").strip()
     body = _strip_commit_sentence(body, commit_messages)
     if body.startswith("Port\u00e9e : ") and not commit_messages:
         body = ""
-    if body:
-        lines.append(body)
+
+    if commit_messages:
+        if len(commit_messages) == 1:
+            lines.append(f"Commit : {commit_messages[0]}")
+            if body:
+                lines.append(body)
+        else:
+            # Plusieurs commits : tenter l'appariement avec les paragraphes du body.
+            # Si le compte correspond, chaque commit est suivi de son résumé.
+            # Sinon, fallback : liste plate + body complet.
+            body_parts = [p.strip() for p in body.split("\n") if p.strip()]
+            if body_parts and len(body_parts) == len(commit_messages):
+                for msg, summary in zip(commit_messages, body_parts):
+                    lines.append(f"Commit : {msg}")
+                    lines.append(summary)
+            else:
+                lines.append("Commits : " + " \u00b7 ".join(commit_messages))
+                if body:
+                    lines.append(body)
+    else:
+        if body:
+            lines.append(body)
+
     if not lines:
         duration = int(entry.get("duration_min") or 0)
-        lines.append(f"Travail observé sur {_journal_entry_title(entry)} pendant {duration} min.")
+        lines.append(f"Travail observ\u00e9 sur {_journal_entry_title(entry)} pendant {duration} min.")
     return "\n".join(lines)
 
 
 def _journal_entry_scope(entry: Dict[str, Any]) -> str:
     top_files = _compact_strings(entry.get("top_files", []))
     if top_files:
-        # Regroupement sémantique par langage — plus lisible qu'une liste plate
-        # quand il y a plusieurs fichiers de types différents.
         return cluster_files_for_display(top_files)
     files_count = int(entry.get("files_count") or 0)
     if files_count > 0:
@@ -1020,13 +1031,13 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
         for name in sorted(current):
             item = current[name]
             lines.extend(["", f"## {name}", "",
-                f"- Premi\u00e8re session : {item['first_session']}",
-                f"- Derni\u00e8re session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
-                f"- Type de travail d\u00e9tect\u00e9 : {item['task']}",
+                f"- Première session : {item['first_session']}",
+                f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
+                f"- Type de travail détecté : {item['task']}",
             ])
             recent_episodes = item.get("recent_episodes", [])
             if recent_episodes:
-                lines.append("- \u00c9pisodes r\u00e9cents :")
+                lines.append("- Épisodes récents :")
                 for episode in recent_episodes[:5]:
                     lines.append(f"  - {episode['date_time']} | {episode['probable_task']} | {episode['activity_level']} | {episode['duration_min']} min | {episode['boundary_reason']} | {episode['episode_id']}")
         projects_file.write_text("\n".join(lines).strip() + "\n")
@@ -1036,7 +1047,7 @@ def _update_index(base_dir: Path) -> None:
     index_file = base_dir / "MEMORY.md"
     with _memory_write_lock:
         entries = [f"- [{f.stem}]({f.name})" for f in sorted(base_dir.glob("*.md")) if f.name != "MEMORY.md"]
-        content = "# Index m\u00e9moire Pulse\n\n" + "\n".join(entries)
+        content = "# Index mémoire Pulse\n\n" + "\n".join(entries)
         if entries:
             content += "\n"
         index_file.write_text(content)
@@ -1058,20 +1069,20 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
             current_name = line[3:]
             result[current_name] = {"recent_episodes": []}
             in_recent_episodes = False
-        elif current_name and line.startswith("- Premi\u00e8re session : "):
+        elif current_name and line.startswith("- Première session : "):
             result[current_name]["first_session"] = line.split(": ", 1)[1]
             in_recent_episodes = False
-        elif current_name and line.startswith("- Derni\u00e8re session : "):
+        elif current_name and line.startswith("- Dernière session : "):
             value = line.split(": ", 1)[1]
             date_part, details = _split_last_session(value)
             result[current_name]["last_session"] = date_part
             result[current_name]["last_duration"] = details["duration"]
             result[current_name]["last_task"] = details["task"]
             in_recent_episodes = False
-        elif current_name and line.startswith("- Type de travail d\u00e9tect\u00e9 : "):
+        elif current_name and line.startswith("- Type de travail détecté : "):
             result[current_name]["task"] = line.split(": ", 1)[1]
             in_recent_episodes = False
-        elif current_name and line == "- \u00c9pisodes r\u00e9cents :":
+        elif current_name and line == "- Épisodes récents :":
             in_recent_episodes = True
         elif current_name and in_recent_episodes and raw_line.startswith("  - "):
             episode = _parse_project_episode_line(raw_line.strip()[2:].strip())
@@ -1209,7 +1220,7 @@ def _split_last_session(value: str) -> tuple:
 
 def _time_slot(hour: int) -> str:
     if 6 <= hour < 12: return "matin"
-    if 12 <= hour < 18: return "apr\u00e8s-midi"
+    if 12 <= hour < 18: return "après-midi"
     return "soir"
 
 
