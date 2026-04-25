@@ -484,6 +484,12 @@ class SignalScorer:
         "diff_source_files":     {"coding": 1.2},
         "diff_test_files":       {"coding": 1.0, "debug": 0.4},
         "diff_docs_files":       {"writing": 1.2},
+        # Séquence d'apps — signal d'intention basé sur les transitions.
+        # Poids faibles : corroboration uniquement, jamais décisif seul.
+        "app_ai_assisted":       {"coding": 0.8},   # IA + éditeur
+        "app_test_debug_cycle":  {"debug": 0.8},    # éditeur + terminal alternés
+        "app_research_then_code": {"coding": 0.6},  # navigateur puis éditeur
+        "app_research_only":     {"exploration": 0.6},  # navigateur seul
     }
 
     def _collect_active_signals(
@@ -607,6 +613,13 @@ class SignalScorer:
                 active.add("diff_test_files")
             if diff_type_mix.get("docs", 0) >= 1:
                 active.add("diff_docs_files")
+
+        # Séquence d'apps — signal d'intention basé sur les transitions.
+        # Détecte les patterns de workflow depuis recent_apps (30 min).
+        # Activé uniquement comme corroboration — poids faibles.
+        app_pattern = self._detect_app_transition_pattern(recent_apps)
+        if app_pattern:
+            active.add(app_pattern)
 
         return frozenset(active)
 
@@ -831,6 +844,67 @@ class SignalScorer:
                 best_event = event
                 best_key = candidate
         return best_event
+
+    def _detect_app_transition_pattern(self, recent_apps: List[str]) -> Optional[str]:
+        """
+        Détecte un pattern de workflow depuis la séquence d'apps (30 min).
+
+        Retourne un signal parmi :
+          app_ai_assisted       — IA + éditeur (Claude/ChatGPT suivi d'un éditeur)
+          app_test_debug_cycle  — éditeur + terminal alternés (cycle test/debug)
+          app_research_then_code — navigateur puis éditeur
+          app_research_only     — navigateur seul sans éditeur
+          None                  — pas de pattern détectable
+
+        La séquence est lue dans l'ordre chronologique (recent_apps[-1] = plus récente).
+        """
+        if not recent_apps or len(recent_apps) < 2:
+            return None
+
+        AI_APPS = {"Claude", "ChatGPT", "Gemini", "Copilot", "Codex"}
+
+        has_ai   = any(app in AI_APPS for app in recent_apps)
+        has_dev  = any(app in self.DEV_APPS for app in recent_apps)
+        has_browser = any(app in self.BROWSER_APPS for app in recent_apps)
+        has_terminal = any(app in self.TERMINAL_APPS for app in recent_apps)
+
+        # IA + éditeur → assistance active
+        if has_ai and has_dev:
+            return "app_ai_assisted"
+
+        # Éditeur + terminal alternés → cycle test/debug
+        # Exige au moins 3 apps pour avoir une vraie alternance.
+        if has_dev and has_terminal and len(recent_apps) >= 3:
+            dev_terminal_switches = 0
+            for i in range(1, len(recent_apps)):
+                prev_is_dev = recent_apps[i - 1] in self.DEV_APPS
+                curr_is_terminal = recent_apps[i] in self.TERMINAL_APPS
+                prev_is_terminal = recent_apps[i - 1] in self.TERMINAL_APPS
+                curr_is_dev = recent_apps[i] in self.DEV_APPS
+                if (prev_is_dev and curr_is_terminal) or (prev_is_terminal and curr_is_dev):
+                    dev_terminal_switches += 1
+            if dev_terminal_switches >= 2:
+                return "app_test_debug_cycle"
+
+        # Navigateur puis éditeur → recherche puis implémentation
+        if has_browser and has_dev:
+            # Vérifier que le navigateur précède l'éditeur dans la séquence
+            last_browser_idx = max(
+                (i for i, app in enumerate(recent_apps) if app in self.BROWSER_APPS),
+                default=-1,
+            )
+            last_dev_idx = max(
+                (i for i, app in enumerate(recent_apps) if app in self.DEV_APPS),
+                default=-1,
+            )
+            if last_browser_idx < last_dev_idx:
+                return "app_research_then_code"
+
+        # Navigateur seul sans éditeur
+        if has_browser and not has_dev:
+            return "app_research_only"
+
+        return None
 
     def _file_event_matches_workspace(self, event, workspace_root: str) -> bool:
         path = event.payload.get("path")
