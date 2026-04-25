@@ -32,6 +32,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from daemon.core.file_cluster import cluster_files_for_display
 from daemon.memory.facts import FactEngine
 
 log = logging.getLogger("pulse")
@@ -73,9 +74,7 @@ _NOISE_PATTERNS = {
 }
 _NOISE_SUBSTRINGS = {
     ".sb-", "__pycache__", "DerivedData", "xcuserdata",
-    # Captures d'écran macOS (deux variantes typographiques)
     "Capture d\u2019\u00e9cran", "Capture d'\u00e9cran", "Screenshot",
-    # Fichiers d'outils IA (Codex, contexts auto-générés)
     "globalContext.json", "openai_yaml",
 }
 
@@ -439,7 +438,7 @@ def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files,
         for line in diff_summary.splitlines():
             facts.append(line)
     elif top_files:
-        facts.append(f"Fichiers modifiés : {', '.join(top_files[:5])}")
+        facts.append(f"Fichiers modifiés : {cluster_files_for_display(top_files)}")
     elif files_count:
         facts.append(f"Fichiers modifiés : {files_count}")
     if friction >= 0.7:
@@ -467,9 +466,8 @@ def _deterministic_summary(duration, task, focus, friction, top_files, files_cou
     if diff_summary:
         parts.append(diff_summary.splitlines()[0])
     if top_files and not diff_summary:
-        main_file = top_files[0]
-        others = f" (+{len(top_files) - 1})" if len(top_files) > 1 else ""
-        parts.append(f"Portée : {main_file}{others}.")
+        # Regroupement sémantique par langage au lieu d'une liste plate.
+        parts.append(f"Portée : {cluster_files_for_display(top_files)}.")
     elif files_count and not diff_summary:
         parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
     if focus_str:
@@ -707,7 +705,9 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
 def _journal_entry_scope(entry: Dict[str, Any]) -> str:
     top_files = _compact_strings(entry.get("top_files", []))
     if top_files:
-        return ", ".join(top_files[:4])
+        # Regroupement sémantique par langage — plus lisible qu'une liste plate
+        # quand il y a plusieurs fichiers de types différents.
+        return cluster_files_for_display(top_files)
     files_count = int(entry.get("files_count") or 0)
     if files_count > 0:
         return f"{files_count} fichier(s) / module(s)"
@@ -1086,8 +1086,6 @@ def _build_consolidation_frame(session_data: Dict[str, Any], *, commit_message: 
         "episode": episode,
         "active_project": active_project,
         "probable_task": probable_task,
-        # Fallback sur session_data quand l'épisode est encore ouvert
-        # (cas screen_lock court) — évite activity_level: "unknown" dans le journal.
         "activity_level": (episode or {}).get("activity_level") or session_data.get("activity_level"),
         "task_confidence": (episode or {}).get("task_confidence") or session_data.get("task_confidence"),
         "duration_min": duration_min,
