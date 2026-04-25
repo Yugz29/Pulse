@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 from .event_bus import DEFAULT_EVENT_BUS_SIZE, EventBus
 from .file_classifier import classify_file_type, file_signal_significance, is_pulse_internal_path
+from .git_diff import extract_file_names_from_diff_summary
 from .session_fsm import SESSION_TIMEOUT_MIN
 from .workspace_context import extract_project_name, find_workspace_root
 
@@ -74,6 +75,7 @@ class SignalScorer:
         session_started_at: Optional[datetime] = None,
         observed_now: Optional[datetime] = None,
         project_hint: Optional[str] = None,
+        diff_summary: Optional[str] = None,
     ) -> Signals:
         # Les fenêtres de calcul montent jusqu'à 30 min. En session active,
         # une coupe fixe à 100 tronque artificiellement ce signal bien avant
@@ -162,6 +164,7 @@ class SignalScorer:
             file_type_mix=file_type_mix_10m,
             dominant_file_mode=dominant_file_mode,
             work_pattern_candidate=work_pattern_candidate,
+            diff_summary=diff_summary,
         )
         focus_level = self._detect_focus_level(recent, app_events, meaningful_file_events, now)
         activity_level = self._detect_activity_level(
@@ -475,6 +478,12 @@ class SignalScorer:
         "terminal_vcs":          {"exploration": 1.0},
         # Friction seule : poids quasi-nul, jamais décisif sans autre preuve
         "high_friction":         {"debug": 0.3},
+        # Diff git — signal de secours quand aucun FSEvent récent.
+        # Poids intentionnellement plus faibles que les signaux FSEvents :
+        # le diff dit "ces fichiers ont changé" mais pas "tu es en train de les éditer".
+        "diff_source_files":     {"coding": 1.2},
+        "diff_test_files":       {"coding": 1.0, "debug": 0.4},
+        "diff_docs_files":       {"writing": 1.2},
     }
 
     def _collect_active_signals(
@@ -490,6 +499,7 @@ class SignalScorer:
         edited_file_count: int,
         file_type_mix: Dict[str, int],
         work_pattern_candidate: Optional[str],
+        diff_summary: Optional[str] = None,
     ) -> frozenset:
         active = set()
         latest_app = recent_apps[-1] if recent_apps else None
@@ -582,6 +592,22 @@ class SignalScorer:
         if friction_score >= 0.75:
             active.add("high_friction")
 
+        # Diff git — signal de secours quand aucun FSEvent récent (10 min).
+        # Activé uniquement si edited_file_count == 0 pour ne pas doubler
+        # les signaux FSEvents déjà présents.
+        if edited_file_count == 0 and diff_summary:
+            diff_files = extract_file_names_from_diff_summary(diff_summary)
+            diff_type_mix: Dict[str, int] = {}
+            for fname in diff_files:
+                ftype = self._classify_file_type(fname)
+                diff_type_mix[ftype] = diff_type_mix.get(ftype, 0) + 1
+            if diff_type_mix.get("source", 0) >= 1:
+                active.add("diff_source_files")
+            if diff_type_mix.get("test", 0) >= 1:
+                active.add("diff_test_files")
+            if diff_type_mix.get("docs", 0) >= 1:
+                active.add("diff_docs_files")
+
         return frozenset(active)
 
     def _score_tasks(self, active_signals: frozenset) -> Dict[str, float]:
@@ -605,6 +631,7 @@ class SignalScorer:
         file_type_mix: Dict[str, int],
         dominant_file_mode: str,
         work_pattern_candidate: Optional[str],
+        diff_summary: Optional[str] = None,
     ) -> tuple:
         active = self._collect_active_signals(
             active_project=active_project,
@@ -617,6 +644,7 @@ class SignalScorer:
             edited_file_count=edited_file_count,
             file_type_mix=file_type_mix,
             work_pattern_candidate=work_pattern_candidate,
+            diff_summary=diff_summary,
         )
         scores = self._score_tasks(active)
 

@@ -669,6 +669,7 @@ class RuntimeOrchestrator:
             session_started_at=self._session_fsm.session_started_at,
             observed_now=observed_now,
             project_hint=project_hint,
+            diff_summary=self.runtime_state.get_diff_summary() or None,
         )
         present = self.runtime_state.update_present(
             signals=signals,
@@ -1090,6 +1091,7 @@ class RuntimeOrchestrator:
                 or self._session_fsm.last_meaningful_activity_at
             ),
             project_hint=snapshot.present.active_project,
+            diff_summary=self.runtime_state.get_diff_summary() or None,
         )
         if signals is None or not hasattr(signals, "session_duration_min"):
             return
