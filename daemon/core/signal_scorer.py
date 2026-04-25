@@ -52,7 +52,7 @@ class SignalScorer:
     """Convertit les derniers events en signaux simples pour le moteur local."""
 
     DEV_APPS = {
-        "Xcode", "VSCode", "Visual Studio Code", "Cursor", "WebStorm",
+        "Xcode", "VSCode", "Visual Studio Code", "Code", "Cursor", "WebStorm",
         "PyCharm", "Terminal", "iTerm2", "Warp",
     }
     BROWSER_APPS = {"Safari", "Google Chrome", "Chrome", "Firefox", "Arc"}
