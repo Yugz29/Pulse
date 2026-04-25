@@ -92,6 +92,16 @@ class RuntimeOrchestrator:
         self._diff_cooldown_sec: float = 120.0
         self._last_diff_triggered: dict[str, float] = {}
         self._diff_trigger_lock = threading.Lock()
+        # Thread de sync périodique — écrit dans le journal toutes les 30 min
+        # même sans commit ni screen_lock, tant qu'il y a un diff actif.
+        self._periodic_sync_interval_sec: float = 30 * 60
+        self._periodic_sync_stopped: bool = False
+        self._periodic_sync_worker = threading.Thread(
+            target=self._periodic_sync_loop,
+            daemon=True,
+            name="pulse-periodic-sync",
+        )
+        self._periodic_sync_worker.start()
         self._fact_engine = get_fact_engine()
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
@@ -389,6 +399,49 @@ class RuntimeOrchestrator:
             args=(path,),
             daemon=True,
         ).start()
+
+    def _periodic_sync_loop(self) -> None:
+        """
+        Boucle de fond : écrit dans le journal toutes les 30 min si actif.
+
+        Conditions pour déclencher :
+        - Pas en pause, pas écran verrouillé
+        - Un diff actif est disponible (activité réelle détectée)
+        - Au moins 20 min de session
+        - Au moins 25 min depuis le dernier sync (laisse une marge)
+        """
+        import time as _time
+        _time.sleep(60)  # délai initial au démarrage du daemon
+        while not self._periodic_sync_stopped:
+            _time.sleep(self._periodic_sync_interval_sec)
+            if self._periodic_sync_stopped:
+                return
+            try:
+                if self.runtime_state.is_paused():
+                    continue
+                if self.runtime_state.is_screen_locked():
+                    continue
+                diff_summary = self.runtime_state.get_diff_summary() or None
+                if not diff_summary:
+                    continue
+                snapshot = self.runtime_state.get_runtime_snapshot()
+                if snapshot.present.session_duration_min < 20:
+                    continue
+                previous_sync_at = self.runtime_state.get_last_memory_sync_at()
+                if previous_sync_at is not None:
+                    elapsed_min = (datetime.now() - previous_sync_at).total_seconds() / 60
+                    if elapsed_min < 25:
+                        continue
+                self.log.info("periodic sync déclenché (diff actif, %d min de session)",
+                              snapshot.present.session_duration_min)
+                memory_snapshot = self._export_memory_payload()
+                threading.Thread(
+                    target=self._sync_memory_background,
+                    args=(memory_snapshot, None, None, "screen_lock", diff_summary),
+                    daemon=True,
+                ).start()
+            except Exception as exc:
+                self.log.warning("periodic sync échouée : %s", exc)
 
     def _trigger_diff_background(self, workspace: str) -> None:
         """Lance read_diff_summary en background avec cooldown par workspace."""
@@ -936,6 +989,7 @@ class RuntimeOrchestrator:
                 name="pulse-file-burst",
             )
             self._file_flush_worker.start()
+        self._periodic_sync_stopped = True
         with self._commit_watch_lock:
             self._pending_commit_watch = set()
         with self._head_sha_lock:
