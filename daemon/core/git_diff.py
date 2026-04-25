@@ -58,12 +58,38 @@ def read_commit_diff_summary(project_root: str | Path) -> str:
     if not root.exists():
         return ""
 
-    # git show HEAD avec stat complet et diff
     raw = _run_git_diff(root, ["show", "HEAD", "--format=format:", "-U2"])
     if not raw:
         return ""
 
     return _parse_diff(raw)
+
+
+def extract_file_names_from_diff_summary(diff_summary: str) -> list[str]:
+    """
+    Extrait les noms de fichiers depuis un résumé de diff produit par _parse_diff.
+
+    Format attendu :
+      "Diff en cours : file_cluster.py (+85 -0), extractor.py (+12 -8)"
+      → ["file_cluster.py", "extractor.py"]
+
+    Utilisé comme fallback quand top_files est vide au moment d'un commit :
+    le diff commit est la source la plus fiable des fichiers réellement modifiés.
+    """
+    if not diff_summary:
+        return []
+    for line in diff_summary.splitlines():
+        if line.startswith("Diff en cours : "):
+            raw_parts = line[len("Diff en cours : "):].split(", ")
+            files = []
+            for part in raw_parts:
+                # "file_cluster.py (+85 -0)" → "file_cluster.py"
+                name = part.split(" ")[0].strip()
+                # Sanity check : un vrai nom de fichier contient une extension
+                if name and "." in name:
+                    files.append(name)
+            return files
+    return []
 
 
 def _run_git_diff(root: Path, args: list[str]) -> str:
