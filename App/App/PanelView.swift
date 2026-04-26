@@ -16,7 +16,8 @@ struct NotchRootView: View {
     let panelWidth: CGFloat = NotchWindow.panelWidth
     var panelHeight: CGFloat { vm.currentPanelHeight }
 
-    var shapePanelWidth: CGFloat { vm.isExpanded ? panelWidth : notchWidth }
+    var shapePanelWidth: CGFloat { vm.isExpanded ? panelWidth : notchWidth + (hoverExtra * 2) }
+
     var shapePanelHeight: CGFloat {
         if vm.isExpanded { return panelHeight }
         if vm.isStartupExpanded { return startupExtensionHeight }
@@ -25,7 +26,8 @@ struct NotchRootView: View {
 
     var hoverExtra: CGFloat {
         guard vm.isHovering && !vm.isExpanded && !vm.isStartupExpanded else { return 0 }
-        return 8
+        // +8 pour compenser le décalage rt des coins concaves dans openPanelPath
+        return 16
     }
 
     var body: some View {
@@ -44,24 +46,20 @@ struct NotchRootView: View {
                 .animation(.spring(response: 0.5, dampingFraction: 0.82), value: vm.isStartupExpanded)
                 .animation(.spring(response: 0.42, dampingFraction: 0.82), value: vm.isExpanded)
 
-                if !vm.isExpanded && vm.transientStatusText == nil {
-                    Circle()
-                        .fill(vm.overallHealthColor)
-                        .frame(width: 4, height: 4)
-                        .position(x: geo.size.width / 2, y: notchHeight - 6)
-                        .animation(.easeInOut(duration: 0.5), value: vm.isDaemonActive)
-                }
-
-                if vm.isStartupVisible && vm.isStartupExpanded {
-                    HStack(spacing: 6) {
-                        Circle().fill(Color(hex: "#5DCAA5")).frame(width: 5, height: 5)
-                        Text("Pulse est actif")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    .frame(width: notchWidth)
-                    .offset(y: notchHeight + 3)
-                    .transition(.opacity)
+                if vm.glowIntensity > 0.01 {
+                    GlowStrokeShape(
+                        bottomCornerRadius: 12,
+                        notchWidth: notchWidth,
+                        notchHeight: notchHeight,
+                        panelWidth: shapePanelWidth,
+                        panelHeight: shapePanelHeight + hoverExtra
+                    )
+                    .stroke(vm.glowColor.opacity(min(vm.glowIntensity * 1.4, 1.0)), lineWidth: 4.5)
+                    .frame(width: geo.size.width)
+                    .animation(.bouncy.speed(1.2), value: vm.isHovering)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.82), value: vm.isStartupExpanded)
+                    .animation(.spring(response: 0.42, dampingFraction: 0.82), value: vm.isExpanded)
+                    .allowsHitTesting(false)
                 }
 
                 if let status = vm.transientStatusText, vm.isStartupExpanded {
@@ -125,7 +123,6 @@ struct NotchRootView: View {
         .onAppear {
             vm.refreshState()
             vm.startMcpPolling()
-            vm.triggerStartupAnimation()
         }
     }
 }

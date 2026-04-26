@@ -16,6 +16,19 @@ final class PulseViewModel: ObservableObject {
     @Published var inputText = ""
     @Published var transientStatusText: String? = nil
     @Published var transientStatusAccent = Color(hex: "#5DCAA5")
+    @Published var startupGlowActive: Bool = false
+    @Published var startupGlowColor: Color = Color(hex: "#5DCAA5")
+    @Published var glowIntensity: Double = 0.0
+    var breathingPhase: Bool = false
+
+    var glowColor: Color {
+        if startupGlowActive { return startupGlowColor }
+        switch serviceStatus {
+        case .daemonOffline: return Color(hex: "#ff453a")
+        case .daemonPaused, .observationPaused: return Color(hex: "#F5A623")
+        default: return .clear
+        }
+    }
 
     @Published var activeProject: String? = nil
     @Published var activeApp: String? = nil
@@ -53,7 +66,7 @@ final class PulseViewModel: ObservableObject {
 
     let bridge: DaemonBridge
     var lastModelsRefreshAt: Date?
-    var lastFeedTimestamp: String? = nil
+    var lastFeedTimestamp: String? = ISO8601DateFormatter().string(from: Date())
     var pollTask: Task<Void, Never>?
     var askTask: Task<Void, Never>?
     var shouldShowCancellationFeedback = true
