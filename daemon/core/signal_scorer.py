@@ -111,6 +111,10 @@ class SignalScorer:
             active_file = self._last_file_path(meaningful_file_events)
             active_project = self._extract_project(active_file)
 
+        # Fallback : si FSEvents n'a rien captué, extraire le fichier depuis
+        # le titre de fenêtre (ex. "extractor.py — Pulse — VS Code").
+        # Appliqué après la lecture de window_title_signal.
+
         app_events = [e for e in recent if e.type in {"app_activated", "app_switch"}]
         recent_apps = self._recent_apps(app_events, now)
 
@@ -121,6 +125,14 @@ class SignalScorer:
         mcp_signal = self._latest_mcp_signal(recent, now)
         terminal_signal = self._latest_terminal_signal(recent, now)
         window_title_signal = self._latest_window_title_signal(recent, now)
+
+        # Fallback active_file depuis le titre de fenêtre.
+        if not active_file and window_title_signal:
+            file_from_title = self._extract_file_from_window_title(
+                window_title_signal.get("title") or ""
+            )
+            if file_from_title:
+                active_file = file_from_title
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
         has_recent_local_exploration = self._has_recent_local_exploration(recent, now)
 
@@ -937,6 +949,39 @@ class SignalScorer:
         if has_browser and not has_dev:
             return "app_research_only"
 
+        return None
+
+    def _extract_file_from_window_title(self, title: str) -> Optional[str]:
+        """
+        Extrait un nom de fichier depuis un titre de fenêtre.
+
+        Formats reconnus :
+          "extractor.py — Pulse — Visual Studio Code" → extractor.py
+          "App — AppApp.swift"                         → AppApp.swift
+          "SQLite WAL Mode — Firefox"                  → None
+
+        On cherche le premier segment qui ressemble à un nom de fichier
+        (contient un point, extension connue). Le séparateur peut être
+        — (em dash), – (en dash) ou - (tiret simple).
+        """
+        if not title:
+            return None
+
+        _SOURCE_EXTENSIONS = {
+            ".py", ".swift", ".ts", ".tsx", ".js", ".jsx",
+            ".go", ".rs", ".kt", ".java", ".c", ".cpp", ".h",
+            ".m", ".mm", ".cs", ".rb", ".php", ".sh", ".zsh",
+            ".md", ".yaml", ".yml", ".toml", ".json",
+        }
+
+        import re
+        segments = re.split(r" [—–-] ", title)
+        for segment in segments:
+            segment = segment.strip()
+            if "." in segment:
+                ext = "." + segment.rsplit(".", 1)[-1].lower()
+                if ext in _SOURCE_EXTENSIONS:
+                    return segment
         return None
 
     def _file_event_matches_workspace(self, event, workspace_root: str) -> bool:
