@@ -209,6 +209,18 @@ class SystemObserver {
               !title.isEmpty else { return nil }
 
         guard !isTrivialWindowTitle(title, appName: appName) else { return nil }
+
+        // Tronque les titres trop longs — 120 chars max.
+        // Les titres GitHub/YouTube peuvent être très verbeux.
+        let maxLength = 120
+        if title.count > maxLength {
+            let truncated = String(title.prefix(maxLength))
+            // Coupe proprement au dernier espace pour ne pas trancher un mot.
+            if let lastSpace = truncated.lastIndex(of: " ") {
+                return String(truncated[..<lastSpace]) + "…"
+            }
+            return truncated + "…"
+        }
         return title
     }
 
