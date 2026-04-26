@@ -823,7 +823,7 @@ class TestExtractor(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         before = session_files[0].read_text()
-        self.assertIn("Commit : feat: commit enrichi", before)
+        self.assertIn("feat: commit enrichi", before)
         self.assertNotIn("Résumé court de la session.", before)
 
         ok = enrich_session_report(
@@ -836,7 +836,7 @@ class TestExtractor(unittest.TestCase):
 
         after = session_files[0].read_text()
         self.assertIn("Résumé court de la session.", after)
-        self.assertIn("Commit : feat: commit enrichi", after)
+        self.assertIn("feat: commit enrichi", after)
 
     def test_fact_engine_structural_error_is_logged_and_exposed_via_facts_route(self):
         class ReadOnlyFailingFactEngine(extractor_module.FactEngine):

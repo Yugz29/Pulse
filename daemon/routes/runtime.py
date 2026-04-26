@@ -526,14 +526,29 @@ def _normalize_terminal_event_payload(event_type: str, payload: dict[str, Any]) 
     interpretation = _terminal_interpreter.interpret(command)
     action_category = _terminal_action_category(command, interpretation)
     base_cmd = _split_command(command)[0]
-    summary = interpretation.translated if not interpretation.needs_llm else _terminal_category_summary(action_category)
+
+    # Résumé enrichi : statut de sortie + description humaine de la commande.
+    # Si exit_code est disponible (terminal_command_finished), on préfixe
+    # le résumé avec ✓/✗ pour indiquer succès ou échec.
+    if interpretation.needs_llm:
+        raw_summary = _terminal_category_summary(action_category)
+    else:
+        raw_summary = interpretation.translated
+
+    if exit_code is not None:
+        status_prefix = "\u2713" if exit_code == 0 else "\u2717"
+        summary = f"{status_prefix} {raw_summary}"
+    else:
+        summary = raw_summary
 
     normalized.update(
         {
+            "terminal_command": command,
             "terminal_command_base": base_cmd,
             "terminal_action_category": action_category,
             "terminal_is_read_only": interpretation.is_read_only,
             "terminal_affects": list(interpretation.affects),
+            "terminal_success": (exit_code == 0) if exit_code is not None else None,
             "terminal_summary": summary,
         }
     )

@@ -404,8 +404,6 @@ def _write_session_report(
     top_files   = _clean_files(session.get("top_files", []))
     files_count = session.get("files_changed", 0)
 
-    # Fallback : si top_files est vide après nettoyage et qu'on a un diff commit,
-    # extraire les fichiers depuis le diff — git est la source la plus fiable.
     if not top_files and diff_summary and trigger in {"commit", None}:
         files_from_diff = extract_file_names_from_diff_summary(diff_summary)
         if files_from_diff:
@@ -416,9 +414,9 @@ def _write_session_report(
             body = _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary)
         except Exception as exc:
             log.warning("Memory : erreur résumé LLM, fallback déterministe utilisé : %s", exc)
-            body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary)
+            body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary, terminal_summary=session.get("terminal_summary"))
     else:
-        body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary)
+        body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary, terminal_summary=session.get("terminal_summary"))
 
     entry_id = _new_entry_id(now)
     episode = consolidation.get("episode") or {}
@@ -468,7 +466,7 @@ N'invente aucun fait absent des données ci-dessus."""
     return _llm_complete(llm, prompt, max_tokens=256, think=False)
 
 
-def _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, *, diff_summary=None) -> str:
+def _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, *, diff_summary=None, terminal_summary=None) -> str:
     focus_str = {"deep": "focus profond", "scattered": "travail dispersé", "idle": "session légère", "normal": ""}.get(focus, "")
     parts = []
     if commit_message:
@@ -479,6 +477,8 @@ def _deterministic_summary(duration, task, focus, friction, top_files, files_cou
         parts.append(f"Portée : {cluster_files_for_display(top_files)}.")
     elif files_count and not diff_summary:
         parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
+    if terminal_summary and not diff_summary and not commit_message:
+        parts.append(terminal_summary)
     if focus_str:
         parts.append(f"Rythme : {focus_str}.")
     if friction >= 0.7:
@@ -701,18 +701,22 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
 
     if commit_messages:
         if len(commit_messages) == 1:
-            lines.append(f"Commit : {commit_messages[0]}")
+            # Commit unique : message en gras, résumé en dessous
+            lines.append(f"**{commit_messages[0]}**")
             if body:
                 lines.append(body)
         else:
             # Plusieurs commits : tenter l'appariement avec les paragraphes du body.
-            # Si le compte correspond, chaque commit est suivi de son résumé.
-            # Sinon, fallback : liste plate + body complet.
+            # Si le compte correspond, chaque commit en gras suivi de son résumé,
+            # avec double saut de ligne entre chaque paire pour lisibilité.
             body_parts = [p.strip() for p in body.split("\n") if p.strip()]
             if body_parts and len(body_parts) == len(commit_messages):
-                for msg, summary in zip(commit_messages, body_parts):
-                    lines.append(f"Commit : {msg}")
+                for i, (msg, summary) in enumerate(zip(commit_messages, body_parts)):
+                    lines.append(f"**{msg}**")
                     lines.append(summary)
+                    if i < len(commit_messages) - 1:
+                        lines.append("")
+                        lines.append("")
             else:
                 lines.append("Commits : " + " \u00b7 ".join(commit_messages))
                 if body:

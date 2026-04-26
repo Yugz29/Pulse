@@ -46,6 +46,8 @@ class Signals:
     terminal_exit_code: Optional[int] = None
     terminal_duration_ms: Optional[int] = None
     terminal_summary: Optional[str] = None
+    terminal_command: Optional[str] = None
+    terminal_success: Optional[bool] = None
 
 
 class SignalScorer:
@@ -203,6 +205,8 @@ class SignalScorer:
             terminal_exit_code=(terminal_signal or {}).get("terminal_exit_code"),
             terminal_duration_ms=(terminal_signal or {}).get("terminal_duration_ms"),
             terminal_summary=(terminal_signal or {}).get("terminal_summary"),
+            terminal_command=(terminal_signal or {}).get("terminal_command"),
+            terminal_success=(terminal_signal or {}).get("terminal_success"),
         )
 
     def _file_event_types(self) -> set[str]:
