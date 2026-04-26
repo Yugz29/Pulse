@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CoreGraphics
 import Foundation
 
@@ -17,7 +18,8 @@ actor EventDeliveryQueue {
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - SystemObserver
 // Observe le système macOS et envoie des events au daemon Python.
-// Trois sources : NSWorkspace (apps), FSEvents (fichiers), Pasteboard (clipboard)
+// Sources : NSWorkspace (apps), FSEvents (fichiers), Pasteboard (clipboard),
+//           Accessibility API (titre de fenêtre active)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SystemObserver {
@@ -38,11 +40,14 @@ class SystemObserver {
     private var lastMeaningfulFilePath: String?
     private let filesystemQueue = DispatchQueue(label: "pulse.systemobserver.filesystem", qos: .utility)
 
-    private let idleThresholdSeconds: TimeInterval = 900  // 15 min — 5 min était trop court (pause café = idle)
+    // Déduplication des titres de fenêtres — on n'émet pas si le titre
+    // n'a pas changé depuis le dernier event window_title.
+    private var lastWindowTitle: String = ""
+    private var lastWindowTitleApp: String = ""
+
+    private let idleThresholdSeconds: TimeInterval = 900  // 15 min
     private let idlePollInterval: TimeInterval = 15
 
-    // On surveille le HOME entier, puis on filtre explicitement le bruit.
-    // Ça évite de rater des workspaces hors des quelques dossiers codés en dur.
     private let watchedPaths: [String] = [NSHomeDirectory()]
 
     // MARK: - Init
@@ -61,16 +66,19 @@ class SystemObserver {
         observeUserIdle()
         observeScreenLock()
         refreshCurrentContext()
+
+        // Log si la permission Accessibility n'est pas encore accordée.
+        // Pulse fonctionne sans, mais window_title ne sera pas capturé.
+        if !AXIsProcessTrusted() {
+            print("[Pulse] Permission Accessibility non accordée — window_title désactivé. Accorder dans Préférences Système → Confidentialité → Accessibilité.")
+        }
     }
 
     func stopObserving() {
-        // NSWorkspace notifications
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
-        // DistributedNotificationCenter — centre séparé, doit être retiré explicitement
         DistributedNotificationCenter.default().removeObserver(self)
 
-        // FSEvents
         if let stream = fsEventStream {
             FSEventStreamStop(stream)
             FSEventStreamInvalidate(stream)
@@ -78,11 +86,9 @@ class SystemObserver {
             fsEventStream = nil
         }
 
-        // Clipboard polling
         clipboardTimer?.invalidate()
         clipboardTimer = nil
 
-        // Idle polling
         idleTimer?.invalidate()
         idleTimer = nil
     }
@@ -134,6 +140,13 @@ class SystemObserver {
             "bundle_id": bundleId,
             "timestamp": ISO8601DateFormatter().string(from: Date())
         ])
+
+        // Lecture du titre de fenêtre via Accessibility API.
+        // Non-bloquant : lancé en arrière-plan, résultat envoyé si pertinent.
+        let pid = app.processIdentifier
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.readAndSendWindowTitle(appName: name, pid: pid)
+        }
     }
 
     @objc private func handleAppLaunched(_ notification: Notification) {
@@ -163,6 +176,67 @@ class SystemObserver {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // MARK: - 6. Titre de fenêtre (Accessibility API)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lit le titre de la fenêtre frontale d'une app via AXUIElement.
+    // Niveau 1 : AXTitle uniquement — une seule requête, quasi gratuit.
+    // Ne fonctionne que si la permission Accessibility est accordée.
+    // Progression future : lire le contenu visible (Niveau 2) sur apps ciblées.
+
+    private func readAndSendWindowTitle(appName: String, pid: pid_t) {
+        guard AXIsProcessTrusted() else { return }
+
+        let appElement = AXUIElementCreateApplication(pid)
+
+        // Récupère la fenêtre frontale
+        var frontWindowRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedWindowAttribute as CFString,
+            &frontWindowRef
+        ) == .success,
+              let frontWindow = frontWindowRef else { return }
+
+        // Lit le titre (AXTitle)
+        var titleRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            frontWindow as! AXUIElement,
+            kAXTitleAttribute as CFString,
+            &titleRef
+        ) == .success,
+              let title = titleRef as? String,
+              !title.isEmpty else { return }
+
+        // Déduplication — on n'émet pas si le titre + app n'ont pas changé
+        let dedupeKey = "\(appName):\(title)"
+        guard dedupeKey != "\(lastWindowTitleApp):\(lastWindowTitle)" else { return }
+
+        lastWindowTitle = title
+        lastWindowTitleApp = appName
+
+        // Filtre les titres non informatifs
+        guard !isTrivialWindowTitle(title, appName: appName) else { return }
+
+        sendEvent([
+            "type": "window_title",
+            "app_name": appName,
+            "title": title,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+    }
+
+    private func isTrivialWindowTitle(_ title: String, appName: String) -> Bool {
+        // Titre identique au nom de l'app — pas d'information supplémentaire
+        if title == appName { return true }
+        // Titres génériques fréquents
+        let trivial: Set<String> = [
+            "Untitled", "Sans titre", "New Tab", "Nouvel onglet",
+            "New Window", "Nouvelle fenêtre", ""
+        ]
+        return trivial.contains(title)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // MARK: - 2. Filesystem (FSEvents)
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -182,9 +256,7 @@ class SystemObserver {
             let observer = Unmanaged<SystemObserver>
                 .fromOpaque(info).takeUnretainedValue()
             let paths = unsafeBitCast(pathsRef, to: NSArray.self)
-            let flagsBuffer = UnsafeBufferPointer(
-                start: flags, count: count
-            )
+            let flagsBuffer = UnsafeBufferPointer(start: flags, count: count)
 
             for i in 0..<count {
                 guard let path = paths[i] as? String else { continue }
@@ -200,7 +272,7 @@ class SystemObserver {
             &ctx,
             watchedPaths as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            0.8,   // latence en secondes (batching)
+            0.8,
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents |
                                      kFSEventStreamCreateFlagUseCFTypes)
         )
@@ -211,11 +283,7 @@ class SystemObserver {
     }
 
     private func handleFileChange(path: String, changeType: String) {
-        // Ignore les fichiers système / cachés / temporaires
         let name = (path as NSString).lastPathComponent
-        // COMMIT_EDITMSG : laissé passer uniquement si c'est dans .git/
-        // Le daemon gère la logique de déclenchement de rapport.
-        // Tous les autres fichiers internes git sont filtrés.
         let isCommitMsg = name == "COMMIT_EDITMSG" && path.contains("/.git/")
 
         guard !isPulseInternalPath(path) else { return }
@@ -238,13 +306,10 @@ class SystemObserver {
         let dedupeKey = "\(changeType):\(path)"
         let now = Date()
         if let lastSeen = recentFileEvents[dedupeKey],
-           now.timeIntervalSince(lastSeen) < 0.8 {
-            return
-        }
+           now.timeIntervalSince(lastSeen) < 0.8 { return }
         recentFileEvents[dedupeKey] = now
-        recentFileEvents = recentFileEvents.filter {
-            now.timeIntervalSince($0.value) < 5
-        }
+        recentFileEvents = recentFileEvents.filter { now.timeIntervalSince($0.value) < 5 }
+
         if changeType != "deleted" && !isCommitMsg {
             lastMeaningfulFilePath = path
         }
@@ -258,10 +323,6 @@ class SystemObserver {
     }
 
     private static func changeType(from flags: FSEventStreamEventFlags) -> String {
-        // "modified" testé avant "renamed" : les écritures atomiques (Xcode, etc.)
-        // lèvent kFSEventStreamEventFlagItemRenamed | kFSEventStreamEventFlagItemModified
-        // ensemble. On préfère "modified" dans ce cas — un vrai renommage n'a
-        // généralement pas le flag ItemModified en même temps.
         let isModified = flags & UInt32(kFSEventStreamEventFlagItemModified) != 0
         let isCreated  = flags & UInt32(kFSEventStreamEventFlagItemCreated)  != 0
         let isRemoved  = flags & UInt32(kFSEventStreamEventFlagItemRemoved)  != 0
@@ -276,16 +337,11 @@ class SystemObserver {
     // ─────────────────────────────────────────────────────────────────────────
     // MARK: - 3. Clipboard (polling NSPasteboard)
     // ─────────────────────────────────────────────────────────────────────────
-    // NSPasteboard n'a pas de notification native → polling à 1 Hz.
-    // changeCount permet de détecter un changement sans lire le contenu inutilement.
 
     private var lastChangeCount: Int = NSPasteboard.general.changeCount
 
     private func observeClipboard() {
-        clipboardTimer = Timer.scheduledTimer(
-            withTimeInterval: 1.0,
-            repeats: true
-        ) { [weak self] _ in
+        clipboardTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.checkClipboard()
         }
     }
@@ -295,38 +351,24 @@ class SystemObserver {
     // ─────────────────────────────────────────────────────────────────────────
 
     private func observeUserIdle() {
-        idleTimer = Timer.scheduledTimer(
-            withTimeInterval: idlePollInterval,
-            repeats: true
-        ) { [weak self] _ in
+        idleTimer = Timer.scheduledTimer(withTimeInterval: idlePollInterval, repeats: true) { [weak self] _ in
             self?.checkUserIdle()
         }
     }
 
     private func checkUserIdle() {
-        let idleSeconds = CGEventSource.secondsSinceLastEventType(
-            .combinedSessionState,
-            eventType: .null
-        )
+        let idleSeconds = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)
 
         if idleSeconds >= idleThresholdSeconds {
             guard !isUserIdle else { return }
             isUserIdle = true
-            sendEvent([
-                "type": "user_idle",
-                "seconds": String(Int(idleSeconds.rounded())),
-                "timestamp": ISO8601DateFormatter().string(from: Date())
-            ])
+            sendEvent(["type": "user_idle", "seconds": String(Int(idleSeconds.rounded())), "timestamp": ISO8601DateFormatter().string(from: Date())])
             return
         }
 
         guard isUserIdle else { return }
         isUserIdle = false
-        sendEvent([
-            "type": "user_active",
-            "seconds": String(Int(idleSeconds.rounded())),
-            "timestamp": ISO8601DateFormatter().string(from: Date())
-        ])
+        sendEvent(["type": "user_active", "seconds": String(Int(idleSeconds.rounded())), "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
 
     private func checkClipboard() {
@@ -342,10 +384,6 @@ class SystemObserver {
         lastClipboardContent = content
         let kind = clipboardContentKind(content)
 
-        // Le contenu brut du clipboard n'est jamais utilisé par le daemon :
-        // seul content_kind (url/code/stacktrace/text) alimente le scorer.
-        // On ne transmet pas le contenu pour éviter de persister des données
-        // sensibles (tokens, mots de passe, clés API) dans session.db.
         sendEvent([
             "type": "clipboard_updated",
             "content_kind": kind,
@@ -355,19 +393,13 @@ class SystemObserver {
     }
 
     private func clipboardContentKind(_ text: String) -> String {
-        // Détection simple — le daemon peut affiner
         if text.hasPrefix("http://") || text.hasPrefix("https://") { return "url" }
         if text.contains("\n") && (
-            text.contains("func ") ||
-            text.contains("def ") ||
-            text.contains("const ") ||
-            text.contains("class ") ||
-            text.contains("import ")
+            text.contains("func ") || text.contains("def ") ||
+            text.contains("const ") || text.contains("class ") || text.contains("import ")
         ) { return "code" }
         if text.contains("Error:") || text.contains("Traceback") ||
-           text.contains("at line") || text.contains("stack trace") {
-            return "stacktrace"
-        }
+           text.contains("at line") || text.contains("stack trace") { return "stacktrace" }
         return "text"
     }
 
@@ -376,50 +408,20 @@ class SystemObserver {
     // ─────────────────────────────────────────────────────────────────────────
 
     private func observeScreenLock() {
-        // Source principale : vrai verrouillage utilisateur (Cmd+Ctrl+Q, menu Apple).
-        // DistributedNotificationCenter est le seul canal qui reçoit ces événements.
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(handleScreenLocked),
-            name: NSNotification.Name("com.apple.screenIsLocked"),
-            object: nil
-        )
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(handleScreenUnlocked),
-            name: NSNotification.Name("com.apple.screenIsUnlocked"),
-            object: nil
-        )
-
-        // Source secondaire : sommeil d'écran (après le délai de mise en veille).
-        // Arrive quelques minutes après le vrai lock — tenu en compte pour
-        // les cas où l'écran s'endort sans verrouillage explicite (ex. veille auto).
-        // Coté daemon, mark_screen_locked() ignore ce second signal si le premier
-        // a déjà été reçu (protection "premier signal gagne").
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(handleScreenLocked),
-            name: NSWorkspace.screensDidSleepNotification,
-            object: nil
-        )
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(handleScreenUnlocked),
-            name: NSWorkspace.screensDidWakeNotification,
-            object: nil
-        )
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(handleScreenLocked), name: NSNotification.Name("com.apple.screenIsLocked"), object: nil)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(handleScreenUnlocked), name: NSNotification.Name("com.apple.screenIsUnlocked"), object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(handleScreenLocked), name: NSWorkspace.screensDidSleepNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(handleScreenUnlocked), name: NSWorkspace.screensDidWakeNotification, object: nil)
     }
 
     @objc private func handleScreenLocked() {
         isUserIdle = true
-        sendEvent(["type": "screen_locked",
-                   "timestamp": ISO8601DateFormatter().string(from: Date())])
+        sendEvent(["type": "screen_locked", "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
 
     @objc private func handleScreenUnlocked() {
         isUserIdle = false
-        sendEvent(["type": "screen_unlocked",
-                   "timestamp": ISO8601DateFormatter().string(from: Date())])
+        sendEvent(["type": "screen_unlocked", "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -439,24 +441,18 @@ class SystemObserver {
             if bundleId == "com.apple.finder" {
                 sendLocalExplorationEvent(appName: name, bundleId: bundleId)
             } else if shouldTrackApp(bundleId: bundleId) {
-                sendEvent([
-                    "type": "app_activated",
-                    "app_name": name,
-                    "bundle_id": bundleId,
-                    "timestamp": ISO8601DateFormatter().string(from: Date())
-                ])
+                sendEvent(["type": "app_activated", "app_name": name, "bundle_id": bundleId, "timestamp": ISO8601DateFormatter().string(from: Date())])
+                let pid = app.processIdentifier
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    self?.readAndSendWindowTitle(appName: name, pid: pid)
+                }
             }
         }
 
         if let path = lastMeaningfulFilePath,
            !path.isEmpty,
            FileManager.default.fileExists(atPath: path) {
-            sendEvent([
-                "type": "file_modified",
-                "path": path,
-                "extension": (path as NSString).pathExtension,
-                "timestamp": ISO8601DateFormatter().string(from: Date())
-            ])
+            sendEvent(["type": "file_modified", "path": path, "extension": (path as NSString).pathExtension, "timestamp": ISO8601DateFormatter().string(from: Date())])
         }
     }
 
@@ -466,22 +462,11 @@ class SystemObserver {
     }
 
     private func sendLocalExplorationEvent(appName: String, bundleId: String) {
-        sendEvent([
-            "type": "local_exploration",
-            "app_name": appName,
-            "bundle_id": bundleId,
-            "timestamp": ISO8601DateFormatter().string(from: Date())
-        ])
+        sendEvent(["type": "local_exploration", "app_name": appName, "bundle_id": bundleId, "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
 
     private func shouldTrackApp(bundleId: String) -> Bool {
-        // Processus système macOS exclus : ils génèrent des app_activated events
-        // lors des transitions de session (lock/unlock, démarrage) mais ne
-        // représentent pas une vraie utilisation d'application par l'utilisateur.
-        let blockedBundleIds: Set<String> = [
-            "com.apple.finder",
-            "com.apple.loginwindow",  // gestionnaire de session (lock/unlock)
-        ]
+        let blockedBundleIds: Set<String> = ["com.apple.finder", "com.apple.loginwindow"]
         return !blockedBundleIds.contains(bundleId) && !bundleId.contains("pulse")
     }
 }

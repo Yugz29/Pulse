@@ -48,6 +48,8 @@ class Signals:
     terminal_summary: Optional[str] = None
     terminal_command: Optional[str] = None
     terminal_success: Optional[bool] = None
+    window_title: Optional[str] = None
+    window_title_app: Optional[str] = None
 
 
 class SignalScorer:
@@ -118,6 +120,7 @@ class SignalScorer:
         clipboard_context = self._last_clipboard_context(clipboard_events, now)
         mcp_signal = self._latest_mcp_signal(recent, now)
         terminal_signal = self._latest_terminal_signal(recent, now)
+        window_title_signal = self._latest_window_title_signal(recent, now)
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
         has_recent_local_exploration = self._has_recent_local_exploration(recent, now)
 
@@ -207,6 +210,8 @@ class SignalScorer:
             terminal_summary=(terminal_signal or {}).get("terminal_summary"),
             terminal_command=(terminal_signal or {}).get("terminal_command"),
             terminal_success=(terminal_signal or {}).get("terminal_success"),
+            window_title=(window_title_signal or {}).get("title"),
+            window_title_app=(window_title_signal or {}).get("app_name"),
         )
 
     def _file_event_types(self) -> set[str]:
@@ -794,6 +799,20 @@ class SignalScorer:
             predicate=lambda item: (
                 item.type in {"terminal_command_started", "terminal_command_finished"}
                 and bool((item.payload or {}).get("terminal_action_category"))
+            ),
+            cutoff=cutoff,
+        )
+        if event is None:
+            return None
+        return event.payload or {}
+
+    def _latest_window_title_signal(self, recent: list, now: datetime, minutes: int = 10) -> Optional[dict]:
+        cutoff = now - timedelta(minutes=minutes)
+        event = self._latest_event(
+            recent,
+            predicate=lambda item: (
+                item.type == "window_title"
+                and bool((item.payload or {}).get("title"))
             ),
             cutoff=cutoff,
         )
