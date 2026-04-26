@@ -941,6 +941,18 @@ def _is_noise_journal_entry(entry: Dict[str, Any]) -> bool:
     body = str(entry.get("body") or "").strip()
     top_files = _compact_strings(entry.get("top_files", []))
     off_project = _is_off_project_entry(entry)
+    activity = str(entry.get("activity_level") or "unknown")
+
+    # Activité idle sans aucun signal de travail — peu importe la durée.
+    # Signature typique : nuit devant YouTube, pause café, écran allumé sans usage.
+    # Ces données n'ont pas leur place dans un journal de bord dev.
+    if (
+        activity == "idle"
+        and task == "general"
+        and not commit_messages
+        and not top_files
+    ):
+        return True
 
     if duration < 3 and not commit_messages and not _has_useful_journal_body(body): return True
     if entry.get("overlap_demoted"): return True
