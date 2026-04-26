@@ -11,6 +11,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     case session = "Session"
     case memory = "Mémoire"
     case events = "Événements"
+    case notifications = "Notifications"
     case mcp = "MCP"
     case system = "Système"
 
@@ -21,6 +22,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
         case .session: return "waveform.path.ecg"
         case .memory: return "brain.head.profile"
         case .events: return "clock.arrow.trianglehead.counterclockwise.rotate.90"
+        case .notifications: return "bell"
         case .mcp: return "terminal"
         case .system: return "gearshape.2"
         }
@@ -31,6 +33,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
         case .session: return gGreen
         case .memory: return gBlue
         case .events: return gPurple
+        case .notifications: return gOrange
         case .mcp: return gOrange
         case .system: return gGray
         }
@@ -162,6 +165,8 @@ struct DashboardRootView: View {
             memoryView
         case .events:
             eventsView
+        case .notifications:
+            notificationsView
         case .mcp:
             mcpView
         case .system:
@@ -644,6 +649,72 @@ struct DashboardRootView: View {
                             VStack(spacing: 6) {
                                 ForEach(journals) { journal in
                                     journalAccordion(journal)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    private var notificationsView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if vm.feedHistory.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "bell.slash")
+                            .font(.system(size: 28, weight: .light))
+                            .foregroundStyle(.tertiary)
+                        Text("Aucune notification")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                        Text("Les résultats de commandes terminal et les commits capturés apparaitront ici.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    GlassCard {
+                        VStack(spacing: 0) {
+                            ForEach(vm.feedHistory) { event in
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color(hex: event.accentHex).opacity(0.15))
+                                            .frame(width: 30, height: 30)
+                                        Image(systemName: event.icon)
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(Color(hex: event.accentHex))
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(event.label)
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        if let cmd = event.command, !cmd.isEmpty {
+                                            Text(cmd)
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundStyle(.tertiary)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    Text(dashboardAbsoluteTimestamp(event.timestamp))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.vertical, 10)
+
+                                if event.id != vm.feedHistory.last?.id {
+                                    Divider().padding(.leading, 44)
                                 }
                             }
                         }

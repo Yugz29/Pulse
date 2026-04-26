@@ -57,6 +57,27 @@ extension DaemonBridge {
         }
     }
 
+    func fetchFeed(since: String?) async -> [FeedEvent] {
+        var urlStr = "\(base)/feed"
+        if let since { urlStr += "?since=\(since.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? since)" }
+        guard let url = URL(string: urlStr) else { return [] }
+        guard let (data, response) = try? await data(from: url) else { return [] }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+        guard let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return array.compactMap { dict in
+            guard let kind = dict["kind"] as? String,
+                  let label = dict["label"] as? String,
+                  let timestamp = dict["timestamp"] as? String else { return nil }
+            return FeedEvent(
+                kind: kind,
+                label: label,
+                success: dict["success"] as? Bool,
+                command: dict["command"] as? String,
+                timestamp: timestamp
+            )
+        }
+    }
+
     func pauseDaemon() async throws {
         try await post(path: "/daemon/pause")
     }

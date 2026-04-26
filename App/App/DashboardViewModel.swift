@@ -12,6 +12,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var sessionJournals: SessionsResponse?
     @Published var events: [InsightEvent] = []
     @Published var proposals: [ProposalRecord] = []
+    @Published var feedHistory: [FeedEvent] = []
     @Published var ping: PingResponse?
     @Published var llmModels: LLMModelsResponse?
     @Published var scoringStatus: ScoringStatusResponse?
@@ -72,6 +73,7 @@ final class DashboardViewModel: ObservableObject {
         async let sessionJournalsTask = bridge.getSessionJournals()
         async let eventsTask = bridge.getInsights(limit: 100)
         async let proposalsTask = bridge.getRecentProposals(limit: 20)
+        async let feedTask = bridge.fetchFeed(since: nil)
         async let pingTask: PingResponse? = try? await bridge.pingStatus()
         async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
         async let scoringTask = bridge.getScoringStatus()
@@ -85,6 +87,7 @@ final class DashboardViewModel: ObservableObject {
         sessionJournals = await sessionJournalsTask
         events = await eventsTask
         proposals = await proposalsTask
+        feedHistory = await feedTask
         ping = await pingTask
         llmModels = await llmTask
         scoringStatus = await scoringTask

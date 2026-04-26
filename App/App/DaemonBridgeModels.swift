@@ -929,6 +929,37 @@ struct InsightEvent: Identifiable {
     }
 }
 
+struct FeedEvent: Identifiable {
+    let id = UUID()
+    let kind: String
+    let label: String
+    let success: Bool?
+    let command: String?
+    let timestamp: String
+
+    var accentHex: String {
+        switch kind {
+        case "terminal":
+            return (success == true) ? "#5DCAA5" : "#ff453a"
+        case "commit":
+            return "#5DCAA5"
+        default:
+            return "#7c7c80"
+        }
+    }
+
+    var icon: String {
+        switch kind {
+        case "terminal":
+            return (success == true) ? "checkmark.circle.fill" : "xmark.circle.fill"
+        case "commit":
+            return "arrow.up.circle.fill"
+        default:
+            return "circle.fill"
+        }
+    }
+}
+
 enum DaemonError: Error {
     case invalidURL
     case badStatus(Int)
