@@ -15,7 +15,13 @@ extension PulseViewModel {
                 self.syncDaemonReachability(alive: alive, paused: paused)
                 if daemonJustCameBack {
                     self.onDaemonReconnected?()
+                    // Glow au démarrage — déclenché après le premier ping réussi,
+                    // pas à onAppear (sinon serviceStatus pas encore à jour).
+                    self.triggerStartupAnimation()
                 }
+
+                // Glow breathing si état dégradé
+                self.updateBreathingGlow()
 
                 if alive {
                     let forceRefresh = daemonJustCameBack || !self.isOllamaOnline || !self.isLLMReady
@@ -45,16 +51,14 @@ extension PulseViewModel {
                     let feedEvents = await self.bridge.fetchFeed(since: self.lastFeedTimestamp)
                     if let latest = feedEvents.last {
                         self.lastFeedTimestamp = latest.timestamp
-                    }
-                    for event in feedEvents {
-                        // Stocke dans l'historique (max 50)
-                        self.feedHistory.insert(event, at: 0)
+                        // Stocke dans l'historique dashboard uniquement.
+                        // Notifications encoche désactivées — pas assez de données sans PTY.
+                        for event in feedEvents {
+                            self.feedHistory.insert(event, at: 0)
+                        }
                         if self.feedHistory.count > 50 {
                             self.feedHistory = Array(self.feedHistory.prefix(50))
                         }
-                        let accent = Color(hex: event.accentHex)
-                        let duration: Double = (event.success == false) ? 4.0 : 3.0
-                        self.showTransientStatus(event.label, accent: accent, duration: duration)
                     }
                 } else {
                     self.isLLMActive = false

@@ -50,20 +50,26 @@ class NotchWindow: NSPanel {
     override var canBecomeMain: Bool { true }
 
     func expandToPanel() {
-        guard let screen = currentDisplayScreen() else { return }
-        setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: currentPanelHeight), display: true)
+        DispatchQueue.main.async {
+            guard let screen = self.currentDisplayScreen() else { return }
+            self.setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: self.currentPanelHeight), display: true)
+        }
     }
 
     func expandForStartup() {
-        guard let screen = currentDisplayScreen() else { return }
-        setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: startupExtensionHeight), display: true)
+        DispatchQueue.main.async {
+            guard let screen = self.currentDisplayScreen() else { return }
+            self.setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: startupExtensionHeight), display: true)
+        }
     }
 
     func collapseToNotch() {
-        guard let screen = currentDisplayScreen() else { return }
-        let notchH = screen.safeAreaInsets.top
-        let notchW = NotchWindow.realNotchWidth(for: screen)
-        setFrame(NotchWindow.collapsedFrame(for: screen, notchHeight: notchH, notchWidth: notchW), display: true)
+        DispatchQueue.main.async {
+            guard let screen = self.currentDisplayScreen() else { return }
+            let notchH = screen.safeAreaInsets.top
+            let notchW = NotchWindow.realNotchWidth(for: screen)
+            self.setFrame(NotchWindow.collapsedFrame(for: screen, notchHeight: notchH, notchWidth: notchW), display: true)
+        }
     }
 
     static func isFrontAppFullscreen() -> Bool {
