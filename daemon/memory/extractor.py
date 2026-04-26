@@ -228,7 +228,9 @@ def update_memories_from_session(
         last = _cooldown.last_report_at.get(project)
         if last is not None:
             elapsed = (datetime.now() - last).total_seconds() / 60
-            if elapsed < REPORT_COOLDOWN_MIN:
+            # Buffer de 2 min pour éviter le cas limite où elapsed == REPORT_COOLDOWN_MIN
+            # (30 < 30 = False) qui laisse passer une entrée supplémentaire.
+            if elapsed < REPORT_COOLDOWN_MIN - 2:
                 _update_index(base_dir)
                 return None
 
@@ -471,8 +473,12 @@ def _deterministic_summary(duration, task, focus, friction, top_files, files_cou
     parts = []
     if commit_message:
         parts.append(f"Livraison : \u00ab {commit_message.splitlines()[0]} \u00bb.")
-    if diff_summary:
-        parts.append(diff_summary.splitlines()[0])
+    if diff_summary and not commit_message:
+        # Reformuler le diff brut en liste de fichiers lisible
+        # au lieu d'afficher "Diff en cours : file.py (+28 -17)..."
+        diff_files = extract_file_names_from_diff_summary(diff_summary)
+        if diff_files:
+            parts.append(f"En cours : {cluster_files_for_display(diff_files)}.")
     if top_files and not diff_summary:
         parts.append(f"Portée : {cluster_files_for_display(top_files)}.")
     elif files_count and not diff_summary:
@@ -681,7 +687,12 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged["commit_messages"] = _merge_unique_strings(left.get("commit_messages", []), right.get("commit_messages", []))
     merged["recent_apps"] = _merge_unique_strings(left.get("recent_apps", []), right.get("recent_apps", []))
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
-    merged["body"] = "\n".join(_compact_strings([left.get("body"), right.get("body")]))
+    # Corps : si pas de commit, garder uniquement le plus récent (right).
+    # Si commit, concaténer pour conserver tous les résumés.
+    if merged["commit_messages"]:
+        merged["body"] = "\n".join(_compact_strings([left.get("body"), right.get("body")]))
+    else:
+        merged["body"] = str(right.get("body") or left.get("body") or "").strip()
     return merged
 
 
