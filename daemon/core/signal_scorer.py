@@ -807,18 +807,23 @@ class SignalScorer:
         return event.payload or {}
 
     def _latest_window_title_signal(self, recent: list, now: datetime, minutes: int = 10) -> Optional[dict]:
+        """Lit le titre de fenêtre depuis les app_activated récents."""
         cutoff = now - timedelta(minutes=minutes)
         event = self._latest_event(
             recent,
             predicate=lambda item: (
-                item.type == "window_title"
-                and bool((item.payload or {}).get("title"))
+                item.type == "app_activated"
+                and bool((item.payload or {}).get("window_title"))
             ),
             cutoff=cutoff,
         )
         if event is None:
             return None
-        return event.payload or {}
+        payload = event.payload or {}
+        return {
+            "title": payload.get("window_title"),
+            "app_name": payload.get("app_name"),
+        }
 
     def _is_usable_terminal_signal(self, terminal_signal: Optional[dict]) -> bool:
         if not terminal_signal:

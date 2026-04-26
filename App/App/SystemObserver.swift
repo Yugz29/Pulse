@@ -40,11 +40,8 @@ class SystemObserver {
     private var lastMeaningfulFilePath: String?
     private let filesystemQueue = DispatchQueue(label: "pulse.systemobserver.filesystem", qos: .utility)
 
-    // Déduplication des titres de fenêtres — on n'émet pas si le titre
-    // n'a pas changé depuis le dernier event window_title.
-    private var lastWindowTitle: String = ""
-    private var lastWindowTitleApp: String = ""
-
+    // Déduplication des titres de fenêtres — supprimée : le titre est maintenant
+    // intégré dans app_activated, la déduplication est gérée par le daemon.
     private let idleThresholdSeconds: TimeInterval = 900  // 15 min
     private let idlePollInterval: TimeInterval = 15
 
@@ -134,18 +131,24 @@ class SystemObserver {
 
         guard shouldTrackApp(bundleId: bundleId) else { return }
 
-        sendEvent([
-            "type": "app_activated",
-            "app_name": name,
-            "bundle_id": bundleId,
-            "timestamp": ISO8601DateFormatter().string(from: Date())
-        ])
-
-        // Lecture du titre de fenêtre via Accessibility API.
-        // Non-bloquant : lancé en arrière-plan, résultat envoyé si pertinent.
         let pid = app.processIdentifier
+
+        // Lecture du titre de fenêtre en arrière-plan, puis envoi d'un seul
+        // event app_activated enrichi. Si Accessibility n'est pas accordée
+        // ou si la lecture échoue, l'event est envoyé sans le titre.
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            self?.readAndSendWindowTitle(appName: name, pid: pid)
+            guard let self else { return }
+            let title = self.readWindowTitle(pid: pid, appName: name)
+            var payload: [String: String] = [
+                "type": "app_activated",
+                "app_name": name,
+                "bundle_id": bundleId,
+                "timestamp": ISO8601DateFormatter().string(from: Date())
+            ]
+            if let title {
+                payload["window_title"] = title
+            }
+            self.sendEvent(payload)
         }
     }
 
@@ -181,23 +184,21 @@ class SystemObserver {
     // Lit le titre de la fenêtre frontale d'une app via AXUIElement.
     // Niveau 1 : AXTitle uniquement — une seule requête, quasi gratuit.
     // Ne fonctionne que si la permission Accessibility est accordée.
-    // Progression future : lire le contenu visible (Niveau 2) sur apps ciblées.
+    // Le titre est intégré directement dans app_activated — pas d'event séparé.
 
-    private func readAndSendWindowTitle(appName: String, pid: pid_t) {
-        guard AXIsProcessTrusted() else { return }
+    private func readWindowTitle(pid: pid_t, appName: String) -> String? {
+        guard AXIsProcessTrusted() else { return nil }
 
         let appElement = AXUIElementCreateApplication(pid)
 
-        // Récupère la fenêtre frontale
         var frontWindowRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             appElement,
             kAXFocusedWindowAttribute as CFString,
             &frontWindowRef
         ) == .success,
-              let frontWindow = frontWindowRef else { return }
+              let frontWindow = frontWindowRef else { return nil }
 
-        // Lit le titre (AXTitle)
         var titleRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             frontWindow as! AXUIElement,
@@ -205,24 +206,10 @@ class SystemObserver {
             &titleRef
         ) == .success,
               let title = titleRef as? String,
-              !title.isEmpty else { return }
+              !title.isEmpty else { return nil }
 
-        // Déduplication — on n'émet pas si le titre + app n'ont pas changé
-        let dedupeKey = "\(appName):\(title)"
-        guard dedupeKey != "\(lastWindowTitleApp):\(lastWindowTitle)" else { return }
-
-        lastWindowTitle = title
-        lastWindowTitleApp = appName
-
-        // Filtre les titres non informatifs
-        guard !isTrivialWindowTitle(title, appName: appName) else { return }
-
-        sendEvent([
-            "type": "window_title",
-            "app_name": appName,
-            "title": title,
-            "timestamp": ISO8601DateFormatter().string(from: Date())
-        ])
+        guard !isTrivialWindowTitle(title, appName: appName) else { return nil }
+        return title
     }
 
     private func isTrivialWindowTitle(_ title: String, appName: String) -> Bool {
@@ -441,10 +428,18 @@ class SystemObserver {
             if bundleId == "com.apple.finder" {
                 sendLocalExplorationEvent(appName: name, bundleId: bundleId)
             } else if shouldTrackApp(bundleId: bundleId) {
-                sendEvent(["type": "app_activated", "app_name": name, "bundle_id": bundleId, "timestamp": ISO8601DateFormatter().string(from: Date())])
                 let pid = app.processIdentifier
                 DispatchQueue.global(qos: .utility).async { [weak self] in
-                    self?.readAndSendWindowTitle(appName: name, pid: pid)
+                    guard let self else { return }
+                    let title = self.readWindowTitle(pid: pid, appName: name)
+                    var payload: [String: String] = [
+                        "type": "app_activated",
+                        "app_name": name,
+                        "bundle_id": bundleId,
+                        "timestamp": ISO8601DateFormatter().string(from: Date())
+                    ]
+                    if let title { payload["window_title"] = title }
+                    self.sendEvent(payload)
                 }
             }
         }
