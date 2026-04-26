@@ -38,6 +38,7 @@ final class PulseViewModel: ObservableObject {
 
     @Published var recentEvents: [InsightEvent] = []
     @Published var recentProposals: [ProposalRecord] = []
+    @Published var feedHistory: [FeedEvent] = []
     @Published var currentPresent: PresentData? = nil
     @Published var currentEpisode: EpisodeData? = nil
     @Published var currentSignals: SignalsData? = nil
@@ -52,6 +53,7 @@ final class PulseViewModel: ObservableObject {
 
     let bridge: DaemonBridge
     var lastModelsRefreshAt: Date?
+    var lastFeedTimestamp: String? = nil
     var pollTask: Task<Void, Never>?
     var askTask: Task<Void, Never>?
     var shouldShowCancellationFeedback = true
@@ -69,6 +71,8 @@ final class PulseViewModel: ObservableObject {
             return NotchWindow.currentStateHeight
         case .insight:
             return NotchWindow.insightHeight
+        case .feed:
+            return NotchWindow.feedHeight
         case .settings:
             return NotchWindow.settingsHeight
         case .status:

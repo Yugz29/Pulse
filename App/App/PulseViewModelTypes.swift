@@ -14,6 +14,7 @@ enum PanelMode {
     case insight
     case settings
     case status
+    case feed
 }
 
 enum PulseServiceStatus {

@@ -398,13 +398,91 @@ def register_runtime_routes(
         except (TypeError, ValueError):
             limit = 25
         limit = min(max(limit, 1), 100)
-        # Le bus ne contient que des events meaningful depuis le filtrage
-        # à l'entrée dans _should_publish_to_bus(). Pas de filtre supplémentaire.
+
+        # Filtre optionnel par timestamp — Swift envoie son dernier ts connu.
+        # Permet un polling différentiel : seuls les nouveaux events sont retournés.
+        since_raw = request.args.get("since")
+        since_dt = _parse_event_timestamp(since_raw) if since_raw else None
+
         recent = bus.recent(limit)
-        return jsonify([
-            {"type": event.type, "payload": event.payload, "timestamp": event.timestamp.isoformat()}
+
+        # Filtre les events notables pour le feed UI :
+        # terminal fini, commit capté, mémoire écrite.
+        notable_types = {
+            "terminal_command_finished",
+            "memory_written",
+        }
+
+        events = [
+            {
+                "type": event.type,
+                "payload": event.payload,
+                "timestamp": event.timestamp.isoformat()
+            }
             for event in recent
-        ])
+            if (since_dt is None or event.timestamp > since_dt)
+        ]
+        return jsonify(events)
+
+    @app.route("/feed")
+    def get_feed():
+        """Events notables depuis un timestamp — pour les notifications UI."""
+        since_raw = request.args.get("since")
+        since_dt = _parse_event_timestamp(since_raw) if since_raw else None
+
+        recent = bus.recent(200)
+
+        notable: list[dict] = []
+        for event in recent:
+            if since_dt is not None and event.timestamp <= since_dt:
+                continue
+            payload = event.payload or {}
+
+            # Terminal fini avec résultat
+            if (
+                event.type == "terminal_command_finished"
+                and payload.get("terminal_success") is not None
+            ):
+                success = payload["terminal_success"]
+                base_cmd = payload.get("terminal_command_base", "")
+                summary = payload.get("terminal_summary", "")
+                duration_ms = payload.get("terminal_duration_ms")
+                tick = ""
+
+                if base_cmd == "pytest":
+                    label = "pytest"
+                elif base_cmd in {"xcodebuild", "make", "ninja", "cmake"}:
+                    label = f"Build {base_cmd}"
+                elif base_cmd == "git":
+                    cmd = payload.get("terminal_command", "")
+                    parts = cmd.split()
+                    subcmd = parts[1] if len(parts) > 1 else ""
+                    label = f"git {subcmd}" if subcmd else summary
+                elif summary:
+                    label = summary
+                else:
+                    label = base_cmd
+
+                if duration_ms and duration_ms > 2000:
+                    pass  # durée retirée de la notification
+
+                notable.append({
+                    "kind": "terminal",
+                    "success": success,
+                    "label": label,
+                    "command": payload.get("terminal_command", ""),
+                    "timestamp": event.timestamp.isoformat(),
+                })
+
+            # Commit capté (COMMIT_EDITMSG modifié)
+            elif event.type in {"file_modified", "file_created"} and "COMMIT_EDITMSG" in str(payload.get("path", "")):
+                notable.append({
+                    "kind": "commit",
+                    "label": "Commit capturé",
+                    "timestamp": event.timestamp.isoformat(),
+                })
+
+        return jsonify(notable)
 
     @app.route("/daemon/shutdown", methods=["POST"])
     def daemon_shutdown():

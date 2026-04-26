@@ -38,6 +38,76 @@ struct DashboardView: View {
     }
 }
 
+struct FeedView: View {
+    @ObservedObject var vm: PulseViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if vm.feedHistory.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "bell.slash")
+                        .font(.system(size: 20, weight: .light))
+                        .foregroundColor(.white.opacity(0.2))
+                    Text("Aucune notification")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.3))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        ForEach(vm.feedHistory) { event in
+                            FeedRow(event: event)
+                            Divider().background(Color.white.opacity(0.05))
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .frame(height: NotchWindow.feedHeight - .panelContentGap, alignment: .top)
+    }
+}
+
+private struct FeedRow: View {
+    let event: FeedEvent
+
+    private var timeLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "HH:mm"
+        // Parse ISO8601
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = isoFormatter.date(from: event.timestamp)
+            ?? ISO8601DateFormatter().date(from: event.timestamp)
+        guard let date else { return "" }
+        return formatter.string(from: date)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: event.icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: event.accentHex))
+                .frame(width: 20)
+
+            Text(event.label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.82))
+                .lineLimit(1)
+
+            Spacer()
+
+            Text(timeLabel)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.white.opacity(0.3))
+        }
+        .padding(.vertical, 9)
+    }
+}
+
 struct ChatView: View {
     @ObservedObject var vm: PulseViewModel
 

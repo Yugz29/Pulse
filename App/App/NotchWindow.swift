@@ -9,6 +9,7 @@ class NotchWindow: NSPanel {
     static let chatHeight:      CGFloat = 212
     static let currentStateHeight: CGFloat = 218
     static let insightHeight:   CGFloat = 218
+    static let feedHeight:      CGFloat = 218
     static let settingsHeight:  CGFloat = 102
     static let statusHeight:    CGFloat = 188
     static let commandHeight:   CGFloat = 80

@@ -61,6 +61,8 @@ struct NotchExpandedHeader: View {
             return "Maintenant"
         case .insight:
             return "Observation"
+        case .feed:
+            return "Notifications"
         default:
             return nil
         }
@@ -126,6 +128,21 @@ struct NotchExpandedHeader: View {
                 }
             )
             .position(x: (geometryWidth - panelWidth) / 2 + 88, y: notchHeight / 2)
+
+            NotchHeaderButton(
+                systemName: vm.panelMode == .feed ? "bell.fill" : "bell",
+                size: 11,
+                baseOpacity: vm.panelMode == .feed ? 0.95 : 0.42,
+                hoverOpacity: 0.95,
+                baseBackgroundOpacity: vm.panelMode == .feed ? 0.14 : 0.03,
+                hoverBackgroundOpacity: 0.14,
+                baseStrokeOpacity: vm.panelMode == .feed ? 0.24 : 0.06,
+                hoverStrokeOpacity: 0.24,
+                hoverScale: 1.0,
+                foregroundColor: vm.feedHistory.isEmpty ? .white : Color(hex: "#5DCAA5"),
+                action: { vm.switchMode(.feed) }
+            )
+            .position(x: (geometryWidth - panelWidth) / 2 + 116, y: notchHeight / 2)
 
             NotchHeaderButton(
                 systemName: "gearshape.fill",

@@ -88,6 +88,8 @@ struct NotchRootView: View {
                                 CurrentStateView(vm: vm)
                             case .insight:
                                 InsightView(vm: vm)
+                            case .feed:
+                                FeedView(vm: vm)
                             case .settings:
                                 SettingsView()
                             case .status:

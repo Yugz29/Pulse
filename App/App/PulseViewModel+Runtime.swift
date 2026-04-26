@@ -40,6 +40,22 @@ extension PulseViewModel {
                             self.isExpanded = true
                         }
                     }
+
+                    // Feed des événements notables — notifications live dans l'encoche.
+                    let feedEvents = await self.bridge.fetchFeed(since: self.lastFeedTimestamp)
+                    if let latest = feedEvents.last {
+                        self.lastFeedTimestamp = latest.timestamp
+                    }
+                    for event in feedEvents {
+                        // Stocke dans l'historique (max 50)
+                        self.feedHistory.insert(event, at: 0)
+                        if self.feedHistory.count > 50 {
+                            self.feedHistory = Array(self.feedHistory.prefix(50))
+                        }
+                        let accent = Color(hex: event.accentHex)
+                        let duration: Double = (event.success == false) ? 4.0 : 3.0
+                        self.showTransientStatus(event.label, accent: accent, duration: duration)
+                    }
                 } else {
                     self.isLLMActive = false
                     self.isOllamaOnline = false
