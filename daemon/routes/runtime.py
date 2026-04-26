@@ -449,8 +449,17 @@ def register_runtime_routes(
                 duration_ms = payload.get("terminal_duration_ms")
                 tick = ""
 
-                if base_cmd == "pytest":
-                    label = "pytest"
+                if base_cmd == "pytest" or (base_cmd in {"python", "python3"} and "-m" in payload.get("terminal_command", "") and "pytest" in payload.get("terminal_command", "")):
+                    cmd_parts = payload.get("terminal_command", "").split()
+                    test_target = next(
+                        (p for p in cmd_parts[1:] if not p.startswith("-") and p != "-m" and p != "pytest" and (".py" in p or "/" in p or p == "tests")),
+                        None
+                    )
+                    if test_target:
+                        short = test_target.split("/")[-1].replace(".py", "")
+                        label = f"pytest {short}"
+                    else:
+                        label = "pytest"
                 elif base_cmd in {"xcodebuild", "make", "ninja", "cmake"}:
                     label = f"Build {base_cmd}"
                 elif base_cmd == "git":
@@ -466,21 +475,23 @@ def register_runtime_routes(
                 if duration_ms and duration_ms > 2000:
                     pass  # durée retirée de la notification
 
-                notable.append({
-                    "kind": "terminal",
-                    "success": success,
-                    "label": label,
-                    "command": payload.get("terminal_command", ""),
-                    "timestamp": event.timestamp.isoformat(),
-                })
+                # Ne notifier que si le label est spécifique et utile.
+                # Les labels génériques comme "Commande terminal" n'apportent rien.
+                _GENERIC_LABELS = {
+                    "Commande terminal", "Inspection terminal",
+                    "Exécution de tests", "Commande de build",
+                    "Commande de setup", "Commande de contrôle de version",
+                }
+                if label and label not in _GENERIC_LABELS:
+                    notable.append({
+                        "kind": "terminal",
+                        "success": success,
+                        "label": label,
+                        "command": payload.get("terminal_command", ""),
+                        "timestamp": event.timestamp.isoformat(),
+                    })
 
-            # Commit capté (COMMIT_EDITMSG modifié)
-            elif event.type in {"file_modified", "file_created"} and "COMMIT_EDITMSG" in str(payload.get("path", "")):
-                notable.append({
-                    "kind": "commit",
-                    "label": "Commit capturé",
-                    "timestamp": event.timestamp.isoformat(),
-                })
+            # Commit capturé — retiré du feed (peu d'info pour une notification)
 
         return jsonify(notable)
 

@@ -499,6 +499,7 @@ class SignalScorer:
         "mcp_modification":      {"coding": 1.0},
         "terminal_inspection":   {"exploration": 1.0},
         "terminal_testing":      {"coding": 1.0},
+        "terminal_test_failed":  {"debug": 2.0},
         "terminal_build":        {"coding": 1.0},
         "terminal_setup":        {"coding": 1.0},
         "terminal_vcs":          {"exploration": 1.0},
@@ -606,10 +607,15 @@ class SignalScorer:
 
         if edited_file_count == 0 and self._is_usable_terminal_signal(terminal_signal):
             category = (terminal_signal or {}).get("terminal_action_category")
+            is_read_only = (terminal_signal or {}).get("terminal_is_read_only")
+            terminal_success = (terminal_signal or {}).get("terminal_success")
             if category == "inspection":
                 active.add("terminal_inspection")
             elif category == "testing":
                 active.add("terminal_testing")
+                # Tests échoués → signal debug fort
+                if terminal_success is False:
+                    active.add("terminal_test_failed")
             elif category == "vcs":
                 active.add("terminal_vcs")
             elif category == "build":
