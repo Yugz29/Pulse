@@ -92,6 +92,8 @@ class SystemObserver {
 
         windowTitleTimer?.invalidate()
         windowTitleTimer = nil
+
+        unregisterAXObserver()
     }
 
     deinit { stopObserving() }
@@ -154,6 +156,10 @@ class SystemObserver {
             }
             self.sendEvent(payload)
         }
+
+        // Enregistrer l'observateur AX sur la nouvelle app
+        // pour capturer les changements de titre/onglet en temps réel.
+        registerAXObserver(for: app)
     }
 
     @objc private func handleAppLaunched(_ notification: Notification) {
@@ -185,12 +191,117 @@ class SystemObserver {
     // ─────────────────────────────────────────────────────────────────────────
     // MARK: - 6. Titre de fenêtre (Accessibility API)
     // Niveau 1 : AXTitle au changement d'app (dans handleAppActivated)
-    // Niveau 2 : polling toutes les 60s pour capturer les changements d'onglets
-    //            sans changement d'app (navigation longue dans Safari, etc.)
+    // Niveau 2 : AXObserver + kAXTitleChangedNotification
+    //            Callback instantané à chaque changement d'onglet/titre.
+    //            Remplace le polling 60s — capture chaque navigation.
+
+    // Observateur AX actif sur l'app frontale courante.
+    private var axObserver: AXObserver?
+    private var axObservedPid: pid_t = 0
+    private var lastObservedTitle: String = ""
+
+    // Callback C — appelé par le RunLoop principal à chaque changement de titre.
+    // Utilise `info` (pointeur opaque) pour accéder à `self`.
+    private static let axTitleChangedCallback: AXObserverCallbackWithInfo = {
+        _, element, _, info in
+        guard let info else { return }
+        let observer = Unmanaged<SystemObserver>.fromOpaque(info).takeUnretainedValue()
+        observer.handleAXTitleChanged(element: element)
+    }
+
+    private func handleAXTitleChanged(element: AXUIElement) {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              let appName = app.localizedName,
+              let bundleId = app.bundleIdentifier,
+              shouldTrackApp(bundleId: bundleId)
+        else { return }
+
+        // Lire le titre depuis l'élément qui a changé
+        var titleRef: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(
+            element, kAXTitleAttribute as CFString, &titleRef
+        )
+        guard result == .success,
+              let title = titleRef as? String,
+              !title.isEmpty,
+              !isTrivialWindowTitle(title, appName: appName)
+        else { return }
+
+        // Tronquer
+        let maxLength = 120
+        var finalTitle = title
+        if finalTitle.count > maxLength {
+            let truncated = String(finalTitle.prefix(maxLength))
+            finalTitle = (truncated.lastIndex(of: " ").map { String(truncated[..<$0]) } ?? truncated) + "…"
+        }
+
+        // Déduplication
+        guard finalTitle != lastObservedTitle else { return }
+        lastObservedTitle = finalTitle
+
+        sendEvent([
+            "type": "window_title_poll",
+            "app_name": appName,
+            "bundle_id": bundleId,
+            "title": finalTitle,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+    }
+
+    // Enregistre l'observateur AX sur l'app frontale.
+    // Appelé à chaque changement d'app active.
+    private func registerAXObserver(for app: NSRunningApplication) {
+        guard AXIsProcessTrusted() else { return }
+        let pid = app.processIdentifier
+        guard pid != axObservedPid else { return }
+
+        // Désenregistrer l'ancien observateur
+        unregisterAXObserver()
+
+        var observer: AXObserver?
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        guard AXObserverCreateWithInfoCallback(
+            pid, Self.axTitleChangedCallback, &observer
+        ) == .success, let observer else { return }
+
+        let appElement = AXUIElementCreateApplication(pid)
+
+        // Observer kAXTitleChangedNotification sur l'app et ses fenêtres
+        AXObserverAddNotification(
+            observer, appElement,
+            kAXTitleChangedNotification as CFString, selfPtr
+        )
+        // Observer aussi kAXFocusedWindowChangedNotification
+        // pour capter les changements de fenêtre dans la même app
+        AXObserverAddNotification(
+            observer, appElement,
+            kAXFocusedWindowChangedNotification as CFString, selfPtr
+        )
+
+        CFRunLoopAddSource(
+            CFRunLoopGetMain(),
+            AXObserverGetRunLoopSource(observer),
+            .defaultMode
+        )
+
+        self.axObserver = observer
+        self.axObservedPid = pid
+    }
+
+    private func unregisterAXObserver() {
+        guard let observer = axObserver else { return }
+        CFRunLoopRemoveSource(
+            CFRunLoopGetMain(),
+            AXObserverGetRunLoopSource(observer),
+            .defaultMode
+        )
+        axObserver = nil
+        axObservedPid = 0
+    }
 
     private func observeWindowTitlePolling() {
-        // Démarrage différé de 30s pour laisser le temps à la première
-        // capture via handleAppActivated de se faire avant le premier poll.
+        // Le polling 60s reste en fallback pour les apps
+        // qui ne remontent pas kAXTitleChangedNotification.
         windowTitleTimer = Timer.scheduledTimer(
             withTimeInterval: 60.0,
             repeats: true
@@ -202,7 +313,6 @@ class SystemObserver {
     private func pollActiveWindowTitle() {
         guard AXIsProcessTrusted() else { return }
         guard !isUserIdle else { return }
-
         guard let app = NSWorkspace.shared.frontmostApplication,
               let appName = app.localizedName,
               let bundleId = app.bundleIdentifier,
@@ -213,13 +323,10 @@ class SystemObserver {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             guard let title = self.readWindowTitle(pid: pid, appName: appName) else { return }
-
-            // Déduplication — on n'émet pas si le titre n'a pas changé depuis le dernier poll.
             guard title != self.lastPolledWindowTitle else { return }
             self.lastPolledWindowTitle = title
-
-            // Émet un event dédié pour le polling — distint de app_activated
-            // pour ne pas perturber le scoring d'app switch.
+            // Si AXObserver est actif sur cette app, le poll ne fait que confirmer
+            // Sinon c'est le fallback utile
             self.sendEvent([
                 "type": "window_title_poll",
                 "app_name": appName,
