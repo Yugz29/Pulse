@@ -16,19 +16,6 @@ final class PulseViewModel: ObservableObject {
     @Published var inputText = ""
     @Published var transientStatusText: String? = nil
     @Published var transientStatusAccent = Color(hex: "#5DCAA5")
-    @Published var startupGlowActive: Bool = false
-    @Published var startupGlowColor: Color = Color(hex: "#5DCAA5")
-    @Published var glowIntensity: Double = 0.0
-    var breathingPhase: Bool = false
-
-    var glowColor: Color {
-        if startupGlowActive { return startupGlowColor }
-        switch serviceStatus {
-        case .daemonOffline: return Color(hex: "#ff453a")
-        case .daemonPaused, .observationPaused: return Color(hex: "#F5A623")
-        default: return .clear
-        }
-    }
 
     @Published var activeProject: String? = nil
     @Published var activeApp: String? = nil

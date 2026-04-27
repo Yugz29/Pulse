@@ -46,33 +46,6 @@ struct NotchRootView: View {
                 .animation(.spring(response: 0.5, dampingFraction: 0.82), value: vm.isStartupExpanded)
                 .animation(.spring(response: 0.42, dampingFraction: 0.82), value: vm.isExpanded)
 
-                // Glow stroke — uniquement autour de l'encoche hardware.
-                // Toujours fixe, indépendant de l'animation du panel.
-                // Invisible quand le panel est ouvert pour éviter le trait épais.
-                if vm.glowIntensity > 0.01 && !vm.isExpanded {
-                    let left  = geo.size.width / 2 - notchWidth / 2
-                    let right = geo.size.width / 2 + notchWidth / 2
-                    let r     = CGFloat(8) // hardwareNotchRadius
-
-                    Path { path in
-                        path.move(to: CGPoint(x: left, y: 0))
-                        path.addLine(to: CGPoint(x: left, y: notchHeight - r))
-                        path.addQuadCurve(
-                            to: CGPoint(x: left + r, y: notchHeight),
-                            control: CGPoint(x: left, y: notchHeight)
-                        )
-                        path.addLine(to: CGPoint(x: right - r, y: notchHeight))
-                        path.addQuadCurve(
-                            to: CGPoint(x: right, y: notchHeight - r),
-                            control: CGPoint(x: right, y: notchHeight)
-                        )
-                        path.addLine(to: CGPoint(x: right, y: 0))
-                    }
-                    .stroke(vm.glowColor.opacity(min(vm.glowIntensity * 1.4, 1.0)), lineWidth: 4.5)
-                    .frame(width: geo.size.width)
-                    .allowsHitTesting(false)
-                }
-
                 if let status = vm.transientStatusText, vm.isStartupExpanded {
                     HStack(spacing: 6) {
                         Circle().fill(vm.transientStatusAccent).frame(width: 6, height: 6)
