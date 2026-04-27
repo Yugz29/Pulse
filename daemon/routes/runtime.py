@@ -452,10 +452,12 @@ def register_runtime_routes(
                     if len(window_titles) >= 50:
                         break
 
-            # Commandes terminal récentes
+            # Commandes terminal récentes — filtrer les triviales
+            _TRIVIAL_COMMANDS = {"clear", "ls", "cd", "pwd", "echo", "cat", "man", "which", "history"}
             if event.type == "terminal_command_finished":
                 cmd = payload.get("terminal_command", "")
-                if cmd:
+                base = payload.get("terminal_command_base", "")
+                if cmd and base not in _TRIVIAL_COMMANDS:
                     terminal_commands.append({
                         "command": cmd,
                         "summary": payload.get("terminal_summary", ""),
