@@ -474,14 +474,14 @@ def _deterministic_summary(duration, task, focus, friction, top_files, files_cou
     if commit_message:
         parts.append(f"Livraison : \u00ab {commit_message.splitlines()[0]} \u00bb.")
     if diff_summary and not commit_message:
-        # Reformuler le diff brut en liste de fichiers lisible
-        # au lieu d'afficher "Diff en cours : file.py (+28 -17)..."
-        diff_files = extract_file_names_from_diff_summary(diff_summary)
-        if diff_files:
-            parts.append(f"En cours : {cluster_files_for_display(diff_files)}.")
-    if top_files and not diff_summary:
+        # Le diff git persiste entre sessions — ne l'afficher dans la portée
+        # que s'il y a eu une édition réelle (top_files non vide).
+        # Sans cela, une session d'exploration afficherait les fichiers
+        # d'un diff antérieur sans rapport avec ce qui était fait.
+        pass
+    if top_files:
         parts.append(f"Portée : {cluster_files_for_display(top_files)}.")
-    elif files_count and not diff_summary:
+    elif files_count and not top_files:
         parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
     if terminal_summary and not diff_summary and not commit_message:
         parts.append(terminal_summary)
