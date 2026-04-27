@@ -51,32 +51,39 @@ def trigger_daydream(
 ) -> Optional[Path]:
     global _daydream_pending, _daydream_done_for_date
 
-    ref_date = today or date.today()
+    try:
+        ref_date = today or date.today()
 
-    journal_entries = _load_journal_entries_for_date(ref_date)
-    if not journal_entries:
-        log.info("DayDream : aucune entree journal pour %s -- ignore.", ref_date)
+        journal_entries = _load_journal_entries_for_date(ref_date)
+        if not journal_entries:
+            log.info("DayDream : aucune entree journal pour %s -- ignore.", ref_date)
+            with _daydream_lock:
+                _daydream_pending = False
+                _daydream_done_for_date = ref_date
+            return None
+
+        content = _generate_daydream(
+            entries=journal_entries,
+            window_titles=window_titles or [],
+            ref_date=ref_date,
+            llm=llm,
+        )
+
+        output_path = _write_daydream(content, ref_date)
+        _vectorize_daydream(content, ref_date)
+
         with _daydream_lock:
             _daydream_pending = False
             _daydream_done_for_date = ref_date
+
+        log.info("DayDream genere : %s", output_path)
+        return output_path
+
+    except Exception as exc:
+        log.warning("DayDream : erreur inattendue : %s", exc)
+        with _daydream_lock:
+            _daydream_pending = False
         return None
-
-    content = _generate_daydream(
-        entries=journal_entries,
-        window_titles=window_titles or [],
-        ref_date=ref_date,
-        llm=llm,
-    )
-
-    output_path = _write_daydream(content, ref_date)
-    _vectorize_daydream(content, ref_date)
-
-    with _daydream_lock:
-        _daydream_pending = False
-        _daydream_done_for_date = ref_date
-
-    log.info("DayDream genere : %s", output_path)
-    return output_path
 
 
 def _load_journal_entries_for_date(ref_date: date) -> list[dict]:

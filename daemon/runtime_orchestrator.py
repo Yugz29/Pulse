@@ -325,7 +325,6 @@ class RuntimeOrchestrator:
     def _save_restart_state(self, snapshot: dict) -> None:
         try:
             import json as _json
-            from pathlib import Path as _Path
             state = {
                 "shutdown_at": datetime.now().isoformat(),
                 "active_project": snapshot.get("active_project"),
@@ -336,6 +335,23 @@ class RuntimeOrchestrator:
                     if self._session_fsm.session_started_at else None
                 ),
             }
+            # Sauvegarder le HEAD SHA de chaque projet connu
+            # pour détecter les commits manqués au prochain démarrage.
+            project = snapshot.get("active_project")
+            if project:
+                try:
+                    from daemon.core.workspace_context import find_workspace_root
+                    from daemon.memory.extractor import read_head_sha, find_git_root
+                    workspace = find_workspace_root(project) or ""
+                    if workspace:
+                        git_root = find_git_root(workspace)
+                        if git_root:
+                            sha = read_head_sha(git_root)
+                            if sha:
+                                state["last_head_sha"] = sha
+                                state["last_sha_project"] = project
+                except Exception:
+                    pass
             self._RESTART_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
             self._RESTART_STATE_PATH.write_text(_json.dumps(state, ensure_ascii=False))
             self.log.info("restart state sauvegardé : %s", state)
@@ -389,6 +405,73 @@ class RuntimeOrchestrator:
 
         # Dans les deux cas — restaurer le contexte projet/tâche.
         self.log.info("contexte restauré : projet=%s tâche=%s", project, task)
+
+    def _recover_missed_commits(self, state: dict) -> None:
+        """
+        Détecte les commits effectués pendant que Pulse était hors ligne
+        et déclenche le pipeline de journalisation pour chacun.
+        """
+        last_sha = state.get("last_head_sha")
+        project = state.get("last_sha_project") or state.get("active_project")
+        if not last_sha or not project:
+            return
+
+        try:
+            from daemon.core.workspace_context import find_workspace_root
+            from daemon.memory.extractor import (
+                read_head_sha, find_git_root, read_commit_message,
+                update_memories_from_session,
+            )
+            from daemon.core.git_diff import read_commit_diff_summary
+
+            workspace = find_workspace_root(project) or ""
+            if not workspace:
+                return
+
+            git_root = find_git_root(workspace)
+            if not git_root:
+                return
+
+            current_sha = read_head_sha(git_root)
+            if not current_sha or current_sha == last_sha:
+                return  # Pas de nouveau commit
+
+            # Nouveau commit détecté
+            commit_message = read_commit_message(git_root) or ""
+            diff_summary = read_commit_diff_summary(git_root) or ""
+            self.log.info(
+                "Commit manqué détecté sur %s : %s",
+                project, commit_message[:60]
+            )
+
+            # Construire un snapshot minimal pour le pipeline
+            shutdown_at = state.get("shutdown_at")
+            started_at = state.get("started_at") or shutdown_at
+            snapshot = {
+                "active_project": project,
+                "probable_task": state.get("probable_task", "coding"),
+                "activity_level": "executing",
+                "duration_min": 5,  # durée inconnue, valeur conservative
+                "top_files": [],
+                "files_changed": 0,
+                "recent_apps": [],
+                "max_friction": 0.0,
+                "focus_level": "normal",
+                "started_at": started_at,
+                "ended_at": shutdown_at,
+            }
+
+            update_memories_from_session(
+                snapshot,
+                llm=self.summary_llm,
+                commit_message=commit_message,
+                trigger="commit",
+                diff_summary=diff_summary,
+            )
+            self.log.info("Journal de secours écrit pour commit manqué : %s", commit_message[:60])
+
+        except Exception as exc:
+            self.log.warning("recover_missed_commits échoué : %s", exc)
 
     def _daydream_scheduler(self) -> None:
         """Tourne en boucle, marque DayDream pending à 23:59 chaque jour."""
@@ -465,6 +548,8 @@ class RuntimeOrchestrator:
         restart_state = self._load_restart_state()
         if restart_state:
             self._apply_restart_state(restart_state)
+            # Vérifier les commits manqués pendant l'absence de Pulse.
+            self._recover_missed_commits(restart_state)
 
         purged = self.memory_store.purge_expired()
         if purged:
