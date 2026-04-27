@@ -960,6 +960,35 @@ struct FeedEvent: Identifiable {
     }
 }
 
+struct ObservationWindowTitle: Identifiable {
+    let id = UUID()
+    let title: String
+    let app: String
+    let timestamp: String
+    let elapsedSec: Int
+}
+
+struct ObservationTerminalCommand: Identifiable {
+    let id = UUID()
+    let command: String
+    let summary: String
+    let success: Bool?
+    let durationMs: Int?
+    let project: String
+    let timestamp: String
+}
+
+struct ObservationData {
+    let windowTitles: [ObservationWindowTitle]
+    let terminalCommands: [ObservationTerminalCommand]
+}
+
+struct DaydreamEntry: Identifiable {
+    let id: String
+    let date: String
+    let content: String
+}
+
 enum DaemonError: Error {
     case invalidURL
     case badStatus(Int)

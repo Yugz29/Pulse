@@ -9,7 +9,9 @@ private let gPurple = "#8B5CF6"
 
 enum DashboardSection: String, CaseIterable, Identifiable {
     case session = "Session"
+    case observation = "Observation"
     case memory = "Mémoire"
+    case daydream = "DayDream"
     case events = "Événements"
     case notifications = "Notifications"
     case mcp = "MCP"
@@ -20,7 +22,9 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .session: return "waveform.path.ecg"
+        case .observation: return "eye"
         case .memory: return "brain.head.profile"
+        case .daydream: return "moon.stars"
         case .events: return "clock.arrow.trianglehead.counterclockwise.rotate.90"
         case .notifications: return "bell"
         case .mcp: return "terminal"
@@ -31,7 +35,9 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     var accent: String {
         switch self {
         case .session: return gGreen
+        case .observation: return gPurple
         case .memory: return gBlue
+        case .daydream: return "#8B5CF6"
         case .events: return gPurple
         case .notifications: return gOrange
         case .mcp: return gOrange
@@ -161,8 +167,12 @@ struct DashboardRootView: View {
         switch selectedSection {
         case .session:
             sessionView
+        case .observation:
+            observationView
         case .memory:
             memoryView
+        case .daydream:
+            daydreamView
         case .events:
             eventsView
         case .notifications:
@@ -564,6 +574,133 @@ struct DashboardRootView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var observationView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Titres de fenêtres
+                GlassCard(accent: gPurple) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        cardTitle("Titres de fenêtres capturs", icon: "eye")
+                        let titles = vm.observation?.windowTitles ?? []
+                        if titles.isEmpty {
+                            emptyState("Aucun titre capté — navigation en cours ?")
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(titles.prefix(30)) { item in
+                                    HStack(alignment: .top, spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(item.title)
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(.primary)
+                                                .lineLimit(2)
+                                            Text(item.app)
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Text(dashboardAbsoluteTimestamp(item.timestamp))
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.vertical, 8)
+                                    if item.id != titles.prefix(30).last?.id {
+                                        Divider()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Commandes terminal
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        cardTitle("Commandes terminal récentes", icon: "terminal")
+                        let commands = vm.observation?.terminalCommands ?? []
+                        if commands.isEmpty {
+                            emptyState("Aucune commande récente")
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(commands) { cmd in
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Circle()
+                                            .fill(cmd.success == true ? Color(hex: gGreen) : cmd.success == false ? Color(hex: gRed) : Color(hex: gGray))
+                                            .frame(width: 7, height: 7)
+                                            .padding(.top, 5)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(cmd.command)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundStyle(.primary)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                            if !cmd.summary.isEmpty {
+                                                Text(cmd.summary)
+                                                    .font(.system(size: 10))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                        Spacer()
+                                        Text(dashboardAbsoluteTimestamp(cmd.timestamp))
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.vertical, 8)
+                                    if cmd.id != commands.last?.id {
+                                        Divider().padding(.leading, 17)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    private var daydreamView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if vm.daydreams.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "moon.stars")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundStyle(.tertiary)
+                        Text("Aucun DayDream généré")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Text("DayDream se déclenche automatiquement au premier verrouillage après 23h59.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 80)
+                } else {
+                    ForEach(vm.daydreams) { dream in
+                        GlassCard(accent: "#8B5CF6") {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Label(journalDateLabel(dream.date), systemImage: "moon.stars")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color(hex: "#8B5CF6"))
+                                    Spacer()
+                                }
+                                Divider()
+                                Text(dream.content)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.primary)
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(24)
         }
     }
 

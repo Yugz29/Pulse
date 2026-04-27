@@ -78,6 +78,49 @@ extension DaemonBridge {
         }
     }
 
+    func getObservation() async -> ObservationData? {
+        guard let url = URL(string: "\(base)/observation") else { return nil }
+        guard let (data, _) = try? await self.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+
+        let titles = (json["window_titles"] as? [[String: Any]] ?? []).compactMap { d -> ObservationWindowTitle? in
+            guard let title = d["title"] as? String else { return nil }
+            return ObservationWindowTitle(
+                title: title,
+                app: d["app"] as? String ?? "",
+                timestamp: d["timestamp"] as? String ?? "",
+                elapsedSec: d["elapsed_sec"] as? Int ?? 0
+            )
+        }
+        let commands = (json["terminal_commands"] as? [[String: Any]] ?? []).compactMap { d -> ObservationTerminalCommand? in
+            guard let cmd = d["command"] as? String else { return nil }
+            return ObservationTerminalCommand(
+                command: cmd,
+                summary: d["summary"] as? String ?? "",
+                success: d["success"] as? Bool,
+                durationMs: d["duration_ms"] as? Int,
+                project: d["project"] as? String ?? "",
+                timestamp: d["timestamp"] as? String ?? ""
+            )
+        }
+        return ObservationData(windowTitles: titles, terminalCommands: commands)
+    }
+
+    func getDaydreams() async -> [DaydreamEntry] {
+        guard let url = URL(string: "\(base)/daydreams") else { return [] }
+        guard let (data, _) = try? await self.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let array = json["daydreams"] as? [[String: Any]]
+        else { return [] }
+        return array.compactMap { d in
+            guard let date = d["date"] as? String,
+                  let content = d["content"] as? String
+            else { return nil }
+            return DaydreamEntry(id: date, date: date, content: content)
+        }
+    }
+
     func pauseDaemon() async throws {
         try await post(path: "/daemon/pause")
     }

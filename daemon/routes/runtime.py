@@ -424,6 +424,75 @@ def register_runtime_routes(
         ]
         return jsonify(events)
 
+    @app.route("/observation")
+    def get_observation():
+        """Retourne les titres de fenêtres et commandes récents capturs par Pulse."""
+        recent = bus.recent(200)
+        now = datetime.now()
+
+        window_titles = []
+        terminal_commands = []
+        seen_titles: set[str] = set()
+
+        for event in reversed(recent):
+            payload = event.payload or {}
+            elapsed = (now - event.timestamp).total_seconds()
+
+            # Titres de fenêtres — depuis app_activated et window_title_poll
+            if event.type in {"app_activated", "window_title_poll"}:
+                title = payload.get("window_title") or payload.get("title")
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    window_titles.append({
+                        "title": title,
+                        "app": payload.get("app_name", ""),
+                        "timestamp": event.timestamp.isoformat(),
+                        "elapsed_sec": int(elapsed),
+                    })
+                    if len(window_titles) >= 50:
+                        break
+
+            # Commandes terminal récentes
+            if event.type == "terminal_command_finished":
+                cmd = payload.get("terminal_command", "")
+                if cmd:
+                    terminal_commands.append({
+                        "command": cmd,
+                        "summary": payload.get("terminal_summary", ""),
+                        "success": payload.get("terminal_success"),
+                        "duration_ms": payload.get("terminal_duration_ms"),
+                        "project": payload.get("terminal_project", ""),
+                        "timestamp": event.timestamp.isoformat(),
+                    })
+                    if len(terminal_commands) >= 20:
+                        break
+
+        return jsonify({
+            "window_titles": window_titles[:50],
+            "terminal_commands": terminal_commands[:20],
+        })
+
+    @app.route("/daydreams")
+    def get_daydreams():
+        """Liste les fichiers DayDream disponibles."""
+        from pathlib import Path
+        daydream_dir = Path.home() / ".pulse" / "memory" / "daydreams"
+        if not daydream_dir.exists():
+            return jsonify({"daydreams": []})
+
+        files = sorted(daydream_dir.glob("*.md"), reverse=True)[:7]
+        result = []
+        for f in files:
+            try:
+                content = f.read_text(encoding="utf-8")
+                result.append({
+                    "date": f.stem,
+                    "content": content,
+                })
+            except Exception:
+                pass
+        return jsonify({"daydreams": result})
+
     @app.route("/feed")
     def get_feed():
         """Events notables depuis un timestamp — pour les notifications UI."""
