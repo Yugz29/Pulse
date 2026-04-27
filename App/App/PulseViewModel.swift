@@ -54,6 +54,7 @@ final class PulseViewModel: ObservableObject {
     let bridge: DaemonBridge
     var lastModelsRefreshAt: Date?
     var lastFeedTimestamp: String? = ISO8601DateFormatter().string(from: Date())
+    var startupGracePeriodEnd: Date? = nil
     var pollTask: Task<Void, Never>?
     var askTask: Task<Void, Never>?
     var shouldShowCancellationFeedback = true
