@@ -680,13 +680,23 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged = dict(left)
     merged["entry_id"] = str(left.get("entry_id") or right.get("entry_id") or "")
     merged["ended_at"] = right.get("ended_at") or left.get("ended_at")
-    merged["duration_min"] = int(left.get("duration_min") or 0) + int(right.get("duration_min") or 0)
     merged["task_confidence"] = max(_float_or_zero(left.get("task_confidence")), _float_or_zero(right.get("task_confidence")))
     merged["files_count"] = max(int(left.get("files_count") or 0), len(_merge_unique_strings(left.get("top_files", []), right.get("top_files", []))), int(right.get("files_count") or 0))
     merged["top_files"] = _merge_unique_strings(left.get("top_files", []), right.get("top_files", []))
     merged["commit_messages"] = _merge_unique_strings(left.get("commit_messages", []), right.get("commit_messages", []))
     merged["recent_apps"] = _merge_unique_strings(left.get("recent_apps", []), right.get("recent_apps", []))
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
+    # Durée réelle : diff entre started_at et ended_at fusionnés.
+    # On prend le max entre la durée réelle et la somme des duration_min
+    # pour couvrir les cas où les timestamps sont très proches (tests, redémarrage rapide).
+    start_dt = _parse_entry_datetime(left.get("started_at"))
+    end_dt = _parse_entry_datetime(merged.get("ended_at"))
+    sum_durations = int(left.get("duration_min") or 0) + int(right.get("duration_min") or 0)
+    if start_dt and end_dt and end_dt > start_dt:
+        real_elapsed = max(int((end_dt - start_dt).total_seconds() / 60), 0)
+        merged["duration_min"] = max(real_elapsed, sum_durations)
+    else:
+        merged["duration_min"] = sum_durations
     # Corps : si pas de commit, garder uniquement le plus récent (right).
     # Si commit, concaténer pour conserver tous les résumés.
     if merged["commit_messages"]:

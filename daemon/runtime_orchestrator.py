@@ -4,6 +4,7 @@ import threading
 import time
 from dataclasses import replace
 from datetime import datetime, timedelta
+from pathlib import Path
 import subprocess
 
 from daemon.memory.extractor import (
@@ -297,9 +298,83 @@ class RuntimeOrchestrator:
             snapshot = self._export_memory_payload()
             if snapshot.get("duration_min", 0) > 0:
                 update_memories_from_session(snapshot)
+            # Persiste l'état courant pour le prochain démarrage.
+            self._save_restart_state(snapshot)
             self.session_memory.close()
         except Exception as exc:
             self.log.warning("shutdown sync failed: %s", exc)
+
+    _RESTART_STATE_PATH = Path.home() / ".pulse" / "restart_state.json"
+    _RESTART_CONTINUE_MAX_MIN = 5    # < 5 min  → reprise transparente
+    _RESTART_RESUME_MAX_MIN   = 30   # 5-30 min → reprise avec note de gap
+
+    def _save_restart_state(self, snapshot: dict) -> None:
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            state = {
+                "shutdown_at": datetime.now().isoformat(),
+                "active_project": snapshot.get("active_project"),
+                "probable_task":  snapshot.get("probable_task"),
+                "activity_level": snapshot.get("activity_level"),
+                "started_at": (
+                    self._session_fsm.session_started_at.isoformat()
+                    if self._session_fsm.session_started_at else None
+                ),
+            }
+            self._RESTART_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self._RESTART_STATE_PATH.write_text(_json.dumps(state, ensure_ascii=False))
+            self.log.info("restart state sauvegardé : %s", state)
+        except Exception as exc:
+            self.log.warning("restart state save échoué : %s", exc)
+
+    def _load_restart_state(self) -> dict | None:
+        try:
+            import json as _json
+            if not self._RESTART_STATE_PATH.exists():
+                return None
+            state = _json.loads(self._RESTART_STATE_PATH.read_text())
+            shutdown_at = datetime.fromisoformat(state["shutdown_at"])
+            elapsed_min = (datetime.now() - shutdown_at).total_seconds() / 60
+            state["elapsed_min"] = elapsed_min
+            return state
+        except Exception as exc:
+            self.log.warning("restart state load échoué : %s", exc)
+            return None
+
+    def _apply_restart_state(self, state: dict) -> None:
+        elapsed_min = state.get("elapsed_min", 999)
+        project = state.get("active_project")
+        task = state.get("probable_task", "general")
+        started_at_raw = state.get("started_at")
+
+        if elapsed_min > self._RESTART_RESUME_MAX_MIN:
+            # Trop long — nouvelle session, on oublie.
+            self.log.info("restart state ignoré (%.0f min > %d min)",
+                          elapsed_min, self._RESTART_RESUME_MAX_MIN)
+            return
+
+        if elapsed_min <= self._RESTART_CONTINUE_MAX_MIN:
+            # Reprise transparente — on restaure le started_at original.
+            if started_at_raw:
+                try:
+                    original_started_at = datetime.fromisoformat(started_at_raw)
+                    self._session_fsm.session_started_at = original_started_at
+                    self.log.info(
+                        "reprise transparente (%.0f min) depuis %s",
+                        elapsed_min, original_started_at.strftime("%H:%M")
+                    )
+                except ValueError:
+                    pass
+        else:
+            # Zone grise 5-30 min — on reprend le contexte mais pas le timer.
+            self.log.info(
+                "reprise partielle (%.0f min) — contexte conservé sans timer",
+                elapsed_min
+            )
+
+        # Dans les deux cas — restaurer le contexte projet/tâche.
+        self.log.info("contexte restauré : projet=%s tâche=%s", project, task)
 
     def build_context_snapshot(self) -> str:
         """
@@ -340,6 +415,12 @@ class RuntimeOrchestrator:
     def deferred_startup(self) -> None:
         time.sleep(0.2)
         self.llm_runtime.load_persisted_models()
+
+        # Restaurer l'état précédent si le redémarrage est récent.
+        restart_state = self._load_restart_state()
+        if restart_state:
+            self._apply_restart_state(restart_state)
+
         purged = self.memory_store.purge_expired()
         if purged:
             self.log.info("Mémoire : %d entrée(s) expirée(s) supprimée(s)", purged)
