@@ -35,10 +35,19 @@ from typing import Any, Dict, List, Optional
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
 from daemon.memory.facts import FactEngine
+from daemon.memory.vector_store import VectorStore
 
 log = logging.getLogger("pulse")
 
 _fact_engine: Optional[FactEngine] = None
+_vector_store: Optional[VectorStore] = None
+
+
+def _get_vector_store() -> VectorStore:
+    global _vector_store
+    if _vector_store is None:
+        _vector_store = VectorStore()
+    return _vector_store
 
 
 def get_fact_engine() -> FactEngine:
@@ -250,6 +259,32 @@ def update_memories_from_session(
     _cooldown.last_report_at[project] = datetime.now()
     _save_cooldown()
     _update_index(base_dir)
+
+    # Vectoriser l'entrée dans un thread séparé — ne pas bloquer le pipeline.
+    # L'embedding est lent (1-2s au premier appel) mais non critique.
+    if report_ref is not None:
+        def _vectorize():
+            try:
+                store = _get_vector_store()
+                entry = {
+                    "active_project": session_data.get("active_project"),
+                    "probable_task":  session_data.get("probable_task"),
+                    "body":           session_data.get("body", ""),
+                    "commit_message": commit_message or "",
+                    "top_files":      _clean_files(session_data.get("top_files", [])),
+                    "duration_min":   session_data.get("duration_min"),
+                    "activity_level": session_data.get("activity_level"),
+                    "started_at":     session_data.get("started_at"),
+                    "ended_at":       session_data.get("ended_at"),
+                    "recent_apps":    session_data.get("recent_apps", []),
+                }
+                mid = store.index_journal_entry(entry)
+                if mid:
+                    log.debug("Vectorisé en mémoire : id=%d projet=%s", mid, entry.get("active_project"))
+            except Exception as exc:
+                log.debug("Vectorisation ignorée : %s", exc)
+        threading.Thread(target=_vectorize, daemon=True, name="pulse-vectorize").start()
+
     return report_ref
 
 
