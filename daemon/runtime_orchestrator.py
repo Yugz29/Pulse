@@ -282,8 +282,8 @@ class RuntimeOrchestrator:
         self.session_memory.record_event(event)
 
         # Accumuler les titres de fenêtres pour DayDream
-        if event.type == "app_activated":
-            title = (event.payload or {}).get("window_title")
+        if event.type in {"app_activated", "window_title_poll"}:
+            title = (event.payload or {}).get("window_title") or (event.payload or {}).get("title")
             if title and len(title) >= 15:
                 self._accumulated_window_titles.append(title)
 

@@ -34,6 +34,8 @@ class SystemObserver {
     private var fsEventStream: FSEventStreamRef?
     private var clipboardTimer: Timer?
     private var idleTimer: Timer?
+    private var windowTitleTimer: Timer?
+    private var lastPolledWindowTitle: String = ""
     private var lastClipboardContent: String = ""
     private var recentFileEvents: [String: Date] = [:]
     private var isUserIdle = false
@@ -62,12 +64,11 @@ class SystemObserver {
         observeClipboard()
         observeUserIdle()
         observeScreenLock()
+        observeWindowTitlePolling()
         refreshCurrentContext()
 
-        // Log si la permission Accessibility n'est pas encore accordée.
-        // Pulse fonctionne sans, mais window_title ne sera pas capturé.
         if !AXIsProcessTrusted() {
-            print("[Pulse] Permission Accessibility non accordée — window_title désactivé. Accorder dans Préférences Système → Confidentialité → Accessibilité.")
+            print("[Pulse] Permission Accessibility non accordée — window_title désactivé.")
         }
     }
 
@@ -88,6 +89,9 @@ class SystemObserver {
 
         idleTimer?.invalidate()
         idleTimer = nil
+
+        windowTitleTimer?.invalidate()
+        windowTitleTimer = nil
     }
 
     deinit { stopObserving() }
@@ -180,6 +184,51 @@ class SystemObserver {
 
     // ─────────────────────────────────────────────────────────────────────────
     // MARK: - 6. Titre de fenêtre (Accessibility API)
+    // Niveau 1 : AXTitle au changement d'app (dans handleAppActivated)
+    // Niveau 2 : polling toutes les 60s pour capturer les changements d'onglets
+    //            sans changement d'app (navigation longue dans Safari, etc.)
+
+    private func observeWindowTitlePolling() {
+        // Démarrage différé de 30s pour laisser le temps à la première
+        // capture via handleAppActivated de se faire avant le premier poll.
+        windowTitleTimer = Timer.scheduledTimer(
+            withTimeInterval: 60.0,
+            repeats: true
+        ) { [weak self] _ in
+            self?.pollActiveWindowTitle()
+        }
+    }
+
+    private func pollActiveWindowTitle() {
+        guard AXIsProcessTrusted() else { return }
+        guard !isUserIdle else { return }
+
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              let appName = app.localizedName,
+              let bundleId = app.bundleIdentifier,
+              shouldTrackApp(bundleId: bundleId)
+        else { return }
+
+        let pid = app.processIdentifier
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            guard let title = self.readWindowTitle(pid: pid, appName: appName) else { return }
+
+            // Déduplication — on n'émet pas si le titre n'a pas changé depuis le dernier poll.
+            guard title != self.lastPolledWindowTitle else { return }
+            self.lastPolledWindowTitle = title
+
+            // Émet un event dédié pour le polling — distint de app_activated
+            // pour ne pas perturber le scoring d'app switch.
+            self.sendEvent([
+                "type": "window_title_poll",
+                "app_name": appName,
+                "bundle_id": bundleId,
+                "title": title,
+                "timestamp": ISO8601DateFormatter().string(from: Date())
+            ])
+        }
+    }
     // ─────────────────────────────────────────────────────────────────────────
     // Lit le titre de la fenêtre frontale d'une app via AXUIElement.
     // Niveau 1 : AXTitle uniquement — une seule requête, quasi gratuit.
