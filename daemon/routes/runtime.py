@@ -493,6 +493,24 @@ def register_runtime_routes(
 
             # Commit capturé — retiré du feed (peu d'info pour une notification)
 
+            # LLM loading / ready
+            elif event.type == "llm_loading":
+                notable.append({
+                    "kind": "llm_loading",
+                    "success": None,
+                    "label": "Chargement du modèle…",
+                    "command": None,
+                    "timestamp": event.timestamp.isoformat(),
+                })
+            elif event.type == "llm_ready":
+                notable.append({
+                    "kind": "llm_ready",
+                    "success": True,
+                    "label": "Modèle chargé",
+                    "command": None,
+                    "timestamp": event.timestamp.isoformat(),
+                })
+
         return jsonify(notable)
 
     @app.route("/daemon/shutdown", methods=["POST"])
@@ -516,7 +534,13 @@ def register_runtime_routes(
     @app.route("/daemon/resume", methods=["POST"])
     def daemon_resume():
         runtime_state.set_paused(False)
-        threading.Thread(target=llm_warmup_background, daemon=True).start()
+
+        def _warmup_with_events():
+            bus.publish("llm_loading", {"model": ""})
+            llm_warmup_background()
+            bus.publish("llm_ready", {"model": ""})
+
+        threading.Thread(target=_warmup_with_events, daemon=True).start()
         return jsonify({"ok": True, "action": "resume", "paused": False})
 
     @app.route("/daemon/restart", methods=["POST"])

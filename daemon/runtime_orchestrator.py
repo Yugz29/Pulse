@@ -363,11 +363,13 @@ class RuntimeOrchestrator:
         provider = self.llm_runtime.provider()
         if provider and hasattr(provider, "warmup"):
             self.log.info("LLM warmup en cours (%s)...", provider.model)
+            self.scorer.bus.publish("llm_loading", {"model": provider.model})
             ok = provider.warmup()
             if ok:
                 self.log.info("LLM warmup terminé (%s)", provider.model)
             else:
                 self.log.warning("LLM warmup échoué au démarrage (Ollama indisponible ?)")
+            self.scorer.bus.publish("llm_ready", {"model": provider.model})
         self.log.info("✓ Init différé terminé")
 
     def _should_ignore_event(self, event) -> bool:

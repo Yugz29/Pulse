@@ -51,13 +51,27 @@ extension PulseViewModel {
                     let feedEvents = await self.bridge.fetchFeed(since: self.lastFeedTimestamp)
                     if let latest = feedEvents.last {
                         self.lastFeedTimestamp = latest.timestamp
-                        // Stocke dans l'historique dashboard uniquement.
-                        // Notifications encoche désactivées — pas assez de données sans PTY.
-                        for event in feedEvents {
-                            self.feedHistory.insert(event, at: 0)
-                        }
+                    }
+                    for event in feedEvents {
+                        // Stocke dans l'historique dashboard (max 50)
+                        self.feedHistory.insert(event, at: 0)
                         if self.feedHistory.count > 50 {
                             self.feedHistory = Array(self.feedHistory.prefix(50))
+                        }
+
+                        // Notifications LLM — affichage persistent jusqu'à llm_ready
+                        if event.kind == "llm_loading" {
+                            self.showTransientStatus(
+                                "Chargement du modèle…",
+                                accent: Color(hex: "#F5A623"),
+                                duration: 120  // reste jusqu'à llm_ready
+                            )
+                        } else if event.kind == "llm_ready" {
+                            // Dismiss immédiat de la notification loading
+                            withAnimation(.easeOut(duration: 0.4)) {
+                                self.transientStatusText = nil
+                                self.isStartupExpanded = false
+                            }
                         }
                     }
                 } else {
