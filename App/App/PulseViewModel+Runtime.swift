@@ -15,27 +15,35 @@ extension PulseViewModel {
                 self.syncDaemonReachability(alive: alive, paused: paused)
                 if daemonJustCameBack {
                     self.onDaemonReconnected?()
-                    // Glow au démarrage — déclenché après le premier ping réussi,
-                    // pas à onAppear (sinon serviceStatus pas encore à jour).
-                    self.triggerStartupAnimation()
+                    // Grace period de 15s pour le chargement LLM au démarrage
+                    self.startupGracePeriodEnd = Date().addingTimeInterval(15)
+                    // "Pulse est actif" dès le premier ping réussi
+                    self.showTransientStatus("Pulse est actif", accent: Color(hex: "#5DCAA5"), duration: 3.0)
                 }
-
-                // Glow breathing si état dégradé
                 self.updateBreathingGlow()
 
                 // Notifications persistantes pour les états dégradés.
-                // Dismiss automatique quand l'état revient à la normale.
+                // On attend la fin de la grace period avant de notifier LLM indisponible.
+                let inGracePeriod = self.startupGracePeriodEnd.map { Date() < $0 } ?? false
                 switch self.serviceStatus {
                 case .daemonOffline:
                     if self.transientStatusText != "Daemon hors ligne" {
                         self.showTransientStatus("Daemon hors ligne", accent: Color(hex: "#ff453a"), persistent: true)
                     }
                 case .llmUnavailable:
-                    if self.transientStatusText != "LLM indisponible" {
+                    if !inGracePeriod && self.transientStatusText != "LLM indisponible" {
                         self.showTransientStatus("LLM indisponible", accent: Color(hex: "#F5A623"), persistent: true)
                     }
-                case .healthy, .daemonPaused, .observationPaused:
-                    let knownPersistent: Set<String> = ["Daemon hors ligne", "LLM indisponible"]
+                case .daemonPaused:
+                    if self.transientStatusText != "Pulse en pause" {
+                        self.showTransientStatus("Pulse en pause", accent: Color(hex: "#F5A623"), persistent: true)
+                    }
+                case .observationPaused:
+                    if self.transientStatusText != "Observation en pause" {
+                        self.showTransientStatus("Observation en pause", accent: Color(hex: "#F5A623"), persistent: true)
+                    }
+                case .healthy:
+                    let knownPersistent: Set<String> = ["Daemon hors ligne", "LLM indisponible", "Pulse en pause", "Observation en pause"]
                     if let current = self.transientStatusText, knownPersistent.contains(current) {
                         self.dismissPersistentStatus()
                     }

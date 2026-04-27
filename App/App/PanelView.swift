@@ -16,7 +16,11 @@ struct NotchRootView: View {
     let panelWidth: CGFloat = NotchWindow.panelWidth
     var panelHeight: CGFloat { vm.currentPanelHeight }
 
-    var shapePanelWidth: CGFloat { vm.isExpanded ? panelWidth : notchWidth + (hoverExtra * 2) }
+    var shapePanelWidth: CGFloat {
+        if vm.isExpanded { return panelWidth }
+        if vm.isStartupExpanded { return notchWidth + 40 }
+        return notchWidth + (hoverExtra * 2)
+    }
 
     var shapePanelHeight: CGFloat {
         if vm.isExpanded { return panelHeight }
@@ -48,12 +52,14 @@ struct NotchRootView: View {
 
                 if let status = vm.transientStatusText, vm.isStartupExpanded {
                     HStack(spacing: 6) {
-                        Circle().fill(vm.transientStatusAccent).frame(width: 6, height: 6)
+                        Circle().fill(vm.transientStatusAccent).frame(width: 5, height: 5)
                         Text(status)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.white.opacity(0.78))
+                            .lineLimit(1)
                     }
-                    .frame(width: notchWidth)
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: notchWidth, maxWidth: notchWidth + 80)
                     .offset(y: notchHeight + 3)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
