@@ -269,7 +269,12 @@ class RuntimeOrchestrator:
                     )
                 if transition.should_clear_sleep_markers:
                     self.runtime_state.clear_sleep_markers()
-            threading.Thread(target=self.llm_warmup_background, daemon=True).start()
+            def _warmup_with_events():
+                self.scorer.bus.publish("llm_loading", {"model": ""})
+                self.llm_warmup_background()
+                self.scorer.bus.publish("llm_ready", {"model": ""})
+
+            threading.Thread(target=_warmup_with_events, daemon=True).start()
 
         self.session_memory.record_event(event)
 
