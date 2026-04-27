@@ -2,7 +2,7 @@ import json
 import sqlite3
 import threading
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -356,6 +356,54 @@ class SessionMemory:
             )
             for row in rows
         ]
+
+    def purge_old_events(self, keep_hours: int = 48) -> int:
+        """
+        Purge les events plus vieux que keep_hours.
+        Ne touche pas à la session courante.
+        Retourne le nombre de lignes supprimées.
+        Appeler au démarrage du daemon pour garder session.db compact.
+        """
+        cutoff = (datetime.now() - timedelta(hours=keep_hours)).isoformat()
+        with self._lock:
+            with self._connect() as conn:
+                # Purge les events des sessions terminées (ended_at non null)
+                # dont la fin est antérieure au cutoff.
+                cursor = conn.execute(
+                    """
+                    DELETE FROM events
+                    WHERE session_id IN (
+                        SELECT id FROM sessions
+                        WHERE ended_at IS NOT NULL AND ended_at < ?
+                    )
+                    """,
+                    (cutoff,),
+                )
+                # Purge aussi les sessions elles-mêmes (sans events orphelins)
+                conn.execute(
+                    """
+                    DELETE FROM sessions
+                    WHERE ended_at IS NOT NULL
+                    AND ended_at < ?
+                    AND id != ?
+                    """,
+                    (cutoff, self.session_id),
+                )
+                # Purge les épisodes clos associés aux sessions supprimées
+                conn.execute(
+                    """
+                    DELETE FROM episodes
+                    WHERE ended_at IS NOT NULL
+                    AND ended_at < ?
+                    AND session_id != ?
+                    """,
+                    (cutoff, self.session_id),
+                )
+                # Compacte la base après une purge importante
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                conn.commit()
+                conn.execute("VACUUM")
+                return cursor.rowcount
 
     def close(self, *, ended_at: Optional[datetime] = None) -> None:
         with self._lock:

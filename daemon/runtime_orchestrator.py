@@ -430,6 +430,15 @@ class RuntimeOrchestrator:
         if purged:
             self.log.info("Mémoire : %d entrée(s) expirée(s) supprimée(s)", purged)
 
+        # Purge les events bruts antérieurs à 48h depuis session.db.
+        # Les sessions journalisées n'ont plus besoin de leurs events bruts.
+        try:
+            purged_events = self.session_memory.purge_old_events(keep_hours=48)
+            if purged_events:
+                self.log.info("session.db : %d event(s) anciens purgés", purged_events)
+        except Exception as exc:
+            self.log.warning("purge session.db échouée : %s", exc)
+
         try:
             archived_legacy = self._fact_engine.archive_legacy_facts()
             if archived_legacy:
