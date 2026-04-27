@@ -69,17 +69,26 @@ extension PulseViewModel {
         }
     }
 
-    func showTransientStatus(_ text: String, accent: Color? = nil, duration: Double = 3.0) {
+    func showTransientStatus(_ text: String, accent: Color? = nil, duration: Double = 3.0, persistent: Bool = false) {
         transientStatusAccent = accent ?? Color(hex: "#5DCAA5")
         transientStatusText = text
         withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
             isStartupExpanded = true
         }
+        guard !persistent else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
             withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) {
                 self.transientStatusText = nil
                 self.isStartupExpanded = false
             }
+        }
+    }
+
+    func dismissPersistentStatus() {
+        guard transientStatusText != nil else { return }
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) {
+            transientStatusText = nil
+            isStartupExpanded = false
         }
     }
 }

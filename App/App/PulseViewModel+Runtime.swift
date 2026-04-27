@@ -23,6 +23,24 @@ extension PulseViewModel {
                 // Glow breathing si état dégradé
                 self.updateBreathingGlow()
 
+                // Notifications persistantes pour les états dégradés.
+                // Dismiss automatique quand l'état revient à la normale.
+                switch self.serviceStatus {
+                case .daemonOffline:
+                    if self.transientStatusText != "Daemon hors ligne" {
+                        self.showTransientStatus("Daemon hors ligne", accent: Color(hex: "#ff453a"), persistent: true)
+                    }
+                case .llmUnavailable:
+                    if self.transientStatusText != "LLM indisponible" {
+                        self.showTransientStatus("LLM indisponible", accent: Color(hex: "#F5A623"), persistent: true)
+                    }
+                case .healthy, .daemonPaused, .observationPaused:
+                    let knownPersistent: Set<String> = ["Daemon hors ligne", "LLM indisponible"]
+                    if let current = self.transientStatusText, knownPersistent.contains(current) {
+                        self.dismissPersistentStatus()
+                    }
+                }
+
                 if alive {
                     let forceRefresh = daemonJustCameBack || !self.isOllamaOnline || !self.isLLMReady
                     if self.shouldRefreshModels(force: forceRefresh) {
@@ -64,7 +82,7 @@ extension PulseViewModel {
                             self.showTransientStatus(
                                 "Chargement du modèle…",
                                 accent: Color(hex: "#F5A623"),
-                                duration: 120  // reste jusqu'à llm_ready
+                                persistent: true
                             )
                         } else if event.kind == "llm_ready" {
                             // Dismiss immédiat de la notification loading
