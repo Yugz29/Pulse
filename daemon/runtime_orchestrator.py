@@ -80,6 +80,7 @@ class RuntimeOrchestrator:
         self._file_flush_deadline: float | None = None
         self._file_flush_condition = threading.Condition(self._debounce_lock)
         self._file_flush_stopped = False
+        self._accumulated_window_titles: list[str] = []
         self._file_flush_worker = threading.Thread(
             target=self._file_flush_loop,
             daemon=True,
@@ -200,6 +201,8 @@ class RuntimeOrchestrator:
             self._episode_fsm.on_screen_locked(when=event.timestamp)
             self.runtime_state.mark_screen_locked(when=event.timestamp)
             threading.Thread(target=self.llm_unload_background, daemon=True).start()
+            # DayDream — déclenche si 23:59 est passé
+            self._run_daydream_if_pending()
 
         elif event.type == "screen_unlocked":
             episode_locked_at = (
@@ -277,6 +280,12 @@ class RuntimeOrchestrator:
             threading.Thread(target=_warmup_with_events, daemon=True).start()
 
         self.session_memory.record_event(event)
+
+        # Accumuler les titres de fenêtres pour DayDream
+        if event.type == "app_activated":
+            title = (event.payload or {}).get("window_title")
+            if title and len(title) >= 15:
+                self._accumulated_window_titles.append(title)
 
         path = (event.payload or {}).get("path", "")
         if event.type in ("file_modified", "file_created") and "/COMMIT_EDITMSG" in path:
@@ -381,6 +390,37 @@ class RuntimeOrchestrator:
         # Dans les deux cas — restaurer le contexte projet/tâche.
         self.log.info("contexte restauré : projet=%s tâche=%s", project, task)
 
+    def _daydream_scheduler(self) -> None:
+        """Tourne en boucle, marque DayDream pending à 23:59 chaque jour."""
+        import time as _time
+        while True:
+            now = datetime.now()
+            # Calculer le prochain 23:59
+            target = now.replace(hour=23, minute=59, second=0, microsecond=0)
+            if now >= target:
+                target = target.replace(day=target.day + 1)
+            wait_sec = (target - now).total_seconds()
+            _time.sleep(max(wait_sec, 1))
+            from daemon.memory.daydream import mark_daydream_pending
+            mark_daydream_pending()
+
+    def _run_daydream_if_pending(self) -> None:
+        """Lance DayDream dans un thread si le flag est actif."""
+        from daemon.memory.daydream import should_trigger_daydream, trigger_daydream
+        if not should_trigger_daydream():
+            return
+        self.log.info("DayDream : déclenchement au screen_lock.")
+        llm = self.llm_runtime.provider()
+        window_titles = list(self._accumulated_window_titles)
+        self._accumulated_window_titles.clear()
+
+        threading.Thread(
+            target=trigger_daydream,
+            kwargs={"llm": llm, "window_titles": window_titles},
+            daemon=True,
+            name="pulse-daydream",
+        ).start()
+
     def build_context_snapshot(self) -> str:
         """
         Snapshot minimal du contexte courant pour le LLM.
@@ -465,7 +505,14 @@ class RuntimeOrchestrator:
             else:
                 self.log.warning("LLM warmup échoué au démarrage (Ollama indisponible ?)")
             self.scorer.bus.publish("llm_ready", {"model": provider.model})
-        self.log.info("✓ Init différé terminé")
+        self.log.info("\u2713 Init différé terminé")
+
+        # Scheduler DayDream — déclenche le flag à 23:59 chaque jour.
+        threading.Thread(
+            target=self._daydream_scheduler,
+            daemon=True,
+            name="pulse-daydream-scheduler",
+        ).start()
 
     def _should_ignore_event(self, event) -> bool:
         if not event.type.startswith("file_"):
