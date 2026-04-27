@@ -37,7 +37,7 @@ def build_session_snapshot(
             "file_created", "file_modified", "file_renamed", "file_deleted", "file_change"
         }:
             path = payload.get("path")
-            if path:
+            if path and ".cache" not in path and "huggingface" not in path:
                 file_counts[path] = file_counts.get(path, 0) + 1
 
     top_files = sorted(file_counts.items(), key=lambda item: item[1], reverse=True)[:8]

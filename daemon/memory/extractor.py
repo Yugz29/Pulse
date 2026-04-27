@@ -88,6 +88,8 @@ _NOISE_SUBSTRINGS = {
     "globalContext.json", "openai_yaml",
     # Fichiers de config éditeur locaux — jamais du vrai travail
     "settings.local.json",
+    # Cache HuggingFace — téléchargé par sentence-transformers, pas du code
+    "huggingface", "adapter_config", "video_preprocessor", "preprocessor_config",
 }
 
 
@@ -722,14 +724,20 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged["recent_apps"] = _merge_unique_strings(left.get("recent_apps", []), right.get("recent_apps", []))
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
     # Durée réelle : diff entre started_at et ended_at fusionnés.
-    # On prend le max entre la durée réelle et la somme des duration_min
-    # pour couvrir les cas où les timestamps sont très proches (tests, redémarrage rapide).
+    # Si real_elapsed >> sum_durations (facteur 3x), c'est qu'il y a eu
+    # un gap (verrou écran, idle long) entre les deux entrées.
+    # Dans ce cas on utilise sum_durations qui reflète le vrai temps de travail.
     start_dt = _parse_entry_datetime(left.get("started_at"))
     end_dt = _parse_entry_datetime(merged.get("ended_at"))
     sum_durations = int(left.get("duration_min") or 0) + int(right.get("duration_min") or 0)
     if start_dt and end_dt and end_dt > start_dt:
         real_elapsed = max(int((end_dt - start_dt).total_seconds() / 60), 0)
-        merged["duration_min"] = max(real_elapsed, sum_durations)
+        # Si le ratio est raisonnable (< 3x), real_elapsed est fiable.
+        # Sinon il y a eu un gap — on garde sum_durations.
+        if sum_durations > 0 and real_elapsed > sum_durations * 3:
+            merged["duration_min"] = sum_durations
+        else:
+            merged["duration_min"] = max(real_elapsed, sum_durations)
     else:
         merged["duration_min"] = sum_durations
     # Corps : si pas de commit, garder uniquement le plus récent (right).
