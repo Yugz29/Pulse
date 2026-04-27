@@ -203,7 +203,7 @@ class SystemObserver {
     // Callback C — appelé par le RunLoop principal à chaque changement de titre.
     // Utilise `info` (pointeur opaque) pour accéder à `self`.
     private static let axTitleChangedCallback: AXObserverCallbackWithInfo = {
-        _, element, _, info in
+        _, element, _, _, info in
         guard let info else { return }
         let observer = Unmanaged<SystemObserver>.fromOpaque(info).takeUnretainedValue()
         observer.handleAXTitleChanged(element: element)
@@ -259,7 +259,7 @@ class SystemObserver {
         unregisterAXObserver()
 
         var observer: AXObserver?
-        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        let selfPtr = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         guard AXObserverCreateWithInfoCallback(
             pid, Self.axTitleChangedCallback, &observer
         ) == .success, let observer else { return }
