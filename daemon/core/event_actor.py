@@ -161,12 +161,12 @@ class EventActorClassifier:
       2. Répétition rapide du même fichier  → system  +2.0  (process en boucle)
       3. Artefact de dépendance             → tool    +1.5  (généré par outil)
       4. Burst de fichiers distincts        → tool    +0.0–4.0  (continu)
-      5. App outil active                   → tool    +0.8  (faible, jamais décisif seul)
+      5. App outil active                   → tool    +2.5  (fort — depasse baseline user)
 
     Exemple de résolution avec baseline user=1.0 :
-      - App outil seul    : tool=0.8,  user=1.0 → USER gagne  (55%)
+      - App outil seul    : tool=2.5,  user=1.0 → TOOL_ASSISTED (71%)
       - Burst seul (4)    : tool=2.5,  user=1.0 → TOOL_ASSISTED (71%)
-      - Burst + app       : tool=3.3,  user=1.0 → TOOL_ASSISTED (77%)
+      - Burst + app       : tool=5.0,  user=1.0 → TOOL_ASSISTED (83%)
       - Chemin système    : sys=4.0,   user=1.0 → SYSTEM  (80%)
     """
 
@@ -188,9 +188,11 @@ class EventActorClassifier:
         noise = file_noise_policy(path)
         scores = _ActorScores()
 
-        # Signal 1 : chemin système absolu
+        # Signal 1 : chemin système absolu — décisif, court-circuite tout le reste
         if self._is_system_path(path):
             scores.system += 4.0
+            actor, confidence, automation_score = scores.resolve()
+            return ActorAttribution(actor, confidence, automation_score, noise)
 
         # Signal 2 : même fichier modifié plusieurs fois rapidement
         if self._is_rapid_repeat(path, now, recent_events):
@@ -204,9 +206,12 @@ class EventActorClassifier:
         # Signal 4 : burst de fichiers distincts (score continu)
         scores.tool_assisted += self._burst_score(now, recent_events)
 
-        # Signal 5 : app outil active — signal faible
+        # Signal 5 : app outil active
+        # +2.5 quand l'app est clairement un outil LLM (Codex, Cursor...)
+        # assez fort pour depasser le baseline user (1.0) et tagger
+        # les fichiers comme tool_assisted, evitant la pollution du projet actif.
         if latest_app in _TOOL_ASSISTED_APPS:
-            scores.tool_assisted += 0.8
+            scores.tool_assisted += 2.5
 
         actor, confidence, automation_score = scores.resolve()
         return ActorAttribution(actor, confidence, automation_score, noise)
