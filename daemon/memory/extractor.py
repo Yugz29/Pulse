@@ -248,7 +248,7 @@ def update_memories_from_session(
     effective_llm = (
         llm
         if trigger == "commit" and substantive_commit
-        and should_use_llm_for_commit(diff_summary=diff_summary, top_files=top_files, files_count=files_count)
+        and should_use_llm_for_commit(diff_summary=diff_summary, top_files=top_files, files_count=files_count, commit_message=commit_message)
         and not defer_llm_enrichment
         else None
     )
@@ -541,7 +541,10 @@ def _has_substantive_commit_signal(*, commit_message, diff_summary, top_files, f
     return False
 
 
-def should_use_llm_for_commit(*, diff_summary, top_files, files_count) -> bool:
+def should_use_llm_for_commit(*, diff_summary, top_files, files_count, commit_message=None) -> bool:
+    # Un commit avec message conventionnel bien formé mérite toujours le LLM.
+    if commit_message and re.match(r'^(feat|fix|refactor|docs|test|perf|style|chore|build|ci)\b', commit_message.strip().lower()):
+        return True
     if diff_summary and diff_summary.strip():
         return True
     if len(top_files) >= 2 or files_count >= 3:

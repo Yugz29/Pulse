@@ -55,6 +55,11 @@ class Signals:
 class SignalScorer:
     """Convertit les derniers events en signaux simples pour le moteur local."""
 
+    # Apps IA — neutres pour le focus score.
+    # Utiliser Claude/ChatGPT en parallèle du développement est un mode de travail
+    # normal, pas un signe de dispersion.
+    AI_APPS = {"Claude", "ChatGPT", "Perplexity", "Copilot"}
+
     DEV_APPS = {
         "Xcode", "VSCode", "Visual Studio Code", "Code", "Cursor", "WebStorm",
         "PyCharm", "Terminal", "iTerm2", "Warp",
@@ -751,8 +756,13 @@ class SignalScorer:
     def _detect_focus_level(
         self, recent: list, app_events: list, file_events: list, now: datetime
     ) -> str:
+        # Exclure les switches vers les apps IA du comptage de dispersion.
+        # Utiliser Claude/ChatGPT en parallèle du développement est un mode
+        # de travail normal, pas un signe de dispersion.
         recent_app_switches = [
-            event for event in app_events if event.timestamp >= now - timedelta(minutes=10)
+            event for event in app_events
+            if event.timestamp >= now - timedelta(minutes=10)
+            and event.payload.get("app_name") not in self.AI_APPS
         ]
         recent_file_edits = [
             event for event in file_events if event.timestamp >= now - timedelta(minutes=10)
