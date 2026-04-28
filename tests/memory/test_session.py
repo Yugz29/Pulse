@@ -291,6 +291,88 @@ class TestSessionMemory(unittest.TestCase):
         session = self.memory.get_session()
         self.assertEqual(session["ended_at"], observed_end.isoformat())
 
+    def test_reouverture_repare_les_sessions_episodes_et_work_windows_ouverts(self):
+        db_path = str(Path(self.tmpdir.name) / "repair.db")
+        stale = SessionMemory(db_path=db_path, session_id="stale-session")
+        start = datetime(2026, 4, 28, 9, 0, 0)
+        stale.started_at = start
+        stale.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        stale.save_episode(
+            Episode(
+                id="ep-open",
+                session_id="stale-session",
+                started_at=start.isoformat(),
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.91,
+            )
+        )
+        stale.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=25,
+                updated_at=start + timedelta(minutes=25),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                activity_level="editing",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=25,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+
+        reopened = SessionMemory(db_path=db_path, session_id="fresh-session")
+
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            session_row = conn.execute(
+                "SELECT ended_at, updated_at, session_duration_min FROM sessions WHERE id = ?",
+                ("stale-session",),
+            ).fetchone()
+            episode_row = conn.execute(
+                "SELECT ended_at, boundary_reason, duration_sec FROM episodes WHERE id = ?",
+                ("ep-open",),
+            ).fetchone()
+            work_window_row = conn.execute(
+                """
+                SELECT status, ended_at, close_reason, active_sec, active_min
+                FROM work_windows
+                WHERE session_id = ?
+                """,
+                ("stale-session",),
+            ).fetchone()
+            fresh_row = conn.execute(
+                "SELECT ended_at FROM sessions WHERE id = ?",
+                ("fresh-session",),
+            ).fetchone()
+
+        self.assertIsNotNone(session_row)
+        self.assertEqual(session_row["ended_at"], session_row["updated_at"])
+        self.assertEqual(session_row["session_duration_min"], 25)
+        self.assertIsNotNone(episode_row)
+        self.assertEqual(episode_row["boundary_reason"], "restart_repair")
+        self.assertEqual(episode_row["duration_sec"], 1500)
+        self.assertIsNotNone(work_window_row)
+        self.assertEqual(work_window_row["status"], "closed")
+        self.assertEqual(work_window_row["close_reason"], "restart_repair")
+        self.assertEqual(work_window_row["active_sec"], 1500)
+        self.assertEqual(work_window_row["active_min"], 25)
+        self.assertIsNotNone(fresh_row)
+        self.assertIsNone(fresh_row["ended_at"])
+        self.assertEqual(reopened.session_id, "fresh-session")
+
     def test_save_episode_persists_active_episode(self):
         episode = Episode(
             id="ep-1",

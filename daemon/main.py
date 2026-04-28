@@ -48,6 +48,31 @@ log = logging.getLogger("pulse")
 app = Flask(__name__)
 
 
+class _RoutineGetLogFilter(logging.Filter):
+    """Masque les GET de polling normaux pour garder daemon.error.log exploitable."""
+
+    _ROUTINE_GET_PATHS = {
+        "/ping",
+        "/state",
+        "/feed",
+        "/today_summary",
+        "/observation",
+        "/daydreams",
+        "/mcp/pending",
+    }
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING:
+            return True
+        message = record.getMessage()
+        if "\"GET " not in message:
+            return True
+        return not any(f"\"GET {path} " in message for path in self._ROUTINE_GET_PATHS)
+
+
+logging.getLogger("werkzeug").addFilter(_RoutineGetLogFilter())
+
+
 def _build_summary_llm():
     try:
         router_module = importlib.import_module("daemon.llm.router")

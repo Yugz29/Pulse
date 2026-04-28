@@ -95,6 +95,13 @@ Règle d'implémentation :
 
 Lire ces champs séparément est incorrect.
 
+## Sources de vérité
+
+- `RuntimeState` / `PresentState` : vérité live du présent runtime
+- `session.db` et surtout `work_windows` : vérité temporelle persistée
+- `sessions/*.md`, `facts.md`, `projects.md` : projections lisibles et dérivées, jamais source primaire
+- `MemoryStore` et `DayDream` : couches de support hors chemin critique tant qu'elles n'apportent pas une valeur observable stable
+
 Règle runtime importante :
 
 > verrou court ≠ nouvelle session

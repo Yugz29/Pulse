@@ -586,6 +586,8 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("Facts : decay échoué : %s", exc)
 
+        # À partir d'ici, on ne touche plus à la vérité live ni à la vérité
+        # temporelle. MemoryStore/DayDream restent des couches de support.
         self.freeze_memory()
         provider = self.llm_runtime.provider()
         if provider and hasattr(provider, "warmup"):

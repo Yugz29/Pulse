@@ -25,7 +25,9 @@ final class DashboardViewModel: ObservableObject {
 
     private let bridge: DaemonBridge
     private var pollTask: Task<Void, Never>?
-    private let refreshInterval: TimeInterval = 5
+    private let refreshInterval: TimeInterval = 10
+    private let slowRefreshEveryTicks = 6
+    private var slowRefreshTick = 0
 
     init(bridge: DaemonBridge = DaemonBridge()) {
         self.bridge = bridge
@@ -55,7 +57,7 @@ final class DashboardViewModel: ObservableObject {
                     break
                 }
                 guard !Task.isCancelled else { break }
-                await self.refresh()
+                await self.refresh(includeSlowData: false)
             }
         }
     }
@@ -65,44 +67,57 @@ final class DashboardViewModel: ObservableObject {
         pollTask = nil
     }
 
-    func refresh() async {
+    func refresh(includeSlowData: Bool = true) async {
         isLoading = true
 
+        if !includeSlowData {
+            slowRefreshTick += 1
+        }
+        let shouldRefreshSlowData = includeSlowData || slowRefreshTick >= slowRefreshEveryTicks
+        if shouldRefreshSlowData {
+            slowRefreshTick = 0
+        }
+
         async let stateTask: StateResponse? = try? await bridge.getState()
-        async let factsTask = bridge.getFacts(limit: 30)
-        async let archivedFactsTask = bridge.getArchivedFacts(limit: 30)
-        async let factsStatsTask = bridge.getFactsStats()
-        async let factsProfileTask = bridge.getFactsProfile()
-        async let memoryTask = bridge.getMemory()
-        async let sessionJournalsTask = bridge.getSessionJournals()
         async let todaySummaryTask = bridge.getTodaySummary()
-        async let eventsTask = bridge.getInsights(limit: 100)
-        async let proposalsTask = bridge.getRecentProposals(limit: 20)
         async let feedTask = bridge.fetchFeed(since: nil)
         async let observationTask = bridge.getObservation()
-        async let daydreamTask = bridge.getDaydreamData()
         async let pingTask: PingResponse? = try? await bridge.pingStatus()
-        async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
-        async let scoringTask = bridge.getScoringStatus()
 
         state = await stateTask
-        facts = await factsTask
-        archivedFacts = await archivedFactsTask
-        factsStats = await factsStatsTask
-        factsProfile = await factsProfileTask
-        memory = await memoryTask
-        sessionJournals = await sessionJournalsTask
         todaySummary = await todaySummaryTask
-        events = await eventsTask
-        proposals = await proposalsTask
         feedHistory = await feedTask
         observation = await observationTask
-        let daydreamData = await daydreamTask
-        daydreams = daydreamData.0
-        daydreamStatus = daydreamData.1
         ping = await pingTask
-        llmModels = await llmTask
-        scoringStatus = await scoringTask
+
+        if shouldRefreshSlowData {
+            async let factsTask = bridge.getFacts(limit: 30)
+            async let archivedFactsTask = bridge.getArchivedFacts(limit: 30)
+            async let factsStatsTask = bridge.getFactsStats()
+            async let factsProfileTask = bridge.getFactsProfile()
+            async let memoryTask = bridge.getMemory()
+            async let sessionJournalsTask = bridge.getSessionJournals()
+            async let eventsTask = bridge.getInsights(limit: 100)
+            async let proposalsTask = bridge.getRecentProposals(limit: 20)
+            async let daydreamTask = bridge.getDaydreamData()
+            async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
+            async let scoringTask = bridge.getScoringStatus()
+
+            facts = await factsTask
+            archivedFacts = await archivedFactsTask
+            factsStats = await factsStatsTask
+            factsProfile = await factsProfileTask
+            memory = await memoryTask
+            sessionJournals = await sessionJournalsTask
+            events = await eventsTask
+            proposals = await proposalsTask
+            let daydreamData = await daydreamTask
+            daydreams = daydreamData.0
+            daydreamStatus = daydreamData.1
+            llmModels = await llmTask
+            scoringStatus = await scoringTask
+        }
+
         lastRefreshedAt = Date()
         isLoading = false
     }

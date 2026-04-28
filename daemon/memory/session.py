@@ -34,6 +34,7 @@ class SessionMemory:
         self._lock = threading.Lock()
 
         self._init_db()
+        self._repair_stale_open_rows()
         self._ensure_current_session()
         self._backfill_work_windows_if_needed()
 
@@ -822,6 +823,166 @@ class SessionMemory:
             )
             conn.commit()
 
+    def _repair_stale_open_rows(self) -> None:
+        """
+        Répare au démarrage les sessions/épisodes/work_windows restés ouverts
+        après un arrêt brutal ou un redémarrage du daemon.
+
+        Important: on ne touche jamais à la session courante en mémoire.
+        """
+        with self._lock:
+            with self._connect() as conn:
+                stale_sessions = conn.execute(
+                    """
+                    SELECT *
+                    FROM sessions
+                    WHERE ended_at IS NULL
+                      AND id != ?
+                    ORDER BY started_at ASC
+                    """,
+                    (self.session_id,),
+                ).fetchall()
+                if not stale_sessions:
+                    return
+
+                for row in stale_sessions:
+                    self._repair_open_session_rows(conn, session=dict(row))
+                conn.commit()
+
+    def _repair_open_session_rows(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        session: Dict[str, Any],
+    ) -> None:
+        session_id = str(session.get("id") or "").strip()
+        if not session_id:
+            return
+
+        repair_end = self._session_repair_end(session)
+        if repair_end is None:
+            return
+
+        started_at = _parse_iso_datetime(session.get("started_at")) or repair_end
+        duration_min = max(int((repair_end - started_at).total_seconds() / 60), 0)
+
+        conn.execute(
+            """
+            UPDATE sessions
+            SET updated_at = ?,
+                ended_at = ?,
+                session_duration_min = ?
+            WHERE id = ?
+            """,
+            (
+                repair_end.isoformat(),
+                repair_end.isoformat(),
+                duration_min,
+                session_id,
+            ),
+        )
+
+        self._repair_open_episodes(
+            conn,
+            session_id=session_id,
+            ended_at=repair_end,
+            close_reason="restart_repair",
+        )
+        self._repair_open_work_windows(
+            conn,
+            session_id=session_id,
+            ended_at=repair_end,
+            close_reason="restart_repair",
+        )
+
+    def _repair_open_episodes(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+        ended_at: datetime,
+        close_reason: str,
+    ) -> None:
+        rows = conn.execute(
+            """
+            SELECT id, started_at
+            FROM episodes
+            WHERE session_id = ?
+              AND ended_at IS NULL
+            ORDER BY started_at ASC
+            """,
+            (session_id,),
+        ).fetchall()
+        for row in rows:
+            started_at = _parse_iso_datetime(row["started_at"]) or ended_at
+            effective_end = max(started_at, ended_at)
+            duration_sec = max(int((effective_end - started_at).total_seconds()), 0)
+            conn.execute(
+                """
+                UPDATE episodes
+                SET ended_at = ?,
+                    boundary_reason = ?,
+                    duration_sec = ?
+                WHERE id = ?
+                """,
+                (
+                    effective_end.isoformat(),
+                    close_reason,
+                    duration_sec,
+                    row["id"],
+                ),
+            )
+
+    def _repair_open_work_windows(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+        ended_at: datetime,
+        close_reason: str,
+    ) -> None:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM work_windows
+            WHERE session_id = ?
+              AND status = 'open'
+            ORDER BY started_at ASC
+            """,
+            (session_id,),
+        ).fetchall()
+        for row in rows:
+            started_at = _parse_iso_datetime(row["started_at"]) or ended_at
+            updated_at = _parse_iso_datetime(row["updated_at"]) or started_at
+            effective_end = max(started_at, updated_at, ended_at)
+            worked_sec = max(int((effective_end - started_at).total_seconds()), 0)
+            worked_min = max(int(worked_sec / 60), 0)
+            active_sec = int(
+                row["active_sec"] if row["active_sec"] is not None else int(row["active_min"] or 0) * 60
+            )
+            active_sec = min(active_sec, worked_sec)
+            active_min = min(self._seconds_to_minutes(active_sec), worked_min)
+            conn.execute(
+                """
+                UPDATE work_windows
+                SET updated_at = ?,
+                    ended_at = ?,
+                    status = 'closed',
+                    close_reason = ?,
+                    active_sec = ?,
+                    active_min = ?
+                WHERE id = ?
+                """,
+                (
+                    effective_end.isoformat(),
+                    effective_end.isoformat(),
+                    close_reason,
+                    active_sec,
+                    active_min,
+                    row["id"],
+                ),
+            )
+
     def _backfill_work_windows_if_needed(self) -> None:
         with self._lock:
             with self._connect() as conn:
@@ -1059,6 +1220,14 @@ class SessionMemory:
         if candidates:
             return max(candidates)
         return _parse_iso_datetime(session.get("started_at"))
+
+    @staticmethod
+    def _session_repair_end(session: Dict[str, Any]) -> Optional[datetime]:
+        updated_at = _parse_iso_datetime(session.get("updated_at"))
+        started_at = _parse_iso_datetime(session.get("started_at"))
+        if updated_at is not None and started_at is not None:
+            return max(updated_at, started_at)
+        return updated_at or started_at
 
     @staticmethod
     def _session_has_backfillable_activity(session: Dict[str, Any]) -> bool:

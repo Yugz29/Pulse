@@ -1064,6 +1064,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(closed.probable_task, "unknown")
         self.assertEqual(closed.activity_level, "idle")
         self.assertEqual(closed.task_confidence, 0.0)
+        self.session_memory.close.assert_called_once_with(close_reason="session_end")
 
     def test_freeze_closed_episode_preserves_existing_semantics(self):
         self.runtime_state.update_present(
