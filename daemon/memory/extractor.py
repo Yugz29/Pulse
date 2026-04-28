@@ -1294,6 +1294,18 @@ def _build_consolidation_frame(
     if commit_message:
         probable_task = _commit_task_correction(commit_message, probable_task)
     session_duration_min = int(session_data.get("duration_min", 0) or 0)
+    work_window = _resolve_commit_work_window(session_data, trigger=trigger)
+    if work_window is not None:
+        return {
+            "episode": episode,
+            "active_project": active_project,
+            "probable_task": probable_task,
+            "activity_level": (episode or {}).get("activity_level") or session_data.get("activity_level"),
+            "task_confidence": (episode or {}).get("task_confidence") or session_data.get("task_confidence"),
+            "duration_min": max(work_window["duration_min"], session_duration_min),
+            "started_at": work_window["started_at"],
+            "ended_at": work_window["ended_at"],
+        }
     duration_min = _episode_duration_min(episode)
     use_session_window = _should_use_session_window_for_commit(
         trigger=trigger,
@@ -1318,6 +1330,31 @@ def _build_consolidation_frame(
         "duration_min": duration_min,
         "started_at": started_at or session_data.get("started_at"),
         "ended_at": ended_at or session_data.get("ended_at") or session_data.get("updated_at"),
+    }
+
+
+def _resolve_commit_work_window(
+    session_data: Dict[str, Any],
+    *,
+    trigger: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if trigger != "commit":
+        return None
+
+    started_at = _parse_entry_datetime(session_data.get("work_window_started_at"))
+    ended_at = _parse_entry_datetime(
+        session_data.get("work_window_ended_at")
+        or session_data.get("updated_at")
+        or session_data.get("ended_at")
+    )
+    if started_at is None or ended_at is None or ended_at <= started_at:
+        return None
+
+    duration_min = max(int((ended_at - started_at).total_seconds() / 60), 0)
+    return {
+        "started_at": started_at.isoformat(),
+        "ended_at": ended_at.isoformat(),
+        "duration_min": duration_min,
     }
 
 

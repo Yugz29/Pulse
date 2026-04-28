@@ -789,10 +789,20 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.session_memory.export_memory_payload.return_value = {
             "active_project": "plugins",
             "duration_min": 19,
+            "started_at": "2026-04-28T11:46:01",
+            "updated_at": "2026-04-28T12:04:48.365316",
             "top_files": ["plugin.json", "openai.yaml"],
             "files_changed": 20,
         }
         self.scorer.compute.return_value = self._signals(session_duration_min=19)
+        self.orchestrator.session_fsm.restore_session_start(datetime(2026, 4, 28, 11, 46, 1))
+        self.runtime_state.update_present(
+            signals=self._signals(session_duration_min=19),
+            session_status="active",
+            awake=True,
+            locked=False,
+            updated_at=datetime(2026, 4, 28, 12, 4, 48, 365316),
+        )
 
         captured_threads = []
 
@@ -824,6 +834,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             ["DashboardViewModel.swift", "DashboardRootView.swift"],
         )
         self.assertEqual(snapshot["files_changed"], 20)
+        self.assertEqual(snapshot["work_window_started_at"], "2026-04-28T11:46:01")
+        self.assertGreaterEqual(snapshot["work_window_ended_at"], "2026-04-28T12:04:48.365316")
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
         git_root = Path("/tmp/Pulse")

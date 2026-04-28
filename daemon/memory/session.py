@@ -263,6 +263,8 @@ class SessionMemory:
 
     def export_memory_payload(self, *, closed_episode_limit: int = 8) -> Dict[str, Any]:
         payload = self.export_session_data()
+        payload["work_window_started_at"] = payload.get("started_at")
+        payload["work_window_ended_at"] = payload.get("updated_at") or payload.get("ended_at")
         payload["closed_episodes"] = [
             asdict(episode)
             for episode in self.get_recent_closed_episodes(limit=closed_episode_limit)

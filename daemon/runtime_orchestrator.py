@@ -774,6 +774,7 @@ class RuntimeOrchestrator:
             return False
 
     def _process_confirmed_commit(self, git_root) -> None:
+        commit_at = datetime.now()
         commit_msg = read_commit_message(git_root)
         self.log.info(
             "Commit git confirmé [%s] : %s",
@@ -784,7 +785,7 @@ class RuntimeOrchestrator:
         self._persist_episode_transition(
             self._episode_fsm.on_commit(
                 session_id=self._current_session_id(),
-                when=datetime.now(),
+                when=commit_at,
             )
         )
 
@@ -796,6 +797,7 @@ class RuntimeOrchestrator:
 
         snapshot = self._export_memory_payload()
         snapshot["active_project"] = git_root.name or snapshot.get("active_project")
+        self._annotate_commit_work_window(snapshot, commit_at=commit_at)
         diff_files = extract_file_names_from_diff_summary(diff_summary or "")
         commit_scope_files = diff_files or read_commit_file_names(git_root)
         if diff_files:
@@ -810,6 +812,20 @@ class RuntimeOrchestrator:
             args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),
             daemon=True,
         ).start()
+
+    def _annotate_commit_work_window(self, snapshot: dict, *, commit_at: datetime) -> None:
+        work_window_started_at = self._session_fsm.session_started_at
+        runtime_snapshot = self.runtime_state.get_runtime_snapshot()
+        window_end = runtime_snapshot.present.updated_at or commit_at
+        if window_end < commit_at:
+            window_end = commit_at
+
+        if work_window_started_at is not None:
+            snapshot["work_window_started_at"] = work_window_started_at.isoformat()
+        elif snapshot.get("started_at"):
+            snapshot["work_window_started_at"] = snapshot.get("started_at")
+
+        snapshot["work_window_ended_at"] = window_end.isoformat()
 
     def _enqueue_file_event(self, event) -> None:
         with self._file_flush_condition:

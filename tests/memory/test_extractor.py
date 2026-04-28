@@ -209,6 +209,44 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("11:46 → 12:04", journal)
         self.assertIn("développement (19 min)", journal)
 
+    def test_commit_prefere_work_window_explicite_aux_sous_episodes_techniques(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 18,
+                "probable_task": "coding",
+                "recent_apps": ["Codex", "Pulse", "Code"],
+                "files_changed": 4,
+                "top_files": ["daydream.py", "DashboardViewModel.swift"],
+                "started_at": "2026-04-28T12:04:48.365316",
+                "updated_at": "2026-04-28T12:04:55.324833",
+                "work_window_started_at": "2026-04-28T11:46:01",
+                "work_window_ended_at": "2026-04-28T12:04:55.324833",
+                "closed_episodes": [
+                    {
+                        "episode_id": "ep-commit",
+                        "session_id": "sess-2",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "executing",
+                        "task_confidence": 0.92,
+                        "started_at": "2026-04-28T12:04:48.365316",
+                        "ended_at": "2026-04-28T12:04:55.324833",
+                        "duration_sec": 7,
+                        "boundary_reason": "commit",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(daydream): add robust execution state",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+
+        self.assertIn("11:46 → 12:04", journal)
+        self.assertIn("développement (18 min)", journal)
+
     def test_projection_projet_conserve_un_historique_roulant_d_episodes(self):
         update_memories_from_session(
             {
