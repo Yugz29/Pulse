@@ -13,6 +13,7 @@ from daemon.memory.extractor import (
     get_fact_engine,
     last_session_context,
     load_memory_context,
+    read_commit_file_names,
     render_project_memory,
     read_commit_message,
     read_head_sha,
@@ -389,7 +390,8 @@ class RuntimeOrchestrator:
             if started_at_raw:
                 try:
                     original_started_at = datetime.fromisoformat(started_at_raw)
-                    self._session_fsm.session_started_at = original_started_at
+                    self._session_fsm.restore_session_start(original_started_at)
+                    self.session_memory.resume_session(started_at=original_started_at)
                     self.log.info(
                         "reprise transparente (%.0f min) depuis %s",
                         elapsed_min, original_started_at.strftime("%H:%M")
@@ -419,7 +421,7 @@ class RuntimeOrchestrator:
         try:
             from daemon.core.workspace_context import find_workspace_root
             from daemon.memory.extractor import (
-                read_head_sha, find_git_root, read_commit_message,
+                read_head_sha, find_git_root, read_commit_file_names, read_commit_message,
                 update_memories_from_session,
             )
             from daemon.core.git_diff import read_commit_diff_summary
@@ -439,6 +441,7 @@ class RuntimeOrchestrator:
             # Nouveau commit détecté
             commit_message = read_commit_message(git_root) or ""
             diff_summary = read_commit_diff_summary(git_root) or ""
+            commit_scope_files = read_commit_file_names(git_root)
             self.log.info(
                 "Commit manqué détecté sur %s : %s",
                 project, commit_message[:60]
@@ -459,6 +462,7 @@ class RuntimeOrchestrator:
                 "focus_level": "normal",
                 "started_at": started_at,
                 "ended_at": shutdown_at,
+                "commit_scope_files": commit_scope_files,
             }
 
             update_memories_from_session(
@@ -791,6 +795,16 @@ class RuntimeOrchestrator:
             pass
 
         snapshot = self._export_memory_payload()
+        snapshot["active_project"] = git_root.name or snapshot.get("active_project")
+        diff_files = extract_file_names_from_diff_summary(diff_summary or "")
+        commit_scope_files = diff_files or read_commit_file_names(git_root)
+        if diff_files:
+            snapshot["top_files"] = diff_files[:5]
+            snapshot["files_changed"] = max(
+                int(snapshot.get("files_changed", 0) or 0),
+                len(diff_files),
+            )
+        snapshot["commit_scope_files"] = commit_scope_files[:8]
         threading.Thread(
             target=self._sync_memory_background,
             args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),

@@ -113,14 +113,16 @@ extension DaemonBridge {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return ([], nil) }
 
-        let entries = (json["daydreams"] as? [[String: Any]] ?? []).compactMap { d in
+        let rawEntries: [[String: Any]] = json["daydreams"] as? [[String: Any]] ?? []
+        let entries: [DaydreamEntry] = rawEntries.compactMap { d in
             guard let date = d["date"] as? String,
                   let content = d["content"] as? String
             else { return nil }
             return DaydreamEntry(id: date, date: date, content: content)
         }
 
-        let status = (json["status"] as? [String: Any]).map { d in
+        let statusDict: [String: Any]? = json["status"] as? [String: Any]
+        let status: DaydreamStatus? = statusDict.map { d in
             DaydreamStatus(
                 status: d["status"] as? String ?? "idle",
                 pending: d["pending"] as? Bool ?? false,
