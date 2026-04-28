@@ -65,6 +65,7 @@ class SystemObserver {
         observeUserIdle()
         observeScreenLock()
         observeWindowTitlePolling()
+        observeClaudeDesktopSessions()
         refreshCurrentContext()
 
         if !AXIsProcessTrusted() {
@@ -587,6 +588,88 @@ class SystemObserver {
     // ─────────────────────────────────────────────────────────────────────────
     // MARK: - Envoi au daemon
     // ─────────────────────────────────────────────────────────────────────────
+
+    // MARK: - 7. Sessions Claude Desktop
+    //
+    // Observe ~/Library/Application Support/Claude/claude-code-sessions/
+    // et local-agent-mode-sessions/ via FSEvents.
+    // Quand Claude Desktop crée ou met à jour une session, Pulse lit
+    // le titre + répertoire de travail depuis le JSON et les publie.
+    //
+    // Entièrement autonome : pas de BLE, pas de prompt, pas de dépendance.
+
+    private var claudeSessionStream: FSEventStreamRef?
+    private var lastSeenSessionFiles: [String: String] = [:] // path → lastActivityAt
+
+    private func observeClaudeDesktopSessions() {
+        let base = NSString(string: "~/Library/Application Support/Claude").expandingTildeInPath
+        let paths = [
+            "\(base)/claude-code-sessions",
+            "\(base)/local-agent-mode-sessions",
+        ] as CFArray
+
+        var ctx = FSEventStreamContext(
+            version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil, release: nil, copyDescription: nil
+        )
+
+        let callback: FSEventStreamCallback = { _, ctx, count, paths, _, _ in
+            guard let ctx else { return }
+            let obs = Unmanaged<SystemObserver>.fromOpaque(ctx).takeUnretainedValue()
+            let pathArray = unsafeBitCast(paths, to: NSArray.self) as! [String]
+            for path in pathArray.prefix(Int(count)) {
+                obs.handleClaudeSessionPath(path)
+            }
+        }
+
+        guard let stream = FSEventStreamCreate(
+            nil, callback, &ctx,
+            paths,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+            0.5,
+            FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
+        ) else { return }
+
+        FSEventStreamScheduleWithRunLoop(stream, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        FSEventStreamStart(stream)
+        claudeSessionStream = stream
+    }
+
+    private func handleClaudeSessionPath(_ path: String) {
+        // On s'intéresse uniquement aux fichiers JSON de session
+        guard path.hasSuffix(".json") else { return }
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return }
+
+            let title    = json["title"] as? String ?? ""
+            let cwd      = json["cwd"] as? String ?? ""
+            let activity = json["lastActivityAt"] as? Int64 ?? 0
+            let turns    = json["completedTurns"] as? Int ?? 0
+            let archived = json["isArchived"] as? Bool ?? false
+
+            // Ignorer les sessions archivées ou sans titre
+            guard !archived, !title.isEmpty, !title.hasPrefix("Nouvelle session") else { return }
+
+            // Déduplication : n'émettre que si lastActivityAt a changé
+            let key = path
+            let activityStr = String(activity)
+            guard self.lastSeenSessionFiles[key] != activityStr else { return }
+            self.lastSeenSessionFiles[key] = activityStr
+
+            self.sendEvent([
+                "type":       "claude_desktop_session",
+                "title":      title,
+                "cwd":        cwd,
+                "turns":      String(turns),
+                "timestamp":  ISO8601DateFormatter().string(from: Date()),
+            ])
+        }
+    }
 
     private func sendEvent(_ payload: [String: String]) {
         Task(priority: .utility) {

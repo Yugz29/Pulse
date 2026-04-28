@@ -289,6 +289,21 @@ class RuntimeOrchestrator:
             if title and len(title) >= 15:
                 self._accumulated_window_titles.append(title)
 
+        # Sessions Claude Desktop — titre de session comme contexte
+        if event.type == "claude_desktop_session":
+            title = (event.payload or {}).get("title", "")
+            cwd   = (event.payload or {}).get("cwd", "")
+            if title:
+                self._accumulated_window_titles.append(f"Claude: {title}")
+            if cwd:
+                try:
+                    from daemon.core.workspace_context import extract_project_name
+                    project = extract_project_name(cwd)
+                    if project:
+                        self.log.debug("claude_desktop_session : projet=%s titre=%s", project, title)
+                except Exception:
+                    pass
+
         path = (event.payload or {}).get("path", "")
         if event.type in ("file_modified", "file_created") and "/COMMIT_EDITMSG" in path:
             self._schedule_commit_watch(path)
