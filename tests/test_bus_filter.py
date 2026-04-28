@@ -161,10 +161,31 @@ class TestShouldPublishToBus(unittest.TestCase):
             {"path": "/Users/yugz/Projets/Pulse/build/models_cache.json"},
         ))
 
-    def test_capture_ecran_bloquee(self):
-        self.assertFalse(_should_publish_to_bus(
+    def test_capture_ecran_passe_comme_contexte_observable(self):
+        self.assertTrue(_should_publish_to_bus(
             "file_created",
             {"path": "/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"},
+        ))
+
+    def test_huggingface_cache_bloque(self):
+        self.assertFalse(_should_publish_to_bus(
+            "file_modified",
+            {
+                "path": "/Users/yugz/.cache/huggingface/modules/transformers_modules/"
+                "Qwen/Qwen2-VL-2B-Instruct/adapter_config.json"
+            },
+        ))
+
+    def test_codex_tmp_bloque(self):
+        self.assertFalse(_should_publish_to_bus(
+            "file_created",
+            {"path": "/Users/yugz/.codex/.tmp/plugins-clone-abc123/plugin.json"},
+        ))
+
+    def test_codex_vendor_imports_bloque(self):
+        self.assertFalse(_should_publish_to_bus(
+            "file_modified",
+            {"path": "/Users/yugz/.codex/vendor_imports/cache/openai.yaml"},
         ))
 
     def test_fichier_dans_trash_bloque(self):

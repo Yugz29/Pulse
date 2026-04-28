@@ -102,18 +102,23 @@ class SignalScorer:
             e for e in file_events
             if self._file_signal_significance(e.payload.get("path")) == "meaningful"
         ]
+        live_meaningful_file_events = [
+            e for e in meaningful_file_events
+            if e.payload.get("_actor", "user") in {"user", "unknown"}
+        ]
         recent_file_events = self._recent_file_events(file_events, now)
         recent_meaningful_file_events = self._recent_file_events(meaningful_file_events, now)
+        recent_live_meaningful_file_events = self._recent_file_events(live_meaningful_file_events, now)
 
-        dominant_workspace_root = self._dominant_workspace_root(recent_meaningful_file_events)
+        dominant_workspace_root = self._dominant_workspace_root(recent_live_meaningful_file_events)
         if dominant_workspace_root:
             active_file = self._last_file_path_for_workspace(
-                meaningful_file_events,
+                live_meaningful_file_events,
                 dominant_workspace_root,
             )
             active_project = self._extract_project_from_workspace(dominant_workspace_root)
         else:
-            active_file = self._last_file_path(meaningful_file_events)
+            active_file = self._last_file_path(live_meaningful_file_events)
             active_project = self._extract_project(active_file)
 
         # Fallback : si FSEvents n'a rien captué, extraire le fichier depuis

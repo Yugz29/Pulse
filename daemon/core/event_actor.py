@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 
+from .file_classifier import file_signal_significance
+
 
 # ── Types publics ─────────────────────────────────────────────────────────────
 
@@ -58,6 +60,9 @@ _USER_BASELINE = 1.0
 # Segments présents dans les chemins purement système (jamais user-initiated).
 _SYSTEM_PATH_SEGMENTS = (
     "/.Spotlight-",
+    "/.cache/",
+    "/.codex/.tmp/",
+    "/.codex/vendor_imports/",
     "/private/var/folders/",
     "/System/Library/",
     "/Library/Caches/",
@@ -105,6 +110,11 @@ def file_noise_policy(path: str) -> NoisePolicy:
     Retourne la NoisePolicy structurelle d'un fichier.
     Indépendant de l'actor et du contexte d'exécution.
     """
+    significance = file_signal_significance(path)
+    if significance == "observe_only":
+        return NoisePolicy.OBSERVE_ONLY
+    if significance == "technical_noise":
+        return NoisePolicy.IGNORE
     name = path.split("/")[-1].lower()
     if name in _DEPENDENCY_ARTIFACTS:
         return NoisePolicy.DOWNRANK

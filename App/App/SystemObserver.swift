@@ -566,7 +566,7 @@ class SystemObserver {
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(handleScreenLocked), name: NSNotification.Name("com.apple.screenIsLocked"), object: nil)
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(handleScreenUnlocked), name: NSNotification.Name("com.apple.screenIsUnlocked"), object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(handleScreenLocked), name: NSWorkspace.screensDidSleepNotification, object: nil)
-        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(handleScreenUnlocked), name: NSWorkspace.screensDidWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(handleScreenDidWake), name: NSWorkspace.screensDidWakeNotification, object: nil)
     }
 
     @objc private func handleScreenLocked() {
@@ -577,6 +577,11 @@ class SystemObserver {
     @objc private func handleScreenUnlocked() {
         isUserIdle = false
         sendEvent(["type": "screen_unlocked", "timestamp": ISO8601DateFormatter().string(from: Date())])
+    }
+
+    @objc private func handleScreenDidWake() {
+        // Un simple wake écran n'implique pas que la session utilisateur soit
+        // déverrouillée. On ne publie donc aucun screen_unlocked ici.
     }
 
     // ─────────────────────────────────────────────────────────────────────────

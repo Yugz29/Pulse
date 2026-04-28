@@ -204,6 +204,18 @@ class TestSessionFSM(unittest.TestCase):
         self.assertEqual(self.fsm.session_started_at, self.base)
         self.assertIsNone(self.fsm.last_screen_locked_at)
 
+    def test_unlock_sans_lock_prealable_n_active_pas_la_session(self):
+        transition = self.fsm.on_screen_unlocked(
+            when=self.base,
+            sleep_session_threshold_min=30,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertEqual(self.fsm.state, SessionFSM.IDLE)
+        self.assertIsNone(self.fsm.last_screen_locked_at)
+
     def test_app_de_dev_est_une_activite_significative(self):
         t_first = self._at(0)
 

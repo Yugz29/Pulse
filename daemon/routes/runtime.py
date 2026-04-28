@@ -478,9 +478,10 @@ def register_runtime_routes(
     def get_daydreams():
         """Liste les fichiers DayDream disponibles."""
         from pathlib import Path
+        from daemon.memory.daydream import get_daydream_status
         daydream_dir = Path.home() / ".pulse" / "memory" / "daydreams"
         if not daydream_dir.exists():
-            return jsonify({"daydreams": []})
+            return jsonify({"daydreams": [], "status": get_daydream_status()})
 
         files = sorted(daydream_dir.glob("*.md"), reverse=True)[:7]
         result = []
@@ -493,7 +494,7 @@ def register_runtime_routes(
                 })
             except Exception:
                 pass
-        return jsonify({"daydreams": result})
+        return jsonify({"daydreams": result, "status": get_daydream_status()})
 
     @app.route("/feed")
     def get_feed():
@@ -646,6 +647,8 @@ def _should_publish_to_bus(event_type: str, payload: dict, runtime_state: Any = 
     - Pendant le verrou, seuls screen_locked/screen_unlocked entrent dans le bus.
       Les écritures système en arrière-plan ne doivent pas contaminer le scorer.
     - Les autres events fichier sont filtrés par file_signal_significance.
+      "observe_only" entre dans le bus pour le contexte brut, mais ne doit
+      pas piloter le runtime live.
     - Pour clipboard_updated, le champ 'content' est retiré du payload avant
       publication : seul content_kind est utilisé par le scorer. Défense en
       profondeur au cas où un ancien client Swift enverrait encore le contenu brut.
@@ -672,7 +675,7 @@ def _should_publish_to_bus(event_type: str, payload: dict, runtime_state: Any = 
     if "COMMIT_EDITMSG" in path:
         return True
 
-    return file_signal_significance(path) == "meaningful"
+    return file_signal_significance(path) in {"meaningful", "observe_only"}
 
 
 def _normalize_terminal_event_payload(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:

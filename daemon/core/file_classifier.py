@@ -12,6 +12,7 @@ Importé par :
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 from typing import Optional
 
@@ -19,9 +20,8 @@ from typing import Optional
 # ── Bruit récurrent à faible valeur produit ──────────────────────────────────
 
 _SCREENSHOT_MARKERS = (
-    "capture d\u2019\u00e9cran",  # apostrophe curly macOS (U+2019)
     "capture d'ecran",
-    "capture d'\u00e9cran",
+    "capture decran",
     "screenshot",
 )
 
@@ -45,11 +45,17 @@ _UUID_RE = re.compile(
 
 
 def _is_screenshot_capture(name: str) -> bool:
-    lower_name = name.lower()
+    lower_name = _normalize_for_match(name)
     return (
         lower_name.endswith(_SCREENSHOT_EXTENSIONS)
         and any(marker in lower_name for marker in _SCREENSHOT_MARKERS)
     )
+
+
+def _normalize_for_match(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    return ascii_only.lower()
 
 
 def _is_git_hash_filename(name: str) -> bool:
@@ -167,6 +173,7 @@ def file_signal_significance(path: Optional[str]) -> str:
     Retourne :
       "technical_noise" — à ignorer complètement
       "meaningful"      — influence active_file, probable_task, focus
+      "observe_only"    — utile comme contexte, exclu du live scoring
       "neutral"         — trackable mais non prioritaire
     """
     if not path:
@@ -205,7 +212,7 @@ def file_signal_significance(path: Optional[str]) -> str:
     if lower_name.endswith(("_cache.json", "-cache.json", ".cache.json")):
         return "technical_noise"
     if _is_screenshot_capture(name):
-        return "technical_noise"
+        return "observe_only"
     if name.endswith(("-journal", "-wal", "-shm")):
         return "technical_noise"
     if ".sb-" in name:
@@ -220,6 +227,7 @@ def file_signal_significance(path: Optional[str]) -> str:
             "/.git/", "/node_modules/", "/__pycache__/",
             "/xcuserdata/", "/DerivedData/",
             "/site-packages/", "/dist-packages/", "/.venv/", "/venv/",
+            "/.cache/", "/.codex/.tmp/", "/.codex/vendor_imports/",
             "/opt/homebrew/Cellar/", "/opt/homebrew/lib/",
             "/usr/local/lib/", "/usr/lib/", "/usr/share/",
             "/System/Library/", "/private/var/",

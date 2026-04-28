@@ -88,6 +88,12 @@ class SessionFSM:
         boundary = False
         locked_at = self._last_screen_locked_at
 
+        # Un event unlock sans lock valide en amont est un faux positif
+        # (wake écran, reprise système, client qui rattrape son état) :
+        # il ne doit ni ouvrir une session active ni réinitialiser l'horloge.
+        if locked_at is None:
+            return SessionTransition(state=self._state)
+
         if locked_at is not None:
             sleep_minutes = (
                 unlocked_at - locked_at
@@ -259,4 +265,4 @@ class SessionFSM:
         return gap_minutes <= SESSION_TIMEOUT_MIN
 
     def _is_trackable_file_path(self, path: Optional[str]) -> bool:
-        return file_signal_significance(path) != "technical_noise"
+        return file_signal_significance(path) == "meaningful"

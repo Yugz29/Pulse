@@ -267,22 +267,53 @@ class TestFileSignalSignificance(unittest.TestCase):
             "technical_noise",
         )
 
-    def test_capture_ecran_macos_est_bruit_technique(self):
+    def test_capture_ecran_macos_est_observe_only(self):
         self.assertEqual(
             file_signal_significance("/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"),
-            "technical_noise",
+            "observe_only",
         )
 
-    def test_screenshot_anglais_est_bruit_technique(self):
+    def test_capture_ecran_unicode_decomposee_est_observe_only(self):
+        self.assertEqual(
+            file_signal_significance("/Users/yugz/Desktop/Capture d’écran 2026-04-28 à 10.49.52.png"),
+            "observe_only",
+        )
+
+    def test_screenshot_anglais_est_observe_only(self):
         self.assertEqual(
             file_signal_significance("/Users/yugz/Desktop/Screenshot 2026-04-21 at 10.32.18.png"),
-            "technical_noise",
+            "observe_only",
         )
 
     def test_asset_normal_reste_meaningful(self):
         self.assertEqual(
             file_signal_significance("/Users/yugz/Projets/MonApp/assets/logo-final.png"),
             "meaningful",
+        )
+
+    def test_huggingface_cache_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance(
+                "/Users/yugz/.cache/huggingface/modules/transformers_modules/"
+                "Qwen/Qwen2-VL-2B-Instruct/processor_config.json"
+            ),
+            "technical_noise",
+        )
+
+    def test_codex_tmp_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance(
+                "/Users/yugz/.codex/.tmp/plugins-clone-abc123/SKILL.md"
+            ),
+            "technical_noise",
+        )
+
+    def test_codex_vendor_imports_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance(
+                "/Users/yugz/.codex/vendor_imports/cache/openai.yaml"
+            ),
+            "technical_noise",
         )
 
     def test_chemin_vide(self):
