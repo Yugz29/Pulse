@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from daemon.memory.extractor import _resolve_git_dir, find_git_root, read_commit_message, read_head_sha
+from daemon.memory.extractor import _resolve_git_dir, find_git_root, read_commit_file_names, read_commit_message, read_head_sha
 
 
 class TestFindGitRoot(unittest.TestCase):
@@ -199,6 +199,29 @@ class TestReadCommitMessage(unittest.TestCase):
         (worktree / ".git").write_text("gitdir: ../gitdirs/wt\n")
         (gitdir / "COMMIT_EDITMSG").write_text("fix: worktree commit\n")
         self.assertEqual(read_commit_message(worktree), "fix: worktree commit")
+
+
+class TestReadCommitFileNames(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / ".git").mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_retourne_fichiers_uniques_du_commit(self):
+        from unittest.mock import patch
+
+        class Result:
+            returncode = 0
+            stdout = "App/App/DashboardViewModel.swift\nApp/App/DashboardRootView.swift\nApp/App/DashboardViewModel.swift\n"
+
+        with patch("daemon.memory.extractor.subprocess.run", return_value=Result()):
+            files = read_commit_file_names(self.root)
+
+        self.assertEqual(files, ["DashboardViewModel.swift", "DashboardRootView.swift"])
 
 
 if __name__ == "__main__":
