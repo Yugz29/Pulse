@@ -173,6 +173,42 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("développement (22 min)", journal)
         self.assertNotIn("- Épisodes récents :", projects)
 
+    def test_commit_tres_court_conserve_la_fenetre_session_si_episode_commit_est_tiny(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 19,
+                "probable_task": "coding",
+                "recent_apps": ["Codex", "Code"],
+                "files_changed": 4,
+                "top_files": ["DashboardViewModel.swift", "daydream.py"],
+                "started_at": "2026-04-28T11:46:01",
+                "updated_at": "2026-04-28T12:04:55",
+                "closed_episodes": [
+                    {
+                        "episode_id": "ep-commit",
+                        "session_id": "sess-2",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "executing",
+                        "task_confidence": 0.92,
+                        "started_at": "2026-04-28T12:04:48",
+                        "ended_at": "2026-04-28T12:04:55",
+                        "duration_sec": 7,
+                        "boundary_reason": "commit",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(daydream): add robust execution state",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+
+        self.assertIn("11:46 → 12:04", journal)
+        self.assertIn("développement (19 min)", journal)
+
     def test_projection_projet_conserve_un_historique_roulant_d_episodes(self):
         update_memories_from_session(
             {
@@ -324,7 +360,7 @@ class TestExtractor(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         content = session_files[0].read_text()
-        self.assertIn("Livraison : « wip ». Portée : main.py.", content)
+        self.assertIn("Livraison : « wip ». Portée estimée : main.py.", content)
 
     def test_llm_desactive_pour_screen_lock(self):
         """Le LLM ne doit PAS être appelé pour screen_lock — fallback déterministe uniquement."""
@@ -738,8 +774,7 @@ class TestExtractor(unittest.TestCase):
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
         self.assertIn("## Pulse", journal)
-        self.assertIn("## Activité faible / bruit", journal)
-        self.assertIn("10:15 → 10:45", journal)
+        self.assertNotIn("10:15 → 10:45", journal)
 
     def test_journal_declasse_un_episode_projet_faible_quand_hors_projet_est_plus_plausible(self):
         update_memories_from_session(
@@ -796,10 +831,11 @@ class TestExtractor(unittest.TestCase):
         )
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
-        self.assertIn("## Hors projet", journal)
-        self.assertNotIn("## Pulse", journal)
-        self.assertIn("## Activité faible / bruit", journal)
-        self.assertIn("models_cache.json", journal)
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        self.assertIn("## Hors projet", visible)
+        self.assertNotIn("## Pulse", visible)
+        self.assertNotIn("## Activité faible / bruit", visible)
+        self.assertNotIn("models_cache.json", visible)
 
     def test_commit_peut_etre_enrichi_apres_ecriture_initiale(self):
         session = {
@@ -837,6 +873,45 @@ class TestExtractor(unittest.TestCase):
         after = session_files[0].read_text()
         self.assertIn("Résumé court de la session.", after)
         self.assertIn("feat: commit enrichi", after)
+
+    def test_commit_prefere_les_fichiers_du_diff_a_ceux_du_snapshot(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 12,
+                "probable_task": "coding",
+                "recent_apps": ["Codex"],
+                "files_changed": 20,
+                "top_files": ["daydream.py", "runtime.py"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: dashboard state",
+            diff_summary="Diff en cours : DashboardViewModel.swift (+10 -2), DashboardRootView.swift (+22 -4)",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("DashboardViewModel.swift", journal)
+        self.assertIn("DashboardRootView.swift", journal)
+        self.assertNotIn("daydream.py, runtime.py", journal)
+
+    def test_commit_marque_la_portee_comme_estimee_en_dernier_recours_snapshot(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 12,
+                "probable_task": "coding",
+                "recent_apps": ["Codex"],
+                "files_changed": 2,
+                "top_files": ["daydream.py", "runtime.py"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: fallback snapshot",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("Portée estimée : daydream.py, runtime.py", journal)
 
     def test_fact_engine_structural_error_is_logged_and_exposed_via_facts_route(self):
         class ReadOnlyFailingFactEngine(extractor_module.FactEngine):

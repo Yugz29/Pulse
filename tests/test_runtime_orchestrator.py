@@ -777,6 +777,115 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(closed.activity_level, "idle")
         self.assertEqual(closed.task_confidence, 0.0)
 
+    def test_process_confirmed_commit_ancre_snapshot_sur_le_repo_et_le_diff(self):
+        git_root = Path("/tmp/Pulse")
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=datetime.now(),
+            )
+
+        self.session_memory.save_episode.reset_mock()
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "plugins",
+            "duration_min": 19,
+            "top_files": ["plugin.json", "openai.yaml"],
+            "files_changed": 20,
+        }
+        self.scorer.compute.return_value = self._signals(session_duration_min=19)
+
+        captured_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.args = kwargs.get("args", ())
+                captured_threads.append(self)
+
+            def start(self):
+                return None
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+             patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
+             patch(
+                 "daemon.runtime_orchestrator.read_commit_diff_summary",
+                 return_value="Diff en cours : DashboardViewModel.swift (+10 -2), DashboardRootView.swift (+22 -4)",
+             ):
+            self.orchestrator._process_confirmed_commit(git_root)
+
+        sync_thread = next(
+            thread for thread in captured_threads
+            if thread.target == self.orchestrator._sync_memory_background
+        )
+        snapshot = sync_thread.args[0]
+        self.assertEqual(snapshot["active_project"], "Pulse")
+        self.assertEqual(
+            snapshot["top_files"],
+            ["DashboardViewModel.swift", "DashboardRootView.swift"],
+        )
+        self.assertEqual(snapshot["files_changed"], 20)
+
+    def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
+        git_root = Path("/tmp/Pulse")
+        with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
+            self.orchestrator._episode_fsm.ensure_active(
+                session_id="session-1",
+                started_at=datetime.now(),
+            )
+
+        self.session_memory.save_episode.reset_mock()
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "plugins",
+            "duration_min": 19,
+            "top_files": ["plugin.json", "openai.yaml"],
+            "files_changed": 20,
+        }
+        self.scorer.compute.return_value = self._signals(session_duration_min=19)
+
+        captured_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.args = kwargs.get("args", ())
+                captured_threads.append(self)
+
+            def start(self):
+                return None
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+             patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
+             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Fonctions touchées : refresh"), \
+             patch("daemon.runtime_orchestrator.read_commit_file_names", return_value=["DashboardViewModel.swift", "DashboardRootView.swift"]):
+            self.orchestrator._process_confirmed_commit(git_root)
+
+        sync_thread = next(
+            thread for thread in captured_threads
+            if thread.target == self.orchestrator._sync_memory_background
+        )
+        snapshot = sync_thread.args[0]
+        self.assertEqual(snapshot["active_project"], "Pulse")
+        self.assertEqual(
+            snapshot["commit_scope_files"],
+            ["DashboardViewModel.swift", "DashboardRootView.swift"],
+        )
+        self.assertEqual(snapshot["top_files"], ["plugin.json", "openai.yaml"])
+
+    def test_apply_restart_state_resume_aussi_la_session_memory_sur_redemarrage_court(self):
+        started_at = datetime(2026, 4, 23, 17, 0, 0)
+
+        self.orchestrator._apply_restart_state(
+            {
+                "elapsed_min": 3,
+                "active_project": "Pulse",
+                "probable_task": "coding",
+                "started_at": started_at.isoformat(),
+            }
+        )
+
+        self.assertEqual(self.orchestrator.session_fsm.session_started_at, started_at)
+        self.session_memory.resume_session.assert_called_once_with(started_at=started_at)
+
     def test_idle_timeout_closes_episode_with_fresh_semantics(self):
         old_event = Event("file_modified", {"path": "/tmp/old.py"}, timestamp=datetime.now())
         resumed_event = Event(

@@ -50,6 +50,41 @@ class SessionMemory:
         self._has_observed_activity = started_at is not None
         self._ensure_current_session()
 
+    def resume_session(self, *, started_at: datetime) -> None:
+        """
+        Ré-aligne la session courante après un redémarrage court du daemon.
+
+        Contrairement à new_session(), on conserve le même session_id:
+        on corrige simplement la fenêtre temporelle de la session live
+        pour que les exports mémoire et le journal restent cohérents.
+        """
+        with self._lock:
+            self.started_at = started_at
+            if self._latest_observed_at is None or self._latest_observed_at < started_at:
+                self._latest_observed_at = started_at
+            self._has_observed_activity = True
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    UPDATE sessions
+                    SET started_at = ?,
+                        updated_at = CASE
+                            WHEN updated_at < ? THEN ?
+                            ELSE updated_at
+                        END,
+                        session_duration_min = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        started_at.isoformat(),
+                        started_at.isoformat(),
+                        started_at.isoformat(),
+                        self._duration_min(),
+                        self.session_id,
+                    ),
+                )
+                conn.commit()
+
     def record_event(self, event: Event) -> None:
         payload_json = json.dumps(event.payload, ensure_ascii=True)
         payload_text = self._payload_to_text(event.payload)

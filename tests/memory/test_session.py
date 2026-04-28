@@ -72,6 +72,18 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(session["updated_at"], newer.isoformat())
         self.assertEqual(session["session_duration_min"], 10)
 
+    def test_resume_session_realigne_started_at_sur_la_session_courante(self):
+        restarted_from = datetime(2026, 4, 23, 16, 0, 0)
+
+        self.memory.resume_session(started_at=restarted_from)
+        self.memory.record_event(
+            Event("app_activated", {"app_name": "Cursor"}, timestamp=datetime(2026, 4, 23, 16, 12, 0))
+        )
+
+        session = self.memory.get_session()
+        self.assertEqual(session["started_at"], restarted_from.isoformat())
+        self.assertEqual(session["session_duration_min"], 12)
+
     def test_get_recent_events_reste_ordre_par_timestamp_meme_hors_ordre_arrivee(self):
         older = datetime(2026, 4, 23, 16, 0, 0)
         newer = datetime(2026, 4, 23, 16, 5, 0)

@@ -26,6 +26,7 @@ Qualité LLM
 import json
 import logging
 import re
+import subprocess
 import threading
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -114,6 +115,14 @@ _JOURNAL_HIDDEN_RE = re.compile(
 _TECHNICAL_FILE_PATTERNS = (
     "cache", ".json", ".sqlite", ".db", ".lock", ".log", ".tmp",
 )
+_SCOPE_SOURCE_PRIORITY = {
+    "commit_diff": 4,
+    "commit_files": 3,
+    "snapshot": 2,
+    "fallback_snapshot": 1,
+    "count_only": 0,
+    "unknown": -1,
+}
 _UNKNOWN_PROJECT_NAMES = {"", "inconnu", "unknown", "autre", "none", "null"}
 _BROWSER_APPS = {"Safari", "Google Chrome", "Chrome", "Arc", "Firefox", "Brave Browser", "Brave"}
 _ADMIN_APPS = {
@@ -204,7 +213,11 @@ def update_memories_from_session(
             session_data["probable_task"] = corrected
             session_data["task_source"] = "commit_correction"
 
-    consolidation = _build_consolidation_frame(session_data, commit_message=commit_message)
+    consolidation = _build_consolidation_frame(
+        session_data,
+        commit_message=commit_message,
+        trigger=trigger,
+    )
     _update_projects(base_dir, session_data, consolidation=consolidation)
 
     try:
@@ -422,6 +435,35 @@ def read_commit_message(git_root: Path) -> Optional[str]:
         return None
 
 
+def read_commit_file_names(git_root: Path, limit: int = 8) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", "show", "--name-only", "--format=format:", "--diff-filter=ACDMRTUXB", "HEAD"],
+            cwd=str(git_root),
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return []
+        files: list[str] = []
+        seen: set[str] = set()
+        for raw_line in result.stdout.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            name = Path(line).name
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            files.append(name)
+            if len(files) >= limit:
+                break
+        return files
+    except Exception:
+        return []
+
+
 # ── Rapport de session ────────────────────────────────────────────────────────
 
 def _write_session_report(
@@ -440,33 +482,55 @@ def _write_session_report(
     focus       = session.get("focus_level", "normal")
     friction    = float(session.get("max_friction", 0.0))
     apps        = session.get("recent_apps", [])
-    top_files   = _clean_files(session.get("top_files", []))
     files_count = session.get("files_changed", 0)
+    top_files   = _clean_files(session.get("top_files", []))
+    scope_source = "snapshot"
 
-    if not top_files and diff_summary and trigger in {"commit", None}:
+    if trigger == "commit":
+        top_files, scope_source = _resolve_commit_scope(session, diff_summary=diff_summary)
+    elif not top_files and diff_summary and trigger in {"commit", None}:
         files_from_diff = extract_file_names_from_diff_summary(diff_summary)
         if files_from_diff:
             top_files = files_from_diff[:5]
 
     if llm is not None:
         try:
-            body = _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary)
+            body = _llm_summary(
+                llm, project, duration, task, focus, friction, apps,
+                top_files, files_count, commit_message, diff_summary,
+                scope_source=scope_source,
+            )
         except Exception as exc:
             log.warning("Memory : erreur résumé LLM, fallback déterministe utilisé : %s", exc)
-            body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary, terminal_summary=session.get("terminal_summary"))
+            body = _deterministic_summary(
+                duration, task, focus, friction, top_files, files_count,
+                commit_message, diff_summary=diff_summary,
+                terminal_summary=session.get("terminal_summary"),
+                scope_source=scope_source,
+            )
     else:
-        body = _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, diff_summary=diff_summary, terminal_summary=session.get("terminal_summary"))
+        body = _deterministic_summary(
+            duration, task, focus, friction, top_files, files_count,
+            commit_message, diff_summary=diff_summary,
+            terminal_summary=session.get("terminal_summary"),
+            scope_source=scope_source,
+        )
 
     entry_id = _new_entry_id(now)
     episode = consolidation.get("episode") or {}
-    ended_at = str(episode.get("ended_at") or now.isoformat())
-    started_at = str(episode.get("started_at") or (now - timedelta(minutes=max(duration, 0))).isoformat())
+    ended_at = str(consolidation.get("ended_at") or episode.get("ended_at") or now.isoformat())
+    started_at = str(
+        consolidation.get("started_at")
+        or episode.get("started_at")
+        or (now - timedelta(minutes=max(duration, 0))).isoformat()
+    )
     entry = _build_journal_entry(
         entry_id=entry_id, active_project=project, probable_task=task,
         activity_level=consolidation.get("activity_level"), task_confidence=consolidation.get("task_confidence"),
         duration_min=duration, body=body, commit_message=commit_message, recent_apps=apps,
         top_files=top_files, files_count=files_count, started_at=started_at, ended_at=ended_at,
         boundary_reason=str(episode.get("boundary_reason") or trigger or "unknown"),
+        scope_source=scope_source,
     )
 
     with _memory_write_lock:
@@ -477,7 +541,7 @@ def _write_session_report(
     return (journal_file, entry_id)
 
 
-def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary) -> str:
+def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
     facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
     if commit_message:
         facts.append(f'Commit : "{commit_message.splitlines()[0]}"')
@@ -485,7 +549,10 @@ def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files,
         for line in diff_summary.splitlines():
             facts.append(line)
     elif top_files:
-        facts.append(f"Fichiers modifiés : {cluster_files_for_display(top_files)}")
+        prefix = "Fichiers du commit"
+        if scope_source == "fallback_snapshot":
+            prefix = "Portée estimée depuis l'observation de session"
+        facts.append(f"{prefix} : {cluster_files_for_display(top_files)}")
     elif files_count:
         facts.append(f"Fichiers modifiés : {files_count}")
     if friction >= 0.7:
@@ -505,7 +572,7 @@ N'invente aucun fait absent des données ci-dessus."""
     return _llm_complete(llm, prompt, max_tokens=256, think=False)
 
 
-def _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, *, diff_summary=None, terminal_summary=None) -> str:
+def _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, *, diff_summary=None, terminal_summary=None, scope_source="snapshot") -> str:
     focus_str = {"deep": "focus profond", "scattered": "travail dispersé", "idle": "session légère", "normal": ""}.get(focus, "")
     parts = []
     if commit_message:
@@ -517,7 +584,8 @@ def _deterministic_summary(duration, task, focus, friction, top_files, files_cou
         # d'un diff antérieur sans rapport avec ce qui était fait.
         pass
     if top_files:
-        parts.append(f"Portée : {cluster_files_for_display(top_files)}.")
+        scope_label = "Portée estimée" if scope_source == "fallback_snapshot" else "Portée"
+        parts.append(f"{scope_label} : {cluster_files_for_display(top_files)}.")
     elif files_count and not top_files:
         parts.append(f"Portée : {files_count} fichier(s) modifié(s).")
     if terminal_summary and not diff_summary and not commit_message:
@@ -591,7 +659,7 @@ def _new_entry_id(now: datetime) -> str:
 
 
 def _build_journal_entry(*, entry_id, active_project, probable_task, activity_level, task_confidence,
-    duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason) -> Dict[str, Any]:
+    duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason, scope_source="snapshot") -> Dict[str, Any]:
     return {
         "entry_id": entry_id,
         "active_project": active_project or "Autre",
@@ -607,6 +675,7 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
         "started_at": started_at,
         "ended_at": ended_at,
         "boundary_reason": boundary_reason or "unknown",
+        "scope_source": scope_source or "unknown",
     }
 
 
@@ -643,6 +712,8 @@ def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -
     project_sections: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
     noise_entries: List[Dict[str, Any]] = []
     for entry in merged_entries:
+        if entry.get("overlap_demoted"):
+            continue
         if _is_noise_journal_entry(entry):
             noise_entries.append(entry)
             continue
@@ -673,7 +744,7 @@ def _render_journal_project_entry(entry: Dict[str, Any]) -> List[str]:
     description = _journal_entry_description(entry)
     if description:
         lines.extend(description.splitlines())
-    lines.append(f"Portée : {_journal_entry_scope(entry)}")
+    lines.append(f"{_journal_scope_label(entry)} : {_journal_entry_scope(entry)}")
     return lines
 
 
@@ -682,7 +753,11 @@ def _render_noise_line(entry: Dict[str, Any]) -> str:
     title = _journal_entry_title(entry)
     duration = int(entry.get("duration_min") or 0)
     scope = _journal_entry_scope(entry)
-    return f"{_journal_entry_time_range(entry)} — {project} / {title} ({duration} min) — {scope}"
+    return f"{_journal_entry_time_range(entry)} — {project} / {title} ({duration} min) — {_journal_scope_label(entry).lower()} : {scope}"
+
+
+def _journal_scope_label(entry: Dict[str, Any]) -> str:
+    return "Portée estimée" if str(entry.get("scope_source") or "") == "fallback_snapshot" else "Portée"
 
 
 def _journal_entry_sort_key(entry: Dict[str, Any]) -> tuple[str, str, str]:
@@ -709,6 +784,7 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized["recent_apps"] = _compact_strings(normalized.get("recent_apps", []))
     normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
     normalized["commit_messages"] = _compact_strings([normalized.get("commit_message"), *normalized.get("commit_messages", [])])
+    normalized["scope_source"] = str(normalized.get("scope_source") or "unknown")
     return normalized
 
 
@@ -726,6 +802,7 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged["commit_messages"] = _merge_unique_strings(left.get("commit_messages", []), right.get("commit_messages", []))
     merged["recent_apps"] = _merge_unique_strings(left.get("recent_apps", []), right.get("recent_apps", []))
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
+    merged["scope_source"] = _stronger_scope_source(left.get("scope_source"), right.get("scope_source"))
     # Durée réelle : diff entre started_at et ended_at fusionnés.
     # Si real_elapsed >> sum_durations (facteur 3x), c'est qu'il y a eu
     # un gap (verrou écran, idle long) entre les deux entrées.
@@ -763,7 +840,7 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
     commit_messages = _compact_strings(entry.get("commit_messages", []))
     body = str(entry.get("body") or "").strip()
     body = _strip_commit_sentence(body, commit_messages)
-    if body.startswith("Port\u00e9e : ") and not commit_messages:
+    if body.startswith(("Port\u00e9e : ", "Port\u00e9e estim\u00e9e : ")) and not commit_messages:
         body = ""
 
     if commit_messages:
@@ -1055,6 +1132,32 @@ def _strip_commit_sentence(body: str, commit_messages: List[str]) -> str:
     return cleaned.strip()
 
 
+def _resolve_commit_scope(session: Dict[str, Any], *, diff_summary: Optional[str]) -> tuple[List[str], str]:
+    diff_files = extract_file_names_from_diff_summary(diff_summary or "")
+    if diff_files:
+        return _clean_files(diff_files[:5]), "commit_diff"
+
+    commit_files = _clean_files(session.get("commit_scope_files", []))
+    if commit_files:
+        return commit_files[:5], "commit_files"
+
+    snapshot_files = _clean_files(session.get("top_files", []))
+    if snapshot_files:
+        return snapshot_files[:5], "fallback_snapshot"
+
+    if int(session.get("files_changed", 0) or 0) > 0:
+        return [], "count_only"
+    return [], "unknown"
+
+
+def _stronger_scope_source(left: Any, right: Any) -> str:
+    left_text = str(left or "unknown")
+    right_text = str(right or "unknown")
+    if _SCOPE_SOURCE_PRIORITY.get(right_text, -1) > _SCOPE_SOURCE_PRIORITY.get(left_text, -1):
+        return right_text
+    return left_text
+
+
 def _compact_strings(values: List[Any]) -> List[str]:
     result: List[str] = []
     for value in values:
@@ -1179,15 +1282,33 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
     return result
 
 
-def _build_consolidation_frame(session_data: Dict[str, Any], *, commit_message: Optional[str] = None) -> Dict[str, Any]:
+def _build_consolidation_frame(
+    session_data: Dict[str, Any],
+    *,
+    commit_message: Optional[str] = None,
+    trigger: Optional[str] = None,
+) -> Dict[str, Any]:
     episode = _latest_closed_episode(session_data.get("closed_episodes"))
     active_project = (episode or {}).get("active_project") or session_data.get("active_project")
     probable_task = (episode or {}).get("probable_task") or session_data.get("probable_task") or "general"
     if commit_message:
         probable_task = _commit_task_correction(commit_message, probable_task)
+    session_duration_min = int(session_data.get("duration_min", 0) or 0)
     duration_min = _episode_duration_min(episode)
-    if duration_min is None:
-        duration_min = int(session_data.get("duration_min", 0) or 0)
+    use_session_window = _should_use_session_window_for_commit(
+        trigger=trigger,
+        session_duration_min=session_duration_min,
+        episode_duration_min=duration_min,
+    )
+    if duration_min is None or use_session_window:
+        duration_min = session_duration_min
+
+    started_at = (episode or {}).get("started_at")
+    ended_at = (episode or {}).get("ended_at")
+    if use_session_window:
+        started_at = session_data.get("started_at") or started_at
+        ended_at = session_data.get("ended_at") or session_data.get("updated_at") or ended_at
+
     return {
         "episode": episode,
         "active_project": active_project,
@@ -1195,7 +1316,28 @@ def _build_consolidation_frame(session_data: Dict[str, Any], *, commit_message: 
         "activity_level": (episode or {}).get("activity_level") or session_data.get("activity_level"),
         "task_confidence": (episode or {}).get("task_confidence") or session_data.get("task_confidence"),
         "duration_min": duration_min,
+        "started_at": started_at or session_data.get("started_at"),
+        "ended_at": ended_at or session_data.get("ended_at") or session_data.get("updated_at"),
     }
+
+
+def _should_use_session_window_for_commit(
+    *,
+    trigger: Optional[str],
+    session_duration_min: int,
+    episode_duration_min: Optional[int],
+) -> bool:
+    if trigger != "commit":
+        return False
+    if session_duration_min <= 0:
+        return False
+    if episode_duration_min is None:
+        return True
+    if episode_duration_min <= 1 and session_duration_min >= 5:
+        return True
+    if episode_duration_min > 0 and session_duration_min >= max(episode_duration_min * 3, 10):
+        return True
+    return False
 
 
 def _latest_closed_episode(closed_episodes: Any) -> Optional[Dict[str, Any]]:
