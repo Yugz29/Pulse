@@ -812,9 +812,14 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     else:
         merged["duration_min"] = sum_durations
     # Corps : si pas de commit, garder uniquement le plus récent (right).
-    # Si commit, concaténer pour conserver tous les résumés.
+    # Si commit, concaténer uniquement les bodies des entrées qui ont un commit
+    # pour que le comptage body_parts == commit_messages reste cohérent.
     if merged["commit_messages"]:
-        merged["body"] = "\n".join(_compact_strings([left.get("body"), right.get("body")]))
+        left_has_commit = bool((left.get("commit_message") or "").strip())
+        right_has_commit = bool((right.get("commit_message") or "").strip())
+        left_body = left.get("body") if left_has_commit else None
+        right_body = right.get("body") if right_has_commit else None
+        merged["body"] = "\n".join(_compact_strings([left_body, right_body]))
     else:
         merged["body"] = str(right.get("body") or left.get("body") or "").strip()
     return merged
