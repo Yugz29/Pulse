@@ -70,6 +70,12 @@ class SessionFSM:
     def is_locked(self) -> bool:
         return self._state == self.LOCKED
 
+    def restore_session_start(self, when: datetime) -> None:
+        """
+        Réinjecte un début de session connu après un redémarrage court du daemon.
+        """
+        self._session_started_at = when
+
     def on_screen_locked(self, when: datetime | None = None) -> SessionTransition:
         locked_at = when or datetime.now()
         if self._state != self.LOCKED and self._last_screen_locked_at is None:
