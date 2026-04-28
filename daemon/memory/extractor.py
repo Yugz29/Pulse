@@ -735,7 +735,7 @@ def _render_journal_project_entry(entry: Dict[str, Any]) -> List[str]:
     description = _journal_entry_description(entry)
     if description:
         lines.extend(description.splitlines())
-    lines.append(f"{_journal_scope_label(entry)} : {_journal_entry_scope(entry)}")
+    lines.append(f"{_journal_scope_label(entry)} : {_journal_entry_scope(entry)}.")        
     return lines
 
 
