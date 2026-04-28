@@ -398,7 +398,10 @@ class TestExtractor(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         content = session_files[0].read_text()
-        self.assertIn("Livraison : « wip ». Portée estimée : main.py.", content)
+        # Livraison dans le body, portée rendue séparément par le renderer.
+        self.assertIn("Livraison", content)
+        self.assertIn("wip", content)
+        self.assertIn("Portée estimée : main.py.", content)
 
     def test_llm_desactive_pour_screen_lock(self):
         """Le LLM ne doit PAS être appelé pour screen_lock — fallback déterministe uniquement."""
