@@ -15,6 +15,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var feedHistory: [FeedEvent] = []
     @Published var observation: ObservationData? = nil
     @Published var daydreams: [DaydreamEntry] = []
+    @Published var daydreamStatus: DaydreamStatus?
     @Published var ping: PingResponse?
     @Published var llmModels: LLMModelsResponse?
     @Published var scoringStatus: ScoringStatusResponse?
@@ -77,7 +78,7 @@ final class DashboardViewModel: ObservableObject {
         async let proposalsTask = bridge.getRecentProposals(limit: 20)
         async let feedTask = bridge.fetchFeed(since: nil)
         async let observationTask = bridge.getObservation()
-        async let daydreamsTask = bridge.getDaydreams()
+        async let daydreamTask = bridge.getDaydreamData()
         async let pingTask: PingResponse? = try? await bridge.pingStatus()
         async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
         async let scoringTask = bridge.getScoringStatus()
@@ -93,7 +94,9 @@ final class DashboardViewModel: ObservableObject {
         proposals = await proposalsTask
         feedHistory = await feedTask
         observation = await observationTask
-        daydreams = await daydreamsTask
+        let daydreamData = await daydreamTask
+        daydreams = daydreamData.0
+        daydreamStatus = daydreamData.1
         ping = await pingTask
         llmModels = await llmTask
         scoringStatus = await scoringTask

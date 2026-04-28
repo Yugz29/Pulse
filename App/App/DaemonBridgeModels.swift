@@ -989,6 +989,18 @@ struct DaydreamEntry: Identifiable {
     let content: String
 }
 
+struct DaydreamStatus {
+    let status: String
+    let pending: Bool
+    let targetDate: String?
+    let doneForDate: String?
+    let lastReason: String?
+    let lastError: String?
+    let lastAttemptAt: String?
+    let lastCompletedAt: String?
+    let lastOutputPath: String?
+}
+
 enum DaemonError: Error {
     case invalidURL
     case badStatus(Int)

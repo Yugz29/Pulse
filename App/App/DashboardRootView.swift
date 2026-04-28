@@ -664,6 +664,35 @@ struct DashboardRootView: View {
     private var daydreamView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if let status = vm.daydreamStatus {
+                    GlassCard(accent: "#8B5CF6") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label(daydreamStatusTitle(status), systemImage: "moon.stars")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Color(hex: "#8B5CF6"))
+                                Spacer()
+                                if let targetDate = status.targetDate, !targetDate.isEmpty {
+                                    Text(targetDate)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if let detail = daydreamStatusDetail(status) {
+                                Text(detail)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if let error = status.lastError, !error.isEmpty {
+                                Text(error)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.red.opacity(0.8))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
                 if vm.daydreams.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "moon.stars")
@@ -701,6 +730,38 @@ struct DashboardRootView: View {
                 }
             }
             .padding(24)
+        }
+    }
+
+    private func daydreamStatusTitle(_ status: DaydreamStatus) -> String {
+        switch status.status {
+        case "pending": return "DayDream en attente"
+        case "running": return "DayDream en cours"
+        case "generated": return "DayDream généré"
+        case "skipped": return "DayDream ignoré"
+        case "failed": return "DayDream en échec"
+        default: return "DayDream inactif"
+        }
+    }
+
+    private func daydreamStatusDetail(_ status: DaydreamStatus) -> String? {
+        switch status.lastReason {
+        case "awaiting_screen_lock":
+            return "Le résumé nocturne attend le prochain verrouillage d’écran après 23h59."
+        case "running":
+            return "Le résumé de la journée est en cours de génération."
+        case "generated":
+            return "Le résumé a été généré avec succès."
+        case "already_exists":
+            return "Le fichier DayDream existait déjà; aucune régénération n’a été faite."
+        case "already_completed_for_date":
+            return "Cette journée a déjà été consolidée."
+        case "no_journal_entries":
+            return "Aucune entrée de journal exploitable n’a été trouvée pour cette date."
+        case "unexpected_error":
+            return "La génération a échoué. Voir l’erreur ci-dessous."
+        default:
+            return nil
         }
     }
 

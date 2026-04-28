@@ -25,56 +25,154 @@ _JOURNAL_DATA_END = "pulse-journal-data:end -->"
 _daydream_pending = False
 _daydream_lock = threading.Lock()
 _daydream_done_for_date: Optional[date] = None
+_daydream_target_date: Optional[date] = None
+_daydream_status = "idle"
+_daydream_last_reason: Optional[str] = None
+_daydream_last_error: Optional[str] = None
+_daydream_last_attempt_at: Optional[datetime] = None
+_daydream_last_completed_at: Optional[datetime] = None
+_daydream_last_output_path: Optional[str] = None
 
 
-def mark_daydream_pending() -> None:
-    global _daydream_pending
+def mark_daydream_pending(ref_date: Optional[date] = None) -> bool:
+    global _daydream_pending, _daydream_target_date, _daydream_status, _daydream_last_reason
     with _daydream_lock:
+        target_date = ref_date or date.today()
+        if _daydream_status == "running" and _daydream_target_date == target_date:
+            log.info("DayDream : execution deja en cours pour %s.", target_date)
+            return False
+        if _daydream_pending and _daydream_target_date == target_date:
+            log.info("DayDream : deja en attente pour %s.", target_date)
+            return False
         _daydream_pending = True
-    log.info("DayDream : en attente du prochain screen_lock.")
+        _daydream_target_date = target_date
+        _daydream_status = "pending"
+        _daydream_last_reason = "awaiting_screen_lock"
+    log.info("DayDream : en attente du prochain screen_lock pour %s.", target_date)
+    return True
 
 
 def should_trigger_daydream() -> bool:
     with _daydream_lock:
         if not _daydream_pending:
             return False
-        today = date.today()
-        if _daydream_done_for_date == today:
+        if _daydream_status == "running":
+            return False
+        target_date = _daydream_target_date or date.today()
+        if _daydream_done_for_date == target_date:
             return False
         return True
+
+
+def get_daydream_status() -> dict[str, Any]:
+    with _daydream_lock:
+        return {
+            "status": _daydream_status,
+            "pending": _daydream_pending,
+            "target_date": _daydream_target_date.isoformat() if _daydream_target_date else None,
+            "done_for_date": _daydream_done_for_date.isoformat() if _daydream_done_for_date else None,
+            "last_reason": _daydream_last_reason,
+            "last_error": _daydream_last_error,
+            "last_attempt_at": _daydream_last_attempt_at.isoformat() if _daydream_last_attempt_at else None,
+            "last_completed_at": _daydream_last_completed_at.isoformat() if _daydream_last_completed_at else None,
+            "last_output_path": _daydream_last_output_path,
+        }
+
+
+def claim_daydream_run(today: Optional[date] = None) -> Optional[date]:
+    global _daydream_pending
+    global _daydream_status
+    global _daydream_target_date
+    global _daydream_done_for_date
+    global _daydream_last_reason
+    global _daydream_last_attempt_at
+    global _daydream_last_completed_at
+    global _daydream_last_output_path
+    global _daydream_last_error
+
+    with _daydream_lock:
+        ref_date = _daydream_target_date or today or date.today()
+        if not _daydream_pending:
+            return None
+        if _daydream_status == "running":
+            log.info("DayDream : execution deja en cours pour %s.", ref_date)
+            return None
+        if _daydream_done_for_date == ref_date:
+            _daydream_pending = False
+            _daydream_status = "skipped"
+            _daydream_last_reason = "already_completed_for_date"
+            return None
+
+        existing_path = _daydream_output_path(ref_date)
+        if existing_path.exists():
+            _daydream_pending = False
+            _daydream_done_for_date = ref_date
+            _daydream_status = "generated"
+            _daydream_last_reason = "already_exists"
+            _daydream_last_completed_at = datetime.now()
+            _daydream_last_output_path = str(existing_path)
+            _daydream_last_error = None
+            log.info("DayDream : fichier deja present pour %s (%s).", ref_date, existing_path)
+            return None
+
+        _daydream_pending = False
+        _daydream_status = "running"
+        _daydream_target_date = ref_date
+        _daydream_last_reason = "running"
+        _daydream_last_attempt_at = datetime.now()
+        _daydream_last_error = None
+        return ref_date
 
 
 def trigger_daydream(
     llm: Optional[Any] = None,
     window_titles: Optional[list[str]] = None,
     today: Optional[date] = None,
+    ref_date: Optional[date] = None,
 ) -> Optional[Path]:
-    global _daydream_pending, _daydream_done_for_date
+    global _daydream_done_for_date
+    global _daydream_target_date
+    global _daydream_status
+    global _daydream_last_reason
+    global _daydream_last_error
+    global _daydream_last_completed_at
+    global _daydream_last_output_path
 
     try:
-        ref_date = today or date.today()
+        claimed_ref_date = ref_date or claim_daydream_run(today=today)
+        if claimed_ref_date is None:
+            return None
 
-        journal_entries = _load_journal_entries_for_date(ref_date)
+        journal_entries = _load_journal_entries_for_date(claimed_ref_date)
         if not journal_entries:
-            log.info("DayDream : aucune entree journal pour %s -- ignore.", ref_date)
+            log.info("DayDream : aucune entree journal pour %s -- ignore.", claimed_ref_date)
             with _daydream_lock:
-                _daydream_pending = False
-                _daydream_done_for_date = ref_date
+                _daydream_done_for_date = claimed_ref_date
+                _daydream_target_date = None
+                _daydream_status = "skipped"
+                _daydream_last_reason = "no_journal_entries"
+                _daydream_last_completed_at = datetime.now()
+                _daydream_last_output_path = None
             return None
 
         content = _generate_daydream(
             entries=journal_entries,
             window_titles=window_titles or [],
-            ref_date=ref_date,
+            ref_date=claimed_ref_date,
             llm=llm,
         )
 
-        output_path = _write_daydream(content, ref_date)
-        _vectorize_daydream(content, ref_date)
+        output_path = _write_daydream(content, claimed_ref_date)
+        _vectorize_daydream(content, claimed_ref_date)
 
         with _daydream_lock:
-            _daydream_pending = False
-            _daydream_done_for_date = ref_date
+            _daydream_done_for_date = claimed_ref_date
+            _daydream_target_date = None
+            _daydream_status = "generated"
+            _daydream_last_reason = "generated"
+            _daydream_last_completed_at = datetime.now()
+            _daydream_last_output_path = str(output_path)
+            _daydream_last_error = None
 
         log.info("DayDream genere : %s", output_path)
         return output_path
@@ -82,7 +180,11 @@ def trigger_daydream(
     except Exception as exc:
         log.warning("DayDream : erreur inattendue : %s", exc)
         with _daydream_lock:
-            _daydream_pending = False
+            _daydream_target_date = ref_date or _daydream_target_date
+            _daydream_status = "failed"
+            _daydream_last_reason = "unexpected_error"
+            _daydream_last_error = str(exc)
+            _daydream_last_completed_at = datetime.now()
         return None
 
 
@@ -208,7 +310,7 @@ def _deterministic_narrative(entries: list[dict], commits: list[str], total_min:
 
 def _write_daydream(content: dict, ref_date: date) -> Path:
     DAYDREAM_DIR.mkdir(parents=True, exist_ok=True)
-    path = DAYDREAM_DIR / f"{ref_date}.md"
+    path = _daydream_output_path(ref_date)
 
     try:
         date_fr = ref_date.strftime("%-d %B %Y")
@@ -251,6 +353,10 @@ def _write_daydream(content: dict, ref_date: date) -> Path:
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _daydream_output_path(ref_date: date) -> Path:
+    return DAYDREAM_DIR / f"{ref_date}.md"
 
 
 def _vectorize_daydream(content: dict, ref_date: date) -> None:

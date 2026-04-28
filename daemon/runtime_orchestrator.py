@@ -476,12 +476,13 @@ class RuntimeOrchestrator:
     def _daydream_scheduler(self) -> None:
         """Tourne en boucle, marque DayDream pending à 23:59 chaque jour."""
         import time as _time
+        from datetime import timedelta
         while True:
             now = datetime.now()
             # Calculer le prochain 23:59
             target = now.replace(hour=23, minute=59, second=0, microsecond=0)
             if now >= target:
-                target = target.replace(day=target.day + 1)
+                target = target + timedelta(days=1)
             wait_sec = (target - now).total_seconds()
             _time.sleep(max(wait_sec, 1))
             from daemon.memory.daydream import mark_daydream_pending
@@ -489,17 +490,18 @@ class RuntimeOrchestrator:
 
     def _run_daydream_if_pending(self) -> None:
         """Lance DayDream dans un thread si le flag est actif."""
-        from daemon.memory.daydream import should_trigger_daydream, trigger_daydream
-        if not should_trigger_daydream():
+        from daemon.memory.daydream import claim_daydream_run, trigger_daydream
+        ref_date = claim_daydream_run()
+        if ref_date is None:
             return
-        self.log.info("DayDream : déclenchement au screen_lock.")
+        self.log.info("DayDream : déclenchement au screen_lock pour %s.", ref_date)
         llm = self.llm_runtime.provider()
         window_titles = list(self._accumulated_window_titles)
         self._accumulated_window_titles.clear()
 
         threading.Thread(
             target=trigger_daydream,
-            kwargs={"llm": llm, "window_titles": window_titles},
+            kwargs={"llm": llm, "window_titles": window_titles, "ref_date": ref_date},
             daemon=True,
             name="pulse-daydream",
         ).start()

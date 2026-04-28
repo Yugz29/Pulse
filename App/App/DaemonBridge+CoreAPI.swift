@@ -107,18 +107,34 @@ extension DaemonBridge {
         return ObservationData(windowTitles: titles, terminalCommands: commands)
     }
 
-    func getDaydreams() async -> [DaydreamEntry] {
-        guard let url = URL(string: "\(base)/daydreams") else { return [] }
+    func getDaydreamData() async -> ([DaydreamEntry], DaydreamStatus?) {
+        guard let url = URL(string: "\(base)/daydreams") else { return ([], nil) }
         guard let (data, _) = try? await self.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let array = json["daydreams"] as? [[String: Any]]
-        else { return [] }
-        return array.compactMap { d in
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return ([], nil) }
+
+        let entries = (json["daydreams"] as? [[String: Any]] ?? []).compactMap { d in
             guard let date = d["date"] as? String,
                   let content = d["content"] as? String
             else { return nil }
             return DaydreamEntry(id: date, date: date, content: content)
         }
+
+        let status = (json["status"] as? [String: Any]).map { d in
+            DaydreamStatus(
+                status: d["status"] as? String ?? "idle",
+                pending: d["pending"] as? Bool ?? false,
+                targetDate: d["target_date"] as? String,
+                doneForDate: d["done_for_date"] as? String,
+                lastReason: d["last_reason"] as? String,
+                lastError: d["last_error"] as? String,
+                lastAttemptAt: d["last_attempt_at"] as? String,
+                lastCompletedAt: d["last_completed_at"] as? String,
+                lastOutputPath: d["last_output_path"] as? String
+            )
+        }
+
+        return (entries, status)
     }
 
     func pauseDaemon() async throws {

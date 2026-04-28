@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 from flask import Flask
 
@@ -77,6 +78,27 @@ class TestRuntimeRoutes(unittest.TestCase):
             log=self.log,
         )
         self.client = self.app.test_client()
+
+    def test_daydreams_expose_etat_meme_sans_fichier(self):
+        with patch("pathlib.Path.home", return_value=Path("/tmp/pulse-home")), \
+             patch("daemon.memory.daydream.get_daydream_status", return_value={
+                 "status": "skipped",
+                 "pending": False,
+                 "target_date": "2026-04-27",
+                 "done_for_date": "2026-04-27",
+                 "last_reason": "no_journal_entries",
+                 "last_error": None,
+                 "last_attempt_at": "2026-04-28T00:05:16",
+                 "last_completed_at": "2026-04-28T00:05:16",
+                 "last_output_path": None,
+             }):
+            response = self.client.get("/daydreams")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["daydreams"], [])
+        self.assertEqual(payload["status"]["status"], "skipped")
+        self.assertEqual(payload["status"]["last_reason"], "no_journal_entries")
 
     def test_state_golden_legacy_json_output_exact(self):
         self.runtime_state.set_paused(True)
