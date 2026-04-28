@@ -819,9 +819,12 @@ class RuntimeOrchestrator:
         ).start()
 
     def _annotate_commit_work_window(self, snapshot: dict, *, commit_at: datetime) -> None:
-        work_window_started_at = self._session_fsm.session_started_at
+        work_window_started_at = _parse_optional_datetime(snapshot.get("work_window_started_at"))
+        if work_window_started_at is None:
+            work_window_started_at = self._session_fsm.session_started_at
         runtime_snapshot = self.runtime_state.get_runtime_snapshot()
-        window_end = runtime_snapshot.present.updated_at or commit_at
+        payload_window_end = _parse_optional_datetime(snapshot.get("work_window_ended_at"))
+        window_end = payload_window_end or runtime_snapshot.present.updated_at or commit_at
         if window_end < commit_at:
             window_end = commit_at
 
@@ -1495,3 +1498,13 @@ class RuntimeOrchestrator:
             if lock_at is None or event.timestamp > lock_at:
                 lock_at = event.timestamp
         return lock_at
+
+
+def _parse_optional_datetime(value) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None

@@ -276,8 +276,20 @@ class SessionMemory:
 
     def export_memory_payload(self, *, closed_episode_limit: int = 8) -> Dict[str, Any]:
         payload = self.export_session_data()
-        payload["work_window_started_at"] = payload.get("started_at")
-        payload["work_window_ended_at"] = payload.get("updated_at") or payload.get("ended_at")
+        with self._lock:
+            with self._connect() as conn:
+                row = self._get_latest_work_window_row(conn, session_id=self.session_id)
+        if row is not None:
+            payload["work_window_started_at"] = row["started_at"]
+            payload["work_window_ended_at"] = row["ended_at"] or row["updated_at"]
+            payload["work_window_status"] = row["status"]
+            payload["work_window_commit_count"] = int(row["commit_count"] or 0)
+            payload["work_window_active_sec"] = int(
+                row["active_sec"] if row["active_sec"] is not None else int(row["active_min"] or 0) * 60
+            )
+        else:
+            payload["work_window_started_at"] = payload.get("started_at")
+            payload["work_window_ended_at"] = payload.get("updated_at") or payload.get("ended_at")
         payload["closed_episodes"] = [
             asdict(episode)
             for episode in self.get_recent_closed_episodes(limit=closed_episode_limit)
@@ -508,21 +520,24 @@ class SessionMemory:
                 started_at = _parse_iso_datetime(row["started_at"]) or commit_at
                 updated_at = max(previous_updated_at, commit_at)
                 active_min = int(row["active_min"] or 0)
-                if updated_at > previous_updated_at:
-                    active_min += max(int((updated_at - previous_updated_at).total_seconds() / 60), 0)
-                active_min = min(
-                    active_min,
-                    max(int((updated_at - started_at).total_seconds() / 60), 0),
+                active_sec = int(
+                    row["active_sec"] if row["active_sec"] is not None else active_min * 60
                 )
+                if updated_at > previous_updated_at:
+                    active_sec += max(int((updated_at - previous_updated_at).total_seconds()), 0)
+                max_worked_sec = max(int((updated_at - started_at).total_seconds()), 0)
+                active_sec = min(active_sec, max_worked_sec)
+                active_min = self._seconds_to_minutes(active_sec)
                 conn.execute(
                     """
                     UPDATE work_windows
                     SET updated_at = ?,
+                        active_sec = ?,
                         active_min = ?,
                         commit_count = COALESCE(commit_count, 0) + 1
                     WHERE id = ?
                     """,
-                    (updated_at.isoformat(), active_min, row["id"]),
+                    (updated_at.isoformat(), active_sec, active_min, row["id"]),
                 )
                 conn.commit()
 
@@ -731,6 +746,7 @@ class SessionMemory:
                     probable_task TEXT,
                     activity_level TEXT,
                     task_confidence REAL,
+                    active_sec INTEGER DEFAULT 0,
                     active_min INTEGER DEFAULT 0,
                     commit_count INTEGER DEFAULT 0,
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
@@ -757,6 +773,7 @@ class SessionMemory:
             self._ensure_column(conn, "work_windows", "probable_task", "TEXT")
             self._ensure_column(conn, "work_windows", "activity_level", "TEXT")
             self._ensure_column(conn, "work_windows", "task_confidence", "REAL")
+            self._ensure_column(conn, "work_windows", "active_sec", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "work_windows", "active_min", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "work_windows", "commit_count", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "work_windows", "close_reason", "TEXT")
@@ -875,7 +892,8 @@ class SessionMemory:
         if not episodes:
             window_end = session_end or session_start
             worked_min = max(int((window_end - session_start).total_seconds() / 60), 0)
-            active_min = worked_min if self._session_looks_active(session) else 0
+            active_sec = max(int((window_end - session_start).total_seconds()), 0) if self._session_looks_active(session) else 0
+            active_min = self._seconds_to_minutes(active_sec)
             self._insert_backfilled_work_window(
                 conn,
                 session_id=session_id,
@@ -888,6 +906,7 @@ class SessionMemory:
                 probable_task=session.get("probable_task"),
                 activity_level="executing" if active_min > 0 else "idle",
                 task_confidence=None,
+                active_sec=active_sec,
                 active_min=active_min,
                 commit_count=0,
             )
@@ -919,8 +938,8 @@ class SessionMemory:
                 else current_window["task_confidence"]
             )
             if str(episode.get("activity_level") or "") != "idle":
-                current_window["active_min"] += max(
-                    int((episode_ended_at - episode_started_at).total_seconds() / 60),
+                current_window["active_sec"] += max(
+                    int((episode_ended_at - episode_started_at).total_seconds()),
                     0,
                 )
             if str(episode.get("boundary_reason") or "") == "commit":
@@ -1075,6 +1094,7 @@ class SessionMemory:
             "probable_task": probable_task,
             "activity_level": activity_level,
             "task_confidence": task_confidence,
+            "active_sec": 0,
             "active_min": 0,
             "commit_count": 0,
         }
@@ -1093,7 +1113,12 @@ class SessionMemory:
             int((window["updated_at"] - window["started_at"]).total_seconds() / 60),
             0,
         )
-        window["active_min"] = min(int(window["active_min"] or 0), worked_min)
+        worked_sec = max(
+            int((window["updated_at"] - window["started_at"]).total_seconds()),
+            0,
+        )
+        window["active_sec"] = min(int(window["active_sec"] or 0), worked_sec)
+        window["active_min"] = min(self._seconds_to_minutes(window["active_sec"]), worked_min)
         self._insert_backfilled_work_window(
             conn,
             session_id=window["session_id"],
@@ -1106,6 +1131,7 @@ class SessionMemory:
             probable_task=window["probable_task"],
             activity_level=window["activity_level"],
             task_confidence=window["task_confidence"],
+            active_sec=window["active_sec"],
             active_min=window["active_min"],
             commit_count=window["commit_count"],
             work_window_id=window["id"],
@@ -1125,6 +1151,7 @@ class SessionMemory:
         probable_task: Optional[str],
         activity_level: Optional[str],
         task_confidence: Optional[float],
+        active_sec: int,
         active_min: int,
         commit_count: int,
         work_window_id: Optional[str] = None,
@@ -1133,8 +1160,8 @@ class SessionMemory:
             """
             INSERT INTO work_windows (
                 id, session_id, started_at, updated_at, ended_at, status, close_reason,
-                active_project, probable_task, activity_level, task_confidence, active_min, commit_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                active_project, probable_task, activity_level, task_confidence, active_sec, active_min, commit_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 work_window_id or new_uid(),
@@ -1148,6 +1175,7 @@ class SessionMemory:
                 probable_task,
                 activity_level,
                 task_confidence,
+                active_sec,
                 active_min,
                 commit_count,
             ),
@@ -1171,15 +1199,16 @@ class SessionMemory:
             return
 
         if row is None:
-            active_min = 0
+            active_sec = 0
             if activity_level and activity_level != "idle":
-                active_min = max(int((observed_at - started_at).total_seconds() / 60), 0)
+                active_sec = max(int((observed_at - started_at).total_seconds()), 0)
+            active_min = self._seconds_to_minutes(active_sec)
             conn.execute(
                 """
                 INSERT INTO work_windows (
                     id, session_id, started_at, updated_at, ended_at, status, close_reason,
-                    active_project, probable_task, activity_level, task_confidence, active_min, commit_count
-                ) VALUES (?, ?, ?, ?, NULL, 'open', NULL, ?, ?, ?, ?, ?, 0)
+                    active_project, probable_task, activity_level, task_confidence, active_sec, active_min, commit_count
+                ) VALUES (?, ?, ?, ?, NULL, 'open', NULL, ?, ?, ?, ?, ?, ?, 0)
                 """,
                 (
                     new_uid(),
@@ -1190,6 +1219,7 @@ class SessionMemory:
                     probable_task,
                     activity_level,
                     task_confidence,
+                    active_sec,
                     active_min,
                 ),
             )
@@ -1198,11 +1228,14 @@ class SessionMemory:
         window_started_at = _parse_iso_datetime(row["started_at"]) or started_at
         previous_updated_at = _parse_iso_datetime(row["updated_at"]) or window_started_at
         effective_updated_at = max(previous_updated_at, observed_at)
-        active_min = int(row["active_min"] or 0)
+        active_sec = int(
+            row["active_sec"] if row["active_sec"] is not None else int(row["active_min"] or 0) * 60
+        )
         if activity_level and activity_level != "idle" and effective_updated_at > previous_updated_at:
-            active_min += max(int((effective_updated_at - previous_updated_at).total_seconds() / 60), 0)
-        max_worked_min = max(int((effective_updated_at - window_started_at).total_seconds() / 60), 0)
-        active_min = min(active_min, max_worked_min)
+            active_sec += max(int((effective_updated_at - previous_updated_at).total_seconds()), 0)
+        max_worked_sec = max(int((effective_updated_at - window_started_at).total_seconds()), 0)
+        active_sec = min(active_sec, max_worked_sec)
+        active_min = self._seconds_to_minutes(active_sec)
 
         conn.execute(
             """
@@ -1212,6 +1245,7 @@ class SessionMemory:
                 probable_task = ?,
                 activity_level = ?,
                 task_confidence = ?,
+                active_sec = ?,
                 active_min = ?
             WHERE id = ?
             """,
@@ -1221,6 +1255,7 @@ class SessionMemory:
                 probable_task,
                 activity_level,
                 task_confidence,
+                active_sec,
                 active_min,
                 row["id"],
             ),
@@ -1241,8 +1276,13 @@ class SessionMemory:
         started_at = _parse_iso_datetime(row["started_at"]) or ended_at
         updated_at = _parse_iso_datetime(row["updated_at"]) or started_at
         effective_end = max(started_at, updated_at, ended_at)
+        max_worked_sec = max(int((effective_end - started_at).total_seconds()), 0)
         max_worked_min = max(int((effective_end - started_at).total_seconds() / 60), 0)
-        active_min = min(int(row["active_min"] or 0), max_worked_min)
+        active_sec = min(
+            int(row["active_sec"] if row["active_sec"] is not None else int(row["active_min"] or 0) * 60),
+            max_worked_sec,
+        )
+        active_min = min(self._seconds_to_minutes(active_sec), max_worked_min)
 
         conn.execute(
             """
@@ -1251,6 +1291,7 @@ class SessionMemory:
                 ended_at = ?,
                 status = 'closed',
                 close_reason = ?,
+                active_sec = ?,
                 active_min = ?
             WHERE id = ?
             """,
@@ -1258,6 +1299,7 @@ class SessionMemory:
                 effective_end.isoformat(),
                 effective_end.isoformat(),
                 close_reason,
+                active_sec,
                 active_min,
                 row["id"],
             ),
@@ -1281,6 +1323,26 @@ class SessionMemory:
         ).fetchone()
 
     @staticmethod
+    def _get_latest_work_window_row(
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+    ) -> Optional[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT *
+            FROM work_windows
+            WHERE session_id = ?
+            ORDER BY
+                CASE WHEN status = 'open' THEN 0 ELSE 1 END,
+                COALESCE(ended_at, updated_at) DESC,
+                started_at DESC
+            LIMIT 1
+            """,
+            (session_id,),
+        ).fetchone()
+
+    @staticmethod
     def _window_overlap(
         window: Dict[str, Any],
         *,
@@ -1296,18 +1358,25 @@ class SessionMemory:
         if overlap_end <= overlap_start:
             return None
 
-        overlap_min = max(int((overlap_end - overlap_start).total_seconds() / 60), 0)
-        total_duration_min = max(int((ended_at - started_at).total_seconds() / 60), 0)
-        active_min = int(window.get("active_min") or 0)
-        if total_duration_min > 0 and overlap_min < total_duration_min:
-            active_min = int(active_min * (overlap_min / total_duration_min))
-        active_min = min(active_min, overlap_min)
+        overlap_sec = max(int((overlap_end - overlap_start).total_seconds()), 0)
+        overlap_min = max(int(overlap_sec / 60), 0)
+        total_duration_sec = max(int((ended_at - started_at).total_seconds()), 0)
+        active_sec = int(window.get("active_sec") or 0)
+        if active_sec <= 0 and window.get("active_min") is not None:
+            active_sec = int(window.get("active_min") or 0) * 60
+        if total_duration_sec > 0 and overlap_sec < total_duration_sec:
+            active_sec = int(active_sec * (overlap_sec / total_duration_sec))
+        active_sec = min(active_sec, overlap_sec)
         return {
             "started_at": overlap_start,
             "ended_at": overlap_end,
             "worked_min": overlap_min,
-            "active_min": active_min,
+            "active_min": min(SessionMemory._seconds_to_minutes(active_sec), overlap_min),
         }
+
+    @staticmethod
+    def _seconds_to_minutes(seconds: int) -> int:
+        return max(int(seconds / 60), 0)
 
 
 def _parse_iso_datetime(value: Any) -> Optional[datetime]:

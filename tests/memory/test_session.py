@@ -432,6 +432,123 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(payload["closed_episodes"][0]["active_project"], "Pulse")
         self.assertEqual(payload["closed_episodes"][0]["probable_task"], "coding")
 
+    def test_export_memory_payload_ancre_la_derniere_work_window_persisted(self):
+        start = datetime(2026, 4, 28, 11, 46, 1)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=18,
+                updated_at=start + timedelta(minutes=18),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/daydream.py",
+                probable_task="coding",
+                activity_level="editing",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=18,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+        self.memory.rollover_work_window(
+            ended_at=start + timedelta(minutes=18),
+            next_started_at=start + timedelta(minutes=18),
+            close_reason="project_change",
+            session_id="test-session",
+            active_project="plugins",
+            probable_task="debug",
+            activity_level="executing",
+            task_confidence=0.81,
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="plugins",
+                probable_task="debug",
+                activity_level="executing",
+                focus_level="normal",
+                session_duration_min=22,
+                updated_at=start + timedelta(minutes=22),
+            ),
+            signals=Signals(
+                active_project="plugins",
+                active_file="/tmp/plugin.py",
+                probable_task="debug",
+                activity_level="executing",
+                friction_score=0.2,
+                focus_level="normal",
+                session_duration_min=22,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+                task_confidence=0.81,
+            ),
+        )
+
+        payload = self.memory.export_memory_payload()
+
+        self.assertEqual(payload["started_at"], start.isoformat())
+        self.assertEqual(payload["work_window_started_at"], (start + timedelta(minutes=18)).isoformat())
+        self.assertEqual(payload["work_window_ended_at"], (start + timedelta(minutes=22)).isoformat())
+        self.assertEqual(payload["work_window_status"], "open")
+
+    def test_active_min_accumule_les_updates_sub_minute_en_secondes(self):
+        start = datetime(2026, 4, 28, 18, 42, 52)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+
+        for observed_at in (
+            start + timedelta(seconds=20),
+            start + timedelta(seconds=45),
+            start + timedelta(seconds=75),
+        ):
+            self.memory.update_present_snapshot(
+                PresentState(
+                    session_status="active",
+                    awake=True,
+                    locked=False,
+                    active_project="Pulse",
+                    probable_task="coding",
+                    activity_level="editing",
+                    focus_level="normal",
+                    session_duration_min=max(int((observed_at - start).total_seconds() / 60), 0),
+                    updated_at=observed_at,
+                ),
+                signals=Signals(
+                    active_project="Pulse",
+                    active_file="/tmp/dashboard.py",
+                    probable_task="coding",
+                    activity_level="editing",
+                    friction_score=0.1,
+                    focus_level="normal",
+                    session_duration_min=max(int((observed_at - start).total_seconds() / 60), 0),
+                    recent_apps=["Cursor"],
+                    clipboard_context=None,
+                ),
+            )
+
+        summary = self.memory.get_today_summary(now=start + timedelta(seconds=75))
+
+        self.assertEqual(summary["totals"]["worked_min"], 1)
+        self.assertEqual(summary["totals"]["active_min"], 1)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT active_sec, active_min FROM work_windows WHERE session_id = ?", ("test-session",)).fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["active_sec"], 75)
+        self.assertEqual(row["active_min"], 1)
+
 
     # ── I3 : update_present_snapshot — present est la source de vérité du présent ───
 
