@@ -1,6 +1,7 @@
 import tempfile
+import sqlite3
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from daemon.core.contracts import Episode
@@ -543,6 +544,218 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(session["session_duration_min"], 45)
         self.assertEqual(session["probable_task"], "coding")
         self.assertEqual(session["focus_level"], "deep")
+
+    def test_today_summary_aggregate_les_work_windows_persistes_du_jour(self):
+        start = datetime(2026, 4, 28, 9, 0, 0)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=45,
+                updated_at=start + timedelta(minutes=45),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                activity_level="editing",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=45,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+        self.memory.note_commit_for_current_work_window(when=start + timedelta(minutes=45))
+        self.memory.new_session(
+            started_at=start + timedelta(hours=2),
+            ended_at=start + timedelta(hours=1),
+            close_reason="screen_lock",
+        )
+
+        self.memory.record_event(
+            Event("app_activated", {"app_name": "Cursor"}, timestamp=start + timedelta(hours=2))
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="debug",
+                activity_level="executing",
+                focus_level="deep",
+                session_duration_min=30,
+                updated_at=start + timedelta(hours=2, minutes=30),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/runtime.py",
+                probable_task="debug",
+                activity_level="executing",
+                friction_score=0.2,
+                focus_level="deep",
+                session_duration_min=30,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+
+        summary = self.memory.get_today_summary(now=start + timedelta(hours=2, minutes=30))
+
+        self.assertEqual(summary["totals"]["worked_min"], 90)
+        self.assertEqual(summary["totals"]["commit_count"], 1)
+        self.assertEqual(summary["totals"]["window_count"], 2)
+        self.assertEqual(summary["projects"][0]["name"], "Pulse")
+        self.assertEqual(summary["projects"][0]["worked_min"], 90)
+
+    def test_rollover_work_window_scinde_les_projets_dans_today_summary(self):
+        start = datetime(2026, 4, 28, 14, 0, 0)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=20,
+                updated_at=start + timedelta(minutes=20),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                activity_level="editing",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=20,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+        self.memory.rollover_work_window(
+            ended_at=start + timedelta(minutes=20),
+            next_started_at=start + timedelta(minutes=20),
+            close_reason="project_change",
+            session_id="test-session",
+            active_project="plugins",
+            probable_task="debug",
+            activity_level="executing",
+            task_confidence=0.82,
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="plugins",
+                probable_task="debug",
+                activity_level="executing",
+                focus_level="normal",
+                session_duration_min=35,
+                updated_at=start + timedelta(minutes=35),
+            ),
+            signals=Signals(
+                active_project="plugins",
+                active_file="/tmp/plugin.py",
+                probable_task="debug",
+                activity_level="executing",
+                friction_score=0.2,
+                focus_level="normal",
+                session_duration_min=35,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+                task_confidence=0.82,
+            ),
+        )
+
+        summary = self.memory.get_today_summary(now=start + timedelta(minutes=35))
+
+        self.assertEqual(summary["totals"]["worked_min"], 35)
+        self.assertEqual([item["name"] for item in summary["projects"]], ["Pulse", "plugins"])
+        self.assertEqual(summary["projects"][0]["worked_min"], 20)
+        self.assertEqual(summary["projects"][1]["worked_min"], 15)
+
+    def test_reouverture_reconstruit_work_windows_depuis_sessions_et_episodes_existants(self):
+        start = datetime(2026, 4, 28, 10, 0, 0)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.save_episode(
+            Episode(
+                id="ep-1",
+                session_id="test-session",
+                started_at=start.isoformat(),
+                ended_at=(start + timedelta(minutes=25)).isoformat(),
+                boundary_reason="commit",
+                duration_sec=1500,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                task_confidence=0.91,
+            )
+        )
+        self.memory.save_episode(
+            Episode(
+                id="ep-2",
+                session_id="test-session",
+                started_at=(start + timedelta(minutes=25)).isoformat(),
+                ended_at=(start + timedelta(minutes=40)).isoformat(),
+                boundary_reason="screen_lock",
+                duration_sec=900,
+                active_project="Pulse",
+                probable_task="debug",
+                activity_level="executing",
+                task_confidence=0.88,
+            )
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="debug",
+                activity_level="executing",
+                focus_level="normal",
+                session_duration_min=40,
+                updated_at=start + timedelta(minutes=40),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/runtime.py",
+                probable_task="debug",
+                activity_level="executing",
+                friction_score=0.2,
+                focus_level="normal",
+                session_duration_min=40,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+                task_confidence=0.88,
+            ),
+        )
+        self.memory.close(ended_at=start + timedelta(minutes=40), close_reason="screen_lock")
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM work_windows")
+            conn.commit()
+
+        reopened = SessionMemory(db_path=self.db_path, session_id="test-session-reopened")
+        summary = reopened.get_today_summary(now=start + timedelta(minutes=45))
+
+        self.assertEqual(summary["totals"]["worked_min"], 40)
+        self.assertEqual(summary["totals"]["commit_count"], 1)
+        self.assertEqual(summary["projects"][0]["name"], "Pulse")
 
 
 if __name__ == "__main__":

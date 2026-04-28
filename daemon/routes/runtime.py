@@ -220,6 +220,7 @@ def register_runtime_routes(
     get_session_fsm: Callable[[], Any] | None = None,
     get_current_episode: Callable[[], Any] | None = None,
     get_recent_episodes: Callable[[int], Any] | None = None,
+    get_today_summary: Callable[[], dict[str, Any]] | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
     shutdown_runtime: Callable[[], None],
@@ -495,6 +496,32 @@ def register_runtime_routes(
             except Exception:
                 pass
         return jsonify({"daydreams": result, "status": get_daydream_status()})
+
+    @app.route("/today_summary")
+    def get_today_summary_route():
+        if get_today_summary is None:
+            now = datetime.now()
+            return jsonify(
+                {
+                    "date": now.date().isoformat(),
+                    "generated_at": now.isoformat(),
+                    "totals": {
+                        "worked_min": 0,
+                        "active_min": 0,
+                        "commit_count": 0,
+                        "window_count": 0,
+                        "project_count": 0,
+                    },
+                    "projects": [],
+                    "timeline": {
+                        "first_activity_at": None,
+                        "last_activity_at": None,
+                        "current_work_window_started_at": None,
+                    },
+                    "current_window": None,
+                }
+            )
+        return jsonify(get_today_summary())
 
     @app.route("/feed")
     def get_feed():

@@ -2,7 +2,7 @@ import json
 import sqlite3
 import threading
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -35,15 +35,17 @@ class SessionMemory:
 
         self._init_db()
         self._ensure_current_session()
+        self._backfill_work_windows_if_needed()
 
     def new_session(
         self,
         *,
         started_at: Optional[datetime] = None,
         ended_at: Optional[datetime] = None,
+        close_reason: str = "session_end",
     ) -> None:
         """Clôture la session courante et en démarre une nouvelle."""
-        self.close(ended_at=ended_at)
+        self.close(ended_at=ended_at, close_reason=close_reason)
         self.session_id = new_uid()
         self.started_at = started_at or datetime.now()
         self._latest_observed_at = self.started_at if started_at is not None else None
@@ -159,6 +161,17 @@ class SessionMemory:
                         signals.friction_score,
                         self.session_id,
                     ),
+                )
+                self._sync_work_window(
+                    conn,
+                    session_id=self.session_id,
+                    started_at=self.started_at,
+                    observed_at=self._effective_updated_at(observed_at),
+                    active_project=present.active_project,
+                    probable_task=present.probable_task,
+                    activity_level=present.activity_level,
+                    task_confidence=getattr(signals, "task_confidence", None),
+                    allow_create=(present.session_status == "active"),
                 )
                 conn.commit()
 
@@ -436,17 +449,33 @@ class SessionMemory:
                     """,
                     (cutoff, self.session_id),
                 )
+                conn.execute(
+                    """
+                    DELETE FROM work_windows
+                    WHERE status = 'closed'
+                    AND ended_at IS NOT NULL
+                    AND ended_at < ?
+                    AND session_id != ?
+                    """,
+                    (cutoff, self.session_id),
+                )
                 # Compacte la base après une purge importante
                 conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 conn.commit()
                 conn.execute("VACUUM")
                 return cursor.rowcount
 
-    def close(self, *, ended_at: Optional[datetime] = None) -> None:
+    def close(self, *, ended_at: Optional[datetime] = None, close_reason: str = "session_end") -> None:
         with self._lock:
             effective_end = ended_at or self._latest_observed_at or datetime.now()
             self._observe_timestamp(effective_end, bootstrap_if_empty=False)
             with self._connect() as conn:
+                self._close_work_window(
+                    conn,
+                    session_id=self.session_id,
+                    ended_at=effective_end,
+                    close_reason=close_reason,
+                )
                 conn.execute(
                     """
                     UPDATE sessions
@@ -461,6 +490,185 @@ class SessionMemory:
                     ),
                 )
                 conn.commit()
+
+    def note_commit_for_current_work_window(
+        self,
+        *,
+        when: Optional[datetime] = None,
+        session_id: Optional[str] = None,
+    ) -> None:
+        target_id = session_id or self.session_id
+        commit_at = when or datetime.now()
+        with self._lock:
+            with self._connect() as conn:
+                row = self._get_open_work_window_row(conn, session_id=target_id)
+                if row is None:
+                    return
+                previous_updated_at = _parse_iso_datetime(row["updated_at"]) or commit_at
+                started_at = _parse_iso_datetime(row["started_at"]) or commit_at
+                updated_at = max(previous_updated_at, commit_at)
+                active_min = int(row["active_min"] or 0)
+                if updated_at > previous_updated_at:
+                    active_min += max(int((updated_at - previous_updated_at).total_seconds() / 60), 0)
+                active_min = min(
+                    active_min,
+                    max(int((updated_at - started_at).total_seconds() / 60), 0),
+                )
+                conn.execute(
+                    """
+                    UPDATE work_windows
+                    SET updated_at = ?,
+                        active_min = ?,
+                        commit_count = COALESCE(commit_count, 0) + 1
+                    WHERE id = ?
+                    """,
+                    (updated_at.isoformat(), active_min, row["id"]),
+                )
+                conn.commit()
+
+    def rollover_work_window(
+        self,
+        *,
+        ended_at: datetime,
+        next_started_at: datetime,
+        close_reason: str,
+        session_id: Optional[str] = None,
+        active_project: Optional[str] = None,
+        probable_task: Optional[str] = None,
+        activity_level: Optional[str] = None,
+        task_confidence: Optional[float] = None,
+    ) -> None:
+        target_id = session_id or self.session_id
+        with self._lock:
+            with self._connect() as conn:
+                self._close_work_window(
+                    conn,
+                    session_id=target_id,
+                    ended_at=ended_at,
+                    close_reason=close_reason,
+                )
+                self._sync_work_window(
+                    conn,
+                    session_id=target_id,
+                    started_at=next_started_at,
+                    observed_at=next_started_at,
+                    active_project=active_project,
+                    probable_task=probable_task,
+                    activity_level=activity_level,
+                    task_confidence=task_confidence,
+                    allow_create=True,
+                )
+                conn.commit()
+
+    def get_today_summary(self, *, now: Optional[datetime] = None) -> Dict[str, Any]:
+        current_time = now or datetime.now()
+        day_start = datetime.combine(current_time.date(), time.min)
+        day_end = min(datetime.combine(current_time.date(), time.max), current_time)
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM work_windows
+                    WHERE started_at <= ?
+                      AND COALESCE(ended_at, updated_at) >= ?
+                    ORDER BY started_at ASC
+                    """,
+                    (day_end.isoformat(), day_start.isoformat()),
+                ).fetchall()
+
+        windows = [dict(row) for row in rows]
+        totals = {
+            "worked_min": 0,
+            "active_min": 0,
+            "commit_count": 0,
+            "window_count": 0,
+            "project_count": 0,
+        }
+        projects: dict[str, dict[str, Any]] = {}
+        first_activity_at: Optional[datetime] = None
+        last_activity_at: Optional[datetime] = None
+        current_window_payload: Optional[Dict[str, Any]] = None
+
+        for window in windows:
+            overlap = self._window_overlap(window, day_start=day_start, day_end=day_end)
+            if overlap is None:
+                continue
+
+            worked_min = overlap["worked_min"]
+            active_min = overlap["active_min"]
+            totals["worked_min"] += worked_min
+            totals["active_min"] += active_min
+            totals["commit_count"] += int(window.get("commit_count") or 0)
+            totals["window_count"] += 1
+
+            overlap_started = overlap["started_at"]
+            overlap_ended = overlap["ended_at"]
+            if first_activity_at is None or overlap_started < first_activity_at:
+                first_activity_at = overlap_started
+            if last_activity_at is None or overlap_ended > last_activity_at:
+                last_activity_at = overlap_ended
+
+            project_name = str(window.get("active_project") or "inconnu")
+            project_entry = projects.setdefault(
+                project_name,
+                {
+                    "name": project_name,
+                    "worked_min": 0,
+                    "active_min": 0,
+                    "commit_count": 0,
+                    "top_tasks": {},
+                },
+            )
+            project_entry["worked_min"] += worked_min
+            project_entry["active_min"] += active_min
+            project_entry["commit_count"] += int(window.get("commit_count") or 0)
+            task_name = str(window.get("probable_task") or "general")
+            project_entry["top_tasks"][task_name] = project_entry["top_tasks"].get(task_name, 0) + worked_min
+
+            if str(window.get("status") or "") == "open":
+                current_window_payload = {
+                    "id": window.get("id"),
+                    "started_at": overlap_started.isoformat(),
+                    "updated_at": overlap_ended.isoformat(),
+                    "project": window.get("active_project"),
+                    "probable_task": window.get("probable_task"),
+                    "activity_level": window.get("activity_level"),
+                    "commit_count": int(window.get("commit_count") or 0),
+                }
+
+        project_payload = []
+        for item in projects.values():
+            tasks = sorted(
+                item["top_tasks"].items(),
+                key=lambda entry: (-entry[1], entry[0]),
+            )
+            project_payload.append(
+                {
+                    "name": item["name"],
+                    "worked_min": item["worked_min"],
+                    "active_min": item["active_min"],
+                    "commit_count": item["commit_count"],
+                    "top_tasks": [name for name, _ in tasks[:3]],
+                }
+            )
+        project_payload.sort(key=lambda item: (-item["worked_min"], item["name"]))
+        totals["project_count"] = len(project_payload)
+
+        return {
+            "date": current_time.date().isoformat(),
+            "generated_at": current_time.isoformat(),
+            "totals": totals,
+            "projects": project_payload,
+            "timeline": {
+                "first_activity_at": first_activity_at.isoformat() if first_activity_at else None,
+                "last_activity_at": last_activity_at.isoformat() if last_activity_at else None,
+                "current_work_window_started_at": (
+                    current_window_payload["started_at"] if current_window_payload else None
+                ),
+            },
+            "current_window": current_window_payload,
+        }
 
     def _init_db(self) -> None:
         with self._connect() as conn:
@@ -509,10 +717,49 @@ class SessionMemory:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS work_windows (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    ended_at TEXT,
+                    status TEXT NOT NULL,
+                    close_reason TEXT,
+                    active_project TEXT,
+                    probable_task TEXT,
+                    activity_level TEXT,
+                    task_confidence REAL,
+                    active_min INTEGER DEFAULT 0,
+                    commit_count INTEGER DEFAULT 0,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_work_windows_session_started
+                ON work_windows(session_id, started_at DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_work_windows_status_started
+                ON work_windows(status, started_at DESC)
+                """
+            )
             self._ensure_column(conn, "episodes", "active_project", "TEXT")
             self._ensure_column(conn, "episodes", "probable_task", "TEXT")
             self._ensure_column(conn, "episodes", "activity_level", "TEXT")
             self._ensure_column(conn, "episodes", "task_confidence", "REAL")
+            self._ensure_column(conn, "work_windows", "active_project", "TEXT")
+            self._ensure_column(conn, "work_windows", "probable_task", "TEXT")
+            self._ensure_column(conn, "work_windows", "activity_level", "TEXT")
+            self._ensure_column(conn, "work_windows", "task_confidence", "REAL")
+            self._ensure_column(conn, "work_windows", "active_min", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "work_windows", "commit_count", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "work_windows", "close_reason", "TEXT")
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_episodes_session_started
@@ -557,6 +804,151 @@ class SessionMemory:
                 (self.session_id, now, now, 0),
             )
             conn.commit()
+
+    def _backfill_work_windows_if_needed(self) -> None:
+        with self._lock:
+            with self._connect() as conn:
+                sessions = conn.execute(
+                    """
+                    SELECT s.*
+                    FROM sessions s
+                    LEFT JOIN work_windows w ON w.session_id = s.id
+                    GROUP BY s.id
+                    HAVING COUNT(w.id) = 0
+                    ORDER BY s.started_at ASC
+                    """
+                ).fetchall()
+                if not sessions:
+                    return
+
+                session_rows = [dict(row) for row in sessions]
+                for index, session in enumerate(session_rows):
+                    next_started_at = None
+                    if index + 1 < len(session_rows):
+                        next_started_at = _parse_iso_datetime(session_rows[index + 1].get("started_at"))
+                    self._backfill_session_work_windows(
+                        conn,
+                        session=session,
+                        next_session_started_at=next_started_at,
+                    )
+                conn.commit()
+
+    def _backfill_session_work_windows(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        session: Dict[str, Any],
+        next_session_started_at: Optional[datetime],
+    ) -> None:
+        session_id = str(session.get("id") or "").strip()
+        if not session_id:
+            return
+
+        episodes = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT *
+                FROM episodes
+                WHERE session_id = ?
+                ORDER BY started_at ASC, ended_at ASC
+                """,
+                (session_id,),
+            ).fetchall()
+        ]
+
+        if not episodes and not self._session_has_backfillable_activity(session):
+            return
+
+        session_start = _parse_iso_datetime(session.get("started_at"))
+        if session_start is None:
+            return
+        session_end = self._session_effective_end(
+            session=session,
+            next_session_started_at=next_session_started_at,
+        )
+        session_is_open = (
+            session.get("ended_at") in (None, "")
+            and next_session_started_at is None
+        )
+
+        if not episodes:
+            window_end = session_end or session_start
+            worked_min = max(int((window_end - session_start).total_seconds() / 60), 0)
+            active_min = worked_min if self._session_looks_active(session) else 0
+            self._insert_backfilled_work_window(
+                conn,
+                session_id=session_id,
+                started_at=session_start,
+                updated_at=window_end,
+                ended_at=None if session_is_open else window_end,
+                status="open" if session_is_open else "closed",
+                close_reason=None if session_is_open else "session_end",
+                active_project=session.get("active_project"),
+                probable_task=session.get("probable_task"),
+                activity_level="executing" if active_min > 0 else "idle",
+                task_confidence=None,
+                active_min=active_min,
+                commit_count=0,
+            )
+            return
+
+        current_window: Dict[str, Any] | None = None
+        for episode in episodes:
+            episode_started_at = _parse_iso_datetime(episode.get("started_at"))
+            if episode_started_at is None:
+                continue
+            episode_ended_at = _parse_iso_datetime(episode.get("ended_at")) or session_end or episode_started_at
+            if current_window is None:
+                current_window = self._new_backfilled_window(
+                    session_id=session_id,
+                    started_at=episode_started_at,
+                    active_project=episode.get("active_project") or session.get("active_project"),
+                    probable_task=episode.get("probable_task") or session.get("probable_task"),
+                    activity_level=episode.get("activity_level"),
+                    task_confidence=episode.get("task_confidence"),
+                )
+
+            current_window["updated_at"] = max(current_window["updated_at"], episode_ended_at)
+            current_window["active_project"] = episode.get("active_project") or current_window["active_project"]
+            current_window["probable_task"] = episode.get("probable_task") or current_window["probable_task"]
+            current_window["activity_level"] = episode.get("activity_level") or current_window["activity_level"]
+            current_window["task_confidence"] = (
+                episode.get("task_confidence")
+                if episode.get("task_confidence") is not None
+                else current_window["task_confidence"]
+            )
+            if str(episode.get("activity_level") or "") != "idle":
+                current_window["active_min"] += max(
+                    int((episode_ended_at - episode_started_at).total_seconds() / 60),
+                    0,
+                )
+            if str(episode.get("boundary_reason") or "") == "commit":
+                current_window["commit_count"] += 1
+
+            boundary_reason = str(episode.get("boundary_reason") or "")
+            if boundary_reason in {"screen_lock", "idle_timeout", "project_change", "session_end"}:
+                self._finalize_backfilled_work_window(
+                    conn,
+                    window=current_window,
+                    ended_at=episode_ended_at,
+                    close_reason=boundary_reason,
+                    closed=True,
+                )
+                current_window = None
+
+        if current_window is None:
+            return
+
+        final_end = session_end or current_window["updated_at"]
+        close_reason = None if session_is_open else "session_end"
+        self._finalize_backfilled_work_window(
+            conn,
+            window=current_window,
+            ended_at=final_end,
+            close_reason=close_reason,
+            closed=not session_is_open,
+        )
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -631,3 +1023,298 @@ class SessionMemory:
         ):
             return observed_at
         return self._latest_observed_at or observed_at or self.started_at
+
+    @staticmethod
+    def _session_effective_end(
+        *,
+        session: Dict[str, Any],
+        next_session_started_at: Optional[datetime],
+    ) -> Optional[datetime]:
+        ended_at = _parse_iso_datetime(session.get("ended_at"))
+        updated_at = _parse_iso_datetime(session.get("updated_at"))
+        candidates = [dt for dt in (ended_at, updated_at) if dt is not None]
+        if next_session_started_at is not None:
+            if candidates:
+                return min(max(candidates), next_session_started_at)
+            return next_session_started_at
+        if candidates:
+            return max(candidates)
+        return _parse_iso_datetime(session.get("started_at"))
+
+    @staticmethod
+    def _session_has_backfillable_activity(session: Dict[str, Any]) -> bool:
+        duration = int(session.get("session_duration_min") or 0)
+        if duration > 0:
+            return True
+        if session.get("active_project"):
+            return True
+        probable_task = str(session.get("probable_task") or "")
+        return probable_task not in {"", "general"}
+
+    @staticmethod
+    def _session_looks_active(session: Dict[str, Any]) -> bool:
+        probable_task = str(session.get("probable_task") or "")
+        return probable_task not in {"", "general"}
+
+    @staticmethod
+    def _new_backfilled_window(
+        *,
+        session_id: str,
+        started_at: datetime,
+        active_project: Optional[str],
+        probable_task: Optional[str],
+        activity_level: Optional[str],
+        task_confidence: Optional[float],
+    ) -> Dict[str, Any]:
+        return {
+            "id": new_uid(),
+            "session_id": session_id,
+            "started_at": started_at,
+            "updated_at": started_at,
+            "active_project": active_project,
+            "probable_task": probable_task,
+            "activity_level": activity_level,
+            "task_confidence": task_confidence,
+            "active_min": 0,
+            "commit_count": 0,
+        }
+
+    def _finalize_backfilled_work_window(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        window: Dict[str, Any],
+        ended_at: datetime,
+        close_reason: Optional[str],
+        closed: bool,
+    ) -> None:
+        window["updated_at"] = max(window["updated_at"], ended_at)
+        worked_min = max(
+            int((window["updated_at"] - window["started_at"]).total_seconds() / 60),
+            0,
+        )
+        window["active_min"] = min(int(window["active_min"] or 0), worked_min)
+        self._insert_backfilled_work_window(
+            conn,
+            session_id=window["session_id"],
+            started_at=window["started_at"],
+            updated_at=window["updated_at"],
+            ended_at=window["updated_at"] if closed else None,
+            status="closed" if closed else "open",
+            close_reason=close_reason,
+            active_project=window["active_project"],
+            probable_task=window["probable_task"],
+            activity_level=window["activity_level"],
+            task_confidence=window["task_confidence"],
+            active_min=window["active_min"],
+            commit_count=window["commit_count"],
+            work_window_id=window["id"],
+        )
+
+    @staticmethod
+    def _insert_backfilled_work_window(
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+        started_at: datetime,
+        updated_at: datetime,
+        ended_at: Optional[datetime],
+        status: str,
+        close_reason: Optional[str],
+        active_project: Optional[str],
+        probable_task: Optional[str],
+        activity_level: Optional[str],
+        task_confidence: Optional[float],
+        active_min: int,
+        commit_count: int,
+        work_window_id: Optional[str] = None,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO work_windows (
+                id, session_id, started_at, updated_at, ended_at, status, close_reason,
+                active_project, probable_task, activity_level, task_confidence, active_min, commit_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                work_window_id or new_uid(),
+                session_id,
+                started_at.isoformat(),
+                updated_at.isoformat(),
+                ended_at.isoformat() if ended_at is not None else None,
+                status,
+                close_reason,
+                active_project,
+                probable_task,
+                activity_level,
+                task_confidence,
+                active_min,
+                commit_count,
+            ),
+        )
+
+    def _sync_work_window(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+        started_at: datetime,
+        observed_at: datetime,
+        active_project: Optional[str],
+        probable_task: Optional[str],
+        activity_level: Optional[str],
+        task_confidence: Optional[float],
+        allow_create: bool,
+    ) -> None:
+        row = self._get_open_work_window_row(conn, session_id=session_id)
+        if row is None and not allow_create:
+            return
+
+        if row is None:
+            active_min = 0
+            if activity_level and activity_level != "idle":
+                active_min = max(int((observed_at - started_at).total_seconds() / 60), 0)
+            conn.execute(
+                """
+                INSERT INTO work_windows (
+                    id, session_id, started_at, updated_at, ended_at, status, close_reason,
+                    active_project, probable_task, activity_level, task_confidence, active_min, commit_count
+                ) VALUES (?, ?, ?, ?, NULL, 'open', NULL, ?, ?, ?, ?, ?, 0)
+                """,
+                (
+                    new_uid(),
+                    session_id,
+                    started_at.isoformat(),
+                    observed_at.isoformat(),
+                    active_project,
+                    probable_task,
+                    activity_level,
+                    task_confidence,
+                    active_min,
+                ),
+            )
+            return
+
+        window_started_at = _parse_iso_datetime(row["started_at"]) or started_at
+        previous_updated_at = _parse_iso_datetime(row["updated_at"]) or window_started_at
+        effective_updated_at = max(previous_updated_at, observed_at)
+        active_min = int(row["active_min"] or 0)
+        if activity_level and activity_level != "idle" and effective_updated_at > previous_updated_at:
+            active_min += max(int((effective_updated_at - previous_updated_at).total_seconds() / 60), 0)
+        max_worked_min = max(int((effective_updated_at - window_started_at).total_seconds() / 60), 0)
+        active_min = min(active_min, max_worked_min)
+
+        conn.execute(
+            """
+            UPDATE work_windows
+            SET updated_at = ?,
+                active_project = ?,
+                probable_task = ?,
+                activity_level = ?,
+                task_confidence = ?,
+                active_min = ?
+            WHERE id = ?
+            """,
+            (
+                effective_updated_at.isoformat(),
+                active_project,
+                probable_task,
+                activity_level,
+                task_confidence,
+                active_min,
+                row["id"],
+            ),
+        )
+
+    def _close_work_window(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+        ended_at: datetime,
+        close_reason: str,
+    ) -> None:
+        row = self._get_open_work_window_row(conn, session_id=session_id)
+        if row is None:
+            return
+
+        started_at = _parse_iso_datetime(row["started_at"]) or ended_at
+        updated_at = _parse_iso_datetime(row["updated_at"]) or started_at
+        effective_end = max(started_at, updated_at, ended_at)
+        max_worked_min = max(int((effective_end - started_at).total_seconds() / 60), 0)
+        active_min = min(int(row["active_min"] or 0), max_worked_min)
+
+        conn.execute(
+            """
+            UPDATE work_windows
+            SET updated_at = ?,
+                ended_at = ?,
+                status = 'closed',
+                close_reason = ?,
+                active_min = ?
+            WHERE id = ?
+            """,
+            (
+                effective_end.isoformat(),
+                effective_end.isoformat(),
+                close_reason,
+                active_min,
+                row["id"],
+            ),
+        )
+
+    @staticmethod
+    def _get_open_work_window_row(
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+    ) -> Optional[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT *
+            FROM work_windows
+            WHERE session_id = ? AND status = 'open'
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            (session_id,),
+        ).fetchone()
+
+    @staticmethod
+    def _window_overlap(
+        window: Dict[str, Any],
+        *,
+        day_start: datetime,
+        day_end: datetime,
+    ) -> Optional[Dict[str, Any]]:
+        started_at = _parse_iso_datetime(window.get("started_at"))
+        ended_at = _parse_iso_datetime(window.get("ended_at") or window.get("updated_at"))
+        if started_at is None or ended_at is None:
+            return None
+        overlap_start = max(started_at, day_start)
+        overlap_end = min(ended_at, day_end)
+        if overlap_end <= overlap_start:
+            return None
+
+        overlap_min = max(int((overlap_end - overlap_start).total_seconds() / 60), 0)
+        total_duration_min = max(int((ended_at - started_at).total_seconds() / 60), 0)
+        active_min = int(window.get("active_min") or 0)
+        if total_duration_min > 0 and overlap_min < total_duration_min:
+            active_min = int(active_min * (overlap_min / total_duration_min))
+        active_min = min(active_min, overlap_min)
+        return {
+            "started_at": overlap_start,
+            "ended_at": overlap_end,
+            "worked_min": overlap_min,
+            "active_min": active_min,
+        }
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None

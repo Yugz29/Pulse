@@ -217,6 +217,13 @@ extension DaemonBridge {
         return try? decode(SessionsResponse.self, from: data)
     }
 
+    func getTodaySummary() async -> TodaySummaryResponse? {
+        guard let url = URL(string: "\(base)/today_summary") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(TodaySummaryResponse.self, from: data)
+    }
+
     func getScoringStatus() async -> ScoringStatusResponse? {
         guard let url = URL(string: "\(base)/scoring/status") else { return nil }
         guard let (data, response) = try? await data(from: url) else { return nil }

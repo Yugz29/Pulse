@@ -250,6 +250,7 @@ class RuntimeOrchestrator:
                     self.session_memory.new_session(
                         started_at=self._session_fsm.session_started_at,
                         ended_at=session_ended_at,
+                        close_reason="screen_lock",
                     )
                     self._persist_episode_transition(
                         self._episode_fsm.ensure_active(
@@ -315,7 +316,7 @@ class RuntimeOrchestrator:
                 update_memories_from_session(snapshot)
             # Persiste l'état courant pour le prochain démarrage.
             self._save_restart_state(snapshot)
-            self.session_memory.close()
+            self.session_memory.close(close_reason="session_end")
         except Exception as exc:
             self.log.warning("shutdown sync failed: %s", exc)
 
@@ -788,6 +789,10 @@ class RuntimeOrchestrator:
                 when=commit_at,
             )
         )
+        self.session_memory.note_commit_for_current_work_window(
+            when=commit_at,
+            session_id=self._current_session_id(),
+        )
 
         diff_summary: str | None = None
         try:
@@ -917,6 +922,7 @@ class RuntimeOrchestrator:
                 self.session_memory.new_session(
                     started_at=self._session_fsm.session_started_at,
                     ended_at=session_ended_at,
+                    close_reason="idle_timeout" if lifecycle_transition.boundary_reason == "idle" else "screen_lock",
                 )
 
         project_hint = None
@@ -971,6 +977,12 @@ class RuntimeOrchestrator:
             signals=signals,
         )
         self._persist_episode_transition(episode_transition)
+        self._sync_work_window_from_episode_transition(
+            episode_transition,
+            present=present,
+            signals=signals,
+            observed_at=observed_now,
+        )
         self.session_memory.update_present_snapshot(
             present,
             signals=signals,
@@ -1279,6 +1291,29 @@ class RuntimeOrchestrator:
             self.session_memory.save_episode(transition.opened_episode)
         elif transition.current_episode is not None:
             self.session_memory.save_episode(transition.current_episode)
+
+    def _sync_work_window_from_episode_transition(
+        self,
+        transition,
+        *,
+        present,
+        signals,
+        observed_at: datetime,
+    ) -> None:
+        if transition is None or transition.boundary_reason != "project_change":
+            return
+        if transition.opened_episode is None:
+            return
+        self.session_memory.rollover_work_window(
+            ended_at=observed_at,
+            next_started_at=observed_at,
+            close_reason="project_change",
+            session_id=self._current_session_id(),
+            active_project=present.active_project,
+            probable_task=present.probable_task,
+            activity_level=present.activity_level,
+            task_confidence=getattr(signals, "task_confidence", None),
+        )
 
     def _bind_live_semantics_to_active_episode(self, transition, *, present, signals):
         if transition is None:

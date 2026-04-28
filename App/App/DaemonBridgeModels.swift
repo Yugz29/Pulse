@@ -500,6 +500,111 @@ struct SessionJournal: Decodable, Identifiable {
     let content: String
 }
 
+struct TodaySummaryResponse: Decodable {
+    let date: String
+    let generatedAt: String
+    let totals: TodayTotals
+    let projects: [TodayProject]
+    let timeline: TodayTimeline
+    let currentWindow: TodayCurrentWindow?
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case generatedAt = "generated_at"
+        case totals
+        case projects
+        case timeline
+        case currentWindow = "current_window"
+    }
+}
+
+struct TodayTotals: Decodable {
+    let workedMin: Int
+    let activeMin: Int
+    let commitCount: Int
+    let windowCount: Int
+    let projectCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case workedMin = "worked_min"
+        case activeMin = "active_min"
+        case commitCount = "commit_count"
+        case windowCount = "window_count"
+        case projectCount = "project_count"
+    }
+}
+
+struct TodayProject: Decodable, Identifiable {
+    var id: String { name }
+    let name: String
+    let workedMin: Int
+    let activeMin: Int
+    let commitCount: Int
+    let topTasks: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case workedMin = "worked_min"
+        case activeMin = "active_min"
+        case commitCount = "commit_count"
+        case topTasks = "top_tasks"
+    }
+}
+
+struct TodayTimeline: Decodable {
+    let firstActivityAt: String?
+    let lastActivityAt: String?
+    let currentWorkWindowStartedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case firstActivityAt = "first_activity_at"
+        case lastActivityAt = "last_activity_at"
+        case currentWorkWindowStartedAt = "current_work_window_started_at"
+    }
+}
+
+struct TodayCurrentWindow: Decodable {
+    let id: String
+    let startedAt: String
+    let updatedAt: String
+    let project: String?
+    let probableTask: String?
+    let activityLevel: String?
+    let commitCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case startedAt = "started_at"
+        case updatedAt = "updated_at"
+        case project
+        case probableTask = "probable_task"
+        case activityLevel = "activity_level"
+        case commitCount = "commit_count"
+    }
+
+    var taskLabel: String {
+        switch probableTask {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "exploration", "browsing": return "Exploration"
+        case "general": return "Général"
+        default: return probableTask ?? "—"
+        }
+    }
+
+    var activityLabel: String {
+        switch activityLevel {
+        case "editing": return "Édition"
+        case "reading": return "Lecture"
+        case "executing": return "Exécution"
+        case "navigating": return "Navigation"
+        case "idle": return "Inactif"
+        default: return activityLevel ?? "—"
+        }
+    }
+}
+
 struct FactsStatsResponse: Decodable {
     let total: Int?
     let active: Int?

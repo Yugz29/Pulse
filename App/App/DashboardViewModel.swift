@@ -10,6 +10,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var factsProfile: FactsProfileResponse?
     @Published var memory: MemoryResponse?
     @Published var sessionJournals: SessionsResponse?
+    @Published var todaySummary: TodaySummaryResponse?
     @Published var events: [InsightEvent] = []
     @Published var proposals: [ProposalRecord] = []
     @Published var feedHistory: [FeedEvent] = []
@@ -74,6 +75,7 @@ final class DashboardViewModel: ObservableObject {
         async let factsProfileTask = bridge.getFactsProfile()
         async let memoryTask = bridge.getMemory()
         async let sessionJournalsTask = bridge.getSessionJournals()
+        async let todaySummaryTask = bridge.getTodaySummary()
         async let eventsTask = bridge.getInsights(limit: 100)
         async let proposalsTask = bridge.getRecentProposals(limit: 20)
         async let feedTask = bridge.fetchFeed(since: nil)
@@ -90,6 +92,7 @@ final class DashboardViewModel: ObservableObject {
         factsProfile = await factsProfileTask
         memory = await memoryTask
         sessionJournals = await sessionJournalsTask
+        todaySummary = await todaySummaryTask
         events = await eventsTask
         proposals = await proposalsTask
         feedHistory = await feedTask

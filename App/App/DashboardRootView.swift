@@ -190,6 +190,11 @@ struct DashboardRootView: View {
                 sessionHero
 
                 HStack(alignment: .top, spacing: 16) {
+                    todayOverviewCard
+                    todayProjectsCard
+                }
+
+                HStack(alignment: .top, spacing: 16) {
                     episodeCurrentCard
                     episodeHistoryCard
                 }
@@ -205,6 +210,109 @@ struct DashboardRootView: View {
             }
             .padding(24)
         }
+    }
+
+    private var todayOverviewCard: some View {
+        let summary = vm.todaySummary
+        let totals = summary?.totals
+        let currentWindow = summary?.currentWindow
+
+        return GlassCard(accent: gGreen) {
+            VStack(alignment: .leading, spacing: 12) {
+                cardTitle("Aujourd’hui", icon: "calendar")
+
+                HStack(spacing: 18) {
+                    statBadge("Travail", dashboardMinutes(totals?.workedMin), gGreen)
+                    statBadge("Actif", dashboardMinutes(totals?.activeMin), gBlue)
+                    statBadge("Commits", dashboardCount(totals?.commitCount), gOrange)
+                    statBadge("Blocs", dashboardCount(totals?.windowCount), gGray)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    signalRow("Première activité", dashboardAbsoluteTimestamp(summary?.timeline.firstActivityAt))
+                    signalRow("Dernière activité", dashboardRelativeTimestamp(summary?.timeline.lastActivityAt))
+                    signalRow("Projets", dashboardCount(totals?.projectCount))
+                    signalRow("Agrégé", dashboardRelativeTimestamp(summary?.generatedAt))
+                }
+
+                if let currentWindow {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "waveform.path.ecg")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text("Bloc de travail courant")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in
+                            Text(sessionDurationLabel(from: currentWindow.startedAt))
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                        }
+                        signalRow("Projet", currentWindow.project ?? "—")
+                        signalRow("Tâche", currentWindow.taskLabel)
+                        signalRow("Activité", currentWindow.activityLabel)
+                        signalRow("Commits", "\(currentWindow.commitCount)")
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var todayProjectsCard: some View {
+        let projects = vm.todaySummary?.projects ?? []
+
+        return GlassCard(accent: gBlue) {
+            VStack(alignment: .leading, spacing: 12) {
+                cardTitle("Projets du jour", icon: "square.grid.2x2")
+
+                if projects.isEmpty {
+                    emptyState("Aucune fenêtre de travail persistée aujourd’hui")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(projects.prefix(5)) { project in
+                            HStack(alignment: .top, spacing: 10) {
+                                Circle()
+                                    .fill(Color(hex: gBlue).opacity(0.65))
+                                    .frame(width: 8, height: 8)
+                                    .padding(.top, 5)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(project.name)
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        Text(dashboardMinutes(project.workedMin))
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text("\(dashboardMinutes(project.activeMin)) actives · \(project.commitCount) commit(s)")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                    if !project.topTasks.isEmpty {
+                                        Text(project.topTasks.map(todayTaskLabel).joined(separator: " · "))
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 8)
+
+                            if project.id != projects.prefix(5).last?.id {
+                                Divider().padding(.leading, 18)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var sessionHero: some View {
@@ -1378,6 +1486,17 @@ struct DashboardRootView: View {
         }
     }
 
+    private func todayTaskLabel(_ raw: String) -> String {
+        switch raw {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "exploration", "browsing": return "Exploration"
+        case "general": return "Général"
+        default: return raw
+        }
+    }
+
     private func fileModeLabel(_ raw: String?) -> String {
         switch raw {
         case "single_file": return "Fichier unique"
@@ -1465,6 +1584,16 @@ private func dashboardScore(_ value: Double?) -> String {
 private func dashboardCount(_ value: Int?) -> String {
     guard let value else { return "—" }
     return "\(value)"
+}
+
+private func dashboardMinutes(_ value: Int?) -> String {
+    guard let value else { return "—" }
+    let hours = value / 60
+    let minutes = value % 60
+    if hours > 0 {
+        return String(format: "%02dh %02dm", hours, minutes)
+    }
+    return "\(minutes) min"
 }
 
 private func dashboardBoolLabel(_ value: Bool?) -> String {

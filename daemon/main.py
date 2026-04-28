@@ -190,6 +190,7 @@ register_runtime_routes(
     get_session_fsm=lambda: runtime_orchestrator.session_fsm,
     get_current_episode=lambda: runtime_orchestrator.current_episode,
     get_recent_episodes=lambda limit: session_memory.get_recent_episodes(limit=limit),
+    get_today_summary=lambda: session_memory.get_today_summary(),
     llm_unload_background=_llm_unload_background,
     llm_warmup_background=_llm_warmup_background,
     shutdown_runtime=_shutdown_runtime,

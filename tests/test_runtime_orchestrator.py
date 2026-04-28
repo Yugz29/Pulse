@@ -575,6 +575,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         with patch("daemon.core.episode_fsm.new_uid", side_effect=["ep-1", "ep-2"]):
             self.orchestrator._process_signals(first)
             self.session_memory.save_episode.reset_mock()
+            self.session_memory.rollover_work_window.reset_mock()
 
             self.scorer.bus.recent.return_value = [first, second]
             self.scorer.compute.return_value = self._signals(
@@ -605,6 +606,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(closed.active_project, "Pulse")
         self.assertEqual(opened.active_project, "Client")
         self.assertEqual(opened.probable_task, "coding")
+        self.session_memory.rollover_work_window.assert_called_once()
 
     def test_process_signals_mode_oscillation_does_not_split_episode(self):
         start = datetime.now()

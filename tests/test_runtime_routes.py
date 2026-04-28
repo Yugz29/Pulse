@@ -100,6 +100,62 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["status"]["status"], "skipped")
         self.assertEqual(payload["status"]["last_reason"], "no_journal_entries")
 
+    def test_today_summary_expose_un_aggregate_persiste(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_summary=lambda: {
+                "date": "2026-04-28",
+                "generated_at": "2026-04-28T12:50:00",
+                "totals": {
+                    "worked_min": 95,
+                    "active_min": 72,
+                    "commit_count": 3,
+                    "window_count": 2,
+                    "project_count": 1,
+                },
+                "projects": [
+                    {
+                        "name": "Pulse",
+                        "worked_min": 95,
+                        "active_min": 72,
+                        "commit_count": 3,
+                        "top_tasks": ["coding", "debug"],
+                    }
+                ],
+                "timeline": {
+                    "first_activity_at": "2026-04-28T11:10:00",
+                    "last_activity_at": "2026-04-28T12:49:00",
+                    "current_work_window_started_at": "2026-04-28T12:36:00",
+                },
+                "current_window": {
+                    "id": "ww-1",
+                    "started_at": "2026-04-28T12:36:00",
+                    "updated_at": "2026-04-28T12:49:00",
+                    "project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "executing",
+                    "commit_count": 2,
+                },
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/today_summary")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["totals"]["worked_min"], 95)
+        self.assertEqual(payload["projects"][0]["name"], "Pulse")
+        self.assertEqual(payload["current_window"]["id"], "ww-1")
+
     def test_state_golden_legacy_json_output_exact(self):
         self.runtime_state.set_paused(True)
         signals = Signals(
