@@ -45,6 +45,7 @@ class SystemObserver {
     private var isUserIdle = false
     private var lastMeaningfulFilePath: String?
     private let filesystemQueue = DispatchQueue(label: "pulse.systemobserver.filesystem", qos: .utility)
+    private let claudeSessionQueue = DispatchQueue(label: "pulse.systemobserver.claude-sessions", qos: .utility)
 
     // Déduplication des titres de fenêtres — supprimée : le titre est maintenant
     // intégré dans app_activated, la déduplication est gérée par le daemon.
@@ -87,6 +88,13 @@ class SystemObserver {
             FSEventStreamInvalidate(stream)
             FSEventStreamRelease(stream)
             fsEventStream = nil
+        }
+
+        if let stream = claudeSessionStream {
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            claudeSessionStream = nil
         }
 
         clipboardTimer?.invalidate()
@@ -635,7 +643,7 @@ class SystemObserver {
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
         ) else { return }
 
-        FSEventStreamScheduleWithRunLoop(stream, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        FSEventStreamSetDispatchQueue(stream, claudeSessionQueue)
         FSEventStreamStart(stream)
         claudeSessionStream = stream
     }
