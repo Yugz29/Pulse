@@ -909,6 +909,64 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("débogage (61 min)", rendered)
         self.assertNotIn("débogage (69 min)", rendered)
 
+    def test_journal_ne_fusionne_pas_un_commit_livre_beaucoup_plus_tard(self):
+        rendered = extractor_module._render_journal_document(
+            "2026-04-29",
+            [
+                {
+                    "entry_id": "first",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 20,
+                    "body": "Premier bloc.",
+                    "commit_message": "refactor(app): read session context aliases",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["DaemonBridgeModels.swift"],
+                    "files_count": 1,
+                    "started_at": "2026-04-29T21:35:26",
+                    "ended_at": "2026-04-29T21:55:14",
+                    "delivered_at": "2026-04-29T21:58:57",
+                    "scope_source": "commit_diff",
+                },
+                {
+                    "entry_id": "late",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 24,
+                    "body": "Commit livre plus tard.",
+                    "commit_message": "refactor(runtime): rename session context dto",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["contracts.py", "runtime_orchestrator.py"],
+                    "files_count": 2,
+                    "started_at": "2026-04-29T21:50:00",
+                    "ended_at": "2026-04-29T22:14:00",
+                    "delivered_at": "2026-04-29T23:36:02",
+                    "scope_source": "commit_diff",
+                },
+            ],
+        )
+
+        self.assertIn("21:35 → 21:55 — développement (20 min)", rendered)
+        self.assertIn("21:55 → 22:14 — développement (18 min)", rendered)
+        self.assertNotIn("21:35 → 22:14 — développement", rendered)
+
+    def test_commit_work_window_court_vaut_au_moins_une_minute(self):
+        frame = extractor_module._build_consolidation_frame(
+            {
+                "active_project": "Pulse",
+                "probable_task": "coding",
+                "duration_min": 0,
+                "commit_activity_started_at": "2026-04-29T23:41:56",
+                "commit_activity_ended_at": "2026-04-29T23:42:20",
+            },
+            trigger="commit",
+            commit_message="fix(journal): keep late commits separate",
+        )
+
+        self.assertEqual(frame["duration_min"], 1)
+
     def test_journal_affiche_une_heure_unique_pour_un_bloc_inferieur_a_une_minute(self):
         rendered = extractor_module._render_journal_document(
             "2026-04-29",

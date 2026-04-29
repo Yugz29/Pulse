@@ -793,12 +793,18 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
 
 
 _JOURNAL_MERGE_GAP_MAX_MIN = 5
+_JOURNAL_COMMIT_DELIVERY_MERGE_GAP_MAX_MIN = 10
 
 
 def _can_merge_journal_entries(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
     if left.get("active_project") != right.get("active_project"):
         return False
     if left.get("probable_task") != right.get("probable_task"):
+        return False
+
+    left_commits = _compact_strings(left.get("commit_messages", []))
+    right_commits = _compact_strings(right.get("commit_messages", []))
+    if left_commits and right_commits and not _commit_deliveries_are_close(left, right):
         return False
 
     left_start, left_end = _entry_bounds(left)
@@ -811,6 +817,15 @@ def _can_merge_journal_entries(left: Dict[str, Any], right: Dict[str, Any]) -> b
 
     gap_min = (right_start - left_end).total_seconds() / 60
     return 0 <= gap_min <= _JOURNAL_MERGE_GAP_MAX_MIN
+
+
+def _commit_deliveries_are_close(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+    left_delivered = _parse_entry_datetime(left.get("delivered_at"))
+    right_delivered = _parse_entry_datetime(right.get("delivered_at"))
+    if left_delivered is None or right_delivered is None:
+        return True
+    gap_min = abs((right_delivered - left_delivered).total_seconds()) / 60
+    return gap_min <= _JOURNAL_COMMIT_DELIVERY_MERGE_GAP_MAX_MIN
 
 
 def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
@@ -1462,7 +1477,7 @@ def _resolve_commit_work_window(
     if started_at is None or ended_at is None or ended_at <= started_at:
         return None
 
-    duration_min = max(int((ended_at - started_at).total_seconds() / 60), 0)
+    duration_min = max(int((ended_at - started_at).total_seconds() / 60), 1)
     return {
         "started_at": started_at.isoformat(),
         "ended_at": ended_at.isoformat(),
