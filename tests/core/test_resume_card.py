@@ -82,7 +82,7 @@ class TestResumeCard(unittest.TestCase):
             memory_payload={
                 "duration_min": 48,
                 "top_files": ["/tmp/Pulse/tests/test_runtime_orchestrator.py"],
-                "work_window_started_at": "2026-04-29T09:00:00",
+                "work_block_started_at": "2026-04-29T09:00:00",
             },
             sleep_minutes=32,
             diff_summary=snapshot.last_diff_summary,
@@ -93,6 +93,7 @@ class TestResumeCard(unittest.TestCase):
         self.assertEqual(card.project, "Pulse")
         self.assertEqual(card.generated_by, "deterministic")
         self.assertIn("present_state", card.source_refs)
+        self.assertIn("work_block", card.source_refs)
         self.assertIn("git_diff", card.source_refs)
         self.assertLessEqual(len(card.summary), 110)
         self.assertLessEqual(len(card.next_action), 130)

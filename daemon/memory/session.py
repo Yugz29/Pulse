@@ -471,7 +471,8 @@ class SessionMemory:
         updated_at = session.get("updated_at") or datetime.now().isoformat()
         duration_min = int(session.get("session_duration_min") or 0) or self._duration_min()
 
-        return {
+        recent_sessions = self.get_recent_sessions(limit=3)
+        payload = {
             "started_at": started_at,
             "ended_at": session.get("ended_at"),
             "updated_at": updated_at,
@@ -485,11 +486,15 @@ class SessionMemory:
             "files_changed": len(seen_paths),
             "recent_apps": app_names[:10],
             "commit_count": commit_count,
-            # Compatibilité resume_card
-            "work_window_started_at": started_at,
-            "work_window_commit_count": commit_count,
-            "closed_episodes": self.get_recent_sessions(limit=3),
+            "work_block_started_at": started_at,
+            "work_block_commit_count": commit_count,
+            "recent_sessions": recent_sessions,
         }
+        # Alias legacy pour l'extracteur mémoire et les anciennes ResumeCards.
+        payload["work_window_started_at"] = payload["work_block_started_at"]
+        payload["work_window_commit_count"] = payload["work_block_commit_count"]
+        payload["closed_episodes"] = recent_sessions
+        return payload
 
     def purge_old_events(self, keep_hours: int = 48) -> int:
         cutoff = (datetime.now() - timedelta(hours=keep_hours)).isoformat()

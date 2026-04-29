@@ -1393,7 +1393,7 @@ def _build_consolidation_frame(
     commit_message: Optional[str] = None,
     trigger: Optional[str] = None,
 ) -> Dict[str, Any]:
-    episode = _latest_closed_episode(session_data.get("closed_episodes"))
+    episode = _latest_closed_episode(session_data.get("recent_sessions") or session_data.get("closed_episodes"))
     active_project = (episode or {}).get("active_project") or session_data.get("active_project")
     probable_task = (episode or {}).get("probable_task") or session_data.get("probable_task") or "general"
     if commit_message:
@@ -1449,10 +1449,12 @@ def _resolve_commit_work_window(
 
     started_at = _parse_entry_datetime(
         session_data.get("commit_activity_started_at")
+        or session_data.get("work_block_started_at")
         or session_data.get("work_window_started_at")
     )
     ended_at = _parse_entry_datetime(
         session_data.get("commit_activity_ended_at")
+        or session_data.get("work_block_ended_at")
         or session_data.get("work_window_ended_at")
         or session_data.get("updated_at")
         or session_data.get("ended_at")

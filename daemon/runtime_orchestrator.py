@@ -669,7 +669,7 @@ class RuntimeOrchestrator:
                 len(diff_files),
             )
         snapshot["commit_scope_files"] = commit_scope_files[:8]
-        self._annotate_commit_work_window(
+        self._annotate_commit_work_block(
             snapshot,
             commit_at=commit_at,
             commit_scope_files=commit_scope_files,
@@ -681,7 +681,7 @@ class RuntimeOrchestrator:
             daemon=True,
         ).start()
 
-    def _annotate_commit_work_window(
+    def _annotate_commit_work_block(
         self,
         snapshot: dict,
         *,
@@ -708,24 +708,38 @@ class RuntimeOrchestrator:
                 snapshot["commit_activity_started_at"] = started_at.isoformat()
                 snapshot["commit_activity_ended_at"] = ended_at.isoformat()
                 snapshot["commit_activity_event_count"] = int(activity_window.get("event_count") or 0)
-                snapshot["work_window_started_at"] = started_at.isoformat()
-                snapshot["work_window_ended_at"] = ended_at.isoformat()
+                self._set_commit_work_block(snapshot, started_at=started_at, ended_at=ended_at)
                 return
 
-        work_window_started_at = _parse_optional_datetime(snapshot.get("work_window_started_at"))
-        if work_window_started_at is None:
-            work_window_started_at = self._session_fsm.session_started_at
+        work_block_started_at = _parse_optional_datetime(
+            snapshot.get("work_block_started_at") or snapshot.get("work_window_started_at")
+        )
+        if work_block_started_at is None:
+            work_block_started_at = self._session_fsm.session_started_at
         runtime_snapshot = self.runtime_state.get_runtime_snapshot()
-        payload_window_end = _parse_optional_datetime(snapshot.get("work_window_ended_at"))
-        window_end = payload_window_end or runtime_snapshot.present.updated_at or commit_at
-        if window_end < commit_at:
-            window_end = commit_at
+        payload_block_end = _parse_optional_datetime(snapshot.get("work_block_ended_at") or snapshot.get("work_window_ended_at"))
+        block_end = payload_block_end or runtime_snapshot.present.updated_at or commit_at
+        if block_end < commit_at:
+            block_end = commit_at
 
-        if work_window_started_at is not None:
-            snapshot["work_window_started_at"] = work_window_started_at.isoformat()
+        if work_block_started_at is not None:
+            self._set_commit_work_block(snapshot, started_at=work_block_started_at, ended_at=block_end)
         elif snapshot.get("started_at"):
+            snapshot["work_block_started_at"] = snapshot.get("started_at")
             snapshot["work_window_started_at"] = snapshot.get("started_at")
-        snapshot["work_window_ended_at"] = window_end.isoformat()
+            snapshot["work_block_ended_at"] = block_end.isoformat()
+            snapshot["work_window_ended_at"] = block_end.isoformat()
+
+    def _annotate_commit_work_window(self, *args, **kwargs) -> None:
+        """Alias legacy pour les tests/outils qui utilisent encore work_window."""
+        self._annotate_commit_work_block(*args, **kwargs)
+
+    @staticmethod
+    def _set_commit_work_block(snapshot: dict, *, started_at: datetime, ended_at: datetime) -> None:
+        snapshot["work_block_started_at"] = started_at.isoformat()
+        snapshot["work_block_ended_at"] = ended_at.isoformat()
+        snapshot["work_window_started_at"] = snapshot["work_block_started_at"]
+        snapshot["work_window_ended_at"] = snapshot["work_block_ended_at"]
 
     def _enqueue_file_event(self, event) -> None:
         with self._file_flush_condition:

@@ -256,6 +256,9 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(payload["duration_min"], 20)
         self.assertEqual(payload["files_changed"], 1)
         self.assertIn("Cursor", payload["recent_apps"])
+        self.assertIn("work_block_started_at", payload)
+        self.assertIn("work_block_commit_count", payload)
+        self.assertIn("recent_sessions", payload)
         self.assertIn("work_window_started_at", payload)
         self.assertIn("work_window_commit_count", payload)
 
@@ -276,6 +279,7 @@ class TestSessionMemory(unittest.TestCase):
 
         payload = self.memory.export_memory_payload()
         self.assertEqual(payload["commit_count"], 2)
+        self.assertEqual(payload["work_block_commit_count"], 2)
         self.assertEqual(payload["work_window_commit_count"], 2)
 
     def test_get_today_summary_derive_le_temps_depuis_les_evenements(self):

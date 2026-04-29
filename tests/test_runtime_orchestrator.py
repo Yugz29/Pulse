@@ -321,6 +321,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         snapshot = sync_thread.args[0]
         self.assertEqual(snapshot["active_project"], "Pulse")
         self.assertEqual(snapshot["top_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
+        self.assertEqual(snapshot["work_block_started_at"], "2026-04-28T11:46:01")
         self.assertEqual(snapshot["work_window_started_at"], "2026-04-28T11:46:01")
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
@@ -350,7 +351,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(snapshot["active_project"], "Pulse")
         self.assertEqual(snapshot["commit_scope_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
 
-    def test_annotate_commit_work_window_prefere_l_activite_des_fichiers_du_commit(self):
+    def test_annotate_commit_work_block_prefere_l_activite_des_fichiers_du_commit(self):
         self.session_memory.find_file_activity_window.return_value = {
             "started_at": "2026-04-29T10:33:04",
             "ended_at": "2026-04-29T10:48:12",
@@ -360,12 +361,14 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         snapshot = {"work_window_started_at": "2026-04-29T10:00:00", "work_window_ended_at": "2026-04-29T11:42:00"}
         commit_at = datetime(2026, 4, 29, 11, 42, 0)
 
-        self.orchestrator._annotate_commit_work_window(
+        self.orchestrator._annotate_commit_work_block(
             snapshot, commit_at=commit_at,
             commit_scope_files=["DashboardContentView.swift"],
             git_root=Path("/Users/yugz/Projets/Pulse/Pulse"),
         )
 
+        self.assertEqual(snapshot["work_block_started_at"], "2026-04-29T10:33:04")
+        self.assertEqual(snapshot["work_block_ended_at"], "2026-04-29T10:48:12")
         self.assertEqual(snapshot["work_window_started_at"], "2026-04-29T10:33:04")
         self.assertEqual(snapshot["work_window_ended_at"], "2026-04-29T10:48:12")
         self.assertEqual(snapshot["commit_activity_event_count"], 4)
@@ -585,7 +588,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.session_memory.export_memory_payload.return_value = {
             "active_project": "Pulse", "duration_min": 42,
             "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
-            "work_window_started_at": "2026-04-29T09:00:00",
+            "work_block_started_at": "2026-04-29T09:00:00",
         }
 
         self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)

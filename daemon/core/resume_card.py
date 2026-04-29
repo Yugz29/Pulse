@@ -53,7 +53,7 @@ def should_offer_resume_card(
     if not _clean(active_project):
         return False
     payload = memory_payload or {}
-    if int(payload.get("duration_min", 0) or 0) <= 0 and not payload.get("work_window_started_at"):
+    if int(payload.get("duration_min", 0) or 0) <= 0 and not _work_block_started_at(payload):
         return False
     if last_offered_at is not None:
         reference = now or datetime.now()
@@ -73,11 +73,14 @@ def build_resume_card_context(
     signals = runtime_snapshot.signals
     payload = dict(memory_payload or {})
     recent_files = _recent_files(payload, signals)
+    work_block_started_at = _work_block_started_at(payload)
+    work_block_commit_count = payload.get("work_block_commit_count") or payload.get("work_window_commit_count") or 0
+    recent_sessions = list(payload.get("recent_sessions") or payload.get("closed_episodes") or [])[:3]
     source_refs = ["present_state", "session_memory"]
-    if payload.get("work_window_started_at"):
-        source_refs.append("work_window")
-    if payload.get("closed_episodes"):
-        source_refs.append("episodes")
+    if work_block_started_at:
+        source_refs.append("work_block")
+    if recent_sessions:
+        source_refs.append("recent_sessions")
     if diff_summary:
         source_refs.append("git_diff")
 
@@ -91,9 +94,13 @@ def build_resume_card_context(
         "sleep_minutes": sleep_minutes,
         "recent_files": recent_files,
         "commit_scope_files": list(payload.get("commit_scope_files") or [])[:5],
-        "work_window_started_at": payload.get("work_window_started_at"),
-        "work_window_commit_count": payload.get("work_window_commit_count") or 0,
-        "closed_episodes": list(payload.get("closed_episodes") or [])[:3],
+        "work_block_started_at": work_block_started_at,
+        "work_block_commit_count": work_block_commit_count,
+        "recent_sessions": recent_sessions,
+        # Alias legacy pour les prompts/outils qui liraient encore ces clés.
+        "work_window_started_at": work_block_started_at,
+        "work_window_commit_count": work_block_commit_count,
+        "closed_episodes": recent_sessions,
         "diff_summary": diff_summary or "",
         "source_refs": source_refs,
     }
@@ -113,6 +120,10 @@ def generate_resume_card(context: dict[str, Any], llm: Any = None) -> ResumeCard
         return _card_from_llm(context, deterministic, parsed)
     except Exception:
         return deterministic
+
+
+def _work_block_started_at(payload: dict[str, Any]) -> Any:
+    return payload.get("work_block_started_at") or payload.get("work_window_started_at")
 
 
 def _deterministic_card(context: dict[str, Any]) -> ResumeCard:
