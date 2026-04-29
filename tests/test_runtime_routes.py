@@ -439,9 +439,15 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["current_episode"]["id"], "ep-1")
         self.assertEqual(payload["current_episode"]["active_project"], "Pulse")
         self.assertEqual(payload["current_episode"]["probable_task"], "coding")
+        self.assertEqual(payload["current_context"]["id"], "ep-1")
+        self.assertEqual(payload["current_context"]["active_project"], "Pulse")
+        self.assertEqual(payload["current_context"]["probable_task"], "coding")
         self.assertEqual(payload["recent_episodes"][0]["id"], "ep-1")
         self.assertEqual(payload["recent_episodes"][0]["active_project"], "Pulse")
         self.assertEqual(payload["recent_episodes"][0]["activity_level"], "editing")
+        self.assertEqual(payload["recent_sessions"][0]["id"], "ep-1")
+        self.assertEqual(payload["recent_sessions"][0]["active_project"], "Pulse")
+        self.assertEqual(payload["recent_sessions"][0]["activity_level"], "editing")
 
     def test_state_keeps_product_hierarchy_with_present_episode_and_signals(self):
         signals = Signals(

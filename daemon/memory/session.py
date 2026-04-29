@@ -291,6 +291,20 @@ class SessionMemory:
                 "commit_count": commit_count,
             }
 
+        work_blocks = []
+        for index, window in enumerate(windows):
+            work_blocks.append(
+                {
+                    "id": f"work-{window['started_at']}",
+                    "started_at": window["started_at"],
+                    "ended_at": window["ended_at"],
+                    "duration_min": window["duration_min"],
+                    "event_count": window["event_count"],
+                    "project": project,
+                    "probable_task": task,
+                }
+            )
+
         projects = []
         if project:
             projects.append(
@@ -316,6 +330,7 @@ class SessionMemory:
                 "project_count": len(projects),
             },
             "projects": projects,
+            "work_blocks": work_blocks,
             "timeline": {
                 "first_activity_at": first_activity,
                 "last_activity_at": last_activity,

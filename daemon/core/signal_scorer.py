@@ -106,9 +106,14 @@ class SignalScorer:
             e for e in meaningful_file_events
             if e.payload.get("_actor", "user") in {"user", "unknown"}
         ]
+        project_anchor_file_events = [
+            e for e in meaningful_file_events
+            if e.payload.get("_actor", "user") != "system"
+        ]
         recent_file_events = self._recent_file_events(file_events, now)
         recent_meaningful_file_events = self._recent_file_events(meaningful_file_events, now)
         recent_live_meaningful_file_events = self._recent_file_events(live_meaningful_file_events, now)
+        recent_project_anchor_file_events = self._recent_file_events(project_anchor_file_events, now)
 
         dominant_workspace_root = self._dominant_workspace_root(recent_live_meaningful_file_events)
         if dominant_workspace_root:
@@ -120,6 +125,16 @@ class SignalScorer:
         else:
             active_file = self._last_file_path(live_meaningful_file_events)
             active_project = self._extract_project(active_file)
+
+        if not active_project:
+            anchor_workspace_root = self._dominant_workspace_root(recent_project_anchor_file_events)
+            if anchor_workspace_root:
+                active_project = self._extract_project_from_workspace(anchor_workspace_root)
+                if not active_file:
+                    active_file = self._last_file_path_for_workspace(
+                        project_anchor_file_events,
+                        anchor_workspace_root,
+                    )
 
         # Fallback : si FSEvents n'a rien captué, extraire le fichier depuis
         # le titre de fenêtre (ex. "extractor.py — Pulse — VS Code").

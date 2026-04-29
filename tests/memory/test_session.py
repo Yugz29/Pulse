@@ -328,6 +328,10 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(summary["totals"]["project_count"], 1)
         self.assertEqual(summary["projects"][0]["name"], "Pulse")
         self.assertEqual(summary["current_window"]["probable_task"], "coding")
+        self.assertEqual(len(summary["work_blocks"]), 2)
+        self.assertEqual(summary["work_blocks"][0]["duration_min"], 10)
+        self.assertEqual(summary["work_blocks"][1]["duration_min"], 1)
+        self.assertEqual(summary["work_blocks"][1]["project"], "Pulse")
 
     def test_get_today_summary_compte_les_commits_du_depot(self):
         repo = Path(self.tmpdir.name) / "repo"

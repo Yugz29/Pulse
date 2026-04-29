@@ -302,6 +302,45 @@ class TestSignalScorer(unittest.TestCase):
             self.assertEqual(signals.active_project, "repo-b")
             self.assertEqual(signals.active_file, str(b2))
 
+    def test_active_project_utilise_les_fichiers_tool_assisted_comme_ancre(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir) / "Pulse"
+            (repo / ".git").mkdir(parents=True)
+            file_path = repo / "daemon" / "runtime_orchestrator.py"
+            file_path.parent.mkdir(parents=True)
+            file_path.write_text("print('ok')\n")
+
+            self._push("app_activated", {"app_name": "Codex"})
+            self._push(
+                "file_modified",
+                {"path": str(file_path), "_actor": "tool_assisted"},
+            )
+
+            signals = self.scorer.compute()
+
+            self.assertEqual(signals.active_project, "Pulse")
+            self.assertEqual(signals.active_file, str(file_path))
+            self.assertEqual(signals.edited_file_count_10m, 0)
+
+    def test_active_project_ignore_les_fichiers_system_comme_ancre(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir) / "Pulse"
+            (repo / ".git").mkdir(parents=True)
+            file_path = repo / "daemon" / "runtime_orchestrator.py"
+            file_path.parent.mkdir(parents=True)
+            file_path.write_text("print('ok')\n")
+
+            self._push(
+                "file_modified",
+                {"path": str(file_path), "_actor": "system"},
+            )
+
+            signals = self.scorer.compute()
+
+            self.assertIsNone(signals.active_project)
+            self.assertIsNone(signals.active_file)
+            self.assertEqual(signals.edited_file_count_10m, 0)
+
     def test_project_hint_stabilise_le_projet_pendant_une_phase_browser_utile(self):
         self._push("app_activated", {"app_name": "Chrome"})
 
