@@ -706,6 +706,7 @@ def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -
     ordered_entries = sorted(entries, key=_journal_entry_sort_key)
     merged_entries = _merge_journal_entries(ordered_entries)
     merged_entries = _resolve_journal_entry_overlaps(merged_entries)
+    merged_entries = sorted(merged_entries, key=_journal_entry_sort_key)
 
     project_sections: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
     noise_entries: List[Dict[str, Any]] = []
@@ -765,9 +766,12 @@ def _journal_entry_sort_key(entry: Dict[str, Any]) -> tuple[str, str, str]:
 
 
 def _merge_journal_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized_entries = [_normalize_journal_entry(raw_entry) for raw_entry in entries]
+    normalized_entries = _trim_delivered_commit_overlaps(normalized_entries)
+    normalized_entries = sorted(normalized_entries, key=_journal_entry_sort_key)
+
     merged: List[Dict[str, Any]] = []
-    for raw_entry in entries:
-        entry = _normalize_journal_entry(raw_entry)
+    for entry in normalized_entries:
         if merged and _can_merge_journal_entries(merged[-1], entry):
             merged[-1] = _merge_journal_pair(merged[-1], entry)
         else:
@@ -843,6 +847,8 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
         )
         if overlaps and not _compact_strings(left.get("commit_messages", [])) and not _compact_strings(right.get("commit_messages", [])):
             merged["duration_min"] = real_elapsed
+        elif merged["commit_messages"] and real_elapsed < sum_durations:
+            merged["duration_min"] = max(real_elapsed, 1)
         # Si le ratio est raisonnable (< 3x), real_elapsed est fiable.
         # Sinon il y a eu un gap — on garde sum_durations.
         elif sum_durations > 0 and real_elapsed > sum_durations * 3:
@@ -926,6 +932,11 @@ def _journal_entry_scope(entry: Dict[str, Any]) -> str:
 
 
 def _journal_entry_time_range(entry: Dict[str, Any]) -> str:
+    start_dt, end_dt = _entry_bounds(entry)
+    if start_dt and end_dt and start_dt.date() != end_dt.date():
+        return f"{start_dt.strftime('%d/%m %H:%M')} \u2192 {end_dt.strftime('%d/%m %H:%M')}"
+    if start_dt and end_dt and start_dt.strftime("%H:%M") == end_dt.strftime("%H:%M"):
+        return start_dt.strftime("%H:%M")
     return f"{_format_journal_time(entry.get('started_at'))} \u2192 {_format_journal_time(entry.get('ended_at'))}"
 
 
@@ -1007,7 +1018,7 @@ def _resolve_journal_entry_overlaps(entries: List[Dict[str, Any]]) -> List[Dict[
     if len(entries) < 2:
         return entries
 
-    result: List[Dict[str, Any]] = list(entries)
+    result: List[Dict[str, Any]] = _trim_delivered_commit_overlaps(entries)
     removed_ids: set[str] = set()
 
     i = 0
@@ -1042,6 +1053,48 @@ def _resolve_journal_entry_overlaps(entries: List[Dict[str, Any]]) -> List[Dict[
         i += 1
 
     return [_mark_overlap_demoted(e) if str(e.get("entry_id") or "") in removed_ids else e for e in result]
+
+
+def _trim_delivered_commit_overlaps(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    adjusted_by_id: Dict[str, Dict[str, Any]] = {}
+    latest_end_by_project: Dict[str, datetime] = {}
+
+    for entry in sorted(entries, key=_journal_entry_delivery_key):
+        if not _compact_strings(entry.get("commit_messages", [])):
+            continue
+        project = _normalize_project_name(entry.get("active_project"))
+        if project is None:
+            continue
+
+        start_dt, end_dt = _entry_bounds(entry)
+        if start_dt is None or end_dt is None or end_dt <= start_dt:
+            continue
+
+        current = entry
+        previous_end = latest_end_by_project.get(project)
+        if previous_end is not None and start_dt < previous_end < end_dt:
+            current = dict(entry)
+            current["started_at"] = previous_end.isoformat()
+            current["duration_min"] = max(int((end_dt - previous_end).total_seconds() / 60), 1)
+            adjusted_by_id[str(current.get("entry_id") or "")] = current
+
+        latest_end = latest_end_by_project.get(project)
+        if latest_end is None or end_dt > latest_end:
+            latest_end_by_project[project] = end_dt
+
+    if not adjusted_by_id:
+        return list(entries)
+
+    return [adjusted_by_id.get(str(entry.get("entry_id") or ""), entry) for entry in entries]
+
+
+def _journal_entry_delivery_key(entry: Dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        str(entry.get("delivered_at") or entry.get("ended_at") or ""),
+        str(entry.get("ended_at") or ""),
+        str(entry.get("started_at") or ""),
+        str(entry.get("entry_id") or ""),
+    )
 
 
 def _should_fuse_overlapping_entries(left: Dict[str, Any], right: Dict[str, Any]) -> bool:

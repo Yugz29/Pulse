@@ -683,6 +683,8 @@ class TestExtractor(unittest.TestCase):
             "recent_apps": ["Cursor"],
             "top_files": ["main.py"],
             "files_changed": 1,
+            "commit_activity_started_at": "2026-04-29T10:00:00",
+            "commit_activity_ended_at": "2026-04-29T10:10:00",
         }
         update_memories_from_session(
             base_session,
@@ -691,7 +693,12 @@ class TestExtractor(unittest.TestCase):
             commit_message="feat: premier bloc",
         )
         update_memories_from_session(
-            dict(base_session, top_files=["runtime.py"]),
+            dict(
+                base_session,
+                top_files=["runtime.py"],
+                commit_activity_started_at="2026-04-29T10:10:00",
+                commit_activity_ended_at="2026-04-29T10:20:00",
+            ),
             memory_dir=self.memory_dir,
             trigger="commit",
             commit_message="feat: second bloc",
@@ -768,6 +775,164 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("développement (15 min)", journal)
         self.assertIn("Livré à 11:42.", journal)
         self.assertNotIn("10:00 → 11:42", journal)
+
+    def test_journal_decoupe_les_commits_livres_qui_se_chevauchent(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 3,
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "recent_apps": ["Codex", "Xcode"],
+                "top_files": ["daemon/memory/session.py", "tests/memory/test_session.py"],
+                "files_changed": 2,
+                "commit_activity_started_at": "2026-04-29T16:19:43",
+                "commit_activity_ended_at": "2026-04-29T16:23:29",
+                "delivered_at": "2026-04-29T16:32:54",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="refactor(session): derive context from events",
+        )
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 11,
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "recent_apps": ["Codex", "Xcode"],
+                "top_files": ["App/App/DashboardRootView.swift"],
+                "files_changed": 1,
+                "commit_activity_started_at": "2026-04-29T16:23:29",
+                "commit_activity_ended_at": "2026-04-29T16:34:53",
+                "delivered_at": "2026-04-29T16:38:36",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="refactor(app): simplify live context card",
+        )
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 24,
+                "probable_task": "debug",
+                "activity_level": "editing",
+                "recent_apps": ["Codex", "Xcode"],
+                "top_files": ["daemon/memory/session.py", "App/App/DashboardRootView.swift"],
+                "files_changed": 2,
+                "commit_activity_started_at": "2026-04-29T16:19:43",
+                "commit_activity_ended_at": "2026-04-29T16:43:47",
+                "delivered_at": "2026-04-29T16:47:18",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(session): clarify live and daily activity",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        rendered = journal.split("<!-- pulse-journal-data:start", 1)[0]
+
+        self.assertIn("16:19 → 16:34", rendered)
+        self.assertIn("16:34 → 16:43", rendered)
+        self.assertNotIn("16:19 → 16:43", rendered)
+        self.assertLess(rendered.index("16:19 → 16:34"), rendered.index("16:34 → 16:43"))
+
+    def test_journal_decoupe_les_commits_chevauchants_avant_fusion(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 33,
+                "probable_task": "debug",
+                "activity_level": "editing",
+                "recent_apps": ["Codex", "Xcode"],
+                "top_files": [],
+                "files_changed": 0,
+                "started_at": "2026-04-28T23:41:21",
+                "ended_at": "2026-04-29T00:14:46",
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 2,
+                "probable_task": "debug",
+                "activity_level": "editing",
+                "recent_apps": ["Codex", "Xcode"],
+                "top_files": ["SystemObserver.swift", "runtime_orchestrator.py"],
+                "files_changed": 2,
+                "commit_activity_started_at": "2026-04-29T00:16:05",
+                "commit_activity_ended_at": "2026-04-29T00:18:08",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(context): observe Claude Desktop sessions via FSEvents",
+        )
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 12,
+                "probable_task": "debug",
+                "activity_level": "editing",
+                "recent_apps": ["Codex", "Xcode"],
+                "top_files": ["event_actor.py"],
+                "files_changed": 1,
+                "commit_activity_started_at": "2026-04-29T00:21:06",
+                "commit_activity_ended_at": "2026-04-29T00:33:06",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(scorer): system path short-circuits actor scoring",
+        )
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 22,
+                "probable_task": "debug",
+                "activity_level": "editing",
+                "recent_apps": ["Codex", "Xcode"],
+                "top_files": ["extractor.py", "test_extractor.py"],
+                "files_changed": 2,
+                "commit_activity_started_at": "2026-04-29T00:21:06",
+                "commit_activity_ended_at": "2026-04-29T00:43:16",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(journal): remove portée from body",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        rendered = journal.split("<!-- pulse-journal-data:start", 1)[0]
+
+        self.assertIn("28/04 23:41 → 29/04 00:43", rendered)
+        self.assertIn("débogage (61 min)", rendered)
+        self.assertNotIn("débogage (69 min)", rendered)
+
+    def test_journal_affiche_une_heure_unique_pour_un_bloc_inferieur_a_une_minute(self):
+        rendered = extractor_module._render_journal_document(
+            "2026-04-29",
+            [
+                {
+                    "entry_id": "short-commit",
+                    "active_project": "Pulse",
+                    "duration_min": 1,
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "body": "Livraison courte.",
+                    "commit_message": "fix: short commit",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-04-29T11:05:16",
+                    "ended_at": "2026-04-29T11:05:50",
+                    "scope_source": "commit_files",
+                },
+            ],
+        )
+
+        self.assertIn("### 11:05 — développement (1 min)", rendered)
+        self.assertNotIn("11:05 → 11:05", rendered)
 
     def test_journal_n_additionne_pas_les_doublons_sans_commit_qui_se_chevauchent(self):
         base_session = {

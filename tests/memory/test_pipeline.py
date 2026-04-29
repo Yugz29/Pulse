@@ -184,7 +184,7 @@ class TestMemoryPipeline(unittest.TestCase):
         self.assertEqual(len(session_files), 1)  # un seul fichier jour
         content = session_files[0].read_text()
         self.assertEqual(content.count("### "), 1)
-        self.assertIn("développement (60 min)", content)
+        self.assertIn("développement (30 min)", content)
         self.assertIn("ajout du pipeline m\u00e9moire", content)
 
     def test_pipeline_session_sans_projet_ne_plante_pas(self):
