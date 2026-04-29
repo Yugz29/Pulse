@@ -26,10 +26,9 @@ from daemon.core.context_formatter import (
     format_file_work_reading,
     has_informative_file_reading,
 )
-from daemon.core.episode_fsm import EpisodeFSM
 from daemon.core.current_context_adapters import current_context_to_markdown
 from daemon.core.current_context_builder import CurrentContextBuilder
-from daemon.core.contracts import ProposalCandidate
+from daemon.core.contracts import Episode, ProposalCandidate
 from daemon.core.event_bus import DEFAULT_EVENT_BUS_SIZE
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary, extract_file_names_from_diff_summary
@@ -101,8 +100,6 @@ class RuntimeOrchestrator:
         self._last_diff_triggered: dict[str, float] = {}
         self._diff_trigger_lock = threading.Lock()
         self._last_resume_card_at: datetime | None = None
-        # Thread de sync périodique — écrit dans le journal toutes les 30 min
-        # même sans commit ni screen_lock, tant qu'il y a un diff actif.
         self._periodic_sync_interval_sec: float = 30 * 60
         self._periodic_sync_stopped: bool = False
         self._periodic_sync_worker = threading.Thread(
@@ -114,7 +111,6 @@ class RuntimeOrchestrator:
         self._fact_engine = get_fact_engine()
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
-        self._episode_fsm = EpisodeFSM()
         self._restart_manager = RestartManager()
 
     @property
@@ -122,12 +118,40 @@ class RuntimeOrchestrator:
         return self._session_fsm
 
     @property
-    def fact_engine(self):
-        return self._fact_engine
+    def current_episode(self) -> Episode | None:
+        snapshot = self.runtime_state.get_runtime_snapshot()
+        present = snapshot.present
+        session = self.session_memory.get_session()
+        started_at = (
+            self._session_fsm.session_started_at.isoformat()
+            if self._session_fsm.session_started_at
+            else session.get("started_at")
+        )
+        if not started_at:
+            return None
+
+        duration_sec = None
+        if present.session_duration_min is not None:
+            duration_sec = max(int(present.session_duration_min), 0) * 60
+
+        signals = snapshot.signals
+        task_confidence = getattr(signals, "task_confidence", None) if signals is not None else None
+        return Episode(
+            id=f"current-{self.session_memory.session_id}",
+            session_id=self.session_memory.session_id,
+            started_at=started_at,
+            ended_at=None,
+            boundary_reason=None,
+            duration_sec=duration_sec,
+            active_project=present.active_project or session.get("active_project"),
+            probable_task=present.probable_task or session.get("probable_task"),
+            activity_level=present.activity_level,
+            task_confidence=task_confidence,
+        )
 
     @property
-    def current_episode(self):
-        return self._episode_fsm.current_episode
+    def fact_engine(self):
+        return self._fact_engine
 
     def llm_unload_background(self) -> None:
         self.llm_runtime.unload_background(self.log)
@@ -161,7 +185,6 @@ class RuntimeOrchestrator:
             self.log.warning("freeze_memory: mémoire projet absente — fallback vers legacy context")
             legacy = load_memory_context()
 
-        # Profil utilisateur issu des faits consolidés (facts.db)
         facts_profile = ""
         try:
             facts_profile = self._fact_engine.render_for_context(limit=8)
@@ -186,10 +209,7 @@ class RuntimeOrchestrator:
         )
 
     def _export_memory_payload(self) -> dict:
-        payload = self.session_memory.export_memory_payload()
-        if isinstance(payload, dict):
-            return payload
-        return self.session_memory.export_session_data()
+        return self.session_memory.export_memory_payload()
 
     def handle_event(self, event) -> None:
         if self._should_ignore_event(event):
@@ -199,9 +219,6 @@ class RuntimeOrchestrator:
         if self.runtime_state.is_paused():
             return
 
-        # Pendant le verrou écran, seuls screen_locked/screen_unlocked
-        # sont traités. Les events fichier et app sont ignorés pour éviter
-        # que des écritures système en arrière-plan polluent l'activité.
         _SCREEN_PASSTHROUGH = {"screen_locked", "screen_unlocked"}
         if self.runtime_state.is_screen_locked() and event.type not in _SCREEN_PASSTHROUGH:
             return
@@ -210,25 +227,12 @@ class RuntimeOrchestrator:
 
         if event.type == "screen_locked":
             self._session_fsm.on_screen_locked(when=event.timestamp)
-            self._episode_fsm.on_screen_locked(when=event.timestamp)
             self.runtime_state.mark_screen_locked(when=event.timestamp)
             threading.Thread(target=self.llm_unload_background, daemon=True).start()
-            # DayDream — déclenche si 23:59 est passé
             self._run_daydream_if_pending()
 
         elif event.type == "screen_unlocked":
             self._run_daydream_if_pending()
-            episode_locked_at = (
-                self._session_fsm.last_screen_locked_at
-                or self.runtime_state.get_last_screen_locked_at()
-            )
-            # Shim de compat Phase 2 :
-            # si RuntimeState porte encore le marqueur legacy de lock mais que la FSM
-            # ne l'a pas, on réinjecte ce timestamp une seule fois avant l'unlock.
-            # Ce cas intervient surtout pendant la coexistence RuntimeState/FSM
-            # et dans certains tests qui préparent directement RuntimeState.
-            # À supprimer quand RuntimeState ne sera plus porteur du marqueur de lock
-            # utilisé uniquement pour compat.
             if (
                 self._session_fsm.last_screen_locked_at is None
                 and self.runtime_state.get_last_screen_locked_at() is not None
@@ -246,13 +250,6 @@ class RuntimeOrchestrator:
                 sleep_min = transition.sleep_minutes or 0.0
                 if transition.should_start_new_session:
                     self._refresh_runtime_signals_for_closure(drain_pending=True)
-                    session_ended_at = episode_locked_at or event.timestamp
-                    self._persist_episode_transition(
-                        self._episode_fsm.close_current(
-                            ended_at=session_ended_at,
-                            boundary_reason="screen_lock",
-                        )
-                    )
                     self.log.info("Longue veille (%.0f min) → nouvelle session", sleep_min)
                     try:
                         snapshot = self._export_memory_payload()
@@ -262,31 +259,17 @@ class RuntimeOrchestrator:
                         self.log.warning("sync mémoire pré-reset échouée : %s", exc)
                     self.session_memory.new_session(
                         started_at=self._session_fsm.session_started_at,
-                        ended_at=session_ended_at,
+                        ended_at=self.runtime_state.get_last_screen_locked_at() or event.timestamp,
                         close_reason="screen_lock",
                     )
-                    self._persist_episode_transition(
-                        self._episode_fsm.ensure_active(
-                            session_id=self._current_session_id(),
-                            started_at=event.timestamp,
-                        )
-                    )
                 else:
-                    # Verrou court : reset du timer scorer uniquement.
-                    # Le temps de veille ne doit pas s'accumuler dans session_duration_min.
-                    # On ne cree pas de nouvelle session : le contexte de travail
-                    # (projet, fichier actif) est conserve.
                     self.log.debug(
-                        "Verrou court (%.0f min) -> reset timer scorer, session conservee",
+                        "Verrou court (%.0f min) -> reset timer scorer, session conservée",
                         sleep_min,
-                    )
-                    self._episode_fsm.on_screen_unlocked(
-                        session_id=self._current_session_id(),
-                        when=event.timestamp,
-                        boundary_detected=False,
                     )
                 if transition.should_clear_sleep_markers:
                     self.runtime_state.clear_sleep_markers()
+
             def _warmup_with_events():
                 self.scorer.bus.publish("llm_loading", {"model": ""})
                 self.llm_warmup_background()
@@ -296,13 +279,11 @@ class RuntimeOrchestrator:
 
         self.session_memory.record_event(event)
 
-        # Accumuler les titres de fenêtres pour DayDream
         if event.type in {"app_activated", "window_title_poll"}:
             title = (event.payload or {}).get("window_title") or (event.payload or {}).get("title")
             if title and len(title) >= 15:
                 self._accumulated_window_titles.append(title)
 
-        # Sessions Claude Desktop — titre de session comme contexte
         if event.type == "claude_desktop_session":
             title = (event.payload or {}).get("title", "")
             cwd   = (event.payload or {}).get("cwd", "")
@@ -377,12 +358,6 @@ class RuntimeOrchestrator:
                 self._file_flush_stopped = True
                 self._file_flush_condition.notify_all()
             self._refresh_runtime_signals_for_closure(drain_pending=True)
-            self._persist_episode_transition(
-                self._episode_fsm.close_current(
-                    ended_at=datetime.now(),
-                    boundary_reason="session_end",
-                )
-            )
             snapshot = self._export_memory_payload()
             if snapshot.get("duration_min", 0) > 0:
                 update_memories_from_session(snapshot)
@@ -392,12 +367,10 @@ class RuntimeOrchestrator:
             self.log.warning("shutdown sync failed: %s", exc)
 
     def _daydream_scheduler(self) -> None:
-        """Tourne en boucle, marque DayDream pending à 23:59 chaque jour."""
         import time as _time
         from datetime import timedelta
         while True:
             now = datetime.now()
-            # Calculer le prochain 23:59
             target = now.replace(hour=23, minute=59, second=0, microsecond=0)
             if now >= target:
                 target = target + timedelta(days=1)
@@ -409,7 +382,6 @@ class RuntimeOrchestrator:
                 self._run_daydream_if_pending()
 
     def _run_daydream_if_pending(self) -> None:
-        """Lance DayDream dans un thread si le flag est actif."""
         from daemon.memory.daydream import claim_daydream_run, trigger_daydream
         ref_date = claim_daydream_run()
         if ref_date is None:
@@ -418,7 +390,6 @@ class RuntimeOrchestrator:
         llm = self.llm_runtime.provider()
         window_titles = list(self._accumulated_window_titles)
         self._accumulated_window_titles.clear()
-
         threading.Thread(
             target=trigger_daydream,
             kwargs={"llm": llm, "window_titles": window_titles, "ref_date": ref_date},
@@ -427,15 +398,6 @@ class RuntimeOrchestrator:
         ).start()
 
     def build_context_snapshot(self) -> str:
-        """
-        Snapshot minimal du contexte courant pour le LLM.
-
-        Principe : seuls les faits directement utiles pour répondre à une
-        question ou appeler un outil. Pas de bruit, pas de duplication.
-
-        La mémoire persistante (frozen_memory) est injectée séparément dans
-        build_system_prompt() — ne pas la répéter ici.
-        """
         state = self.store.to_dict()
         snapshot = self.runtime_state.get_runtime_snapshot()
         current_context = self._render_current_context(
@@ -466,7 +428,6 @@ class RuntimeOrchestrator:
         time.sleep(0.2)
         self.llm_runtime.load_persisted_models()
 
-        # Restaurer l'état précédent si le redémarrage est récent.
         restart_state = self._restart_manager.load()
         if restart_state:
             self._restart_manager.apply(
@@ -483,8 +444,6 @@ class RuntimeOrchestrator:
         if purged:
             self.log.info("Mémoire : %d entrée(s) expirée(s) supprimée(s)", purged)
 
-        # Purge les events bruts antérieurs à 48h depuis session.db.
-        # Les sessions journalisées n'ont plus besoin de leurs events bruts.
         try:
             purged_events = self.session_memory.purge_old_events(keep_hours=48)
             if purged_events:
@@ -499,7 +458,6 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("Facts : archivage legacy échoué : %s", exc)
 
-        # Decay des faits utilisateurs silencieux depuis > DECAY_START_DAYS jours
         try:
             decayed = self._fact_engine.decay_all()
             if decayed:
@@ -507,8 +465,6 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("Facts : decay échoué : %s", exc)
 
-        # À partir d'ici, on ne touche plus à la vérité live ni à la vérité
-        # temporelle. MemoryStore/DayDream restent des couches de support.
         self.freeze_memory()
         provider = self.llm_runtime.provider()
         if provider and hasattr(provider, "warmup"):
@@ -523,7 +479,6 @@ class RuntimeOrchestrator:
         self._recover_missed_daydream()
         self.log.info("\u2713 Init différé terminé")
 
-        # Scheduler DayDream — déclenche le flag à 23:59 chaque jour.
         threading.Thread(
             target=self._daydream_scheduler,
             daemon=True,
@@ -531,13 +486,8 @@ class RuntimeOrchestrator:
         ).start()
 
     def _recover_missed_daydream(self) -> None:
-        """
-        Rattrape le DayDream de la veille si le daemon dormait, était arrêté,
-        ou si le Mac était déjà verrouillé quand le scheduler a marqué le job.
-        """
         try:
             from daemon.memory.daydream import mark_daydream_pending
-
             yesterday = (datetime.now() - timedelta(days=1)).date()
             mark_daydream_pending(ref_date=yesterday)
             self._run_daydream_if_pending()
@@ -561,13 +511,11 @@ class RuntimeOrchestrator:
         git_root = find_git_root(path)
         if not git_root:
             return
-
         root_key = str(git_root)
         with self._commit_watch_lock:
             if root_key in self._pending_commit_watch:
                 return
             self._pending_commit_watch.add(root_key)
-
         threading.Thread(
             target=self._handle_commit_event,
             args=(path,),
@@ -575,17 +523,8 @@ class RuntimeOrchestrator:
         ).start()
 
     def _periodic_sync_loop(self) -> None:
-        """
-        Boucle de fond : écrit dans le journal toutes les 30 min si actif.
-
-        Conditions pour déclencher :
-        - Pas en pause, pas écran verrouillé
-        - Un diff actif est disponible (activité réelle détectée)
-        - Au moins 20 min de session
-        - Au moins 25 min depuis le dernier sync (laisse une marge)
-        """
         import time as _time
-        _time.sleep(60)  # délai initial au démarrage du daemon
+        _time.sleep(60)
         while not self._periodic_sync_stopped:
             _time.sleep(self._periodic_sync_interval_sec)
             if self._periodic_sync_stopped:
@@ -618,7 +557,6 @@ class RuntimeOrchestrator:
                 self.log.warning("periodic sync échouée : %s", exc)
 
     def _trigger_diff_background(self, workspace: str) -> None:
-        """Lance read_diff_summary en background avec cooldown par workspace."""
         now = time.monotonic()
         with self._diff_trigger_lock:
             last = self._last_diff_triggered.get(workspace)
@@ -641,24 +579,18 @@ class RuntimeOrchestrator:
         git_root = find_git_root(path)
         if not git_root:
             return
-
         root_key = str(git_root)
         try:
             baseline_sha = read_head_sha(git_root)
             with self._head_sha_lock:
                 previous_sha = self._last_head_sha.get(root_key)
 
-            # Cas 1: on connaissait déjà HEAD et il a changé avant même que
-            # l'event COMMIT_EDITMSG nous arrive.
             if baseline_sha and previous_sha and baseline_sha != previous_sha:
                 with self._head_sha_lock:
                     self._last_head_sha[root_key] = baseline_sha
                 self._process_confirmed_commit(git_root)
                 return
 
-            # Cas 2: premier commit après redémarrage. Si HEAD est tout frais,
-            # on le traite immédiatement au lieu d'attendre un changement
-            # supplémentaire qui n'arrivera jamais.
             if baseline_sha and previous_sha is None and self._head_commit_is_recent(git_root):
                 with self._head_sha_lock:
                     self._last_head_sha[root_key] = baseline_sha
@@ -675,13 +607,11 @@ class RuntimeOrchestrator:
                 current_sha = read_head_sha(git_root)
                 if not current_sha or current_sha == baseline_sha:
                     continue
-
                 with self._head_sha_lock:
                     previous_sha = self._last_head_sha.get(root_key)
                     if current_sha == previous_sha:
                         return
                     self._last_head_sha[root_key] = current_sha
-
                 self._process_confirmed_commit(git_root)
                 return
 
@@ -691,11 +621,6 @@ class RuntimeOrchestrator:
                 self._pending_commit_watch.discard(root_key)
 
     def _head_commit_is_recent(self, git_root, max_age_sec: float = 45.0) -> bool:
-        """
-        Retourne True si le commit HEAD a été créé récemment.
-        Sert de garde-fou pour le premier commit après redémarrage quand
-        COMMIT_EDITMSG est reçu après l'avancement de HEAD.
-        """
         try:
             result = subprocess.run(
                 ["git", "show", "-s", "--format=%ct", "HEAD"],
@@ -714,7 +639,6 @@ class RuntimeOrchestrator:
 
     def _process_confirmed_commit(self, git_root) -> None:
         commit_at = datetime.now()
-        session_id = self._current_session_id()
         commit_msg = read_commit_message(git_root)
         self.log.info(
             "Commit git confirmé [%s] : %s",
@@ -722,16 +646,6 @@ class RuntimeOrchestrator:
             (commit_msg or "").splitlines()[0] if commit_msg else "(sans message)",
         )
         self._refresh_runtime_signals_for_closure(drain_pending=True)
-        self._persist_episode_transition(
-            self._episode_fsm.on_commit(
-                session_id=session_id,
-                when=commit_at,
-            )
-        )
-        self.session_memory.note_commit_for_current_work_window(
-            when=commit_at,
-            session_id=session_id,
-        )
 
         diff_summary: str | None = None
         try:
@@ -761,19 +675,6 @@ class RuntimeOrchestrator:
             args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),
             daemon=True,
         ).start()
-        try:
-            self.session_memory.rollover_work_window(
-                ended_at=commit_at,
-                next_started_at=commit_at,
-                close_reason="commit",
-                session_id=session_id,
-                active_project=snapshot.get("active_project"),
-                probable_task=snapshot.get("probable_task"),
-                activity_level=snapshot.get("activity_level"),
-                task_confidence=snapshot.get("task_confidence"),
-            )
-        except Exception as exc:
-            self.log.warning("work window rollover après commit échoué : %s", exc)
 
     def _annotate_commit_work_window(
         self,
@@ -819,7 +720,6 @@ class RuntimeOrchestrator:
             snapshot["work_window_started_at"] = work_window_started_at.isoformat()
         elif snapshot.get("started_at"):
             snapshot["work_window_started_at"] = snapshot.get("started_at")
-
         snapshot["work_window_ended_at"] = window_end.isoformat()
 
     def _enqueue_file_event(self, event) -> None:
@@ -891,26 +791,12 @@ class RuntimeOrchestrator:
             if lifecycle_transition.should_start_new_session:
                 self._refresh_runtime_signals_for_closure(drain_pending=True)
                 session_ended_at = previous_activity
-                if lifecycle_transition.boundary_reason == "idle":
-                    self._persist_episode_transition(
-                        self._episode_fsm.on_idle_timeout(
-                            session_id=None,
-                            last_meaningful_activity_at=previous_activity,
-                            resumed_at=None,
-                        )
-                    )
-                elif lifecycle_transition.boundary_reason == "screen_lock":
+                if lifecycle_transition.boundary_reason == "screen_lock":
                     locked_at = self._latest_screen_lock_after(
                         recent_events=recent_events,
                         since=previous_activity,
                     )
                     session_ended_at = locked_at or previous_activity or datetime.now()
-                    self._persist_episode_transition(
-                        self._episode_fsm.close_current(
-                            ended_at=session_ended_at,
-                            boundary_reason="screen_lock",
-                        )
-                    )
                 self.session_memory.new_session(
                     started_at=self._session_fsm.session_started_at,
                     ended_at=session_ended_at,
@@ -946,45 +832,10 @@ class RuntimeOrchestrator:
             previous_decision=previous_decision,
             trigger_event=trigger_event,
         )
-        episode_transition = self._episode_fsm.ensure_active(
-            session_id=self._current_session_id(),
-            started_at=self._session_fsm.last_meaningful_activity_at,
-        )
-        semantic_transition = self._episode_fsm.on_semantic_signal(
-            session_id=self._current_session_id(),
-            when=observed_now,
-            active_project=present.active_project,
-            probable_task=present.probable_task,
-            task_confidence=getattr(signals, "task_confidence", 0.0),
-        )
-        if (
-            semantic_transition.boundary_detected
-            or semantic_transition.closed_episode is not None
-            or semantic_transition.opened_episode is not None
-        ):
-            episode_transition = semantic_transition
-        episode_transition = self._bind_live_semantics_to_active_episode(
-            episode_transition,
-            present=present,
-            signals=signals,
-        )
-        self._persist_episode_transition(episode_transition)
-        self._sync_work_window_from_episode_transition(
-            episode_transition,
-            present=present,
-            signals=signals,
-            observed_at=observed_now,
-        )
-        self.session_memory.update_present_snapshot(
-            present,
-            signals=signals,
-        )
+        self.session_memory.update_present_snapshot(present, signals=signals)
         previous_sync_at = self.runtime_state.get_last_memory_sync_at()
         should_sync = self._should_sync_memory(trigger_event.type, present, previous_sync_at)
-        self.runtime_state.set_analysis(
-            signals=signals,
-            decision=decision,
-        )
+        self.runtime_state.set_analysis(signals=signals, decision=decision)
         if (
             lifecycle_transition.boundary_detected
             and lifecycle_transition.should_start_new_session
@@ -1018,31 +869,15 @@ class RuntimeOrchestrator:
                 decision.reason,
             )
 
-    def _attach_context_proposal_if_needed(
-        self,
-        *,
-        present,
-        signals,
-        decision,
-        previous_decision,
-        trigger_event,
-    ):
+    def _attach_context_proposal_if_needed(self, *, present, signals, decision, previous_decision, trigger_event):
         if not self._should_emit_context_proposal(decision, previous_decision):
             return decision
-
         candidate = self._build_context_injection_candidate(
-            present=present,
-            signals=signals,
-            decision=decision,
-            trigger_event=trigger_event,
+            present=present, signals=signals, decision=decision, trigger_event=trigger_event,
         )
-        proposal = proposal_candidate_to_proposal(
-            candidate,
-            proposal_id=new_uid(),
-        )
+        proposal = proposal_candidate_to_proposal(candidate, proposal_id=new_uid())
         proposal_store.add(proposal)
         proposal_store.resolve(proposal.id, "executed")
-
         payload = dict(decision.payload or {})
         payload["proposal_id"] = proposal.id
         return replace(decision, payload=payload)
@@ -1065,43 +900,23 @@ class RuntimeOrchestrator:
         normalized.pop("proposal_id", None)
         return normalized
 
-    def _build_context_injection_candidate(
-        self,
-        *,
-        present,
-        signals,
-        decision,
-        trigger_event,
-    ) -> ProposalCandidate:
+    def _build_context_injection_candidate(self, *, present, signals, decision, trigger_event) -> ProposalCandidate:
         payload = dict(decision.payload or {})
         evidence = [
             {"kind": "project", "label": "Projet", "value": present.active_project or "inconnu"},
             {"kind": "task", "label": "Tâche", "value": present.probable_task or "general"},
             {"kind": "focus", "label": "Focus", "value": present.focus_level},
-            {
-                "kind": "session",
-                "label": "Durée session",
-                "value": f"{present.session_duration_min} min",
-            },
+            {"kind": "session", "label": "Durée session", "value": f"{present.session_duration_min} min"},
         ]
         file_activity = format_file_activity_summary(signals)
         if file_activity:
-            evidence.append({
-                "kind": "file_activity",
-                "label": "Activité fichiers",
-                "value": file_activity,
-            })
+            evidence.append({"kind": "file_activity", "label": "Activité fichiers", "value": file_activity})
         if has_informative_file_reading(signals):
             file_reading = format_file_work_reading(signals)
             if file_reading:
-                evidence.append({
-                    "kind": "file_reading",
-                    "label": "Lecture de la session",
-                    "value": file_reading,
-                })
+                evidence.append({"kind": "file_reading", "label": "Lecture de la session", "value": file_reading})
         if present.active_file:
             evidence.append({"kind": "file", "label": "Fichier actif", "value": present.active_file})
-
         return ProposalCandidate(
             type="context_injection",
             trigger=trigger_event.type,
@@ -1127,14 +942,7 @@ class RuntimeOrchestrator:
             },
         )
 
-    def _sync_memory_background(
-        self,
-        snapshot: dict,
-        llm,
-        commit_message: str | None = None,
-        trigger: str = "screen_lock",
-        diff_summary: str | None = None,
-    ) -> None:
+    def _sync_memory_background(self, snapshot, llm, commit_message=None, trigger="screen_lock", diff_summary=None):
         try:
             if diff_summary is None:
                 diff_summary = self.runtime_state.get_diff_summary() or None
@@ -1143,29 +951,18 @@ class RuntimeOrchestrator:
             defer_llm = (
                 trigger == "commit"
                 and llm is not None
-                and should_use_llm_for_commit(
-                    diff_summary=diff_summary,
-                    top_files=top_files,
-                    files_count=files_count,
-                )
+                and should_use_llm_for_commit(diff_summary=diff_summary, top_files=top_files, files_count=files_count)
             )
             report_ref = update_memories_from_session(
-                snapshot,
-                llm=llm,
-                commit_message=commit_message,
-                trigger=trigger,
-                diff_summary=diff_summary,
-                defer_llm_enrichment=defer_llm,
+                snapshot, llm=llm, commit_message=commit_message,
+                trigger=trigger, diff_summary=diff_summary, defer_llm_enrichment=defer_llm,
             )
             if report_ref is None:
                 self.log.info(
                     "memory sync skipped project=%s duration=%smin trigger=%s",
-                    snapshot.get("active_project"),
-                    snapshot.get("duration_min"),
-                    trigger,
+                    snapshot.get("active_project"), snapshot.get("duration_min"), trigger,
                 )
                 return
-
             runtime_snapshot = self.runtime_state.get_runtime_snapshot()
             self.runtime_state.set_analysis(
                 signals=runtime_snapshot.signals,
@@ -1174,13 +971,8 @@ class RuntimeOrchestrator:
             )
             self.log.info(
                 "memory sync ok project=%s duration=%smin trigger=%s",
-                snapshot.get("active_project"),
-                snapshot.get("duration_min"),
-                trigger,
+                snapshot.get("active_project"), snapshot.get("duration_min"), trigger,
             )
-            # Rafraîchit la mémoire injectée dans le prompt après chaque sync.
-            # Garantit que les nouveaux faits consolidés sont visibles
-            # sans attendre le prochain redémarrage du daemon.
             self.freeze_memory()
             if defer_llm and report_ref is not None:
                 threading.Thread(
@@ -1191,56 +983,31 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("memory sync échouée : %s", exc)
 
-    def _enrich_commit_summary_background(
-        self,
-        report_ref,
-        snapshot: dict,
-        llm,
-        commit_message: str | None,
-        diff_summary: str | None,
-    ) -> None:
+    def _enrich_commit_summary_background(self, report_ref, snapshot, llm, commit_message, diff_summary):
         started_at = time.monotonic()
         model = getattr(llm, "get_model", lambda: "unknown")() if llm is not None else "unknown"
         try:
-            ok = enrich_session_report(
-                report_ref,
-                snapshot,
-                llm,
-                commit_message=commit_message,
-                diff_summary=diff_summary,
-            )
+            ok = enrich_session_report(report_ref, snapshot, llm, commit_message=commit_message, diff_summary=diff_summary)
             latency_ms = int((time.monotonic() - started_at) * 1000)
             project = snapshot.get("active_project")
             if ok:
-                self.log.info(
-                    f"llm_request_terminal request_kind=commit_summary status=success "
-                    f"provider=ollama model={model} latency_ms={latency_ms} project={project}",
-                )
+                self.log.info(f"llm_request_terminal request_kind=commit_summary status=success provider=ollama model={model} latency_ms={latency_ms} project={project}")
                 self.freeze_memory()
             else:
-                self.log.warning(
-                    f"llm_request_terminal request_kind=commit_summary status=invalid "
-                    f"provider=ollama model={model} latency_ms={latency_ms} project={project} "
-                    f"reason=entry_not_found",
-                )
+                self.log.warning(f"llm_request_terminal request_kind=commit_summary status=invalid provider=ollama model={model} latency_ms={latency_ms} project={project} reason=entry_not_found")
         except Exception as exc:
             latency_ms = int((time.monotonic() - started_at) * 1000)
             project = snapshot.get("active_project")
-            self.log.error(
-                f"llm_request_terminal request_kind=commit_summary status=error "
-                f"provider=ollama model={model} latency_ms={latency_ms} project={project} "
-                f"reason={exc.__class__.__name__.lower()}",
-            )
+            self.log.error(f"llm_request_terminal request_kind=commit_summary status=error provider=ollama model={model} latency_ms={latency_ms} project={project} reason={exc.__class__.__name__.lower()}")
 
     def _should_sync_memory(self, event_type, present, previous_sync_at) -> bool:
         if present.session_duration_min < 20:
             if not self.runtime_state.get_diff_summary():
                 return False
         if event_type in {"screen_locked", "user_idle", "screen_unlocked"}:
-            # Cooldown court pour éviter les doubles syncs sur events rapprochés
             if previous_sync_at is not None:
                 elapsed = (datetime.now() - previous_sync_at).total_seconds()
-                if elapsed < 60:  # moins d'1 minute → on skip
+                if elapsed < 60:
                     return False
             return True
         if previous_sync_at is None:
@@ -1281,104 +1048,7 @@ class RuntimeOrchestrator:
         reset_cooldown_for_tests()
         self._fact_engine = get_fact_engine()
         self._session_fsm.reset_for_tests()
-        self._episode_fsm.reset_for_tests()
         proposal_store.clear()
-
-    def _persist_episode_transition(self, transition) -> None:
-        if transition is None:
-            return
-        if transition.closed_episode is not None:
-            self.session_memory.save_episode(
-                self._freeze_closed_episode_semantics(transition.closed_episode)
-            )
-        if transition.opened_episode is not None:
-            self.session_memory.save_episode(transition.opened_episode)
-        elif transition.current_episode is not None:
-            self.session_memory.save_episode(transition.current_episode)
-
-    def _sync_work_window_from_episode_transition(
-        self,
-        transition,
-        *,
-        present,
-        signals,
-        observed_at: datetime,
-    ) -> None:
-        if transition is None or transition.boundary_reason != "project_change":
-            return
-        if transition.opened_episode is None:
-            return
-        self.session_memory.rollover_work_window(
-            ended_at=observed_at,
-            next_started_at=observed_at,
-            close_reason="project_change",
-            session_id=self._current_session_id(),
-            active_project=present.active_project,
-            probable_task=present.probable_task,
-            activity_level=present.activity_level,
-            task_confidence=getattr(signals, "task_confidence", None),
-        )
-
-    def _bind_live_semantics_to_active_episode(self, transition, *, present, signals):
-        if transition is None:
-            return transition
-        if (
-            self._episode_fsm.semantic_boundary_pending
-            and transition.opened_episode is None
-            and transition.closed_episode is None
-        ):
-            return None
-        updated = self._episode_fsm.sync_current_semantics(
-            active_project=present.active_project,
-            probable_task=present.probable_task,
-            activity_level=present.activity_level,
-            task_confidence=getattr(signals, "task_confidence", 0.0),
-        )
-        if updated is None:
-            if transition.opened_episode is None and transition.closed_episode is None:
-                return None
-            return transition
-        opened_episode = transition.opened_episode
-        if opened_episode is not None and opened_episode.id == updated.id:
-            opened_episode = updated
-        return replace(
-            transition,
-            opened_episode=opened_episode,
-            current_episode=updated,
-        )
-
-    def _freeze_closed_episode_semantics(self, episode):
-        snapshot = self.runtime_state.get_runtime_snapshot()
-        present = snapshot.present
-        signals = snapshot.signals
-        if episode is None:
-            return episode
-        active_project = episode.active_project or present.active_project
-        if episode.probable_task is not None:
-            probable_task = episode.probable_task
-        elif signals is None:
-            probable_task = "unknown"
-        else:
-            probable_task = present.probable_task or "unknown"
-        if episode.activity_level is not None:
-            activity_level = episode.activity_level
-        elif signals is None:
-            activity_level = "idle"
-        else:
-            activity_level = present.activity_level or "idle"
-        if episode.task_confidence is not None:
-            task_confidence = episode.task_confidence
-        else:
-            task_confidence = getattr(signals, "task_confidence", None)
-            if task_confidence is None:
-                task_confidence = 0.0
-        return replace(
-            episode,
-            active_project=active_project,
-            probable_task=probable_task,
-            activity_level=activity_level,
-            task_confidence=task_confidence,
-        )
 
     def _refresh_runtime_signals_for_closure(self, *, drain_pending: bool) -> None:
         if drain_pending:
@@ -1386,10 +1056,7 @@ class RuntimeOrchestrator:
         snapshot = self.runtime_state.get_runtime_snapshot()
         signals = self.scorer.compute(
             session_started_at=self._session_fsm.session_started_at,
-            observed_now=(
-                snapshot.present.updated_at
-                or self._session_fsm.last_meaningful_activity_at
-            ),
+            observed_now=(snapshot.present.updated_at or self._session_fsm.last_meaningful_activity_at),
             project_hint=snapshot.present.active_project,
             diff_summary=self.runtime_state.get_diff_summary() or None,
         )
@@ -1406,24 +1073,10 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("refresh signaux pré-fermeture échoué : %s", exc)
             return
-        semantic_update = self._episode_fsm.sync_current_semantics(
-            active_project=present.active_project,
-            probable_task=present.probable_task,
-            activity_level=present.activity_level,
-            task_confidence=getattr(signals, "task_confidence", 0.0),
-        )
-        if semantic_update is not None:
-            self.session_memory.save_episode(semantic_update)
-        self.session_memory.update_present_snapshot(
-            present,
-            signals=signals,
-        )
-        self.runtime_state.set_analysis(
-            signals=signals,
-            decision=decision,
-        )
+        self.session_memory.update_present_snapshot(present, signals=signals)
+        self.runtime_state.set_analysis(signals=signals, decision=decision)
 
-    def _render_current_context(self, *, present, signals, active_app: str | None):
+    def _render_current_context(self, *, present, signals, active_app):
         return self._current_context_builder.build(
             present=present,
             active_app=active_app,
@@ -1443,10 +1096,7 @@ class RuntimeOrchestrator:
         if not events:
             return
         self.log.debug("file burst flush n=%d", len(events))
-        trigger = self._latest_event_by_timestamp(
-            events,
-            predicate=lambda event: event.type != "file_deleted",
-        )
+        trigger = self._latest_event_by_timestamp(events, predicate=lambda e: e.type != "file_deleted")
         if trigger is None:
             trigger = self._latest_event_by_timestamp(events) or events[-1]
         self._process_signals(trigger)

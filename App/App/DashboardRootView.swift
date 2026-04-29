@@ -363,7 +363,7 @@ struct DashboardRootView: View {
 
         return GlassCard(accent: episode?.boundaryColor ?? gBlue) {
             VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Épisode courant", icon: "timeline.selection")
+                cardTitle("Contexte actuel", icon: "timeline.selection")
 
                 if let episode {
                     VStack(alignment: .leading, spacing: 6) {
@@ -384,18 +384,17 @@ struct DashboardRootView: View {
                             Image(systemName: "shippingbox")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
-                            Text("Bloc courant")
+                            Text("Interprétation")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
 
                         signalRow("Projet", episode.activeProject ?? present?.activeProject ?? "—")
-                        signalRow("Session", episode.sessionId)
                         signalRow("Statut", episode.isActive ? "Actif" : "Clos")
                         signalRow("Tâche", episode.taskLabel)
                         signalRow("Activité", episode.activityLabel)
                         signalRow("Confiance", dashboardPercent(episode.taskConfidence))
-                        signalRow("Frontière", episode.boundaryLabel)
+                        signalRow("Source", "Présent")
                         if episode.boundaryReason == "idle_timeout" {
                             signalRow("Fin", "Estimée par inactivité")
                         }
@@ -408,7 +407,7 @@ struct DashboardRootView: View {
                             Image(systemName: "dot.radiowaves.left.and.right")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
-                            Text("Tête live")
+                            Text("Signaux live")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
@@ -428,7 +427,7 @@ struct DashboardRootView: View {
                         }
                     }
                 } else {
-                    emptyState("Aucun épisode actif")
+                    emptyState("Aucun contexte actif")
                 }
             }
         }
@@ -440,10 +439,10 @@ struct DashboardRootView: View {
 
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Historique récent", icon: "clock")
+                cardTitle("Sessions récentes", icon: "clock")
 
                 if history.isEmpty {
-                    emptyState("Aucun épisode clos")
+                    emptyState("Aucune session close")
                 } else {
                     VStack(spacing: 0) {
                         ForEach(history.prefix(5)) { episode in
