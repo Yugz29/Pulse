@@ -61,8 +61,7 @@ _USER_BASELINE = 1.0
 _SYSTEM_PATH_SEGMENTS = (
     "/.Spotlight-",
     "/.cache/",
-    "/.codex/.tmp/",
-    "/.codex/vendor_imports/",
+    "/.codex/",
     "/private/var/folders/",
     "/System/Library/",
     "/Library/Caches/",

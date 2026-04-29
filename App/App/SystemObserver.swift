@@ -463,6 +463,7 @@ class SystemObserver {
               !name.hasSuffix(".xcuserstate") &&
               !name.contains(".sb-") &&
               !path.contains("/.git/") &&
+              !path.contains("/.codex/") &&
               !path.contains("/node_modules/") &&
               !path.contains("/__pycache__/") &&
               !path.contains("/Library/") &&

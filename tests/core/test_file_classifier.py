@@ -316,6 +316,15 @@ class TestFileSignalSignificance(unittest.TestCase):
             "technical_noise",
         )
 
+    def test_codex_plugin_cache_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance(
+                "/Users/yugz/.codex/plugins/cache/openai-bundled/browser-use/"
+                "0.1.0-alpha1/skills/browser/SKILL.md"
+            ),
+            "technical_noise",
+        )
+
     def test_chemin_vide(self):
         self.assertEqual(file_signal_significance(""), "technical_noise")
 

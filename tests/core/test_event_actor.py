@@ -64,6 +64,21 @@ class TestEventActorClassifier(unittest.TestCase):
         self.assertEqual(result.actor, EventActor.SYSTEM)
         self.assertEqual(result.noise_policy, NoisePolicy.IGNORE)
 
+    def test_codex_plugin_cache_est_ignore(self):
+        result = self.classifier.classify(
+            "file_created",
+            {
+                "path": "/Users/yugz/.codex/plugins/cache/openai-bundled/browser-use/"
+                        "0.1.0-alpha1/skills/browser/SKILL.md"
+            },
+            latest_app="Codex",
+            recent_events=[],
+            now=self.now,
+        )
+
+        self.assertEqual(result.actor, EventActor.SYSTEM)
+        self.assertEqual(result.noise_policy, NoisePolicy.IGNORE)
+
 
 if __name__ == "__main__":
     unittest.main()

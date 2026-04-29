@@ -129,6 +129,11 @@ _ADMIN_APPS = {
     "Mail", "Gmail", "Outlook", "Calendar", "Calendrier",
     "zoom.us", "Zoom", "Microsoft Teams", "Teams", "Meet", "Slack",
 }
+_TOOLING_METADATA_FILENAMES = {
+    "openai.yaml",
+    "plugin.json",
+    "skill.md",
+}
 
 
 def _load_cooldown() -> None:
@@ -705,6 +710,8 @@ def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -
     for entry in merged_entries:
         if entry.get("overlap_demoted"):
             continue
+        if _is_suppressed_journal_entry(entry):
+            continue
         if _is_noise_journal_entry(entry):
             noise_entries.append(entry)
             continue
@@ -817,12 +824,26 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     # Dans ce cas on utilise sum_durations qui reflète le vrai temps de travail.
     start_dt = _parse_entry_datetime(left.get("started_at"))
     end_dt = _parse_entry_datetime(merged.get("ended_at"))
+    left_start = _parse_entry_datetime(left.get("started_at"))
+    left_end = _parse_entry_datetime(left.get("ended_at"))
+    right_start = _parse_entry_datetime(right.get("started_at"))
+    right_end = _parse_entry_datetime(right.get("ended_at"))
     sum_durations = int(left.get("duration_min") or 0) + int(right.get("duration_min") or 0)
     if start_dt and end_dt and end_dt > start_dt:
         real_elapsed = max(int((end_dt - start_dt).total_seconds() / 60), 0)
+        overlaps = (
+            left_start is not None
+            and left_end is not None
+            and right_start is not None
+            and right_end is not None
+            and right_start <= left_end
+            and left_start <= right_end
+        )
+        if overlaps and not _compact_strings(left.get("commit_messages", [])) and not _compact_strings(right.get("commit_messages", [])):
+            merged["duration_min"] = real_elapsed
         # Si le ratio est raisonnable (< 3x), real_elapsed est fiable.
         # Sinon il y a eu un gap — on garde sum_durations.
-        if sum_durations > 0 and real_elapsed > sum_durations * 3:
+        elif sum_durations > 0 and real_elapsed > sum_durations * 3:
             merged["duration_min"] = sum_durations
         else:
             merged["duration_min"] = max(real_elapsed, sum_durations)
@@ -1119,6 +1140,12 @@ def _is_noise_journal_entry(entry: Dict[str, Any]) -> bool:
     return False
 
 
+def _is_suppressed_journal_entry(entry: Dict[str, Any]) -> bool:
+    commit_messages = _compact_strings(entry.get("commit_messages", []))
+    top_files = _compact_strings(entry.get("top_files", []))
+    return not commit_messages and top_files and _all_files_tooling_metadata(top_files)
+
+
 def _has_useful_journal_body(body: str) -> bool:
     if not body:
         return False
@@ -1131,6 +1158,12 @@ def _all_files_technical(files: List[str]) -> bool:
         return False
     lowered = [name.lower() for name in files]
     return all(any(pattern in name for pattern in _TECHNICAL_FILE_PATTERNS) for name in lowered)
+
+
+def _all_files_tooling_metadata(files: List[str]) -> bool:
+    if not files:
+        return False
+    return all(Path(name).name.lower() in _TOOLING_METADATA_FILENAMES for name in files)
 
 
 def _strip_commit_sentence(body: str, commit_messages: List[str]) -> str:

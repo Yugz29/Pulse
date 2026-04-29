@@ -227,7 +227,7 @@ def file_signal_significance(path: Optional[str]) -> str:
             "/.git/", "/node_modules/", "/__pycache__/",
             "/xcuserdata/", "/DerivedData/",
             "/site-packages/", "/dist-packages/", "/.venv/", "/venv/",
-            "/.cache/", "/.codex/.tmp/", "/.codex/vendor_imports/",
+            "/.cache/", "/.codex/",
             "/opt/homebrew/Cellar/", "/opt/homebrew/lib/",
             "/usr/local/lib/", "/usr/lib/", "/usr/share/",
             "/System/Library/", "/private/var/",

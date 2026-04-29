@@ -188,6 +188,15 @@ class TestShouldPublishToBus(unittest.TestCase):
             {"path": "/Users/yugz/.codex/vendor_imports/cache/openai.yaml"},
         ))
 
+    def test_codex_plugin_cache_bloque(self):
+        self.assertFalse(_should_publish_to_bus(
+            "file_created",
+            {
+                "path": "/Users/yugz/.codex/plugins/cache/openai-bundled/browser-use/"
+                        "0.1.0-alpha1/.codex-plugin/plugin.json"
+            },
+        ))
+
     def test_fichier_dans_trash_bloque(self):
         self.assertFalse(_should_publish_to_bus(
             "file_modified",

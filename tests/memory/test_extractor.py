@@ -711,7 +711,7 @@ class TestExtractor(unittest.TestCase):
                 "probable_task": "coding",
                 "activity_level": "executing",
                 "recent_apps": ["Pulse", "Xcode"],
-                "top_files": ["openai.yaml"],
+                "top_files": ["runtime_orchestrator.py"],
                 "files_changed": 1,
                 "started_at": "2026-04-29T01:51:06",
                 "ended_at": "2026-04-29T02:39:23",
@@ -741,6 +741,55 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("549 min", journal)
         self.assertIn("01:51 → 02:39", journal)
         self.assertIn("10:33 → 11:00", journal)
+
+    def test_journal_n_additionne_pas_les_doublons_sans_commit_qui_se_chevauchent(self):
+        base_session = {
+            "active_project": "Pulse",
+            "duration_min": 48,
+            "probable_task": "coding",
+            "activity_level": "executing",
+            "recent_apps": ["Pulse", "Xcode"],
+            "top_files": ["runtime_orchestrator.py"],
+            "files_changed": 1,
+            "started_at": "2026-04-29T01:51:06",
+            "ended_at": "2026-04-29T02:39:23",
+        }
+        update_memories_from_session(
+            base_session,
+            memory_dir=self.memory_dir,
+            trigger="restart_repair",
+        )
+        update_memories_from_session(
+            dict(base_session),
+            memory_dir=self.memory_dir,
+            trigger="restart_repair",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("01:51 → 02:39", journal)
+        self.assertIn("développement (48 min)", journal)
+        self.assertNotIn("développement (96 min)", journal)
+
+    def test_journal_masque_les_anciens_blocs_codex_metadata_sans_commit(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 48,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Pulse", "Codex"],
+                "top_files": ["openai.yaml", "SKILL.md", "plugin.json"],
+                "files_changed": 3,
+                "started_at": "2026-04-29T01:51:06",
+                "ended_at": "2026-04-29T02:39:23",
+            },
+            memory_dir=self.memory_dir,
+            trigger="restart_repair",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertNotIn("01:51 → 02:39", journal)
+        self.assertNotIn("openai.yaml", journal.split("<!-- pulse-journal-data:start", 1)[0])
 
     def test_journal_isole_le_bruit_dans_une_section_dediee(self):
         update_memories_from_session(
