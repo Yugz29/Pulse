@@ -779,8 +779,25 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+_JOURNAL_MERGE_GAP_MAX_MIN = 5
+
+
 def _can_merge_journal_entries(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
-    return left.get("active_project") == right.get("active_project") and left.get("probable_task") == right.get("probable_task")
+    if left.get("active_project") != right.get("active_project"):
+        return False
+    if left.get("probable_task") != right.get("probable_task"):
+        return False
+
+    left_start, left_end = _entry_bounds(left)
+    right_start, right_end = _entry_bounds(right)
+    if left_start is None or left_end is None or right_start is None or right_end is None:
+        return False
+
+    if right_start <= left_end and left_start <= right_end:
+        return True
+
+    gap_min = (right_start - left_end).total_seconds() / 60
+    return 0 <= gap_min <= _JOURNAL_MERGE_GAP_MAX_MIN
 
 
 def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:

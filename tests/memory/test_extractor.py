@@ -703,6 +703,45 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("premier bloc", journal)
         self.assertIn("second bloc", journal)
 
+    def test_journal_ne_fusionne_pas_deux_blocs_separes_par_un_long_gap(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 48,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Pulse", "Xcode"],
+                "top_files": ["openai.yaml"],
+                "files_changed": 1,
+                "started_at": "2026-04-29T01:51:06",
+                "ended_at": "2026-04-29T02:39:23",
+            },
+            memory_dir=self.memory_dir,
+            trigger="restart_repair",
+        )
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 27,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Pulse", "Codex"],
+                "top_files": ["DashboardContentView.swift"],
+                "files_changed": 1,
+                "started_at": "2026-04-29T10:33:04",
+                "ended_at": "2026-04-29T11:00:21",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: reprise de contexte",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertNotIn("01:51 → 11:00", journal)
+        self.assertNotIn("549 min", journal)
+        self.assertIn("01:51 → 02:39", journal)
+        self.assertIn("10:33 → 11:00", journal)
+
     def test_journal_isole_le_bruit_dans_une_section_dediee(self):
         update_memories_from_session(
             {
