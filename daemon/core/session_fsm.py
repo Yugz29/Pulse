@@ -181,6 +181,7 @@ class SessionFSM:
                             boundary_reason="screen_lock" if had_screen_lock else "idle",
                             should_reset_clock=True,
                             should_start_new_session=True,
+                            sleep_minutes=gap_minutes,
                         )
             else:
                 self._session_started_at = latest_meaningful

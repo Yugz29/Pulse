@@ -73,6 +73,31 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(session["updated_at"], newer.isoformat())
         self.assertEqual(session["session_duration_min"], 10)
 
+    def test_screen_events_sont_persistes_sans_demarrer_une_activite(self):
+        initial = self.memory.get_session()
+        unlock_at = datetime(2026, 4, 23, 10, 0, 0)
+
+        self.memory.record_event(Event("screen_unlocked", {}, timestamp=unlock_at))
+
+        session = self.memory.get_session()
+        events = self.memory.get_recent_events()
+        self.assertEqual(events[0]["type"], "screen_unlocked")
+        self.assertEqual(session["started_at"], initial["started_at"])
+        self.assertEqual(session["updated_at"], initial["updated_at"])
+        self.assertEqual(session["session_duration_min"], initial["session_duration_min"])
+
+    def test_premiere_activite_apres_unlock_devient_le_vrai_debut(self):
+        unlock_at = datetime(2026, 4, 23, 10, 0, 0)
+        work_at = datetime(2026, 4, 23, 10, 8, 0)
+
+        self.memory.record_event(Event("screen_unlocked", {}, timestamp=unlock_at))
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=work_at))
+
+        session = self.memory.get_session()
+        self.assertEqual(session["started_at"], work_at.isoformat())
+        self.assertEqual(session["updated_at"], work_at.isoformat())
+        self.assertEqual(session["session_duration_min"], 0)
+
     def test_resume_session_realigne_started_at_sur_la_session_courante(self):
         restarted_from = datetime(2026, 4, 23, 16, 0, 0)
 
@@ -150,7 +175,7 @@ class TestSessionMemory(unittest.TestCase):
                 active_project="Pulse",
                 active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
                 probable_task="coding",
-                activity_level="editing",
+                activity_level="idle",
                 focus_level="normal",
                 session_duration_min=20,
             ),
@@ -814,6 +839,44 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(summary["totals"]["window_count"], 2)
         self.assertEqual(summary["projects"][0]["name"], "Pulse")
         self.assertEqual(summary["projects"][0]["worked_min"], 90)
+
+    def test_today_summary_plafonne_une_fenetre_ouverte_qui_traverse_la_nuit(self):
+        start = datetime(2026, 4, 28, 23, 30, 0)
+        now = datetime(2026, 4, 29, 10, 30, 0)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Xcode"}, timestamp=start))
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="idle",
+                focus_level="normal",
+                session_duration_min=660,
+                updated_at=now,
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/SystemObserver.swift",
+                probable_task="coding",
+                activity_level="idle",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=660,
+                recent_apps=["Xcode"],
+                clipboard_context=None,
+            ),
+        )
+
+        summary = self.memory.get_today_summary(now=now)
+
+        self.assertLess(summary["totals"]["worked_min"], 660)
+        self.assertEqual(
+            summary["totals"]["worked_min"],
+            summary["totals"]["active_min"] + 15,
+        )
 
     def test_rollover_work_window_scinde_les_projets_dans_today_summary(self):
         start = datetime(2026, 4, 28, 14, 0, 0)

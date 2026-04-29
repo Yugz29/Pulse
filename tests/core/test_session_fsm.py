@@ -75,6 +75,7 @@ class TestSessionFSM(unittest.TestCase):
         self.assertTrue(transition.boundary_detected)
         self.assertEqual(transition.boundary_reason, "idle")
         self.assertTrue(transition.should_start_new_session)
+        self.assertGreaterEqual(transition.sleep_minutes or 0, 35)
         self.assertEqual(self.fsm.session_started_at, t_new)
 
     def test_gap_court_ne_declenche_pas_de_frontiere(self):
@@ -95,6 +96,26 @@ class TestSessionFSM(unittest.TestCase):
 
         self.assertFalse(transition.boundary_detected)
         self.assertEqual(self.fsm.session_started_at, t_first)
+
+    def test_minuit_ne_declenche_pas_de_frontiere_si_l_activite_continue(self):
+        before_midnight = datetime(2026, 4, 28, 23, 55, 0)
+        after_midnight = datetime(2026, 4, 29, 0, 5, 0)
+        self.fsm._session_started_at = before_midnight - timedelta(minutes=20)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", before_midnight)],
+            now=before_midnight,
+        )
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _file_event("/proj/main.py", before_midnight),
+                _file_event("/proj/main.py", after_midnight),
+            ],
+            now=after_midnight,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertEqual(self.fsm.session_started_at, before_midnight)
 
     def test_screen_lock_entre_activites_declenche_une_frontiere(self):
         t_before = self._at(8)

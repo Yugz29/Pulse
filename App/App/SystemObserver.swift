@@ -11,7 +11,11 @@ actor EventDeliveryQueue {
     }
 
     func send(_ payload: [String: String]) async {
-        try? await bridge.sendEvent(payload)
+        do {
+            try await bridge.sendEvent(payload)
+        } catch {
+            print("[Pulse] Échec envoi event \(payload["type"] ?? "unknown") : \(error)")
+        }
     }
 }
 

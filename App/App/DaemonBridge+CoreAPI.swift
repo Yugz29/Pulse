@@ -21,7 +21,8 @@ extension DaemonBridge {
 
     func sendEvent(_ payload: [String: String]) async throws {
         let request = try jsonRequest(path: "/event", body: payload, timeout: 3)
-        _ = try? await data(for: request)
+        let (_, response) = try await data(for: request)
+        try validate(response, expectedStatus: 200)
     }
 
     func fetchPendingCommand() async throws -> CommandAnalysis? {
@@ -73,9 +74,34 @@ extension DaemonBridge {
                 label: label,
                 success: dict["success"] as? Bool,
                 command: dict["command"] as? String,
-                timestamp: timestamp
+                timestamp: timestamp,
+                resumeCard: Self.resumeCard(from: dict["resume_card"] as? [String: Any])
             )
         }
+    }
+
+    private static func resumeCard(from dict: [String: Any]?) -> ResumeCard? {
+        guard let dict,
+              let id = dict["id"] as? String,
+              let title = dict["title"] as? String,
+              let summary = dict["summary"] as? String,
+              let lastObjective = dict["last_objective"] as? String,
+              let nextAction = dict["next_action"] as? String
+        else { return nil }
+
+        return ResumeCard(
+            id: id,
+            project: dict["project"] as? String,
+            title: title,
+            summary: summary,
+            lastObjective: lastObjective,
+            nextAction: nextAction,
+            confidence: dict["confidence"] as? Double ?? 0,
+            sourceRefs: dict["source_refs"] as? [String] ?? [],
+            generatedBy: dict["generated_by"] as? String ?? "deterministic",
+            displaySize: dict["display_size"] as? String ?? "standard",
+            createdAt: dict["created_at"] as? String
+        )
     }
 
     func getObservation() async -> ObservationData? {

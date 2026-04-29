@@ -396,6 +396,9 @@ struct DashboardRootView: View {
                         signalRow("Activité", episode.activityLabel)
                         signalRow("Confiance", dashboardPercent(episode.taskConfidence))
                         signalRow("Frontière", episode.boundaryLabel)
+                        if episode.boundaryReason == "idle_timeout" {
+                            signalRow("Fin", "Estimée par inactivité")
+                        }
                     }
 
                     Divider()

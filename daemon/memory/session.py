@@ -16,6 +16,12 @@ from daemon.memory.session_snapshot_builder import (
     session_snapshot_to_legacy_dict,
 )
 
+WORKED_IDLE_GRACE_MIN = 15
+_SESSION_TIMING_IGNORED_EVENT_TYPES = {
+    "screen_locked",
+    "screen_unlocked",
+}
+
 
 class SessionMemory:
     """Persiste la session courante dans SQLite."""
@@ -91,9 +97,11 @@ class SessionMemory:
     def record_event(self, event: Event) -> None:
         payload_json = json.dumps(event.payload, ensure_ascii=True)
         payload_text = self._payload_to_text(event.payload)
+        updates_session_timing = event.type not in _SESSION_TIMING_IGNORED_EVENT_TYPES
 
         with self._lock:
-            self._observe_timestamp(event.timestamp, bootstrap_if_empty=True)
+            if updates_session_timing:
+                self._observe_timestamp(event.timestamp, bootstrap_if_empty=True)
             with self._connect() as conn:
                 cursor = conn.execute(
                     """
@@ -125,7 +133,8 @@ class SessionMemory:
                     )
                 except Exception:
                     pass  # FTS5 indisponible — on continue sans planter
-                self._update_session_from_event(conn, event.timestamp)
+                if updates_session_timing:
+                    self._update_session_from_event(conn, event.timestamp)
                 conn.commit()
 
     def update_present_snapshot(
@@ -611,8 +620,8 @@ class SessionMemory:
             if overlap is None:
                 continue
 
-            worked_min = overlap["worked_min"]
             active_min = overlap["active_min"]
+            worked_min = self._counted_worked_minutes(overlap["worked_min"], active_min)
             totals["worked_min"] += worked_min
             totals["active_min"] += active_min
             totals["commit_count"] += int(window.get("commit_count") or 0)
@@ -1542,6 +1551,14 @@ class SessionMemory:
             "worked_min": overlap_min,
             "active_min": min(SessionMemory._seconds_to_minutes(active_sec), overlap_min),
         }
+
+    @staticmethod
+    def _counted_worked_minutes(worked_min: int, active_min: int) -> int:
+        if worked_min <= 0:
+            return 0
+        if active_min <= 0:
+            return min(worked_min, WORKED_IDLE_GRACE_MIN)
+        return min(worked_min, active_min + WORKED_IDLE_GRACE_MIN)
 
     @staticmethod
     def _seconds_to_minutes(seconds: int) -> int:

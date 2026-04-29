@@ -127,8 +127,8 @@ struct EpisodeData: Decodable, Identifiable {
 
     var boundaryLabel: String {
         switch boundaryReason {
-        case "screen_lock": return "Verrou écran"
-        case "idle_timeout": return "Timeout inactivité"
+        case "screen_lock": return "screen_lock"
+        case "idle_timeout": return "idle_timeout · fin estimée"
         case "commit": return "Commit"
         case "session_end": return "Fin de session"
         case nil: return "En cours"
@@ -957,8 +957,8 @@ struct InsightEvent: Identifiable {
         case "file_deleted": return "Supprimé"
         case "file_renamed": return "Renommé"
         case "clipboard_updated": return "Clipboard"
-        case "screen_locked": return "Verrouillé"
-        case "screen_unlocked": return "Déverrouillé"
+        case "screen_locked": return "screen_locked"
+        case "screen_unlocked": return "screen_unlocked"
         case "mcp_command_received": return "MCP"
         default: return type
         }
@@ -1041,6 +1041,7 @@ struct FeedEvent: Identifiable {
     let success: Bool?
     let command: String?
     let timestamp: String
+    let resumeCard: ResumeCard?
 
     var accentHex: String {
         switch kind {
@@ -1048,6 +1049,8 @@ struct FeedEvent: Identifiable {
             return (success == true) ? "#5DCAA5" : "#ff453a"
         case "commit":
             return "#5DCAA5"
+        case "resume_card":
+            return "#5E9EFF"
         default:
             return "#7c7c80"
         }
@@ -1059,8 +1062,35 @@ struct FeedEvent: Identifiable {
             return (success == true) ? "checkmark.circle.fill" : "xmark.circle.fill"
         case "commit":
             return "arrow.up.circle.fill"
+        case "resume_card":
+            return "arrow.clockwise.circle.fill"
         default:
             return "circle.fill"
+        }
+    }
+}
+
+struct ResumeCard: Identifiable, Equatable {
+    let id: String
+    let project: String?
+    let title: String
+    let summary: String
+    let lastObjective: String
+    let nextAction: String
+    let confidence: Double
+    let sourceRefs: [String]
+    let generatedBy: String
+    let displaySize: String
+    let createdAt: String?
+
+    var displayHeight: CGFloat {
+        switch displaySize {
+        case "compact":
+            return NotchWindow.resumeCompactHeight
+        case "expanded":
+            return NotchWindow.resumeExpandedHeight
+        default:
+            return NotchWindow.resumeStandardHeight
         }
     }
 }
