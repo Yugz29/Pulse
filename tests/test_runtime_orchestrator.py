@@ -788,6 +788,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             )
 
         self.session_memory.save_episode.reset_mock()
+        self.session_memory.rollover_work_window.reset_mock()
         self.session_memory.export_memory_payload.return_value = {
             "active_project": "plugins",
             "duration_min": 19,
@@ -838,6 +839,15 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(snapshot["files_changed"], 20)
         self.assertEqual(snapshot["work_window_started_at"], "2026-04-28T11:46:01")
         self.assertGreaterEqual(snapshot["work_window_ended_at"], "2026-04-28T12:04:48.365316")
+        self.session_memory.rollover_work_window.assert_called_once()
+        rollover_kwargs = self.session_memory.rollover_work_window.call_args.kwargs
+        self.assertEqual(rollover_kwargs["close_reason"], "commit")
+        self.assertEqual(rollover_kwargs["session_id"], "session-1")
+        self.assertEqual(rollover_kwargs["active_project"], "Pulse")
+        self.assertEqual(
+            rollover_kwargs["ended_at"],
+            rollover_kwargs["next_started_at"],
+        )
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
         git_root = Path("/tmp/Pulse")

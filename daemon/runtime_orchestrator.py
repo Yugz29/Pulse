@@ -714,6 +714,7 @@ class RuntimeOrchestrator:
 
     def _process_confirmed_commit(self, git_root) -> None:
         commit_at = datetime.now()
+        session_id = self._current_session_id()
         commit_msg = read_commit_message(git_root)
         self.log.info(
             "Commit git confirmé [%s] : %s",
@@ -723,13 +724,13 @@ class RuntimeOrchestrator:
         self._refresh_runtime_signals_for_closure(drain_pending=True)
         self._persist_episode_transition(
             self._episode_fsm.on_commit(
-                session_id=self._current_session_id(),
+                session_id=session_id,
                 when=commit_at,
             )
         )
         self.session_memory.note_commit_for_current_work_window(
             when=commit_at,
-            session_id=self._current_session_id(),
+            session_id=session_id,
         )
 
         diff_summary: str | None = None
@@ -755,6 +756,19 @@ class RuntimeOrchestrator:
             args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),
             daemon=True,
         ).start()
+        try:
+            self.session_memory.rollover_work_window(
+                ended_at=commit_at,
+                next_started_at=commit_at,
+                close_reason="commit",
+                session_id=session_id,
+                active_project=snapshot.get("active_project"),
+                probable_task=snapshot.get("probable_task"),
+                activity_level=snapshot.get("activity_level"),
+                task_confidence=snapshot.get("task_confidence"),
+            )
+        except Exception as exc:
+            self.log.warning("work window rollover après commit échoué : %s", exc)
 
     def _annotate_commit_work_window(self, snapshot: dict, *, commit_at: datetime) -> None:
         work_window_started_at = _parse_optional_datetime(snapshot.get("work_window_started_at"))
