@@ -536,6 +536,7 @@ def _write_session_report(
         top_files=top_files, files_count=files_count, started_at=started_at, ended_at=ended_at,
         boundary_reason=str(episode.get("boundary_reason") or trigger or "unknown"),
         scope_source=scope_source,
+        delivered_at=consolidation.get("delivered_at") or session.get("delivered_at"),
     )
 
     with _memory_write_lock:
@@ -655,7 +656,7 @@ def _new_entry_id(now: datetime) -> str:
 
 
 def _build_journal_entry(*, entry_id, active_project, probable_task, activity_level, task_confidence,
-    duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason, scope_source="snapshot") -> Dict[str, Any]:
+    duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason, scope_source="snapshot", delivered_at=None) -> Dict[str, Any]:
     return {
         "entry_id": entry_id,
         "active_project": active_project or "Autre",
@@ -670,6 +671,7 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
         "files_count": int(max(files_count or 0, 0)),
         "started_at": started_at,
         "ended_at": ended_at,
+        "delivered_at": delivered_at,
         "boundary_reason": boundary_reason or "unknown",
         "scope_source": scope_source or "unknown",
     }
@@ -883,6 +885,10 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
             lines.append(f"**{commit_messages[0]}**")
             if body:
                 lines.append(body)
+            delivered_at = _format_journal_time(entry.get("delivered_at"))
+            ended_at = _format_journal_time(entry.get("ended_at"))
+            if delivered_at != "??:??" and delivered_at != ended_at:
+                lines.append(f"Livré à {delivered_at}.")
         else:
             # Plusieurs commits : tenter l'appariement avec les paragraphes du body.
             # Si le compte correspond, chaque commit en gras suivi de son résumé,
@@ -1348,9 +1354,10 @@ def _build_consolidation_frame(
             "probable_task": probable_task,
             "activity_level": (episode or {}).get("activity_level") or session_data.get("activity_level"),
             "task_confidence": (episode or {}).get("task_confidence") or session_data.get("task_confidence"),
-            "duration_min": max(work_window["duration_min"], session_duration_min),
+            "duration_min": work_window["duration_min"],
             "started_at": work_window["started_at"],
             "ended_at": work_window["ended_at"],
+            "delivered_at": work_window.get("delivered_at"),
         }
     duration_min = _episode_duration_min(episode)
     use_session_window = _should_use_session_window_for_commit(
@@ -1387,9 +1394,13 @@ def _resolve_commit_work_window(
     if trigger != "commit":
         return None
 
-    started_at = _parse_entry_datetime(session_data.get("work_window_started_at"))
+    started_at = _parse_entry_datetime(
+        session_data.get("commit_activity_started_at")
+        or session_data.get("work_window_started_at")
+    )
     ended_at = _parse_entry_datetime(
-        session_data.get("work_window_ended_at")
+        session_data.get("commit_activity_ended_at")
+        or session_data.get("work_window_ended_at")
         or session_data.get("updated_at")
         or session_data.get("ended_at")
     )
@@ -1401,6 +1412,7 @@ def _resolve_commit_work_window(
         "started_at": started_at.isoformat(),
         "ended_at": ended_at.isoformat(),
         "duration_min": duration_min,
+        "delivered_at": session_data.get("delivered_at"),
     }
 
 

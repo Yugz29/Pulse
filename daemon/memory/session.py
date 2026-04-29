@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from daemon.core.contracts import ConsolidatedEpisode, Episode, SessionSnapshot
 from daemon.core.event_bus import Event
+from daemon.core.file_classifier import file_signal_significance
 from daemon.core.signal_scorer import Signals
 from daemon.core.uid import new_uid
 from daemon.runtime_state import PresentState
@@ -270,6 +271,81 @@ class SessionMemory:
                 }
             )
         return result
+
+    def find_file_activity_window(
+        self,
+        files: List[str],
+        *,
+        before: datetime,
+        lookback_hours: int = 6,
+        gap_min: int = 20,
+        repo_root: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        wanted_names = {Path(str(file)).name for file in files if Path(str(file)).name}
+        if not wanted_names:
+            return None
+
+        cutoff = before - timedelta(hours=lookback_hours)
+        repo_prefix = str(repo_root or "").rstrip("/")
+        file_event_types = ("file_created", "file_modified", "file_renamed", "file_deleted", "file_change")
+        placeholders = ",".join("?" for _ in file_event_types)
+
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    f"""
+                    SELECT event_type, payload_json, created_at
+                    FROM events
+                    WHERE event_type IN ({placeholders})
+                      AND created_at >= ?
+                      AND created_at <= ?
+                    ORDER BY created_at ASC, id ASC
+                    """,
+                    (*file_event_types, cutoff.isoformat(), before.isoformat()),
+                ).fetchall()
+
+        events: List[datetime] = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            path = str(payload.get("path") or "")
+            if not path:
+                continue
+            if repo_prefix and not (path == repo_prefix or path.startswith(repo_prefix + "/")):
+                continue
+            if Path(path).name not in wanted_names:
+                continue
+            if file_signal_significance(path) == "technical_noise":
+                continue
+            observed_at = _parse_iso_datetime(row["created_at"])
+            if observed_at is not None:
+                events.append(observed_at)
+
+        if not events:
+            return None
+
+        max_gap = timedelta(minutes=gap_min)
+        clusters: List[List[datetime]] = []
+        current: List[datetime] = []
+        for observed_at in events:
+            if current and observed_at - current[-1] > max_gap:
+                clusters.append(current)
+                current = []
+            current.append(observed_at)
+        if current:
+            clusters.append(current)
+
+        cluster = clusters[-1]
+        started_at = cluster[0]
+        ended_at = cluster[-1]
+        return {
+            "started_at": started_at.isoformat(),
+            "ended_at": ended_at.isoformat(),
+            "duration_min": max(int((ended_at - started_at).total_seconds() / 60), 0),
+            "event_count": len(cluster),
+        }
 
     def build_session_snapshot(self) -> SessionSnapshot:
         session = self.get_session()

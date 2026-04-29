@@ -741,7 +741,6 @@ class RuntimeOrchestrator:
 
         snapshot = self._export_memory_payload()
         snapshot["active_project"] = git_root.name or snapshot.get("active_project")
-        self._annotate_commit_work_window(snapshot, commit_at=commit_at)
         diff_files = extract_file_names_from_diff_summary(diff_summary or "")
         commit_scope_files = diff_files or read_commit_file_names(git_root)
         if diff_files:
@@ -751,6 +750,12 @@ class RuntimeOrchestrator:
                 len(diff_files),
             )
         snapshot["commit_scope_files"] = commit_scope_files[:8]
+        self._annotate_commit_work_window(
+            snapshot,
+            commit_at=commit_at,
+            commit_scope_files=commit_scope_files,
+            git_root=git_root,
+        )
         threading.Thread(
             target=self._sync_memory_background,
             args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),
@@ -770,7 +775,37 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("work window rollover après commit échoué : %s", exc)
 
-    def _annotate_commit_work_window(self, snapshot: dict, *, commit_at: datetime) -> None:
+    def _annotate_commit_work_window(
+        self,
+        snapshot: dict,
+        *,
+        commit_at: datetime,
+        commit_scope_files: list[str] | None = None,
+        git_root=None,
+    ) -> None:
+        snapshot["delivered_at"] = commit_at.isoformat()
+        activity_window = None
+        if commit_scope_files:
+            try:
+                activity_window = self.session_memory.find_file_activity_window(
+                    commit_scope_files,
+                    before=commit_at,
+                    repo_root=str(git_root) if git_root is not None else None,
+                )
+            except Exception as exc:
+                self.log.warning("commit activity window introuvable : %s", exc)
+
+        if isinstance(activity_window, dict):
+            started_at = _parse_optional_datetime(activity_window.get("started_at"))
+            ended_at = _parse_optional_datetime(activity_window.get("ended_at"))
+            if started_at is not None and ended_at is not None and ended_at >= started_at:
+                snapshot["commit_activity_started_at"] = started_at.isoformat()
+                snapshot["commit_activity_ended_at"] = ended_at.isoformat()
+                snapshot["commit_activity_event_count"] = int(activity_window.get("event_count") or 0)
+                snapshot["work_window_started_at"] = started_at.isoformat()
+                snapshot["work_window_ended_at"] = ended_at.isoformat()
+                return
+
         work_window_started_at = _parse_optional_datetime(snapshot.get("work_window_started_at"))
         if work_window_started_at is None:
             work_window_started_at = self._session_fsm.session_started_at

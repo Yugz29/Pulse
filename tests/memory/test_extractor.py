@@ -742,6 +742,33 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("01:51 → 02:39", journal)
         self.assertIn("10:33 → 11:00", journal)
 
+    def test_commit_utilise_l_activite_fichier_et_affiche_l_heure_de_livraison(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 69,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Pulse", "Codex"],
+                "top_files": ["DashboardContentView.swift"],
+                "files_changed": 1,
+                "work_window_started_at": "2026-04-29T10:00:00",
+                "work_window_ended_at": "2026-04-29T11:42:00",
+                "commit_activity_started_at": "2026-04-29T10:33:04",
+                "commit_activity_ended_at": "2026-04-29T10:48:12",
+                "delivered_at": "2026-04-29T11:42:00",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: reprise de contexte",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("10:33 → 10:48", journal)
+        self.assertIn("développement (15 min)", journal)
+        self.assertIn("Livré à 11:42.", journal)
+        self.assertNotIn("10:00 → 11:42", journal)
+
     def test_journal_n_additionne_pas_les_doublons_sans_commit_qui_se_chevauchent(self):
         base_session = {
             "active_project": "Pulse",

@@ -98,6 +98,44 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(session["updated_at"], work_at.isoformat())
         self.assertEqual(session["session_duration_min"], 0)
 
+    def test_find_file_activity_window_retient_le_dernier_cluster_des_fichiers_du_commit(self):
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        old_start = datetime(2026, 4, 29, 9, 0, 0)
+        old_end = datetime(2026, 4, 29, 9, 10, 0)
+        recent_start = datetime(2026, 4, 29, 10, 30, 0)
+        recent_end = datetime(2026, 4, 29, 10, 42, 0)
+        commit_at = datetime(2026, 4, 29, 11, 30, 0)
+
+        for observed_at in (old_start, old_end, recent_start, recent_end):
+            self.memory.record_event(Event(
+                "file_modified",
+                {"path": f"{repo}/App/App/DashboardContentView.swift"},
+                timestamp=observed_at,
+            ))
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/runtime_orchestrator.py"},
+            timestamp=recent_start + timedelta(minutes=3),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": "/Users/yugz/.codex/plugins/cache/openai.yaml"},
+            timestamp=recent_start + timedelta(minutes=4),
+        ))
+
+        window = self.memory.find_file_activity_window(
+            ["DashboardContentView.swift", "runtime_orchestrator.py", "openai.yaml"],
+            before=commit_at,
+            repo_root=repo,
+        )
+
+        self.assertIsNotNone(window)
+        self.assertEqual(window["started_at"], recent_start.isoformat())
+        self.assertEqual(window["ended_at"], recent_end.isoformat())
+        self.assertEqual(window["duration_min"], 12)
+        self.assertEqual(window["event_count"], 3)
+
     def test_resume_session_realigne_started_at_sur_la_session_courante(self):
         restarted_from = datetime(2026, 4, 23, 16, 0, 0)
 
