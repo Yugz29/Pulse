@@ -14,7 +14,7 @@ Pulse n'est pas :
 - un système qui comprend parfaitement le travail utilisateur
 - un système qui structure déjà toute sa mémoire et ses propositions autour des épisodes
 
-La fondation du runtime est en place. Pulse dispose maintenant d'épisodes temporels persistés et d'une sémantique figée sur les épisodes clos, tout en restant encore limité sur l'exploitation mémoire et proposal de cette couche.
+La fondation du runtime est en place. Pulse est maintenant recentré autour d'un présent canonique, de contextes de session récents et de blocs de travail dérivés des événements significatifs. Les anciens champs d'épisodes restent exposés comme alias de compatibilité, mais ils ne sont plus le modèle produit.
 
 ---
 
@@ -38,7 +38,8 @@ Principe fondamental :
 - **Cycle de session** : `SessionFSM` produit l'état de session (`active` / `idle` / `locked`)
 - **Contexte de travail** : `SignalScorer` produit `active_file`, `active_project`, `probable_task`, `activity_level`, `focus_level` et le contexte secondaire
 - **Contexte rendu** : `CurrentContextBuilder` rend un `CurrentContext` depuis `present`, avec quelques détails secondaires encore lus depuis `signals`
-- **Épisodes** : `EpisodeFSM` segmente le temps et persiste l'historique récent, mais ne pilote pas le présent
+- **Blocs de travail** : `SessionMemory` groupe les événements significatifs en `work_blocks` pour produire le bilan de journée et les blocs récents
+- **Sessions récentes** : les sessions fermées sont exposées comme `recent_sessions` pour l'historique, avec alias legacy temporaire
 - **Mémoire locale** : extraction rétrospective de résumés de session et consolidation de faits utilisateur
 - **Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
 - **Interception MCP** : traduction et arbitrage de certaines commandes risquées avant exécution
@@ -46,7 +47,7 @@ Principe fondamental :
 - **Dashboard technique** : fenêtre macOS indépendante pour visualiser en temps réel session, mémoire, événements, MCP et état système
 
 Ce que Pulse ne fait pas encore :
-- structurer la mémoire autour des épisodes
+- structurer finement la mémoire autour des blocs de travail et de la continuité inter-session
 - contextualiser finement les propositions par continuité de travail
 - agir de manière autonome
 
@@ -83,7 +84,6 @@ Rôles structurants du runtime actuel :
 - `RuntimeOrchestrator` : orchestration du pipeline, pas source de vérité
 - `CurrentContextBuilder` : renderer pur pour les lectures assistant/UI
 - `SessionMemory` : persistance historique, pas writer du présent
-- `EpisodeFSM` : télémétrie temporelle secondaire
 
 Le runtime expose aussi un **snapshot atomique** via `RuntimeState.get_runtime_snapshot()`.
 Il contient `present`, `signals`, `decision` et quelques métadonnées runtime.
@@ -98,7 +98,7 @@ Lire ces champs séparément est incorrect.
 ## Sources de vérité
 
 - `RuntimeState` / `PresentState` : vérité live du présent runtime
-- `session.db` et surtout `work_windows` : vérité temporelle persistée
+- `session.db` et les `work_blocks` dérivés des événements significatifs : vérité temporelle persistée
 - `sessions/*.md`, `facts.md`, `projects.md` : projections lisibles et dérivées, jamais source primaire
 - `MemoryStore` et `DayDream` : couches de support hors chemin critique tant qu'elles n'apportent pas une valeur observable stable
 
@@ -229,7 +229,7 @@ La mémoire actuelle reste principalement :
 - heuristique
 - locale
 
-Elle n’est pas encore pilotée par les épisodes, même si des épisodes temporels sont persistés dans `session.db`.
+Elle n’est pas encore une mémoire riche de continuité. Les `work_blocks` et `recent_sessions` servent de base plus simple que l'ancien modèle d'épisodes.
 
 ---
 
@@ -239,7 +239,7 @@ Elle n’est pas encore pilotée par les épisodes, même si des épisodes tempo
 - `signals` ne sont pas une source de vérité du présent. Ils ne doivent pas être utilisés comme base d'une décision métier ou d'une nouvelle feature de contexte principal.
 - `/state` garde des champs top-level et des blocs legacy pour compat UI et debug. Ces champs top-level sont dépréciés. Toute nouvelle lecture doit passer par `present`.
 - Le marqueur de lock legacy existe encore dans `RuntimeState` pour filtrage, debug et compat. Il n'est pas canonique et ne doit jamais servir de source métier.
-- `EpisodeFSM` existe et persiste des épisodes, mais les épisodes ne participent pas aujourd'hui à la décision ni au présent runtime. Toute recentralisation des épisodes exigerait une refonte explicite du contrat runtime.
+- Les alias legacy `current_episode`, `recent_episodes`, `work_window_*` et `closed_episodes` existent encore pour compatibilité. Toute nouvelle lecture doit utiliser `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
 
 ---
 
@@ -343,4 +343,4 @@ Le projet est aujourd’hui dans une phase où :
 - le système expose désormais un dashboard technique et une observabilité plus explicite
 
 Le premier périmètre Episode est maintenant en place.
-Les chantiers encore ouverts concernent surtout l’exploitation des épisodes par la mémoire et les proposals, ainsi que la lisibilité de l’historique utile.
+Les chantiers encore ouverts concernent surtout l’exploitation des blocs de travail par la mémoire et les proposals, ainsi que la lisibilité de l’historique utile.

@@ -9,6 +9,8 @@ Il distingue explicitement :
 
 Il ne décrit pas un système idéal.
 
+Note 2026 : les sections historiques qui parlent d'`EpisodeFSM` décrivent l'ancienne piste d'architecture. Le runtime actuel a supprimé `EpisodeFSM` et utilise `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`. La référence courte à jour est [architecture.md](./architecture.md).
+
 ---
 
 # Partie 0 — Contrat du présent runtime
@@ -39,13 +41,13 @@ Il ne le recalcule pas.
 - `CurrentContext` : rendu du présent pour la lecture assistant/UI
 - `StateStore` : shim legacy
 - `SessionMemory` : persistance historique
-- `EpisodeFSM` : segmentation temporelle secondaire
+- `work_blocks` / `recent_sessions` : historique dérivé, non canonique pour le présent
 
 Interdits explicites :
 - `signals` ne sont pas une source de vérité du présent
 - `signals` ne doivent pas être utilisés pour une décision métier
 - `signals` ne doivent pas servir à dériver le contexte métier principal
-- les épisodes ne participent pas aujourd'hui à la vérité du présent ni à la décision courante
+- l'historique de travail ne participe pas aujourd'hui à la vérité du présent ni à la décision courante
 
 ## 0.4 Snapshot atomique
 
@@ -404,9 +406,11 @@ pas comme un système de compréhension avancée.
 
 ---
 
-# Partie 2 — Contrat de l'épisode (Phase 2a + 2b actuel)
+# Partie 2 — Contrat de l'épisode (historique)
 
-Cette section définit le contrat actuel de l'épisode dans Pulse.
+Note : cette partie est conservée comme trace de la piste Episode System. Elle n'est plus le contrat actuel du runtime. Le contrat actuel est décrit dans `architecture.md` : `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
+
+Cette section définit l'ancien contrat de l'épisode dans Pulse.
 
 Elle couvre :
 - les frontières temporelles portées par `EpisodeFSM`

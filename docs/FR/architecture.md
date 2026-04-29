@@ -79,7 +79,6 @@ Règle de lecture :
 | `CurrentContextBuilder` | rendre un `CurrentContext` à partir de `present` | devenir une source de vérité |
 | `SessionMemory` | persister l'historique et les snapshots | corriger ou écrire le présent |
 | `StateStore` | shim de compat legacy | dériver `active_file`, `active_project` ou l'état session |
-| `EpisodeFSM` | segmenter le temps et persister des épisodes | piloter le présent |
 
 ---
 
@@ -188,8 +187,10 @@ Le payload `/state` actuel mélange encore :
   - `signals`
   - `decision`
   - `session_fsm`
-  - `current_episode`
-  - `recent_episodes`
+  - `current_context`
+  - `recent_sessions`
+  - `current_episode` alias legacy
+  - `recent_episodes` alias legacy
   - `debug`
 
 ---
@@ -212,29 +213,23 @@ La frontière est décidée dans `SessionFSM`.
 
 ---
 
-## 8. Épisodes
+## 8. Contexte et historique de travail
 
-`EpisodeFSM` existe et fonctionne, mais il reste secondaire.
+`EpisodeFSM` a été supprimé du runtime.
 
-Ce qu'il fait aujourd'hui :
-- ouvrir / fermer des épisodes temporels
-- persister ces épisodes
-- exposer `current_episode` et `recent_episodes`
-- figer une sémantique minimale sur les épisodes clos
+Le modèle actuel est plus simple :
+- `current_context` : lecture produit du contexte courant
+- `recent_sessions` : sessions fermées récentes, pour l'historique
+- `work_blocks` : blocs de travail dérivés des événements significatifs
+- `work_block_*` : fenêtre de travail utilisée par la mémoire et la ResumeCard
 
-Ce qu'il ne fait pas :
-- produire le présent
-- alimenter directement la décision courante
-- piloter la mémoire comme source principale
-- servir de base implicite à une nouvelle vérité runtime
+Les anciens noms restent exposés seulement pour compatibilité :
+- `current_episode`
+- `recent_episodes`
+- `work_window_*`
+- `closed_episodes`
 
-Il faut lire la couche épisode comme :
-- de la segmentation temporelle utile
-- de l'observabilité
-- de la télémétrie runtime enrichie
-
-Pas comme le coeur du système.
-Toute évolution qui rendrait les épisodes centraux pour le présent ou la décision exigerait une refonte explicite du contrat runtime.
+Ces alias ne doivent pas servir à écrire de nouvelles features.
 
 ---
 
@@ -246,6 +241,7 @@ Les reliquats suivants existent encore :
 - marqueur de lock legacy dans `RuntimeState` : utile pour filtrage d'ingress / debug / compat, non canonique
 - payload top-level `/state` : conservé pour compat UI et déprécié
 - adaptateurs markdown / legacy : encore alimentés par `signals` pour certains détails secondaires
+- alias API : `current_episode`, `recent_episodes`, `work_window_*`, `closed_episodes`
 
 Ces reliquats ne doivent pas être relus comme des sources de vérité concurrentes.
 
@@ -256,7 +252,7 @@ Ces reliquats ne doivent pas être relus comme des sources de vérité concurren
 - `CurrentContext` dépend encore partiellement de `signals`
 - `/state` garde encore du legacy pour compat UI et debug
 - le marqueur de lock legacy existe encore en parallèle du `present.locked`
-- les épisodes ne sont pas centraux pour la mémoire, la décision ou les proposals
+- l'extracteur mémoire contient encore du vocabulaire historique d'épisodes
 - `SessionSnapshot` reste une projection de compat, pas la forme canonique du présent
 
 ---
@@ -270,3 +266,4 @@ Pour lire le runtime correctement aujourd'hui :
 3. lire `CurrentContext` comme un rendu
 4. lire `signals` comme une couche de détails secondaires
 5. lire `StateStore` et les champs top-level `/state` comme compat, pas comme vérité
+6. lire `work_blocks` / `work_block_*` pour le temps de travail, pas les alias `work_window_*`

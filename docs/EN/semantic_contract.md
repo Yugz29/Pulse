@@ -10,6 +10,8 @@ It explicitly separates:
 It does not describe an ideal system.
 It does not describe Episode System either.
 
+2026 note: historical sections that mention `EpisodeFSM` describe the previous architecture path. The current runtime removed `EpisodeFSM` and uses `current_context`, `recent_sessions`, `work_blocks`, and `work_block_*`. The short up-to-date reference is [architecture.md](./architecture.md).
+
 Current Pulse memory is still primarily:
 - session-centric
 - heuristic
@@ -45,13 +47,13 @@ It does not recompute it.
 - `CurrentContext`: a rendering of the present for assistant/UI reads
 - `StateStore`: a legacy shim
 - `SessionMemory`: historical persistence
-- `EpisodeFSM`: secondary temporal segmentation
+- `work_blocks` / `recent_sessions`: derived history, not canonical for the present
 
 Explicit prohibitions:
 - `signals` are not a source of truth for the present
 - `signals` must not be used for business decisions
 - `signals` must not be used to derive the main business context
-- episodes do not currently participate in the truth of the present or the live decision path
+- work history does not currently participate in the truth of the present or the live decision path
 
 ## 0.4 Atomic snapshot
 

@@ -79,7 +79,6 @@ Read rule:
 | `CurrentContextBuilder` | render `CurrentContext` from `present` | become a source of truth |
 | `SessionMemory` | persist history and snapshots | correct or write the present |
 | `StateStore` | passive legacy shim | derive `active_file`, `active_project`, or session state |
-| `EpisodeFSM` | segment time and persist episodes | drive the present |
 
 ---
 
@@ -188,8 +187,10 @@ The current `/state` payload still mixes:
   - `signals`
   - `decision`
   - `session_fsm`
-  - `current_episode`
-  - `recent_episodes`
+  - `current_context`
+  - `recent_sessions`
+  - `current_episode` legacy alias
+  - `recent_episodes` legacy alias
   - `debug`
 
 ---
@@ -212,29 +213,23 @@ The boundary decision lives in `SessionFSM`.
 
 ---
 
-## 8. Episodes
+## 8. Work context and history
 
-`EpisodeFSM` exists and works, but it remains secondary.
+`EpisodeFSM` has been removed from the runtime.
 
-What it does today:
-- open / close temporal episodes
-- persist those episodes
-- expose `current_episode` and `recent_episodes`
-- freeze minimal semantics on closed episodes
+The current model is simpler:
+- `current_context`: product-facing current context
+- `recent_sessions`: recently closed sessions for history
+- `work_blocks`: work blocks derived from meaningful events
+- `work_block_*`: work window data used by memory and the ResumeCard
 
-What it does not do:
-- produce the present
-- directly feed the current decision path
-- drive memory as the main source
-- act as an implicit new center of runtime truth
+The old names remain exposed only for compatibility:
+- `current_episode`
+- `recent_episodes`
+- `work_window_*`
+- `closed_episodes`
 
-The episode layer should be read as:
-- useful temporal segmentation
-- observability
-- enriched runtime telemetry
-
-Not as the core of the system.
-Any change that would make episodes central for the present or decision path would require an explicit runtime-contract refactor.
+Those aliases must not be used for new features.
 
 ---
 
@@ -246,6 +241,7 @@ The following leftovers still exist:
 - legacy lock marker in `RuntimeState`: useful for ingress filtering / debug / compatibility, not canonical
 - top-level `/state` payload: kept for UI compatibility and deprecated
 - markdown / legacy adapters: still fed by `signals` for a few secondary details
+- API aliases: `current_episode`, `recent_episodes`, `work_window_*`, `closed_episodes`
 
 Those leftovers must not be treated as concurrent sources of truth.
 
@@ -256,7 +252,7 @@ Those leftovers must not be treated as concurrent sources of truth.
 - `CurrentContext` still depends partly on `signals`
 - `/state` still keeps legacy payload for UI compatibility and debug
 - the legacy lock marker still exists alongside `present.locked`
-- episodes are not central for memory, decision, or proposals
+- the memory extractor still contains historical episode vocabulary
 - `SessionSnapshot` remains a compatibility projection, not the canonical shape of the present
 
 ---
@@ -270,3 +266,4 @@ To read the runtime correctly today:
 3. read `CurrentContext` as a rendering
 4. read `signals` as a secondary-detail layer
 5. read `StateStore` and top-level `/state` fields as compatibility, not truth
+6. read `work_blocks` / `work_block_*` for work time, not the `work_window_*` aliases

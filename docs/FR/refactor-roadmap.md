@@ -6,9 +6,9 @@
 
 Pulse est un système d'observation locale du travail qui qualifie l'activité en temps réel, structure la continuité du travail, consolide une mémoire utile, et propose des actions explicables.
 
-La chaîne cible reste :
+La chaîne cible actuelle est :
 
-Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session -> Memory -> Proposal
+Observation -> Qualification -> Current Context -> Work Blocks -> Session -> Memory -> Proposal
 
 ### Ce que Pulse veut devenir
 
@@ -19,9 +19,8 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 
 ### Ce que Pulse n'est pas encore
 
-- Un système à épisodes exploitable en production
 - Un moteur de proposition vraiment contextualisé sur la continuité du travail
-- Une mémoire consolidée riche et pilotée par épisodes
+- Une mémoire consolidée riche et pilotée par blocs de travail
 - Un agent autonome
 
 ## 1bis. État runtime après refocus
@@ -45,7 +44,10 @@ Points actés dans le code :
 - `SessionFSM` est la seule source de l'état de session
 - `CurrentContext` est un rendu, pas une source de vérité
 - `StateStore` est un shim legacy
-- `EpisodeFSM` reste secondaire et télémétrique
+- `EpisodeFSM` a été supprimé du runtime
+- `current_context` remplace `current_episode` comme lecture produit
+- `recent_sessions` remplace `recent_episodes` comme historique produit
+- `work_blocks` / `work_block_*` remplacent progressivement `work_windows`
 - `/state` expose `present` comme noyau canonique, avec compat et debug autour
 - un snapshot runtime atomique existe pour éviter les lectures hybrides
 - verrou court != nouvelle session
@@ -54,7 +56,7 @@ Interdits runtime :
 - ne pas réintroduire `signals` comme source de vérité du présent
 - ne pas construire de nouvelle feature depuis les champs top-level de `/state`
 - ne pas lire `present`, `signals` et `decision` séparément
-- ne pas recentraliser les épisodes sans refonte explicite du contrat runtime
+- ne pas recentraliser les épisodes ; le modèle produit courant est `current_context` + `work_blocks` + `recent_sessions`
 
 ## 2. État actuel
 
@@ -75,6 +77,7 @@ Interdits runtime :
 
 - Phase 0 Foundation : contrats structurés, compat legacy verrouillée, lifecycle session unifié
 - Phase 1 Observation terrain : instrumentation, dashboard technique, observations terrain documentées dans `OBS.md`
+- Refocus 2026 : abandon du modèle produit `EpisodeFSM`, migration vers `current_context`, `recent_sessions` et `work_blocks`
 
 ### Ajouté en Phase 1
 
@@ -86,8 +89,8 @@ Interdits runtime :
 
 ### Ce qui manque encore
 
-- Proposition intelligente basée sur épisodes et mémoire enrichie
-- Mémoire session -> épisode -> faits plus robuste
+- Proposition intelligente basée sur blocs de travail et mémoire enrichie
+- Mémoire session -> bloc de travail -> faits plus robuste
 - Cadre agentique contrôlé
 
 ## 3. Roadmap globale
@@ -112,7 +115,7 @@ Rendre le runtime structurable sans changer le comportement observable.
 
 **Hors périmètre**
 
-- Episode System
+- Modèle de blocs de travail
 - Nouvelles heuristiques métier
 - Mémoire enrichie
 - Agentique
@@ -130,7 +133,7 @@ Rendre le runtime structurable sans changer le comportement observable.
 
 **Objectif**
 
-Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode System.
+Mesurer le comportement réel du système stabilisé avant de structurer les blocs de travail.
 
 **Livrables**
 
@@ -156,7 +159,7 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 
 **Hors périmètre**
 
-- Implémentation d'épisodes
+- Implémentation prématurée d'un modèle temporel lourd
 - Changement heuristique non justifié par observation
 - Refonte mémoire
 - Agentique
@@ -165,75 +168,72 @@ Mesurer le comportement réel du système stabilisé avant d'ouvrir Episode Syst
 
 - ✓ Frontières de session stables sur cas réels
 - ✓ Zones faibles identifiées et classées (voir `OBS.md`)
-- ✓ Point d'entrée Episode System défini à partir d'observations terrain
+- ✓ Besoin de continuité de travail défini à partir d'observations terrain
 
 ---
 
-### Phase 2a — Episode Boundaries
+### Phase 2a — Work Block Boundaries
 
-**Statut** : terminée
+**Statut** : en cours après refocus
 
 **Objectif**
 
-Poser des frontières d'épisodes fiables et observables, sans sémantique imposée.
+Poser des frontières de blocs de travail fiables et observables, sans sémantique imposée.
 La question à résoudre : délimiter du temps de travail réel de façon déterministe et auditable.
 
-Principe : un épisode est d'abord une unité temporelle fiable. La sémantique vient ensuite, en Phase 2b.
+Principe : un bloc de travail est d'abord une fenêtre temporelle fiable dérivée d'événements significatifs.
 
 **Livrables**
 
-- Modèle `Episode` minimal : id, started_at, ended_at, session_id
-- Détection des frontières par signaux durs : gap d'inactivité, changement de projet, commit confirmé, verrou écran
-- `EpisodeFSM` : lifecycle actif / suspendu / clos, source de vérité des frontières
-- Intégration `episode -> session` : une session agrège plusieurs épisodes
-- Exposition dans `/state` : épisode courant visible dans le dashboard
-- Persistance minimale en SQLite
+- `work_blocks` dérivés des événements significatifs
+- `recent_sessions` dérivées des sessions fermées
+- `work_block_*` dans les payloads mémoire et ResumeCard
+- aliases legacy `current_episode`, `recent_episodes`, `work_window_*`, `closed_episodes` conservés temporairement
 
 **Hors périmètre**
 
-- Sémantique de tâche sur l'épisode (Phase 2b)
-- Injection LLM de l'épisode
+- Sémantique de tâche riche sur les blocs
+- Injection LLM des blocs
 - Agentique
 - Refonte mémoire
 
 **Condition de sortie**
 
-- Les frontières d'épisode sont visibles dans le dashboard et correspondent à la réalité terrain
-- Une session agrège plusieurs épisodes sans bricolage
-- Les frontières sont auditables : on peut expliquer pourquoi un épisode a commencé ou fini
+- Les blocs de travail sont visibles dans le dashboard et correspondent à la réalité terrain
+- Une session expose un historique lisible sans FSM d'épisodes parallèle
+- Les durées sont dérivées des événements significatifs, pas des commits seuls
 
 ---
 
-### Phase 2b — Episode Semantics
+### Phase 2b — Context / Work Block Semantics
 
-**Statut** : terminée (scope actuel)
+**Statut** : en cours
 
 **Objectif**
 
-Ajouter de la sémantique sur les épisodes délimités en 2a.
-Un épisode devient une unité de sens : quelle tâche, quel contexte, quelle origine.
+Ajouter de la sémantique utile aux contextes et blocs de travail sans recréer une FSM d'épisodes.
 
 **Livrables**
 
-- `probable_task` et `activity_level` portés au niveau de l'épisode
-- `task_confidence` porté au niveau de l'épisode
-- Sémantique figée à la clôture de l'épisode, sans rescoring dans `EpisodeFSM`
-- Transparence sur l'épisode courant et les épisodes clos dans le dashboard
+- `current_context` porte la lecture produit courante
+- `work_blocks` portent les durées de travail
+- `recent_sessions` portent l'historique fermé
+- la ResumeCard lit `work_block_*` et `recent_sessions`
 
 **Hors périmètre**
 
 - Agentique
 - Refonte complète de la mémoire
-- Détection LLM des épisodes
+- Détection LLM des blocs
 - `origin`
-- Résumé d'épisode
-- Export épisode vers mémoire ou proposals
+- Résumé riche de bloc
+- Export complet des blocs vers mémoire ou proposals
 
 **Condition de sortie**
 
-- Un épisode clos porte une sémantique lisible et auditable
+- Un bloc ou une session récente porte une sémantique lisible et auditable
 - La sémantique est construite de façon déterministe, sans LLM obligatoire
-- Le présent continue d'être lu via `PresentState`, pas via la sémantique de l'épisode actif
+- Le présent continue d'être lu via `PresentState`, pas via l'historique
 
 ---
 
@@ -241,11 +241,11 @@ Un épisode devient une unité de sens : quelle tâche, quel contexte, quelle or
 
 **Objectif**
 
-Faire évoluer les propositions de suggestions locales vers des propositions contextualisées par session, épisode et mémoire.
+Faire évoluer les propositions de suggestions locales vers des propositions contextualisées par session, bloc de travail et mémoire.
 
 **Livrables**
 
-- Proposal flow enrichi par `CurrentContext + Episode + Session + Memory`
+- Proposal flow enrichi par `CurrentContext + WorkBlock + Session + Memory`
 - Priorisation des propositions
 - Explicabilité renforcée
 - Déduplication et arbitrage des suggestions
@@ -269,7 +269,7 @@ Faire passer la mémoire d'un résumé de session à une mémoire structurée pa
 
 **Livrables**
 
-- Consolidation mémoire à partir des épisodes
+- Consolidation mémoire à partir des blocs de travail
 - Meilleure séparation temps réel / rétrospectif
 - Faits et résumés mieux alignés sur le travail réellement produit
 - Contrats mémoire préparant les usages propositionnels et agentiques
@@ -288,7 +288,7 @@ Faire passer la mémoire d'un résumé de session à une mémoire structurée pa
 
 **Objectif**
 
-Ouvrir des capacités d'action sous contraintes strictes, à partir d'un système déjà fiable en observation, épisodes, propositions et mémoire.
+Ouvrir des capacités d'action sous contraintes strictes, à partir d'un système déjà fiable en observation, blocs de travail, propositions et mémoire.
 
 **Livrables**
 
@@ -317,18 +317,18 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
   - Compat legacy verrouillée
   - Lifecycle session unifié
 
-- `Observation terrain -> Episode Boundaries (2a)`
+- `Observation terrain -> Work Block Boundaries (2a)`
   - Cas réels observés et documentés
   - Frontières de session jugées stables
-  - Besoins d'épisode formulés à partir de données terrain
+  - Besoins de blocs de travail formulés à partir de données terrain
 
-- `Episode Boundaries (2a) -> Episode Semantics (2b)`
-  - Frontières d'épisode visibles et auditables dans le dashboard
-  - Une session agrège plusieurs épisodes de façon stable
+- `Work Block Boundaries (2a) -> Context / Work Block Semantics (2b)`
+  - Frontières de blocs visibles et auditables dans le dashboard
+  - Une session expose des blocs de façon stable
   - Correspondance terrain validée sur plusieurs sessions réelles
 
-- `Episode Semantics (2b) -> Smart Proposals`
-  - Épisode clos avec sémantique lisible
+- `Context / Work Block Semantics (2b) -> Smart Proposals`
+  - Blocs ou sessions récentes avec sémantique lisible
   - Agrégation sessionnelle stable
 
 - `Smart Proposals -> Mémoire enrichie`
@@ -342,7 +342,7 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
 
 ### Ce qu'on refuse de faire trop tôt
 
-- Introduire Episode System sans observation terrain
+- Réintroduire un Episode System sans preuve terrain forte
 - Changer des heuristiques faute de mesure
 - Réécrire le stockage sans modèle stabilisé
 - Ouvrir l'agentique avant d'avoir des propositions robustes
@@ -362,13 +362,13 @@ Ouvrir des capacités d'action sous contraintes strictes, à partir d'un systèm
 
 À la fin du scope actuel de Phase 2, Pulse doit permettre :
 
-- de voir l'épisode courant dans le dashboard en temps réel
-- de comprendre pourquoi une frontière d'épisode a été détectée
 - de lire le présent canonique via `PresentState`
-- de visualiser un historique récent des épisodes clos
-- de lire la sémantique live via `signals` et la sémantique figée via les épisodes clos
+- de voir le contexte courant dans le dashboard en temps réel
+- de visualiser les blocs de travail et les sessions récentes
+- de comprendre pourquoi une durée de travail a été calculée
+- de lire la sémantique live via `current_context`
 
-`origin`, le résumé d'épisode et l'export vers mémoire/proposals restent hors périmètre du scope actuel.
+Le résumé riche de bloc et l'export complet vers mémoire/proposals restent hors périmètre du scope actuel.
 
 ## Référence d'usage
 

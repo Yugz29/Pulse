@@ -7,9 +7,9 @@
 Pulse is a local work observation system that qualifies activity in real time,
 structures work continuity, consolidates useful memory, and produces explainable actions.
 
-The target chain remains:
+The current target chain is:
 
-Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session -> Memory -> Proposal
+Observation -> Qualification -> Current Context -> Work Blocks -> Session -> Memory -> Proposal
 
 ### What Pulse is trying to become
 
@@ -21,7 +21,7 @@ Observation -> Qualification -> Activity -> Interpretation -> Episode -> Session
 ### What Pulse is not yet
 
 - A proposal engine truly contextualized by work continuity
-- A rich memory layer driven by episodes
+- A rich memory layer driven by work blocks
 - An autonomous agent
 
 ## 1bis. Runtime state after the refocus
@@ -45,7 +45,10 @@ What is now true in code:
 - `SessionFSM` is the single source of session state
 - `CurrentContext` is a rendering, not a source of truth
 - `StateStore` is a legacy shim
-- `EpisodeFSM` remains secondary and telemetry-oriented
+- `EpisodeFSM` has been removed from the runtime
+- `current_context` replaces `current_episode` as the product read model
+- `recent_sessions` replaces `recent_episodes` as the product history model
+- `work_blocks` / `work_block_*` progressively replace `work_windows`
 - `/state` exposes `present` as the canonical core, with compatibility and debug around it
 - an atomic runtime snapshot exists to avoid hybrid reads
 - short lock != new session
@@ -54,7 +57,7 @@ Runtime prohibitions:
 - do not reintroduce `signals` as a source of truth for the present
 - do not build new features from top-level `/state` fields
 - do not read `present`, `signals`, and `decision` separately
-- do not recentralize episodes without an explicit runtime-contract refactor
+- do not recentralize episodes; the current product model is `current_context` + `work_blocks` + `recent_sessions`
 
 ## 2. Current state
 
@@ -75,8 +78,7 @@ Runtime prohibitions:
 
 - Phase 0 Foundation: structured contracts, locked legacy compatibility, unified session lifecycle
 - Phase 1 Field observation: instrumentation, technical dashboard, field observations documented in `OBS.md`
-- Phase 2a Episode Boundaries: temporal episodes, SQLite persistence, `/state` exposure, dashboard visibility
-- Phase 2b Episode Semantics (current scope): frozen semantic snapshot on closed episodes
+- 2026 refocus: product `EpisodeFSM` model removed, migration toward `current_context`, `recent_sessions`, and `work_blocks`
 
 ### Added in Phase 1
 
@@ -88,8 +90,8 @@ Runtime prohibitions:
 
 ### What is still missing
 
-- Smarter proposals built on episodes and richer memory
-- A stronger memory chain from session -> episode -> facts
+- Smarter proposals built on work blocks and richer memory
+- A stronger memory chain from session -> work block -> facts
 - A controlled agentic framework
 
 ## 3. Global roadmap
@@ -114,7 +116,7 @@ Make the runtime structurally sound without changing observable behavior.
 
 **Out of scope**
 
-- Episode System
+- Work block model
 - New business heuristics
 - Enriched memory
 - Agentic behavior
@@ -132,7 +134,7 @@ Make the runtime structurally sound without changing observable behavior.
 
 **Goal**
 
-Measure the real behavior of the stabilized system before opening Episode System.
+Measure the real behavior of the stabilized system before structuring work blocks.
 
 **Deliverables**
 
@@ -161,7 +163,7 @@ Measure the real behavior of the stabilized system before opening Episode System
 
 **Out of scope**
 
-- Episode implementation
+- Premature implementation of a heavy temporal model
 - Heuristic changes not justified by observation
 - Memory redesign
 - Agentic work
@@ -170,72 +172,72 @@ Measure the real behavior of the stabilized system before opening Episode System
 
 - ✓ Session boundaries stable on real cases
 - ✓ Weak zones identified and classified (see `OBS.md`)
-- ✓ Episode System entry point defined from field observations
+- ✓ Work continuity need defined from field observations
 
-### Phase 2a — Episode Boundaries
+### Phase 2a — Work Block Boundaries
 
-**Status**: complete
+**Status**: in progress after refocus
 
 **Goal**
 
-Introduce reliable and observable episode boundaries without imposing semantics yet.
+Introduce reliable and observable work block boundaries without imposing rich semantics yet.
 
 **Deliverables**
 
-- A minimal `Episode` model
-- Boundary detection from hard signals
-- `episode -> session` integration
-- SQLite persistence
-- Transparency on the current episode in `/state` and the dashboard
+- `work_blocks` derived from meaningful events
+- `recent_sessions` derived from closed sessions
+- `work_block_*` in memory and ResumeCard payloads
+- temporary legacy aliases: `current_episode`, `recent_episodes`, `work_window_*`, `closed_episodes`
 
 **Out of scope**
 
-- Episode semantics beyond the temporal model
+- Rich work block semantics beyond the temporal model
 - Agentic work
 - Full memory rewrite
 - Automated actions
 
 **Exit condition**
 
-- Episode boundaries are understandable and auditable
-- A session can aggregate multiple episodes without patchwork
+- Work block boundaries are understandable and auditable
+- A session exposes readable history without a parallel episode FSM
 
-### Phase 2b — Episode Semantics
+### Phase 2b — Context / Work Block Semantics
 
-**Status**: complete (current scope)
+**Status**: in progress
 
 **Goal**
 
-Attach deterministic semantics to closed episodes without moving scoring out of live runtime signals.
+Attach useful semantics to contexts and work blocks without recreating an episode FSM.
 
 **Deliverables**
 
-- `probable_task`, `activity_level`, and `task_confidence` carried by closed episodes
-- Semantics frozen only at episode closure
-- Technical dashboard transparency between live signals and closed-episode history
+- `current_context` carries the product-facing current read
+- `work_blocks` carry work duration
+- `recent_sessions` carry closed history
+- ResumeCard reads `work_block_*` and `recent_sessions`
 
 **Out of scope**
 
 - `origin`
-- Episode summary / LLM enrichment
-- Memory/proposal exports based on episodes
+- Work block summary / LLM enrichment
+- Full memory/proposal exports based on work blocks
 - Agentic work
 
 **Exit condition**
 
-- Closed episodes carry readable semantics
-- Live semantics still come from `PresentState`, not from the active episode
+- Work blocks or recent sessions carry readable semantics
+- Live semantics still come from `PresentState`, not from history
 - Session aggregation is stable
 
 ### Phase 3 — Smart Proposals
 
 **Goal**
 
-Evolve proposals from local suggestions toward proposals contextualized by session, episode, and memory.
+Evolve proposals from local suggestions toward proposals contextualized by session, work block, and memory.
 
 **Deliverables**
 
-- Proposal flow enriched by `CurrentContext + Episode + Session + Memory`
+- Proposal flow enriched by `CurrentContext + WorkBlock + Session + Memory`
 - Proposal prioritization
 - Stronger explainability
 - Suggestion deduplication and arbitration
@@ -259,7 +261,7 @@ Move memory from flat session summaries toward a structure based on work continu
 
 **Deliverables**
 
-- Memory consolidation built from episodes
+- Memory consolidation built from work blocks
 - Better separation between real-time and retrospective layers
 - Facts and summaries better aligned with actual work produced
 - Memory contracts ready for proposal and future agentic use
@@ -278,7 +280,7 @@ Move memory from flat session summaries toward a structure based on work continu
 
 **Goal**
 
-Open bounded action capabilities on top of a system that is already reliable in observation, episodes, proposals, and memory.
+Open bounded action capabilities on top of a system that is already reliable in observation, work blocks, proposals, and memory.
 
 **Deliverables**
 
@@ -307,18 +309,18 @@ Open bounded action capabilities on top of a system that is already reliable in 
   - Legacy compatibility is locked
   - Session lifecycle is unified
 
-- `Field observation -> Episode Boundaries (2a)`
+- `Field observation -> Work Block Boundaries (2a)`
   - Real cases have been observed and documented
   - Session boundaries are considered stable
-  - Episode needs are formulated from field data
+  - Work block needs are formulated from field data
 
-- `Episode Boundaries (2a) -> Episode Semantics (2b)`
-  - Current episodes are visible and boundaries are auditable
+- `Work Block Boundaries (2a) -> Context / Work Block Semantics (2b)`
+  - Work block boundaries are visible and auditable
   - Session aggregation is stable
   - Runtime behavior matches real field cases
 
-- `Episode Semantics (2b) -> Smart Proposals`
-  - Closed episodes carry readable semantics
+- `Context / Work Block Semantics (2b) -> Smart Proposals`
+  - Work blocks or recent sessions carry readable semantics
   - Live semantics still come from `PresentState`
   - Session aggregation is stable
 
@@ -333,7 +335,7 @@ Open bounded action capabilities on top of a system that is already reliable in 
 
 ### What we refuse to do too early
 
-- Introduce Episode System without field observation
+- Reintroduce Episode System without strong field evidence
 - Change heuristics without measurement
 - Rewrite storage before the model is stable
 - Open agentic behavior before proposals are robust
@@ -355,10 +357,10 @@ At the end of the current Phase 2 scope, Pulse should make it possible to:
 
 - observe activity, task and context in real time through `PresentState`
 - visualize internal state through the technical dashboard
-- detect episode boundaries inside a session
-- inspect recent closed episodes with a frozen semantic snapshot
+- inspect current context, work blocks, and recent sessions
+- understand why work duration was calculated
 
-Cross-session continuity and smart proposals remain out of scope for the current Phase 2 scope.
+Rich work block summaries, cross-session continuity, and smart proposals remain out of scope for the current Phase 2 scope.
 
 ## Usage reference
 
