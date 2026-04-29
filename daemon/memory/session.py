@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import subprocess
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -251,7 +252,8 @@ class SessionMemory:
                     (self.session_id,),
                 ).fetchone()
 
-        events = []
+        all_events = []
+        work_events = []
         for row in event_rows:
             observed_at = _parse_iso_datetime(row["created_at"])
             if observed_at is None:
@@ -265,20 +267,16 @@ class SessionMemory:
                 "payload": payload,
                 "timestamp": observed_at,
             }
+            all_events.append(event)
             if self._is_meaningful_work_event(event):
-                events.append(event)
+                work_events.append(event)
 
-        windows = self._cluster_work_events(events)
+        windows = self._cluster_work_events(work_events)
         worked_min = sum(window["duration_min"] for window in windows)
-        commit_count = sum(
-            1
-            for event in events
-            if event["type"] in {"file_modified", "file_created"}
-            and "COMMIT_EDITMSG" in str(event["payload"].get("path") or "")
-        )
+        commit_count = self._commit_count_for_period(all_events, since=day_start, until=day_end)
 
         session_dict = dict(session) if session is not None else {}
-        project = session_dict.get("active_project") or self._project_from_events(events)
+        project = session_dict.get("active_project") or self._project_from_events(work_events or all_events)
         task = session_dict.get("probable_task") or "general"
         current_window = None
         if windows:
@@ -757,6 +755,83 @@ class SessionMemory:
                         return parts[idx + 1]
         return None
 
+    @classmethod
+    def _commit_count_for_period(
+        cls,
+        events: List[Dict[str, Any]],
+        *,
+        since: datetime,
+        until: datetime,
+    ) -> int:
+        event_count = cls._commit_event_count(events)
+        git_hashes: set[str] = set()
+        for root in cls._git_roots_from_events(events):
+            try:
+                result = subprocess.run(
+                    [
+                        "git",
+                        "log",
+                        f"--since={since.isoformat()}",
+                        f"--until={until.isoformat()}",
+                        "--format=%H",
+                    ],
+                    cwd=str(root),
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                )
+            except Exception:
+                continue
+            if result.returncode != 0:
+                continue
+            git_hashes.update(line.strip() for line in result.stdout.splitlines() if line.strip())
+        return max(event_count, len(git_hashes))
+
+    @staticmethod
+    def _commit_event_count(events: List[Dict[str, Any]]) -> int:
+        count = 0
+        for event in events:
+            payload = event["payload"]
+            if event["type"] in {"file_modified", "file_created"}:
+                path = str(payload.get("path") or "")
+                if "COMMIT_EDITMSG" in path:
+                    count += 1
+                    continue
+            if event["type"] == "terminal_command_finished":
+                command = str(payload.get("terminal_command") or "")
+                base = str(payload.get("terminal_command_base") or "")
+                success = payload.get("terminal_success")
+                if success is not False and base == "git" and " commit" in f" {command} ":
+                    count += 1
+        return count
+
+    @staticmethod
+    def _git_roots_from_events(events: List[Dict[str, Any]], *, limit: int = 5) -> List[Path]:
+        roots: List[Path] = []
+        seen: set[str] = set()
+        for event in events:
+            payload = event["payload"]
+            candidates = [
+                payload.get("path"),
+                payload.get("repo_root"),
+                payload.get("project_root"),
+                payload.get("terminal_workspace_root"),
+                payload.get("terminal_cwd"),
+                payload.get("cwd"),
+            ]
+            for raw in candidates:
+                root = _find_git_root_from_path(raw)
+                if root is None:
+                    continue
+                key = str(root)
+                if key in seen:
+                    continue
+                seen.add(key)
+                roots.append(root)
+                if len(roots) >= limit:
+                    return roots
+        return roots
+
 
 def _parse_iso_datetime(value: Any) -> Optional[datetime]:
     text = str(value or "").strip()
@@ -766,3 +841,16 @@ def _parse_iso_datetime(value: Any) -> Optional[datetime]:
         return datetime.fromisoformat(text)
     except ValueError:
         return None
+
+
+def _find_git_root_from_path(value: Any) -> Optional[Path]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    path = Path(text).expanduser()
+    search = path if path.suffix == "" else path.parent
+    for candidate in (search, *search.parents):
+        marker = candidate / ".git"
+        if marker.exists():
+            return candidate
+    return None

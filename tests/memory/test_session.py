@@ -1,5 +1,6 @@
 import tempfile
 import sqlite3
+import subprocess
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -327,6 +328,50 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(summary["totals"]["project_count"], 1)
         self.assertEqual(summary["projects"][0]["name"], "Pulse")
         self.assertEqual(summary["current_window"]["probable_task"], "coding")
+
+    def test_get_today_summary_compte_les_commits_du_depot(self):
+        repo = Path(self.tmpdir.name) / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "config", "user.email", "pulse@example.test"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Pulse Test"], cwd=repo, check=True)
+        source = repo / "main.py"
+        source.write_text("print('pulse')\n", encoding="utf-8")
+        subprocess.run(["git", "add", "main.py"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-m", "test commit"], cwd=repo, check=True, capture_output=True, text=True)
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": str(source)},
+            timestamp=datetime.now().replace(hour=10, minute=0, second=0, microsecond=0),
+        ))
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="repo",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=10,
+            ),
+            signals=Signals(
+                active_project="repo",
+                active_file=str(source),
+                probable_task="coding",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=10,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+
+        summary = self.memory.get_today_summary()
+
+        self.assertGreaterEqual(summary["totals"]["commit_count"], 1)
+        self.assertGreaterEqual(summary["projects"][0]["commit_count"], 1)
 
     def test_get_recent_episodes_projette_les_sessions_closes(self):
         start = datetime(2026, 4, 28, 9, 0, 0)

@@ -223,9 +223,9 @@ struct DashboardRootView: View {
 
                 HStack(spacing: 18) {
                     statBadge("Travail", dashboardMinutes(totals?.workedMin), gGreen)
-                    statBadge("Actif", dashboardMinutes(totals?.activeMin), gBlue)
                     statBadge("Commits", dashboardCount(totals?.commitCount), gOrange)
                     statBadge("Blocs", dashboardCount(totals?.windowCount), gGray)
+                    statBadge("Projets", dashboardCount(totals?.projectCount), gBlue)
                 }
 
                 Divider()
@@ -233,8 +233,7 @@ struct DashboardRootView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     signalRow("Première activité", dashboardAbsoluteTimestamp(summary?.timeline.firstActivityAt))
                     signalRow("Dernière activité", dashboardRelativeTimestamp(summary?.timeline.lastActivityAt))
-                    signalRow("Projets", dashboardCount(totals?.projectCount))
-                    signalRow("Agrégé", dashboardRelativeTimestamp(summary?.generatedAt))
+                    signalRow("Mis à jour", dashboardRelativeTimestamp(summary?.generatedAt))
                 }
 
                 if let currentWindow {
@@ -292,7 +291,7 @@ struct DashboardRootView: View {
                                             .font(.system(size: 11, weight: .semibold))
                                             .foregroundStyle(.secondary)
                                     }
-                                    Text("\(dashboardMinutes(project.activeMin)) actives · \(project.commitCount) commit(s)")
+                                    Text("\(dashboardMinutes(project.workedMin)) travaillées · \(project.commitCount) commit(s)")
                                         .font(.system(size: 10))
                                         .foregroundStyle(.secondary)
                                     if !project.topTasks.isEmpty {
@@ -317,23 +316,22 @@ struct DashboardRootView: View {
 
     private var sessionHero: some View {
         let fsm = vm.state?.sessionFsm
+        let present = vm.state?.present
         let stateColor = Color(hex: fsm?.stateColor ?? gGray)
 
         return GlassCard(accent: fsm?.stateColor ?? gGray) {
             HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Circle().fill(stateColor).frame(width: 10, height: 10)
-                        Text(fsm?.stateLabel ?? "—")
+                        Text("Maintenant")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.primary)
                     }
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text(sessionDurationLabel(from: fsm?.sessionStartedAt))
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-                    }
-                    Text("Démarrée \(dashboardAbsoluteTimestamp(fsm?.sessionStartedAt))")
+                    Text(liveTaskTitle(present))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(hex: present?.taskAccentHex ?? gGray))
+                    Text("\(present?.activeProject ?? "Projet non identifié") · \(present?.activityLabel ?? "—")")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -341,10 +339,14 @@ struct DashboardRootView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
-                    metaLabel("Dernière activité")
-                    Text(dashboardRelativeTimestamp(fsm?.lastMeaningfulActivityAt))
+                    metaLabel("État live")
+                    Text(fsm?.stateLabel ?? "—")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.primary)
+                    metaLabel("Dernier signal").padding(.top, 8)
+                    Text(dashboardRelativeTimestamp(fsm?.lastMeaningfulActivityAt))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
                     if let locked = fsm?.lastScreenLockedAt {
                         metaLabel("Dernier verrou").padding(.top, 8)
                         Text(dashboardRelativeTimestamp(locked))
