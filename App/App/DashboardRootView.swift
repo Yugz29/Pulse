@@ -216,6 +216,7 @@ struct DashboardRootView: View {
         let summary = vm.todaySummary
         let totals = summary?.totals
         let currentWindow = summary?.currentWindow
+        let currentBlock = summary?.workBlocks.last
 
         return GlassCard(accent: gGreen) {
             VStack(alignment: .leading, spacing: 12) {
@@ -236,7 +237,7 @@ struct DashboardRootView: View {
                     signalRow("Mis à jour", dashboardRelativeTimestamp(summary?.generatedAt))
                 }
 
-                if let currentWindow {
+                if currentBlock != nil || currentWindow != nil {
                     Divider()
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
@@ -248,14 +249,14 @@ struct DashboardRootView: View {
                                 .foregroundStyle(.secondary)
                         }
                         TimelineView(.periodic(from: .now, by: 1)) { _ in
-                            Text(sessionDurationLabel(from: currentWindow.startedAt))
+                            Text(sessionDurationLabel(from: currentBlock?.startedAt ?? currentWindow?.startedAt))
                                 .font(.system(size: 22, weight: .bold, design: .rounded))
                                 .foregroundStyle(.primary)
                         }
-                        signalRow("Projet", currentWindow.project ?? "—")
-                        signalRow("Tâche", currentWindow.taskLabel)
-                        signalRow("Activité", currentWindow.activityLabel)
-                        signalRow("Commits", "\(currentWindow.commitCount)")
+                        signalRow("Projet", currentBlock?.project ?? currentWindow?.project ?? "—")
+                        signalRow("Tâche", currentBlock?.taskLabel ?? currentWindow?.taskLabel ?? "—")
+                        signalRow("Activité", currentWindow?.activityLabel ?? "—")
+                        signalRow("Commits", "\(currentWindow?.commitCount ?? totals?.commitCount ?? 0)")
                     }
                 }
             }
@@ -359,7 +360,7 @@ struct DashboardRootView: View {
     }
 
     private var episodeCurrentCard: some View {
-        let episode = vm.state?.currentEpisode
+        let episode = vm.state?.currentContext ?? vm.state?.currentEpisode
         let present = vm.state?.present
         let liveSignals = vm.state?.signals
         let weakContext = isWeakProductTask(episode, present)
@@ -420,7 +421,7 @@ struct DashboardRootView: View {
     }
 
     private var episodeHistoryCard: some View {
-        let history = (vm.state?.recentEpisodes ?? []).filter { !$0.isActive }
+        let history = ((vm.state?.recentSessions ?? vm.state?.recentEpisodes) ?? []).filter { !$0.isActive }
 
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -469,7 +470,7 @@ struct DashboardRootView: View {
     }
 
     private var taskCard: some View {
-        let episode = vm.state?.currentEpisode
+        let episode = vm.state?.currentContext ?? vm.state?.currentEpisode
         let present = vm.state?.present
         let signals = vm.state?.signals
         let confidence = episode?.taskConfidence ?? signals?.taskConfidence ?? 0
@@ -564,7 +565,8 @@ struct DashboardRootView: View {
                     contextItem("App", state?.activeApp ?? "—")
                     contextItem(
                         "Projet",
-                        state?.currentEpisode?.activeProject
+                        state?.currentContext?.activeProject
+                            ?? state?.currentEpisode?.activeProject
                             ?? state?.present?.activeProject
                             ?? state?.activeProject
                             ?? "—"

@@ -16,7 +16,9 @@ struct StateResponse: Decodable {
     let present: PresentData?
     let signals: SignalsData?
     let sessionFsm: SessionFSMData?
+    let currentContext: EpisodeData?
     let currentEpisode: EpisodeData?
+    let recentSessions: [EpisodeData]?
     let recentEpisodes: [EpisodeData]?
 
     enum CodingKeys: String, CodingKey {
@@ -29,7 +31,9 @@ struct StateResponse: Decodable {
         case present
         case signals
         case sessionFsm = "session_fsm"
+        case currentContext = "current_context"
         case currentEpisode = "current_episode"
+        case recentSessions = "recent_sessions"
         case recentEpisodes = "recent_episodes"
     }
 }
@@ -505,6 +509,7 @@ struct TodaySummaryResponse: Decodable {
     let generatedAt: String
     let totals: TodayTotals
     let projects: [TodayProject]
+    let workBlocks: [TodayWorkBlock]
     let timeline: TodayTimeline
     let currentWindow: TodayCurrentWindow?
 
@@ -513,6 +518,7 @@ struct TodaySummaryResponse: Decodable {
         case generatedAt = "generated_at"
         case totals
         case projects
+        case workBlocks = "work_blocks"
         case timeline
         case currentWindow = "current_window"
     }
@@ -560,6 +566,37 @@ struct TodayTimeline: Decodable {
         case firstActivityAt = "first_activity_at"
         case lastActivityAt = "last_activity_at"
         case currentWorkWindowStartedAt = "current_work_window_started_at"
+    }
+}
+
+struct TodayWorkBlock: Decodable, Identifiable {
+    let id: String
+    let startedAt: String
+    let endedAt: String
+    let durationMin: Int
+    let eventCount: Int
+    let project: String?
+    let probableTask: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case startedAt = "started_at"
+        case endedAt = "ended_at"
+        case durationMin = "duration_min"
+        case eventCount = "event_count"
+        case project
+        case probableTask = "probable_task"
+    }
+
+    var taskLabel: String {
+        switch probableTask {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "exploration", "browsing": return "Exploration"
+        case "general": return "Général"
+        default: return probableTask ?? "—"
+        }
     }
 }
 

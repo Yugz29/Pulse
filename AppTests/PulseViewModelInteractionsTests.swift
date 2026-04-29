@@ -809,6 +809,32 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             "activity_level": "editing",
             "task_confidence": 0.86
           },
+          "current_context": {
+            "id": "ctx-1",
+            "session_id": "session-1",
+            "started_at": "2026-04-23T11:55:00",
+            "ended_at": null,
+            "boundary_reason": null,
+            "duration_sec": null,
+            "active_project": "Pulse",
+            "probable_task": "debug",
+            "activity_level": "executing",
+            "task_confidence": 0.92
+          },
+          "recent_sessions": [
+            {
+              "id": "session-recent",
+              "session_id": "session-0",
+              "started_at": "2026-04-23T10:00:00",
+              "ended_at": "2026-04-23T10:20:00",
+              "boundary_reason": "session_end",
+              "duration_sec": 1200,
+              "active_project": "Pulse",
+              "probable_task": "coding",
+              "activity_level": null,
+              "task_confidence": null
+            }
+          ],
           "signals": {
             "active_project": "SignalsProject",
             "active_file": "/tmp/signals.swift",
@@ -830,10 +856,13 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(state.present?.probableTask, "debug")
         XCTAssertEqual(state.currentEpisode?.activeProject, "Pulse")
         XCTAssertEqual(state.currentEpisode?.probableTask, "coding")
+        XCTAssertEqual(state.currentContext?.activeProject, "Pulse")
+        XCTAssertEqual(state.currentContext?.probableTask, "debug")
+        XCTAssertEqual(state.recentSessions?.first?.id, "session-recent")
         XCTAssertEqual(state.signals?.activeProject, "SignalsProject")
     }
 
-    func testRefreshStateBuildsProductStateFromEpisodeAndPresentBeforeSignals() async {
+    func testRefreshStateBuildsProductStateFromCurrentContextBeforeLegacyEpisode() async {
         let json = """
         {
           "active_app": "Xcode",
@@ -867,6 +896,18 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             "activity_level": "editing",
             "task_confidence": 0.86
           },
+          "current_context": {
+            "id": "ctx-1",
+            "session_id": "session-1",
+            "started_at": "2026-04-23T11:55:00",
+            "ended_at": null,
+            "boundary_reason": null,
+            "duration_sec": null,
+            "active_project": "Pulse",
+            "probable_task": "debug",
+            "activity_level": "executing",
+            "task_confidence": 0.92
+          },
           "signals": {
             "active_project": "SignalsProject",
             "active_file": "/tmp/signals.swift",
@@ -887,13 +928,71 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         await waitUntil { vm.currentEpisode != nil && vm.currentPresent != nil }
 
         XCTAssertEqual(vm.currentEpisode?.activeProject, "Pulse")
+        XCTAssertEqual(vm.currentEpisode?.probableTask, "debug")
         XCTAssertEqual(vm.currentPresent?.probableTask, "debug")
         XCTAssertEqual(vm.activeProject, "Pulse")
-        XCTAssertEqual(vm.probableTask, "coding")
+        XCTAssertEqual(vm.probableTask, "debug")
         XCTAssertEqual(vm.activeFile, "/tmp/live.swift")
         XCTAssertEqual(vm.sessionDuration, 33)
         XCTAssertEqual(vm.focusLevel, "deep")
         XCTAssertEqual(vm.frictionScore, 0.18, accuracy: 0.001)
         XCTAssertEqual(vm.recentApps, ["Chrome"])
+    }
+
+    func testTodaySummaryDecodesWorkBlocks() throws {
+        let json = """
+        {
+          "date": "2026-04-29",
+          "generated_at": "2026-04-29T17:20:00",
+          "totals": {
+            "worked_min": 42,
+            "active_min": 42,
+            "commit_count": 3,
+            "window_count": 1,
+            "project_count": 1
+          },
+          "projects": [
+            {
+              "name": "Pulse",
+              "worked_min": 42,
+              "active_min": 42,
+              "commit_count": 3,
+              "top_tasks": ["coding"]
+            }
+          ],
+          "work_blocks": [
+            {
+              "id": "work-1",
+              "started_at": "2026-04-29T16:38:00",
+              "ended_at": "2026-04-29T17:20:00",
+              "duration_min": 42,
+              "event_count": 12,
+              "project": "Pulse",
+              "probable_task": "coding"
+            }
+          ],
+          "timeline": {
+            "first_activity_at": "2026-04-29T16:38:00",
+            "last_activity_at": "2026-04-29T17:20:00",
+            "current_work_window_started_at": "2026-04-29T16:38:00"
+          },
+          "current_window": {
+            "id": "work-1",
+            "started_at": "2026-04-29T16:38:00",
+            "updated_at": "2026-04-29T17:20:00",
+            "project": "Pulse",
+            "probable_task": "coding",
+            "activity_level": "editing",
+            "commit_count": 3
+          }
+        }
+        """
+
+        let summary = try JSONDecoder().decode(TodaySummaryResponse.self, from: Data(json.utf8))
+
+        XCTAssertEqual(summary.workBlocks.count, 1)
+        XCTAssertEqual(summary.workBlocks.first?.project, "Pulse")
+        XCTAssertEqual(summary.workBlocks.first?.taskLabel, "Développement")
+        XCTAssertEqual(summary.currentWindow?.commitCount, 3)
     }
 }
