@@ -360,6 +360,8 @@ struct DashboardRootView: View {
         let episode = vm.state?.currentEpisode
         let present = vm.state?.present
         let liveSignals = vm.state?.signals
+        let weakContext = isWeakProductTask(episode, present)
+        let accent = episode?.taskAccentHex ?? present?.taskAccentHex ?? gGray
 
         return GlassCard(accent: episode?.boundaryColor ?? gBlue) {
             VStack(alignment: .leading, spacing: 12) {
@@ -367,14 +369,15 @@ struct DashboardRootView: View {
 
                 if let episode {
                     VStack(alignment: .leading, spacing: 6) {
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in
-                            Text(episodeDurationLabel(episode))
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
+                        Text(productTaskTitle(episode, present))
+                            .font(.system(size: weakContext ? 18 : 22, weight: weakContext ? .semibold : .bold, design: .rounded))
+                            .foregroundStyle(weakContext ? .secondary : Color(hex: accent))
+                        HStack(spacing: 8) {
+                            evidenceBadge(liveSignals?.taskEvidenceLabel ?? "Faible", weak: weakContext)
+                            Text(dashboardRelativeTimestamp(present?.updatedAt))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.secondary)
                         }
-                        Text("Démarré \(dashboardAbsoluteTimestamp(episode.startedAt))")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
                     }
 
                     Divider()
@@ -390,41 +393,21 @@ struct DashboardRootView: View {
                         }
 
                         signalRow("Projet", episode.activeProject ?? present?.activeProject ?? "—")
-                        signalRow("Statut", episode.isActive ? "Actif" : "Clos")
                         signalRow("Tâche", episode.taskLabel)
                         signalRow("Activité", episode.activityLabel)
+                        signalRow("Focus", focusLabel(present?.focusLevel))
                         signalRow("Confiance", dashboardPercent(episode.taskConfidence))
-                        signalRow("Source", "Présent")
                         if episode.boundaryReason == "idle_timeout" {
                             signalRow("Fin", "Estimée par inactivité")
                         }
                     }
 
-                    Divider()
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "dot.radiowaves.left.and.right")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                            Text("Signaux live")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        signalRow("Tâche live", liveTaskTitle(present))
-                        signalRow("Activité live", present?.activityLabel ?? "—")
-                        signalRow("Focus", focusLabel(present?.focusLevel))
-                        signalRow("Mise à jour", dashboardRelativeTimestamp(present?.updatedAt))
-
-                        if let liveSignals {
-                            Divider()
-                            evidenceBadge(liveSignals.taskEvidenceLabel, weak: isWeakLiveTask(liveSignals))
-                            Text(liveSignals.taskEvidenceSummary)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    if let liveSignals {
+                        Divider()
+                        Text(liveSignals.taskEvidenceSummary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
                     emptyState("Aucun contexte actif")
