@@ -10,7 +10,7 @@ Exemples :
   ["extractor.py", "session.py", "file_classifier.py", "NotchWindow.swift"]
   → "Python (extractor.py, session.py +1) · Swift (NotchWindow.swift)"
 
-  ["runtime.py", "extractor.py", "session.py", "episode_fsm.py", "NotchWindow.swift", "PanelView.swift"]
+  ["runtime.py", "extractor.py", "session.py", "context_builder.py", "NotchWindow.swift", "PanelView.swift"]
   → "Python (runtime.py, extractor.py +2) · Swift (NotchWindow.swift, PanelView.swift)"
 """
 

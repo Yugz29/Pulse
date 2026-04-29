@@ -394,14 +394,14 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["present"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
 
-    def test_state_exposes_current_and_recent_episodes_when_getters_are_provided(self):
+    def test_state_exposes_current_context_and_recent_sessions_when_getters_are_provided(self):
         app = Flask(__name__)
         register_runtime_routes(
             app,
             bus=self.bus,
             store=self.store,
             runtime_state=self.runtime_state,
-            get_current_episode=lambda: Episode(
+            get_current_context=lambda: Episode(
                 id="ep-1",
                 session_id="session-1",
                 started_at="2026-04-22T10:00:00",
@@ -410,7 +410,7 @@ class TestRuntimeRoutes(unittest.TestCase):
                 activity_level="editing",
                 task_confidence=0.81,
             ),
-            get_recent_episodes=lambda limit: [
+            get_recent_sessions=lambda limit: [
                 {
                     "id": "ep-1",
                     "session_id": "session-1",

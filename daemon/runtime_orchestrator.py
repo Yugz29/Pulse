@@ -118,7 +118,7 @@ class RuntimeOrchestrator:
         return self._session_fsm
 
     @property
-    def current_episode(self) -> Episode | None:
+    def current_context(self) -> Episode | None:
         snapshot = self.runtime_state.get_runtime_snapshot()
         present = snapshot.present
         session = self.session_memory.get_session()
@@ -148,6 +148,11 @@ class RuntimeOrchestrator:
             activity_level=present.activity_level,
             task_confidence=task_confidence,
         )
+
+    @property
+    def current_episode(self) -> Episode | None:
+        """Alias legacy pour les clients qui lisent encore current_episode."""
+        return self.current_context
 
     @property
     def fact_engine(self):

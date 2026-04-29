@@ -216,7 +216,7 @@ class SessionMemory:
             })
         return result
 
-    def get_recent_episodes(self, limit: int = 8) -> List[Dict[str, Any]]:
+    def get_recent_sessions(self, limit: int = 8) -> List[Dict[str, Any]]:
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -229,7 +229,11 @@ class SessionMemory:
                     """,
                     (limit,),
                 ).fetchall()
-        return [self._session_row_to_episode_payload(dict(row)) for row in rows]
+        return [self._session_row_to_recent_session_payload(dict(row)) for row in rows]
+
+    def get_recent_episodes(self, limit: int = 8) -> List[Dict[str, Any]]:
+        """Alias legacy pour l'ancienne API recent_episodes."""
+        return self.get_recent_sessions(limit=limit)
 
     def get_today_summary(self) -> Dict[str, Any]:
         now = datetime.now()
@@ -484,7 +488,7 @@ class SessionMemory:
             # Compatibilité resume_card
             "work_window_started_at": started_at,
             "work_window_commit_count": commit_count,
-            "closed_episodes": self.get_recent_episodes(limit=3),
+            "closed_episodes": self.get_recent_sessions(limit=3),
         }
 
     def purge_old_events(self, keep_hours: int = 48) -> int:
@@ -682,7 +686,7 @@ class SessionMemory:
         return updated_at or started_at
 
     @staticmethod
-    def _session_row_to_episode_payload(session: Dict[str, Any]) -> Dict[str, Any]:
+    def _session_row_to_recent_session_payload(session: Dict[str, Any]) -> Dict[str, Any]:
         started_at = _parse_iso_datetime(session.get("started_at"))
         ended_at = _parse_iso_datetime(session.get("ended_at")) or _parse_iso_datetime(session.get("updated_at"))
         duration_sec = None

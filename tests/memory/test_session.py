@@ -377,7 +377,7 @@ class TestSessionMemory(unittest.TestCase):
         self.assertGreaterEqual(summary["totals"]["commit_count"], 1)
         self.assertGreaterEqual(summary["projects"][0]["commit_count"], 1)
 
-    def test_get_recent_episodes_projette_les_sessions_closes(self):
+    def test_get_recent_sessions_projette_les_sessions_closes(self):
         start = datetime(2026, 4, 28, 9, 0, 0)
         end = start + timedelta(minutes=25)
         self.memory.started_at = start
@@ -408,7 +408,7 @@ class TestSessionMemory(unittest.TestCase):
         )
         self.memory.close(ended_at=end)
 
-        episodes = self.memory.get_recent_episodes()
+        episodes = self.memory.get_recent_sessions()
 
         self.assertEqual(len(episodes), 1)
         self.assertEqual(episodes[0]["session_id"], "test-session")

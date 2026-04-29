@@ -218,7 +218,9 @@ def register_runtime_routes(
     store: Any,
     runtime_state: Any,
     get_session_fsm: Callable[[], Any] | None = None,
+    get_current_context: Callable[[], Any] | None = None,
     get_current_episode: Callable[[], Any] | None = None,
+    get_recent_sessions: Callable[[int], Any] | None = None,
     get_recent_episodes: Callable[[int], Any] | None = None,
     get_today_summary: Callable[[], dict[str, Any]] | None = None,
     llm_unload_background: Callable[[], None],
@@ -345,20 +347,21 @@ def register_runtime_routes(
             }
             state["session_fsm"] = session_fsm_payload
             debug["session_fsm"] = session_fsm_payload
-        if get_current_episode is not None:
-            episode = get_current_episode()
-            if episode is not None:
+        current_context_getter = get_current_context or get_current_episode
+        if current_context_getter is not None:
+            current_context = current_context_getter()
+            if current_context is not None:
                 episode_payload = {
-                    "id": episode.id,
-                    "session_id": episode.session_id,
-                    "started_at": episode.started_at,
-                    "ended_at": episode.ended_at,
-                    "boundary_reason": episode.boundary_reason,
-                    "duration_sec": episode.duration_sec,
-                    "active_project": episode.active_project,
-                    "probable_task": episode.probable_task,
-                    "activity_level": episode.activity_level,
-                    "task_confidence": episode.task_confidence,
+                    "id": current_context.id,
+                    "session_id": current_context.session_id,
+                    "started_at": current_context.started_at,
+                    "ended_at": current_context.ended_at,
+                    "boundary_reason": current_context.boundary_reason,
+                    "duration_sec": current_context.duration_sec,
+                    "active_project": current_context.active_project,
+                    "probable_task": current_context.probable_task,
+                    "activity_level": current_context.activity_level,
+                    "task_confidence": current_context.task_confidence,
                 }
                 state["current_episode"] = episode_payload
                 state["current_context"] = episode_payload
@@ -381,18 +384,18 @@ def register_runtime_routes(
                     else None
                 ),
             )
-            # Compat / debug : la lecture produit doit passer d'abord par
-            # current_episode puis present. Les signaux restent exposés
-            # pour instrumentation et explication locale.
+            # Compat / debug : la lecture produit passe par current_context
+            # puis present. Les signaux restent exposés pour instrumentation.
             state["signals"] = legacy_signals
             debug["signals"] = legacy_signals
-        if get_recent_episodes is not None:
-            episodes = get_recent_episodes(8)
-            if episodes:
-                state["recent_episodes"] = episodes
-                state["recent_sessions"] = episodes
-                debug["recent_episodes"] = episodes
-                debug["recent_sessions"] = episodes
+        recent_sessions_getter = get_recent_sessions or get_recent_episodes
+        if recent_sessions_getter is not None:
+            sessions = recent_sessions_getter(8)
+            if sessions:
+                state["recent_episodes"] = sessions
+                state["recent_sessions"] = sessions
+                debug["recent_episodes"] = sessions
+                debug["recent_sessions"] = sessions
         state["debug"] = debug
         return jsonify(state)
 
