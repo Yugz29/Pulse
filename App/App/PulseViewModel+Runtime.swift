@@ -98,6 +98,8 @@ extension PulseViewModel {
                                 self.transientStatusText = nil
                                 self.isStartupExpanded = false
                             }
+                        } else if event.kind == "resume_card", let card = event.resumeCard {
+                            self.showResumeCard(card)
                         }
                     }
                 } else {

@@ -13,6 +13,9 @@ class NotchWindow: NSPanel {
     static let settingsHeight:  CGFloat = 102
     static let statusHeight:    CGFloat = 188
     static let commandHeight:   CGFloat = 80
+    static let resumeCompactHeight: CGFloat = 118
+    static let resumeStandardHeight: CGFloat = 168
+    static let resumeExpandedHeight: CGFloat = 220
     static let bottomMargin:    CGFloat = 20
 
     var currentPanelHeight: CGFloat = NotchWindow.dashboardHeight

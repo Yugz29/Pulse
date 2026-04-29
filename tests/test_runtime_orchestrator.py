@@ -939,13 +939,15 @@ class TestRuntimeOrchestrator(unittest.TestCase):
     def test_apply_restart_state_resume_aussi_la_session_memory_sur_redemarrage_court(self):
         started_at = datetime(2026, 4, 23, 17, 0, 0)
 
-        self.orchestrator._apply_restart_state(
+        self.orchestrator._restart_manager.apply(
             {
                 "elapsed_min": 3,
                 "active_project": "Pulse",
                 "probable_task": "coding",
                 "started_at": started_at.isoformat(),
-            }
+            },
+            session_fsm=self.orchestrator._session_fsm,
+            session_memory=self.session_memory,
         )
 
         self.assertEqual(self.orchestrator.session_fsm.session_started_at, started_at)
@@ -1866,6 +1868,109 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             self.runtime_state.get_last_screen_locked_at(),
             "_last_screen_locked_at doit etre efface apres un verrou court"
         )
+
+    def test_resume_card_est_publiee_apres_reprise_longue(self):
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/runtime_orchestrator.py",
+            probable_task="coding",
+            session_duration_min=42,
+        )
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "active_file": "/tmp/Pulse/daemon/runtime_orchestrator.py",
+            "probable_task": "coding",
+            "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_window_started_at": "2026-04-29T09:00:00",
+        }
+
+        self.orchestrator._maybe_emit_resume_card(
+            event=event,
+            sleep_minutes=35,
+        )
+
+        self.scorer.bus.publish.assert_called_once()
+        args = self.scorer.bus.publish.call_args.args
+        self.assertEqual(args[0], "resume_card")
+        self.assertEqual(args[1]["project"], "Pulse")
+        self.assertEqual(args[1]["generated_by"], "deterministic")
+        self.assertIn("next_action", args[1])
+
+    def test_resume_card_respecte_le_cooldown(self):
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        self._set_runtime_analysis(self._signals())
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 42,
+        }
+        self.orchestrator._last_resume_card_at = event.timestamp - timedelta(minutes=30)
+
+        self.orchestrator._maybe_emit_resume_card(
+            event=event,
+            sleep_minutes=35,
+        )
+
+        self.scorer.bus.publish.assert_not_called()
+
+    def test_resume_card_est_publiee_apres_gap_d_activite_sans_unlock(self):
+        t_old = datetime(2026, 4, 29, 8, 0, 0)
+        t_new = datetime(2026, 4, 29, 10, 0, 0)
+        old_event = Event("app_activated", {"app_name": "Xcode"})
+        old_event.timestamp = t_old
+        new_event = Event("app_activated", {"app_name": "Xcode"})
+        new_event.timestamp = t_new
+        self.orchestrator.session_fsm._session_started_at = t_old - timedelta(minutes=10)
+        self.orchestrator.session_fsm.observe_recent_events(
+            recent_events=[old_event],
+            now=t_old,
+        )
+        self.scorer.bus.recent.return_value = [old_event, new_event]
+        self.scorer.compute.return_value = self._signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/App/App/SystemObserver.swift",
+            session_duration_min=1,
+        )
+        self.decision_engine.evaluate.return_value = Decision("silent", 0, "nothing_relevant")
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "active_file": "/tmp/Pulse/App/App/SystemObserver.swift",
+            "probable_task": "coding",
+            "duration_min": 45,
+            "top_files": ["/tmp/Pulse/App/App/SystemObserver.swift"],
+            "work_window_started_at": "2026-04-29T08:00:00",
+        }
+
+        self.orchestrator._process_signals(new_event)
+
+        publish_calls = [call.args for call in self.scorer.bus.publish.call_args_list]
+        resume_calls = [args for args in publish_calls if args and args[0] == "resume_card"]
+        self.assertEqual(len(resume_calls), 1)
+        self.assertEqual(resume_calls[0][1]["project"], "Pulse")
+
+    def test_screen_unlock_declenche_daydream_pending(self):
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+
+        with patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream, \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(event)
+
+        run_daydream.assert_called_once()
+
+    def test_recover_missed_daydream_marque_la_veille_et_declenche(self):
+        with patch("daemon.memory.daydream.mark_daydream_pending") as mark_pending, \
+             patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream:
+            self.orchestrator._recover_missed_daydream()
+
+        mark_pending.assert_called_once()
+        requested_date = mark_pending.call_args.kwargs["ref_date"]
+        self.assertEqual(requested_date, (datetime.now() - timedelta(days=1)).date())
+        run_daydream.assert_called_once()
 
 
 if __name__ == "__main__":

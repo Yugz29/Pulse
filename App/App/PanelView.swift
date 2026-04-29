@@ -78,6 +78,8 @@ struct NotchRootView: View {
                                 InsightView(vm: vm)
                             case .feed:
                                 FeedView(vm: vm)
+                            case .resumeCard:
+                                ResumeCardNotificationView(vm: vm)
                             case .settings:
                                 SettingsView()
                             case .status:

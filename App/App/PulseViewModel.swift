@@ -39,6 +39,7 @@ final class PulseViewModel: ObservableObject {
     @Published var recentEvents: [InsightEvent] = []
     @Published var recentProposals: [ProposalRecord] = []
     @Published var feedHistory: [FeedEvent] = []
+    @Published var activeResumeCard: ResumeCard? = nil
     @Published var currentPresent: PresentData? = nil
     @Published var currentEpisode: EpisodeData? = nil
     @Published var currentSignals: SignalsData? = nil
@@ -65,6 +66,9 @@ final class PulseViewModel: ObservableObject {
 
     var currentPanelHeight: CGFloat {
         if pendingCommand != nil { return NotchWindow.commandHeight }
+        if panelMode == .resumeCard, let card = activeResumeCard {
+            return card.displayHeight
+        }
         switch panelMode {
         case .chat:
             return NotchWindow.chatHeight
@@ -78,6 +82,8 @@ final class PulseViewModel: ObservableObject {
             return NotchWindow.settingsHeight
         case .status:
             return NotchWindow.statusHeight
+        case .resumeCard:
+            return NotchWindow.resumeStandardHeight
         default:
             return NotchWindow.dashboardHeight
         }

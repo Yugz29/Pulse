@@ -23,6 +23,26 @@ extension PulseViewModel {
         }
     }
 
+    func showResumeCard(_ card: ResumeCard) {
+        activeResumeCard = card
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            panelMode = .resumeCard
+            isExpanded = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 11.0) {
+            guard self.activeResumeCard?.id == card.id, self.panelMode == .resumeCard else { return }
+            self.dismissResumeCard()
+        }
+    }
+
+    func dismissResumeCard() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            activeResumeCard = nil
+            panelMode = .dashboard
+            isExpanded = false
+        }
+    }
+
     func toggleObservation() {
         isObservingEnabled.toggle()
         onObservationToggle?(isObservingEnabled)

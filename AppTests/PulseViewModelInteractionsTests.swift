@@ -498,6 +498,16 @@ final class PulseViewModelInteractionsTests: XCTestCase {
                 return (response, Data("{}".utf8))
             }
 
+            if path == "/feed" {
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data("[]".utf8))
+            }
+
             XCTFail("Chemin inattendu: \\(path)")
             let response = HTTPURLResponse(
                 url: url,
@@ -725,6 +735,15 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         let session = URLSession(configuration: config)
 
         MockURLProtocol.handler = { request in
+            if request.url?.path == "/feed" {
+                let response = HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data("[]".utf8))
+            }
             XCTAssertEqual(request.url?.path, "/llm/model")
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),

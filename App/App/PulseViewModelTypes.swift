@@ -15,6 +15,7 @@ enum PanelMode {
     case settings
     case status
     case feed
+    case resumeCard
 }
 
 enum PulseServiceStatus {

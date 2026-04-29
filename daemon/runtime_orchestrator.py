@@ -4,7 +4,6 @@ import threading
 import time
 from dataclasses import replace
 from datetime import datetime, timedelta
-from pathlib import Path
 import subprocess
 
 from daemon.memory.extractor import (
@@ -36,8 +35,14 @@ from daemon.core.file_classifier import file_signal_significance
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary, extract_file_names_from_diff_summary
 from daemon.core.proposal_candidate_adapter import proposal_candidate_to_proposal
 from daemon.core.proposals import proposal_store
+from daemon.core.resume_card import (
+    build_resume_card_context,
+    generate_resume_card,
+    should_offer_resume_card,
+)
 from daemon.core.session_fsm import SessionFSM
 from daemon.core.uid import new_uid
+from daemon.core.restart_manager import RestartManager
 from daemon.core.workspace_context import find_workspace_root
 
 
@@ -95,6 +100,7 @@ class RuntimeOrchestrator:
         self._diff_cooldown_sec: float = 120.0
         self._last_diff_triggered: dict[str, float] = {}
         self._diff_trigger_lock = threading.Lock()
+        self._last_resume_card_at: datetime | None = None
         # Thread de sync périodique — écrit dans le journal toutes les 30 min
         # même sans commit ni screen_lock, tant qu'il y a un diff actif.
         self._periodic_sync_interval_sec: float = 30 * 60
@@ -109,6 +115,7 @@ class RuntimeOrchestrator:
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
         self._episode_fsm = EpisodeFSM()
+        self._restart_manager = RestartManager()
 
     @property
     def session_fsm(self) -> SessionFSM:
@@ -187,6 +194,8 @@ class RuntimeOrchestrator:
     def handle_event(self, event) -> None:
         if self._should_ignore_event(event):
             return
+        if event.type == "resume_card":
+            return
         if self.runtime_state.is_paused():
             return
 
@@ -197,6 +206,8 @@ class RuntimeOrchestrator:
         if self.runtime_state.is_screen_locked() and event.type not in _SCREEN_PASSTHROUGH:
             return
 
+        resume_sleep_minutes: float | None = None
+
         if event.type == "screen_locked":
             self._session_fsm.on_screen_locked(when=event.timestamp)
             self._episode_fsm.on_screen_locked(when=event.timestamp)
@@ -206,6 +217,7 @@ class RuntimeOrchestrator:
             self._run_daydream_if_pending()
 
         elif event.type == "screen_unlocked":
+            self._run_daydream_if_pending()
             episode_locked_at = (
                 self._session_fsm.last_screen_locked_at
                 or self.runtime_state.get_last_screen_locked_at()
@@ -228,6 +240,7 @@ class RuntimeOrchestrator:
                 when=event.timestamp,
                 sleep_session_threshold_min=self.sleep_session_threshold_min,
             )
+            resume_sleep_minutes = transition.sleep_minutes
             self.runtime_state.mark_screen_unlocked()
             if transition.should_reset_clock:
                 sleep_min = transition.sleep_minutes or 0.0
@@ -313,6 +326,50 @@ class RuntimeOrchestrator:
             self._enqueue_file_event(event)
         else:
             self._process_signals(event)
+            if event.type == "screen_unlocked":
+                self._maybe_emit_resume_card(
+                    event=event,
+                    sleep_minutes=resume_sleep_minutes,
+                )
+
+    def _maybe_emit_resume_card(
+        self,
+        *,
+        event,
+        sleep_minutes: float | None,
+        memory_payload: dict | None = None,
+        event_type: str | None = None,
+    ) -> None:
+        try:
+            snapshot = self.runtime_state.get_runtime_snapshot()
+            payload = memory_payload if isinstance(memory_payload, dict) else self._export_memory_payload()
+            active_project = snapshot.present.active_project or payload.get("active_project")
+            if not should_offer_resume_card(
+                event_type=event_type or event.type,
+                sleep_minutes=sleep_minutes,
+                active_project=active_project,
+                memory_payload=payload,
+                last_offered_at=self._last_resume_card_at,
+                now=event.timestamp,
+            ):
+                return
+            context = build_resume_card_context(
+                runtime_snapshot=snapshot,
+                memory_payload=payload,
+                sleep_minutes=sleep_minutes,
+                diff_summary=snapshot.last_diff_summary,
+            )
+            card = generate_resume_card(context, llm=self.summary_llm)
+            self._last_resume_card_at = event.timestamp
+            self.scorer.bus.publish("resume_card", card.to_event_payload(), event.timestamp)
+            self.log.info(
+                "resume_card emitted project=%s generated_by=%s confidence=%.2f",
+                card.project,
+                card.generated_by,
+                card.confidence,
+            )
+        except Exception as exc:
+            self.log.warning("resume_card skipped: %s", exc)
 
     def shutdown_runtime(self) -> None:
         try:
@@ -329,169 +386,10 @@ class RuntimeOrchestrator:
             snapshot = self._export_memory_payload()
             if snapshot.get("duration_min", 0) > 0:
                 update_memories_from_session(snapshot)
-            # Persiste l'état courant pour le prochain démarrage.
-            self._save_restart_state(snapshot)
+            self._restart_manager.save(snapshot, session_fsm=self._session_fsm)
             self.session_memory.close(close_reason="session_end")
         except Exception as exc:
             self.log.warning("shutdown sync failed: %s", exc)
-
-    _RESTART_STATE_PATH = Path.home() / ".pulse" / "restart_state.json"
-    _RESTART_CONTINUE_MAX_MIN = 5    # < 5 min  → reprise transparente
-    _RESTART_RESUME_MAX_MIN   = 30   # 5-30 min → reprise avec note de gap
-
-    def _save_restart_state(self, snapshot: dict) -> None:
-        try:
-            import json as _json
-            state = {
-                "shutdown_at": datetime.now().isoformat(),
-                "active_project": snapshot.get("active_project"),
-                "probable_task":  snapshot.get("probable_task"),
-                "activity_level": snapshot.get("activity_level"),
-                "started_at": (
-                    self._session_fsm.session_started_at.isoformat()
-                    if self._session_fsm.session_started_at else None
-                ),
-            }
-            # Sauvegarder le HEAD SHA de chaque projet connu
-            # pour détecter les commits manqués au prochain démarrage.
-            project = snapshot.get("active_project")
-            if project:
-                try:
-                    from daemon.core.workspace_context import find_workspace_root
-                    from daemon.memory.extractor import read_head_sha, find_git_root
-                    workspace = find_workspace_root(project) or ""
-                    if workspace:
-                        git_root = find_git_root(workspace)
-                        if git_root:
-                            sha = read_head_sha(git_root)
-                            if sha:
-                                state["last_head_sha"] = sha
-                                state["last_sha_project"] = project
-                except Exception:
-                    pass
-            self._RESTART_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            self._RESTART_STATE_PATH.write_text(_json.dumps(state, ensure_ascii=False))
-            self.log.info("restart state sauvegardé : %s", state)
-        except Exception as exc:
-            self.log.warning("restart state save échoué : %s", exc)
-
-    def _load_restart_state(self) -> dict | None:
-        try:
-            import json as _json
-            if not self._RESTART_STATE_PATH.exists():
-                return None
-            state = _json.loads(self._RESTART_STATE_PATH.read_text())
-            shutdown_at = datetime.fromisoformat(state["shutdown_at"])
-            elapsed_min = (datetime.now() - shutdown_at).total_seconds() / 60
-            state["elapsed_min"] = elapsed_min
-            return state
-        except Exception as exc:
-            self.log.warning("restart state load échoué : %s", exc)
-            return None
-
-    def _apply_restart_state(self, state: dict) -> None:
-        elapsed_min = state.get("elapsed_min", 999)
-        project = state.get("active_project")
-        task = state.get("probable_task", "general")
-        started_at_raw = state.get("started_at")
-
-        if elapsed_min > self._RESTART_RESUME_MAX_MIN:
-            # Trop long — nouvelle session, on oublie.
-            self.log.info("restart state ignoré (%.0f min > %d min)",
-                          elapsed_min, self._RESTART_RESUME_MAX_MIN)
-            return
-
-        if elapsed_min <= self._RESTART_CONTINUE_MAX_MIN:
-            # Reprise transparente — on restaure le started_at original.
-            if started_at_raw:
-                try:
-                    original_started_at = datetime.fromisoformat(started_at_raw)
-                    self._session_fsm.restore_session_start(original_started_at)
-                    self.session_memory.resume_session(started_at=original_started_at)
-                    self.log.info(
-                        "reprise transparente (%.0f min) depuis %s",
-                        elapsed_min, original_started_at.strftime("%H:%M")
-                    )
-                except ValueError:
-                    pass
-        else:
-            # Zone grise 5-30 min — on reprend le contexte mais pas le timer.
-            self.log.info(
-                "reprise partielle (%.0f min) — contexte conservé sans timer",
-                elapsed_min
-            )
-
-        # Dans les deux cas — restaurer le contexte projet/tâche.
-        self.log.info("contexte restauré : projet=%s tâche=%s", project, task)
-
-    def _recover_missed_commits(self, state: dict) -> None:
-        """
-        Détecte les commits effectués pendant que Pulse était hors ligne
-        et déclenche le pipeline de journalisation pour chacun.
-        """
-        last_sha = state.get("last_head_sha")
-        project = state.get("last_sha_project") or state.get("active_project")
-        if not last_sha or not project:
-            return
-
-        try:
-            from daemon.core.workspace_context import find_workspace_root
-            from daemon.memory.extractor import (
-                read_head_sha, find_git_root, read_commit_file_names, read_commit_message,
-                update_memories_from_session,
-            )
-            from daemon.core.git_diff import read_commit_diff_summary
-
-            workspace = find_workspace_root(project) or ""
-            if not workspace:
-                return
-
-            git_root = find_git_root(workspace)
-            if not git_root:
-                return
-
-            current_sha = read_head_sha(git_root)
-            if not current_sha or current_sha == last_sha:
-                return  # Pas de nouveau commit
-
-            # Nouveau commit détecté
-            commit_message = read_commit_message(git_root) or ""
-            diff_summary = read_commit_diff_summary(git_root) or ""
-            commit_scope_files = read_commit_file_names(git_root)
-            self.log.info(
-                "Commit manqué détecté sur %s : %s",
-                project, commit_message[:60]
-            )
-
-            # Construire un snapshot minimal pour le pipeline
-            shutdown_at = state.get("shutdown_at")
-            started_at = state.get("started_at") or shutdown_at
-            snapshot = {
-                "active_project": project,
-                "probable_task": state.get("probable_task", "coding"),
-                "activity_level": "executing",
-                "duration_min": 5,  # durée inconnue, valeur conservative
-                "top_files": [],
-                "files_changed": 0,
-                "recent_apps": [],
-                "max_friction": 0.0,
-                "focus_level": "normal",
-                "started_at": started_at,
-                "ended_at": shutdown_at,
-                "commit_scope_files": commit_scope_files,
-            }
-
-            update_memories_from_session(
-                snapshot,
-                llm=self.summary_llm,
-                commit_message=commit_message,
-                trigger="commit",
-                diff_summary=diff_summary,
-            )
-            self.log.info("Journal de secours écrit pour commit manqué : %s", commit_message[:60])
-
-        except Exception as exc:
-            self.log.warning("recover_missed_commits échoué : %s", exc)
 
     def _daydream_scheduler(self) -> None:
         """Tourne en boucle, marque DayDream pending à 23:59 chaque jour."""
@@ -507,6 +405,8 @@ class RuntimeOrchestrator:
             _time.sleep(max(wait_sec, 1))
             from daemon.memory.daydream import mark_daydream_pending
             mark_daydream_pending()
+            if self.runtime_state.is_screen_locked():
+                self._run_daydream_if_pending()
 
     def _run_daydream_if_pending(self) -> None:
         """Lance DayDream dans un thread si le flag est actif."""
@@ -567,11 +467,17 @@ class RuntimeOrchestrator:
         self.llm_runtime.load_persisted_models()
 
         # Restaurer l'état précédent si le redémarrage est récent.
-        restart_state = self._load_restart_state()
+        restart_state = self._restart_manager.load()
         if restart_state:
-            self._apply_restart_state(restart_state)
-            # Vérifier les commits manqués pendant l'absence de Pulse.
-            self._recover_missed_commits(restart_state)
+            self._restart_manager.apply(
+                restart_state,
+                session_fsm=self._session_fsm,
+                session_memory=self.session_memory,
+            )
+            self._restart_manager.recover_missed_commits(
+                restart_state,
+                summary_llm=self.summary_llm,
+            )
 
         purged = self.memory_store.purge_expired()
         if purged:
@@ -614,6 +520,7 @@ class RuntimeOrchestrator:
             else:
                 self.log.warning("LLM warmup échoué au démarrage (Ollama indisponible ?)")
             self.scorer.bus.publish("llm_ready", {"model": provider.model})
+        self._recover_missed_daydream()
         self.log.info("\u2713 Init différé terminé")
 
         # Scheduler DayDream — déclenche le flag à 23:59 chaque jour.
@@ -622,6 +529,20 @@ class RuntimeOrchestrator:
             daemon=True,
             name="pulse-daydream-scheduler",
         ).start()
+
+    def _recover_missed_daydream(self) -> None:
+        """
+        Rattrape le DayDream de la veille si le daemon dormait, était arrêté,
+        ou si le Mac était déjà verrouillé quand le scheduler a marqué le job.
+        """
+        try:
+            from daemon.memory.daydream import mark_daydream_pending
+
+            yesterday = (datetime.now() - timedelta(days=1)).date()
+            mark_daydream_pending(ref_date=yesterday)
+            self._run_daydream_if_pending()
+        except Exception as exc:
+            self.log.warning("DayDream catch-up échoué : %s", exc)
 
     def _should_ignore_event(self, event) -> bool:
         if not event.type.startswith("file_"):
@@ -886,6 +807,7 @@ class RuntimeOrchestrator:
         if trigger_event.type == "user_idle":
             self._session_fsm.on_user_idle()
 
+        resume_memory_payload: dict | None = None
         previous_activity = self._session_fsm.last_meaningful_activity_at
         previous_present = self.runtime_state.get_runtime_snapshot().present
         recent_events = self.scorer.bus.recent(DEFAULT_EVENT_BUS_SIZE)
@@ -908,6 +830,7 @@ class RuntimeOrchestrator:
             )
             try:
                 snapshot = self._export_memory_payload()
+                resume_memory_payload = snapshot
                 if snapshot.get("duration_min", 0) >= 5:
                     threading.Thread(
                         target=self._sync_memory_background,
@@ -1013,6 +936,17 @@ class RuntimeOrchestrator:
             signals=signals,
             decision=decision,
         )
+        if (
+            lifecycle_transition.boundary_detected
+            and lifecycle_transition.should_start_new_session
+            and lifecycle_transition.sleep_minutes is not None
+        ):
+            self._maybe_emit_resume_card(
+                event=trigger_event,
+                sleep_minutes=lifecycle_transition.sleep_minutes,
+                memory_payload=resume_memory_payload,
+                event_type="resume_after_pause",
+            )
         if should_sync:
             snapshot = self._export_memory_payload()
             llm = self._summary_llm_for(trigger_event.type, present)
@@ -1293,6 +1227,7 @@ class RuntimeOrchestrator:
         with self._runtime_lock:
             self._frozen_memory = None
             self._frozen_memory_at = None
+        self._last_resume_card_at = None
         reset_fact_engine_for_tests()
         reset_cooldown_for_tests()
         self._fact_engine = get_fact_engine()

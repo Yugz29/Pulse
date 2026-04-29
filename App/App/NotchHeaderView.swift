@@ -63,6 +63,8 @@ struct NotchExpandedHeader: View {
             return "Observation"
         case .feed:
             return "Notifications"
+        case .resumeCard:
+            return "Reprise"
         default:
             return nil
         }
@@ -174,7 +176,7 @@ struct NotchExpandedHeader: View {
             )
             .position(x: geometryWidth / 2 + notchWidth / 2 + 52, y: notchHeight / 2)
 
-            if vm.panelMode == .chat {
+            if vm.panelMode == .chat || vm.panelMode == .resumeCard {
                 NotchHeaderButton(
                     systemName: "xmark",
                     size: 10,
@@ -186,7 +188,13 @@ struct NotchExpandedHeader: View {
                     hoverStrokeOpacity: 0.22,
                     hoverScale: 1.0,
                     foregroundColor: .white,
-                    action: { vm.closeChat() }
+                    action: {
+                        if vm.panelMode == .resumeCard {
+                            vm.dismissResumeCard()
+                        } else {
+                            vm.closeChat()
+                        }
+                    }
                 )
                 .position(x: (geometryWidth - panelWidth) / 2 + 116, y: notchHeight / 2)
             }

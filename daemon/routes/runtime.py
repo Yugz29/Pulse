@@ -609,6 +609,15 @@ def register_runtime_routes(
                     "command": None,
                     "timestamp": event.timestamp.isoformat(),
                 })
+            elif event.type == "resume_card":
+                notable.append({
+                    "kind": "resume_card",
+                    "success": True,
+                    "label": payload.get("title") or "Reprise de contexte",
+                    "command": None,
+                    "timestamp": event.timestamp.isoformat(),
+                    "resume_card": payload,
+                })
 
         return jsonify(notable)
 

@@ -70,6 +70,71 @@ struct FeedView: View {
     }
 }
 
+struct ResumeCardNotificationView: View {
+    @ObservedObject var vm: PulseViewModel
+
+    var body: some View {
+        if let card = vm.activeResumeCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color(hex: "#5E9EFF"))
+                    Text(card.project ?? card.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.88))
+                        .lineLimit(1)
+                    Spacer()
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(card.summary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.72))
+                        .lineLimit(2)
+                    Text(card.lastObjective)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.62))
+                        .lineLimit(2)
+                    Text(card.nextAction)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: "#5DCAA5"))
+                        .lineLimit(2)
+                }
+
+                HStack(spacing: 8) {
+                    Text(card.generatedBy == "llm" ? "LLM + journal" : "journal local")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.32))
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            vm.panelMode = .feed
+                        }
+                    } label: {
+                        Image(systemName: "bell")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.5))
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            .frame(height: card.displayHeight - .panelContentGap, alignment: .top)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                    vm.panelMode = .feed
+                }
+            }
+        } else {
+            EmptyView()
+        }
+    }
+}
+
 private struct FeedRow: View {
     let event: FeedEvent
 
