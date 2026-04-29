@@ -5,7 +5,7 @@ from pathlib import Path
 
 from flask import Flask
 
-from daemon.core.contracts import Episode
+from daemon.core.contracts import SessionContext
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
 from daemon.routes.runtime import _FileEventCoalescer, register_runtime_routes
@@ -401,7 +401,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             bus=self.bus,
             store=self.store,
             runtime_state=self.runtime_state,
-            get_current_context=lambda: Episode(
+            get_current_context=lambda: SessionContext(
                 id="ep-1",
                 session_id="session-1",
                 started_at="2026-04-22T10:00:00",
@@ -449,7 +449,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["recent_sessions"][0]["active_project"], "Pulse")
         self.assertEqual(payload["recent_sessions"][0]["activity_level"], "editing")
 
-    def test_state_keeps_product_hierarchy_with_present_episode_and_signals(self):
+    def test_state_keeps_product_hierarchy_with_present_context_and_signals(self):
         signals = Signals(
             active_project="SignalsProject",
             active_file="/tmp/signals.py",
@@ -488,7 +488,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             bus=self.bus,
             store=self.store,
             runtime_state=self.runtime_state,
-            get_current_episode=lambda: Episode(
+            get_current_episode=lambda: SessionContext(
                 id="ep-1",
                 session_id="session-1",
                 started_at="2026-04-23T11:50:00",

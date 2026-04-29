@@ -79,33 +79,12 @@ class SessionSnapshot:
 
 
 @dataclass(frozen=True)
-class ConsolidatedEpisode:
+class SessionContext:
     """
-    Brique minimale de consolidation mémoire pour un épisode clos.
+    Projection déterministe du contexte de session courant.
 
-    Elle reste passive : aucune logique de calcul, seulement les champs
-    nécessaires pour alimenter la mémoire rétrospective.
-    """
-
-    episode_id: str
-    session_id: str
-    active_project: Optional[str]
-    probable_task: Optional[str]
-    activity_level: Optional[str]
-    task_confidence: Optional[float]
-    started_at: str
-    ended_at: str
-    duration_sec: Optional[int]
-    boundary_reason: Optional[str]
-
-
-@dataclass(frozen=True)
-class Episode:
-    """
-    Projection déterministe d'un épisode.
-
-    Les champs sémantiques restent des snapshots du runtime live :
-    ils sont attachés à l'épisode sans recalcul rétrospectif.
+    La forme JSON reste compatible avec l'ancien payload current_episode,
+    mais le modèle produit est current_context.
     """
 
     id: str
@@ -118,6 +97,9 @@ class Episode:
     probable_task: Optional[str] = None
     activity_level: Optional[str] = None
     task_confidence: Optional[float] = None
+
+
+Episode = SessionContext
 
 
 @dataclass(frozen=True)

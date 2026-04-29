@@ -28,7 +28,7 @@ from daemon.core.context_formatter import (
 )
 from daemon.core.current_context_adapters import current_context_to_markdown
 from daemon.core.current_context_builder import CurrentContextBuilder
-from daemon.core.contracts import Episode, ProposalCandidate
+from daemon.core.contracts import ProposalCandidate, SessionContext
 from daemon.core.event_bus import DEFAULT_EVENT_BUS_SIZE
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary, extract_file_names_from_diff_summary
@@ -118,7 +118,7 @@ class RuntimeOrchestrator:
         return self._session_fsm
 
     @property
-    def current_context(self) -> Episode | None:
+    def current_context(self) -> SessionContext | None:
         snapshot = self.runtime_state.get_runtime_snapshot()
         present = snapshot.present
         session = self.session_memory.get_session()
@@ -136,7 +136,7 @@ class RuntimeOrchestrator:
 
         signals = snapshot.signals
         task_confidence = getattr(signals, "task_confidence", None) if signals is not None else None
-        return Episode(
+        return SessionContext(
             id=f"current-{self.session_memory.session_id}",
             session_id=self.session_memory.session_id,
             started_at=started_at,
@@ -150,7 +150,7 @@ class RuntimeOrchestrator:
         )
 
     @property
-    def current_episode(self) -> Episode | None:
+    def current_episode(self) -> SessionContext | None:
         """Alias legacy pour les clients qui lisent encore current_episode."""
         return self.current_context
 
