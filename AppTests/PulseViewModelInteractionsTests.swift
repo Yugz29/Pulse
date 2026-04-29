@@ -775,7 +775,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.selectedSummaryModel, "mistral")
     }
 
-    func testStateResponseDecodesPresentAndEpisodeHierarchy() throws {
+    func testStateResponseDecodesPresentContextAndLegacyAliases() throws {
         let json = """
         {
           "active_app": "Xcode",
@@ -862,7 +862,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(state.signals?.activeProject, "SignalsProject")
     }
 
-    func testRefreshStateBuildsProductStateFromCurrentContextBeforeLegacyEpisode() async {
+    func testRefreshStateBuildsProductStateFromCurrentContextBeforeLegacyAlias() async {
         let json = """
         {
           "active_app": "Xcode",
@@ -925,10 +925,10 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         let vm = PulseViewModel(bridge: makeJSONBridge(json: json, path: "/state"))
 
         vm.refreshState()
-        await waitUntil { vm.currentEpisode != nil && vm.currentPresent != nil }
+        await waitUntil { vm.currentContext != nil && vm.currentPresent != nil }
 
-        XCTAssertEqual(vm.currentEpisode?.activeProject, "Pulse")
-        XCTAssertEqual(vm.currentEpisode?.probableTask, "debug")
+        XCTAssertEqual(vm.currentContext?.activeProject, "Pulse")
+        XCTAssertEqual(vm.currentContext?.probableTask, "debug")
         XCTAssertEqual(vm.currentPresent?.probableTask, "debug")
         XCTAssertEqual(vm.activeProject, "Pulse")
         XCTAssertEqual(vm.probableTask, "debug")

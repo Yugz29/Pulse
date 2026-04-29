@@ -41,7 +41,7 @@ final class PulseViewModel: ObservableObject {
     @Published var feedHistory: [FeedEvent] = []
     @Published var activeResumeCard: ResumeCard? = nil
     @Published var currentPresent: PresentData? = nil
-    @Published var currentEpisode: EpisodeData? = nil
+    @Published var currentContext: SessionContextData? = nil
     @Published var currentSignals: SignalsData? = nil
     @Published var frictionScore: Double = 0.0
     @Published var activeFile: String? = nil

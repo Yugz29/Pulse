@@ -4,7 +4,7 @@ struct CurrentStateView: View {
     @ObservedObject var vm: PulseViewModel
     private let proposalLimit = 4
     private var currentPresent: PresentData? { vm.currentPresent }
-    private var currentEpisode: EpisodeData? { vm.currentEpisode }
+    private var currentContext: SessionContextData? { vm.currentContext }
     private var currentSignals: SignalsData? { vm.currentSignals }
 
     private var visibleProposals: [ProposalRecord] {
@@ -13,7 +13,7 @@ struct CurrentStateView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if currentPresent == nil && currentEpisode == nil && visibleProposals.isEmpty {
+            if currentPresent == nil && currentContext == nil && visibleProposals.isEmpty {
                 HStack {
                     Spacer()
                     Text("Aucune lecture courante ni proposition récente")
@@ -32,7 +32,7 @@ struct CurrentStateView: View {
                         currentContextRow
                             .padding(.horizontal, 18)
 
-                        if currentEpisode != nil || currentPresent != nil {
+                        if currentContext != nil || currentPresent != nil {
                             Divider().background(Color.white.opacity(0.05))
 
                             sectionHeader("Bloc courant")
@@ -40,7 +40,7 @@ struct CurrentStateView: View {
                                 .padding(.top, 8)
 
                             currentInterpretationRow(
-                                episode: currentEpisode,
+                                context: currentContext,
                                 present: currentPresent,
                                 signals: currentSignals
                             )
@@ -208,12 +208,12 @@ struct CurrentStateView: View {
     }
 
     private func currentInterpretationRow(
-        episode: EpisodeData?,
+        context: SessionContextData?,
         present: PresentData?,
         signals: SignalsData?
     ) -> some View {
-        let accent = episode?.taskAccentHex ?? present?.taskAccentHex ?? "#7c7c80"
-        let taskTitle = currentTaskTitle(episode: episode, present: present)
+        let accent = context?.taskAccentHex ?? present?.taskAccentHex ?? "#7c7c80"
+        let taskTitle = currentTaskTitle(context: context, present: present)
 
         return HStack(alignment: .top, spacing: 10) {
             ZStack {
@@ -234,7 +234,7 @@ struct CurrentStateView: View {
 
                     Spacer(minLength: 8)
 
-                    Text(episode != nil ? "Épisode" : "Live")
+                    Text(context != nil ? "Contexte" : "Live")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(Color(hex: accent))
                         .padding(.horizontal, 6)
@@ -243,7 +243,7 @@ struct CurrentStateView: View {
                         .clipShape(Capsule())
                 }
 
-                Text(currentTaskSummary(episode: episode, present: present))
+                Text(currentTaskSummary(context: context, present: present))
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.52))
                     .lineLimit(3)
@@ -266,9 +266,9 @@ struct CurrentStateView: View {
         .padding(.vertical, 8)
     }
 
-    private func currentTaskTitle(episode: EpisodeData?, present: PresentData?) -> String {
-        if let episode, episode.taskLabel != "—" {
-            return episode.taskLabel
+    private func currentTaskTitle(context: SessionContextData?, present: PresentData?) -> String {
+        if let context, context.taskLabel != "—" {
+            return context.taskLabel
         }
         if let present {
             return present.taskLabel == "Général" ? "Contexte faible" : present.taskLabel
@@ -276,11 +276,11 @@ struct CurrentStateView: View {
         return "Contexte faible"
     }
 
-    private func currentTaskSummary(episode: EpisodeData?, present: PresentData?) -> String {
-        let project = episode?.activeProject ?? present?.activeProject ?? "—"
-        let activity = present?.activityLabel ?? episode?.activityLabel ?? "—"
-        if let episode {
-            return "Bloc courant sur \(project) · \(episode.taskLabel) · \(activity)"
+    private func currentTaskSummary(context: SessionContextData?, present: PresentData?) -> String {
+        let project = context?.activeProject ?? present?.activeProject ?? "—"
+        let activity = present?.activityLabel ?? context?.activityLabel ?? "—"
+        if let context {
+            return "Bloc courant sur \(project) · \(context.taskLabel) · \(activity)"
         }
         if let present {
             return "Lecture live sur \(project) · \(present.taskLabel) · \(activity)"

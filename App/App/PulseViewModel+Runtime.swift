@@ -154,7 +154,7 @@ private extension PulseViewModel {
     func applyState(_ state: StateResponse) {
         let resolvedContext = state.currentContext ?? state.currentEpisode
         currentPresent = state.present
-        currentEpisode = resolvedContext
+        currentContext = resolvedContext
         currentSignals = state.signals
 
         let productProject = resolvedContext?.activeProject

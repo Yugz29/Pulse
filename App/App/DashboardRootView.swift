@@ -195,8 +195,8 @@ struct DashboardRootView: View {
                 }
 
                 HStack(alignment: .top, spacing: 16) {
-                    episodeCurrentCard
-                    episodeHistoryCard
+                    currentContextCard
+                    recentSessionsCard
                 }
 
                 HStack(alignment: .top, spacing: 16) {
@@ -359,20 +359,20 @@ struct DashboardRootView: View {
         }
     }
 
-    private var episodeCurrentCard: some View {
-        let episode = vm.state?.currentContext ?? vm.state?.currentEpisode
+    private var currentContextCard: some View {
+        let context = vm.state?.currentContext ?? vm.state?.currentEpisode
         let present = vm.state?.present
         let liveSignals = vm.state?.signals
-        let weakContext = isWeakProductTask(episode, present)
-        let accent = episode?.taskAccentHex ?? present?.taskAccentHex ?? gGray
+        let weakContext = isWeakProductTask(context, present)
+        let accent = context?.taskAccentHex ?? present?.taskAccentHex ?? gGray
 
-        return GlassCard(accent: episode?.boundaryColor ?? gBlue) {
+        return GlassCard(accent: context?.boundaryColor ?? gBlue) {
             VStack(alignment: .leading, spacing: 12) {
                 cardTitle("Contexte actuel", icon: "timeline.selection")
 
-                if let episode {
+                if let context {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(productTaskTitle(episode, present))
+                        Text(productTaskTitle(context, present))
                             .font(.system(size: weakContext ? 18 : 22, weight: weakContext ? .semibold : .bold, design: .rounded))
                             .foregroundStyle(weakContext ? .secondary : Color(hex: accent))
                         HStack(spacing: 8) {
@@ -395,12 +395,12 @@ struct DashboardRootView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        signalRow("Projet", episode.activeProject ?? present?.activeProject ?? "—")
-                        signalRow("Tâche", episode.taskLabel)
-                        signalRow("Activité", episode.activityLabel)
+                        signalRow("Projet", context.activeProject ?? present?.activeProject ?? "—")
+                        signalRow("Tâche", context.taskLabel)
+                        signalRow("Activité", context.activityLabel)
                         signalRow("Focus", focusLabel(present?.focusLevel))
-                        signalRow("Confiance", dashboardPercent(episode.taskConfidence))
-                        if episode.boundaryReason == "idle_timeout" {
+                        signalRow("Confiance", dashboardPercent(context.taskConfidence))
+                        if context.boundaryReason == "idle_timeout" {
                             signalRow("Fin", "Estimée par inactivité")
                         }
                     }
@@ -420,7 +420,7 @@ struct DashboardRootView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var episodeHistoryCard: some View {
+    private var recentSessionsCard: some View {
         let history = ((vm.state?.recentSessions ?? vm.state?.recentEpisodes) ?? []).filter { !$0.isActive }
 
         return GlassCard {
@@ -431,34 +431,34 @@ struct DashboardRootView: View {
                     emptyState("Aucune session close")
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(history.prefix(5)) { episode in
+                        ForEach(history.prefix(5)) { session in
                             HStack(alignment: .top, spacing: 10) {
                                 Circle()
-                                    .fill(Color(hex: episode.boundaryColor))
+                                    .fill(Color(hex: session.boundaryColor))
                                     .frame(width: 8, height: 8)
                                     .padding(.top, 5)
 
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack {
-                                        Text(episode.boundaryLabel)
+                                        Text(session.boundaryLabel)
                                             .font(.system(size: 12, weight: .medium))
                                             .foregroundStyle(.primary)
                                         Spacer()
-                                        Text(episodeDurationCompact(episode))
+                                        Text(sessionDurationCompact(session))
                                             .font(.system(size: 11, weight: .semibold))
                                             .foregroundStyle(.secondary)
                                     }
-                                    Text("\(dashboardAbsoluteTimestamp(episode.startedAt)) → \(dashboardAbsoluteTimestamp(episode.endedAt))")
+                                    Text("\(dashboardAbsoluteTimestamp(session.startedAt)) → \(dashboardAbsoluteTimestamp(session.endedAt))")
                                         .font(.system(size: 10))
                                         .foregroundStyle(.tertiary)
-                                    Text("\(episode.taskLabel) · \(episode.activityLabel) · \(dashboardPercent(episode.taskConfidence))")
+                                    Text("\(session.taskLabel) · \(session.activityLabel) · \(dashboardPercent(session.taskConfidence))")
                                         .font(.system(size: 10))
-                                        .foregroundStyle(Color(hex: episode.taskAccentHex))
+                                        .foregroundStyle(Color(hex: session.taskAccentHex))
                                 }
                             }
                             .padding(.vertical, 8)
 
-                            if episode.id != history.prefix(5).last?.id {
+                            if session.id != history.prefix(5).last?.id {
                                 Divider().padding(.leading, 18)
                             }
                         }
@@ -470,18 +470,18 @@ struct DashboardRootView: View {
     }
 
     private var taskCard: some View {
-        let episode = vm.state?.currentContext ?? vm.state?.currentEpisode
+        let context = vm.state?.currentContext ?? vm.state?.currentEpisode
         let present = vm.state?.present
         let signals = vm.state?.signals
-        let confidence = episode?.taskConfidence ?? signals?.taskConfidence ?? 0
-        let weakTask = isWeakProductTask(episode, present)
-        let accent = episode?.taskAccentHex ?? present?.taskAccentHex ?? gGray
+        let confidence = context?.taskConfidence ?? signals?.taskConfidence ?? 0
+        let weakTask = isWeakProductTask(context, present)
+        let accent = context?.taskAccentHex ?? present?.taskAccentHex ?? gGray
 
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 cardTitle("Bloc de travail", icon: "target")
 
-                Text(productTaskTitle(episode, present))
+                Text(productTaskTitle(context, present))
                     .font(.system(size: weakTask ? 18 : 22, weight: weakTask ? .semibold : .bold, design: .rounded))
                     .foregroundStyle(weakTask ? .secondary : Color(hex: accent))
 
@@ -499,7 +499,7 @@ struct DashboardRootView: View {
                     HStack {
                         metaLabel("Confiance")
                         Spacer()
-                        Text(dashboardPercent(episode?.taskConfidence ?? signals?.taskConfidence))
+                        Text(dashboardPercent(context?.taskConfidence ?? signals?.taskConfidence))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -511,7 +511,7 @@ struct DashboardRootView: View {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                    Text((present?.activityLabel ?? episode?.activityLabel) ?? "—")
+                    Text((present?.activityLabel ?? context?.activityLabel) ?? "—")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -1215,9 +1215,9 @@ struct DashboardRootView: View {
             )
     }
 
-    private func productTaskTitle(_ episode: EpisodeData?, _ present: PresentData?) -> String {
-        if let episode, episode.taskLabel != "Général", episode.taskLabel != "—" {
-            return episode.taskLabel
+    private func productTaskTitle(_ context: SessionContextData?, _ present: PresentData?) -> String {
+        if let context, context.taskLabel != "Général", context.taskLabel != "—" {
+            return context.taskLabel
         }
         return liveTaskTitle(present)
     }
@@ -1227,10 +1227,10 @@ struct DashboardRootView: View {
         return present.taskLabel == "Général" ? "Contexte faible" : present.taskLabel
     }
 
-    private func isWeakProductTask(_ episode: EpisodeData?, _ present: PresentData?) -> Bool {
-        if let episode {
-            if episode.taskLabel == "Général" || episode.taskLabel == "—" { return true }
-            return (episode.taskConfidence ?? 0) < 0.45
+    private func isWeakProductTask(_ context: SessionContextData?, _ present: PresentData?) -> Bool {
+        if let context {
+            if context.taskLabel == "Général" || context.taskLabel == "—" { return true }
+            return (context.taskConfidence ?? 0) < 0.45
         }
         guard let present else { return true }
         if present.taskLabel == "Général" { return true }
@@ -1516,15 +1516,8 @@ struct DashboardRootView: View {
         }
     }
 
-    private func episodeDurationLabel(_ episode: EpisodeData) -> String {
-        if episode.isActive {
-            return sessionDurationLabel(from: episode.startedAt)
-        }
-        return episodeDurationCompact(episode)
-    }
-
-    private func episodeDurationCompact(_ episode: EpisodeData) -> String {
-        guard let duration = episode.durationSec else { return "—" }
+    private func sessionDurationCompact(_ session: SessionContextData) -> String {
+        guard let duration = session.durationSec else { return "—" }
         let hours = duration / 3600
         let minutes = (duration % 3600) / 60
         let seconds = duration % 60
