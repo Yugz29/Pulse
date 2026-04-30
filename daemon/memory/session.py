@@ -334,7 +334,6 @@ class SessionMemory:
             "timeline": {
                 "first_activity_at": first_activity,
                 "last_activity_at": last_activity,
-                "current_work_window_started_at": current_window["started_at"] if current_window else None,
             },
             "current_window": current_window,
         }

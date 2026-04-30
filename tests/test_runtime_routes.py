@@ -129,7 +129,6 @@ class TestRuntimeRoutes(unittest.TestCase):
                 "timeline": {
                     "first_activity_at": "2026-04-28T11:10:00",
                     "last_activity_at": "2026-04-28T12:49:00",
-                    "current_work_window_started_at": "2026-04-28T12:36:00",
                 },
                 "current_window": {
                     "id": "ww-1",

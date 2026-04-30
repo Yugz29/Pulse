@@ -515,7 +515,6 @@ def register_runtime_routes(
                     "timeline": {
                         "first_activity_at": None,
                         "last_activity_at": None,
-                        "current_work_window_started_at": None,
                     },
                     "current_window": None,
                 }

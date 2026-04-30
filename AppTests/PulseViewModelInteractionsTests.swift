@@ -971,8 +971,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
           ],
           "timeline": {
             "first_activity_at": "2026-04-29T16:38:00",
-            "last_activity_at": "2026-04-29T17:20:00",
-            "current_work_window_started_at": "2026-04-29T16:38:00"
+            "last_activity_at": "2026-04-29T17:20:00"
           },
           "current_window": {
             "id": "work-1",

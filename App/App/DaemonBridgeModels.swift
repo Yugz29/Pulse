@@ -556,12 +556,10 @@ struct TodayProject: Decodable, Identifiable {
 struct TodayTimeline: Decodable {
     let firstActivityAt: String?
     let lastActivityAt: String?
-    let currentWorkWindowStartedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case firstActivityAt = "first_activity_at"
         case lastActivityAt = "last_activity_at"
-        case currentWorkWindowStartedAt = "current_work_window_started_at"
     }
 }
 
