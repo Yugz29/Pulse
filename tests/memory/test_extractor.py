@@ -97,7 +97,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("Type de travail détecté : debug", projects)
         self.assertIn("(40 min, debug)", projects)
 
-    def test_update_memories_prefers_latest_closed_episode_for_consolidation(self):
+    def test_update_memories_prefers_latest_recent_session_for_consolidation(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -145,10 +145,10 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("(15 min, debug)", projects)
         self.assertIn("## Pulse", journal)
         self.assertIn("débogage (15 min)", journal)
-        self.assertIn("- Épisodes récents :", projects)
+        self.assertIn("- Sessions récentes :", projects)
         self.assertIn("2026-04-23 10:36 | debug | executing | 15 min | commit | ep-latest", projects)
 
-    def test_update_memories_falls_back_to_session_when_no_closed_episode_exists(self):
+    def test_update_memories_falls_back_to_session_when_no_recent_session_exists(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -171,9 +171,9 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("(22 min, coding)", projects)
         self.assertIn("## Pulse", journal)
         self.assertIn("développement (22 min)", journal)
-        self.assertNotIn("- Épisodes récents :", projects)
+        self.assertNotIn("- Sessions récentes :", projects)
 
-    def test_commit_tres_court_conserve_la_fenetre_session_si_episode_commit_est_tiny(self):
+    def test_commit_tres_court_conserve_la_fenetre_session_si_session_record_est_tiny(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -247,7 +247,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("11:46 → 12:04", journal)
         self.assertIn("développement (18 min)", journal)
 
-    def test_projection_projet_conserve_un_historique_roulant_d_episodes(self):
+    def test_projection_projet_conserve_un_historique_roulant_de_sessions(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -307,6 +307,23 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("2026-04-24 10:18 | debug | executing | 18 min | commit | ep-2", projects)
         self.assertIn("2026-04-23 09:20 | coding | editing | 20 min | idle_timeout | ep-1", projects)
         self.assertIn("Type de travail détecté : debug", projects)
+
+    def test_parse_project_sections_lit_l_ancien_titre_episodes_recents(self):
+        projects_file = self.memory_dir / "projects.md"
+        projects_file.write_text(
+            "# Projets\n\n"
+            "## Pulse\n\n"
+            "- Première session : 2026-04-23\n"
+            "- Dernière session : 2026-04-23 (15 min, debug)\n"
+            "- Type de travail détecté : debug\n"
+            "- Épisodes récents :\n"
+            "  - 2026-04-23 10:36 | debug | executing | 15 min | commit | ep-latest\n",
+            encoding="utf-8",
+        )
+
+        parsed = extractor_module._parse_project_sections(projects_file)
+
+        self.assertEqual(parsed["Pulse"]["recent_sessions"][0]["record_id"], "ep-latest")
 
     def test_load_memory_context_concatene_les_fichiers(self):
         # load_memory_context() lit projects.md + preferences.md uniquement.

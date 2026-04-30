@@ -522,11 +522,11 @@ def _write_session_report(
         )
 
     entry_id = _new_entry_id(now)
-    episode = consolidation.get("episode") or {}
-    ended_at = str(consolidation.get("ended_at") or episode.get("ended_at") or now.isoformat())
+    session_record = consolidation.get("session_record") or {}
+    ended_at = str(consolidation.get("ended_at") or session_record.get("ended_at") or now.isoformat())
     started_at = str(
         consolidation.get("started_at")
-        or episode.get("started_at")
+        or session_record.get("started_at")
         or (now - timedelta(minutes=max(duration, 0))).isoformat()
     )
     entry = _build_journal_entry(
@@ -534,7 +534,7 @@ def _write_session_report(
         activity_level=consolidation.get("activity_level"), task_confidence=consolidation.get("task_confidence"),
         duration_min=duration, body=body, commit_message=commit_message, recent_apps=apps,
         top_files=top_files, files_count=files_count, started_at=started_at, ended_at=ended_at,
-        boundary_reason=str(episode.get("boundary_reason") or trigger or "unknown"),
+        boundary_reason=str(session_record.get("boundary_reason") or trigger or "unknown"),
         scope_source=scope_source,
         delivered_at=consolidation.get("delivered_at") or session.get("delivered_at"),
     )
@@ -1311,28 +1311,28 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
         today    = datetime.now().strftime("%Y-%m-%d")
         duration = consolidation["duration_min"]
         task     = consolidation["probable_task"]
-        latest_episode = _normalize_project_episode(consolidation.get("episode"))
+        latest_session = _normalize_project_session_record(consolidation.get("session_record"))
 
         entry = current.get(project)
         if entry is None:
-            current[project] = {"first_session": today, "last_session": today, "last_duration": duration, "last_task": task, "task": task, "recent_episodes": []}
+            current[project] = {"first_session": today, "last_session": today, "last_duration": duration, "last_task": task, "task": task, "recent_sessions": []}
         else:
             entry["last_session"] = today
             entry["last_duration"] = duration
             entry["last_task"] = task
             entry["task"] = task
-            entry.setdefault("recent_episodes", [])
+            entry.setdefault("recent_sessions", [])
 
         entry = current[project]
-        entry["recent_episodes"] = _merge_project_recent_episodes(entry.get("recent_episodes", []), latest_episode)
+        entry["recent_sessions"] = _merge_project_recent_sessions(entry.get("recent_sessions", []), latest_session)
 
-        latest_known = entry["recent_episodes"][0] if entry["recent_episodes"] else None
+        latest_known = entry["recent_sessions"][0] if entry["recent_sessions"] else None
         if latest_known is not None:
             entry["last_session"] = latest_known["date"]
             entry["last_duration"] = latest_known["duration_min"]
             entry["last_task"] = latest_known["probable_task"]
 
-        dominant_task = _dominant_project_task(entry["recent_episodes"]) or entry["task"]
+        dominant_task = _dominant_project_task(entry["recent_sessions"]) or entry["task"]
         entry["task"] = dominant_task
 
         lines = ["# Projets\n"]
@@ -1343,11 +1343,11 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
                 f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
                 f"- Type de travail détecté : {item['task']}",
             ])
-            recent_episodes = item.get("recent_episodes", [])
-            if recent_episodes:
-                lines.append("- Épisodes récents :")
-                for episode in recent_episodes[:5]:
-                    lines.append(f"  - {episode['date_time']} | {episode['probable_task']} | {episode['activity_level']} | {episode['duration_min']} min | {episode['boundary_reason']} | {episode['episode_id']}")
+            recent_sessions = item.get("recent_sessions", [])
+            if recent_sessions:
+                lines.append("- Sessions récentes :")
+                for session_record in recent_sessions[:5]:
+                    lines.append(f"  - {session_record['date_time']} | {session_record['probable_task']} | {session_record['activity_level']} | {session_record['duration_min']} min | {session_record['boundary_reason']} | {session_record['record_id']}")
         projects_file.write_text("\n".join(lines).strip() + "\n")
 
 
@@ -1369,35 +1369,35 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
 
     result: Dict[str, Dict[str, Any]] = {}
     current_name = None
-    in_recent_episodes = False
+    in_recent_sessions = False
 
     for raw_line in projects_file.read_text().splitlines():
         line = raw_line.strip()
         if line.startswith("## "):
             current_name = line[3:]
-            result[current_name] = {"recent_episodes": []}
-            in_recent_episodes = False
+            result[current_name] = {"recent_sessions": []}
+            in_recent_sessions = False
         elif current_name and line.startswith("- Première session : "):
             result[current_name]["first_session"] = line.split(": ", 1)[1]
-            in_recent_episodes = False
+            in_recent_sessions = False
         elif current_name and line.startswith("- Dernière session : "):
             value = line.split(": ", 1)[1]
             date_part, details = _split_last_session(value)
             result[current_name]["last_session"] = date_part
             result[current_name]["last_duration"] = details["duration"]
             result[current_name]["last_task"] = details["task"]
-            in_recent_episodes = False
+            in_recent_sessions = False
         elif current_name and line.startswith("- Type de travail détecté : "):
             result[current_name]["task"] = line.split(": ", 1)[1]
-            in_recent_episodes = False
-        elif current_name and line == "- Épisodes récents :":
-            in_recent_episodes = True
-        elif current_name and in_recent_episodes and raw_line.startswith("  - "):
-            episode = _parse_project_episode_line(raw_line.strip()[2:].strip())
-            if episode is not None:
-                result[current_name]["recent_episodes"].append(episode)
+            in_recent_sessions = False
+        elif current_name and line in {"- Sessions récentes :", "- Épisodes récents :"}:
+            in_recent_sessions = True
+        elif current_name and in_recent_sessions and raw_line.startswith("  - "):
+            session_record = _parse_project_session_line(raw_line.strip()[2:].strip())
+            if session_record is not None:
+                result[current_name]["recent_sessions"].append(session_record)
         elif line:
-            in_recent_episodes = False
+            in_recent_sessions = False
 
     return result
 
@@ -1408,46 +1408,46 @@ def _build_consolidation_frame(
     commit_message: Optional[str] = None,
     trigger: Optional[str] = None,
 ) -> Dict[str, Any]:
-    episode = _latest_closed_episode(session_data.get("recent_sessions") or session_data.get("closed_episodes"))
-    active_project = (episode or {}).get("active_project") or session_data.get("active_project")
-    probable_task = (episode or {}).get("probable_task") or session_data.get("probable_task") or "general"
+    session_record = _latest_recent_session(session_data.get("recent_sessions") or session_data.get("closed_episodes"))
+    active_project = (session_record or {}).get("active_project") or session_data.get("active_project")
+    probable_task = (session_record or {}).get("probable_task") or session_data.get("probable_task") or "general"
     if commit_message:
         probable_task = _commit_task_correction(commit_message, probable_task)
     session_duration_min = int(session_data.get("duration_min", 0) or 0)
     work_window = _resolve_commit_work_window(session_data, trigger=trigger)
     if work_window is not None:
         return {
-            "episode": episode,
+            "session_record": session_record,
             "active_project": active_project,
             "probable_task": probable_task,
-            "activity_level": (episode or {}).get("activity_level") or session_data.get("activity_level"),
-            "task_confidence": (episode or {}).get("task_confidence") or session_data.get("task_confidence"),
+            "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
+            "task_confidence": (session_record or {}).get("task_confidence") or session_data.get("task_confidence"),
             "duration_min": work_window["duration_min"],
             "started_at": work_window["started_at"],
             "ended_at": work_window["ended_at"],
             "delivered_at": work_window.get("delivered_at"),
         }
-    duration_min = _episode_duration_min(episode)
+    duration_min = _session_record_duration_min(session_record)
     use_session_window = _should_use_session_window_for_commit(
         trigger=trigger,
         session_duration_min=session_duration_min,
-        episode_duration_min=duration_min,
+        session_record_duration_min=duration_min,
     )
     if duration_min is None or use_session_window:
         duration_min = session_duration_min
 
-    started_at = (episode or {}).get("started_at")
-    ended_at = (episode or {}).get("ended_at")
+    started_at = (session_record or {}).get("started_at")
+    ended_at = (session_record or {}).get("ended_at")
     if use_session_window:
         started_at = session_data.get("started_at") or started_at
         ended_at = session_data.get("ended_at") or session_data.get("updated_at") or ended_at
 
     return {
-        "episode": episode,
+        "session_record": session_record,
         "active_project": active_project,
         "probable_task": probable_task,
-        "activity_level": (episode or {}).get("activity_level") or session_data.get("activity_level"),
-        "task_confidence": (episode or {}).get("task_confidence") or session_data.get("task_confidence"),
+        "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
+        "task_confidence": (session_record or {}).get("task_confidence") or session_data.get("task_confidence"),
         "duration_min": duration_min,
         "started_at": started_at or session_data.get("started_at"),
         "ended_at": ended_at or session_data.get("ended_at") or session_data.get("updated_at"),
@@ -1490,35 +1490,35 @@ def _should_use_session_window_for_commit(
     *,
     trigger: Optional[str],
     session_duration_min: int,
-    episode_duration_min: Optional[int],
+    session_record_duration_min: Optional[int],
 ) -> bool:
     if trigger != "commit":
         return False
     if session_duration_min <= 0:
         return False
-    if episode_duration_min is None:
+    if session_record_duration_min is None:
         return True
-    if episode_duration_min <= 1 and session_duration_min >= 5:
+    if session_record_duration_min <= 1 and session_duration_min >= 5:
         return True
-    if episode_duration_min > 0 and session_duration_min >= max(episode_duration_min * 3, 10):
+    if session_record_duration_min > 0 and session_duration_min >= max(session_record_duration_min * 3, 10):
         return True
     return False
 
 
-def _latest_closed_episode(closed_episodes: Any) -> Optional[Dict[str, Any]]:
-    if not isinstance(closed_episodes, list):
+def _latest_recent_session(session_records: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(session_records, list):
         return None
     def _sort_key(item): return (str(item.get("ended_at") or ""), str(item.get("started_at") or ""))
-    candidates = [item for item in closed_episodes if isinstance(item, dict) and item.get("ended_at")]
+    candidates = [item for item in session_records if isinstance(item, dict) and item.get("ended_at")]
     if not candidates:
         return None
     return max(candidates, key=_sort_key)
 
 
-def _episode_duration_min(episode: Optional[Dict[str, Any]]) -> Optional[int]:
-    if episode is None:
+def _session_record_duration_min(session_record: Optional[Dict[str, Any]]) -> Optional[int]:
+    if session_record is None:
         return None
-    duration_sec = episode.get("duration_sec")
+    duration_sec = session_record.get("duration_sec")
     if duration_sec is None:
         return None
     try:
@@ -1527,48 +1527,48 @@ def _episode_duration_min(episode: Optional[Dict[str, Any]]) -> Optional[int]:
         return None
 
 
-def _normalize_project_episode(episode: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not isinstance(episode, dict):
+def _normalize_project_session_record(session_record: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(session_record, dict):
         return None
-    ended_at = episode.get("ended_at")
-    started_at = episode.get("started_at")
+    ended_at = session_record.get("ended_at")
+    started_at = session_record.get("started_at")
     timestamp = ended_at or started_at
     if not timestamp:
         return None
-    duration_min = _episode_duration_min(episode)
+    duration_min = _session_record_duration_min(session_record)
     if duration_min is None:
         return None
-    date, date_time = _format_project_episode_timestamp(str(timestamp))
+    date, date_time = _format_project_session_timestamp(str(timestamp))
     return {
-        "episode_id": str(episode.get("episode_id") or episode.get("id") or ""),
+        "record_id": str(session_record.get("id") or session_record.get("episode_id") or ""),
         "date": date, "date_time": date_time,
-        "probable_task": str(episode.get("probable_task") or "general"),
-        "activity_level": str(episode.get("activity_level") or "unknown"),
+        "probable_task": str(session_record.get("probable_task") or "general"),
+        "activity_level": str(session_record.get("activity_level") or "unknown"),
         "duration_min": duration_min,
-        "boundary_reason": str(episode.get("boundary_reason") or "unknown"),
+        "boundary_reason": str(session_record.get("boundary_reason") or "unknown"),
     }
 
 
-def _merge_project_recent_episodes(existing: List[Dict[str, Any]], latest: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    episodes = [episode for episode in existing if isinstance(episode, dict)]
+def _merge_project_recent_sessions(existing: List[Dict[str, Any]], latest: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    sessions = [session_record for session_record in existing if isinstance(session_record, dict)]
     if latest is not None:
-        episodes = [episode for episode in episodes if episode.get("episode_id") != latest["episode_id"]]
-        episodes.append(latest)
-    episodes.sort(key=lambda item: (str(item.get("date_time") or ""), str(item.get("episode_id") or "")), reverse=True)
-    return episodes[:5]
+        sessions = [session_record for session_record in sessions if session_record.get("record_id") != latest["record_id"]]
+        sessions.append(latest)
+    sessions.sort(key=lambda item: (str(item.get("date_time") or ""), str(item.get("record_id") or "")), reverse=True)
+    return sessions[:5]
 
 
-def _dominant_project_task(episodes: List[Dict[str, Any]]) -> Optional[str]:
+def _dominant_project_task(session_records: List[Dict[str, Any]]) -> Optional[str]:
     counts: Dict[str, int] = {}
-    for episode in episodes:
-        task = str(episode.get("probable_task") or "general")
+    for session_record in session_records:
+        task = str(session_record.get("probable_task") or "general")
         counts[task] = counts.get(task, 0) + 1
     if not counts:
         return None
-    return max(counts, key=lambda task: (counts[task], next((index for index, episode in enumerate(episodes) if episode.get("probable_task") == task), len(episodes)) * -1))
+    return max(counts, key=lambda task: (counts[task], next((index for index, session_record in enumerate(session_records) if session_record.get("probable_task") == task), len(session_records)) * -1))
 
 
-def _format_project_episode_timestamp(timestamp: str) -> tuple[str, str]:
+def _format_project_session_timestamp(timestamp: str) -> tuple[str, str]:
     try:
         dt = datetime.fromisoformat(timestamp)
     except ValueError:
@@ -1576,7 +1576,7 @@ def _format_project_episode_timestamp(timestamp: str) -> tuple[str, str]:
     return dt.strftime("%Y-%m-%d"), dt.strftime("%Y-%m-%d %H:%M")
 
 
-def _parse_project_episode_line(value: str) -> Optional[Dict[str, Any]]:
+def _parse_project_session_line(value: str) -> Optional[Dict[str, Any]]:
     parts = [part.strip() for part in value.split("|")]
     if len(parts) != 6:
         return None
@@ -1591,7 +1591,7 @@ def _parse_project_episode_line(value: str) -> Optional[Dict[str, Any]]:
     return {
         "date": date_time[:10], "date_time": date_time,
         "probable_task": parts[1] or "general", "activity_level": parts[2] or "unknown",
-        "duration_min": duration_min, "boundary_reason": parts[4] or "unknown", "episode_id": parts[5],
+        "duration_min": duration_min, "boundary_reason": parts[4] or "unknown", "record_id": parts[5],
     }
 
 
