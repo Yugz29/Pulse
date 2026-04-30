@@ -189,8 +189,6 @@ Le payload `/state` actuel mélange encore :
   - `session_fsm`
   - `current_context`
   - `recent_sessions`
-  - `current_episode` alias legacy
-  - `recent_episodes` alias legacy
   - `debug`
 
 ---
@@ -223,9 +221,7 @@ Le modèle actuel est plus simple :
 - `work_blocks` : blocs de travail dérivés des événements significatifs
 - `work_block_*` : fenêtre de travail utilisée par la mémoire et la ResumeCard
 
-Les anciens noms restent exposés seulement pour compatibilité :
-- `current_episode`
-- `recent_episodes`
+Les anciens noms restants sont exposés seulement pour compatibilité :
 - `work_window_*`
 - `closed_episodes`
 
@@ -241,7 +237,7 @@ Les reliquats suivants existent encore :
 - marqueur de lock legacy dans `RuntimeState` : utile pour filtrage d'ingress / debug / compat, non canonique
 - payload top-level `/state` : conservé pour compat UI et déprécié
 - adaptateurs markdown / legacy : encore alimentés par `signals` pour certains détails secondaires
-- alias API : `current_episode`, `recent_episodes`, `work_window_*`, `closed_episodes`
+- alias API : `work_window_*`, `closed_episodes`
 
 Ces reliquats ne doivent pas être relus comme des sources de vérité concurrentes.
 

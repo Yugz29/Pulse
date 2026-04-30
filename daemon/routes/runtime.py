@@ -360,9 +360,7 @@ def register_runtime_routes(
                     "activity_level": current_context.activity_level,
                     "task_confidence": current_context.task_confidence,
                 }
-                state["current_episode"] = context_payload
                 state["current_context"] = context_payload
-                debug["current_episode"] = context_payload
                 debug["current_context"] = context_payload
         if runtime_snapshot.signals:
             current_context = _current_context_builder.build(
@@ -388,9 +386,7 @@ def register_runtime_routes(
         if get_recent_sessions is not None:
             sessions = get_recent_sessions(8)
             if sessions:
-                state["recent_episodes"] = sessions
                 state["recent_sessions"] = sessions
-                debug["recent_episodes"] = sessions
                 debug["recent_sessions"] = sessions
         state["debug"] = debug
         return jsonify(state)

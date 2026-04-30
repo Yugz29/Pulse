@@ -83,8 +83,7 @@ class SessionContext:
     """
     Projection déterministe du contexte de session courant.
 
-    La forme JSON reste compatible avec l'ancien payload current_episode,
-    mais le modèle produit est current_context.
+    Le modèle produit est exposé en JSON via current_context.
     """
 
     id: str
@@ -97,10 +96,6 @@ class SessionContext:
     probable_task: Optional[str] = None
     activity_level: Optional[str] = None
     task_confidence: Optional[float] = None
-
-
-Episode = SessionContext
-
 
 @dataclass(frozen=True)
 class ProposalCandidate:

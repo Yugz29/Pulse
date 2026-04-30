@@ -187,7 +187,7 @@ Introduce reliable and observable work block boundaries without imposing rich se
 - `work_blocks` derived from meaningful events
 - `recent_sessions` derived from closed sessions
 - `work_block_*` in memory and ResumeCard payloads
-- temporary legacy aliases: `current_episode`, `recent_episodes`, `work_window_*`, `closed_episodes`
+- temporary legacy aliases: `work_window_*`, `closed_episodes`
 
 **Out of scope**
 

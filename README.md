@@ -239,7 +239,7 @@ Elle n’est pas encore une mémoire riche de continuité. Les `work_blocks` et 
 - `signals` ne sont pas une source de vérité du présent. Ils ne doivent pas être utilisés comme base d'une décision métier ou d'une nouvelle feature de contexte principal.
 - `/state` garde des champs top-level et des blocs legacy pour compat UI et debug. Ces champs top-level sont dépréciés. Toute nouvelle lecture doit passer par `present`.
 - Le marqueur de lock legacy existe encore dans `RuntimeState` pour filtrage, debug et compat. Il n'est pas canonique et ne doit jamais servir de source métier.
-- Les alias legacy `current_episode`, `recent_episodes`, `work_window_*` et `closed_episodes` existent encore pour compatibilité. Toute nouvelle lecture doit utiliser `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
+- Les alias legacy `work_window_*` et `closed_episodes` existent encore pour compatibilité. Toute nouvelle lecture doit utiliser `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
 
 ---
 
@@ -342,5 +342,5 @@ Le projet est aujourd’hui dans une phase où :
 - la phase `Observation terrain` est clôturée
 - le système expose désormais un dashboard technique et une observabilité plus explicite
 
-Le premier périmètre Episode est maintenant en place.
+Le premier périmètre Episode a été retiré du runtime produit.
 Les chantiers encore ouverts concernent surtout l’exploitation des blocs de travail par la mémoire et les proposals, ainsi que la lisibilité de l’historique utile.

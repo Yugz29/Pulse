@@ -188,7 +188,7 @@ Principe : un bloc de travail est d'abord une fenêtre temporelle fiable dériv�
 - `work_blocks` dérivés des événements significatifs
 - `recent_sessions` dérivées des sessions fermées
 - `work_block_*` dans les payloads mémoire et ResumeCard
-- aliases legacy `current_episode`, `recent_episodes`, `work_window_*`, `closed_episodes` conservés temporairement
+- aliases legacy `work_window_*`, `closed_episodes` conservés temporairement
 
 **Hors périmètre**
 
