@@ -219,9 +219,7 @@ def register_runtime_routes(
     runtime_state: Any,
     get_session_fsm: Callable[[], Any] | None = None,
     get_current_context: Callable[[], Any] | None = None,
-    get_current_episode: Callable[[], Any] | None = None,
     get_recent_sessions: Callable[[int], Any] | None = None,
-    get_recent_episodes: Callable[[int], Any] | None = None,
     get_today_summary: Callable[[], dict[str, Any]] | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
@@ -347,11 +345,10 @@ def register_runtime_routes(
             }
             state["session_fsm"] = session_fsm_payload
             debug["session_fsm"] = session_fsm_payload
-        current_context_getter = get_current_context or get_current_episode
-        if current_context_getter is not None:
-            current_context = current_context_getter()
+        if get_current_context is not None:
+            current_context = get_current_context()
             if current_context is not None:
-                episode_payload = {
+                context_payload = {
                     "id": current_context.id,
                     "session_id": current_context.session_id,
                     "started_at": current_context.started_at,
@@ -363,10 +360,10 @@ def register_runtime_routes(
                     "activity_level": current_context.activity_level,
                     "task_confidence": current_context.task_confidence,
                 }
-                state["current_episode"] = episode_payload
-                state["current_context"] = episode_payload
-                debug["current_episode"] = episode_payload
-                debug["current_context"] = episode_payload
+                state["current_episode"] = context_payload
+                state["current_context"] = context_payload
+                debug["current_episode"] = context_payload
+                debug["current_context"] = context_payload
         if runtime_snapshot.signals:
             current_context = _current_context_builder.build(
                 present=present,
@@ -388,9 +385,8 @@ def register_runtime_routes(
             # puis present. Les signaux restent exposés pour instrumentation.
             state["signals"] = legacy_signals
             debug["signals"] = legacy_signals
-        recent_sessions_getter = get_recent_sessions or get_recent_episodes
-        if recent_sessions_getter is not None:
-            sessions = recent_sessions_getter(8)
+        if get_recent_sessions is not None:
+            sessions = get_recent_sessions(8)
             if sessions:
                 state["recent_episodes"] = sessions
                 state["recent_sessions"] = sessions

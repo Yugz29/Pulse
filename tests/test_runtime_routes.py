@@ -488,7 +488,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             bus=self.bus,
             store=self.store,
             runtime_state=self.runtime_state,
-            get_current_episode=lambda: SessionContext(
+            get_current_context=lambda: SessionContext(
                 id="ep-1",
                 session_id="session-1",
                 started_at="2026-04-23T11:50:00",

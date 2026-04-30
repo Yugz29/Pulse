@@ -150,11 +150,6 @@ class RuntimeOrchestrator:
         )
 
     @property
-    def current_episode(self) -> SessionContext | None:
-        """Alias legacy pour les clients qui lisent encore current_episode."""
-        return self.current_context
-
-    @property
     def fact_engine(self):
         return self._fact_engine
 

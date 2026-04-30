@@ -231,10 +231,6 @@ class SessionMemory:
                 ).fetchall()
         return [self._session_row_to_recent_session_payload(dict(row)) for row in rows]
 
-    def get_recent_episodes(self, limit: int = 8) -> List[Dict[str, Any]]:
-        """Alias legacy pour l'ancienne API recent_episodes."""
-        return self.get_recent_sessions(limit=limit)
-
     def get_today_summary(self) -> Dict[str, Any]:
         now = datetime.now()
         day_start = datetime.combine(now.date(), datetime.min.time())
