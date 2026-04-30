@@ -360,7 +360,7 @@ struct DashboardRootView: View {
     }
 
     private var currentContextCard: some View {
-        let context = vm.state?.currentContext ?? vm.state?.currentEpisode
+        let context = vm.state?.currentContext
         let present = vm.state?.present
         let liveSignals = vm.state?.signals
         let weakContext = isWeakProductTask(context, present)
@@ -421,7 +421,7 @@ struct DashboardRootView: View {
     }
 
     private var recentSessionsCard: some View {
-        let history = ((vm.state?.recentSessions ?? vm.state?.recentEpisodes) ?? []).filter { !$0.isActive }
+        let history = (vm.state?.recentSessions ?? []).filter { !$0.isActive }
 
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -470,7 +470,7 @@ struct DashboardRootView: View {
     }
 
     private var taskCard: some View {
-        let context = vm.state?.currentContext ?? vm.state?.currentEpisode
+        let context = vm.state?.currentContext
         let present = vm.state?.present
         let signals = vm.state?.signals
         let confidence = context?.taskConfidence ?? signals?.taskConfidence ?? 0
@@ -566,7 +566,6 @@ struct DashboardRootView: View {
                     contextItem(
                         "Projet",
                         state?.currentContext?.activeProject
-                            ?? state?.currentEpisode?.activeProject
                             ?? state?.present?.activeProject
                             ?? state?.activeProject
                             ?? "—"
