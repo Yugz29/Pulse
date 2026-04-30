@@ -17,9 +17,7 @@ struct StateResponse: Decodable {
     let signals: SignalsData?
     let sessionFsm: SessionFSMData?
     let currentContext: SessionContextData?
-    let currentEpisode: SessionContextData?
     let recentSessions: [SessionContextData]?
-    let recentEpisodes: [SessionContextData]?
 
     enum CodingKeys: String, CodingKey {
         case activeApp = "active_app"
@@ -32,9 +30,7 @@ struct StateResponse: Decodable {
         case signals
         case sessionFsm = "session_fsm"
         case currentContext = "current_context"
-        case currentEpisode = "current_episode"
         case recentSessions = "recent_sessions"
-        case recentEpisodes = "recent_episodes"
     }
 }
 

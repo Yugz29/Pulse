@@ -775,7 +775,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.selectedSummaryModel, "mistral")
     }
 
-    func testStateResponseDecodesPresentContextAndLegacyAliases() throws {
+    func testStateResponseDecodesPresentAndCurrentContext() throws {
         let json = """
         {
           "active_app": "Xcode",
@@ -854,8 +854,6 @@ final class PulseViewModelInteractionsTests: XCTestCase {
 
         XCTAssertEqual(state.present?.activeProject, "Pulse")
         XCTAssertEqual(state.present?.probableTask, "debug")
-        XCTAssertEqual(state.currentEpisode?.activeProject, "Pulse")
-        XCTAssertEqual(state.currentEpisode?.probableTask, "coding")
         XCTAssertEqual(state.currentContext?.activeProject, "Pulse")
         XCTAssertEqual(state.currentContext?.probableTask, "debug")
         XCTAssertEqual(state.recentSessions?.first?.id, "session-recent")
