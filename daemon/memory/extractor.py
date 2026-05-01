@@ -1408,24 +1408,24 @@ def _build_consolidation_frame(
     commit_message: Optional[str] = None,
     trigger: Optional[str] = None,
 ) -> Dict[str, Any]:
-    session_record = _latest_recent_session(session_data.get("recent_sessions") or session_data.get("closed_episodes"))
+    session_record = _latest_recent_session(_session_records(session_data))
     active_project = (session_record or {}).get("active_project") or session_data.get("active_project")
     probable_task = (session_record or {}).get("probable_task") or session_data.get("probable_task") or "general"
     if commit_message:
         probable_task = _commit_task_correction(commit_message, probable_task)
     session_duration_min = int(session_data.get("duration_min", 0) or 0)
-    work_window = _resolve_commit_work_window(session_data, trigger=trigger)
-    if work_window is not None:
+    work_block = _resolve_commit_work_block(session_data, trigger=trigger)
+    if work_block is not None:
         return {
             "session_record": session_record,
             "active_project": active_project,
             "probable_task": probable_task,
             "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
             "task_confidence": (session_record or {}).get("task_confidence") or session_data.get("task_confidence"),
-            "duration_min": work_window["duration_min"],
-            "started_at": work_window["started_at"],
-            "ended_at": work_window["ended_at"],
-            "delivered_at": work_window.get("delivered_at"),
+            "duration_min": work_block["duration_min"],
+            "started_at": work_block["started_at"],
+            "ended_at": work_block["ended_at"],
+            "delivered_at": work_block.get("delivered_at"),
         }
     duration_min = _session_record_duration_min(session_record)
     use_session_window = _should_use_session_window_for_commit(
@@ -1454,7 +1454,16 @@ def _build_consolidation_frame(
     }
 
 
-def _resolve_commit_work_window(
+
+def _session_records(session_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return canonical recent sessions with legacy closed_episodes fallback."""
+    records = session_data.get("recent_sessions")
+    if records is None:
+        records = session_data.get("closed_episodes")
+    return records if isinstance(records, list) else []
+
+
+def _resolve_commit_work_block(
     session_data: Dict[str, Any],
     *,
     trigger: Optional[str],
@@ -1484,6 +1493,15 @@ def _resolve_commit_work_window(
         "duration_min": duration_min,
         "delivered_at": session_data.get("delivered_at"),
     }
+
+
+def _resolve_commit_work_window(
+    session_data: Dict[str, Any],
+    *,
+    trigger: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Legacy alias kept for older tests/tools; use _resolve_commit_work_block."""
+    return _resolve_commit_work_block(session_data, trigger=trigger)
 
 
 def _should_use_session_window_for_commit(
@@ -1539,14 +1557,20 @@ def _normalize_project_session_record(session_record: Optional[Dict[str, Any]]) 
     if duration_min is None:
         return None
     date, date_time = _format_project_session_timestamp(str(timestamp))
+
     return {
-        "record_id": str(session_record.get("id") or session_record.get("episode_id") or ""),
+        "record_id": _session_record_id(session_record),
         "date": date, "date_time": date_time,
         "probable_task": str(session_record.get("probable_task") or "general"),
         "activity_level": str(session_record.get("activity_level") or "unknown"),
         "duration_min": duration_min,
         "boundary_reason": str(session_record.get("boundary_reason") or "unknown"),
     }
+
+
+def _session_record_id(session_record: Dict[str, Any]) -> str:
+    """Return canonical session id with legacy episode_id fallback."""
+    return str(session_record.get("id") or session_record.get("episode_id") or "")
 
 
 def _merge_project_recent_sessions(existing: List[Dict[str, Any]], latest: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
