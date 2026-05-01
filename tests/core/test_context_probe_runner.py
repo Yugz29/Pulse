@@ -7,7 +7,7 @@ from daemon.core.context_probe_request import (
     create_context_probe_request,
     refuse_context_probe_request,
 )
-from daemon.core.context_probe_runner import run_app_context_probe
+from daemon.core.context_probe_runner import run_app_context_probe, run_window_title_probe
 
 
 def _approved_request(kind: ContextProbeKind | str = ContextProbeKind.APP_CONTEXT):
@@ -188,3 +188,139 @@ def test_context_probe_result_to_dict_is_json_ready():
         "captured_at": "2099-05-01T18:02:00",
         "blocked_reason": None,
     }
+
+
+def test_run_window_title_probe_returns_redacted_title_only():
+    request = _approved_request(ContextProbeKind.WINDOW_TITLE)
+    context = SimpleNamespace(
+        window_title="Pulse notes for yugz@example.com — https://example.com/private — /Users/yugz/Projects/Pulse",
+    )
+
+    result = run_window_title_probe(
+        request,
+        context,
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+
+    assert result.captured is True
+    assert result.blocked_reason is None
+    assert result.request_id == "probe-1"
+    assert result.kind == "window_title"
+    assert result.privacy == "path_sensitive"
+    assert result.retention == "session"
+    assert result.data == {
+        "redacted_value": "Pulse notes for [REDACTED_EMAIL] — [REDACTED_URL] — /Users/[REDACTED_USER]/Projects/Pulse",
+        "redaction_flags": ["email", "url", "home_path"],
+        "original_length": 91,
+        "redacted_length": 89,
+        "was_redacted": True,
+    }
+    assert "yugz@example.com" not in str(result.to_dict())
+    assert "https://example.com/private" not in str(result.to_dict())
+    assert "/Users/yugz" not in str(result.to_dict())
+
+
+def test_run_window_title_probe_blocks_pending_refused_and_expired_requests():
+    pending = create_context_probe_request(
+        ContextProbeKind.WINDOW_TITLE,
+        reason="Need window title",
+        request_id="pending",
+        created_at=datetime(2099, 5, 1, 18, 0, 0),
+    )
+    refused = refuse_context_probe_request(
+        pending,
+        decided_at=datetime(2099, 5, 1, 18, 1, 0),
+        decision_reason="No",
+    )
+    expired = approve_context_probe_request(
+        create_context_probe_request(
+            ContextProbeKind.WINDOW_TITLE,
+            reason="Expired window title",
+            request_id="expired",
+            created_at=datetime(2020, 1, 1, 0, 0, 0),
+            ttl_sec=0,
+        ),
+        decided_at=datetime(2020, 1, 1, 0, 0, 1),
+    )
+    context = SimpleNamespace(window_title="Pulse — Code")
+
+    pending_result = run_window_title_probe(pending, context, captured_at=datetime(2099, 5, 1, 18, 2, 0))
+    refused_result = run_window_title_probe(refused, context, captured_at=datetime(2099, 5, 1, 18, 2, 0))
+    expired_result = run_window_title_probe(expired, context, captured_at=datetime(2099, 5, 1, 18, 2, 0))
+
+    assert pending_result.captured is False
+    assert pending_result.blocked_reason == "request_not_approved:pending"
+    assert pending_result.data == {}
+
+    assert refused_result.captured is False
+    assert refused_result.blocked_reason == "request_not_approved:refused"
+    assert refused_result.data == {}
+
+    assert expired_result.captured is False
+    assert expired_result.blocked_reason == "request_expired"
+    assert expired_result.data == {}
+
+
+def test_run_window_title_probe_rejects_approved_unsupported_probe_kind():
+    request = _approved_request(ContextProbeKind.APP_CONTEXT)
+    context = SimpleNamespace(window_title="Pulse — Code")
+
+    result = run_window_title_probe(
+        request,
+        context,
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+
+    assert result.captured is False
+    assert result.kind == "app_context"
+    assert result.blocked_reason == "unsupported_probe_kind"
+    assert result.data == {}
+
+
+def test_run_window_title_probe_rejects_unknown_blocked_policy_before_kind_check():
+    request = _approved_request("not_a_probe")
+    context = SimpleNamespace(window_title="Pulse — Code")
+
+    result = run_window_title_probe(
+        request,
+        context,
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+
+    assert result.captured is False
+    assert result.kind == "unknown"
+    assert result.blocked_reason == "policy_blocked"
+    assert result.data == {}
+
+
+def test_run_window_title_probe_requires_window_title_on_context():
+    request = _approved_request(ContextProbeKind.WINDOW_TITLE)
+    context = SimpleNamespace(active_app="Code")
+
+    result = run_window_title_probe(
+        request,
+        context,
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+
+    assert result.captured is False
+    assert result.kind == "window_title"
+    assert result.blocked_reason == "missing_window_title"
+    assert result.data == {}
+
+
+def test_run_window_title_probe_truncates_using_policy_max_chars():
+    request = _approved_request(ContextProbeKind.WINDOW_TITLE)
+    context = SimpleNamespace(window_title="Window title " + "word " * 80)
+
+    result = run_window_title_probe(
+        request,
+        context,
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+
+    assert result.captured is True
+    assert result.data["was_redacted"] is True
+    assert result.data["redaction_flags"] == ["truncated"]
+    assert result.data["redacted_value"].endswith("…")
+    assert result.data["redacted_length"] == 257
