@@ -11,6 +11,7 @@ from daemon.core.event_envelope import (
     infer_privacy,
     infer_retention,
     infer_source,
+    summarize_envelope_policy,
 )
 
 
@@ -190,6 +191,51 @@ def test_envelope_from_legacy_event_sets_retention_from_privacy():
     assert file_envelope.retention is PulseRetention.SESSION
     assert clipboard_envelope.retention is PulseRetention.EPHEMERAL
     assert unknown_envelope.retention is PulseRetention.DEBUG_ONLY
+
+
+def test_summarize_envelope_policy_for_path_sensitive_file_event():
+    envelope = envelope_from_legacy_event(
+        "file_modified",
+        {"path": "/tmp/Pulse/daemon/main.py"},
+        timestamp=datetime(2026, 5, 1, 15, 0, 0),
+    )
+
+    assert summarize_envelope_policy(envelope) == {
+        "source": "Filesystem watcher",
+        "bucket": "Filesystem events",
+        "privacy": "Path-sensitive metadata",
+        "retention": "Session-scoped by default",
+    }
+
+
+def test_summarize_envelope_policy_for_content_sensitive_clipboard_event():
+    envelope = envelope_from_legacy_event(
+        "clipboard_updated",
+        {"clipboard_context": "text"},
+        timestamp=datetime(2026, 5, 1, 15, 1, 0),
+    )
+
+    assert summarize_envelope_policy(envelope) == {
+        "source": "Clipboard activity",
+        "bucket": "Clipboard timeline",
+        "privacy": "Content-sensitive payload",
+        "retention": "Ephemeral by default",
+    }
+
+
+def test_summarize_envelope_policy_for_unknown_event():
+    envelope = envelope_from_legacy_event(
+        "custom_event",
+        {"value": 42},
+        timestamp=datetime(2026, 5, 1, 15, 2, 0),
+    )
+
+    assert summarize_envelope_policy(envelope) == {
+        "source": "Unknown source",
+        "bucket": "Unknown bucket",
+        "privacy": "Unknown sensitivity",
+        "retention": "Debug-only by default",
+    }
 
 
 def test_infer_source_from_known_legacy_event_types():

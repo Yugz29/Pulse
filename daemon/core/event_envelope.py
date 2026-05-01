@@ -137,6 +137,75 @@ def envelope_from_legacy_event(
     )
 
 
+def summarize_envelope_policy(envelope: PulseEventEnvelope) -> dict[str, str]:
+    """Return human-readable policy hints for debug UI / raw event browser.
+
+    This function is passive: it does not decide storage, redaction, routing, or
+    scoring. It only explains the metadata already present on the envelope.
+    """
+    return {
+        "source": _source_label(envelope.source),
+        "bucket": _bucket_label(envelope.bucket),
+        "privacy": _privacy_label(envelope.privacy),
+        "retention": _retention_label(envelope.retention),
+    }
+
+
+def _source_label(source: PulseEventSource) -> str:
+    labels = {
+        PulseEventSource.SWIFT: "Swift observer",
+        PulseEventSource.DAEMON: "Pulse daemon",
+        PulseEventSource.FILESYSTEM: "Filesystem watcher",
+        PulseEventSource.APP: "Application activity",
+        PulseEventSource.TERMINAL: "Terminal activity",
+        PulseEventSource.CLIPBOARD: "Clipboard activity",
+        PulseEventSource.MCP: "MCP integration",
+        PulseEventSource.LLM: "LLM runtime",
+        PulseEventSource.GIT: "Git activity",
+        PulseEventSource.MEMORY: "Memory system",
+        PulseEventSource.SYSTEM: "System activity",
+        PulseEventSource.UNKNOWN: "Unknown source",
+    }
+    return labels[source]
+
+
+def _bucket_label(bucket: PulseEventBucket) -> str:
+    labels = {
+        PulseEventBucket.FILESYSTEM: "Filesystem events",
+        PulseEventBucket.APP_ACTIVITY: "Application timeline",
+        PulseEventBucket.TERMINAL_ACTIVITY: "Terminal timeline",
+        PulseEventBucket.CLIPBOARD_ACTIVITY: "Clipboard timeline",
+        PulseEventBucket.MCP_ACTIVITY: "MCP timeline",
+        PulseEventBucket.LLM_ACTIVITY: "LLM timeline",
+        PulseEventBucket.GIT_ACTIVITY: "Git timeline",
+        PulseEventBucket.MEMORY_ACTIVITY: "Memory timeline",
+        PulseEventBucket.SYSTEM_ACTIVITY: "System timeline",
+        PulseEventBucket.UNKNOWN: "Unknown bucket",
+    }
+    return labels[bucket]
+
+
+def _privacy_label(privacy: PulsePrivacyClass) -> str:
+    labels = {
+        PulsePrivacyClass.PUBLIC: "Low sensitivity metadata",
+        PulsePrivacyClass.PATH_SENSITIVE: "Path-sensitive metadata",
+        PulsePrivacyClass.CONTENT_SENSITIVE: "Content-sensitive payload",
+        PulsePrivacyClass.SECRET_SENSITIVE: "Potential secret marker",
+        PulsePrivacyClass.UNKNOWN: "Unknown sensitivity",
+    }
+    return labels[privacy]
+
+
+def _retention_label(retention: PulseRetention) -> str:
+    labels = {
+        PulseRetention.EPHEMERAL: "Ephemeral by default",
+        PulseRetention.SESSION: "Session-scoped by default",
+        PulseRetention.PERSISTENT: "Persistent memory candidate",
+        PulseRetention.DEBUG_ONLY: "Debug-only by default",
+    }
+    return labels[retention]
+
+
 def infer_privacy(
     event_type: str,
     payload: Mapping[str, Any] | None = None,
