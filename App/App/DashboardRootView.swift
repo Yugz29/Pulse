@@ -364,6 +364,42 @@ struct DashboardRootView: View {
         }
     }
 
+
+    private func workContextList(title: String, icon: String, items: [String], empty: String, accent: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color(hex: accent))
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            if items.isEmpty {
+                Text(empty)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            } else {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(items.prefix(5), id: \.self) { item in
+                        HStack(alignment: .top, spacing: 6) {
+                            Circle()
+                                .fill(Color(hex: accent).opacity(0.65))
+                                .frame(width: 5, height: 5)
+                                .padding(.top, 5)
+                            Text(item)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var currentContextCard: some View {
         let context = vm.state?.currentContext
         let present = vm.state?.present
@@ -416,6 +452,56 @@ struct DashboardRootView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let card = vm.workContextCard {
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            if !card.evidence.isEmpty {
+                                workContextList(
+                                    title: "Pourquoi Pulse pense ça",
+                                    icon: "checkmark.seal",
+                                    items: card.evidence,
+                                    empty: "Aucune preuve forte",
+                                    accent: gGreen
+                                )
+                            }
+
+                            if !card.missingContext.isEmpty {
+                                workContextList(
+                                    title: "Contexte manquant",
+                                    icon: "questionmark.folder",
+                                    items: card.missingContext,
+                                    empty: "Rien de bloquant",
+                                    accent: gOrange
+                                )
+                            }
+
+                            if !card.safeNextProbes.isEmpty {
+                                HStack(alignment: .center, spacing: 8) {
+                                    Image(systemName: "shield")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(.tertiary)
+
+                                    Text("Probes safe possibles")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+
+                                    ForEach(card.safeNextProbes, id: \.self) { probe in
+                                        Text(probe)
+                                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                            .foregroundStyle(Color(hex: gBlue))
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 3)
+                                            .background(Color(hex: gBlue).opacity(0.10))
+                                            .clipShape(Capsule())
+                                    }
+
+                                    Spacer()
+                                }
+                            }
+                        }
                     }
                 } else {
                     emptyState("Aucun contexte actif")
