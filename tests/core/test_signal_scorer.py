@@ -512,6 +512,7 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m, {})
         self.assertEqual(signals.probable_task, "general")
 
+
     def test_long_burst_ne_tronque_pas_les_signaux_fichier_dans_la_fenetre_10m(self):
         bus = EventBus()
         scorer = SignalScorer(bus)
@@ -529,6 +530,31 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.edited_file_count_10m, 220)
         self.assertEqual(signals.dominant_file_mode, "multi_file")
         self.assertEqual(signals.file_type_mix_10m, {"source": 220})
+
+
+    def test_window_title_poll_alimente_window_title_signal(self):
+        self._push("window_title_poll", {
+            "app": "Code",
+            "title": "Pulse — signal_scorer.py — Visual Studio Code",
+        })
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.window_title, "Pulse — signal_scorer.py — Visual Studio Code")
+        self.assertEqual(signals.window_title_app, "Code")
+
+    def test_window_title_poll_peut_alimenter_active_file_fallback(self):
+        self._push("app_activated", {"app_name": "Code"})
+        self._push("window_title_poll", {
+            "app": "Code",
+            "title": "signal_scorer.py — Pulse — Visual Studio Code",
+        })
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.window_title, "signal_scorer.py — Pulse — Visual Studio Code")
+        self.assertEqual(signals.window_title_app, "Code")
+        self.assertEqual(signals.active_file, "signal_scorer.py")
 
 
     # ── I1 : recent_apps — dernière occurrence gagne ────────────────────────────
