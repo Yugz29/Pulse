@@ -854,3 +854,36 @@ class TestFileEventCoalescer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_events_debug_filters_by_event_metadata(self):
+        self.bus.recent.return_value = [
+            Event(
+                "file_modified",
+                {"path": "/tmp/Pulse/daemon/main.py"},
+                timestamp=datetime(2026, 5, 1, 16, 0, 0),
+            ),
+            Event(
+                "clipboard_updated",
+                {"clipboard_context": "text", "length": 42},
+                timestamp=datetime(2026, 5, 1, 16, 1, 0),
+            ),
+            Event(
+                "app_activated",
+                {"app_name": "Code"},
+                timestamp=datetime(2026, 5, 1, 16, 2, 0),
+            ),
+        ]
+
+        response = self.client.get(
+            "/events/debug?source=clipboard&bucket=clipboard_activity&privacy=content_sensitive&retention=ephemeral"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["events"][0]["type"], "clipboard_updated")
+        self.assertEqual(payload["events"][0]["source"], "clipboard")
+        self.assertEqual(payload["events"][0]["bucket"], "clipboard_activity")
+        self.assertEqual(payload["events"][0]["privacy"], "content_sensitive")
+        self.assertEqual(payload["events"][0]["retention"], "ephemeral")
+        self.bus.recent.assert_called_once_with(50)

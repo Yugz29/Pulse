@@ -446,12 +446,26 @@ def register_runtime_routes(
         since_raw = request.args.get("since")
         since_dt = _parse_event_timestamp(since_raw) if since_raw else None
 
+        source_filter = request.args.get("source")
+        bucket_filter = request.args.get("bucket")
+        privacy_filter = request.args.get("privacy")
+        retention_filter = request.args.get("retention")
+
         recent = bus.recent(limit)
-        events = [
-            describe_event_for_debug(event)
-            for event in recent
-            if since_dt is None or event.timestamp > since_dt
-        ]
+        events = []
+        for event in recent:
+            if since_dt is not None and event.timestamp <= since_dt:
+                continue
+            description = describe_event_for_debug(event)
+            if source_filter and description["source"] != source_filter:
+                continue
+            if bucket_filter and description["bucket"] != bucket_filter:
+                continue
+            if privacy_filter and description["privacy"] != privacy_filter:
+                continue
+            if retention_filter and description["retention"] != retention_filter:
+                continue
+            events.append(description)
         return jsonify({"events": events, "count": len(events)})
 
     @app.route("/events/schema")
