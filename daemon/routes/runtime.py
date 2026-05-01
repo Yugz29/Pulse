@@ -296,12 +296,12 @@ def register_runtime_routes(
     @app.route("/state")
     def get_state():
         # Legacy surface payload: still used for last_event_type / last_activity
-        # and as a temporary active_app fallback for older UI paths.
+        # and debug visibility only. Runtime-facing active_app comes from RuntimeState.
         store_state = store.to_dict()
         runtime_snapshot = runtime_state.get_runtime_snapshot()
         present = runtime_snapshot.present
         state = {
-            "active_app": runtime_snapshot.latest_active_app or store_state.get("active_app"),
+            "active_app": runtime_snapshot.latest_active_app,
             "active_file": present.active_file,
             "active_project": present.active_project,
             "session_duration_min": present.session_duration_min,

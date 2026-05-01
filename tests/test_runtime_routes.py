@@ -196,6 +196,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             "active_app": "Xcode",
             "session_duration_min": 96,
         }
+        self.runtime_state.set_latest_active_app("Xcode")
 
         expected = {
             "active_app": "Xcode",
@@ -248,7 +249,7 @@ class TestRuntimeRoutes(unittest.TestCase):
                     "session_duration_min": 96,
                 },
                 "runtime": {
-                    "latest_active_app": None,
+                    "latest_active_app": "Xcode",
                     "lock_marker_active": False,
                     "last_screen_locked_at": None,
                     "memory_synced_at": None,
