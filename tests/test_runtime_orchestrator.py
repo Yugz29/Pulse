@@ -25,7 +25,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.runtime_state = RuntimeState()
         self.llm_runtime = MagicMock()
         self.log = MagicMock()
-        self.store.to_dict.return_value = {}
+        self.store.to_dict.side_effect = AssertionError("RuntimeOrchestrator must not read legacy StateStore")
 
         self.mock_fact_engine = MagicMock()
         self.mock_fact_engine.render_for_context.return_value = ""
@@ -70,13 +70,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=decision)
 
     def test_build_context_snapshot_includes_state_signals_decision_and_memory(self):
-        self.store.to_dict.return_value = {
-            "active_project": "Pulse",
-            "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-            "active_app": "Xcode",
-            "session_duration_min": 96,
-            "last_event_type": "file_modified",
-        }
         signals = Signals(
             active_project="Pulse",
             active_file="/tmp/main.py",
@@ -139,13 +132,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertFalse(kwargs["locked"])
 
     def test_build_context_snapshot_golden_legacy_markdown_output_exact(self):
-        self.store.to_dict.return_value = {
-            "active_project": "Pulse",
-            "active_file": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
-            "active_app": "Cursor",
-            "session_duration_min": 96,
-            "last_event_type": "file_modified",
-        }
         self.runtime_state.set_latest_active_app("Cursor")
         signals = Signals(
             active_project="Pulse",
@@ -194,7 +180,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
     def test_build_context_snapshot_uses_atomic_runtime_snapshot(self):
         signals = self._signals()
         self._set_runtime_analysis(signals)
-        self.store.to_dict.return_value = {"active_app": "Cursor", "last_event_type": "file_modified"}
 
         with patch.object(self.runtime_state, "get_context_snapshot", side_effect=AssertionError("legacy must not be used")), \
              patch.object(self.runtime_state, "get_present", side_effect=AssertionError("legacy must not be used")):
@@ -203,7 +188,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Projet : Pulse", snapshot)
 
     def test_build_context_snapshot_falls_back_to_signal_context_when_store_is_empty(self):
-        self.store.to_dict.return_value = {"active_project": None, "active_file": None, "active_app": None, "session_duration_min": 0}
         signals = Signals(
             active_project="Pulse", active_file="/tmp/main.py", probable_task="coding",
             friction_score=0.15, focus_level="normal", session_duration_min=24,
@@ -216,7 +200,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Fichier actif : /tmp/main.py", snapshot)
 
     def test_build_context_snapshot_falls_back_to_workspace_root_when_git_root_is_absent(self):
-        self.store.to_dict.return_value = {"active_project": "client-repo", "active_file": "/tmp/client-repo/src/main.py", "active_app": "Cursor", "session_duration_min": 18}
         signals = Signals(active_project="client-repo", active_file="/tmp/client-repo/src/main.py", probable_task="coding", friction_score=0.1, focus_level="normal", session_duration_min=18, recent_apps=["Cursor"], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
@@ -467,10 +450,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertEqual(len(proposal_store.list_history()), 1)
 
-    # ── C4 : priorité signals > state pour active_file et active_project ──────
+    # ── C4 : le contexte runtime ne retombe plus sur StateStore ──────────────
 
     def test_c4_signals_active_file_prime_sur_state_active_file(self):
-        self.store.to_dict.return_value = {"active_project": "OldProject", "active_file": "/stale/path.py", "active_app": "Xcode", "session_duration_min": 999}
         signals = Signals(active_project="Pulse", active_file="/fresh/path/current.py", probable_task="coding", friction_score=0.1, focus_level="normal", session_duration_min=30, recent_apps=["Xcode"], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
@@ -479,7 +461,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertNotIn("/stale/path.py", snapshot)
 
     def test_c4_aucun_fallback_sur_state_si_present_n_a_pas_de_fichier(self):
-        self.store.to_dict.return_value = {"active_project": "FallbackProject", "active_file": "/fallback/from_store.py", "active_app": "Terminal", "session_duration_min": 10}
         signals = Signals(active_project=None, active_file=None, probable_task="general", friction_score=0.0, focus_level="normal", session_duration_min=5, recent_apps=[], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
@@ -487,10 +468,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Fichier actif : aucun", snapshot)
         self.assertNotIn("/fallback/from_store.py", snapshot)
 
-    # ── C5 : priorité signals > state pour session_duration_min ─────────────
+    # ── C5 : la durée vient du PresentState, pas du StateStore ───────────────
 
     def test_c5_signals_duration_prime_sur_state_duration(self):
-        self.store.to_dict.return_value = {"active_project": "Pulse", "active_file": None, "active_app": "Xcode", "session_duration_min": 240}
         signals = Signals(active_project="Pulse", active_file=None, probable_task="coding", friction_score=0.0, focus_level="normal", session_duration_min=45, recent_apps=["Xcode"], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
