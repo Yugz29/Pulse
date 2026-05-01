@@ -295,6 +295,8 @@ def register_runtime_routes(
 
     @app.route("/state")
     def get_state():
+        # Legacy surface payload: still used for last_event_type / last_activity
+        # and as a temporary active_app fallback for older UI paths.
         store_state = store.to_dict()
         runtime_snapshot = runtime_state.get_runtime_snapshot()
         present = runtime_snapshot.present

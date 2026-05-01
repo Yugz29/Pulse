@@ -398,12 +398,11 @@ class RuntimeOrchestrator:
         ).start()
 
     def build_context_snapshot(self) -> str:
-        state = self.store.to_dict()
         snapshot = self.runtime_state.get_runtime_snapshot()
         current_context = self._render_current_context(
             present=snapshot.present,
             signals=snapshot.signals,
-            active_app=snapshot.latest_active_app or state.get("active_app"),
+            active_app=snapshot.latest_active_app,
         )
 
         diff_summary: str | None = None

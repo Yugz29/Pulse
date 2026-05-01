@@ -146,6 +146,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "session_duration_min": 96,
             "last_event_type": "file_modified",
         }
+        self.runtime_state.set_latest_active_app("Cursor")
         signals = Signals(
             active_project="Pulse",
             active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
