@@ -17,6 +17,8 @@ from daemon.core.context_probe_policy import (
     ContextProbeKind,
     policy_for_probe,
 )
+from daemon.core.context_probe_debug import describe_context_probe_request_for_debug
+from daemon.core.context_probe_request import create_context_probe_request
 from daemon.core.event_actor import EventActorClassifier
 from daemon.core.event_debug import describe_event_for_debug
 from daemon.core.event_envelope import (
@@ -535,6 +537,31 @@ def register_runtime_routes(
                 for kind in probe_kinds
             },
             "unknown_policy": policy_for_probe(ContextProbeKind.UNKNOWN).to_dict(),
+        })
+
+    @app.route("/context-probes/request-preview", methods=["POST"])
+    def create_context_probe_request_preview():
+        """Create a non-persistent context probe request preview for consent UI."""
+        data = request.get_json() or {}
+        kind = data.get("kind", ContextProbeKind.UNKNOWN.value)
+        reason = str(data.get("reason", "") or "")
+        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+
+        try:
+            ttl_sec = int(data.get("ttl_sec", 300))
+        except (TypeError, ValueError):
+            ttl_sec = 300
+        ttl_sec = min(max(ttl_sec, 0), 3600)
+
+        probe_request = create_context_probe_request(
+            kind,
+            reason=reason,
+            ttl_sec=ttl_sec,
+            metadata=metadata,
+        )
+        return jsonify({
+            "request": probe_request.to_dict(),
+            "debug": describe_context_probe_request_for_debug(probe_request),
         })
 
     @app.route("/observation")

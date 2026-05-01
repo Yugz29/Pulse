@@ -900,6 +900,97 @@ class TestRuntimeRoutes(unittest.TestCase):
             "max_chars": None,
         })
 
+
+    def test_context_probe_request_preview_creates_debuggable_non_persistent_request(self):
+        response = self.client.post(
+            "/context-probes/request-preview",
+            json={
+                "kind": "selected_text",
+                "reason": "Explain selected error",
+                "ttl_sec": 120,
+                "metadata": {
+                    "raw_selection": "SECRET",
+                    "source": "dashboard",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertEqual(request_payload["kind"], "selected_text")
+        self.assertEqual(request_payload["reason"], "Explain selected error")
+        self.assertEqual(request_payload["status"], "pending")
+        self.assertEqual(request_payload["policy"]["consent"], "explicit_each_time")
+        self.assertEqual(request_payload["policy"]["privacy"], "content_sensitive")
+        self.assertEqual(request_payload["policy"]["retention"], "ephemeral")
+        self.assertFalse(request_payload["policy"]["allow_raw_value"])
+        self.assertFalse(request_payload["policy"]["allow_persistent_storage"])
+        self.assertEqual(request_payload["metadata_keys"], ["raw_selection", "source"])
+        self.assertNotIn("metadata", request_payload)
+        self.assertNotIn("SECRET", str(payload))
+
+        self.assertEqual(debug["kind"], "selected_text")
+        self.assertEqual(debug["status"], "pending")
+        self.assertEqual(debug["labels"], {
+            "kind": "Selected text",
+            "consent": "Requires explicit approval every time",
+            "privacy": "Content-sensitive context",
+            "retention": "Ephemeral by default",
+            "risk": "Sensitive",
+        })
+        self.assertEqual(debug["metadata_keys"], ["raw_selection", "source"])
+        self.assertNotIn("metadata", debug)
+
+    def test_context_probe_request_preview_unknown_kind_is_blocked(self):
+        response = self.client.post(
+            "/context-probes/request-preview",
+            json={
+                "kind": "not_a_probe",
+                "reason": "Try unknown probe",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertEqual(request_payload["kind"], "unknown")
+        self.assertEqual(request_payload["policy"]["consent"], "blocked")
+        self.assertEqual(request_payload["policy"]["privacy"], "unknown")
+        self.assertEqual(request_payload["policy"]["retention"], "debug_only")
+        self.assertEqual(debug["labels"]["risk"], "Blocked")
+        self.assertEqual(debug["labels"]["consent"], "Blocked by default")
+
+    def test_context_probe_request_preview_invalid_ttl_and_metadata_use_safe_defaults(self):
+        response = self.client.post(
+            "/context-probes/request-preview",
+            json={
+                "kind": "app_context",
+                "reason": "",
+                "ttl_sec": "invalid",
+                "metadata": "not-a-dict",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        request_payload = payload["request"]
+
+        self.assertEqual(request_payload["kind"], "app_context")
+        self.assertEqual(request_payload["reason"], "Context probe requested")
+        self.assertEqual(request_payload["policy"]["consent"], "implicit_session")
+        self.assertEqual(request_payload["policy"]["privacy"], "public")
+        self.assertEqual(request_payload["policy"]["retention"], "session")
+        self.assertEqual(request_payload["metadata_keys"], [])
+
+        created_at = datetime.fromisoformat(request_payload["created_at"])
+        expires_at = datetime.fromisoformat(request_payload["expires_at"])
+        self.assertEqual(int((expires_at - created_at).total_seconds()), 300)
+
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/pause")
