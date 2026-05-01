@@ -12,6 +12,11 @@ from flask import Flask, jsonify, request
 
 from daemon.core.current_context_adapters import current_context_to_legacy_signals_payload
 from daemon.core.current_context_builder import CurrentContextBuilder
+from daemon.core.context_probe_policy import (
+    ContextProbeConsent,
+    ContextProbeKind,
+    policy_for_probe,
+)
 from daemon.core.event_actor import EventActorClassifier
 from daemon.core.event_debug import describe_event_for_debug
 from daemon.core.event_envelope import (
@@ -516,6 +521,20 @@ def register_runtime_routes(
         """Expose timeline metadata enums for debug UI / timeline filters."""
         return jsonify({
             "span_kinds": [kind.value for kind in TimelineSpanKind],
+        })
+
+    @app.route("/context-probes/schema")
+    def get_context_probes_schema():
+        """Expose context probe safety policies for debug UI / consent screens."""
+        probe_kinds = [kind for kind in ContextProbeKind if kind is not ContextProbeKind.UNKNOWN]
+        return jsonify({
+            "probe_kinds": [kind.value for kind in ContextProbeKind],
+            "consent_levels": [consent.value for consent in ContextProbeConsent],
+            "default_policies": {
+                kind.value: policy_for_probe(kind).to_dict()
+                for kind in probe_kinds
+            },
+            "unknown_policy": policy_for_probe(ContextProbeKind.UNKNOWN).to_dict(),
         })
 
     @app.route("/observation")

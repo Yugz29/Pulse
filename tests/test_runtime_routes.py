@@ -853,6 +853,53 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertIn("memory", payload["span_kinds"])
         self.assertIn("unknown", payload["span_kinds"])
 
+    def test_context_probes_schema_exposes_default_safety_policies(self):
+        response = self.client.get("/context-probes/schema")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertIn("app_context", payload["probe_kinds"])
+        self.assertIn("window_title", payload["probe_kinds"])
+        self.assertIn("selected_text", payload["probe_kinds"])
+        self.assertIn("clipboard_sample", payload["probe_kinds"])
+        self.assertIn("screen_snapshot", payload["probe_kinds"])
+        self.assertIn("unknown", payload["probe_kinds"])
+
+        self.assertIn("implicit_session", payload["consent_levels"])
+        self.assertIn("explicit_each_time", payload["consent_levels"])
+        self.assertIn("blocked", payload["consent_levels"])
+
+        policies = payload["default_policies"]
+        self.assertEqual(policies["app_context"]["consent"], "implicit_session")
+        self.assertEqual(policies["app_context"]["privacy"], "public")
+        self.assertEqual(policies["app_context"]["retention"], "session")
+        self.assertFalse(policies["app_context"]["allow_raw_value"])
+        self.assertFalse(policies["app_context"]["allow_persistent_storage"])
+
+        self.assertEqual(policies["selected_text"]["consent"], "explicit_each_time")
+        self.assertEqual(policies["selected_text"]["privacy"], "content_sensitive")
+        self.assertEqual(policies["selected_text"]["retention"], "ephemeral")
+        self.assertFalse(policies["selected_text"]["allow_raw_value"])
+        self.assertFalse(policies["selected_text"]["allow_persistent_storage"])
+
+        self.assertEqual(policies["screen_snapshot"]["consent"], "explicit_each_time")
+        self.assertEqual(policies["screen_snapshot"]["privacy"], "content_sensitive")
+        self.assertEqual(policies["screen_snapshot"]["retention"], "ephemeral")
+        self.assertFalse(policies["screen_snapshot"]["allow_raw_value"])
+        self.assertFalse(policies["screen_snapshot"]["allow_persistent_storage"])
+
+        self.assertEqual(payload["unknown_policy"], {
+            "kind": "unknown",
+            "consent": "blocked",
+            "privacy": "unknown",
+            "retention": "debug_only",
+            "allow_raw_value": False,
+            "allow_persistent_storage": False,
+            "requires_user_visible_reason": True,
+            "max_chars": None,
+        })
+
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/pause")
