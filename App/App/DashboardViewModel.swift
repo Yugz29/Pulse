@@ -15,6 +15,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var proposals: [ProposalRecord] = []
     @Published var contextProbeRequests: [ContextProbeRequestPayload] = []
     @Published var contextProbeDebug: [ContextProbeDebugPayload] = []
+    @Published var contextProbeResults: [String: ContextProbeResultPayload] = [:]
     @Published var feedHistory: [FeedEvent] = []
     @Published var observation: ObservationData? = nil
     @Published var daydreams: [DaydreamEntry] = []
@@ -150,11 +151,16 @@ final class DashboardViewModel: ObservableObject {
 
     func executeContextProbeRequest(_ request: ContextProbeRequestPayload) async {
         guard request.canExecute else { return }
-        guard await bridge.executeContextProbeRequest(request.requestId) != nil else { return }
+        guard let response = await bridge.executeContextProbeRequest(request.requestId) else { return }
+        contextProbeResults[request.requestId] = response.result
         await refreshContextProbeRequests()
     }
 
     func debugForContextProbeRequest(_ request: ContextProbeRequestPayload) -> ContextProbeDebugPayload? {
         contextProbeDebug.first { $0.requestId == request.requestId }
+    }
+
+    func resultForContextProbeRequest(_ request: ContextProbeRequestPayload) -> ContextProbeResultPayload? {
+        contextProbeResults[request.requestId]
     }
 }

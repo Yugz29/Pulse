@@ -1174,6 +1174,11 @@ struct DashboardRootView: View {
                 }
             }
 
+            if let result = vm.resultForContextProbeRequest(request) {
+                Divider()
+                contextProbeResultBlock(result)
+            }
+
             HStack(spacing: 8) {
                 if request.canApproveOrRefuse {
                     Button {
@@ -1209,6 +1214,89 @@ struct DashboardRootView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private func contextProbeResultBlock(_ result: ContextProbeResultPayload) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: result.captured ? "checkmark.shield" : "xmark.shield")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(result.captured ? Color(hex: gGreen) : Color(hex: gOrange))
+                Text(result.captured ? "Résultat exécuté" : "Probe bloqué")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(result.kind)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+
+            if result.kind == "window_title" {
+                contextProbeWindowTitleResult(result)
+            } else {
+                contextProbeGenericResult(result)
+            }
+        }
+        .padding(10)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func contextProbeWindowTitleResult(_ result: ContextProbeResultPayload) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if let value = result.data["redacted_value"]?.displayValue, !value.isEmpty {
+                Text(value)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 6) {
+                if let flags = result.data["redaction_flags"]?.stringArrayValue, !flags.isEmpty {
+                    ForEach(flags, id: \.self) { flag in
+                        Text(flag)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Color(hex: gOrange))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color(hex: gOrange).opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                } else {
+                    Text("no redaction flag")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                Text("Original: \(result.data["original_length"]?.displayValue ?? "—")")
+                Text("Redacted: \(result.data["redacted_length"]?.displayValue ?? "—")")
+                Text("Was redacted: \(result.data["was_redacted"]?.displayValue ?? "—")")
+            }
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func contextProbeGenericResult(_ result: ContextProbeResultPayload) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(result.data.keys.sorted(), id: \.self) { key in
+                HStack(alignment: .top, spacing: 8) {
+                    Text(key)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 110, alignment: .leading)
+                    Text(result.data[key]?.displayValue ?? "—")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
                 }
             }
         }

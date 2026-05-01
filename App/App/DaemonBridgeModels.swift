@@ -1135,7 +1135,7 @@ struct ContextProbeResultPayload: Decodable {
     let requestId: String
     let kind: String
     let captured: Bool
-    let data: [String: String?]
+    let data: [String: ContextProbeResultValue]
     let privacy: String
     let retention: String
     let capturedAt: String
@@ -1150,6 +1150,50 @@ struct ContextProbeResultPayload: Decodable {
         case retention
         case capturedAt = "captured_at"
         case blockedReason = "blocked_reason"
+    }
+}
+
+enum ContextProbeResultValue: Decodable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case stringArray([String])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Int.self) {
+            self = .int(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .double(value)
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode([String].self) {
+            self = .stringArray(value)
+        } else {
+            self = .null
+        }
+    }
+
+    var displayValue: String {
+        switch self {
+        case .string(let value): return value
+        case .int(let value): return "\(value)"
+        case .double(let value): return String(format: "%.2f", value)
+        case .bool(let value): return value ? "true" : "false"
+        case .stringArray(let value): return value.joined(separator: " · ")
+        case .null: return "—"
+        }
+    }
+
+    var stringArrayValue: [String]? {
+        if case .stringArray(let value) = self { return value }
+        return nil
     }
 }
 
