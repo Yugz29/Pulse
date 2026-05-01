@@ -1213,6 +1213,134 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertNotIn("Pulse", str(published_payload))
         self.assertNotIn("coding", str(published_payload))
 
+    def test_context_probe_request_execute_runs_approved_window_title_probe_redacted(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/secret.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+            window_title="Pulse notes for yugz@example.com — https://example.com/private — /Users/yugz/Projects/Pulse",
+            window_title_app="Code",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "window_title", "reason": "Need window title"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
+             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+            execute_response = self.client.post(
+                f"/context-probes/requests/{created['request_id']}/execute"
+            )
+
+        self.assertEqual(execute_response.status_code, 200)
+        payload = execute_response.get_json()
+        result = payload["result"]
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertTrue(result["captured"])
+        self.assertEqual(result["kind"], "window_title")
+        self.assertEqual(result["privacy"], "path_sensitive")
+        self.assertEqual(result["retention"], "session")
+        self.assertEqual(result["blocked_reason"], None)
+        self.assertEqual(result["data"], {
+            "redacted_value": "Pulse notes for [REDACTED_EMAIL] — [REDACTED_URL] — /Users/[REDACTED_USER]/Projects/Pulse",
+            "redaction_flags": ["email", "url", "home_path"],
+            "original_length": 91,
+            "redacted_length": 89,
+            "was_redacted": True,
+        })
+        self.assertNotIn("yugz@example.com", str(payload))
+        self.assertNotIn("https://example.com/private", str(payload))
+        self.assertNotIn("/Users/yugz", str(payload))
+        self.assertNotIn("/tmp/Pulse/daemon/secret.py", str(payload))
+
+        self.assertEqual(request_payload["status"], "executed")
+        self.assertEqual(debug["status"], "executed")
+        self.assertTrue(debug["is_terminal"])
+        self.bus.publish.assert_called_once_with("context_probe_executed", {
+            "request_id": created["request_id"],
+            "kind": "window_title",
+            "captured": True,
+            "privacy": "path_sensitive",
+            "retention": "session",
+            "data_keys": ["original_length", "redacted_length", "redacted_value", "redaction_flags", "was_redacted"],
+        })
+        published_payload = self.bus.publish.call_args.args[1]
+        self.assertNotIn("data", published_payload)
+        self.assertNotIn("yugz@example.com", str(published_payload))
+        self.assertNotIn("example.com", str(published_payload))
+        self.assertNotIn("/Users/yugz", str(published_payload))
+
+    def test_context_probe_request_execute_window_title_without_signal_is_blocked(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/secret.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+            window_title=None,
+            window_title_app=None,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "window_title", "reason": "Need window title"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/execute"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "probe_blocked")
+        self.assertEqual(payload["blocked_reason"], "missing_window_title")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertEqual(payload["result"]["kind"], "window_title")
+        self.assertEqual(payload["result"]["data"], {})
+        self.assertEqual(payload["request"]["status"], "approved")
+        self.bus.publish.assert_not_called()
+
     def test_context_probe_request_execute_blocks_pending_request(self):
         created = self.client.post(
             "/context-probes/requests",
