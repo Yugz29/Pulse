@@ -23,6 +23,7 @@ final class PulseViewModel: ObservableObject {
     @Published var probableTask: String = "general"
     @Published var focusLevel: String = "normal"
     @Published var pendingCommand: CommandAnalysis? = nil
+    @Published var pendingContextProbe: ContextProbeRequestPayload? = nil
     @Published var availableModels: [String] = []
     @Published var selectedModel: String = ""
     @Published var selectedCommandModel: String = ""
@@ -66,6 +67,7 @@ final class PulseViewModel: ObservableObject {
 
     var currentPanelHeight: CGFloat {
         if pendingCommand != nil { return NotchWindow.commandHeight }
+        if pendingContextProbe != nil { return NotchWindow.commandHeight }
         if panelMode == .resumeCard, let card = activeResumeCard {
             return card.displayHeight
         }
@@ -112,5 +114,25 @@ final class PulseViewModel: ObservableObject {
         if !selectedModel.isEmpty { return selectedModel }
         if !isModelSelected && !availableModels.isEmpty { return "Aucun modèle sélectionné" }
         return "Aucun modèle détecté"
+    }
+
+    func refreshPendingContextProbe() async {
+        guard let payload = await bridge.getContextProbeRequests(status: "pending", includeTerminal: false) else {
+            pendingContextProbe = nil
+            return
+        }
+        pendingContextProbe = payload.requests.first
+    }
+
+    func approvePendingContextProbe() async {
+        guard let request = pendingContextProbe else { return }
+        guard await bridge.approveContextProbeRequest(request.requestId, reason: "Approved from Pulse Notch") != nil else { return }
+        pendingContextProbe = nil
+    }
+
+    func refusePendingContextProbe() async {
+        guard let request = pendingContextProbe else { return }
+        guard await bridge.refuseContextProbeRequest(request.requestId, reason: "Refused from Pulse Notch") != nil else { return }
+        pendingContextProbe = nil
     }
 }

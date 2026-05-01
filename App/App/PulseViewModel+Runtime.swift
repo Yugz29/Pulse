@@ -71,6 +71,14 @@ extension PulseViewModel {
                             self.panelMode = .dashboard
                             self.isExpanded = true
                         }
+                    } else if self.pendingCommand == nil && tick % 2 == 0 {
+                        await self.refreshPendingContextProbe()
+                        if self.pendingContextProbe != nil {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                self.panelMode = .dashboard
+                                self.isExpanded = true
+                            }
+                        }
                     }
 
                     // Feed des événements notables — notifications live dans l'encoche.

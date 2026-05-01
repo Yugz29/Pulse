@@ -313,6 +313,83 @@ struct CommandTranslationView: View {
     }
 }
 
+struct ContextProbeDecisionView: View {
+    let request: ContextProbeRequestPayload
+    @ObservedObject var vm: PulseViewModel
+
+    private var riskColor: Color {
+        switch request.policy.privacy {
+        case "public":
+            return Color(hex: "#5DCAA5")
+        case "path_sensitive":
+            return Color(hex: "#EF9F27")
+        case "content_sensitive", "secret_sensitive":
+            return Color(hex: "#ff453a")
+        case "unknown":
+            return Color(hex: "#888780")
+        default:
+            return Color(hex: "#888780")
+        }
+    }
+
+    private var riskIcon: String {
+        switch request.policy.privacy {
+        case "public":
+            return "checkmark.shield.fill"
+        case "path_sensitive":
+            return "exclamationmark.triangle.fill"
+        case "content_sensitive", "secret_sensitive":
+            return "exclamationmark.octagon.fill"
+        case "unknown":
+            return "questionmark.circle.fill"
+        default:
+            return "questionmark.circle.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: riskIcon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(riskColor)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Pulse demande du contexte")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.90))
+                    .lineLimit(1)
+
+                Text("\(request.kindLabel) · \(request.policy.privacyLabel) · \(request.policy.retentionLabel)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(riskColor.opacity(0.85))
+                    .lineLimit(1)
+
+                Text(request.reason)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.34))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 6) {
+                pillButton("Approuver") {
+                    Task { await vm.approvePendingContextProbe() }
+                }
+                .foregroundColor(Color(hex: "#5DCAA5"))
+
+                pillButton("Refuser") {
+                    Task { await vm.refusePendingContextProbe() }
+                }
+                .foregroundColor(Color(hex: "#ff453a"))
+            }
+        }
+        .padding(.horizontal, 18)
+        .frame(height: NotchWindow.commandHeight - .panelContentGap)
+    }
+}
+
 private func pillButton(_ label: String, action: @escaping () -> Void) -> some View {
     Button(action: action) {
         Text(label)

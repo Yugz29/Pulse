@@ -68,6 +68,8 @@ struct NotchRootView: View {
                     Group {
                         if let command = vm.pendingCommand {
                             CommandTranslationView(command: command, vm: vm)
+                        } else if let request = vm.pendingContextProbe {
+                            ContextProbeDecisionView(request: request, vm: vm)
                         } else {
                             switch vm.panelMode {
                             case .chat:
@@ -94,7 +96,7 @@ struct NotchRootView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                if vm.isExpanded && vm.pendingCommand == nil {
+                if vm.isExpanded && vm.pendingCommand == nil && vm.pendingContextProbe == nil {
                     NotchExpandedHeader(
                         vm: vm,
                         geometryWidth: geo.size.width,
