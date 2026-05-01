@@ -1153,6 +1153,7 @@ struct ContextProbeResultPayload: Decodable {
     }
 }
 
+
 enum ContextProbeResultValue: Decodable {
     case string(String)
     case int(Int)
@@ -1194,6 +1195,71 @@ enum ContextProbeResultValue: Decodable {
     var stringArrayValue: [String]? {
         if case .stringArray(let value) = self { return value }
         return nil
+    }
+}
+
+struct WorkContextCardResponse: Decodable {
+    let card: WorkContextCardPayload
+}
+
+struct WorkContextCardPayload: Decodable {
+    let project: String?
+    let activityLevel: String
+    let probableTask: String
+    let confidence: Double
+    let evidence: [String]
+    let missingContext: [String]
+    let safeNextProbes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case project
+        case activityLevel = "activity_level"
+        case probableTask = "probable_task"
+        case confidence
+        case evidence
+        case missingContext = "missing_context"
+        case safeNextProbes = "safe_next_probes"
+    }
+
+    var projectLabel: String {
+        project?.isEmpty == false ? project! : "Projet inconnu"
+    }
+
+    var activityLabel: String {
+        switch activityLevel {
+        case "editing": return "Édition"
+        case "reading": return "Lecture"
+        case "executing": return "Exécution"
+        case "navigating": return "Navigation"
+        case "idle": return "Inactif"
+        case "unknown": return "Inconnu"
+        default: return activityLevel
+        }
+    }
+
+    var taskLabel: String {
+        switch probableTask {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "review": return "Revue"
+        case "test": return "Tests"
+        case "exploration", "browsing": return "Exploration"
+        case "general": return "Général"
+        default: return probableTask
+        }
+    }
+
+    var confidencePercentLabel: String {
+        "\(Int((confidence * 100).rounded())) %"
+    }
+
+    var confidenceAccentHex: String {
+        switch confidence {
+        case 0.75...: return "#5DCAA5"
+        case 0.45..<0.75: return "#EF9F27"
+        default: return "#7c7c80"
+        }
     }
 }
 

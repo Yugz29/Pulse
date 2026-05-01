@@ -200,6 +200,13 @@ extension DaemonBridge {
         return payload.items
     }
 
+    func getWorkContextCard() async -> WorkContextCardResponse? {
+        guard let url = URL(string: "\(base)/work-context") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(WorkContextCardResponse.self, from: data)
+    }
+
     func getContextProbeRequests(status: String? = nil, includeTerminal: Bool = true) async -> ContextProbeListResponse? {
         var queryItems: [String] = []
         if let status, !status.isEmpty {

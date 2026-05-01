@@ -16,6 +16,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var contextProbeRequests: [ContextProbeRequestPayload] = []
     @Published var contextProbeDebug: [ContextProbeDebugPayload] = []
     @Published var contextProbeResults: [String: ContextProbeResultPayload] = [:]
+    @Published var workContextCard: WorkContextCardPayload?
     @Published var feedHistory: [FeedEvent] = []
     @Published var observation: ObservationData? = nil
     @Published var daydreams: [DaydreamEntry] = []
@@ -103,6 +104,7 @@ final class DashboardViewModel: ObservableObject {
             async let eventsTask = bridge.getInsights(limit: 100)
             async let proposalsTask = bridge.getRecentProposals(limit: 20)
             async let contextProbesTask = bridge.getContextProbeRequests(includeTerminal: true)
+            async let workContextTask = bridge.getWorkContextCard()
             async let daydreamTask = bridge.getDaydreamData()
             async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
             async let scoringTask = bridge.getScoringStatus()
@@ -118,6 +120,9 @@ final class DashboardViewModel: ObservableObject {
             if let contextProbes = await contextProbesTask {
                 contextProbeRequests = contextProbes.requests
                 contextProbeDebug = contextProbes.debug
+            }
+            if let workContext = await workContextTask {
+                workContextCard = workContext.card
             }
             let daydreamData = await daydreamTask
             daydreams = daydreamData.0
