@@ -6,6 +6,7 @@ from pathlib import Path
 from flask import Flask
 
 from daemon.core.contracts import SessionContext
+from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
 from daemon.routes.runtime import _FileEventCoalescer, register_runtime_routes
@@ -611,6 +612,76 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), [])
         self.bus.recent.assert_called_once_with(100)
+
+    def test_events_debug_describes_recent_events_without_raw_payload_values(self):
+        self.bus.recent.return_value = [
+            Event(
+                "file_modified",
+                {"path": "/tmp/Pulse/daemon/main.py", "_actor": "user"},
+                timestamp=datetime(2026, 5, 1, 16, 0, 0),
+            ),
+            Event(
+                "clipboard_updated",
+                {"clipboard_context": "text", "length": 42},
+                timestamp=datetime(2026, 5, 1, 16, 1, 0),
+            ),
+        ]
+
+        response = self.client.get("/events/debug")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["events"][0]["type"], "file_modified")
+        self.assertEqual(payload["events"][0]["source"], "filesystem")
+        self.assertEqual(payload["events"][0]["bucket"], "filesystem")
+        self.assertEqual(payload["events"][0]["privacy"], "path_sensitive")
+        self.assertEqual(payload["events"][0]["retention"], "session")
+        self.assertEqual(payload["events"][0]["payload_keys"], ["_actor", "path"])
+        self.assertNotIn("payload", payload["events"][0])
+        self.assertNotIn("/tmp/Pulse/daemon/main.py", str(payload["events"][0]))
+
+        self.assertEqual(payload["events"][1]["type"], "clipboard_updated")
+        self.assertEqual(payload["events"][1]["source"], "clipboard")
+        self.assertEqual(payload["events"][1]["bucket"], "clipboard_activity")
+        self.assertEqual(payload["events"][1]["privacy"], "content_sensitive")
+        self.assertEqual(payload["events"][1]["retention"], "ephemeral")
+        self.assertEqual(payload["events"][1]["payload_keys"], ["clipboard_context", "length"])
+        self.assertNotIn("payload", payload["events"][1])
+        self.bus.recent.assert_called_once_with(50)
+
+    def test_events_debug_clamps_limit_and_filters_since(self):
+        self.bus.recent.return_value = [
+            Event(
+                "file_modified",
+                {"path": "/tmp/old.py"},
+                timestamp=datetime(2026, 5, 1, 15, 59, 0),
+            ),
+            Event(
+                "app_activated",
+                {"app_name": "Code"},
+                timestamp=datetime(2026, 5, 1, 16, 1, 0),
+            ),
+        ]
+
+        response = self.client.get("/events/debug?limit=500&since=2026-05-01T16:00:00")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["events"][0]["type"], "app_activated")
+        self.assertEqual(payload["events"][0]["source"], "app")
+        self.assertEqual(payload["events"][0]["privacy"], "public")
+        self.bus.recent.assert_called_once_with(200)
+
+    def test_events_debug_invalid_limit_uses_default(self):
+        self.bus.recent.return_value = []
+
+        response = self.client.get("/events/debug?limit=abc")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"events": [], "count": 0})
+        self.bus.recent.assert_called_once_with(50)
 
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):

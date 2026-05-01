@@ -13,6 +13,7 @@ from flask import Flask, jsonify, request
 from daemon.core.current_context_adapters import current_context_to_legacy_signals_payload
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.event_actor import EventActorClassifier
+from daemon.core.event_debug import describe_event_for_debug
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
 from daemon.interpreter.command_interpreter import CommandInterpreter
@@ -425,6 +426,26 @@ def register_runtime_routes(
             if (since_dt is None or event.timestamp > since_dt)
         ]
         return jsonify(events)
+
+    @app.route("/events/debug")
+    def get_events_debug():
+        """Developer-only raw event browser preview without raw payload values."""
+        try:
+            limit = int(request.args.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+        limit = min(max(limit, 1), 200)
+
+        since_raw = request.args.get("since")
+        since_dt = _parse_event_timestamp(since_raw) if since_raw else None
+
+        recent = bus.recent(limit)
+        events = [
+            describe_event_for_debug(event)
+            for event in recent
+            if since_dt is None or event.timestamp > since_dt
+        ]
+        return jsonify({"events": events, "count": len(events)})
 
     @app.route("/observation")
     def get_observation():
