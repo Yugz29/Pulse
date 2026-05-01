@@ -109,6 +109,31 @@ class PulseEventEnvelope:
         }
 
 
+def envelope_from_legacy_event(
+    event_type: str,
+    payload: Mapping[str, Any] | None = None,
+    *,
+    timestamp: datetime | None = None,
+    source: PulseEventSource | None = None,
+    bucket: PulseEventBucket | None = None,
+) -> PulseEventEnvelope:
+    """Build a passive PulseEventEnvelope from the current legacy event shape.
+
+    This does not publish, persist, score, or mutate the event. It only creates
+    the future watcher/bucket metadata wrapper used by the migration path.
+    """
+    event_payload: Mapping[str, Any] = payload or {}
+    inferred_source = source or infer_source(event_type, event_payload)
+    inferred_bucket = bucket or infer_bucket(event_type, inferred_source)
+    return PulseEventEnvelope(
+        event_type=event_type,
+        payload=event_payload,
+        timestamp=timestamp or datetime.now(),
+        source=inferred_source,
+        bucket=inferred_bucket,
+    )
+
+
 def infer_source(event_type: str, payload: Mapping[str, Any] | None = None) -> PulseEventSource:
     """Infer the likely source of a legacy event.
 

@@ -6,6 +6,7 @@ from daemon.core.event_envelope import (
     PulseEventSource,
     PulsePrivacyClass,
     PulseRetention,
+    envelope_from_legacy_event,
     infer_bucket,
     infer_source,
 )
@@ -48,6 +49,47 @@ def test_event_envelope_defaults_are_conservative():
     assert envelope.retention is PulseRetention.SESSION
     assert envelope.duration_sec is None
     assert envelope.can_heartbeat is False
+
+
+def test_envelope_from_legacy_event_infers_source_and_bucket():
+    envelope = envelope_from_legacy_event(
+        "file_modified",
+        {"path": "/tmp/Pulse/daemon/main.py"},
+        timestamp=datetime(2026, 5, 1, 13, 0, 0),
+    )
+
+    assert envelope.event_type == "file_modified"
+    assert envelope.payload == {"path": "/tmp/Pulse/daemon/main.py"}
+    assert envelope.timestamp == datetime(2026, 5, 1, 13, 0, 0)
+    assert envelope.source is PulseEventSource.FILESYSTEM
+    assert envelope.bucket is PulseEventBucket.FILESYSTEM
+    assert envelope.privacy is PulsePrivacyClass.UNKNOWN
+    assert envelope.retention is PulseRetention.SESSION
+
+
+def test_envelope_from_legacy_event_keeps_unknowns_conservative():
+    envelope = envelope_from_legacy_event(
+        "custom_event",
+        {"value": 42},
+        timestamp=datetime(2026, 5, 1, 13, 5, 0),
+    )
+
+    assert envelope.source is PulseEventSource.UNKNOWN
+    assert envelope.bucket is PulseEventBucket.UNKNOWN
+    assert envelope.payload == {"value": 42}
+
+
+def test_envelope_from_legacy_event_allows_explicit_source_and_bucket_override():
+    envelope = envelope_from_legacy_event(
+        "custom_event",
+        {"value": 42},
+        timestamp=datetime(2026, 5, 1, 13, 10, 0),
+        source=PulseEventSource.DAEMON,
+        bucket=PulseEventBucket.SYSTEM_ACTIVITY,
+    )
+
+    assert envelope.source is PulseEventSource.DAEMON
+    assert envelope.bucket is PulseEventBucket.SYSTEM_ACTIVITY
 
 
 def test_infer_bucket_from_known_legacy_event_types():
