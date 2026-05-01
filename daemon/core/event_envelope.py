@@ -131,7 +131,52 @@ def envelope_from_legacy_event(
         timestamp=timestamp or datetime.now(),
         source=inferred_source,
         bucket=inferred_bucket,
+        privacy=infer_privacy(event_type, event_payload, inferred_source),
     )
+
+
+def infer_privacy(
+    event_type: str,
+    payload: Mapping[str, Any] | None = None,
+    source: PulseEventSource = PulseEventSource.UNKNOWN,
+) -> PulsePrivacyClass:
+    """Infer a coarse privacy class for a legacy event payload.
+
+    This is metadata only. It does not redact, persist, scan secrets, or mutate
+    the payload. Keep it conservative so future UI/storage layers can decide how
+    much detail to show or retain.
+    """
+    payload = payload or {}
+
+    if payload.get("secret") or payload.get("token") or payload.get("password"):
+        return PulsePrivacyClass.SECRET_SENSITIVE
+
+    if event_type == "clipboard_updated":
+        return PulsePrivacyClass.CONTENT_SENSITIVE
+    if event_type.startswith("terminal_"):
+        return PulsePrivacyClass.CONTENT_SENSITIVE
+    if event_type.startswith("llm_"):
+        return PulsePrivacyClass.CONTENT_SENSITIVE
+    if event_type.startswith("mcp_"):
+        return PulsePrivacyClass.CONTENT_SENSITIVE
+
+    if payload.get("clipboard_context") or payload.get("terminal_command") or payload.get("raw_output"):
+        return PulsePrivacyClass.CONTENT_SENSITIVE
+    if payload.get("content") or payload.get("text") or payload.get("message"):
+        return PulsePrivacyClass.CONTENT_SENSITIVE
+
+    if event_type.startswith("file_") or event_type == "file_change" or payload.get("path"):
+        return PulsePrivacyClass.PATH_SENSITIVE
+
+    if source in {PulseEventSource.FILESYSTEM, PulseEventSource.GIT}:
+        return PulsePrivacyClass.PATH_SENSITIVE
+    if source in {PulseEventSource.TERMINAL, PulseEventSource.CLIPBOARD, PulseEventSource.MCP, PulseEventSource.LLM}:
+        return PulsePrivacyClass.CONTENT_SENSITIVE
+
+    if event_type in {"app_activated", "app_switch", "app_launched", "app_terminated", "screen_locked", "screen_unlocked", "user_idle", "user_active"}:
+        return PulsePrivacyClass.PUBLIC
+
+    return PulsePrivacyClass.UNKNOWN
 
 
 def infer_source(event_type: str, payload: Mapping[str, Any] | None = None) -> PulseEventSource:

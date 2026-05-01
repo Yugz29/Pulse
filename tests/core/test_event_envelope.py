@@ -8,6 +8,7 @@ from daemon.core.event_envelope import (
     PulseRetention,
     envelope_from_legacy_event,
     infer_bucket,
+    infer_privacy,
     infer_source,
 )
 
@@ -63,7 +64,7 @@ def test_envelope_from_legacy_event_infers_source_and_bucket():
     assert envelope.timestamp == datetime(2026, 5, 1, 13, 0, 0)
     assert envelope.source is PulseEventSource.FILESYSTEM
     assert envelope.bucket is PulseEventBucket.FILESYSTEM
-    assert envelope.privacy is PulsePrivacyClass.UNKNOWN
+    assert envelope.privacy is PulsePrivacyClass.PATH_SENSITIVE
     assert envelope.retention is PulseRetention.SESSION
 
 
@@ -121,6 +122,35 @@ def test_infer_bucket_from_source_when_event_type_is_unknown():
 
 def test_infer_bucket_unknown_stays_unknown():
     assert infer_bucket("custom_event") is PulseEventBucket.UNKNOWN
+
+
+def test_infer_privacy_from_known_event_types_and_payloads():
+    assert infer_privacy("file_modified", {"path": "/tmp/main.py"}) is PulsePrivacyClass.PATH_SENSITIVE
+    assert infer_privacy("clipboard_updated", {"clipboard_context": "text"}) is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert infer_privacy("terminal_command_finished", {"terminal_command": "pytest"}) is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert infer_privacy("llm_ready", {"message": "model loaded"}) is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert infer_privacy("mcp_command_received", {"mcp_tool": "shell"}) is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert infer_privacy("app_activated", {"app_name": "Code"}) is PulsePrivacyClass.PUBLIC
+    assert infer_privacy("screen_locked", {}) is PulsePrivacyClass.PUBLIC
+
+
+def test_infer_privacy_secret_markers_win():
+    assert infer_privacy("custom", {"token": "abc"}) is PulsePrivacyClass.SECRET_SENSITIVE
+    assert infer_privacy("custom", {"password": "abc"}) is PulsePrivacyClass.SECRET_SENSITIVE
+    assert infer_privacy("custom", {"secret": "abc"}) is PulsePrivacyClass.SECRET_SENSITIVE
+
+
+def test_infer_privacy_from_source_fallback():
+    assert infer_privacy("custom", {}, PulseEventSource.FILESYSTEM) is PulsePrivacyClass.PATH_SENSITIVE
+    assert infer_privacy("custom", {}, PulseEventSource.GIT) is PulsePrivacyClass.PATH_SENSITIVE
+    assert infer_privacy("custom", {}, PulseEventSource.TERMINAL) is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert infer_privacy("custom", {}, PulseEventSource.CLIPBOARD) is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert infer_privacy("custom", {}, PulseEventSource.MCP) is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert infer_privacy("custom", {}, PulseEventSource.LLM) is PulsePrivacyClass.CONTENT_SENSITIVE
+
+
+def test_infer_privacy_unknown_stays_unknown():
+    assert infer_privacy("custom_event", {"value": 42}) is PulsePrivacyClass.UNKNOWN
 
 
 def test_infer_source_from_known_legacy_event_types():
