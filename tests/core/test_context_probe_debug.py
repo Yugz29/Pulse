@@ -1,5 +1,3 @@
-
-
 from datetime import datetime
 
 from daemon.core.context_probe_debug import describe_context_probe_request_for_debug
@@ -17,7 +15,7 @@ def test_describe_context_probe_request_for_debug_is_json_ready_without_metadata
         ContextProbeKind.SELECTED_TEXT,
         reason="Explain selected error",
         request_id="probe-1",
-        created_at=datetime(2026, 5, 1, 18, 0, 0),
+        created_at=datetime(2099, 5, 1, 18, 0, 0),
         ttl_sec=120,
         metadata={"raw_selection": "SECRET", "source": "test"},
     )
@@ -29,8 +27,8 @@ def test_describe_context_probe_request_for_debug_is_json_ready_without_metadata
         "kind": "selected_text",
         "status": "pending",
         "reason": "Explain selected error",
-        "created_at": "2026-05-01T18:00:00",
-        "expires_at": "2026-05-01T18:02:00",
+        "created_at": "2099-05-01T18:00:00",
+        "expires_at": "2099-05-01T18:02:00",
         "decided_at": None,
         "executed_at": None,
         "decision_reason": None,
