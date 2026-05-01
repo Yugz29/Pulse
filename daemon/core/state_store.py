@@ -3,9 +3,19 @@ from datetime import datetime
 from typing import Optional
 from .event_bus import Event
 
+# TODO: Rename StateStore to LegacySurfaceStateStore once all usages are migrated.
+
 
 @dataclass
 class State:
+    """Legacy shallow state snapshot.
+
+    This is not the source of truth for runtime state.
+    It only exists for backward compatibility with older routes.
+
+    Do not derive business context here (project, task, focus, etc.).
+    """
+
     active_app: Optional[str] = None
     active_file: Optional[str] = None
     active_project: Optional[str] = None
@@ -15,6 +25,18 @@ class State:
 
 
 class StateStore:
+    """Legacy surface state store.
+
+    This store no longer computes or represents the real runtime state.
+
+    It only tracks minimal metadata still used by legacy consumers:
+    - active_app
+    - last_event_type
+    - last_activity
+    - session_start (for legacy duration)
+
+    Canonical runtime state lives in RuntimeState / PresentState.
+    """
 
     def __init__(self):
         self._state = State()

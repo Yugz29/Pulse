@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass(frozen=True)
@@ -83,7 +82,7 @@ class SessionContext:
     """
     Projection déterministe du contexte de session courant.
 
-    Le modèle produit est exposé en JSON via current_context.
+    Ce contrat décrit le cycle de session courant, sans remplacer CurrentContext.
     """
 
     id: str
