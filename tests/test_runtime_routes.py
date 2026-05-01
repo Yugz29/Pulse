@@ -853,6 +853,101 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertIn("memory", payload["span_kinds"])
         self.assertIn("unknown", payload["span_kinds"])
 
+
+    def test_work_context_route_builds_passive_card_from_current_runtime_context(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/work_context_card.py",
+            probable_task="debug",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=42,
+            recent_apps=["Code", "Terminal", "ChatGPT"],
+            clipboard_context="text",
+            edited_file_count_10m=3,
+            activity_level="editing",
+            task_confidence=0.78,
+            window_title="Pulse — work_context_card.py — Visual Studio Code",
+            window_title_app="Code",
+        )
+        decision = Decision(
+            action="context_ready",
+            level=1,
+            reason="context_available",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=decision)
+        self.runtime_state.set_latest_active_app("Code")
+
+        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
+             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+            response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        card = payload["card"]
+
+        self.assertEqual(card["project"], "Pulse")
+        self.assertEqual(card["activity_level"], "editing")
+        self.assertEqual(card["probable_task"], "debug")
+        self.assertEqual(card["confidence"], 0.78)
+        self.assertIn("Projet actif détecté : Pulse", card["evidence"])
+        self.assertIn("Niveau d'activité : editing", card["evidence"])
+        self.assertIn("Tâche probable : debug", card["evidence"])
+        self.assertIn("Application active : Code", card["evidence"])
+        self.assertIn("Titre de fenêtre disponible", card["evidence"])
+        self.assertIn("Fichiers modifiés récemment : 3", card["evidence"])
+        self.assertIn("Applications récentes : Code, Terminal, ChatGPT", card["evidence"])
+        self.assertIn("Décision runtime récente : context_ready", card["evidence"])
+        self.assertEqual(card["missing_context"], [])
+        self.assertEqual(card["safe_next_probes"], ["app_context"])
+        self.assertNotIn("active_file", card)
+        self.assertNotIn("/tmp/Pulse/daemon/work_context_card.py", str(card))
+
+    def test_work_context_route_falls_back_to_present_without_signals(self):
+        signals = Signals(
+            active_project=None,
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=[],
+            clipboard_context=None,
+            activity_level="unknown",
+            task_confidence=None,
+            window_title=None,
+            window_title_app=None,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+
+        response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        self.assertEqual(card["project"], None)
+        self.assertEqual(card["activity_level"], "unknown")
+        self.assertEqual(card["probable_task"], "general")
+        self.assertEqual(card["confidence"], 0.0)
+        self.assertEqual(card["evidence"], [])
+        self.assertEqual(card["missing_context"], [
+            "Projet actif non identifié",
+            "Tâche utilisateur encore générale",
+            "Niveau d'activité incertain",
+            "Titre de fenêtre non disponible",
+        ])
+        self.assertEqual(card["safe_next_probes"], ["app_context", "window_title"])
+
     def test_context_probes_schema_exposes_default_safety_policies(self):
         response = self.client.get("/context-probes/schema")
 

@@ -40,6 +40,7 @@ from daemon.core.timeline_builder import span_from_current_context
 from daemon.core.timeline_debug import describe_timeline_span_for_debug
 from daemon.core.timeline_span import TimelineSpanKind
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
+from daemon.core.work_context_card import build_work_context_card
 from daemon.interpreter.command_interpreter import CommandInterpreter
 from daemon.memory.extractor import last_session_context
 from daemon.memory.extractor import find_git_root
@@ -535,6 +536,31 @@ def register_runtime_routes(
         return jsonify({
             "span_kinds": [kind.value for kind in TimelineSpanKind],
         })
+
+    @app.route("/work-context")
+    def get_work_context_card():
+        """Return a passive explainable card for the current work context."""
+        runtime_snapshot = runtime_state.get_runtime_snapshot()
+        present = runtime_snapshot.present
+
+        if runtime_snapshot.signals:
+            current_context = _current_context_builder.build(
+                present=present,
+                active_app=runtime_snapshot.latest_active_app,
+                signals=runtime_snapshot.signals,
+                find_git_root_fn=find_git_root,
+                find_workspace_root_fn=find_workspace_root,
+            )
+        else:
+            current_context = present
+
+        card = build_work_context_card(
+            current_context,
+            present=present,
+            signals=runtime_snapshot.signals,
+            decision=runtime_snapshot.decision,
+        )
+        return jsonify({"card": card.to_dict()})
 
     @app.route("/context-probes/schema")
     def get_context_probes_schema():
