@@ -485,10 +485,7 @@ class SessionMemory:
             "work_block_commit_count": commit_count,
             "recent_sessions": recent_sessions,
         }
-        # Alias legacy pour l'extracteur mémoire et les anciennes ResumeCards.
-        payload["work_window_started_at"] = payload["work_block_started_at"]
-        payload["work_window_commit_count"] = payload["work_block_commit_count"]
-        payload["closed_episodes"] = recent_sessions
+        self._attach_legacy_memory_payload_aliases(payload, recent_sessions=recent_sessions)
         return payload
 
     def purge_old_events(self, keep_hours: int = 48) -> int:
@@ -536,6 +533,29 @@ class SessionMemory:
                     ),
                 )
                 conn.commit()
+
+
+    @staticmethod
+    def _attach_legacy_memory_payload_aliases(
+        payload: Dict[str, Any],
+        *,
+        recent_sessions: List[Dict[str, Any]],
+    ) -> None:
+        """Expose old memory keys while consumers migrate to work_block/recent_sessions.
+
+        Canonical keys:
+        - work_block_started_at
+        - work_block_commit_count
+        - recent_sessions
+
+        Legacy aliases:
+        - work_window_started_at
+        - work_window_commit_count
+        - closed_episodes
+        """
+        payload["work_window_started_at"] = payload["work_block_started_at"]
+        payload["work_window_commit_count"] = payload["work_block_commit_count"]
+        payload["closed_episodes"] = recent_sessions
 
     # ── Internals ──────────────────────────────────────────────────────────────
 

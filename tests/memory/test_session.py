@@ -259,8 +259,16 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIn("work_block_started_at", payload)
         self.assertIn("work_block_commit_count", payload)
         self.assertIn("recent_sessions", payload)
+        self.assertEqual(payload["work_block_started_at"], payload["started_at"])
+        self.assertEqual(payload["work_block_commit_count"], payload["commit_count"])
+
+        # Legacy aliases stay available only for older memory consumers.
         self.assertIn("work_window_started_at", payload)
         self.assertIn("work_window_commit_count", payload)
+        self.assertIn("closed_episodes", payload)
+        self.assertEqual(payload["work_window_started_at"], payload["work_block_started_at"])
+        self.assertEqual(payload["work_window_commit_count"], payload["work_block_commit_count"])
+        self.assertEqual(payload["closed_episodes"], payload["recent_sessions"])
 
     def test_export_memory_payload_compte_les_commits(self):
         """Les events COMMIT_EDITMSG sont comptés comme commits."""
@@ -280,7 +288,7 @@ class TestSessionMemory(unittest.TestCase):
         payload = self.memory.export_memory_payload()
         self.assertEqual(payload["commit_count"], 2)
         self.assertEqual(payload["work_block_commit_count"], 2)
-        self.assertEqual(payload["work_window_commit_count"], 2)
+        self.assertEqual(payload["work_window_commit_count"], payload["work_block_commit_count"])
 
     def test_get_today_summary_derive_le_temps_depuis_les_evenements(self):
         today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
