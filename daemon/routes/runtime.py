@@ -22,6 +22,7 @@ from daemon.core.event_envelope import (
 )
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.timeline_builder import span_from_current_context
+from daemon.core.timeline_span import TimelineSpanKind
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
 from daemon.interpreter.command_interpreter import CommandInterpreter
 from daemon.memory.extractor import last_session_context
@@ -505,6 +506,13 @@ def register_runtime_routes(
             ended_at=now,
         )
         return jsonify({"span": span.to_dict()})
+
+    @app.route("/timeline/schema")
+    def get_timeline_schema():
+        """Expose timeline metadata enums for debug UI / timeline filters."""
+        return jsonify({
+            "span_kinds": [kind.value for kind in TimelineSpanKind],
+        })
 
     @app.route("/observation")
     def get_observation():

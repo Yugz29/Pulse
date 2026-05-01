@@ -816,6 +816,21 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(span["privacy"], "content_sensitive")
         self.assertEqual(span["duration_min"], 5)
 
+    def test_timeline_schema_exposes_span_kinds(self):
+        response = self.client.get("/timeline/schema")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertIn("work", payload["span_kinds"])
+        self.assertIn("break", payload["span_kinds"])
+        self.assertIn("debug", payload["span_kinds"])
+        self.assertIn("reading", payload["span_kinds"])
+        self.assertIn("execution", payload["span_kinds"])
+        self.assertIn("system", payload["span_kinds"])
+        self.assertIn("memory", payload["span_kinds"])
+        self.assertIn("unknown", payload["span_kinds"])
+
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/pause")
