@@ -1199,6 +1199,19 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(request_payload["status"], "executed")
         self.assertEqual(debug["status"], "executed")
         self.assertTrue(debug["is_terminal"])
+        self.bus.publish.assert_called_once_with("context_probe_executed", {
+            "request_id": created["request_id"],
+            "kind": "app_context",
+            "captured": True,
+            "privacy": "public",
+            "retention": "session",
+            "data_keys": ["active_app", "active_project", "activity_level", "probable_task"],
+        })
+        published_payload = self.bus.publish.call_args.args[1]
+        self.assertNotIn("data", published_payload)
+        self.assertNotIn("Code", str(published_payload))
+        self.assertNotIn("Pulse", str(published_payload))
+        self.assertNotIn("coding", str(published_payload))
 
     def test_context_probe_request_execute_blocks_pending_request(self):
         created = self.client.post(
@@ -1216,6 +1229,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["blocked_reason"], "request_not_approved:pending")
         self.assertFalse(payload["result"]["captured"])
         self.assertEqual(payload["request"]["status"], "pending")
+        self.bus.publish.assert_not_called()
 
     def test_context_probe_request_execute_blocks_unsupported_approved_kind(self):
         created = self.client.post(
@@ -1240,12 +1254,14 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertFalse(payload["result"]["captured"])
         self.assertEqual(payload["request"]["status"], "approved")
         self.assertNotIn("selected_text", payload["result"].get("data", {}))
+        self.bus.publish.assert_not_called()
 
     def test_context_probe_request_execute_unknown_request_returns_404(self):
         response = self.client.post("/context-probes/requests/missing/execute")
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.get_json(), {"error": "not_found"})
+        self.bus.publish.assert_not_called()
 
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):

@@ -707,6 +707,14 @@ def register_runtime_routes(
         except ValueError as exc:
             return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
         probe_store.update(executed)
+        bus.publish("context_probe_executed", {
+            "request_id": executed.request_id,
+            "kind": result.kind,
+            "captured": result.captured,
+            "privacy": result.privacy,
+            "retention": result.retention,
+            "data_keys": sorted(result.data.keys()),
+        })
         return jsonify({
             "result": result.to_dict(),
             "request": executed.to_dict(),
