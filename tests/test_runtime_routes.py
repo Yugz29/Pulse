@@ -683,6 +683,31 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(response.get_json(), {"events": [], "count": 0})
         self.bus.recent.assert_called_once_with(50)
 
+    def test_events_schema_exposes_event_metadata_enums(self):
+        response = self.client.get("/events/schema")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertIn("filesystem", payload["sources"])
+        self.assertIn("terminal", payload["sources"])
+        self.assertIn("unknown", payload["sources"])
+
+        self.assertIn("filesystem", payload["buckets"])
+        self.assertIn("terminal_activity", payload["buckets"])
+        self.assertIn("unknown", payload["buckets"])
+
+        self.assertIn("public", payload["privacy_classes"])
+        self.assertIn("path_sensitive", payload["privacy_classes"])
+        self.assertIn("content_sensitive", payload["privacy_classes"])
+        self.assertIn("secret_sensitive", payload["privacy_classes"])
+        self.assertIn("unknown", payload["privacy_classes"])
+
+        self.assertIn("ephemeral", payload["retention_classes"])
+        self.assertIn("session", payload["retention_classes"])
+        self.assertIn("persistent", payload["retention_classes"])
+        self.assertIn("debug_only", payload["retention_classes"])
+
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/pause")

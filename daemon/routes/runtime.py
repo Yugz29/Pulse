@@ -14,6 +14,12 @@ from daemon.core.current_context_adapters import current_context_to_legacy_signa
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.event_actor import EventActorClassifier
 from daemon.core.event_debug import describe_event_for_debug
+from daemon.core.event_envelope import (
+    PulseEventBucket,
+    PulseEventSource,
+    PulsePrivacyClass,
+    PulseRetention,
+)
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
 from daemon.interpreter.command_interpreter import CommandInterpreter
@@ -427,6 +433,7 @@ def register_runtime_routes(
         ]
         return jsonify(events)
 
+
     @app.route("/events/debug")
     def get_events_debug():
         """Developer-only raw event browser preview without raw payload values."""
@@ -446,6 +453,16 @@ def register_runtime_routes(
             if since_dt is None or event.timestamp > since_dt
         ]
         return jsonify({"events": events, "count": len(events)})
+
+    @app.route("/events/schema")
+    def get_events_schema():
+        """Expose event metadata enums for debug UI / raw event browser filters."""
+        return jsonify({
+            "sources": [source.value for source in PulseEventSource],
+            "buckets": [bucket.value for bucket in PulseEventBucket],
+            "privacy_classes": [privacy.value for privacy in PulsePrivacyClass],
+            "retention_classes": [retention.value for retention in PulseRetention],
+        })
 
     @app.route("/observation")
     def get_observation():
