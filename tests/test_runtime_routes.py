@@ -344,6 +344,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             locked=False,
         )
         self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("RuntimeApp")
         self.store.to_dict.return_value = {
             "active_project": "OldProject",
             "active_file": "/tmp/stale.py",
@@ -357,8 +358,15 @@ class TestRuntimeRoutes(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["active_project"], "Pulse")
         self.assertEqual(payload["active_file"], "/tmp/current.py")
+        self.assertEqual(payload["active_app"], "RuntimeApp")
+        self.assertEqual(payload["session_duration_min"], 24)
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["active_file"], "/tmp/current.py")
+        self.assertEqual(payload["signals"]["session_duration_min"], 24)
+        self.assertEqual(payload["debug"]["store"]["active_project"], "OldProject")
+        self.assertEqual(payload["debug"]["store"]["active_file"], "/tmp/stale.py")
+        self.assertEqual(payload["debug"]["store"]["active_app"], "Xcode")
+        self.assertEqual(payload["debug"]["store"]["session_duration_min"], 999)
 
     def test_state_uses_atomic_runtime_snapshot_read_path(self):
         signals = Signals(
