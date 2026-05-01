@@ -14,6 +14,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     case daydream = "DayDream"
     case events = "Événements"
     case notifications = "Notifications"
+    case contextProbes = "Context Probes"
     case mcp = "MCP"
     case system = "Système"
 
@@ -27,6 +28,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
         case .daydream: return "moon.stars"
         case .events: return "clock.arrow.trianglehead.counterclockwise.rotate.90"
         case .notifications: return "bell"
+        case .contextProbes: return "shield.lefthalf.filled"
         case .mcp: return "terminal"
         case .system: return "gearshape.2"
         }
@@ -40,6 +42,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
         case .daydream: return "#8B5CF6"
         case .events: return gPurple
         case .notifications: return gOrange
+        case .contextProbes: return gBlue
         case .mcp: return gOrange
         case .system: return gGray
         }
@@ -177,6 +180,8 @@ struct DashboardRootView: View {
             eventsView
         case .notifications:
             notificationsView
+        case .contextProbes:
+            contextProbesView
         case .mcp:
             mcpView
         case .system:
@@ -1048,6 +1053,182 @@ struct DashboardRootView: View {
                 .padding(.vertical, 8)
             }
         }
+    }
+
+    private var contextProbesView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                GlassCard(accent: gBlue) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            cardTitle("Context Probes", icon: "shield.lefthalf.filled")
+                            Spacer()
+                            statBadge("Demandes", "\(vm.contextProbeRequests.count)", gBlue)
+                        }
+                        Text("Demandes de contexte contrôlées par validation humaine. Les metadata brutes et les valeurs capturées ne sont pas affichées ici.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if vm.contextProbeRequests.isEmpty {
+                    GlassCard {
+                        VStack(spacing: 12) {
+                            Image(systemName: "shield.slash")
+                                .font(.system(size: 28, weight: .light))
+                                .foregroundStyle(.tertiary)
+                            Text("Aucune demande de contexte")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            Text("Pulse n'a rien demandé à lire pour l'instant.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
+                    }
+                } else {
+                    ForEach(sortedContextProbeRequests) { request in
+                        GlassCard(accent: request.statusAccentHex) {
+                            contextProbeRequestCard(request)
+                        }
+                    }
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    private var sortedContextProbeRequests: [ContextProbeRequestPayload] {
+        vm.contextProbeRequests.sorted { left, right in
+            if left.status == "pending" && right.status != "pending" { return true }
+            if left.status != "pending" && right.status == "pending" { return false }
+            if left.status == "approved" && right.status != "approved" { return true }
+            if left.status != "approved" && right.status == "approved" { return false }
+            return left.createdAt > right.createdAt
+        }
+    }
+
+    private func contextProbeRequestCard(_ request: ContextProbeRequestPayload) -> some View {
+        let debug = vm.debugForContextProbeRequest(request)
+        let risk = debug?.labels.risk ?? "Unknown"
+        let riskColor = Color(hex: debug?.labels.riskAccentHex ?? gGray)
+        let statusColor = Color(hex: request.statusAccentHex)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(request.kindLabel)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Text(request.statusLabel)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(statusColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(statusColor.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    Text(request.reason)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Text(risk)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(riskColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(riskColor.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            HStack(spacing: 8) {
+                contextProbeMetaPill("Consentement", request.policy.consentLabel)
+                contextProbeMetaPill("Privacy", request.policy.privacyLabel)
+                contextProbeMetaPill("Rétention", request.policy.retentionLabel)
+            }
+
+            if !request.metadataKeys.isEmpty {
+                Divider()
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "key.horizontal")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Metadata keys")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                        Text(request.metadataKeys.joined(separator: " · "))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                if request.canApproveOrRefuse {
+                    Button {
+                        Task { await vm.approveContextProbeRequest(request) }
+                    } label: {
+                        Label("Approuver", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: gGreen))
+
+                    Button(role: .destructive) {
+                        Task { await vm.refuseContextProbeRequest(request) }
+                    } label: {
+                        Label("Refuser", systemImage: "xmark")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if request.canExecute {
+                    Button {
+                        Task { await vm.executeContextProbeRequest(request) }
+                    } label: {
+                        Label("Exécuter", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: gBlue))
+                }
+
+                Spacer()
+
+                if let decision = request.decisionReason, !decision.isEmpty {
+                    Text(decision)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private func contextProbeMetaPill(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 
     private var mcpView: some View {

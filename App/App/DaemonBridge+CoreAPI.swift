@@ -200,6 +200,66 @@ extension DaemonBridge {
         return payload.items
     }
 
+    func getContextProbeRequests(status: String? = nil, includeTerminal: Bool = true) async -> ContextProbeListResponse? {
+        var queryItems: [String] = []
+        if let status, !status.isEmpty {
+            let encoded = status.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? status
+            queryItems.append("status=\(encoded)")
+        }
+        if !includeTerminal {
+            queryItems.append("include_terminal=false")
+        }
+        let query = queryItems.isEmpty ? "" : "?\(queryItems.joined(separator: "&"))"
+        guard let url = URL(string: "\(base)/context-probes/requests\(query)") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(ContextProbeListResponse.self, from: data)
+    }
+
+    func approveContextProbeRequest(_ requestId: String, reason: String? = nil) async -> ContextProbeActionResponse? {
+        await sendContextProbeDecision(requestId: requestId, action: "approve", reason: reason)
+    }
+
+    func refuseContextProbeRequest(_ requestId: String, reason: String? = nil) async -> ContextProbeActionResponse? {
+        await sendContextProbeDecision(requestId: requestId, action: "refuse", reason: reason)
+    }
+
+    func executeContextProbeRequest(_ requestId: String) async -> ContextProbeExecuteResponse? {
+        guard let encodedId = requestId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        let request: URLRequest
+        do {
+            request = try jsonObjectRequest(
+                path: "/context-probes/requests/\(encodedId)/execute",
+                body: [:]
+            )
+        } catch {
+            return nil
+        }
+        guard let (data, response) = try? await data(for: request) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(ContextProbeExecuteResponse.self, from: data)
+    }
+
+    private func sendContextProbeDecision(requestId: String, action: String, reason: String?) async -> ContextProbeActionResponse? {
+        guard let encodedId = requestId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        var body: [String: Any] = [:]
+        if let reason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            body["reason"] = reason
+        }
+        let request: URLRequest
+        do {
+            request = try jsonObjectRequest(
+                path: "/context-probes/requests/\(encodedId)/\(action)",
+                body: body
+            )
+        } catch {
+            return nil
+        }
+        guard let (data, response) = try? await data(for: request) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(ContextProbeActionResponse.self, from: data)
+    }
+
     func getFacts(limit: Int = 30) async -> FactsResponse? {
         guard let url = URL(string: "\(base)/facts?limit=\(limit)") else { return nil }
         guard let (data, response) = try? await data(from: url) else { return nil }

@@ -933,6 +933,226 @@ struct ProposalRecord: Identifiable, Codable {
     }
 }
 
+struct ContextProbeListResponse: Decodable {
+    let requests: [ContextProbeRequestPayload]
+    let debug: [ContextProbeDebugPayload]
+    let count: Int
+}
+
+struct ContextProbeActionResponse: Decodable {
+    let request: ContextProbeRequestPayload
+    let debug: ContextProbeDebugPayload
+}
+
+struct ContextProbeExecuteResponse: Decodable {
+    let result: ContextProbeResultPayload
+    let request: ContextProbeRequestPayload
+    let debug: ContextProbeDebugPayload
+}
+
+struct ContextProbeRequestPayload: Decodable, Identifiable {
+    let requestId: String
+    let kind: String
+    let reason: String
+    let policy: ContextProbePolicyPayload
+    let status: String
+    let createdAt: String
+    let expiresAt: String?
+    let decidedAt: String?
+    let executedAt: String?
+    let decisionReason: String?
+    let metadataKeys: [String]
+    let isTerminal: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case kind
+        case reason
+        case policy
+        case status
+        case createdAt = "created_at"
+        case expiresAt = "expires_at"
+        case decidedAt = "decided_at"
+        case executedAt = "executed_at"
+        case decisionReason = "decision_reason"
+        case metadataKeys = "metadata_keys"
+        case isTerminal = "is_terminal"
+    }
+
+    var id: String { requestId }
+
+    var kindLabel: String {
+        switch kind {
+        case "app_context": return "Contexte app"
+        case "window_title": return "Titre fenêtre"
+        case "selected_text": return "Texte sélectionné"
+        case "clipboard_sample": return "Extrait clipboard"
+        case "screen_snapshot": return "Capture écran"
+        case "unknown": return "Probe inconnu"
+        default: return kind.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    var statusLabel: String {
+        switch status {
+        case "pending": return "À valider"
+        case "approved": return "Approuvée"
+        case "refused": return "Refusée"
+        case "expired": return "Expirée"
+        case "executed": return "Exécutée"
+        case "cancelled": return "Annulée"
+        default: return status
+        }
+    }
+
+    var statusAccentHex: String {
+        switch status {
+        case "approved": return "#5DCAA5"
+        case "executed": return "#5E9EFF"
+        case "refused": return "#ff453a"
+        case "expired", "cancelled": return "#7c7c80"
+        default: return "#EF9F27"
+        }
+    }
+
+    var canApproveOrRefuse: Bool {
+        status == "pending"
+    }
+
+    var canExecute: Bool {
+        status == "approved" && kind == "app_context"
+    }
+}
+
+struct ContextProbeDebugPayload: Decodable, Identifiable {
+    let requestId: String
+    let kind: String
+    let status: String
+    let reason: String
+    let createdAt: String
+    let expiresAt: String?
+    let decidedAt: String?
+    let executedAt: String?
+    let decisionReason: String?
+    let isTerminal: Bool
+    let isExpired: Bool
+    let policy: ContextProbePolicyPayload
+    let labels: ContextProbeLabelsPayload
+    let metadataKeys: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case kind
+        case status
+        case reason
+        case createdAt = "created_at"
+        case expiresAt = "expires_at"
+        case decidedAt = "decided_at"
+        case executedAt = "executed_at"
+        case decisionReason = "decision_reason"
+        case isTerminal = "is_terminal"
+        case isExpired = "is_expired"
+        case policy
+        case labels
+        case metadataKeys = "metadata_keys"
+    }
+
+    var id: String { requestId }
+}
+
+struct ContextProbePolicyPayload: Decodable {
+    let kind: String
+    let consent: String
+    let privacy: String
+    let retention: String
+    let allowRawValue: Bool
+    let allowPersistentStorage: Bool
+    let requiresUserVisibleReason: Bool
+    let maxChars: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case consent
+        case privacy
+        case retention
+        case allowRawValue = "allow_raw_value"
+        case allowPersistentStorage = "allow_persistent_storage"
+        case requiresUserVisibleReason = "requires_user_visible_reason"
+        case maxChars = "max_chars"
+    }
+
+    var consentLabel: String {
+        switch consent {
+        case "none": return "Aucun"
+        case "implicit_session": return "Session"
+        case "explicit_each_time": return "À chaque fois"
+        case "blocked": return "Bloqué"
+        default: return consent
+        }
+    }
+
+    var privacyLabel: String {
+        switch privacy {
+        case "public": return "Public"
+        case "path_sensitive": return "Chemin sensible"
+        case "content_sensitive": return "Contenu sensible"
+        case "secret_sensitive": return "Secret potentiel"
+        case "unknown": return "Inconnu"
+        default: return privacy
+        }
+    }
+
+    var retentionLabel: String {
+        switch retention {
+        case "ephemeral": return "Éphémère"
+        case "session": return "Session"
+        case "persistent": return "Persistant"
+        case "debug_only": return "Debug only"
+        default: return retention
+        }
+    }
+}
+
+struct ContextProbeLabelsPayload: Decodable {
+    let kind: String
+    let consent: String
+    let privacy: String
+    let retention: String
+    let risk: String
+
+    var riskAccentHex: String {
+        switch risk {
+        case "Low": return "#5DCAA5"
+        case "Moderate": return "#EF9F27"
+        case "Sensitive": return "#ff453a"
+        case "Blocked": return "#7c7c80"
+        default: return "#7c7c80"
+        }
+    }
+}
+
+struct ContextProbeResultPayload: Decodable {
+    let requestId: String
+    let kind: String
+    let captured: Bool
+    let data: [String: String?]
+    let privacy: String
+    let retention: String
+    let capturedAt: String
+    let blockedReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case kind
+        case captured
+        case data
+        case privacy
+        case retention
+        case capturedAt = "captured_at"
+        case blockedReason = "blocked_reason"
+    }
+}
+
 struct InsightEvent: Identifiable {
     let id = UUID()
     let type: String
