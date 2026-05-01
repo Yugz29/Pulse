@@ -348,45 +348,52 @@ struct ContextProbeDecisionView: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: riskIcon)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(riskColor)
-                .frame(width: 28)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: riskIcon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(riskColor)
+                    .frame(width: 28)
+                    .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Pulse demande du contexte")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.90))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Pulse demande du contexte")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.90))
+                        .lineLimit(1)
 
-                Text("\(request.kindLabel) · \(request.policy.privacyLabel) · \(request.policy.retentionLabel)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(riskColor.opacity(0.85))
-                    .lineLimit(1)
+                    Text("\(request.kindLabel) · \(request.policy.privacyLabel) · \(request.policy.retentionLabel)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(riskColor.opacity(0.85))
+                        .lineLimit(1)
 
-                Text(request.reason)
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.34))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    Text(request.reason)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.42))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 pillButton("Approuver") {
                     Task { await vm.approvePendingContextProbe() }
                 }
                 .foregroundColor(Color(hex: "#5DCAA5"))
+                .frame(maxWidth: .infinity)
 
                 pillButton("Refuser") {
                     Task { await vm.refusePendingContextProbe() }
                 }
                 .foregroundColor(Color(hex: "#ff453a"))
+                .frame(maxWidth: .infinity)
             }
+            .padding(.leading, 40)
         }
         .padding(.horizontal, 18)
-        .frame(height: NotchWindow.commandHeight - .panelContentGap)
+        .padding(.vertical, 12)
+        .frame(height: NotchWindow.contextProbeHeight - .panelContentGap)
     }
 }
 

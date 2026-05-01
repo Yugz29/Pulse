@@ -67,7 +67,7 @@ final class PulseViewModel: ObservableObject {
 
     var currentPanelHeight: CGFloat {
         if pendingCommand != nil { return NotchWindow.commandHeight }
-        if pendingContextProbe != nil { return NotchWindow.commandHeight }
+        if pendingContextProbe != nil { return NotchWindow.contextProbeHeight }
         if panelMode == .resumeCard, let card = activeResumeCard {
             return card.displayHeight
         }
@@ -127,12 +127,18 @@ final class PulseViewModel: ObservableObject {
     func approvePendingContextProbe() async {
         guard let request = pendingContextProbe else { return }
         guard await bridge.approveContextProbeRequest(request.requestId, reason: "Approved from Pulse Notch") != nil else { return }
-        pendingContextProbe = nil
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            pendingContextProbe = nil
+            isExpanded = false
+        }
     }
 
     func refusePendingContextProbe() async {
         guard let request = pendingContextProbe else { return }
         guard await bridge.refuseContextProbeRequest(request.requestId, reason: "Refused from Pulse Notch") != nil else { return }
-        pendingContextProbe = nil
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            pendingContextProbe = nil
+            isExpanded = false
+        }
     }
 }
