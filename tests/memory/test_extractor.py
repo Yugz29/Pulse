@@ -814,8 +814,8 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Pulse", "Codex"],
                 "top_files": ["DashboardContentView.swift"],
                 "files_changed": 1,
-                "work_window_started_at": "2026-04-29T10:00:00",
-                "work_window_ended_at": "2026-04-29T11:42:00",
+                "work_block_started_at": "2026-04-29T10:00:00",
+                "work_block_ended_at": "2026-04-29T11:42:00",
                 "commit_activity_started_at": "2026-04-29T10:33:04",
                 "commit_activity_ended_at": "2026-04-29T10:48:12",
                 "delivered_at": "2026-04-29T11:42:00",
@@ -1007,7 +1007,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("21:55 → 22:14 — développement (18 min)", rendered)
         self.assertNotIn("21:35 → 22:14 — développement", rendered)
 
-    def test_commit_work_window_court_vaut_au_moins_une_minute(self):
+    def test_commit_work_block_court_vaut_au_moins_une_minute(self):
         frame = extractor_module._build_consolidation_frame(
             {
                 "active_project": "Pulse",
@@ -1160,9 +1160,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Cursor", "Terminal"],
                 "top_files": ["runtime_orchestrator.py", "episode_fsm.py"],
                 "files_changed": 2,
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-strong",
+                        "id": "ep-strong",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -1187,9 +1187,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Safari"],
                 "files_changed": 0,
                 "top_files": [],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-weak",
+                        "id": "ep-weak",
                         "session_id": "sess-2",
                         "active_project": None,
                         "probable_task": "general",
@@ -1219,9 +1219,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Safari"],
                 "files_changed": 1,
                 "top_files": ["models_cache.json"],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-project-weak",
+                        "id": "ep-project-weak",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "general",
@@ -1245,9 +1245,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Safari", "zoom.us"],
                 "files_changed": 0,
                 "top_files": [],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-off-project",
+                        "id": "ep-off-project",
                         "session_id": "sess-2",
                         "active_project": None,
                         "probable_task": "general",
