@@ -19,7 +19,7 @@ Pulse veut lire du contexte
 
 Cette phase prépare le futur enrichissement contextuel de Pulse, mais elle reste volontairement prudente.
 
-Aujourd'hui, seul le probe `app_context` est réellement exécutable. Les probes plus sensibles (`selected_text`, `clipboard_sample`, `screen_snapshot`) sont modélisés, mais non exécutés.
+Aujourd'hui, deux probes sont réellement exécutables : `app_context` et `window_title`. `window_title` ne retourne jamais le titre brut : il passe obligatoirement par la couche de redaction avant toute sortie. Les probes plus sensibles (`selected_text`, `clipboard_sample`, `screen_snapshot`) sont modélisés, mais non exécutés.
 
 ---
 
@@ -34,7 +34,8 @@ Policy
 → Store mémoire
 → Approval routes
 → Execution gate
-→ Runner app_context
+→ Runner autorisé
+→ Redaction layer si nécessaire
 → Audit event
 ```
 
@@ -78,7 +79,7 @@ Centralise la barrière d'exécution. Une demande ne peut être exécutée que s
 daemon/core/context_probe_runner.py
 ```
 
-Contient le premier runner minimal : `app_context`.
+Contient les runners actuellement autorisés : `app_context` et `window_title`.
 
 ---
 
@@ -87,7 +88,7 @@ Contient le premier runner minimal : `app_context`.
 | Probe | Statut actuel | Consentement | Sensibilité | Rétention | Exécution |
 |---|---:|---|---|---|---|
 | `app_context` | actif | implicite session | `public` | `session` | oui |
-| `window_title` | modélisé | implicite session | `path_sensitive` | `session` | non |
+| `window_title` | actif redacted | implicite session | `path_sensitive` | `session` | oui |
 | `selected_text` | modélisé | explicite à chaque fois | `content_sensitive` | `ephemeral` | non |
 | `clipboard_sample` | modélisé | explicite à chaque fois | `content_sensitive` | `ephemeral` | non |
 | `screen_snapshot` | modélisé | explicite à chaque fois | `content_sensitive` | `ephemeral` | non |
@@ -209,9 +210,44 @@ Les valeurs ne sont pas publiées dans l'EventBus.
 
 ---
 
+### 6. Redaction obligatoire pour les valeurs textuelles sensibles
+
+Avant qu'une valeur textuelle sensible puisse sortir d'un runner, elle doit passer par :
+
+```text
+redact_context_probe_value()
+```
+
+La redaction masque notamment :
+
+```text
+emails
+URLs
+chemins /Users/<user>
+tokens évidents
+secrets d'environnement
+clés privées SSH / PKCS#8
+```
+
+Le résultat expose uniquement :
+
+```json
+{
+  "redacted_value": "...",
+  "redaction_flags": ["email", "url", "home_path"],
+  "original_length": 91,
+  "redacted_length": 89,
+  "was_redacted": true
+}
+```
+
+Le titre brut, le texte brut ou le clipboard brut ne doivent pas être publiés dans les vues debug ou dans l'EventBus.
+
+---
+
 ## Probe `app_context`
 
-Le seul probe réellement exécutable pour l'instant est :
+Le probe le moins sensible actuellement exécutable est :
 
 ```text
 app_context
@@ -239,6 +275,55 @@ screen content
 ```
 
 Même si `active_file` est disponible ailleurs dans le runtime, il est volontairement exclu du résultat du probe.
+
+---
+
+## Probe `window_title`
+
+Le probe `window_title` est maintenant exécutable, mais uniquement en sortie redacted.
+
+Il réutilise une donnée déjà observée par Pulse :
+
+```text
+SystemObserver.swift
+→ app_activated.window_title / window_title_poll.title
+→ EventBus
+→ SignalScorer
+→ Signals.window_title
+→ run_window_title_probe()
+→ redact_context_probe_value()
+```
+
+Il ne crée aucune nouvelle capture macOS.
+
+Il retourne une structure de ce type :
+
+```json
+{
+  "redacted_value": "Pulse notes for [REDACTED_EMAIL] — [REDACTED_URL] — /Users/[REDACTED_USER]/Projects/Pulse",
+  "redaction_flags": ["email", "url", "home_path"],
+  "original_length": 91,
+  "redacted_length": 89,
+  "was_redacted": true
+}
+```
+
+Il ne retourne pas :
+
+```text
+titre brut
+contenu de fenêtre
+texte sélectionné
+clipboard
+capture écran
+active_file
+```
+
+Si aucun `Signals.window_title` n'est disponible, l'exécution est bloquée avec :
+
+```text
+missing_window_title
+```
 
 ---
 
@@ -338,12 +423,13 @@ refused
 POST /context-probes/requests/<request_id>/execute
 ```
 
-Exécute uniquement les demandes approuvées compatibles avec le runner actuel.
+Exécute uniquement les demandes approuvées compatibles avec un runner autorisé.
 
-Aujourdhui :
+Aujourd'hui :
 
 ```text
-app_context seulement
+app_context
+window_title redacted
 ```
 
 Si le probe est bloqué, la route retourne :
@@ -367,7 +453,6 @@ Pulse ne fait pas encore :
 - lecture de texte sélectionné
 - lecture de clipboard brut
 - stockage persistant des demandes
-- exécution de window_title
 - exécution de selected_text
 - exécution de clipboard_sample
 - exécution de screen_snapshot
@@ -389,5 +474,6 @@ observer suffisamment
 expliquer clairement
 demander avant de lire
 exécuter seulement si approuvé
+redacter avant de sortir
 tracer sans exposer
 ```

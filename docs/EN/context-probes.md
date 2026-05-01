@@ -19,7 +19,7 @@ Pulse wants to read context
 
 This phase prepares future context enrichment for Pulse, but it remains deliberately conservative.
 
-Today, only the `app_context` probe is actually executable. More sensitive probes (`selected_text`, `clipboard_sample`, `screen_snapshot`) are modeled, but not executed.
+Today, two probes are actually executable: `app_context` and `window_title`. `window_title` never returns the raw title: it must pass through the redaction layer before any output. More sensitive probes (`selected_text`, `clipboard_sample`, `screen_snapshot`) are modeled, but not executed.
 
 ---
 
@@ -34,7 +34,8 @@ Policy
 → In-memory store
 → Approval routes
 → Execution gate
-→ app_context runner
+→ Authorized runner
+→ Redaction layer when needed
 → Audit event
 ```
 
@@ -78,7 +79,7 @@ Centralizes the execution gate. A request can only execute if it is approved, no
 daemon/core/context_probe_runner.py
 ```
 
-Contains the first minimal runner: `app_context`.
+Contains the currently authorized runners: `app_context` and `window_title`.
 
 ---
 
@@ -87,7 +88,7 @@ Contains the first minimal runner: `app_context`.
 | Probe | Current status | Consent | Sensitivity | Retention | Execution |
 |---|---:|---|---|---|---|
 | `app_context` | active | implicit session | `public` | `session` | yes |
-| `window_title` | modeled | implicit session | `path_sensitive` | `session` | no |
+| `window_title` | active redacted | implicit session | `path_sensitive` | `session` | yes |
 | `selected_text` | modeled | explicit each time | `content_sensitive` | `ephemeral` | no |
 | `clipboard_sample` | modeled | explicit each time | `content_sensitive` | `ephemeral` | no |
 | `screen_snapshot` | modeled | explicit each time | `content_sensitive` | `ephemeral` | no |
@@ -209,9 +210,44 @@ Values are not published to the EventBus.
 
 ---
 
+### 6. Mandatory redaction for sensitive text values
+
+Before a sensitive text value can leave a runner, it must pass through:
+
+```text
+redact_context_probe_value()
+```
+
+Redaction masks, among other things:
+
+```text
+emails
+URLs
+/Users/<user> paths
+obvious tokens
+environment secrets
+SSH / PKCS#8 private keys
+```
+
+The result exposes only:
+
+```json
+{
+  "redacted_value": "...",
+  "redaction_flags": ["email", "url", "home_path"],
+  "original_length": 91,
+  "redacted_length": 89,
+  "was_redacted": true
+}
+```
+
+The raw title, raw selected text, or raw clipboard content must not be published in debug views or in the EventBus.
+
+---
+
 ## `app_context` probe
 
-The only probe that is actually executable for now is:
+The least sensitive probe currently executable is:
 
 ```text
 app_context
@@ -239,6 +275,55 @@ screen content
 ```
 
 Even if `active_file` is available elsewhere in the runtime, it is deliberately excluded from the probe result.
+
+---
+
+## `window_title` probe
+
+The `window_title` probe is now executable, but only as redacted output.
+
+It reuses data already observed by Pulse:
+
+```text
+SystemObserver.swift
+→ app_activated.window_title / window_title_poll.title
+→ EventBus
+→ SignalScorer
+→ Signals.window_title
+→ run_window_title_probe()
+→ redact_context_probe_value()
+```
+
+It does not create any new macOS capture path.
+
+It returns a structure like this:
+
+```json
+{
+  "redacted_value": "Pulse notes for [REDACTED_EMAIL] — [REDACTED_URL] — /Users/[REDACTED_USER]/Projects/Pulse",
+  "redaction_flags": ["email", "url", "home_path"],
+  "original_length": 91,
+  "redacted_length": 89,
+  "was_redacted": true
+}
+```
+
+It does not return:
+
+```text
+raw title
+window content
+selected text
+clipboard
+screen capture
+active_file
+```
+
+If no `Signals.window_title` is available, execution is blocked with:
+
+```text
+missing_window_title
+```
 
 ---
 
@@ -338,12 +423,13 @@ refused
 POST /context-probes/requests/<request_id>/execute
 ```
 
-Executes only approved requests compatible with the current runner.
+Executes only approved requests compatible with an authorized runner.
 
 Today:
 
 ```text
-app_context only
+app_context
+window_title redacted
 ```
 
 If the probe is blocked, the route returns:
@@ -367,7 +453,6 @@ Pulse does not yet do:
 - selected text reading
 - raw clipboard reading
 - persistent request storage
-- window_title execution
 - selected_text execution
 - clipboard_sample execution
 - screen_snapshot execution
@@ -388,5 +473,6 @@ observe enough
 explain clearly
 ask before reading
 execute only if approved
+redact before output
 audit without exposing
 ```
