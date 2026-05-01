@@ -306,7 +306,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(snapshot["active_project"], "Pulse")
         self.assertEqual(snapshot["top_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
         self.assertEqual(snapshot["work_block_started_at"], "2026-04-28T11:46:01")
-        self.assertEqual(snapshot["work_window_started_at"], "2026-04-28T11:46:01")
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
         git_root = Path("/tmp/Pulse")
@@ -342,7 +341,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "duration_min": 15,
             "event_count": 4,
         }
-        snapshot = {"work_window_started_at": "2026-04-29T10:00:00", "work_window_ended_at": "2026-04-29T11:42:00"}
+        snapshot = {"work_block_started_at": "2026-04-29T10:00:00", "work_block_ended_at": "2026-04-29T11:42:00"}
         commit_at = datetime(2026, 4, 29, 11, 42, 0)
 
         self.orchestrator._annotate_commit_work_block(
@@ -353,9 +352,21 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertEqual(snapshot["work_block_started_at"], "2026-04-29T10:33:04")
         self.assertEqual(snapshot["work_block_ended_at"], "2026-04-29T10:48:12")
-        self.assertEqual(snapshot["work_window_started_at"], "2026-04-29T10:33:04")
-        self.assertEqual(snapshot["work_window_ended_at"], "2026-04-29T10:48:12")
         self.assertEqual(snapshot["commit_activity_event_count"], 4)
+
+    def test_annotate_commit_work_window_alias_reste_compatible(self):
+        snapshot = {
+            "work_window_started_at": "2026-04-29T10:00:00",
+            "work_window_ended_at": "2026-04-29T11:42:00",
+        }
+        commit_at = datetime(2026, 4, 29, 11, 42, 0)
+
+        self.orchestrator._annotate_commit_work_window(snapshot, commit_at=commit_at)
+
+        self.assertEqual(snapshot["work_block_started_at"], "2026-04-29T10:00:00")
+        self.assertEqual(snapshot["work_block_ended_at"], "2026-04-29T11:42:00")
+        self.assertEqual(snapshot["work_window_started_at"], "2026-04-29T10:00:00")
+        self.assertEqual(snapshot["work_window_ended_at"], "2026-04-29T11:42:00")
 
     def test_apply_restart_state_resume_aussi_la_session_memory(self):
         started_at = datetime(2026, 4, 23, 17, 0, 0)
