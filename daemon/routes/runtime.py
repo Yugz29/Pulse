@@ -22,6 +22,7 @@ from daemon.core.event_envelope import (
 )
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.timeline_builder import span_from_current_context
+from daemon.core.timeline_debug import describe_timeline_span_for_debug
 from daemon.core.timeline_span import TimelineSpanKind
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
 from daemon.interpreter.command_interpreter import CommandInterpreter
@@ -505,7 +506,10 @@ def register_runtime_routes(
             started_at=started_at,
             ended_at=now,
         )
-        return jsonify({"span": span.to_dict()})
+        return jsonify({
+            "span": span.to_dict(),
+            "debug": describe_timeline_span_for_debug(span),
+        })
 
     @app.route("/timeline/schema")
     def get_timeline_schema():

@@ -768,7 +768,9 @@ class TestRuntimeRoutes(unittest.TestCase):
             response = self.client.get("/timeline/preview")
 
         self.assertEqual(response.status_code, 200)
-        span = response.get_json()["span"]
+        payload = response.get_json()
+        span = payload["span"]
+        debug = payload["debug"]
         self.assertEqual(span["kind"], "work")
         self.assertEqual(span["title"], "Pulse — coding")
         self.assertEqual(span["project"], "Pulse")
@@ -781,6 +783,15 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(span["evidence_event_count"], 0)
         self.assertEqual(span["metadata"], {"source": "current_context"})
         self.assertEqual(span["duration_min"], 30)
+        self.assertEqual(debug["kind"], "work")
+        self.assertEqual(debug["title"], "Pulse — coding")
+        self.assertEqual(debug["policy"], {
+            "privacy": "Path-sensitive span",
+            "retention": "Session-scoped by default",
+            "confidence": "High confidence",
+        })
+        self.assertEqual(debug["metadata_keys"], ["source"])
+        self.assertNotIn("metadata", debug)
 
     def test_timeline_preview_falls_back_to_present_when_no_signals_exist(self):
         signals = Signals(
@@ -805,7 +816,9 @@ class TestRuntimeRoutes(unittest.TestCase):
         response = self.client.get("/timeline/preview")
 
         self.assertEqual(response.status_code, 200)
-        span = response.get_json()["span"]
+        payload = response.get_json()
+        span = payload["span"]
+        debug = payload["debug"]
         self.assertEqual(span["kind"], "debug")
         self.assertEqual(span["title"], "Pulse — debug")
         self.assertEqual(span["project"], "Pulse")
@@ -815,6 +828,15 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(span["buckets"], ["terminal_activity"])
         self.assertEqual(span["privacy"], "content_sensitive")
         self.assertEqual(span["duration_min"], 5)
+        self.assertEqual(debug["kind"], "debug")
+        self.assertEqual(debug["title"], "Pulse — debug")
+        self.assertEqual(debug["policy"], {
+            "privacy": "Content-sensitive span",
+            "retention": "Session-scoped by default",
+            "confidence": "No confidence score",
+        })
+        self.assertEqual(debug["metadata_keys"], ["source"])
+        self.assertNotIn("metadata", debug)
 
     def test_timeline_schema_exposes_span_kinds(self):
         response = self.client.get("/timeline/schema")
