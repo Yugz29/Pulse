@@ -107,9 +107,9 @@ class TestExtractor(unittest.TestCase):
                 "files_changed": 3,
                 "top_files": ["runtime_orchestrator.py", "episode_fsm.py"],
                 "max_friction": 0.2,
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-older",
+                        "id": "ep-older",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -121,7 +121,7 @@ class TestExtractor(unittest.TestCase):
                         "boundary_reason": "idle_timeout",
                     },
                     {
-                        "episode_id": "ep-latest",
+                        "id": "ep-latest",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "debug",
@@ -158,7 +158,7 @@ class TestExtractor(unittest.TestCase):
                 "files_changed": 2,
                 "top_files": ["main.py"],
                 "max_friction": 0.1,
-                "closed_episodes": [],
+                "recent_sessions": [],
             },
             memory_dir=self.memory_dir,
             trigger="screen_lock",
@@ -184,9 +184,9 @@ class TestExtractor(unittest.TestCase):
                 "top_files": ["DashboardViewModel.swift", "daydream.py"],
                 "started_at": "2026-04-28T11:46:01",
                 "updated_at": "2026-04-28T12:04:55",
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-commit",
+                        "id": "ep-commit",
                         "session_id": "sess-2",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -209,7 +209,45 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("11:46 → 12:04", journal)
         self.assertIn("développement (19 min)", journal)
 
-    def test_commit_prefere_work_window_explicite_aux_sous_episodes_techniques(self):
+    def test_commit_prefere_work_block_explicite_aux_sessions_techniques(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 18,
+                "probable_task": "coding",
+                "recent_apps": ["Codex", "Pulse", "Code"],
+                "files_changed": 4,
+                "top_files": ["daydream.py", "DashboardViewModel.swift"],
+                "started_at": "2026-04-28T12:04:48.365316",
+                "updated_at": "2026-04-28T12:04:55.324833",
+                "work_block_started_at": "2026-04-28T11:46:01",
+                "work_block_ended_at": "2026-04-28T12:04:55.324833",
+                "recent_sessions": [
+                    {
+                        "id": "ep-commit",
+                        "session_id": "sess-2",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "executing",
+                        "task_confidence": 0.92,
+                        "started_at": "2026-04-28T12:04:48.365316",
+                        "ended_at": "2026-04-28T12:04:55.324833",
+                        "duration_sec": 7,
+                        "boundary_reason": "commit",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(daydream): add robust execution state",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+
+        self.assertIn("11:46 → 12:04", journal)
+        self.assertIn("développement (18 min)", journal)
+
+    def test_commit_accepte_encore_work_window_et_closed_episodes_legacy(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -256,9 +294,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Cursor"],
                 "files_changed": 3,
                 "top_files": ["main.py", "state.py"],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-1",
+                        "id": "ep-1",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -283,9 +321,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Terminal"],
                 "files_changed": 2,
                 "top_files": ["runtime_orchestrator.py"],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-2",
+                        "id": "ep-2",
                         "session_id": "sess-2",
                         "active_project": "Pulse",
                         "probable_task": "debug",
