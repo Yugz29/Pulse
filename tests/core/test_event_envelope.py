@@ -7,6 +7,7 @@ from daemon.core.event_envelope import (
     PulsePrivacyClass,
     PulseRetention,
     infer_bucket,
+    infer_source,
 )
 
 
@@ -78,3 +79,34 @@ def test_infer_bucket_from_source_when_event_type_is_unknown():
 
 def test_infer_bucket_unknown_stays_unknown():
     assert infer_bucket("custom_event") is PulseEventBucket.UNKNOWN
+
+
+def test_infer_source_from_known_legacy_event_types():
+    assert infer_source("file_modified") is PulseEventSource.FILESYSTEM
+    assert infer_source("file_change") is PulseEventSource.FILESYSTEM
+    assert infer_source("app_activated") is PulseEventSource.APP
+    assert infer_source("terminal_command_finished") is PulseEventSource.TERMINAL
+    assert infer_source("clipboard_updated") is PulseEventSource.CLIPBOARD
+    assert infer_source("mcp_command_received") is PulseEventSource.MCP
+    assert infer_source("llm_ready") is PulseEventSource.LLM
+    assert infer_source("git_commit") is PulseEventSource.GIT
+    assert infer_source("confirmed_commit") is PulseEventSource.GIT
+    assert infer_source("memory_sync") is PulseEventSource.MEMORY
+    assert infer_source("resume_card") is PulseEventSource.MEMORY
+    assert infer_source("screen_locked") is PulseEventSource.SYSTEM
+
+
+def test_infer_source_from_payload_when_event_type_is_unknown():
+    assert infer_source("custom", {"terminal_command": "pytest"}) is PulseEventSource.TERMINAL
+    assert infer_source("custom", {"terminal_action_category": "test"}) is PulseEventSource.TERMINAL
+    assert infer_source("custom", {"mcp_tool": "shell"}) is PulseEventSource.MCP
+    assert infer_source("custom", {"mcp_action_category": "risky_command"}) is PulseEventSource.MCP
+    assert infer_source("custom", {"commit_sha": "abc123"}) is PulseEventSource.GIT
+    assert infer_source("custom", {"commit_message": "feat: add event envelope"}) is PulseEventSource.GIT
+    assert infer_source("custom", {"path": "/tmp/file.py"}) is PulseEventSource.FILESYSTEM
+    assert infer_source("custom", {"app_name": "Code"}) is PulseEventSource.APP
+
+
+def test_infer_source_unknown_stays_unknown():
+    assert infer_source("custom_event") is PulseEventSource.UNKNOWN
+    assert infer_source("custom_event", {"value": 42}) is PulseEventSource.UNKNOWN

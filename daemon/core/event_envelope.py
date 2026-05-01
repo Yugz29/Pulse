@@ -1,5 +1,3 @@
-
-
 """Canonical event envelope contracts for Pulse.
 
 This module introduces ActivityWatch-inspired event metadata without changing
@@ -109,6 +107,47 @@ class PulseEventEnvelope:
             "duration_sec": self.duration_sec,
             "can_heartbeat": self.can_heartbeat,
         }
+
+
+def infer_source(event_type: str, payload: Mapping[str, Any] | None = None) -> PulseEventSource:
+    """Infer the likely source of a legacy event.
+
+    This is a migration helper only. It should remain conservative and avoid
+    pretending that unknown event families are understood.
+    """
+    payload = payload or {}
+
+    if event_type.startswith("file_") or event_type == "file_change":
+        return PulseEventSource.FILESYSTEM
+    if event_type in {"app_activated", "app_switch", "app_launched", "app_terminated"}:
+        return PulseEventSource.APP
+    if event_type.startswith("terminal_"):
+        return PulseEventSource.TERMINAL
+    if event_type == "clipboard_updated":
+        return PulseEventSource.CLIPBOARD
+    if event_type.startswith("mcp_"):
+        return PulseEventSource.MCP
+    if event_type.startswith("llm_"):
+        return PulseEventSource.LLM
+    if event_type.startswith("git_") or "commit" in event_type:
+        return PulseEventSource.GIT
+    if event_type.startswith("memory_") or event_type == "resume_card":
+        return PulseEventSource.MEMORY
+    if event_type in {"screen_locked", "screen_unlocked", "user_idle", "user_active"}:
+        return PulseEventSource.SYSTEM
+
+    if payload.get("terminal_command") or payload.get("terminal_action_category"):
+        return PulseEventSource.TERMINAL
+    if payload.get("mcp_tool") or payload.get("mcp_action_category"):
+        return PulseEventSource.MCP
+    if payload.get("commit_sha") or payload.get("commit_message"):
+        return PulseEventSource.GIT
+    if payload.get("path"):
+        return PulseEventSource.FILESYSTEM
+    if payload.get("app_name"):
+        return PulseEventSource.APP
+
+    return PulseEventSource.UNKNOWN
 
 
 def infer_bucket(event_type: str, source: PulseEventSource = PulseEventSource.UNKNOWN) -> PulseEventBucket:
