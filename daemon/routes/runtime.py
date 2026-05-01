@@ -5,7 +5,7 @@ import shlex
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable
 
 from flask import Flask, jsonify, request
@@ -21,6 +21,7 @@ from daemon.core.event_envelope import (
     PulseRetention,
 )
 from daemon.core.file_classifier import file_signal_significance
+from daemon.core.timeline_builder import span_from_current_context
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
 from daemon.interpreter.command_interpreter import CommandInterpreter
 from daemon.memory.extractor import last_session_context
@@ -477,6 +478,33 @@ def register_runtime_routes(
             "privacy_classes": [privacy.value for privacy in PulsePrivacyClass],
             "retention_classes": [retention.value for retention in PulseRetention],
         })
+
+    @app.route("/timeline/preview")
+    def get_timeline_preview():
+        """Preview a passive timeline span from the current runtime context."""
+        runtime_snapshot = runtime_state.get_runtime_snapshot()
+        present = runtime_snapshot.present
+        now = datetime.now()
+        duration_min = max(int(present.session_duration_min or 0), 0)
+        started_at = now - timedelta(minutes=duration_min)
+
+        if runtime_snapshot.signals:
+            context = _current_context_builder.build(
+                present=present,
+                active_app=runtime_snapshot.latest_active_app,
+                signals=runtime_snapshot.signals,
+                find_git_root_fn=find_git_root,
+                find_workspace_root_fn=find_workspace_root,
+            )
+        else:
+            context = present
+
+        span = span_from_current_context(
+            context,
+            started_at=started_at,
+            ended_at=now,
+        )
+        return jsonify({"span": span.to_dict()})
 
     @app.route("/observation")
     def get_observation():

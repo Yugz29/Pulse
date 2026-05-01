@@ -741,6 +741,81 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertIn("persistent", payload["retention_classes"])
         self.assertIn("debug_only", payload["retention_classes"])
 
+    def test_timeline_preview_builds_span_from_current_context_when_signals_exist(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/runtime.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=30,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
+             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+            response = self.client.get("/timeline/preview")
+
+        self.assertEqual(response.status_code, 200)
+        span = response.get_json()["span"]
+        self.assertEqual(span["kind"], "work")
+        self.assertEqual(span["title"], "Pulse — coding")
+        self.assertEqual(span["project"], "Pulse")
+        self.assertEqual(span["activity_level"], "editing")
+        self.assertEqual(span["probable_task"], "coding")
+        self.assertEqual(span["confidence"], 0.82)
+        self.assertEqual(span["buckets"], ["filesystem"])
+        self.assertEqual(span["privacy"], "path_sensitive")
+        self.assertEqual(span["retention"], "session")
+        self.assertEqual(span["evidence_event_count"], 0)
+        self.assertEqual(span["metadata"], {"source": "current_context"})
+        self.assertEqual(span["duration_min"], 30)
+
+    def test_timeline_preview_falls_back_to_present_when_no_signals_exist(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="debug",
+            friction_score=0.2,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=["Terminal"],
+            clipboard_context=None,
+            activity_level="executing",
+            task_confidence=0.91,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+
+        response = self.client.get("/timeline/preview")
+
+        self.assertEqual(response.status_code, 200)
+        span = response.get_json()["span"]
+        self.assertEqual(span["kind"], "debug")
+        self.assertEqual(span["title"], "Pulse — debug")
+        self.assertEqual(span["project"], "Pulse")
+        self.assertEqual(span["activity_level"], "executing")
+        self.assertEqual(span["probable_task"], "debug")
+        self.assertEqual(span["confidence"], 0.0)
+        self.assertEqual(span["buckets"], ["terminal_activity"])
+        self.assertEqual(span["privacy"], "content_sensitive")
+        self.assertEqual(span["duration_min"], 5)
+
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/pause")
