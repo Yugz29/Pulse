@@ -18,7 +18,12 @@ from daemon.core.context_probe_policy import (
     policy_for_probe,
 )
 from daemon.core.context_probe_debug import describe_context_probe_request_for_debug
-from daemon.core.context_probe_request import create_context_probe_request
+from daemon.core.context_probe_request import (
+    approve_context_probe_request,
+    create_context_probe_request,
+    refuse_context_probe_request,
+)
+from daemon.core.context_probe_store import ContextProbeRequestStore, requests_to_dicts
 from daemon.core.event_actor import EventActorClassifier
 from daemon.core.event_debug import describe_event_for_debug
 from daemon.core.event_envelope import (
@@ -238,11 +243,14 @@ def register_runtime_routes(
     get_current_context: Callable[[], Any] | None = None,
     get_recent_sessions: Callable[[int], Any] | None = None,
     get_today_summary: Callable[[], dict[str, Any]] | None = None,
+    context_probe_store: ContextProbeRequestStore | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
     shutdown_runtime: Callable[[], None],
     log: Any,
 ) -> None:
+    probe_store = context_probe_store or ContextProbeRequestStore()
+
     def _publish_to_bus(
         event_type: str,
         payload: dict[str, Any],
@@ -562,6 +570,91 @@ def register_runtime_routes(
         return jsonify({
             "request": probe_request.to_dict(),
             "debug": describe_context_probe_request_for_debug(probe_request),
+        })
+
+    @app.route("/context-probes/requests", methods=["POST"])
+    def create_context_probe_request_route():
+        """Create and store a pending context probe request without executing it."""
+        data = request.get_json() or {}
+        kind = data.get("kind", ContextProbeKind.UNKNOWN.value)
+        reason = str(data.get("reason", "") or "")
+        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+
+        try:
+            ttl_sec = int(data.get("ttl_sec", 300))
+        except (TypeError, ValueError):
+            ttl_sec = 300
+        ttl_sec = min(max(ttl_sec, 0), 3600)
+
+        probe_request = create_context_probe_request(
+            kind,
+            reason=reason,
+            ttl_sec=ttl_sec,
+            metadata=metadata,
+        )
+        probe_store.add(probe_request)
+        return jsonify({
+            "request": probe_request.to_dict(),
+            "debug": describe_context_probe_request_for_debug(probe_request),
+        })
+
+    @app.route("/context-probes/requests")
+    def list_context_probe_requests_route():
+        """List stored context probe requests without exposing metadata values."""
+        probe_store.expire_due()
+        status = request.args.get("status")
+        include_terminal = request.args.get("include_terminal", "true").lower() not in {"0", "false", "no"}
+        try:
+            requests_list = probe_store.list(
+                status=status,
+                include_terminal=include_terminal,
+            )
+        except ValueError:
+            return jsonify({"error": "invalid_status"}), 400
+        return jsonify({
+            "requests": requests_to_dicts(requests_list),
+            "debug": [describe_context_probe_request_for_debug(item) for item in requests_list],
+            "count": len(requests_list),
+        })
+
+    @app.route("/context-probes/requests/<request_id>/approve", methods=["POST"])
+    def approve_context_probe_request_route(request_id: str):
+        """Approve a stored context probe request without executing it."""
+        data = request.get_json(silent=True) or {}
+        probe_request = probe_store.get(request_id)
+        if probe_request is None:
+            return jsonify({"error": "not_found"}), 404
+        try:
+            approved = approve_context_probe_request(
+                probe_request,
+                decision_reason=data.get("reason"),
+            )
+        except ValueError as exc:
+            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        probe_store.update(approved)
+        return jsonify({
+            "request": approved.to_dict(),
+            "debug": describe_context_probe_request_for_debug(approved),
+        })
+
+    @app.route("/context-probes/requests/<request_id>/refuse", methods=["POST"])
+    def refuse_context_probe_request_route(request_id: str):
+        """Refuse a stored context probe request."""
+        data = request.get_json(silent=True) or {}
+        probe_request = probe_store.get(request_id)
+        if probe_request is None:
+            return jsonify({"error": "not_found"}), 404
+        try:
+            refused = refuse_context_probe_request(
+                probe_request,
+                decision_reason=data.get("reason"),
+            )
+        except ValueError as exc:
+            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        probe_store.update(refused)
+        return jsonify({
+            "request": refused.to_dict(),
+            "debug": describe_context_probe_request_for_debug(refused),
         })
 
     @app.route("/observation")

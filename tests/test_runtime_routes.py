@@ -965,6 +965,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(debug["labels"]["risk"], "Blocked")
         self.assertEqual(debug["labels"]["consent"], "Blocked by default")
 
+
     def test_context_probe_request_preview_invalid_ttl_and_metadata_use_safe_defaults(self):
         response = self.client.post(
             "/context-probes/request-preview",
@@ -990,6 +991,150 @@ class TestRuntimeRoutes(unittest.TestCase):
         created_at = datetime.fromisoformat(request_payload["created_at"])
         expires_at = datetime.fromisoformat(request_payload["expires_at"])
         self.assertEqual(int((expires_at - created_at).total_seconds()), 300)
+
+
+    def test_context_probe_requests_create_and_list_stored_requests(self):
+        create_response = self.client.post(
+            "/context-probes/requests",
+            json={
+                "kind": "selected_text",
+                "reason": "Explain selected error",
+                "ttl_sec": 120,
+                "metadata": {
+                    "raw_selection": "SECRET",
+                    "source": "dashboard",
+                },
+            },
+        )
+
+        self.assertEqual(create_response.status_code, 200)
+        created_payload = create_response.get_json()
+        request_id = created_payload["request"]["request_id"]
+        self.assertEqual(created_payload["request"]["kind"], "selected_text")
+        self.assertEqual(created_payload["request"]["status"], "pending")
+        self.assertEqual(created_payload["request"]["metadata_keys"], ["raw_selection", "source"])
+        self.assertNotIn("metadata", created_payload["request"])
+        self.assertNotIn("SECRET", str(created_payload))
+
+        list_response = self.client.get("/context-probes/requests")
+
+        self.assertEqual(list_response.status_code, 200)
+        list_payload = list_response.get_json()
+        self.assertEqual(list_payload["count"], 1)
+        self.assertEqual(list_payload["requests"][0]["request_id"], request_id)
+        self.assertEqual(list_payload["requests"][0]["kind"], "selected_text")
+        self.assertEqual(list_payload["debug"][0]["request_id"], request_id)
+        self.assertEqual(list_payload["debug"][0]["labels"]["risk"], "Sensitive")
+        self.assertNotIn("SECRET", str(list_payload))
+
+    def test_context_probe_requests_list_filters_status_and_include_terminal(self):
+        first = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "app_context", "reason": "Need app context"},
+        ).get_json()["request"]
+        second = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample"},
+        ).get_json()["request"]
+
+        refuse_response = self.client.post(
+            f"/context-probes/requests/{second['request_id']}/refuse",
+            json={"reason": "Too sensitive"},
+        )
+
+        self.assertEqual(refuse_response.status_code, 200)
+
+        pending_response = self.client.get("/context-probes/requests?status=pending")
+        self.assertEqual(pending_response.status_code, 200)
+        pending_payload = pending_response.get_json()
+        self.assertEqual(pending_payload["count"], 1)
+        self.assertEqual(pending_payload["requests"][0]["request_id"], first["request_id"])
+
+        active_response = self.client.get("/context-probes/requests?include_terminal=false")
+        self.assertEqual(active_response.status_code, 200)
+        active_payload = active_response.get_json()
+        self.assertEqual(active_payload["count"], 1)
+        self.assertEqual(active_payload["requests"][0]["request_id"], first["request_id"])
+
+        refused_response = self.client.get("/context-probes/requests?status=refused")
+        self.assertEqual(refused_response.status_code, 200)
+        refused_payload = refused_response.get_json()
+        self.assertEqual(refused_payload["count"], 1)
+        self.assertEqual(refused_payload["requests"][0]["request_id"], second["request_id"])
+
+    def test_context_probe_requests_approve_and_refuse_update_stored_status(self):
+        approve_candidate = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "window_title", "reason": "Need window title"},
+        ).get_json()["request"]
+        refuse_candidate = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "screen_snapshot", "reason": "Need visual context"},
+        ).get_json()["request"]
+
+        approve_response = self.client.post(
+            f"/context-probes/requests/{approve_candidate['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        refuse_response = self.client.post(
+            f"/context-probes/requests/{refuse_candidate['request_id']}/refuse",
+            json={"reason": "Too sensitive"},
+        )
+
+        self.assertEqual(approve_response.status_code, 200)
+        approved = approve_response.get_json()
+        self.assertEqual(approved["request"]["status"], "approved")
+        self.assertEqual(approved["request"]["decision_reason"], "User accepted")
+        self.assertEqual(approved["debug"]["labels"]["kind"], "Window title")
+
+        self.assertEqual(refuse_response.status_code, 200)
+        refused = refuse_response.get_json()
+        self.assertEqual(refused["request"]["status"], "refused")
+        self.assertEqual(refused["request"]["decision_reason"], "Too sensitive")
+        self.assertEqual(refused["debug"]["labels"]["risk"], "Sensitive")
+
+        list_response = self.client.get("/context-probes/requests")
+        statuses = {
+            item["request_id"]: item["status"]
+            for item in list_response.get_json()["requests"]
+        }
+        self.assertEqual(statuses[approve_candidate["request_id"]], "approved")
+        self.assertEqual(statuses[refuse_candidate["request_id"]], "refused")
+
+    def test_context_probe_request_routes_return_not_found_for_unknown_request(self):
+        approve_response = self.client.post("/context-probes/requests/missing/approve")
+        refuse_response = self.client.post("/context-probes/requests/missing/refuse")
+
+        self.assertEqual(approve_response.status_code, 404)
+        self.assertEqual(approve_response.get_json(), {"error": "not_found"})
+        self.assertEqual(refuse_response.status_code, 404)
+        self.assertEqual(refuse_response.get_json(), {"error": "not_found"})
+
+    def test_context_probe_request_routes_reject_invalid_transitions(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "selected_text", "reason": "Need selected text"},
+        ).get_json()["request"]
+        request_id = created["request_id"]
+
+        refuse_response = self.client.post(
+            f"/context-probes/requests/{request_id}/refuse",
+            json={"reason": "No"},
+        )
+        approve_response = self.client.post(
+            f"/context-probes/requests/{request_id}/approve",
+            json={"reason": "Too late"},
+        )
+
+        self.assertEqual(refuse_response.status_code, 200)
+        self.assertEqual(approve_response.status_code, 409)
+        self.assertEqual(approve_response.get_json()["error"], "invalid_transition")
+
+    def test_context_probe_requests_list_invalid_status_returns_400(self):
+        response = self.client.get("/context-probes/requests?status=not_a_status")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json(), {"error": "invalid_status"})
 
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
