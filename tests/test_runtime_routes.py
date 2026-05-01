@@ -1130,11 +1130,122 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(approve_response.status_code, 409)
         self.assertEqual(approve_response.get_json()["error"], "invalid_transition")
 
+
     def test_context_probe_requests_list_invalid_status_returns_400(self):
         response = self.client.get("/context-probes/requests?status=not_a_status")
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json(), {"error": "invalid_status"})
+
+
+    def test_context_probe_request_execute_runs_approved_app_context_probe(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/secret.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "app_context", "reason": "Need app context"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
+             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+            execute_response = self.client.post(
+                f"/context-probes/requests/{created['request_id']}/execute"
+            )
+
+        self.assertEqual(execute_response.status_code, 200)
+        payload = execute_response.get_json()
+        result = payload["result"]
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertTrue(result["captured"])
+        self.assertEqual(result["kind"], "app_context")
+        self.assertEqual(result["privacy"], "public")
+        self.assertEqual(result["retention"], "session")
+        self.assertEqual(result["blocked_reason"], None)
+        self.assertEqual(result["data"], {
+            "active_app": "Code",
+            "active_project": "Pulse",
+            "activity_level": "editing",
+            "probable_task": "coding",
+        })
+        self.assertNotIn("active_file", result["data"])
+        self.assertNotIn("/tmp/Pulse/daemon/secret.py", str(payload))
+
+        self.assertEqual(request_payload["status"], "executed")
+        self.assertEqual(debug["status"], "executed")
+        self.assertTrue(debug["is_terminal"])
+
+    def test_context_probe_request_execute_blocks_pending_request(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "app_context", "reason": "Need app context"},
+        ).get_json()["request"]
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/execute"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "probe_blocked")
+        self.assertEqual(payload["blocked_reason"], "request_not_approved:pending")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertEqual(payload["request"]["status"], "pending")
+
+    def test_context_probe_request_execute_blocks_unsupported_approved_kind(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "selected_text", "reason": "Need selected text"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/execute"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "probe_blocked")
+        self.assertEqual(payload["blocked_reason"], "unsupported_probe_kind")
+        self.assertEqual(payload["result"]["kind"], "selected_text")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertEqual(payload["request"]["status"], "approved")
+        self.assertNotIn("selected_text", payload["result"].get("data", {}))
+
+    def test_context_probe_request_execute_unknown_request_returns_404(self):
+        response = self.client.post("/context-probes/requests/missing/execute")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json(), {"error": "not_found"})
 
     def test_daemon_pause_returns_legacy_payload(self):
         with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):

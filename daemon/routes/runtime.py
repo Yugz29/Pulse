@@ -6,6 +6,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from typing import Any, Callable
 
 from flask import Flask, jsonify, request
@@ -21,9 +22,11 @@ from daemon.core.context_probe_debug import describe_context_probe_request_for_d
 from daemon.core.context_probe_request import (
     approve_context_probe_request,
     create_context_probe_request,
+    execute_context_probe_request,
     refuse_context_probe_request,
 )
 from daemon.core.context_probe_store import ContextProbeRequestStore, requests_to_dicts
+from daemon.core.context_probe_runner import run_app_context_probe
 from daemon.core.event_actor import EventActorClassifier
 from daemon.core.event_debug import describe_event_for_debug
 from daemon.core.event_envelope import (
@@ -655,6 +658,59 @@ def register_runtime_routes(
         return jsonify({
             "request": refused.to_dict(),
             "debug": describe_context_probe_request_for_debug(refused),
+        })
+
+    @app.route("/context-probes/requests/<request_id>/execute", methods=["POST"])
+    def execute_context_probe_request_route(request_id: str):
+        """Execute an approved app_context probe and mark the request executed."""
+        probe_request = probe_store.get(request_id)
+        if probe_request is None:
+            return jsonify({"error": "not_found"}), 404
+
+        runtime_snapshot = runtime_state.get_runtime_snapshot()
+        present = runtime_snapshot.present
+
+        if runtime_snapshot.signals:
+            current_context = _current_context_builder.build(
+                present=present,
+                active_app=runtime_snapshot.latest_active_app,
+                signals=runtime_snapshot.signals,
+                find_git_root_fn=find_git_root,
+                find_workspace_root_fn=find_workspace_root,
+            )
+            probe_context = SimpleNamespace(
+                active_app=runtime_snapshot.latest_active_app,
+                active_project=current_context.active_project,
+                activity_level=current_context.activity_level,
+                probable_task=current_context.probable_task,
+            )
+        else:
+            probe_context = SimpleNamespace(
+                active_app=runtime_snapshot.latest_active_app,
+                active_project=present.active_project,
+                activity_level=present.activity_level,
+                probable_task=present.probable_task,
+            )
+
+        result = run_app_context_probe(probe_request, probe_context)
+        if not result.captured:
+            return jsonify({
+                "error": "probe_blocked",
+                "blocked_reason": result.blocked_reason,
+                "result": result.to_dict(),
+                "request": probe_request.to_dict(),
+                "debug": describe_context_probe_request_for_debug(probe_request),
+            }), 409
+
+        try:
+            executed = execute_context_probe_request(probe_request)
+        except ValueError as exc:
+            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        probe_store.update(executed)
+        return jsonify({
+            "result": result.to_dict(),
+            "request": executed.to_dict(),
+            "debug": describe_context_probe_request_for_debug(executed),
         })
 
     @app.route("/observation")
