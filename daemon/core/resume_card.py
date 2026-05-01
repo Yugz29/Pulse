@@ -84,7 +84,7 @@ def build_resume_card_context(
     if diff_summary:
         source_refs.append("git_diff")
 
-    return {
+    context = {
         "project": present.active_project or payload.get("active_project"),
         "active_file": present.active_file or payload.get("active_file"),
         "probable_task": present.probable_task or payload.get("probable_task") or "general",
@@ -97,13 +97,29 @@ def build_resume_card_context(
         "work_block_started_at": work_block_started_at,
         "work_block_commit_count": work_block_commit_count,
         "recent_sessions": recent_sessions,
-        # Alias legacy pour les prompts/outils qui liraient encore ces clés.
-        "work_window_started_at": work_block_started_at,
-        "work_window_commit_count": work_block_commit_count,
-        "closed_episodes": recent_sessions,
         "diff_summary": diff_summary or "",
         "source_refs": source_refs,
     }
+    _attach_legacy_resume_context_aliases(context)
+    return context
+
+
+def _attach_legacy_resume_context_aliases(context: dict[str, Any]) -> None:
+    """Expose old resume context keys while prompts/tools migrate.
+
+    Canonical keys:
+    - work_block_started_at
+    - work_block_commit_count
+    - recent_sessions
+
+    Legacy aliases:
+    - work_window_started_at
+    - work_window_commit_count
+    - closed_episodes
+    """
+    context["work_window_started_at"] = context["work_block_started_at"]
+    context["work_window_commit_count"] = context["work_block_commit_count"]
+    context["closed_episodes"] = context["recent_sessions"]
 
 
 def generate_resume_card(context: dict[str, Any], llm: Any = None) -> ResumeCard:
