@@ -9,6 +9,7 @@ from daemon.core.event_envelope import (
     envelope_from_legacy_event,
     infer_bucket,
     infer_privacy,
+    infer_retention,
     infer_source,
 )
 
@@ -151,6 +152,44 @@ def test_infer_privacy_from_source_fallback():
 
 def test_infer_privacy_unknown_stays_unknown():
     assert infer_privacy("custom_event", {"value": 42}) is PulsePrivacyClass.UNKNOWN
+
+
+def test_infer_retention_from_privacy_and_event_type():
+    assert infer_retention("custom", PulsePrivacyClass.SECRET_SENSITIVE) is PulseRetention.EPHEMERAL
+    assert infer_retention("terminal_command_finished", PulsePrivacyClass.CONTENT_SENSITIVE) is PulseRetention.EPHEMERAL
+    assert infer_retention("file_modified", PulsePrivacyClass.PATH_SENSITIVE) is PulseRetention.SESSION
+    assert infer_retention("app_activated", PulsePrivacyClass.PUBLIC) is PulseRetention.SESSION
+    assert infer_retention("memory_sync", PulsePrivacyClass.CONTENT_SENSITIVE) is PulseRetention.PERSISTENT
+    assert infer_retention("resume_card", PulsePrivacyClass.CONTENT_SENSITIVE) is PulseRetention.PERSISTENT
+    assert infer_retention("daydream_generated", PulsePrivacyClass.CONTENT_SENSITIVE) is PulseRetention.PERSISTENT
+
+
+def test_infer_retention_from_source_fallback():
+    assert infer_retention("custom", PulsePrivacyClass.UNKNOWN, PulseEventSource.MEMORY) is PulseRetention.PERSISTENT
+    assert infer_retention("custom", PulsePrivacyClass.UNKNOWN, PulseEventSource.GIT) is PulseRetention.PERSISTENT
+    assert infer_retention("custom", PulsePrivacyClass.UNKNOWN, PulseEventSource.UNKNOWN) is PulseRetention.DEBUG_ONLY
+
+
+def test_envelope_from_legacy_event_sets_retention_from_privacy():
+    file_envelope = envelope_from_legacy_event(
+        "file_modified",
+        {"path": "/tmp/Pulse/daemon/main.py"},
+        timestamp=datetime(2026, 5, 1, 14, 0, 0),
+    )
+    clipboard_envelope = envelope_from_legacy_event(
+        "clipboard_updated",
+        {"clipboard_context": "text"},
+        timestamp=datetime(2026, 5, 1, 14, 1, 0),
+    )
+    unknown_envelope = envelope_from_legacy_event(
+        "custom_event",
+        {"value": 42},
+        timestamp=datetime(2026, 5, 1, 14, 2, 0),
+    )
+
+    assert file_envelope.retention is PulseRetention.SESSION
+    assert clipboard_envelope.retention is PulseRetention.EPHEMERAL
+    assert unknown_envelope.retention is PulseRetention.DEBUG_ONLY
 
 
 def test_infer_source_from_known_legacy_event_types():

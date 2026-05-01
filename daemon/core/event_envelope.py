@@ -125,13 +125,15 @@ def envelope_from_legacy_event(
     event_payload: Mapping[str, Any] = payload or {}
     inferred_source = source or infer_source(event_type, event_payload)
     inferred_bucket = bucket or infer_bucket(event_type, inferred_source)
+    inferred_privacy = infer_privacy(event_type, event_payload, inferred_source)
     return PulseEventEnvelope(
         event_type=event_type,
         payload=event_payload,
         timestamp=timestamp or datetime.now(),
         source=inferred_source,
         bucket=inferred_bucket,
-        privacy=infer_privacy(event_type, event_payload, inferred_source),
+        privacy=inferred_privacy,
+        retention=infer_retention(event_type, inferred_privacy, inferred_source),
     )
 
 
@@ -177,6 +179,34 @@ def infer_privacy(
         return PulsePrivacyClass.PUBLIC
 
     return PulsePrivacyClass.UNKNOWN
+
+
+def infer_retention(
+    event_type: str,
+    privacy: PulsePrivacyClass = PulsePrivacyClass.UNKNOWN,
+    source: PulseEventSource = PulseEventSource.UNKNOWN,
+) -> PulseRetention:
+    """Infer retention intent for a legacy event envelope.
+
+    This is metadata only. It does not persist, delete, redact, or archive data.
+    Future timeline/storage layers can use this as an initial policy hint.
+    """
+    if privacy is PulsePrivacyClass.SECRET_SENSITIVE:
+        return PulseRetention.EPHEMERAL
+
+    if event_type.startswith("memory_") or event_type in {"resume_card", "daydream_generated"}:
+        return PulseRetention.PERSISTENT
+
+    if privacy is PulsePrivacyClass.CONTENT_SENSITIVE:
+        return PulseRetention.EPHEMERAL
+
+    if privacy in {PulsePrivacyClass.PATH_SENSITIVE, PulsePrivacyClass.PUBLIC}:
+        return PulseRetention.SESSION
+
+    if source in {PulseEventSource.MEMORY, PulseEventSource.GIT}:
+        return PulseRetention.PERSISTENT
+
+    return PulseRetention.DEBUG_ONLY
 
 
 def infer_source(event_type: str, payload: Mapping[str, Any] | None = None) -> PulseEventSource:
