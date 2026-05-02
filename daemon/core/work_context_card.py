@@ -88,7 +88,14 @@ def build_work_context_card(
         current_context=current_context,
         signals=signals,
     )
-    safe_next_probes = _build_safe_next_probes(signals=signals, current_context=current_context)
+    safe_next_probes = _build_safe_next_probes(
+        project=project,
+        activity_level=activity_level,
+        probable_task=probable_task,
+        present=present,
+        signals=signals,
+        current_context=current_context,
+    )
 
     return WorkContextCard(
         project=project,
@@ -128,7 +135,7 @@ def _build_evidence(
     if active_app:
         evidence.append(f"Application active : {active_app}")
 
-    if _first_non_empty(getattr(signals, "window_title", None)):
+    if _has_window_title(signals=signals, current_context=current_context):
         evidence.append("Titre de fenêtre disponible")
 
     edited_count = _first_number(getattr(signals, "edited_file_count_10m", None))
@@ -169,7 +176,7 @@ def _build_missing_context(
     if not activity_level or activity_level == "unknown":
         missing.append("Niveau d'activité incertain")
 
-    if not _first_non_empty(getattr(signals, "window_title", None)):
+    if not _has_window_title(signals=signals, current_context=current_context):
         missing.append("Titre de fenêtre non disponible")
 
     terminal_active = bool(getattr(signals, "terminal_active", False))
@@ -180,16 +187,45 @@ def _build_missing_context(
     return _dedupe(missing)
 
 
-def _build_safe_next_probes(*, signals: Any, current_context: Any) -> list[str]:
-    probes = ["app_context"]
+def _build_safe_next_probes(
+    *,
+    project: Optional[str],
+    activity_level: str,
+    probable_task: str,
+    present: Any,
+    signals: Any,
+    current_context: Any,
+) -> list[str]:
+    probes: list[str] = []
 
-    if not _first_non_empty(
-        getattr(signals, "window_title", None),
-        getattr(current_context, "window_title", None),
+    active_app = _first_non_empty(
+        getattr(current_context, "active_app", None),
+        getattr(present, "active_app", None),
+        getattr(signals, "active_app", None),
+    )
+    if (
+        not active_app
+        or not project
+        or not activity_level
+        or activity_level == "unknown"
+        or not probable_task
+        or probable_task == "general"
     ):
+        probes.append("app_context")
+
+    if not _has_window_title(signals=signals, current_context=current_context):
         probes.append("window_title")
 
     return probes
+
+
+def _has_window_title(*, signals: Any, current_context: Any) -> bool:
+    return bool(
+        _first_non_empty(
+            getattr(signals, "window_title", None),
+            getattr(current_context, "window_title", None),
+        )
+    )
 
 
 def _first_non_empty(*values: Any) -> Optional[str]:

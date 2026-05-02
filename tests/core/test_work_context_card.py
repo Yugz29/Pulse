@@ -1,5 +1,3 @@
-
-
 from types import SimpleNamespace
 
 from daemon.core.work_context_card import WorkContextCard, build_work_context_card
@@ -35,7 +33,7 @@ def test_build_work_context_card_from_current_context_and_signals():
         "Applications récentes : Code, Terminal, ChatGPT",
     )
     assert card.missing_context == ()
-    assert card.safe_next_probes == ("app_context",)
+    assert card.safe_next_probes == ()
 
 
 def test_build_work_context_card_falls_back_to_present():
@@ -63,7 +61,7 @@ def test_build_work_context_card_falls_back_to_present():
     assert "Projet actif détecté : DevNote" in card.evidence
     assert "Application active : Safari" in card.evidence
     assert "Titre de fenêtre non disponible" in card.missing_context
-    assert card.safe_next_probes == ("app_context", "window_title")
+    assert card.safe_next_probes == ("window_title",)
 
 
 def test_build_work_context_card_reports_missing_context_when_uncertain():
@@ -112,6 +110,37 @@ def test_build_work_context_card_does_not_report_terminal_missing_when_commands_
 
     assert "Terminal actif sans commande récente lisible" not in card.missing_context
     assert "Titre de fenêtre non disponible" in card.missing_context
+
+
+def test_build_work_context_card_uses_current_context_window_title_for_probe_availability():
+    current_context = SimpleNamespace(
+        active_project="Pulse",
+        activity_level="editing",
+        probable_task="debug",
+        active_app="Code",
+        window_title="Pulse — DashboardRootView.swift — Visual Studio Code",
+    )
+    signals = SimpleNamespace(window_title=None)
+
+    card = build_work_context_card(current_context, signals=signals)
+
+    assert "Titre de fenêtre disponible" in card.evidence
+    assert "Titre de fenêtre non disponible" not in card.missing_context
+    assert "window_title" not in card.safe_next_probes
+
+
+def test_build_work_context_card_suggests_app_context_only_when_base_context_is_incomplete():
+    current_context = SimpleNamespace(
+        active_project="Pulse",
+        activity_level="editing",
+        probable_task="general",
+        active_app="Code",
+        window_title="Pulse",
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.safe_next_probes == ("app_context",)
 
 
 def test_build_work_context_card_clamps_confidence():

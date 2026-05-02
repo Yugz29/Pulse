@@ -905,7 +905,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertIn("Applications récentes : Code, Terminal, ChatGPT", card["evidence"])
         self.assertIn("Décision runtime récente : context_ready", card["evidence"])
         self.assertEqual(card["missing_context"], [])
-        self.assertEqual(card["safe_next_probes"], ["app_context"])
+        self.assertEqual(card["safe_next_probes"], [])
         self.assertNotIn("active_file", card)
         self.assertNotIn("/tmp/Pulse/daemon/work_context_card.py", str(card))
 
