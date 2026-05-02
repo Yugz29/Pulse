@@ -403,15 +403,55 @@ class SessionMemory:
         if current:
             clusters.append(current)
 
-        cluster = clusters[-1]
-        started_at = cluster[0]
-        ended_at = cluster[-1]
+        selected_clusters = self._select_commit_activity_clusters(
+            clusters,
+            before=before,
+        )
+        activity_points = [observed_at for cluster in selected_clusters for observed_at in cluster]
+        started_at = activity_points[0]
+        ended_at = activity_points[-1]
         return {
             "started_at": started_at.isoformat(),
             "ended_at": ended_at.isoformat(),
             "duration_min": max(int((ended_at - started_at).total_seconds() / 60), 0),
-            "event_count": len(cluster),
+            "event_count": len(activity_points),
+            "cluster_count": len(selected_clusters),
         }
+
+    @staticmethod
+    def _select_commit_activity_clusters(
+        clusters: List[List[datetime]],
+        *,
+        before: datetime,
+        max_span_hours: int = 4,
+        bridge_gap_min: int = 75,
+    ) -> List[List[datetime]]:
+        """Select adjacent activity clusters likely belonging to one commit work block.
+
+        `find_file_activity_window` already filters by repo and commit file names.
+        This helper only decides whether separated clusters should be represented
+        as one broader commit activity window instead of keeping the last burst
+        only. It intentionally stops on large gaps to avoid swallowing a whole day.
+        """
+        if not clusters:
+            return []
+
+        selected: List[List[datetime]] = [clusters[-1]]
+        earliest_allowed = before - timedelta(hours=max_span_hours)
+        max_bridge_gap = timedelta(minutes=bridge_gap_min)
+
+        for cluster in reversed(clusters[:-1]):
+            if not cluster:
+                continue
+            if cluster[-1] < earliest_allowed:
+                break
+            next_start = selected[0][0]
+            gap = next_start - cluster[-1]
+            if gap > max_bridge_gap:
+                break
+            selected.insert(0, cluster)
+
+        return selected
 
     def build_session_snapshot(self):
         session = self.get_session()
