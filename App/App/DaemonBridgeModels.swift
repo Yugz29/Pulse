@@ -1204,6 +1204,9 @@ struct WorkContextCardResponse: Decodable {
 
 struct WorkContextCardPayload: Decodable {
     let project: String?
+    let projectHint: String?
+    let projectHintConfidence: Double
+    let projectHintSource: String?
     let activityLevel: String
     let probableTask: String
     let confidence: Double
@@ -1213,6 +1216,9 @@ struct WorkContextCardPayload: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case project
+        case projectHint = "project_hint"
+        case projectHintConfidence = "project_hint_confidence"
+        case projectHintSource = "project_hint_source"
         case activityLevel = "activity_level"
         case probableTask = "probable_task"
         case confidence
@@ -1223,6 +1229,15 @@ struct WorkContextCardPayload: Decodable {
 
     var projectLabel: String {
         project?.isEmpty == false ? project! : "Projet inconnu"
+    }
+
+    var projectHintLabel: String? {
+        guard let projectHint, !projectHint.isEmpty else { return nil }
+        let confidence = Int((projectHintConfidence * 100).rounded())
+        if let projectHintSource, !projectHintSource.isEmpty {
+            return "Indice faible : \(projectHint) · \(projectHintSource) · \(confidence) %"
+        }
+        return "Indice faible : \(projectHint) · \(confidence) %"
     }
 
     var activityLabel: String {

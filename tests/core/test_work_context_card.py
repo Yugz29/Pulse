@@ -20,6 +20,9 @@ def test_build_work_context_card_from_current_context_and_signals():
     card = build_work_context_card(current_context, signals=signals)
 
     assert card.project == "Pulse"
+    assert card.project_hint is None
+    assert card.project_hint_confidence == 0.0
+    assert card.project_hint_source is None
     assert card.activity_level == "editing"
     assert card.probable_task == "debug"
     assert card.confidence == 0.78
@@ -204,6 +207,9 @@ def test_build_work_context_card_deduplicates_evidence_and_missing_context():
 def test_work_context_card_to_dict_is_json_ready():
     card = WorkContextCard(
         project="Pulse",
+        project_hint=None,
+        project_hint_confidence=0.0,
+        project_hint_source=None,
         activity_level="editing",
         probable_task="debug",
         confidence=0.8,
@@ -214,6 +220,9 @@ def test_work_context_card_to_dict_is_json_ready():
 
     assert card.to_dict() == {
         "project": "Pulse",
+        "project_hint": None,
+        "project_hint_confidence": 0.0,
+        "project_hint_source": None,
         "activity_level": "editing",
         "probable_task": "debug",
         "confidence": 0.8,
@@ -221,3 +230,57 @@ def test_work_context_card_to_dict_is_json_ready():
         "missing_context": ["Objectif utilisateur non explicite"],
         "safe_next_probes": ["app_context", "window_title"],
     }
+
+
+# Additional tests for project_hint logic
+
+def test_build_work_context_card_adds_weak_project_hint_from_window_title_when_project_unknown():
+    current_context = SimpleNamespace(
+        active_project=None,
+        activity_level="reading",
+        probable_task="general",
+        active_app="Code",
+        window_title="Pulse — DashboardRootView.swift — Visual Studio Code",
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.project is None
+    assert card.project_hint == "Pulse"
+    assert card.project_hint_confidence == 0.35
+    assert card.project_hint_source == "window_title"
+    assert "Projet actif détecté : Pulse" not in card.evidence
+
+
+def test_build_work_context_card_does_not_promote_project_hint_when_project_is_known():
+    current_context = SimpleNamespace(
+        active_project="Pulse",
+        activity_level="reading",
+        probable_task="general",
+        active_app="Code",
+        window_title="DevNote — README.md — Visual Studio Code",
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.project == "Pulse"
+    assert card.project_hint is None
+    assert card.project_hint_confidence == 0.0
+    assert card.project_hint_source is None
+
+
+def test_build_work_context_card_ignores_weak_project_hint_for_app_or_file_segments():
+    current_context = SimpleNamespace(
+        active_project=None,
+        activity_level="reading",
+        probable_task="general",
+        active_app="Code",
+        window_title="work_context_card.py — Visual Studio Code",
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.project is None
+    assert card.project_hint is None
+    assert card.project_hint_confidence == 0.0
+    assert card.project_hint_source is None

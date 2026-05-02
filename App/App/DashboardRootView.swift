@@ -437,6 +437,20 @@ struct DashboardRootView: View {
                         }
 
                         signalRow("Projet", context.activeProject ?? present?.activeProject ?? "—")
+                        if let projectHintLabel = vm.workContextCard?.projectHintLabel {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "lightbulb")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(Color(hex: gOrange))
+                                    .padding(.top, 2)
+                                Text(projectHintLabel)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Color(hex: gOrange))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer()
+                            }
+                            .padding(.top, 2)
+                        }
                         signalRow("Tâche", context.taskLabel)
                         signalRow("Activité", context.activityLabel)
                         signalRow("Focus", focusLabel(present?.focusLevel))

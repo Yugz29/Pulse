@@ -16,6 +16,9 @@ class WorkContextCard:
     """Explainable summary of the current work context."""
 
     project: Optional[str]
+    project_hint: Optional[str]
+    project_hint_confidence: float
+    project_hint_source: Optional[str]
     activity_level: str
     probable_task: str
     confidence: float
@@ -27,6 +30,9 @@ class WorkContextCard:
         """Return a JSON-serializable representation."""
         return {
             "project": self.project,
+            "project_hint": self.project_hint,
+            "project_hint_confidence": self.project_hint_confidence,
+            "project_hint_source": self.project_hint_source,
             "activity_level": self.activity_level,
             "probable_task": self.probable_task,
             "confidence": self.confidence,
@@ -52,6 +58,12 @@ def build_work_context_card(
     project = _first_non_empty(
         getattr(current_context, "active_project", None),
         getattr(present, "active_project", None),
+    )
+    # Insert project_hint computation
+    project_hint, project_hint_confidence, project_hint_source = _build_project_hint(
+        project=project,
+        signals=signals,
+        current_context=current_context,
     )
     activity_level = _first_non_empty(
         getattr(current_context, "activity_level", None),
@@ -99,6 +111,9 @@ def build_work_context_card(
 
     return WorkContextCard(
         project=project,
+        project_hint=project_hint,
+        project_hint_confidence=project_hint_confidence,
+        project_hint_source=project_hint_source,
         activity_level=activity_level,
         probable_task=probable_task,
         confidence=confidence,
@@ -219,6 +234,7 @@ def _build_safe_next_probes(
     return probes
 
 
+
 def _has_window_title(*, signals: Any, current_context: Any) -> bool:
     return bool(
         _first_non_empty(
@@ -226,6 +242,74 @@ def _has_window_title(*, signals: Any, current_context: Any) -> bool:
             getattr(current_context, "window_title", None),
         )
     )
+
+
+# --- Project hint logic ---
+def _build_project_hint(
+    *,
+    project: Optional[str],
+    signals: Any,
+    current_context: Any,
+) -> tuple[Optional[str], float, Optional[str]]:
+    """Return a weak project hint without promoting it to active project."""
+    if project:
+        return None, 0.0, None
+
+    title = _first_non_empty(
+        getattr(signals, "window_title", None),
+        getattr(current_context, "window_title", None),
+    )
+    if not title:
+        return None, 0.0, None
+
+    hint = _project_hint_from_window_title(title)
+    if not hint:
+        return None, 0.0, None
+
+    return hint, 0.35, "window_title"
+
+
+def _project_hint_from_window_title(title: str) -> Optional[str]:
+    separators = (" — ", " – ", " - ")
+    segments = [title]
+    for separator in separators:
+        if separator in title:
+            segments = title.split(separator)
+            break
+
+    for segment in segments:
+        candidate = segment.strip()
+        if _is_project_hint_candidate(candidate):
+            return candidate
+    return None
+
+
+def _is_project_hint_candidate(value: str) -> bool:
+    if not value or len(value) < 2 or len(value) > 48:
+        return False
+    lowered = value.lower()
+    blocked = {
+        "visual studio code",
+        "code",
+        "cursor",
+        "xcode",
+        "safari",
+        "terminal",
+        "chatgpt",
+        "claude",
+        "finder",
+        "nouvel onglet",
+        "new tab",
+        "untitled",
+        "sans titre",
+    }
+    if lowered in blocked:
+        return False
+    if "/" in value or "\\" in value:
+        return False
+    if "." in value and " " not in value:
+        return False
+    return any(char.isalpha() for char in value)
 
 
 def _first_non_empty(*values: Any) -> Optional[str]:

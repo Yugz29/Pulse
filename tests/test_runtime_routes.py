@@ -893,6 +893,9 @@ class TestRuntimeRoutes(unittest.TestCase):
         card = payload["card"]
 
         self.assertEqual(card["project"], "Pulse")
+        self.assertEqual(card["project_hint"], None)
+        self.assertEqual(card["project_hint_confidence"], 0.0)
+        self.assertEqual(card["project_hint_source"], None)
         self.assertEqual(card["activity_level"], "editing")
         self.assertEqual(card["probable_task"], "debug")
         self.assertEqual(card["confidence"], 0.78)
@@ -936,6 +939,9 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         card = response.get_json()["card"]
         self.assertEqual(card["project"], None)
+        self.assertEqual(card["project_hint"], None)
+        self.assertEqual(card["project_hint_confidence"], 0.0)
+        self.assertEqual(card["project_hint_source"], None)
         self.assertEqual(card["activity_level"], "unknown")
         self.assertEqual(card["probable_task"], "general")
         self.assertEqual(card["confidence"], 0.0)
@@ -947,6 +953,44 @@ class TestRuntimeRoutes(unittest.TestCase):
             "Titre de fenêtre non disponible",
         ])
         self.assertEqual(card["safe_next_probes"], ["app_context", "window_title"])
+
+
+    def test_work_context_route_exposes_weak_project_hint_without_promoting_project(self):
+        signals = Signals(
+            active_project=None,
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=["Code"],
+            clipboard_context=None,
+            activity_level="reading",
+            task_confidence=0.35,
+            window_title="Pulse — DashboardRootView.swift — Visual Studio Code",
+            window_title_app="Code",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
+             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+            response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        self.assertEqual(card["project"], None)
+        self.assertEqual(card["project_hint"], "Pulse")
+        self.assertEqual(card["project_hint_confidence"], 0.35)
+        self.assertEqual(card["project_hint_source"], "window_title")
+        self.assertNotIn("Projet actif détecté : Pulse", card["evidence"])
+        self.assertIn("Projet actif non identifié", card["missing_context"])
 
     def test_context_probes_schema_exposes_default_safety_policies(self):
         response = self.client.get("/context-probes/schema")
