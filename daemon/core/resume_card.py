@@ -145,24 +145,44 @@ def _work_block_started_at(payload: dict[str, Any]) -> Any:
 def _deterministic_card(context: dict[str, Any]) -> ResumeCard:
     project = _clean(context.get("project"))
     task = _clean(context.get("probable_task")) or "general"
+    activity = _clean(context.get("activity_level")) or "idle"
     active_file = _short_file(context.get("active_file"))
     recent_files = [_short_file(path) for path in context.get("recent_files", []) if _short_file(path)]
-    primary_file = active_file or (recent_files[0] if recent_files else None)
+    commit_scope_files = [_short_file(path) for path in context.get("commit_scope_files", []) if _short_file(path)]
+    primary_file = active_file or (recent_files[0] if recent_files else None) or (commit_scope_files[0] if commit_scope_files else None)
+    file_focus = _file_focus_label(primary_file, recent_files, commit_scope_files)
+    diff_focus = _diff_focus_label(context.get("diff_summary"))
+    recent_session_hint = _recent_session_hint(context.get("recent_sessions"))
 
-    summary = f"Tu étais sur {project}." if project else "Tu revenais sur une session de travail."
-    if primary_file:
-        last_objective = f"Reprendre le travail {task} autour de {primary_file}."
-    else:
-        last_objective = f"Reprendre le travail {task}."
-
-    if context.get("diff_summary"):
-        next_action = "Relire le diff actif puis reprendre le prochain changement utile."
-    elif primary_file:
-        next_action = f"Rouvrir {primary_file} et vérifier le prochain geste."
-    else:
-        next_action = "Relire le dernier journal de session avant de reprendre."
+    summary = _resume_summary(
+        project=project,
+        task=task,
+        activity=activity,
+        file_focus=file_focus,
+        diff_focus=diff_focus,
+        recent_session_hint=recent_session_hint,
+    )
+    last_objective = _resume_last_objective(
+        task=task,
+        activity=activity,
+        file_focus=file_focus,
+        diff_focus=diff_focus,
+        recent_session_hint=recent_session_hint,
+    )
+    next_action = _resume_next_action(
+        primary_file=primary_file,
+        file_focus=file_focus,
+        diff_focus=diff_focus,
+        recent_session_hint=recent_session_hint,
+    )
 
     evidence_count = len(context.get("source_refs") or [])
+    if file_focus:
+        evidence_count += 1
+    if diff_focus:
+        evidence_count += 1
+    if recent_session_hint:
+        evidence_count += 1
     confidence = min(0.9, 0.52 + evidence_count * 0.08)
     return ResumeCard(
         id=new_uid(),
@@ -201,12 +221,69 @@ def _card_from_llm(
     )
 
 
+def _resume_summary(
+    *,
+    project: str | None,
+    task: str,
+    activity: str,
+    file_focus: str | None,
+    diff_focus: str | None,
+    recent_session_hint: str | None,
+) -> str:
+    base = f"Tu étais sur {project}" if project else "Tu revenais sur une session de travail"
+    if diff_focus:
+        return f"{base}, avec des changements récents sur {diff_focus}."
+    if file_focus:
+        return f"{base}, en {activity} autour de {file_focus}."
+    if recent_session_hint:
+        return f"{base}, dans la continuité de {recent_session_hint}."
+    return f"{base}."
+
+
+def _resume_last_objective(
+    *,
+    task: str,
+    activity: str,
+    file_focus: str | None,
+    diff_focus: str | None,
+    recent_session_hint: str | None,
+) -> str:
+    task_label = task if task != "general" else activity
+    if diff_focus:
+        return f"Stabiliser le travail {task_label} lié à {diff_focus}."
+    if file_focus:
+        return f"Reprendre le travail {task_label} autour de {file_focus}."
+    if recent_session_hint:
+        return f"Reprendre la continuité de {recent_session_hint}."
+    return f"Reprendre le travail {task_label}."
+
+
+def _resume_next_action(
+    *,
+    primary_file: str | None,
+    file_focus: str | None,
+    diff_focus: str | None,
+    recent_session_hint: str | None,
+) -> str:
+    if diff_focus:
+        return f"Vérifier {diff_focus}, puis tester le comportement attendu."
+    if primary_file:
+        return f"Rouvrir {primary_file}, relire le dernier changement et valider la suite."
+    if file_focus:
+        return f"Reprendre par {file_focus} et vérifier le prochain geste concret."
+    if recent_session_hint:
+        return f"Reprendre depuis {recent_session_hint} et confirmer le prochain fichier utile."
+    return "Reprendre par le dernier fichier actif ou relancer une action de test ciblée."
+
+
 def _llm_prompt(context: dict[str, Any], fallback: ResumeCard) -> str:
     return (
         "Tu écris une Resume Card Pulse en français.\n"
         "Réponds uniquement en JSON avec les clés: title, summary, last_objective, "
         "next_action, confidence.\n"
-        "Contraintes: phrases courtes, pas d'invention, maximum 5 lignes côté UI.\n\n"
+        "Contraintes: phrases courtes, pas d'invention, maximum 5 lignes côté UI. "
+        "Ne réponds pas simplement qu'il faut relire le journal si le contexte contient déjà des fichiers, "
+        "un diff ou des sessions récentes: résume directement ce qui est connu.\n\n"
         f"Contexte local:\n{json.dumps(context, ensure_ascii=False, default=str)[:5000]}\n\n"
         f"Fallback déterministe:\n{json.dumps(fallback.to_event_payload(), ensure_ascii=False)}"
     )
@@ -252,6 +329,72 @@ def _recent_files(payload: dict[str, Any], signals: Any) -> list[str]:
         result.append(path)
         if len(result) >= 5:
             break
+    return result
+
+
+def _file_focus_label(
+    primary_file: str | None,
+    recent_files: list[str],
+    commit_scope_files: list[str],
+) -> str | None:
+    files = _dedupe_text([primary_file, *recent_files, *commit_scope_files])
+    if not files:
+        return None
+    if len(files) == 1:
+        return files[0]
+    return ", ".join(files[:3])
+
+
+def _diff_focus_label(value: Any) -> str | None:
+    text = _clean(value)
+    if not text:
+        return None
+    names: list[str] = []
+    for part in text.replace(";", ",").split(","):
+        candidate = part.strip()
+        if not candidate:
+            continue
+        token = candidate.split()[0].strip()
+        short = _short_file(token)
+        if short and "." in short:
+            names.append(short)
+    names = _dedupe_text(names)
+    if names:
+        return ", ".join(names[:3])
+    return _limit_line(text, 70)
+
+
+def _recent_session_hint(value: Any) -> str | None:
+    if not isinstance(value, list) or not value:
+        return None
+    first = value[0]
+    if not isinstance(first, dict):
+        return None
+    project = _clean(first.get("project"))
+    task = _clean(first.get("task") or first.get("probable_task"))
+    duration = first.get("duration_min") or first.get("duration")
+    parts: list[str] = []
+    if project:
+        parts.append(project)
+    if task:
+        parts.append(task)
+    if duration:
+        try:
+            parts.append(f"{int(float(duration))} min")
+        except (TypeError, ValueError):
+            pass
+    return " / ".join(parts) if parts else None
+
+
+def _dedupe_text(values: list[str | None]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        text = _clean(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
     return result
 
 
