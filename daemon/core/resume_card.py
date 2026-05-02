@@ -134,7 +134,7 @@ def generate_resume_card(context: dict[str, Any], llm: Any = None) -> ResumeCard
 
     try:
         prompt = _llm_prompt(context, deterministic)
-        raw = llm.complete(prompt, max_tokens=180)
+        raw = llm.complete(prompt, max_tokens=260)
         parsed = _parse_llm_card(raw)
         if parsed is None:
             return deterministic
@@ -434,16 +434,57 @@ def _resume_next_action(
 
 
 def _llm_prompt(context: dict[str, Any], fallback: ResumeCard) -> str:
+    llm_context = _llm_resume_context(context)
     return (
-        "Tu écris une Resume Card Pulse en français.\n"
-        "Réponds uniquement en JSON avec les clés: title, summary, last_objective, "
-        "next_action, confidence.\n"
-        "Contraintes: phrases courtes, pas d'invention, maximum 5 lignes côté UI. "
-        "Ne réponds pas simplement qu'il faut relire le journal si le contexte contient déjà des fichiers, "
-        "un diff, des sessions récentes ou des recent_journal_entries: résume directement ce qui est connu.\n\n"
-        f"Contexte local:\n{json.dumps(context, ensure_ascii=False, default=str)[:5000]}\n\n"
-        f"Fallback déterministe:\n{json.dumps(fallback.to_event_payload(), ensure_ascii=False)}"
+        "Tu écris une Resume Card Pulse en français pour aider l'utilisateur à reprendre son travail après une pause.\n"
+        "Réponds uniquement en JSON valide avec les clés: title, summary, last_objective, next_action, confidence.\n"
+        "Objectif: produire une vraie reprise, pas une phrase générique.\n"
+        "summary: résume ce qui était concrètement en cours en 1 phrase.\n"
+        "last_objective: explique le but de travail probable, pas seulement le nom d'un fichier.\n"
+        "next_action: donne le prochain geste vérifiable et concret.\n"
+        "Contraintes fortes:\n"
+        "- français naturel, phrases courtes;\n"
+        "- n'invente rien hors contexte;\n"
+        "- ne dis pas seulement 'relire le journal', 'rouvrir le fichier', ou 'tester le comportement attendu' sans préciser quoi;\n"
+        "- ne recopie pas les messages de commit en anglais tels quels: reformule leur sens en français;\n"
+        "- évite les détails bruts de diff du type (+127 -5);\n"
+        "- maximum 5 lignes côté UI.\n\n"
+        f"Contexte de reprise priorisé:\n{json.dumps(llm_context, ensure_ascii=False, default=str)[:5000]}\n\n"
+        f"Fallback déterministe, à améliorer si possible:\n{json.dumps(fallback.to_event_payload(), ensure_ascii=False)}"
     )
+
+def _llm_resume_context(context: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact, task-oriented context for LLM resume synthesis."""
+    journal_entries = _recent_journal_entries(context.get("recent_journal_entries"))
+    compact_entries: list[dict[str, Any]] = []
+    for entry in journal_entries[:5]:
+        files = [_short_file(path) for path in _compact_text_list(entry.get("top_files"))]
+        compact_entries.append({
+            "project": entry.get("project") or entry.get("active_project"),
+            "task": entry.get("task") or entry.get("probable_task"),
+            "activity_level": entry.get("activity_level"),
+            "duration_min": entry.get("duration_min"),
+            "body": _limit_line(str(entry.get("body") or ""), 220),
+            "commit_message": _humanize_commit_message(str(entry.get("commit_message") or "")),
+            "commit_messages": [_humanize_commit_message(item) for item in _compact_text_list(entry.get("commit_messages"))[:3]],
+            "top_files": [file for file in files if file][:5],
+            "boundary_reason": entry.get("boundary_reason"),
+        })
+
+    return {
+        "project": context.get("project"),
+        "probable_task": context.get("probable_task"),
+        "activity_level": context.get("activity_level"),
+        "focus_level": context.get("focus_level"),
+        "duration_min": context.get("duration_min"),
+        "sleep_minutes": context.get("sleep_minutes"),
+        "active_file": _short_file(context.get("active_file")),
+        "recent_files": [_short_file(path) for path in context.get("recent_files", []) if _short_file(path)][:5],
+        "commit_scope_files": [_short_file(path) for path in context.get("commit_scope_files", []) if _short_file(path)][:5],
+        "diff_focus": _diff_focus_label(context.get("diff_summary")),
+        "recent_journal_entries": compact_entries,
+        "source_refs": context.get("source_refs") or [],
+    }
 
 
 def _parse_llm_card(raw: Any) -> dict[str, Any] | None:
@@ -464,7 +505,29 @@ def _parse_llm_card(raw: Any) -> dict[str, Any] | None:
         return None
     if not any(_clean(parsed.get(key)) for key in ("summary", "last_objective", "next_action")):
         return None
+    for key in ("summary", "last_objective", "next_action"):
+        value = _clean(parsed.get(key))
+        if value and _is_low_value_llm_resume_line(value):
+            return None
     return parsed
+
+def _is_low_value_llm_resume_line(value: str) -> bool:
+    text = value.strip().lower()
+    banned_exact = {
+        "relire le journal.",
+        "relire le dernier journal.",
+        "rouvrir le fichier.",
+        "tester le comportement attendu.",
+        "vérifier le prochain geste.",
+    }
+    if text in banned_exact:
+        return True
+    weak_patterns = (
+        "relire le journal",
+        "relire le dernier journal",
+        "vérifier le prochain geste",
+    )
+    return any(pattern in text for pattern in weak_patterns)
 
 
 def _recent_files(payload: dict[str, Any], signals: Any) -> list[str]:
