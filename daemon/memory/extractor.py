@@ -354,6 +354,68 @@ def last_session_context(project: str, memory_dir: Optional[Path] = None, today:
         return None
 
 
+# ── Recent Journal Entries API ────────────────────────────────────────────────
+
+def get_recent_journal_entries(
+    limit: int = 5,
+    *,
+    project: Optional[str] = None,
+    memory_dir: Optional[Path] = None,
+) -> List[Dict[str, Any]]:
+    """Return recent structured journal entries suitable for resume cards.
+
+    This reads the hidden pulse-journal-data blocks already persisted in
+    session journals. It does not parse rendered Markdown prose and does not
+    mutate memory.
+    """
+    base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
+    sessions_dir = base_dir / "sessions"
+    if not sessions_dir.exists():
+        return []
+
+    wanted_project = _normalize_project_name(project) if project else None
+    entries: List[Dict[str, Any]] = []
+    for journal_file in sorted(sessions_dir.glob("*.md"), reverse=True)[:14]:
+        for raw_entry in _load_journal_entries(journal_file):
+            entry = _normalize_journal_entry(raw_entry)
+            if _is_suppressed_journal_entry(entry) or _is_noise_journal_entry(entry):
+                continue
+            if wanted_project is not None and _normalize_project_name(entry.get("active_project")) != wanted_project:
+                continue
+            entries.append(_journal_entry_for_resume_card(entry, journal_file))
+
+    entries.sort(key=lambda item: (str(item.get("ended_at") or ""), str(item.get("started_at") or "")), reverse=True)
+    return entries[: max(int(limit or 0), 0)]
+
+
+def _journal_entry_for_resume_card(entry: Dict[str, Any], journal_file: Path) -> Dict[str, Any]:
+    commit_messages = _compact_strings(entry.get("commit_messages", []))
+    commit_message = str(entry.get("commit_message") or "").strip()
+    if commit_message and commit_message not in commit_messages:
+        commit_messages.insert(0, commit_message)
+
+    return {
+        "date": _journal_date_from_path(journal_file),
+        "entry_id": entry.get("entry_id"),
+        "active_project": _normalize_project_name(entry.get("active_project")),
+        "project": _normalize_project_name(entry.get("active_project")),
+        "probable_task": str(entry.get("probable_task") or "general"),
+        "task": str(entry.get("probable_task") or "general"),
+        "activity_level": str(entry.get("activity_level") or "unknown"),
+        "duration_min": int(entry.get("duration_min") or 0),
+        "body": str(entry.get("body") or "").strip(),
+        "commit_message": commit_message,
+        "commit_messages": commit_messages,
+        "top_files": _compact_strings(entry.get("top_files", [])),
+        "files_count": int(entry.get("files_count") or 0),
+        "recent_apps": _compact_strings(entry.get("recent_apps", [])),
+        "started_at": entry.get("started_at"),
+        "ended_at": entry.get("ended_at"),
+        "boundary_reason": entry.get("boundary_reason"),
+        "scope_source": entry.get("scope_source"),
+    }
+
+
 def load_memory_context(memory_dir: Optional[Path] = None) -> str:
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     parts = []

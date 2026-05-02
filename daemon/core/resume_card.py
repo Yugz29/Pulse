@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -76,11 +77,14 @@ def build_resume_card_context(
     work_block_started_at = _work_block_started_at(payload)
     work_block_commit_count = payload.get("work_block_commit_count") or payload.get("work_window_commit_count") or 0
     recent_sessions = list(payload.get("recent_sessions") or payload.get("closed_episodes") or [])[:3]
+    recent_journal_entries = list(payload.get("recent_journal_entries") or [])[:5]
     source_refs = ["present_state", "session_memory"]
     if work_block_started_at:
         source_refs.append("work_block")
     if recent_sessions:
         source_refs.append("recent_sessions")
+    if recent_journal_entries:
+        source_refs.append("recent_journal_entries")
     if diff_summary:
         source_refs.append("git_diff")
 
@@ -97,6 +101,7 @@ def build_resume_card_context(
         "work_block_started_at": work_block_started_at,
         "work_block_commit_count": work_block_commit_count,
         "recent_sessions": recent_sessions,
+        "recent_journal_entries": recent_journal_entries,
         "diff_summary": diff_summary or "",
         "source_refs": source_refs,
     }
@@ -142,6 +147,153 @@ def _work_block_started_at(payload: dict[str, Any]) -> Any:
     return payload.get("work_block_started_at") or payload.get("work_window_started_at")
 
 
+@dataclass(frozen=True)
+class _JournalFocus:
+    hint: str | None = None
+    summary: str | None = None
+    last_objective: str | None = None
+    next_action: str | None = None
+
+
+def _recent_journal_entries(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            result.append(item)
+        if len(result) >= 5:
+            break
+    return result
+
+
+def _journal_focus(entries: list[dict[str, Any]]) -> _JournalFocus:
+    if not entries:
+        return _JournalFocus()
+
+    best = _best_journal_entry(entries)
+    if best is None:
+        return _JournalFocus()
+
+    project = _clean(best.get("project") or best.get("active_project"))
+    task = _clean(best.get("task") or best.get("probable_task")) or "general"
+    files = _compact_text_list(best.get("top_files"))
+    short_files = [_short_file(path) for path in files if _short_file(path)]
+    file_focus = ", ".join(short_files[:3]) if short_files else None
+    duration = _journal_duration(best)
+
+    topic = _journal_topic(best, file_focus=file_focus)
+    if not topic:
+        return _JournalFocus()
+
+    prefix = f"Tu étais sur {project}" if project else "Tu reprenais une session récente"
+    duration_label = f" · {duration} min" if duration else ""
+    summary = f"{prefix} : {topic}{duration_label}."
+
+    if file_focus:
+        last_objective = f"Stabiliser {file_focus}."
+        next_action = f"Rouvrir {short_files[0]} et tester le comportement attendu."
+    else:
+        last_objective = f"Reprendre : {topic}."
+        next_action = "Relire le dernier changement utile, puis tester le comportement attendu."
+
+    hint_parts = [part for part in (project, task, f"{duration} min" if duration else None) if part]
+    return _JournalFocus(
+        hint=" / ".join(hint_parts) if hint_parts else None,
+        summary=summary,
+        last_objective=last_objective,
+        next_action=next_action,
+    )
+
+
+def _journal_topic(entry: dict[str, Any], *, file_focus: str | None) -> str | None:
+    commit_message = _clean(entry.get("commit_message"))
+    commit_messages = _compact_text_list(entry.get("commit_messages"))
+    body = _clean(entry.get("body"))
+
+    raw = commit_message or (commit_messages[0] if commit_messages else None) or body
+    topic = _humanize_commit_message(raw)
+    topic = _strip_low_value_resume_prefixes(topic)
+    if topic:
+        return _limit_line(topic, 68)
+    if file_focus:
+        return f"travail autour de {file_focus}"
+    return None
+
+
+def _strip_low_value_resume_prefixes(value: str | None) -> str | None:
+    text = _clean(value)
+    if not text:
+        return None
+
+    prefixes = (
+        "le commit ajoute ",
+        "ce commit ajoute ",
+        "ce commit ajuste ",
+        "ce commit corrige ",
+        "implémentation de ",
+        "implementation de ",
+        "en cours : ",
+    )
+    lowered = text.lower()
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+
+    return text[:1].lower() + text[1:] if text else None
+
+
+def _best_journal_entry(entries: list[dict[str, Any]]) -> dict[str, Any] | None:
+    meaningful: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        task = _clean(entry.get("task") or entry.get("probable_task")) or "general"
+        body = _clean(entry.get("body"))
+        commit_message = _clean(entry.get("commit_message"))
+        files = _compact_text_list(entry.get("top_files"))
+        if task == "general" and not body and not commit_message and not files:
+            continue
+        meaningful.append(entry)
+    return meaningful[0] if meaningful else None
+
+
+def _journal_duration(entry: dict[str, Any]) -> int | None:
+    value = entry.get("duration_min")
+    try:
+        duration = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return duration if duration > 0 else None
+
+
+def _humanize_commit_message(value: str | None) -> str | None:
+    text = _clean(value)
+    if not text:
+        return None
+    if ":" in text:
+        prefix, rest = text.split(":", 1)
+        if prefix.lower().split("(", 1)[0] in {"feat", "fix", "docs", "test", "refactor", "chore"}:
+            text = rest.strip()
+    text = text.replace("_", " ").strip()
+    return text
+
+
+def _compact_text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = _clean(item)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
 def _deterministic_card(context: dict[str, Any]) -> ResumeCard:
     project = _clean(context.get("project"))
     task = _clean(context.get("probable_task")) or "general"
@@ -149,12 +301,14 @@ def _deterministic_card(context: dict[str, Any]) -> ResumeCard:
     active_file = _short_file(context.get("active_file"))
     recent_files = [_short_file(path) for path in context.get("recent_files", []) if _short_file(path)]
     commit_scope_files = [_short_file(path) for path in context.get("commit_scope_files", []) if _short_file(path)]
+    recent_journal_entries = _recent_journal_entries(context.get("recent_journal_entries"))
+    journal_focus = _journal_focus(recent_journal_entries)
     primary_file = active_file or (recent_files[0] if recent_files else None) or (commit_scope_files[0] if commit_scope_files else None)
     file_focus = _file_focus_label(primary_file, recent_files, commit_scope_files)
     diff_focus = _diff_focus_label(context.get("diff_summary"))
-    recent_session_hint = _recent_session_hint(context.get("recent_sessions"))
+    recent_session_hint = journal_focus.hint or _recent_session_hint(context.get("recent_sessions"))
 
-    summary = _resume_summary(
+    summary = journal_focus.summary or _resume_summary(
         project=project,
         task=task,
         activity=activity,
@@ -162,14 +316,14 @@ def _deterministic_card(context: dict[str, Any]) -> ResumeCard:
         diff_focus=diff_focus,
         recent_session_hint=recent_session_hint,
     )
-    last_objective = _resume_last_objective(
+    last_objective = journal_focus.last_objective or _resume_last_objective(
         task=task,
         activity=activity,
         file_focus=file_focus,
         diff_focus=diff_focus,
         recent_session_hint=recent_session_hint,
     )
-    next_action = _resume_next_action(
+    next_action = journal_focus.next_action or _resume_next_action(
         primary_file=primary_file,
         file_focus=file_focus,
         diff_focus=diff_focus,
@@ -182,6 +336,8 @@ def _deterministic_card(context: dict[str, Any]) -> ResumeCard:
     if diff_focus:
         evidence_count += 1
     if recent_session_hint:
+        evidence_count += 1
+    if journal_focus.summary:
         evidence_count += 1
     confidence = min(0.9, 0.52 + evidence_count * 0.08)
     return ResumeCard(
@@ -232,7 +388,7 @@ def _resume_summary(
 ) -> str:
     base = f"Tu étais sur {project}" if project else "Tu revenais sur une session de travail"
     if diff_focus:
-        return f"{base}, avec des changements récents sur {diff_focus}."
+        return f"{base}, sur des changements récents dans {diff_focus}."
     if file_focus:
         return f"{base}, en {activity} autour de {file_focus}."
     if recent_session_hint:
@@ -250,7 +406,7 @@ def _resume_last_objective(
 ) -> str:
     task_label = task if task != "general" else activity
     if diff_focus:
-        return f"Stabiliser le travail {task_label} lié à {diff_focus}."
+        return f"Stabiliser {diff_focus}."
     if file_focus:
         return f"Reprendre le travail {task_label} autour de {file_focus}."
     if recent_session_hint:
@@ -266,7 +422,8 @@ def _resume_next_action(
     recent_session_hint: str | None,
 ) -> str:
     if diff_focus:
-        return f"Vérifier {diff_focus}, puis tester le comportement attendu."
+        first_file = diff_focus.split(",", 1)[0].strip()
+        return f"Rouvrir {first_file}, relire le dernier changement et tester."
     if primary_file:
         return f"Rouvrir {primary_file}, relire le dernier changement et valider la suite."
     if file_focus:
@@ -283,7 +440,7 @@ def _llm_prompt(context: dict[str, Any], fallback: ResumeCard) -> str:
         "next_action, confidence.\n"
         "Contraintes: phrases courtes, pas d'invention, maximum 5 lignes côté UI. "
         "Ne réponds pas simplement qu'il faut relire le journal si le contexte contient déjà des fichiers, "
-        "un diff ou des sessions récentes: résume directement ce qui est connu.\n\n"
+        "un diff, des sessions récentes ou des recent_journal_entries: résume directement ce qui est connu.\n\n"
         f"Contexte local:\n{json.dumps(context, ensure_ascii=False, default=str)[:5000]}\n\n"
         f"Fallback déterministe:\n{json.dumps(fallback.to_event_payload(), ensure_ascii=False)}"
     )
@@ -349,19 +506,19 @@ def _diff_focus_label(value: Any) -> str | None:
     text = _clean(value)
     if not text:
         return None
-    names: list[str] = []
-    for part in text.replace(";", ",").split(","):
-        candidate = part.strip()
-        if not candidate:
-            continue
-        token = candidate.split()[0].strip()
-        short = _short_file(token)
-        if short and "." in short:
-            names.append(short)
-    names = _dedupe_text(names)
+
+    names = [
+        _short_file(match)
+        for match in re.findall(r"[A-Za-z0-9_+./-]+\.[A-Za-z0-9_+-]+", text)
+    ]
+    names = _dedupe_text([name for name in names if name])
     if names:
         return ", ".join(names[:3])
-    return _limit_line(text, 70)
+
+    cleaned = re.sub(r"\([+\-0-9\s]+\)", "", text)
+    cleaned = cleaned.replace("Diff en cours :", "").replace("Fonctions touchées :", "")
+    cleaned = cleaned.strip(" :,-")
+    return _limit_line(cleaned, 58) if cleaned else None
 
 
 def _recent_session_hint(value: Any) -> str | None:

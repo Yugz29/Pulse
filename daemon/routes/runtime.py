@@ -43,8 +43,7 @@ from daemon.core.timeline_span import TimelineSpanKind
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
 from daemon.core.work_context_card import build_work_context_card
 from daemon.interpreter.command_interpreter import CommandInterpreter
-from daemon.memory.extractor import last_session_context
-from daemon.memory.extractor import find_git_root
+from daemon.memory.extractor import find_git_root, get_recent_journal_entries, last_session_context
 
 _actor_classifier = EventActorClassifier()
 _current_context_builder = CurrentContextBuilder()
@@ -269,7 +268,6 @@ class _FileEventCoalescer:
         return _FILE_EVENT_PRIORITY.get(event_type, -1)
 
 def _first_recent_session_value(recent_sessions: Any, key: str) -> Any:
-
     if not isinstance(recent_sessions, list):
         return None
     for item in recent_sessions:
@@ -634,6 +632,12 @@ def register_runtime_routes(
         if not isinstance(current_window, dict):
             current_window = {}
 
+        journal_project = present.active_project or current_window.get("project")
+        recent_journal_entries = get_recent_journal_entries(
+            5,
+            project=journal_project,
+        )
+
         top_files: list[str] = []
         for candidate in [
             present.active_file,
@@ -669,6 +673,7 @@ def register_runtime_routes(
             "top_files": top_files[:8],
             "recent_files": top_files[:8],
             "recent_sessions": recent_sessions,
+            "recent_journal_entries": recent_journal_entries,
             "today_summary": today_summary,
             "active_app": runtime_snapshot.latest_active_app,
             "window_title": getattr(signals, "window_title", None) if signals is not None else None,
