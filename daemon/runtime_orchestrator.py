@@ -215,6 +215,59 @@ class RuntimeOrchestrator:
     def _export_memory_payload(self) -> dict:
         return self.session_memory.export_memory_payload()
 
+    def _resume_card_memory_payload(self, *, snapshot, base_payload: dict | None = None) -> dict:
+        """Build a richer payload for resume cards without mutating session memory."""
+        payload = dict(base_payload or {})
+        present = snapshot.present
+        signals = snapshot.signals
+
+        active_project = present.active_project or payload.get("active_project")
+        if active_project:
+            payload["active_project"] = active_project
+
+        probable_task = present.probable_task or payload.get("probable_task")
+        if probable_task:
+            payload["probable_task"] = probable_task
+
+        activity_level = present.activity_level or payload.get("activity_level")
+        if activity_level:
+            payload["activity_level"] = activity_level
+
+        if present.session_duration_min is not None:
+            payload["duration_min"] = max(
+                int(payload.get("duration_min") or 0),
+                int(present.session_duration_min),
+            )
+
+        top_files = list(payload.get("top_files") or [])
+        for candidate in [
+            present.active_file,
+            getattr(signals, "active_file", None) if signals is not None else None,
+        ]:
+            if candidate and candidate not in top_files:
+                top_files.insert(0, candidate)
+
+        diff_summary = snapshot.last_diff_summary or ""
+        for candidate in extract_file_names_from_diff_summary(diff_summary)[:5]:
+            if candidate and candidate not in top_files:
+                top_files.append(candidate)
+
+        if top_files:
+            payload["top_files"] = top_files[:8]
+            payload.setdefault("recent_files", top_files[:8])
+
+        if diff_summary:
+            payload["diff_summary"] = diff_summary
+
+        if snapshot.latest_active_app:
+            payload["active_app"] = snapshot.latest_active_app
+
+        window_title = getattr(signals, "window_title", None) if signals is not None else None
+        if window_title:
+            payload["window_title"] = window_title
+
+        return payload
+
     def handle_event(self, event) -> None:
         if self._should_ignore_event(event):
             return
@@ -327,7 +380,8 @@ class RuntimeOrchestrator:
     ) -> None:
         try:
             snapshot = self.runtime_state.get_runtime_snapshot()
-            payload = memory_payload if isinstance(memory_payload, dict) else self._export_memory_payload()
+            base_payload = memory_payload if isinstance(memory_payload, dict) else self._export_memory_payload()
+            payload = self._resume_card_memory_payload(snapshot=snapshot, base_payload=base_payload)
             active_project = snapshot.present.active_project or payload.get("active_project")
             if not should_offer_resume_card(
                 event_type=event_type or event.type,
@@ -732,7 +786,11 @@ class RuntimeOrchestrator:
         except Exception:
             pass
 
-        snapshot = self._export_memory_payload()
+        runtime_snapshot = self.runtime_state.get_runtime_snapshot()
+        snapshot = self._resume_card_memory_payload(
+            snapshot=runtime_snapshot,
+            base_payload=self._export_memory_payload(),
+        )
         snapshot["active_project"] = git_root.name or snapshot.get("active_project")
         diff_files = extract_file_names_from_diff_summary(diff_summary or "")
         commit_scope_files = diff_files or read_commit_file_names(git_root)
@@ -790,8 +848,8 @@ class RuntimeOrchestrator:
         )
         if work_block_started_at is None:
             work_block_started_at = self._session_fsm.session_started_at
-        runtime_snapshot = self.runtime_state.get_runtime_snapshot()
         payload_block_end = _parse_optional_datetime(snapshot.get("work_block_ended_at") or snapshot.get("work_window_ended_at"))
+        runtime_snapshot = self.runtime_state.get_runtime_snapshot()
         block_end = payload_block_end or runtime_snapshot.present.updated_at or commit_at
         if block_end < commit_at:
             block_end = commit_at

@@ -26,10 +26,12 @@ extension PulseViewModel {
     func showResumeCard(_ card: ResumeCard) {
         activeResumeCard = card
         withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            transientStatusText = nil
+            isStartupExpanded = false
             panelMode = .resumeCard
             isExpanded = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 11.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60.0) {
             guard self.activeResumeCard?.id == card.id, self.panelMode == .resumeCard else { return }
             self.dismissResumeCard()
         }

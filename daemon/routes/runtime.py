@@ -36,6 +36,7 @@ from daemon.core.event_envelope import (
     PulseRetention,
 )
 from daemon.core.file_classifier import file_signal_significance
+from daemon.core.resume_card import build_resume_card_context, generate_resume_card
 from daemon.core.timeline_builder import span_from_current_context
 from daemon.core.timeline_debug import describe_timeline_span_for_debug
 from daemon.core.timeline_span import TimelineSpanKind
@@ -602,6 +603,51 @@ def register_runtime_routes(
             decision=runtime_snapshot.decision,
         )
         return jsonify({"card": card.to_dict()})
+
+    @app.route("/debug/resume-card", methods=["POST"])
+    def debug_resume_card():
+        """Force a deterministic resume card event for local UI testing."""
+        runtime_snapshot = runtime_state.get_runtime_snapshot()
+        present = runtime_snapshot.present
+        data = request.get_json(silent=True) or {}
+
+        try:
+            sleep_minutes = float(data.get("sleep_minutes", 35))
+        except (TypeError, ValueError):
+            sleep_minutes = 35.0
+
+        signals = runtime_snapshot.signals
+        top_files: list[str] = []
+        for candidate in [
+            present.active_file,
+            getattr(signals, "active_file", None) if signals is not None else None,
+        ]:
+            if candidate and candidate not in top_files:
+                top_files.append(candidate)
+
+        memory_payload = {
+            "active_project": present.active_project,
+            "probable_task": present.probable_task,
+            "activity_level": present.activity_level,
+            "duration_min": present.session_duration_min,
+            "top_files": top_files[:8],
+            "recent_files": top_files[:8],
+            "active_app": runtime_snapshot.latest_active_app,
+            "window_title": getattr(signals, "window_title", None) if signals is not None else None,
+            "diff_summary": runtime_snapshot.last_diff_summary,
+            "work_block_started_at": None,
+        }
+        context = build_resume_card_context(
+            runtime_snapshot=runtime_snapshot,
+            memory_payload=memory_payload,
+            sleep_minutes=sleep_minutes,
+            diff_summary=runtime_snapshot.last_diff_summary,
+        )
+        context["debug_forced"] = True
+        card = generate_resume_card(context, llm=None)
+        payload = card.to_event_payload()
+        bus.publish("resume_card", payload)
+        return jsonify({"ok": True, "card": payload})
 
     @app.route("/context-probes/schema")
     def get_context_probes_schema():
