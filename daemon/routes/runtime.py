@@ -75,6 +75,20 @@ _FILE_EVENT_PRIORITY: dict[str, int] = {
     "file_renamed": 2,
 }
 
+_SCREENSHOT_FILE_EVENT_PRIORITY: dict[str, int] = {
+    "file_modified": 0,
+    "file_renamed": 1,
+    "file_created": 2,
+}
+_SCREENSHOT_EXTENSIONS: frozenset[str] = frozenset({".png", ".jpg", ".jpeg", ".heic", ".tiff"})
+_SCREENSHOT_NAME_PREFIXES: tuple[str, ...] = (
+    "capture d’écran",
+    "capture d'ecran",
+    "capture d’écran",
+    "screenshot",
+    "screen shot",
+)
+
 
 @dataclass
 class _PendingFileEvent:
@@ -137,6 +151,7 @@ class _FileEventCoalescer:
             self._publisher(event_type, payload, timestamp)
             return
 
+        screenshot_event = _is_screenshot_path(str(path))
         emit_now: tuple[str, dict[str, Any], datetime | None] | None = None
         now = self._time_fn()
 
@@ -156,7 +171,21 @@ class _FileEventCoalescer:
             expired = (now - pending.started_at) > self._window_sec
             same_type = pending.event_type == event_type
 
-            if expired or same_type:
+            if expired:
+                emit_now = (pending.event_type, pending.payload, pending.timestamp)
+                self._pending_by_path[path] = self._new_pending(
+                    path=path,
+                    event_type=event_type,
+                    payload=dict(payload),
+                    timestamp=timestamp,
+                    started_at=now,
+                )
+            elif screenshot_event:
+                if self._priority(event_type, screenshot=True) > self._priority(pending.event_type, screenshot=True):
+                    pending.event_type = event_type
+                    pending.payload = dict(payload)
+                    pending.timestamp = timestamp
+            elif same_type:
                 emit_now = (pending.event_type, pending.payload, pending.timestamp)
                 self._pending_by_path[path] = self._new_pending(
                     path=path,
@@ -233,8 +262,20 @@ class _FileEventCoalescer:
     def _is_coalescible(self, event_type: str, path: Any) -> bool:
         return bool(path) and event_type in _COALESCIBLE_FILE_EVENT_TYPES
 
-    def _priority(self, event_type: str) -> int:
+    def _priority(self, event_type: str, *, screenshot: bool = False) -> int:
+        if screenshot:
+            return _SCREENSHOT_FILE_EVENT_PRIORITY.get(event_type, -1)
         return _FILE_EVENT_PRIORITY.get(event_type, -1)
+
+
+def _is_screenshot_path(path: str) -> bool:
+    name = os.path.basename(path).strip().lower()
+    if not name:
+        return False
+    _, ext = os.path.splitext(name)
+    if ext not in _SCREENSHOT_EXTENSIONS:
+        return False
+    return any(name.startswith(prefix) for prefix in _SCREENSHOT_NAME_PREFIXES)
 
 
 def register_runtime_routes(

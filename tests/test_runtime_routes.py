@@ -1612,6 +1612,31 @@ class TestFileEventCoalescer(unittest.TestCase):
 
         self.assertEqual(self.emitted, [("file_renamed", {"path": path}, None)])
 
+    def test_screenshot_burst_created_modified_renamed_emits_one_created(self):
+        path = "/Users/yugz/Desktop/Capture d’écran 2026-05-02 à 12.34.12.png"
+
+        self.coalescer.publish("file_created", {"path": path, "seq": 1})
+        self.coalescer.publish("file_modified", {"path": path, "seq": 2})
+        self.coalescer.publish("file_renamed", {"path": path, "seq": 3})
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [("file_created", {"path": path, "seq": 1}, None)],
+        )
+
+    def test_normal_file_burst_created_then_renamed_keeps_renamed_priority(self):
+        path = "/tmp/Pulse/daemon/runtime.py"
+
+        self.coalescer.publish("file_created", {"path": path, "seq": 1})
+        self.coalescer.publish("file_renamed", {"path": path, "seq": 2})
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [("file_renamed", {"path": path, "seq": 2}, None)],
+        )
+
     def test_events_outside_window_remain_distinct(self):
         path = "/tmp/screenshot.png"
 
