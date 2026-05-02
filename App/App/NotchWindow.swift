@@ -5,6 +5,7 @@ private let startupExtensionHeight: CGFloat = 22
 class NotchWindow: NSPanel {
 
     static let panelWidth:      CGFloat = 440
+    static let resumeExpandedWidth: CGFloat = 680
     static let dashboardHeight: CGFloat = 214
     static let chatHeight:      CGFloat = 212
     static let currentStateHeight: CGFloat = 218
@@ -16,10 +17,11 @@ class NotchWindow: NSPanel {
     static let contextProbeHeight: CGFloat = 150
     static let resumeCompactHeight: CGFloat = 118
     static let resumeStandardHeight: CGFloat = 168
-    static let resumeExpandedHeight: CGFloat = 220
+    static let resumeExpandedHeight: CGFloat = 280
     static let bottomMargin:    CGFloat = 20
 
     var currentPanelHeight: CGFloat = NotchWindow.dashboardHeight
+    var currentPanelWidth: CGFloat = NotchWindow.panelWidth
     var isExpanded: Bool = false { didSet { updateIgnoresMouseEvents() } }
 
     private var globalMonitor: Any?
@@ -56,14 +58,28 @@ class NotchWindow: NSPanel {
     func expandToPanel() {
         DispatchQueue.main.async {
             guard let screen = self.currentDisplayScreen() else { return }
-            self.setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: self.currentPanelHeight), display: true)
+            self.setFrame(
+                NotchWindow.expandedFrame(
+                    for: screen,
+                    panelHeight: self.currentPanelHeight,
+                    panelWidth: self.currentPanelWidth
+                ),
+                display: true
+            )
         }
     }
 
     func expandForStartup() {
         DispatchQueue.main.async {
             guard let screen = self.currentDisplayScreen() else { return }
-            self.setFrame(NotchWindow.expandedFrame(for: screen, panelHeight: startupExtensionHeight), display: true)
+            self.setFrame(
+                NotchWindow.expandedFrame(
+                    for: screen,
+                    panelHeight: startupExtensionHeight,
+                    panelWidth: NotchWindow.panelWidth
+                ),
+                display: true
+            )
         }
     }
 
@@ -107,11 +123,15 @@ class NotchWindow: NSPanel {
                       width: winW, height: notchHeight + NotchWindow.bottomMargin)
     }
 
-    private static func expandedFrame(for screen: NSScreen, panelHeight: CGFloat) -> NSRect {
+    private static func expandedFrame(
+        for screen: NSScreen,
+        panelHeight: CGFloat,
+        panelWidth: CGFloat
+    ) -> NSRect {
         let notchH = screen.safeAreaInsets.top
         let notchW = realNotchWidth(for: screen)
         let totalH = notchH + panelHeight + NotchWindow.bottomMargin
-        let winW   = max(NotchWindow.panelWidth + 40, notchW + 40)
+        let winW   = max(panelWidth + 40, notchW + 40)
         let winX   = screen.frame.minX + (screen.frame.width - winW) / 2
         return NSRect(x: winX, y: screen.frame.maxY - totalH, width: winW, height: totalH)
     }
@@ -154,7 +174,7 @@ class NotchWindow: NSPanel {
         guard let screen = currentDisplayScreen() else { return .zero }
         let notchH = screen.safeAreaInsets.top
         let totalH = notchH + currentPanelHeight
-        return NSRect(x: screen.frame.minX + (screen.frame.width - NotchWindow.panelWidth) / 2,
-                      y: screen.frame.maxY - totalH, width: NotchWindow.panelWidth, height: totalH)
+        return NSRect(x: screen.frame.minX + (screen.frame.width - currentPanelWidth) / 2,
+                      y: screen.frame.maxY - totalH, width: currentPanelWidth, height: totalH)
     }
 }

@@ -13,7 +13,7 @@ struct NotchRootView: View {
     }
 
     var notchHeight: CGFloat { NotchWindow.displayScreen()?.safeAreaInsets.top ?? 37 }
-    let panelWidth: CGFloat = NotchWindow.panelWidth
+    var panelWidth: CGFloat { vm.currentPanelWidth }
     var panelHeight: CGFloat { vm.currentPanelHeight }
 
     var shapePanelWidth: CGFloat {

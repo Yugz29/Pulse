@@ -1464,9 +1464,21 @@ struct ResumeCard: Identifiable, Equatable {
         case "compact":
             return NotchWindow.resumeCompactHeight
         case "expanded":
-            return NotchWindow.resumeExpandedHeight
+            return expandedDisplayHeight
         default:
             return NotchWindow.resumeStandardHeight
+        }
+    }
+
+    private var expandedDisplayHeight: CGFloat {
+        let totalLength = summary.count + lastObjective.count + nextAction.count
+        switch totalLength {
+        case 0..<260:
+            return 220
+        case 260..<380:
+            return 250
+        default:
+            return NotchWindow.resumeExpandedHeight
         }
     }
 }

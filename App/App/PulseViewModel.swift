@@ -91,6 +91,13 @@ final class PulseViewModel: ObservableObject {
         }
     }
 
+    var currentPanelWidth: CGFloat {
+        if panelMode == .resumeCard, activeResumeCard?.displaySize == "expanded" {
+            return NotchWindow.resumeExpandedWidth
+        }
+        return NotchWindow.panelWidth
+    }
+
     var serviceStatus: PulseServiceStatus {
         if !isDaemonActive { return .daemonOffline }
         if daemonController.state == .paused { return .daemonPaused }

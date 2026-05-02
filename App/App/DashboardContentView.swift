@@ -75,38 +75,21 @@ struct ResumeCardNotificationView: View {
 
     var body: some View {
         if let card = vm.activeResumeCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: card.displaySize == "expanded" ? 12 : 10) {
+                HStack(spacing: 9) {
                     Image(systemName: "arrow.clockwise.circle.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: "#5E9EFF"))
+
                     Text(card.project ?? card.title)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white.opacity(0.88))
                         .lineLimit(1)
-                    Spacer()
-                }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(card.summary)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.72))
-                        .lineLimit(2)
-                    Text(card.lastObjective)
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.62))
-                        .lineLimit(2)
-                    Text(card.nextAction)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color(hex: "#5DCAA5"))
-                        .lineLimit(2)
-                }
+                    sourceBadge(card)
 
-                HStack(spacing: 8) {
-                    Text(card.generatedBy == "llm" ? "LLM + journal" : "journal local")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.32))
                     Spacer()
+
                     Button {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                             vm.panelMode = .feed
@@ -114,14 +97,24 @@ struct ResumeCardNotificationView: View {
                     } label: {
                         Image(systemName: "bell")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(.white.opacity(0.42))
                             .frame(width: 22, height: 22)
                     }
                     .buttonStyle(.plain)
                 }
+
+                if card.displaySize == "expanded" {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        resumeCardText(card)
+                    }
+                    .frame(maxHeight: max(140, card.displayHeight - 74), alignment: .top)
+                } else {
+                    resumeCardText(card)
+                }
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, card.displaySize == "expanded" ? 22 : 18)
             .padding(.top, 12)
+            .padding(.bottom, card.displaySize == "expanded" ? 10 : 0)
             .frame(height: card.displayHeight - .panelContentGap, alignment: .top)
             .contentShape(Rectangle())
             .onTapGesture {
@@ -132,6 +125,78 @@ struct ResumeCardNotificationView: View {
         } else {
             EmptyView()
         }
+    }
+    
+    @ViewBuilder
+    private func resumeCardText(_ card: ResumeCard) -> some View {
+        if card.displaySize == "expanded" {
+            VStack(alignment: .leading, spacing: 10) {
+                resumeSection(label: "Résumé", text: card.summary, tint: .white.opacity(0.72), weight: .medium)
+                resumeSection(label: "Objectif", text: card.lastObjective, tint: .white.opacity(0.62), weight: .regular)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Prochaine action")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.34))
+                        .textCase(.uppercase)
+                    Text(card.nextAction)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: "#5DCAA5"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color(hex: "#5DCAA5").opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color(hex: "#5DCAA5").opacity(0.14), lineWidth: 0.8)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(card.summary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.72))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(card.lastObjective)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.62))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(card.nextAction)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(hex: "#5DCAA5"))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func resumeSection(label: String, text: String, tint: Color, weight: Font.Weight) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.30))
+                .textCase(.uppercase)
+            Text(text)
+                .font(.system(size: 12, weight: weight))
+                .foregroundColor(tint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func sourceBadge(_ card: ResumeCard) -> some View {
+        Text(card.generatedBy == "llm" ? "LLM + journal" : "journal local")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(Color(hex: "#5DCAA5").opacity(card.generatedBy == "llm" ? 0.85 : 0.55))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.055))
+            .clipShape(Capsule())
     }
 }
 

@@ -47,6 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 DispatchQueue.main.async {
                     if expanded {
                         self.notchWindow?.currentPanelHeight = self.vm.currentPanelHeight
+                        self.notchWindow?.currentPanelWidth = self.vm.currentPanelWidth
                         self.notchWindow?.expandToPanel()
                     } else {
                         self.notchWindow?.collapseToNotch()
@@ -76,6 +77,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard let self, self.vm.isExpanded else { return }
                 DispatchQueue.main.async {
                     self.notchWindow?.currentPanelHeight = self.vm.currentPanelHeight
+                    self.notchWindow?.currentPanelWidth = self.vm.currentPanelWidth
                     self.notchWindow?.expandToPanel()
                 }
             }
@@ -87,6 +89,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard let self, self.vm.isExpanded, self.vm.pendingCommand == nil else { return }
                 DispatchQueue.main.async {
                     self.notchWindow?.currentPanelHeight = self.vm.currentPanelHeight
+                    self.notchWindow?.currentPanelWidth = self.vm.currentPanelWidth
+                    self.notchWindow?.expandToPanel()
+                }
+            }
+            .store(in: &cancellables)
+
+        vm.$activeResumeCard
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, self.vm.isExpanded else { return }
+                DispatchQueue.main.async {
+                    self.notchWindow?.currentPanelHeight = self.vm.currentPanelHeight
+                    self.notchWindow?.currentPanelWidth = self.vm.currentPanelWidth
                     self.notchWindow?.expandToPanel()
                 }
             }
