@@ -268,6 +268,17 @@ class _FileEventCoalescer:
             return _SCREENSHOT_FILE_EVENT_PRIORITY.get(event_type, -1)
         return _FILE_EVENT_PRIORITY.get(event_type, -1)
 
+def _first_recent_session_value(recent_sessions: Any, key: str) -> Any:
+
+    if not isinstance(recent_sessions, list):
+        return None
+    for item in recent_sessions:
+        if not isinstance(item, dict):
+            continue
+        value = item.get(key)
+        if value is not None and value != "" and value != []:
+            return value
+    return None
 
 def _is_screenshot_path(path: str) -> bool:
     name = os.path.basename(path).strip().lower()
@@ -617,6 +628,12 @@ def register_runtime_routes(
             sleep_minutes = 35.0
 
         signals = runtime_snapshot.signals
+        recent_sessions = get_recent_sessions(5) if get_recent_sessions is not None else []
+        today_summary = get_today_summary() if get_today_summary is not None else {}
+        current_window = today_summary.get("current_window") if isinstance(today_summary, dict) else None
+        if not isinstance(current_window, dict):
+            current_window = {}
+
         top_files: list[str] = []
         for candidate in [
             present.active_file,
@@ -626,16 +643,38 @@ def register_runtime_routes(
                 top_files.append(candidate)
 
         memory_payload = {
-            "active_project": present.active_project,
-            "probable_task": present.probable_task,
-            "activity_level": present.activity_level,
-            "duration_min": present.session_duration_min,
+            "active_project": (
+                present.active_project
+                or current_window.get("project")
+                or _first_recent_session_value(recent_sessions, "project")
+            ),
+            "probable_task": (
+                present.probable_task
+                or current_window.get("task")
+                or current_window.get("probable_task")
+                or _first_recent_session_value(recent_sessions, "task")
+                or _first_recent_session_value(recent_sessions, "probable_task")
+            ),
+            "activity_level": (
+                present.activity_level
+                or current_window.get("activity")
+                or current_window.get("activity_level")
+                or _first_recent_session_value(recent_sessions, "activity_level")
+            ),
+            "duration_min": (
+                present.session_duration_min
+                or current_window.get("duration_min")
+                or _first_recent_session_value(recent_sessions, "duration_min")
+            ),
             "top_files": top_files[:8],
             "recent_files": top_files[:8],
+            "recent_sessions": recent_sessions,
+            "today_summary": today_summary,
             "active_app": runtime_snapshot.latest_active_app,
             "window_title": getattr(signals, "window_title", None) if signals is not None else None,
             "diff_summary": runtime_snapshot.last_diff_summary,
-            "work_block_started_at": None,
+            "work_block_started_at": current_window.get("started_at"),
+            "work_block_ended_at": current_window.get("ended_at"),
         }
         context = build_resume_card_context(
             runtime_snapshot=runtime_snapshot,
