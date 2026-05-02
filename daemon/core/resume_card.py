@@ -73,11 +73,11 @@ def build_resume_card_context(
     present = runtime_snapshot.present
     signals = runtime_snapshot.signals
     payload = dict(memory_payload or {})
-    recent_files = _recent_files(payload, signals)
+    recent_journal_entries = list(payload.get("recent_journal_entries") or [])[:5]
+    recent_files = _recent_files(payload, signals, recent_journal_entries=recent_journal_entries)
     work_block_started_at = _work_block_started_at(payload)
     work_block_commit_count = payload.get("work_block_commit_count") or payload.get("work_window_commit_count") or 0
     recent_sessions = list(payload.get("recent_sessions") or payload.get("closed_episodes") or [])[:3]
-    recent_journal_entries = list(payload.get("recent_journal_entries") or [])[:5]
     source_refs = ["present_state", "session_memory"]
     if work_block_started_at:
         source_refs.append("work_block")
@@ -90,7 +90,7 @@ def build_resume_card_context(
 
     context = {
         "project": present.active_project or payload.get("active_project"),
-        "active_file": present.active_file or payload.get("active_file"),
+        "active_file": _resume_active_file(present.active_file or payload.get("active_file"), recent_files),
         "probable_task": present.probable_task or payload.get("probable_task") or "general",
         "activity_level": present.activity_level or payload.get("activity_level") or "idle",
         "focus_level": present.focus_level or payload.get("focus_level") or "normal",
@@ -134,13 +134,44 @@ def generate_resume_card(context: dict[str, Any], llm: Any = None) -> ResumeCard
 
     try:
         prompt = _llm_prompt(context, deterministic)
-        raw = llm.complete(prompt, max_tokens=260)
+        raw = llm.complete(prompt, max_tokens=480)
         parsed = _parse_llm_card(raw)
         if parsed is None:
             return deterministic
         return _card_from_llm(context, deterministic, parsed)
     except Exception:
         return deterministic
+
+
+# --- Debug version for local routes ---
+def generate_resume_card_with_debug(context: dict[str, Any], llm: Any = None) -> tuple[ResumeCard, dict[str, Any]]:
+    """Generate a resume card and return debug diagnostics for local routes."""
+    deterministic = _deterministic_card(context)
+    debug: dict[str, Any] = {
+        "llm_available": llm is not None and hasattr(llm, "complete"),
+        "llm_called": False,
+        "fallback_reason": None,
+        "raw_preview": None,
+        "error": None,
+    }
+    if not debug["llm_available"]:
+        debug["fallback_reason"] = "llm_unavailable"
+        return deterministic, debug
+
+    try:
+        prompt = _llm_prompt(context, deterministic)
+        debug["llm_called"] = True
+        raw = llm.complete(prompt, max_tokens=480)
+        debug["raw_preview"] = _limit_line(str(raw or ""), 800)
+        parsed, parse_reason = _parse_llm_card_with_reason(raw)
+        if parsed is None:
+            debug["fallback_reason"] = parse_reason or "parse_failed"
+            return deterministic, debug
+        return _card_from_llm(context, deterministic, parsed), debug
+    except Exception as exc:
+        debug["fallback_reason"] = "exception"
+        debug["error"] = f"{type(exc).__name__}: {exc}"
+        return deterministic, debug
 
 
 def _work_block_started_at(payload: dict[str, Any]) -> Any:
@@ -178,7 +209,7 @@ def _journal_focus(entries: list[dict[str, Any]]) -> _JournalFocus:
     project = _clean(best.get("project") or best.get("active_project"))
     task = _clean(best.get("task") or best.get("probable_task")) or "general"
     files = _compact_text_list(best.get("top_files"))
-    short_files = [_short_file(path) for path in files if _short_file(path)]
+    short_files = [_resume_short_file(path) for path in files if _resume_short_file(path)]
     file_focus = ", ".join(short_files[:3]) if short_files else None
     duration = _journal_duration(best)
 
@@ -298,9 +329,9 @@ def _deterministic_card(context: dict[str, Any]) -> ResumeCard:
     project = _clean(context.get("project"))
     task = _clean(context.get("probable_task")) or "general"
     activity = _clean(context.get("activity_level")) or "idle"
-    active_file = _short_file(context.get("active_file"))
-    recent_files = [_short_file(path) for path in context.get("recent_files", []) if _short_file(path)]
-    commit_scope_files = [_short_file(path) for path in context.get("commit_scope_files", []) if _short_file(path)]
+    active_file = _resume_short_file(context.get("active_file"))
+    recent_files = [_resume_short_file(path) for path in context.get("recent_files", []) if _resume_short_file(path)]
+    commit_scope_files = [_resume_short_file(path) for path in context.get("commit_scope_files", []) if _resume_short_file(path)]
     recent_journal_entries = _recent_journal_entries(context.get("recent_journal_entries"))
     journal_focus = _journal_focus(recent_journal_entries)
     primary_file = active_file or (recent_files[0] if recent_files else None) or (commit_scope_files[0] if commit_scope_files else None)
@@ -359,20 +390,22 @@ def _card_from_llm(
     fallback: ResumeCard,
     parsed: dict[str, Any],
 ) -> ResumeCard:
-    summary = _clean(parsed.get("summary")) or fallback.summary
-    last_objective = _clean(parsed.get("last_objective")) or fallback.last_objective
-    next_action = _clean(parsed.get("next_action")) or fallback.next_action
+    summary = _normalize_resume_card_terms(_clean(parsed.get("summary")) or fallback.summary)
+    last_objective = _normalize_resume_card_terms(_clean(parsed.get("last_objective")) or fallback.last_objective)
+    next_action = _normalize_resume_card_terms(_clean(parsed.get("next_action")) or fallback.next_action)
+    display_size = _display_size(summary, last_objective, next_action)
+    summary_limit, objective_limit, action_limit = _llm_card_text_limits(display_size)
     return ResumeCard(
         id=fallback.id,
         project=fallback.project,
         title=_clean(parsed.get("title")) or fallback.title,
-        summary=_limit_line(summary, 110),
-        last_objective=_limit_line(last_objective, 120),
-        next_action=_limit_line(next_action, 130),
+        summary=_limit_line(summary, summary_limit),
+        last_objective=_limit_line(last_objective, objective_limit),
+        next_action=_limit_line(next_action, action_limit),
         confidence=max(0.0, min(float(parsed.get("confidence") or fallback.confidence), 0.95)),
         source_refs=list(context.get("source_refs") or fallback.source_refs),
         generated_by="llm",
-        display_size=_display_size(summary, last_objective, next_action),
+        display_size=display_size,
         created_at=fallback.created_at,
     )
 
@@ -443,6 +476,8 @@ def _llm_prompt(context: dict[str, Any], fallback: ResumeCard) -> str:
         "last_objective: explique le but de travail probable, pas seulement le nom d'un fichier.\n"
         "next_action: donne le prochain geste vérifiable et concret.\n"
         "Contraintes fortes:\n"
+        "- 'Resume Card' signifie carte de reprise Pulse, jamais CV ou curriculum vitae;\n"
+        "- n'utilise jamais le terme CV dans la réponse;\n"
         "- français naturel, phrases courtes;\n"
         "- n'invente rien hors contexte;\n"
         "- ne dis pas seulement 'relire le journal', 'rouvrir le fichier', ou 'tester le comportement attendu' sans préciser quoi;\n"
@@ -453,12 +488,31 @@ def _llm_prompt(context: dict[str, Any], fallback: ResumeCard) -> str:
         f"Fallback déterministe, à améliorer si possible:\n{json.dumps(fallback.to_event_payload(), ensure_ascii=False)}"
     )
 
+def _normalize_resume_card_terms(value: str) -> str:
+    text = str(value or "")
+    replacements = {
+        "cartes de CV": "cartes de reprise",
+        "carte de CV": "carte de reprise",
+        "cartes CV": "cartes de reprise",
+        "carte CV": "carte de reprise",
+        "Cartes de CV": "Cartes de reprise",
+        "Carte de CV": "Carte de reprise",
+        "Cartes CV": "Cartes de reprise",
+        "Carte CV": "Carte de reprise",
+        "de CV": "de reprise",
+        "du CV": "de la reprise",
+    }
+    for needle, replacement in replacements.items():
+        text = text.replace(needle, replacement)
+    return text
+
+
 def _llm_resume_context(context: dict[str, Any]) -> dict[str, Any]:
     """Return a compact, task-oriented context for LLM resume synthesis."""
     journal_entries = _recent_journal_entries(context.get("recent_journal_entries"))
     compact_entries: list[dict[str, Any]] = []
     for entry in journal_entries[:5]:
-        files = [_short_file(path) for path in _compact_text_list(entry.get("top_files"))]
+        files = [_resume_short_file(path) for path in _compact_text_list(entry.get("top_files"))]
         compact_entries.append({
             "project": entry.get("project") or entry.get("active_project"),
             "task": entry.get("task") or entry.get("probable_task"),
@@ -478,9 +532,9 @@ def _llm_resume_context(context: dict[str, Any]) -> dict[str, Any]:
         "focus_level": context.get("focus_level"),
         "duration_min": context.get("duration_min"),
         "sleep_minutes": context.get("sleep_minutes"),
-        "active_file": _short_file(context.get("active_file")),
-        "recent_files": [_short_file(path) for path in context.get("recent_files", []) if _short_file(path)][:5],
-        "commit_scope_files": [_short_file(path) for path in context.get("commit_scope_files", []) if _short_file(path)][:5],
+        "active_file": _resume_short_file(context.get("active_file")),
+        "recent_files": [_resume_short_file(path) for path in context.get("recent_files", []) if _resume_short_file(path)][:5],
+        "commit_scope_files": [_resume_short_file(path) for path in context.get("commit_scope_files", []) if _resume_short_file(path)][:5],
         "diff_focus": _diff_focus_label(context.get("diff_summary")),
         "recent_journal_entries": compact_entries,
         "source_refs": context.get("source_refs") or [],
@@ -488,28 +542,34 @@ def _llm_resume_context(context: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_llm_card(raw: Any) -> dict[str, Any] | None:
+    parsed, _reason = _parse_llm_card_with_reason(raw)
+    return parsed
+
+
+def _parse_llm_card_with_reason(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
     if not isinstance(raw, str):
-        return None
+        return None, "non_string_response"
     text = raw.strip()
     if not text:
-        return None
+        return None, "empty_response"
     if text.startswith("```"):
         text = text.strip("`")
         if "\n" in text:
             text = text.split("\n", 1)[1]
     try:
         parsed = json.loads(text)
-    except json.JSONDecodeError:
-        return None
+    except json.JSONDecodeError as exc:
+        return None, f"invalid_json: {exc.msg}"
     if not isinstance(parsed, dict):
-        return None
+        return None, "json_not_object"
     if not any(_clean(parsed.get(key)) for key in ("summary", "last_objective", "next_action")):
-        return None
+        return None, "missing_resume_fields"
     for key in ("summary", "last_objective", "next_action"):
         value = _clean(parsed.get(key))
         if value and _is_low_value_llm_resume_line(value):
-            return None
-    return parsed
+            return None, f"low_value_line:{key}"
+    return parsed, None
+
 
 def _is_low_value_llm_resume_line(value: str) -> bool:
     text = value.strip().lower()
@@ -530,22 +590,35 @@ def _is_low_value_llm_resume_line(value: str) -> bool:
     return any(pattern in text for pattern in weak_patterns)
 
 
-def _recent_files(payload: dict[str, Any], signals: Any) -> list[str]:
+def _recent_files(
+    payload: dict[str, Any],
+    signals: Any,
+    *,
+    recent_journal_entries: list[dict[str, Any]] | None = None,
+) -> list[str]:
     files: list[str] = []
-    for key in ("commit_scope_files", "top_files"):
+
+    for entry in recent_journal_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        files.extend(str(item) for item in _compact_text_list(entry.get("top_files")))
+
+    for key in ("commit_scope_files", "top_files", "recent_files"):
         value = payload.get(key) or []
         if isinstance(value, list):
             files.extend(str(item) for item in value if item)
+
     active_file = getattr(signals, "active_file", None)
     if active_file:
-        files.insert(0, str(active_file))
+        files.append(str(active_file))
 
     seen: set[str] = set()
     result: list[str] = []
     for path in files:
-        if path in seen:
+        short = _resume_short_file(path)
+        if not short or short in seen:
             continue
-        seen.add(path)
+        seen.add(short)
         result.append(path)
         if len(result) >= 5:
             break
@@ -571,7 +644,7 @@ def _diff_focus_label(value: Any) -> str | None:
         return None
 
     names = [
-        _short_file(match)
+        _resume_short_file(match)
         for match in re.findall(r"[A-Za-z0-9_+./-]+\.[A-Za-z0-9_+-]+", text)
     ]
     names = _dedupe_text([name for name in names if name])
@@ -582,6 +655,38 @@ def _diff_focus_label(value: Any) -> str | None:
     cleaned = cleaned.replace("Diff en cours :", "").replace("Fonctions touchées :", "")
     cleaned = cleaned.strip(" :,-")
     return _limit_line(cleaned, 58) if cleaned else None
+
+
+def _resume_active_file(value: Any, recent_files: list[str]) -> str | None:
+    candidate = _resume_short_file(value)
+    if candidate:
+        return str(value)
+    for item in recent_files:
+        if _resume_short_file(item):
+            return str(item)
+    return None
+
+
+def _resume_short_file(value: Any) -> str | None:
+    short = _short_file(value)
+    if not short or _is_low_value_resume_file(short):
+        return None
+    return short
+
+
+def _is_low_value_resume_file(name: str) -> bool:
+    lowered = name.lower()
+    blocked_names = {
+        ".ds_store",
+        "model-recommendations.json",
+        "models_cache.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+    }
+    if lowered in blocked_names:
+        return True
+    return lowered.endswith((".tmp", ".log", ".lock"))
 
 
 def _recent_session_hint(value: Any) -> str | None:
@@ -616,6 +721,13 @@ def _dedupe_text(values: list[str | None]) -> list[str]:
         seen.add(text)
         result.append(text)
     return result
+
+def _llm_card_text_limits(display_size: DisplaySize) -> tuple[int, int, int]:
+    if display_size == "expanded":
+        return 260, 260, 260
+    if display_size == "standard":
+        return 150, 160, 170
+    return 110, 120, 130
 
 
 def _display_size(*lines: str) -> DisplaySize:

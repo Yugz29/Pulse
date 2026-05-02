@@ -340,7 +340,55 @@ class OllamaProvider:
         """
         Réponse complète — construit par-dessus stream() pour réutiliser
         le parsing /api/chat et bénéficier du même timeout.
+
+        Si un modèle de raisonnement consomme tout son budget sans produire de
+        réponse finale, on relance une seule fois en final-only. Le raisonnement
+        peut améliorer la qualité, mais Pulse ne doit jamais traiter le
+        raisonnement seul comme une réponse exploitable.
         """
+        try:
+            return self._complete_once(
+                prompt=prompt,
+                system=system,
+                max_tokens=max_tokens,
+                think=think,
+            )
+        except RuntimeError as exc:
+            message = str(exc)
+            should_retry_final_only = (
+                _INVALID_FINAL_CODE in message
+                and "reasoning_without_final" in message
+                and think is not False
+            )
+            if not should_retry_final_only:
+                raise
+
+            retry_budget = max(max_tokens, 480)
+            log.warning(
+                "Ollama complete reasoning sans final model=%s — retry final-only max_tokens=%s",
+                self.model,
+                retry_budget,
+            )
+            final_prompt = (
+                f"{prompt}\n\n"
+                "IMPORTANT: Réponds maintenant uniquement avec la réponse finale exploitable. "
+                "N'inclus aucun raisonnement, aucune étape interne, aucun commentaire hors format."
+            )
+            return self._complete_once(
+                prompt=final_prompt,
+                system=system,
+                max_tokens=retry_budget,
+                think=False,
+            )
+
+    def _complete_once(
+        self,
+        *,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 160,
+        think: bool | None = None,
+    ) -> str:
         tokens = []
         for token in self.stream(
             prompt=prompt,

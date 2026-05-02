@@ -219,6 +219,7 @@ register_runtime_routes(
     llm_unload_background=_llm_unload_background,
     llm_warmup_background=_llm_warmup_background,
     shutdown_runtime=_shutdown_runtime,
+    resume_card_llm=summary_llm,
     log=log,
 )
 

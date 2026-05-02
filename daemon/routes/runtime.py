@@ -36,7 +36,11 @@ from daemon.core.event_envelope import (
     PulseRetention,
 )
 from daemon.core.file_classifier import file_signal_significance
-from daemon.core.resume_card import build_resume_card_context, generate_resume_card
+from daemon.core.resume_card import (
+    build_resume_card_context,
+    generate_resume_card,
+    generate_resume_card_with_debug,
+)
 from daemon.core.timeline_builder import span_from_current_context
 from daemon.core.timeline_debug import describe_timeline_span_for_debug
 from daemon.core.timeline_span import TimelineSpanKind
@@ -267,6 +271,7 @@ class _FileEventCoalescer:
             return _SCREENSHOT_FILE_EVENT_PRIORITY.get(event_type, -1)
         return _FILE_EVENT_PRIORITY.get(event_type, -1)
 
+
 def _first_recent_session_value(recent_sessions: Any, key: str) -> Any:
     if not isinstance(recent_sessions, list):
         return None
@@ -277,6 +282,7 @@ def _first_recent_session_value(recent_sessions: Any, key: str) -> Any:
         if value is not None and value != "" and value != []:
             return value
     return None
+
 
 def _is_screenshot_path(path: str) -> bool:
     name = os.path.basename(path).strip().lower()
@@ -303,9 +309,10 @@ def register_runtime_routes(
     llm_warmup_background: Callable[[], None],
     shutdown_runtime: Callable[[], None],
     log: Any,
+    resume_card_llm: Any = None,
 ) -> None:
     probe_store = context_probe_store or ContextProbeRequestStore()
-
+    
     def _publish_to_bus(
         event_type: str,
         payload: dict[str, Any],
@@ -613,12 +620,10 @@ def register_runtime_routes(
         )
         return jsonify({"card": card.to_dict()})
 
-    @app.route("/debug/resume-card", methods=["POST"])
-    def debug_resume_card():
-        """Force a deterministic resume card event for local UI testing."""
+
+    def _build_debug_resume_card_context(data: dict[str, Any]) -> dict[str, Any]:
         runtime_snapshot = runtime_state.get_runtime_snapshot()
         present = runtime_snapshot.present
-        data = request.get_json(silent=True) or {}
 
         try:
             sleep_minutes = float(data.get("sleep_minutes", 35))
@@ -688,10 +693,33 @@ def register_runtime_routes(
             diff_summary=runtime_snapshot.last_diff_summary,
         )
         context["debug_forced"] = True
+        return context
+
+    @app.route("/debug/resume-card", methods=["POST"])
+    def debug_resume_card():
+        """Force a deterministic resume card event for local UI testing."""
+        data = request.get_json(silent=True) or {}
+        context = _build_debug_resume_card_context(data)
         card = generate_resume_card(context, llm=None)
         payload = card.to_event_payload()
         bus.publish("resume_card", payload)
-        return jsonify({"ok": True, "card": payload})
+        return jsonify({"ok": True, "mode": "deterministic", "card": payload})
+
+    @app.route("/debug/resume-card/llm", methods=["POST"])
+    def debug_resume_card_llm():
+        """Force a resume card event using the configured LLM when available."""
+        data = request.get_json(silent=True) or {}
+        context = _build_debug_resume_card_context(data)
+        card, debug = generate_resume_card_with_debug(context, llm=resume_card_llm)
+        payload = card.to_event_payload()
+        bus.publish("resume_card", payload)
+        return jsonify({
+            "ok": True,
+            "mode": "llm" if resume_card_llm is not None else "deterministic_fallback",
+            "llm_available": resume_card_llm is not None,
+            "card": payload,
+            "debug": debug,
+        })
 
     @app.route("/context-probes/schema")
     def get_context_probes_schema():
