@@ -362,17 +362,20 @@ class RuntimeOrchestrator:
                 self._emit_resume_card_now(context=context, emitted_at=event.timestamp)
         except Exception as exc:
             self.log.warning("resume_card skipped: %s", exc)
+
     def _resume_card_can_use_llm(self) -> bool:
         return self.summary_llm is not None and hasattr(self.summary_llm, "complete")
 
-    def _emit_resume_card_now(self, *, context: dict, emitted_at: datetime) -> None:
-        card = generate_resume_card(context, llm=self.summary_llm)
+    def _emit_resume_card_now(self, *, context: dict, emitted_at: datetime, force_fallback: bool = False) -> None:
+        llm = None if force_fallback else self.summary_llm
+        card = generate_resume_card(context, llm=llm)
         self.scorer.bus.publish("resume_card", card.to_event_payload(), emitted_at)
         self.log.info(
-            "resume_card emitted project=%s generated_by=%s confidence=%.2f",
+            "resume_card emitted project=%s generated_by=%s confidence=%.2f fallback=%s",
             card.project,
             card.generated_by,
             card.confidence,
+            force_fallback,
         )
 
     def _schedule_resume_card_emit(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
@@ -395,16 +398,20 @@ class RuntimeOrchestrator:
 
     def _emit_resume_card_background(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
         try:
+            llm_ready = True
             if wait_for_llm:
-                self._wait_for_llm_ready_for_resume(since=event_timestamp)
-            self._emit_resume_card_now(context=context, emitted_at=datetime.now())
+                llm_ready = self._wait_for_llm_ready_for_resume(since=event_timestamp)
+            if llm_ready:
+                self._emit_resume_card_now(context=context, emitted_at=datetime.now())
+            else:
+                self._emit_resume_card_now(context=context, emitted_at=datetime.now(), force_fallback=True)
         except Exception as exc:
             self.log.warning("resume_card background emit skipped: %s", exc)
         finally:
             with self._pending_resume_card_lock:
                 self._pending_resume_card = False
 
-    def _wait_for_llm_ready_for_resume(self, *, since: datetime) -> None:
+    def _wait_for_llm_ready_for_resume(self, *, since: datetime) -> bool:
         deadline = time.monotonic() + self._resume_card_wait_timeout_sec
         saw_loading = False
         while time.monotonic() < deadline:
@@ -417,12 +424,13 @@ class RuntimeOrchestrator:
                 if item.type == "llm_ready":
                     if saw_loading:
                         self.log.debug("resume_card: LLM ready observed after unlock")
-                    return
+                    return True
             time.sleep(self._resume_card_wait_poll_sec)
         self.log.warning(
-            "resume_card: LLM readiness timeout after %.0fs — using fallback path",
+            "resume_card: LLM readiness timeout after %.0fs — using deterministic fallback",
             self._resume_card_wait_timeout_sec,
         )
+        return False
 
     def shutdown_runtime(self) -> None:
         try:
