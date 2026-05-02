@@ -583,8 +583,32 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "work_block_started_at": "2026-04-29T09:00:00",
         }
 
-        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+        with patch.object(self.orchestrator, "_schedule_resume_card_emit") as schedule:
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
 
+        schedule.assert_called_once()
+        kwargs = schedule.call_args.kwargs
+        self.assertEqual(kwargs["event_timestamp"], event.timestamp)
+        self.assertTrue(kwargs["wait_for_llm"])
+        self.assertEqual(kwargs["context"]["project"], "Pulse")
+        self.scorer.bus.publish.assert_not_called()
+
+    def test_resume_card_est_publiee_immediatement_sans_llm_utilisable(self):
+        self.orchestrator.summary_llm = None
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse", "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+
+        with patch.object(self.orchestrator, "_schedule_resume_card_emit") as schedule:
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+
+        schedule.assert_not_called()
         self.scorer.bus.publish.assert_called_once()
         args = self.scorer.bus.publish.call_args.args
         self.assertEqual(args[0], "resume_card")

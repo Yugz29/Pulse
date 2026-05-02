@@ -100,6 +100,10 @@ class RuntimeOrchestrator:
         self._last_diff_triggered: dict[str, float] = {}
         self._diff_trigger_lock = threading.Lock()
         self._last_resume_card_at: datetime | None = None
+        self._pending_resume_card_lock = threading.Lock()
+        self._pending_resume_card = False
+        self._resume_card_wait_timeout_sec: float = 90.0
+        self._resume_card_wait_poll_sec: float = 0.5
         self._periodic_sync_interval_sec: float = 30 * 60
         self._periodic_sync_stopped: bool = False
         self._periodic_sync_worker = threading.Thread(
@@ -340,17 +344,85 @@ class RuntimeOrchestrator:
                 sleep_minutes=sleep_minutes,
                 diff_summary=snapshot.last_diff_summary,
             )
-            card = generate_resume_card(context, llm=self.summary_llm)
-            self._last_resume_card_at = event.timestamp
-            self.scorer.bus.publish("resume_card", card.to_event_payload(), event.timestamp)
-            self.log.info(
-                "resume_card emitted project=%s generated_by=%s confidence=%.2f",
-                card.project,
-                card.generated_by,
-                card.confidence,
+            should_wait_for_llm = (
+                self._resume_card_can_use_llm()
+                and (
+                    event_type in {None, "screen_unlocked", "resume_after_pause"}
+                    or event.type == "screen_unlocked"
+                )
             )
+            self._last_resume_card_at = event.timestamp
+            if should_wait_for_llm:
+                self._schedule_resume_card_emit(
+                    context=context,
+                    event_timestamp=event.timestamp,
+                    wait_for_llm=True,
+                )
+            else:
+                self._emit_resume_card_now(context=context, emitted_at=event.timestamp)
         except Exception as exc:
             self.log.warning("resume_card skipped: %s", exc)
+    def _resume_card_can_use_llm(self) -> bool:
+        return self.summary_llm is not None and hasattr(self.summary_llm, "complete")
+
+    def _emit_resume_card_now(self, *, context: dict, emitted_at: datetime) -> None:
+        card = generate_resume_card(context, llm=self.summary_llm)
+        self.scorer.bus.publish("resume_card", card.to_event_payload(), emitted_at)
+        self.log.info(
+            "resume_card emitted project=%s generated_by=%s confidence=%.2f",
+            card.project,
+            card.generated_by,
+            card.confidence,
+        )
+
+    def _schedule_resume_card_emit(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
+        with self._pending_resume_card_lock:
+            if self._pending_resume_card:
+                self.log.debug("resume_card already pending — skip duplicate schedule")
+                return
+            self._pending_resume_card = True
+
+        threading.Thread(
+            target=self._emit_resume_card_background,
+            kwargs={
+                "context": context,
+                "event_timestamp": event_timestamp,
+                "wait_for_llm": wait_for_llm,
+            },
+            daemon=True,
+            name="pulse-resume-card",
+        ).start()
+
+    def _emit_resume_card_background(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
+        try:
+            if wait_for_llm:
+                self._wait_for_llm_ready_for_resume(since=event_timestamp)
+            self._emit_resume_card_now(context=context, emitted_at=datetime.now())
+        except Exception as exc:
+            self.log.warning("resume_card background emit skipped: %s", exc)
+        finally:
+            with self._pending_resume_card_lock:
+                self._pending_resume_card = False
+
+    def _wait_for_llm_ready_for_resume(self, *, since: datetime) -> None:
+        deadline = time.monotonic() + self._resume_card_wait_timeout_sec
+        saw_loading = False
+        while time.monotonic() < deadline:
+            recent = self.scorer.bus.recent(DEFAULT_EVENT_BUS_SIZE)
+            for item in recent:
+                if item.timestamp < since:
+                    continue
+                if item.type == "llm_loading":
+                    saw_loading = True
+                if item.type == "llm_ready":
+                    if saw_loading:
+                        self.log.debug("resume_card: LLM ready observed after unlock")
+                    return
+            time.sleep(self._resume_card_wait_poll_sec)
+        self.log.warning(
+            "resume_card: LLM readiness timeout after %.0fs — using fallback path",
+            self._resume_card_wait_timeout_sec,
+        )
 
     def shutdown_runtime(self) -> None:
         try:
@@ -1057,6 +1129,8 @@ class RuntimeOrchestrator:
             self._frozen_memory = None
             self._frozen_memory_at = None
         self._last_resume_card_at = None
+        with self._pending_resume_card_lock:
+            self._pending_resume_card = False
         reset_fact_engine_for_tests()
         reset_cooldown_for_tests()
         self._fact_engine = get_fact_engine()
