@@ -18,6 +18,12 @@ class PresentState:
     focus_level: str = "normal"
     friction_score: float = 0.0
     clipboard_context: str | None = None
+    user_presence_state: str | None = None
+    user_idle_seconds: int | None = None
+    active_app_duration_sec: int | None = None
+    active_window_title_duration_sec: int | None = None
+    app_switch_count_10m: int = 0
+    ai_app_switch_count_10m: int = 0
     session_duration_min: int = 0
     updated_at: datetime | None = None
 
@@ -33,6 +39,12 @@ class PresentState:
             "focus_level": self.focus_level,
             "friction_score": self.friction_score,
             "clipboard_context": self.clipboard_context,
+            "user_presence_state": self.user_presence_state,
+            "user_idle_seconds": self.user_idle_seconds,
+            "active_app_duration_sec": self.active_app_duration_sec,
+            "active_window_title_duration_sec": self.active_window_title_duration_sec,
+            "app_switch_count_10m": self.app_switch_count_10m,
+            "ai_app_switch_count_10m": self.ai_app_switch_count_10m,
             "session_duration_min": self.session_duration_min,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -114,6 +126,12 @@ class RuntimeState:
             focus_level=getattr(signals, "focus_level", "normal"),
             friction_score=getattr(signals, "friction_score", 0.0),
             clipboard_context=getattr(signals, "clipboard_context", None),
+            user_presence_state=getattr(signals, "user_presence_state", None),
+            user_idle_seconds=getattr(signals, "user_idle_seconds", None),
+            active_app_duration_sec=getattr(signals, "active_app_duration_sec", None),
+            active_window_title_duration_sec=getattr(signals, "active_window_title_duration_sec", None),
+            app_switch_count_10m=getattr(signals, "app_switch_count_10m", 0),
+            ai_app_switch_count_10m=getattr(signals, "ai_app_switch_count_10m", 0),
             session_duration_min=getattr(signals, "session_duration_min", 0),
             updated_at=updated_at or datetime.now(),
         )

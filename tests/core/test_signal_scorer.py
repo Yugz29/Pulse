@@ -821,6 +821,25 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.focus_level, "normal",
             "6 switches + 3 fichiers modifies doit etre 'normal', pas 'scattered'")
 
+    def test_4c_workflow_ia_assiste_ne_devient_pas_scattered(self):
+        """
+        Code ↔ ChatGPT fréquent peut être un workflow assisté normal.
+        Si le contexte dev reste stable et qu'il existe une activité projet,
+        les switches IA ne doivent pas être traités comme de la dispersion brute.
+        """
+        apps = ["Code", "ChatGPT", "Code", "ChatGPT", "Code", "ChatGPT"]
+        for app in apps:
+            self._push("app_activated", {"app_name": app})
+        self._push("user_presence", {"presence_state": "active", "idle_seconds": "3"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.app_switch_count_10m, 6)
+        self.assertEqual(signals.ai_app_switch_count_10m, 3)
+        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.focus_level, "normal")
+
     def test_4c_seuil_2_fichiers_insuffisant_pour_annuler_scattered(self):
         """2 fichiers ne suffisent pas pour annuler scattered (seuil = 3)."""
         apps = ["Xcode", "Terminal", "Chrome", "Xcode", "Terminal", "Xcode"]

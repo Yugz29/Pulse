@@ -50,6 +50,12 @@ class Signals:
     terminal_success: Optional[bool] = None
     window_title: Optional[str] = None
     window_title_app: Optional[str] = None
+    active_app_duration_sec: Optional[int] = None
+    active_window_title_duration_sec: Optional[int] = None
+    app_switch_count_10m: int = 0
+    ai_app_switch_count_10m: int = 0
+    user_presence_state: Optional[str] = None
+    user_idle_seconds: Optional[int] = None
 
 
 class SignalScorer:
@@ -150,6 +156,7 @@ class SignalScorer:
         mcp_signal = self._latest_mcp_signal(recent, now)
         terminal_signal = self._latest_terminal_signal(recent, now)
         window_title_signal = self._latest_window_title_signal(recent, now)
+        user_presence_signal = self._latest_user_presence_signal(recent, now)
 
         # Fallback active_file depuis le titre de fenêtre.
         if not active_file and window_title_signal:
@@ -159,6 +166,10 @@ class SignalScorer:
             if file_from_title:
                 active_file = file_from_title
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
+        active_app_duration_sec = self._active_app_duration_sec(app_events, now)
+        active_window_title_duration_sec = self._active_window_title_duration_sec(recent, now)
+        app_switch_count_10m = self._app_switch_count_10m(app_events, now)
+        ai_app_switch_count_10m = self._ai_app_switch_count_10m(app_events, now)
         has_recent_local_exploration = self._has_recent_local_exploration(recent, now)
 
         if not active_project:
@@ -208,7 +219,13 @@ class SignalScorer:
             work_pattern_candidate=work_pattern_candidate,
             diff_summary=diff_summary,
         )
-        focus_level = self._detect_focus_level(recent, app_events, meaningful_file_events, now)
+        focus_level = self._detect_focus_level(
+            recent,
+            app_events,
+            meaningful_file_events,
+            now,
+            user_presence_signal=user_presence_signal,
+        )
         activity_level = self._detect_activity_level(
             focus_level=focus_level,
             user_file_count=edited_file_count_10m,
@@ -217,6 +234,7 @@ class SignalScorer:
             has_recent_local_exploration=has_recent_local_exploration,
             mcp_signal=mcp_signal,
             terminal_signal=terminal_signal,
+            user_presence_signal=user_presence_signal,
         )
 
         return Signals(
@@ -249,6 +267,12 @@ class SignalScorer:
             terminal_success=(terminal_signal or {}).get("terminal_success"),
             window_title=(window_title_signal or {}).get("title"),
             window_title_app=(window_title_signal or {}).get("app_name"),
+            active_app_duration_sec=active_app_duration_sec,
+            active_window_title_duration_sec=active_window_title_duration_sec,
+            app_switch_count_10m=app_switch_count_10m,
+            ai_app_switch_count_10m=ai_app_switch_count_10m,
+            user_presence_state=(user_presence_signal or {}).get("presence_state"),
+            user_idle_seconds=(user_presence_signal or {}).get("idle_seconds"),
         )
 
     def _file_event_types(self) -> set[str]:
@@ -741,6 +765,7 @@ class SignalScorer:
         has_recent_local_exploration: bool,
         mcp_signal: Optional[dict] = None,
         terminal_signal: Optional[dict] = None,
+        user_presence_signal: Optional[dict] = None,
     ) -> str:
         """
         Activité bas niveau : ce que l'utilisateur fait concrètement.
@@ -748,6 +773,10 @@ class SignalScorer:
 
         Priorité : idle > executing > editing > navigating > reading > idle
         """
+        presence_state = (user_presence_signal or {}).get("presence_state")
+        has_recent_presence = presence_state in {"active", "passive"}
+        has_idle_presence = presence_state == "idle"
+
         if focus_level == "idle":
             return "idle"
         if self._is_usable_mcp_signal(mcp_signal):
@@ -767,22 +796,41 @@ class SignalScorer:
         if user_file_count >= 1:
             return "editing"
         if latest_active_app in self.BROWSER_APPS or has_recent_local_exploration:
+            if has_idle_presence and not has_recent_local_exploration:
+                return "idle"
             return "navigating"
-        # App dev ou writing récente (3 dernières des 30 min) sans édition → lecture
-        if recent_apps and set(recent_apps[-3:]) & (self.DEV_APPS | self.WRITING_APPS):
+        # App dev ou writing active/récente sans édition → lecture.
+        # La présence utilisateur soutient la lecture, mais ne crée pas seule
+        # une preuve de travail.
+        if latest_active_app in (self.DEV_APPS | self.WRITING_APPS):
+            if has_idle_presence:
+                return "idle"
             return "reading"
+        if recent_apps and set(recent_apps[-3:]) & (self.DEV_APPS | self.WRITING_APPS):
+            if has_recent_presence:
+                return "reading"
         return "idle"
 
     def _detect_focus_level(
-        self, recent: list, app_events: list, file_events: list, now: datetime
+        self,
+        recent: list,
+        app_events: list,
+        file_events: list,
+        now: datetime,
+        *,
+        user_presence_signal: Optional[dict] = None,
     ) -> str:
-        # Exclure les switches vers les apps IA du comptage de dispersion.
-        # Utiliser Claude/ChatGPT en parallèle du développement est un mode
-        # de travail normal, pas un signe de dispersion.
-        recent_app_switches = [
+        # Les switches IA sont conservés dans le flux pour pouvoir distinguer
+        # un workflow assisté d'une dispersion réelle. Ils ne doivent pas être
+        # interprétés comme scattered s'ils restent ancrés dans un contexte dev.
+        recent_app_switches_all = [
             event for event in app_events
             if event.timestamp >= now - timedelta(minutes=10)
-            and event.payload.get("app_name") not in self.AI_APPS
+            and event.payload.get("app_name")
+        ]
+        recent_non_ai_app_switches = [
+            event for event in recent_app_switches_all
+            if event.payload.get("app_name") not in self.AI_APPS
         ]
         recent_file_edits = [
             event for event in file_events if event.timestamp >= now - timedelta(minutes=10)
@@ -792,13 +840,33 @@ class SignalScorer:
             event.type in {"screen_locked", "user_idle"}
             for event in recent_by_timestamp[-5:]
         )
+        presence_state = (user_presence_signal or {}).get("presence_state")
+        has_recent_idle_signal = has_recent_idle_signal or presence_state == "idle"
 
         if has_recent_idle_signal:
             if self._has_meaningful_recent_file_activity(recent_file_edits):
                 return "normal"
             return "idle"
+        recent_ai_switch_count = sum(
+            1
+            for event in recent_app_switches_all
+            if event.payload.get("app_name") in self.AI_APPS
+        )
+        has_ai_assisted_workflow = (
+            len(recent_app_switches_all) >= 6
+            and recent_ai_switch_count >= 2
+            and (
+                self._has_meaningful_recent_file_activity(recent_file_edits)
+                or any(
+                    event.payload.get("app_name") in self.DEV_APPS
+                    for event in recent_app_switches_all[-3:]
+                )
+            )
+        )
+        if has_ai_assisted_workflow:
+            return "normal"
 
-        if len(recent_app_switches) >= 6:
+        if len(recent_non_ai_app_switches) >= 6:
             # De nombreux switches n'impliquent pas un manque de focus si une
             # activite fichiers substantielle se produit en parallele.
             # Xcode/Terminal/Chrome en workflow de dev actif peut generer 6+ switches
@@ -806,9 +874,51 @@ class SignalScorer:
             if len(recent_file_edits) >= 3:
                 return "normal"
             return "scattered"
-        if len(recent_app_switches) <= 1 and len(recent_file_edits) >= 2:
+        if len(recent_non_ai_app_switches) <= 1 and len(recent_file_edits) >= 2:
             return "deep"
         return "normal"
+
+    def _latest_user_presence_signal(self, recent: list, now: datetime, minutes: int = 2) -> Optional[dict]:
+        """Return the latest lightweight user presence signal.
+
+        `user_presence` is a support signal only: it says whether the user was
+        recently active/passive/idle based on idle seconds. It must not create
+        work by itself.
+        """
+        cutoff = now - timedelta(minutes=minutes)
+        event = self._latest_event(
+            recent,
+            predicate=lambda item: item.type in {"user_presence", "user_active", "user_idle"},
+            cutoff=cutoff,
+        )
+        if event is None:
+            return None
+
+        payload = event.payload or {}
+        if event.type == "user_presence":
+            idle_seconds = self._parse_optional_int(payload.get("idle_seconds"))
+            return {
+                "presence_state": payload.get("presence_state"),
+                "idle_seconds": idle_seconds,
+            }
+        if event.type == "user_active":
+            return {
+                "presence_state": "active",
+                "idle_seconds": self._parse_optional_int(payload.get("seconds")),
+            }
+        return {
+            "presence_state": "idle",
+            "idle_seconds": self._parse_optional_int(payload.get("seconds")),
+        }
+
+    @staticmethod
+    def _parse_optional_int(value) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _has_meaningful_recent_file_activity(self, recent_file_edits: list) -> bool:
         distinct_paths = {
@@ -1028,3 +1138,75 @@ class SignalScorer:
         if not path or event.type == "file_deleted":
             return False
         return self._workspace_root(path) == workspace_root
+
+    def _active_app_duration_sec(self, app_events: list, now: datetime, minutes: int = 60) -> Optional[int]:
+        """Return how long the latest active app has been stable.
+
+        This is a lightweight observation signal. It does not prove work by itself.
+        """
+        cutoff = now - timedelta(minutes=minutes)
+        ordered = [
+            event for event in self._sort_events_by_timestamp(app_events)
+            if event.timestamp >= cutoff and event.payload.get("app_name")
+        ]
+        if not ordered:
+            return None
+
+        latest_app = ordered[-1].payload.get("app_name")
+        latest_start = ordered[-1].timestamp
+        for event in reversed(ordered[:-1]):
+            if event.payload.get("app_name") != latest_app:
+                break
+            latest_start = event.timestamp
+
+        return max(0, int((now - latest_start).total_seconds()))
+
+    def _active_window_title_duration_sec(self, recent: list, now: datetime, minutes: int = 60) -> Optional[int]:
+        """Return how long the latest app/window-title pair has been stable."""
+        cutoff = now - timedelta(minutes=minutes)
+        title_events = [
+            event for event in self._sort_events_by_timestamp(recent)
+            if event.timestamp >= cutoff
+            and event.type in {"app_activated", "window_title_poll"}
+            and (
+                (event.payload or {}).get("window_title")
+                or (event.payload or {}).get("title")
+            )
+        ]
+        if not title_events:
+            return None
+
+        def key(event) -> tuple[Optional[str], Optional[str]]:
+            payload = event.payload or {}
+            return (
+                payload.get("app_name") or payload.get("app"),
+                payload.get("window_title") or payload.get("title"),
+            )
+
+        latest_key = key(title_events[-1])
+        latest_start = title_events[-1].timestamp
+        for event in reversed(title_events[:-1]):
+            if key(event) != latest_key:
+                break
+            latest_start = event.timestamp
+
+        return max(0, int((now - latest_start).total_seconds()))
+
+    def _app_switch_count_10m(self, app_events: list, now: datetime) -> int:
+        cutoff = now - timedelta(minutes=10)
+        return sum(
+            1
+            for event in app_events
+            if event.timestamp >= cutoff
+            and event.payload.get("app_name")
+            and event.payload.get("app_name") not in {"Pulse", "PulseApp"}
+        )
+
+    def _ai_app_switch_count_10m(self, app_events: list, now: datetime) -> int:
+        cutoff = now - timedelta(minutes=10)
+        return sum(
+            1
+            for event in app_events
+            if event.timestamp >= cutoff
+            and event.payload.get("app_name") in self.AI_APPS
+        )
