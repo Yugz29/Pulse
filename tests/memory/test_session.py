@@ -128,6 +128,34 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(window["duration_min"], 12)
         self.assertEqual(window["event_count"], 3)
 
+    def test_find_file_activity_window_fusionne_les_clusters_proches(self):
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        first_start = datetime(2026, 4, 29, 9, 0, 0)
+        first_end = datetime(2026, 4, 29, 9, 10, 0)
+        second_start = datetime(2026, 4, 29, 10, 0, 0)
+        second_end = datetime(2026, 4, 29, 10, 12, 0)
+        commit_at = datetime(2026, 4, 29, 10, 45, 0)
+
+        for observed_at in (first_start, first_end, second_start, second_end):
+            self.memory.record_event(Event(
+                "file_modified",
+                {"path": f"{repo}/daemon/runtime_orchestrator.py"},
+                timestamp=observed_at,
+            ))
+
+        window = self.memory.find_file_activity_window(
+            ["runtime_orchestrator.py"],
+            before=commit_at,
+            repo_root=repo,
+        )
+
+        self.assertIsNotNone(window)
+        self.assertEqual(window["started_at"], first_start.isoformat())
+        self.assertEqual(window["ended_at"], second_end.isoformat())
+        self.assertEqual(window["duration_min"], 72)
+        self.assertEqual(window["event_count"], 4)
+        self.assertEqual(window["cluster_count"], 2)
+
     def test_resume_session_realigne_started_at(self):
         restarted_from = datetime(2026, 4, 23, 16, 0, 0)
         self.memory.resume_session(started_at=restarted_from)
@@ -218,7 +246,7 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIn("Cursor", data["recent_apps"])
         self.assertEqual(data["max_friction"], 0.8)
 
-    def test_export_memory_payload_contient_les_champs_essentiels(self):
+    def test_export_memory_payload_contient_les_champs_canoniques(self):
         start = datetime(2026, 4, 28, 11, 0, 0)
         self.memory.started_at = start
         self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
@@ -262,6 +290,39 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(payload["work_block_started_at"], payload["started_at"])
         self.assertEqual(payload["work_block_commit_count"], payload["commit_count"])
 
+    def test_export_memory_payload_expose_les_alias_legacy_temporairement(self):
+        start = datetime(2026, 4, 28, 11, 0, 0)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.record_event(
+            Event("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, timestamp=start)
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=20,
+                updated_at=start + timedelta(minutes=20),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
+                probable_task="coding",
+                friction_score=0.2,
+                focus_level="normal",
+                session_duration_min=20,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+
+        payload = self.memory.export_memory_payload()
+
         # Legacy aliases stay available only for older memory consumers.
         self.assertIn("work_window_started_at", payload)
         self.assertIn("work_window_commit_count", payload)
@@ -288,7 +349,6 @@ class TestSessionMemory(unittest.TestCase):
         payload = self.memory.export_memory_payload()
         self.assertEqual(payload["commit_count"], 2)
         self.assertEqual(payload["work_block_commit_count"], 2)
-        self.assertEqual(payload["work_window_commit_count"], payload["work_block_commit_count"])
 
     def test_get_today_summary_derive_le_temps_depuis_les_evenements(self):
         today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
@@ -420,13 +480,13 @@ class TestSessionMemory(unittest.TestCase):
         )
         self.memory.close(ended_at=end)
 
-        episodes = self.memory.get_recent_sessions()
+        sessions = self.memory.get_recent_sessions()
 
-        self.assertEqual(len(episodes), 1)
-        self.assertEqual(episodes[0]["session_id"], "test-session")
-        self.assertEqual(episodes[0]["active_project"], "Pulse")
-        self.assertEqual(episodes[0]["probable_task"], "coding")
-        self.assertEqual(episodes[0]["duration_sec"], 25 * 60)
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["session_id"], "test-session")
+        self.assertEqual(sessions[0]["active_project"], "Pulse")
+        self.assertEqual(sessions[0]["probable_task"], "coding")
+        self.assertEqual(sessions[0]["duration_sec"], 25 * 60)
 
     def test_build_session_snapshot_plus_adaptateur_legacy(self):
         session = {
