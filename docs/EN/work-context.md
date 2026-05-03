@@ -29,6 +29,9 @@ what is missing to be more confident
 what it could ask without being intrusive
 ```
 
+The Work Context is therefore an **explanatory reading** of the present.
+It must not become memory, a parallel source of truth, or an autonomy engine.
+
 ---
 
 ## The four layers that must not be confused
@@ -36,6 +39,7 @@ what it could ask without being intrusive
 ### 1. `PresentState`
 
 `PresentState` is the immediate runtime truth.
+It is written by `RuntimeState.update_present()` from signals and the session lifecycle.
 
 It represents the **now**.
 
@@ -56,7 +60,7 @@ It should remain a compact and usable source of truth.
 
 ### 2. `CurrentContext`
 
-`CurrentContext` is the current product context.
+`CurrentContext` is the product reading of the current context.
 
 It turns runtime state and signals into a more useful reading for the UI and other modules.
 
@@ -71,6 +75,8 @@ What confidence is attached to that reading?
 
 In the Dashboard, the **Current Context** card is the main representation of this layer.
 
+`CurrentContext` remains a readable projection. It does not replace `PresentState` as the truth of the present.
+
 `CurrentContext` must not be duplicated by a second competing product card.
 
 ---
@@ -80,6 +86,7 @@ In the Dashboard, the **Current Context** card is the main representation of thi
 `WorkContextCard` is not a new truth.
 
 It is a passive explanation layer built on top of the existing context.
+It must read `PresentState` / `CurrentContext`, not recalculate a competing state.
 
 It is meant to enrich **Current Context**, not replace it.
 
@@ -121,7 +128,7 @@ What could Pulse safely ask for?
 
 Context Probes are controlled requests for additional context.
 
-They are not automatic.
+They are not automatic and they are not a memory layer.
 
 They go through:
 
@@ -142,6 +149,9 @@ app_context
 window_title redacted
 ```
 
+`redacted` means the data is masked before exposure or audit storage.
+The `window_title` probe reuses a signal already observed by the runtime; it does not create a new macOS capture capability.
+
 Sensitive probes remain non-executable:
 
 ```text
@@ -150,7 +160,7 @@ clipboard_sample
 screen_snapshot
 ```
 
-The Work Context may indicate that a probe would be safe or useful, but it must not trigger it by itself.
+The Work Context may indicate that a probe would be safe or useful, but it must not trigger it by itself or remember an approval preference.
 
 ---
 
@@ -159,7 +169,8 @@ The Work Context may indicate that a probe would be safe or useful, but it must 
 ```text
 SystemObserver / events
 → EventBus
-→ SignalScorer
+→ SessionFSM / SignalScorer
+→ RuntimeState.update_present()
 → PresentState
 → CurrentContextBuilder
 → CurrentContext
@@ -188,6 +199,8 @@ GET /work-context
 ```
 
 returns a passive card:
+
+It must be treated as a local read/debug surface, not as an action API.
 
 ```json
 {
@@ -267,6 +280,18 @@ It does not mean:
 Pulse can read it automatically.
 ```
 
+### Do not confuse context with memory
+
+The Work Context may indicate:
+
+```text
+what is missing now
+what could be requested now
+```
+
+But it must not turn those missing pieces into persistent facts.
+Long-term facts remain the responsibility of memory and the `FactEngine`, not the Work Context.
+
 ---
 
 ### No implicit autonomy
@@ -295,6 +320,8 @@ The Work Context does not do:
 - preference learning
 - long-term scoring
 - automatic probe selection
+- user fact writing
+- replacing CurrentContext
 - clipboard reading
 - selected text reading
 - screen capture

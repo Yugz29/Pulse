@@ -10,7 +10,7 @@ It explicitly separates:
 It does not describe an ideal system.
 It does not describe Episode System either.
 
-2026 note: historical sections that mention `EpisodeFSM` describe the previous architecture path. The current runtime removed `EpisodeFSM` and uses `current_context`, `recent_sessions`, `work_blocks`, and `work_block_*`. The short up-to-date reference is [architecture.md](./architecture.md).
+2026 note: historical sections that mention `EpisodeFSM` describe the previous architecture path. They are kept only as design archive and must no longer guide runtime changes. The current runtime removed `EpisodeFSM` and uses `current_context`, `recent_sessions`, `work_blocks`, and `work_block_*`. The short up-to-date reference is [architecture.md](./architecture.md).
 
 Current Pulse memory is still primarily:
 - session-centric
@@ -476,3 +476,22 @@ The right use of this document is therefore:
 - understand what Pulse memory does today
 - see clearly where it is weak
 - prepare future evolutions without assuming they are already active
+
+---
+
+# 2026 decision — Episode System replaced
+
+The `EpisodeFSM` path is abandoned for the current runtime.
+
+The retained model is:
+- `SessionFSM`: user lifecycle (`active`, `idle`, `locked`)
+- `PresentState`: canonical truth of the present
+- `CurrentContext`: product read model of the present
+- `recent_sessions`: recent history of closed sessions
+- `work_blocks` / `work_block_*`: temporal projections of meaningful work
+- `JournalEntry`: human-readable consolidated rendering, derived from history, not a runtime source of truth
+
+Migration rule:
+- old terms such as `current_episode`, `recent_episodes`, `work_window_*`, and `closed_episodes` must no longer be used as the current product model;
+- they may remain as read fallbacks or compatibility aliases while historical payloads exist;
+- every new feature must read canonical fields: `current_context`, `recent_sessions`, `work_blocks`, and `work_block_*`.

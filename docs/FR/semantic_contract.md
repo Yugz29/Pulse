@@ -9,7 +9,7 @@ Il distingue explicitement :
 
 Il ne décrit pas un système idéal.
 
-Note 2026 : les sections historiques qui parlent d'`EpisodeFSM` décrivent l'ancienne piste d'architecture. Le runtime actuel a supprimé `EpisodeFSM` et utilise `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`. La référence courte à jour est [architecture.md](./architecture.md).
+Note 2026 : les sections historiques qui parlent d'`EpisodeFSM` décrivent l'ancienne piste d'architecture. Elles sont conservées uniquement comme archive de conception et ne doivent plus guider les changements runtime. Le runtime actuel a supprimé `EpisodeFSM` et utilise `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`. La référence courte à jour est [architecture.md](./architecture.md).
 
 ---
 
@@ -406,20 +406,25 @@ pas comme un système de compréhension avancée.
 
 ---
 
-# Partie 2 — Contrat de l'épisode (historique)
+# Partie 2 — Archive : ancienne piste Episode System
 
-Note : cette partie est conservée comme trace de la piste Episode System. Elle n'est plus le contrat actuel du runtime. Le contrat actuel est décrit dans `architecture.md` : `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
+> Statut 2026 : **obsolète pour le runtime actuel**.
+>
+> Cette partie est conservée uniquement pour comprendre l'ancienne piste de conception `EpisodeFSM`.
+> Elle ne doit plus servir de contrat d'implémentation, de roadmap active, ni de base pour de nouveaux patchs.
+>
+> Le contrat actuel est décrit dans `architecture.md` et repose sur `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
 
-Cette section définit l'ancien contrat de l'épisode dans Pulse.
+Cette section décrit l'ancien contrat de l'épisode dans Pulse.
 
-Elle couvre :
+Elle couvrait :
 - les frontières temporelles portées par `EpisodeFSM`
 - la sémantique live portée par `PresentState`, avec `signals` comme enrichissement secondaire
 - la sémantique figée portée uniquement par les épisodes clos
 
 ---
 
-## 7. Ce qu'est un épisode dans Pulse
+## 7. Ce qu'était un épisode dans l'ancienne piste
 
 Un épisode est une **unité temporelle de travail délimitée**, à l'intérieur d'une session.
 
@@ -443,7 +448,7 @@ Un épisode n'est pas :
 
 ---
 
-## 8. Ce qu'un épisode n'est pas aujourd'hui
+## 8. Ce que cette ancienne piste ne résolvait pas
 
 Le système actuel ne prétend pas résoudre :
 - l'intention derrière l'activité
@@ -456,7 +461,7 @@ La lecture live du présent reste portée par `PresentState`, pas par `current_e
 
 ---
 
-## 9. Modèle actuel de l'épisode
+## 9. Ancien modèle envisagé de l'épisode
 
 Un épisode porte aujourd'hui :
 
@@ -473,7 +478,7 @@ Episode:
   task_confidence : sémantique figée à la clôture (null si épisode actif)
 ```
 
-Règle actuelle :
+Règle envisagée à l'époque :
 - épisode actif : vérité essentiellement temporelle ; la lecture live vient de `PresentState`
 - épisode clos : snapshot sémantique figé à la clôture
 
@@ -482,13 +487,13 @@ Le runtime garantit qu'un épisode clos ne garde pas de champs sémantiques nuls
 - `activity_level = "idle"` si aucun snapshot valide n'existe
 - `task_confidence = 0.0` si aucun snapshot valide n'existe
 
-Il ne porte pas aujourd'hui :
+Il ne portait pas dans cette piste :
 - `origin` (user_driven / assistant_driven)
 - résumé ou enrichissement LLM
 
 ---
 
-## 10. Cycle de vie d'un épisode
+## 10. Ancien cycle de vie envisagé
 
 ```
 ACTIF -> SUSPENDU -> CLOS
@@ -573,9 +578,11 @@ La clôture d'une session clôture l'épisode actif en cours.
 
 ---
 
-## 13. Règles d'implémentation actuelles
+## 13. Anciennes règles d'implémentation envisagées
 
-### Ce qui doit être vrai dans le code
+> Ces règles ne sont plus applicables au runtime actuel. Elles restent ici pour expliquer pourquoi la migration a abandonné `EpisodeFSM` au profit de `SessionFSM`, `PresentState`, `current_context`, `recent_sessions` et `work_blocks`.
+
+### Ce qui devait être vrai dans l'ancienne piste
 
 - Il existe au plus un épisode ACTIF par session à tout instant
 - `EpisodeFSM` est la source de vérité des frontières — pas `SessionFSM`, pas le scorer
@@ -589,7 +596,7 @@ La clôture d'une session clôture l'épisode actif en cours.
 - `/state` est une projection composite du runtime, pas une source de vérité
 - Un épisode clos porte toujours une sémantique figée non nulle, quitte à utiliser le fallback déterministe
 
-### Ce qu'il faut éviter dans le code
+### Ce que cette ancienne piste voulait éviter
 
 - Déduire la frontière depuis `probable_task` (trop fragile)
 - Ouvrir plusieurs épisodes en parallèle
@@ -598,7 +605,7 @@ La clôture d'une session clôture l'épisode actif en cours.
 - Utiliser le LLM pour détecter les frontières
 - Faire re-déduire à `EpisodeFSM` l'activité significative depuis le bus
 
-### Ce qui est encore hors périmètre aujourd'hui
+### Ce qui était hors périmètre dans cette piste
 
 - `Episode.origin`
 - Résumé d'épisode
@@ -608,7 +615,7 @@ La clôture d'une session clôture l'épisode actif en cours.
 
 ---
 
-## 14. Ce que le système actuel doit permettre d'observer
+## 14. Ce que cette piste voulait permettre d'observer
 
 Dans le dashboard actuel :
 
@@ -628,9 +635,9 @@ Dans le dashboard actuel :
 
 ---
 
-## 15. Résumé opérationnel (épisode actuel)
+## 15. Résumé opérationnel historique
 
-Le contrat actuel de l'épisode est le suivant :
+> Ce résumé décrit l'ancienne piste Episode System. Le résumé opérationnel actuel est : `PresentState` pour le présent, `SessionFSM` pour le lifecycle, `current_context` pour la lecture produit, `recent_sessions` et `work_blocks` pour l'historique dérivé.
 
 - Un épisode reste d'abord une unité temporelle
 - Ses frontières sont détectées par des signaux durs déterministes
@@ -640,7 +647,26 @@ Le contrat actuel de l'épisode est le suivant :
 - `PresentState` reste la source live du présent
 - Un épisode clos porte une sémantique figée (`probable_task`, `activity_level`, `task_confidence`)
 - Cette sémantique est figée à la clôture depuis la dernière valeur live connue, avec fallback `unknown / idle / 0.0`
-- Il ne sait pas distinguer finement activité utilisateur et activité assistée
+- Il ne savait pas distinguer finement activité utilisateur et activité assistée
 
 Ce contrat reste volontairement borné.
 Sa valeur est dans la fiabilité des frontières et dans la stabilité du snapshot des épisodes clos.
+
+---
+
+## Décision 2026 — remplacement de la piste Episode System
+
+La piste `EpisodeFSM` est abandonnée pour le runtime actuel.
+
+Le modèle retenu est :
+- `SessionFSM` : lifecycle utilisateur (`active`, `idle`, `locked`)
+- `PresentState` : vérité canonique du présent
+- `CurrentContext` : lecture produit du présent
+- `recent_sessions` : historique récent de sessions clôturées
+- `work_blocks` / `work_block_*` : projections temporelles de travail significatif
+- `JournalEntry` : rendu humain consolidé, dérivé de l'historique, non source runtime
+
+Règle de migration :
+- les anciens termes `current_episode`, `recent_episodes`, `work_window_*` et `closed_episodes` ne doivent plus être utilisés comme modèle produit courant ;
+- ils peuvent rester en lecture fallback ou alias de compatibilité tant que des payloads historiques existent ;
+- toute nouvelle feature doit lire les champs canoniques `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.

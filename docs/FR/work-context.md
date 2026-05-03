@@ -29,6 +29,9 @@ ce qui manque pour être plus sûr
 ce qu'il pourrait demander sans être intrusif
 ```
 
+Le Work Context est donc une **lecture explicative** du présent.
+Il ne doit pas devenir une mémoire, une source de vérité parallèle ou un moteur d'autonomie.
+
 ---
 
 ## Les quatre couches à ne pas confondre
@@ -36,6 +39,8 @@ ce qu'il pourrait demander sans être intrusif
 ### 1. `PresentState`
 
 `PresentState` est la vérité runtime immédiate.
+
+Il est écrit par `RuntimeState.update_present()` à partir des signaux et du lifecycle de session.
 
 Il représente le **maintenant**.
 
@@ -56,7 +61,7 @@ Il doit rester une source de vérité compacte et exploitable.
 
 ### 2. `CurrentContext`
 
-`CurrentContext` est le contexte produit courant.
+`CurrentContext` est la lecture produit du contexte courant.
 
 Il transforme l'état runtime et les signaux en une lecture plus utile pour l'interface et les autres modules.
 
@@ -71,6 +76,8 @@ Quelle confiance est associée à cette lecture ?
 
 Dans le Dashboard, la carte **Contexte actuel** est la représentation principale de cette couche.
 
+`CurrentContext` reste une projection lisible. Il ne remplace pas `PresentState` comme vérité du présent.
+
 `CurrentContext` ne doit pas être dupliqué par une deuxième carte produit concurrente.
 
 ---
@@ -80,6 +87,8 @@ Dans le Dashboard, la carte **Contexte actuel** est la représentation principal
 `WorkContextCard` n'est pas une nouvelle vérité.
 
 C'est une couche d'explication passive construite au-dessus du contexte existant.
+
+Elle doit lire `PresentState` / `CurrentContext`, pas recalculer un état concurrent.
 
 Elle sert à enrichir **Contexte actuel**, pas à le remplacer.
 
@@ -121,7 +130,7 @@ Qu'est-ce que Pulse pourrait demander sans danger ?
 
 Les Context Probes sont des demandes contrôlées de contexte supplémentaire.
 
-Ils ne sont pas automatiques.
+Ils ne sont pas automatiques et ne constituent pas une couche mémoire.
 
 Ils passent par :
 
@@ -142,6 +151,9 @@ app_context
 window_title redacted
 ```
 
+`redacted` signifie que la donnée est masquée avant exposition ou stockage d'audit.
+Le probe `window_title` réutilise un signal déjà observé par le runtime ; il ne crée pas une nouvelle capacité de capture macOS.
+
 Les probes sensibles restent non exécutés :
 
 ```text
@@ -150,7 +162,7 @@ clipboard_sample
 screen_snapshot
 ```
 
-Le Work Context peut indiquer qu'un probe serait safe ou utile, mais il ne doit pas le déclencher lui-même.
+Le Work Context peut indiquer qu'un probe serait safe ou utile, mais il ne doit pas le déclencher lui-même, ni mémoriser une préférence d'approbation.
 
 ---
 
@@ -159,7 +171,8 @@ Le Work Context peut indiquer qu'un probe serait safe ou utile, mais il ne doit 
 ```text
 SystemObserver / events
 → EventBus
-→ SignalScorer
+→ SessionFSM / SignalScorer
+→ RuntimeState.update_present()
 → PresentState
 → CurrentContextBuilder
 → CurrentContext
@@ -188,6 +201,8 @@ GET /work-context
 ```
 
 retourne une carte passive :
+
+Elle doit être considérée comme une surface de lecture/debug local, pas comme une API d'action.
 
 ```json
 {
@@ -269,6 +284,20 @@ Pulse peut le lire automatiquement.
 
 ---
 
+### Ne pas confondre contexte et mémoire
+
+Le Work Context peut signaler :
+
+```text
+ce qui manque maintenant
+ce qui pourrait être demandé maintenant
+```
+
+Mais il ne doit pas transformer ces manques en faits persistants.
+Les faits long terme restent la responsabilité de la mémoire et du `FactEngine`, pas du Work Context.
+
+---
+
 ### Pas d'autonomie implicite
 
 Même si l'utilisateur accepte souvent un probe, le Work Context ne doit pas transformer cela en autorisation automatique.
@@ -295,6 +324,8 @@ Le Work Context ne fait pas :
 - apprentissage de préférences
 - scoring long terme
 - sélection automatique de probes
+- écriture de faits utilisateur
+- remplacement de CurrentContext
 - lecture de clipboard
 - lecture de texte sélectionné
 - capture écran

@@ -5,16 +5,18 @@ Pulse est une couche locale d'observation, de structuration de contexte, de mém
 Aujourd'hui, Pulse sait :
 - observer l'activité locale utile
 - maintenir un présent runtime canonique
-- consolider une mémoire sessionnelle et des faits utilisateur
+- consolider une mémoire sessionnelle, des blocs de travail et des faits utilisateur
+- aider à reprendre le contexte après une pause via des Resume Cards
+- demander ponctuellement du contexte supplémentaire via des Context Probes validées
 - intercepter certaines commandes agents via MCP
 - produire des propositions explicables
 
 Pulse n'est pas :
 - un agent autonome
 - un système qui comprend parfaitement le travail utilisateur
-- un système qui structure déjà toute sa mémoire et ses propositions autour des épisodes
+- un système qui structure déjà parfaitement toute sa mémoire et ses propositions autour de la continuité de travail
 
-La fondation du runtime est en place. Pulse est maintenant recentré autour d'un présent canonique, de contextes de session récents et de blocs de travail dérivés des événements significatifs. Les anciens champs d'épisodes restent exposés comme alias de compatibilité, mais ils ne sont plus le modèle produit.
+La fondation du runtime est en place. Pulse est maintenant recentré autour d'un présent canonique, de `current_context`, de `recent_sessions` et de `work_blocks` dérivés des événements significatifs. Les anciens champs d'épisodes et `work_window_*` restent lisibles comme alias de compatibilité, mais ils ne sont plus le modèle produit.
 
 ---
 
@@ -40,6 +42,9 @@ Principe fondamental :
 - **Contexte rendu** : `CurrentContextBuilder` rend un `CurrentContext` depuis `present`, avec quelques détails secondaires encore lus depuis `signals`
 - **Blocs de travail** : `SessionMemory` groupe les événements significatifs en `work_blocks` pour produire le bilan de journée et les blocs récents
 - **Sessions récentes** : les sessions fermées sont exposées comme `recent_sessions` pour l'historique, avec alias legacy temporaire
+- **Resume Cards** : cartes de reprise déterministes ou LLM pour aider l'utilisateur à revenir dans le fil après une pause
+- **Resume Card préparée** : préparation à chaud au `screen_locked`, puis consommation immédiate au prochain `screen_unlocked` si valide
+- **Context Probes** : demandes ponctuelles de contexte supplémentaire, validées et masquées avant exposition quand nécessaire
 - **Mémoire locale** : extraction rétrospective de résumés de session et consolidation de faits utilisateur
 - **Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
 - **Interception MCP** : traduction et arbitrage de certaines commandes risquées avant exécution
@@ -47,7 +52,8 @@ Principe fondamental :
 - **Dashboard technique** : fenêtre macOS indépendante pour visualiser en temps réel session, mémoire, événements, MCP et état système
 
 Ce que Pulse ne fait pas encore :
-- structurer finement la mémoire autour des blocs de travail et de la continuité inter-session
+- modéliser parfaitement les blocs de travail et la continuité inter-session
+- corréler systématiquement sessions, commits, journal et reprises de contexte
 - contextualiser finement les propositions par continuité de travail
 - agir de manière autonome
 
@@ -66,24 +72,24 @@ EventBus
     ↓
 RuntimeOrchestrator
     ↓
-SessionFSM
-    ↓
-SignalScorer
+SessionFSM / SignalScorer
     ↓
 RuntimeState.update_present()
     ↓
 DecisionEngine
     ↓
 SessionMemory
+    ↓
+work projections / journal / Resume Card
 ```
 
 Rôles structurants du runtime actuel :
 - `PresentState` : seule vérité canonique du présent
 - `SessionFSM` : seule source de vérité du lifecycle de session
 - `SignalScorer` : seule source du contexte de travail courant
-- `RuntimeOrchestrator` : orchestration du pipeline, pas source de vérité
+-- `RuntimeOrchestrator` : orchestration du pipeline, déclencheurs proactifs et effets de bord contrôlés, pas source de vérité
 - `CurrentContextBuilder` : renderer pur pour les lectures assistant/UI
-- `SessionMemory` : persistance historique, pas writer du présent
+- `SessionMemory` : persistance historique et projections de travail, pas writer du présent
 
 Le runtime expose aussi un **snapshot atomique** via `RuntimeState.get_runtime_snapshot()`.
 Il contient `present`, `signals`, `decision` et quelques métadonnées runtime.
@@ -98,7 +104,8 @@ Lire ces champs séparément est incorrect.
 ## Sources de vérité
 
 - `RuntimeState` / `PresentState` : vérité live du présent runtime
-- `session.db` et les `work_blocks` dérivés des événements significatifs : vérité temporelle persistée
+- `session.db` et les événements significatifs : vérité temporelle persistée
+- `work_blocks` / `work_block_*` : projections temporelles dérivées, utilisées par la mémoire, les commits et les Resume Cards
 - `sessions/*.md`, `facts.md`, `projects.md` : projections lisibles et dérivées, jamais source primaire
 - `MemoryStore` et `DayDream` : couches de support hors chemin critique tant qu'elles n'apportent pas une valeur observable stable
 
@@ -134,6 +141,8 @@ Pulse/
 │   │   ├── current_context_adapters.py
 │   │   ├── session_fsm.py
 │   │   ├── signal_scorer.py
+│   │   ├── resume_card.py
+│   │   ├── work_context.py
 │   │   ├── decision_engine.py
 │   │   ├── proposal_candidate_adapter.py
 │   │   ├── proposals.py
@@ -149,6 +158,7 @@ Pulse/
 │   │   └── store.py
 │   ├── routes/
 │   │   ├── runtime.py
+│   │   ├── context_probes.py
 │   │   ├── assistant.py
 │   │   ├── memory.py
 │   │   ├── facts.py
@@ -189,6 +199,9 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 | GET | `/ping` | Health check |
 | GET | `/state` | Projection du snapshot runtime : `present` canonique, top-level déprécié pour compat UI, `debug` non contractuel |
 | GET | `/insights` | Activité récente issue du bus |
+| GET | `/work-context` | Lecture explicative du contexte courant |
+| POST | `/debug/resume-card` | Génération debug d’une Resume Card déterministe |
+| POST | `/debug/resume-card/llm` | Génération debug d’une Resume Card LLM avec diagnostic |
 | POST | `/event` | Entrée d’événements depuis l’app Swift |
 | POST | `/ask` | Question assistant avec contexte local |
 | POST | `/ask/stream` | Streaming assistant |
@@ -196,6 +209,7 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 | GET | `/facts/profile` | Bloc mémoire injecté dans le prompt |
 | GET | `/memory` | Entrées du `MemoryStore` |
 | GET | `/memory/sessions` | Journaux de session exposés pour le dashboard |
+| GET/POST | `/context-probes/requests` | Demandes ponctuelles de contexte supplémentaire avec validation |
 | GET | `/mcp/pending` | Commande agent en attente |
 | POST | `/mcp/decision` | Autoriser ou refuser une commande |
 
@@ -223,13 +237,15 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 - faits utilisateur dérivés d’observations répétées
 - projets connus
 - résumés de commit quand un commit confirmé sert de frontière fiable
+- blocs de travail dérivés pour le bilan de journée et les reprises de contexte
+- entrées de journal utilisées comme contexte court pour les Resume Cards
 
 La mémoire actuelle reste principalement :
 - session-centrique
 - heuristique
 - locale
 
-Elle n’est pas encore une mémoire riche de continuité. Les `work_blocks` et `recent_sessions` servent de base plus simple que l'ancien modèle d'épisodes.
+Elle n’est pas encore une mémoire riche de continuité. Les `work_blocks` et `recent_sessions` servent de base actuelle, plus simple et plus stable que l'ancien modèle d'épisodes.
 
 ---
 
@@ -240,6 +256,9 @@ Elle n’est pas encore une mémoire riche de continuité. Les `work_blocks` et 
 - `/state` garde des champs top-level et des blocs legacy pour compat UI et debug. Ces champs top-level sont dépréciés. Toute nouvelle lecture doit passer par `present`.
 - Le marqueur de lock legacy existe encore dans `RuntimeState` pour filtrage, debug et compat. Il n'est pas canonique et ne doit jamais servir de source métier.
 - Les alias legacy `work_window_*` et `closed_episodes` existent encore pour compatibilité. Toute nouvelle lecture doit utiliser `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
+- La Resume Card préparée est stockée en mémoire uniquement et disparaît si le daemon redémarre.
+- Il n’existe pas encore de route debug dédiée au cycle complet `prepared_resume_card` (`prepare`, `peek`, `consume`, `expire`).
+- Les Context Probes sont des demandes ponctuelles validées ; elles ne sont ni une mémoire, ni un mécanisme d’auto-approval.
 
 ---
 
@@ -298,15 +317,16 @@ Cette commande :
 - utilise Python 3.11+
 - évite les faux négatifs liés au Python système macOS
 
-Le repo contient actuellement :
-- 43 fichiers de tests Python dans `tests/`
-- des tests ciblés sur les contrats et verrous récents :
-  - `PresentState`
-  - `CurrentContext`
-  - `SessionSnapshot`
-  - `ProposalCandidate`
-  - `SessionFSM`
-  - compat legacy golden sur `build_context_snapshot()`, `/state`, `export_session_data()`
+Le repo contient des tests ciblés sur les contrats et verrous récents :
+- `PresentState`
+- `CurrentContext`
+- `SessionSnapshot`
+- `ProposalCandidate`
+- `SessionFSM`
+- `ResumeCard`
+- `work_blocks` / `work_block_*`
+- `ContextProbeRequest`
+- compat legacy golden sur `build_context_snapshot()`, `/state`, `export_session_data()` et les alias mémoire temporaires
 
 La documentation de test détaillée est dans [docs/testing.md](./docs/FR/testing.md).
 
@@ -343,4 +363,8 @@ Le projet est aujourd’hui dans une phase où :
 - le système expose désormais un dashboard technique et une observabilité plus explicite
 
 Le premier périmètre Episode a été retiré du runtime produit.
-Les chantiers encore ouverts concernent surtout l’exploitation des blocs de travail par la mémoire et les proposals, ainsi que la lisibilité de l’historique utile.
+Les chantiers encore ouverts concernent surtout :
+- la validation terrain des Resume Cards préparées ;
+- la corrélation longue entre session, commits, journal et reprises de contexte ;
+- l’exploitation des blocs de travail par la mémoire et les proposals ;
+- la lisibilité de l’historique utile.
