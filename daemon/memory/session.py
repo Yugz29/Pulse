@@ -277,22 +277,27 @@ class SessionMemory:
 
         session_dict = dict(session) if session is not None else {}
         project = session_dict.get("active_project") or self._project_from_events(work_events or all_events)
-        task = session_dict.get("probable_task") or "general"
+        fallback_task = session_dict.get("probable_task") or "general"
         current_window = None
         if windows:
             last = windows[-1]
+            current_window_task = last.get("probable_task") or fallback_task
             current_window = {
                 "id": f"work-{last['started_at']}",
                 "started_at": last["started_at"],
                 "updated_at": last["ended_at"],
                 "project": project,
-                "probable_task": task,
-                "activity_level": "editing",
+                "probable_task": current_window_task,
+                "activity_level": last.get("activity_level") or "editing",
                 "commit_count": commit_count,
             }
 
         work_blocks = []
+        observed_tasks: List[str] = []
         for index, window in enumerate(windows):
+            window_task = window.get("probable_task") or fallback_task
+            if window_task and window_task != "general" and window_task not in observed_tasks:
+                observed_tasks.append(window_task)
             work_blocks.append(
                 {
                     "id": f"work-{window['started_at']}",
@@ -301,7 +306,8 @@ class SessionMemory:
                     "duration_min": window["duration_min"],
                     "event_count": window["event_count"],
                     "project": project,
-                    "probable_task": task,
+                    "probable_task": window_task,
+                    "activity_level": window.get("activity_level"),
                 }
             )
 
@@ -313,7 +319,7 @@ class SessionMemory:
                     "worked_min": worked_min,
                     "active_min": worked_min,
                     "commit_count": commit_count,
-                    "top_tasks": [task] if task else [],
+                    "top_tasks": observed_tasks or ([fallback_task] if fallback_task else []),
                 }
             )
 
@@ -783,8 +789,9 @@ class SessionMemory:
             return True
         return False
 
-    @staticmethod
+    @classmethod
     def _cluster_work_events(
+        cls,
         events: List[Dict[str, Any]],
         *,
         gap_min: int = 30,
@@ -813,9 +820,75 @@ class SessionMemory:
                     "ended_at": ended_at.isoformat(),
                     "duration_min": duration_min,
                     "event_count": len(cluster),
+                    "probable_task": cls._probable_task_from_events(cluster),
+                    "activity_level": cls._activity_level_from_events(cluster),
                 }
             )
         return windows
+
+    @staticmethod
+    def _probable_task_from_events(events: List[Dict[str, Any]]) -> str:
+        terminal_categories: List[str] = []
+        git_event_count = 0
+        inspection_event_count = 0
+        terminal_event_count = 0
+        file_event_count = 0
+        assisted_event_count = 0
+
+        for event in events:
+            event_type = event.get("type")
+            payload = event.get("payload") or {}
+
+            if event_type in _FILE_EVENT_TYPES:
+                file_event_count += 1
+
+            if event_type in {"mcp_command_received", "claude_desktop_session"}:
+                assisted_event_count += 1
+
+            if event_type == "terminal_command_finished":
+                terminal_event_count += 1
+                category = str(payload.get("terminal_action_category") or "").strip().lower()
+                if category:
+                    terminal_categories.append(category)
+                    if category == "inspection":
+                        inspection_event_count += 1
+                command = str(payload.get("terminal_command") or "").strip()
+                base = str(payload.get("terminal_command_base") or "").strip().lower()
+                if category in {"vcs", "git"} or base == "git" or command.startswith("git "):
+                    git_event_count += 1
+
+        if any(category in {"testing", "test"} for category in terminal_categories):
+            return "tests"
+        if any(category in {"debug", "debugging"} for category in terminal_categories):
+            return "debug"
+        if any(category == "build" for category in terminal_categories):
+            return "build"
+
+        if file_event_count >= 2:
+            return "coding"
+        if file_event_count >= 1 and git_event_count <= 1:
+            return "coding"
+        if git_event_count >= 2 and git_event_count >= max(file_event_count, inspection_event_count):
+            return "version_control"
+        if inspection_event_count >= 2 and inspection_event_count >= file_event_count:
+            return "inspection"
+        if inspection_event_count == 1 and terminal_event_count == 1 and file_event_count == 0:
+            return "inspection"
+        if assisted_event_count:
+            return "assisted_workflow"
+        if terminal_event_count:
+            return "terminal_execution"
+        return "general"
+
+    @staticmethod
+    def _activity_level_from_events(events: List[Dict[str, Any]]) -> str:
+        if any(event.get("type") == "terminal_command_finished" for event in events):
+            return "executing"
+        if any(event.get("type") in _FILE_EVENT_TYPES for event in events):
+            return "editing"
+        if any(event.get("type") in _APP_EVENT_TYPES for event in events):
+            return "navigating"
+        return "unknown"
 
     @staticmethod
     def _project_from_events(events: List[Dict[str, Any]]) -> Optional[str]:
