@@ -130,9 +130,16 @@ _ADMIN_APPS = {
     "zoom.us", "Zoom", "Microsoft Teams", "Teams", "Meet", "Slack",
 }
 _TOOLING_METADATA_FILENAMES = {
+    "model-recommendations.json",
     "openai.yaml",
     "plugin.json",
     "skill.md",
+}
+
+_CODE_FILE_SUFFIXES = {
+    ".c", ".cc", ".cpp", ".cs", ".go", ".java", ".js", ".jsx",
+    ".kt", ".m", ".mm", ".php", ".py", ".rb", ".rs", ".swift",
+    ".ts", ".tsx",
 }
 
 
@@ -851,7 +858,34 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
     normalized["commit_messages"] = _compact_strings([normalized.get("commit_message"), *normalized.get("commit_messages", [])])
     normalized["scope_source"] = str(normalized.get("scope_source") or "unknown")
+    normalized["probable_task"] = _correct_snapshot_task_from_scope(normalized)
     return normalized
+
+
+# ── Code/snapshot task correction ─────────────────────────────────────────────
+
+def _correct_snapshot_task_from_scope(entry: Dict[str, Any]) -> str:
+    """Avoid classifying code-file snapshots as writing.
+
+    This is intentionally narrow: commit entries keep their commit-derived task,
+    while weak snapshot entries on code files should not render as rédaction.
+    """
+    task = str(entry.get("probable_task") or "general")
+    if task != "writing":
+        return task
+    if _compact_strings(entry.get("commit_messages", [])):
+        return task
+    scope_source = str(entry.get("scope_source") or "unknown")
+    if scope_source not in {"snapshot", "fallback_snapshot", "unknown"}:
+        return task
+    top_files = _compact_strings(entry.get("top_files", []))
+    if any(_is_code_file_name(name) for name in top_files):
+        return "coding"
+    return task
+
+
+def _is_code_file_name(name: Any) -> bool:
+    return Path(str(name or "")).suffix.lower() in _CODE_FILE_SUFFIXES
 
 
 _JOURNAL_MERGE_GAP_MAX_MIN = 5
@@ -1226,6 +1260,12 @@ def _parse_entry_datetime(value: Any) -> Optional[datetime]:
 
 
 def _choose_weaker_overlapping_entry(left: Dict[str, Any], right: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    if _same_project(left, right):
+        if _is_strong_commit_entry(left) and _is_weak_snapshot_entry(right):
+            return right, left
+        if _is_strong_commit_entry(right) and _is_weak_snapshot_entry(left):
+            return left, right
+
     left_project = _is_strong_project_entry(left)
     right_project = _is_strong_project_entry(right)
     left_off = _is_off_project_entry(left)
@@ -1236,6 +1276,41 @@ def _choose_weaker_overlapping_entry(left: Dict[str, Any], right: Dict[str, Any]
     if left_off and _is_weak_project_entry(right): return right, left
     if right_off and _is_weak_project_entry(left): return left, right
     return None, None
+
+
+def _same_project(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+    left_project = _normalize_project_name(left.get("active_project"))
+    right_project = _normalize_project_name(right.get("active_project"))
+    return left_project is not None and left_project == right_project
+
+
+def _is_commit_entry(entry: Dict[str, Any]) -> bool:
+    return bool(_compact_strings(entry.get("commit_messages", [])))
+
+
+def _is_strong_commit_entry(entry: Dict[str, Any]) -> bool:
+    if not _is_commit_entry(entry):
+        return False
+
+    scope_source = str(entry.get("scope_source") or "unknown")
+    top_files = _compact_strings(entry.get("top_files", []))
+
+    if scope_source in {"commit_diff", "commit_files"}:
+        return True
+    if scope_source == "fallback_snapshot" and top_files:
+        return True
+    return False
+
+
+def _is_weak_snapshot_entry(entry: Dict[str, Any]) -> bool:
+    if _is_commit_entry(entry):
+        return False
+    if str(entry.get("scope_source") or "unknown") not in {"snapshot", "fallback_snapshot", "unknown", "count_only"}:
+        return False
+    confidence = _float_or_zero(entry.get("task_confidence"))
+    if confidence >= 0.8 and _has_non_technical_scope(entry):
+        return False
+    return True
 
 
 def _is_weak_unknown_entry(entry: Dict[str, Any]) -> bool:
