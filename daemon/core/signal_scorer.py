@@ -878,7 +878,7 @@ class SignalScorer:
             return "deep"
         return "normal"
 
-    def _latest_user_presence_signal(self, recent: list, now: datetime, minutes: int = 2) -> Optional[dict]:
+    def _latest_user_presence_signal(self, recent: list, now: datetime, minutes: int = 5) -> Optional[dict]:
         """Return the latest lightweight user presence signal.
 
         `user_presence` is a support signal only: it says whether the user was
@@ -904,11 +904,15 @@ class SignalScorer:
         if event.type == "user_active":
             return {
                 "presence_state": "active",
-                "idle_seconds": self._parse_optional_int(payload.get("seconds")),
+                "idle_seconds": self._parse_optional_int(
+                    payload.get("idle_seconds") or payload.get("seconds")
+                ),
             }
         return {
             "presence_state": "idle",
-            "idle_seconds": self._parse_optional_int(payload.get("seconds")),
+            "idle_seconds": self._parse_optional_int(
+                payload.get("idle_seconds") or payload.get("seconds")
+            ),
         }
 
     @staticmethod
