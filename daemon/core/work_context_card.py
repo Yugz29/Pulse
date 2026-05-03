@@ -141,6 +141,21 @@ def _build_evidence(
         evidence.append(f"Niveau d'activité : {activity_level}")
     if probable_task and probable_task != "general":
         evidence.append(f"Tâche probable : {probable_task}")
+    presence_state = _first_non_empty(
+        getattr(current_context, "user_presence_state", None),
+        getattr(signals, "user_presence_state", None),
+        getattr(present, "user_presence_state", None),
+    )
+    idle_seconds = _first_number(
+        getattr(current_context, "user_idle_seconds", None),
+        getattr(signals, "user_idle_seconds", None),
+        getattr(present, "user_idle_seconds", None),
+    )
+    if presence_state:
+        if idle_seconds is not None:
+            evidence.append(f"Présence utilisateur : {presence_state} ({int(idle_seconds)}s sans input)")
+        else:
+            evidence.append(f"Présence utilisateur : {presence_state}")
 
     active_app = _first_non_empty(
         getattr(current_context, "active_app", None),
@@ -149,9 +164,52 @@ def _build_evidence(
     )
     if active_app:
         evidence.append(f"Application active : {active_app}")
+    active_app_duration = _first_number(
+        getattr(current_context, "active_app_duration_sec", None),
+        getattr(signals, "active_app_duration_sec", None),
+    )
+    if active_app_duration is not None and active_app_duration >= 10:
+        evidence.append(f"Application active stable depuis {int(active_app_duration)}s")
 
     if _has_window_title(signals=signals, current_context=current_context):
         evidence.append("Titre de fenêtre disponible")
+        terminal_summary = _first_non_empty(
+            getattr(current_context, "terminal_summary", None),
+            getattr(signals, "terminal_summary", None),
+        )
+        terminal_action = _first_non_empty(
+            getattr(current_context, "terminal_action_category", None),
+            getattr(signals, "terminal_action_category", None),
+        )
+        terminal_project = _first_non_empty(
+            getattr(current_context, "terminal_project", None),
+            getattr(signals, "terminal_project", None),
+        )
+        terminal_success = _first_non_empty(
+            getattr(current_context, "terminal_success", None),
+            getattr(signals, "terminal_success", None),
+        )
+        if terminal_summary:
+            evidence.append(f"Terminal : {terminal_summary}")
+        elif terminal_action:
+            evidence.append(f"Action terminal détectée : {terminal_action}")
+        if terminal_project and terminal_project != project:
+            evidence.append(f"Projet terminal : {terminal_project}")
+        if terminal_success in {"True", "False"}:
+            evidence.append(f"Dernière commande terminée : {'succès' if terminal_success == 'True' else 'échec'}")
+
+        app_switch_count = _first_number(
+            getattr(current_context, "app_switch_count_10m", None),
+            getattr(signals, "app_switch_count_10m", None),
+        )
+        ai_switch_count = _first_number(
+            getattr(current_context, "ai_app_switch_count_10m", None),
+            getattr(signals, "ai_app_switch_count_10m", None),
+        )
+        if app_switch_count and app_switch_count > 0:
+            evidence.append(f"Switchs d'apps sur 10 min : {int(app_switch_count)}")
+        if ai_switch_count and ai_switch_count > 0:
+            evidence.append(f"Allers-retours avec app IA sur 10 min : {int(ai_switch_count)}")
 
     edited_count = _first_number(getattr(signals, "edited_file_count_10m", None))
     if edited_count and edited_count > 0:
@@ -186,17 +244,30 @@ def _build_missing_context(
 
     if not project:
         missing.append("Projet actif non identifié")
+    terminal_action = _first_non_empty(
+        getattr(current_context, "terminal_action_category", None),
+        getattr(signals, "terminal_action_category", None),
+    )
+    terminal_summary = _first_non_empty(
+        getattr(current_context, "terminal_summary", None),
+        getattr(signals, "terminal_summary", None),
+    )
     if not probable_task or probable_task == "general":
-        missing.append("Tâche utilisateur encore générale")
+        if not terminal_action and not terminal_summary:
+            missing.append("Tâche utilisateur encore générale")
     if not activity_level or activity_level == "unknown":
         missing.append("Niveau d'activité incertain")
 
     if not _has_window_title(signals=signals, current_context=current_context):
         missing.append("Titre de fenêtre non disponible")
 
-    terminal_active = bool(getattr(signals, "terminal_active", False))
+    terminal_active = bool(getattr(signals, "terminal_active", False)) or bool(terminal_action)
+    terminal_command = _first_non_empty(
+        getattr(current_context, "terminal_command", None),
+        getattr(signals, "terminal_command", None),
+    )
     recent_commands = getattr(current_context, "recent_terminal_commands", None)
-    if terminal_active and not recent_commands:
+    if terminal_active and not terminal_command and not recent_commands:
         missing.append("Terminal actif sans commande récente lisible")
 
     return _dedupe(missing)
@@ -218,13 +289,20 @@ def _build_safe_next_probes(
         getattr(present, "active_app", None),
         getattr(signals, "active_app", None),
     )
+    terminal_context_available = bool(
+        _first_non_empty(
+            getattr(current_context, "terminal_summary", None),
+            getattr(current_context, "terminal_action_category", None),
+            getattr(signals, "terminal_summary", None),
+            getattr(signals, "terminal_action_category", None),
+        )
+    )
     if (
         not active_app
         or not project
         or not activity_level
         or activity_level == "unknown"
-        or not probable_task
-        or probable_task == "general"
+        or ((not probable_task or probable_task == "general") and not terminal_context_available)
     ):
         probes.append("app_context")
 
