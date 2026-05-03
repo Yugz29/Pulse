@@ -964,20 +964,24 @@ class RuntimeOrchestrator:
             self._set_commit_work_block(snapshot, started_at=work_block_started_at, ended_at=block_end)
         elif snapshot.get("started_at"):
             snapshot["work_block_started_at"] = snapshot.get("started_at")
-            snapshot["work_window_started_at"] = snapshot.get("started_at")
             snapshot["work_block_ended_at"] = block_end.isoformat()
-            snapshot["work_window_ended_at"] = block_end.isoformat()
 
-    def _annotate_commit_work_window(self, *args, **kwargs) -> None:
+    def _annotate_commit_work_window(self, snapshot: dict, *args, **kwargs) -> None:
         """Alias legacy pour les tests/outils qui utilisent encore work_window."""
-        self._annotate_commit_work_block(*args, **kwargs)
+        self._annotate_commit_work_block(snapshot, *args, **kwargs)
+        self._attach_legacy_commit_work_window_aliases(snapshot)
 
     @staticmethod
     def _set_commit_work_block(snapshot: dict, *, started_at: datetime, ended_at: datetime) -> None:
         snapshot["work_block_started_at"] = started_at.isoformat()
         snapshot["work_block_ended_at"] = ended_at.isoformat()
-        snapshot["work_window_started_at"] = snapshot["work_block_started_at"]
-        snapshot["work_window_ended_at"] = snapshot["work_block_ended_at"]
+
+    @staticmethod
+    def _attach_legacy_commit_work_window_aliases(snapshot: dict) -> None:
+        if snapshot.get("work_block_started_at"):
+            snapshot["work_window_started_at"] = snapshot["work_block_started_at"]
+        if snapshot.get("work_block_ended_at"):
+            snapshot["work_window_ended_at"] = snapshot["work_block_ended_at"]
 
     def _enqueue_file_event(self, event) -> None:
         with self._file_flush_condition:
