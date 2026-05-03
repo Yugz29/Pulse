@@ -284,6 +284,7 @@ def _first_recent_session_value(recent_sessions: Any, key: str) -> Any:
     return None
 
 
+
 def _is_screenshot_path(path: str) -> bool:
     name = os.path.basename(path).strip().lower()
     if not name:
@@ -292,6 +293,40 @@ def _is_screenshot_path(path: str) -> bool:
     if ext not in _SCREENSHOT_EXTENSIONS:
         return False
     return any(name.startswith(prefix) for prefix in _SCREENSHOT_NAME_PREFIXES)
+
+
+# Helper to serialize current_context for /state route
+def _serialize_current_context(current_context: Any) -> dict[str, Any]:
+    """Serialize CurrentContext while staying compatible with legacy SessionContext."""
+    signal_summary = getattr(current_context, "signal_summary", None)
+    return {
+        "id": getattr(current_context, "id", None),
+        "session_id": getattr(current_context, "session_id", None),
+        "started_at": getattr(current_context, "started_at", None),
+        "ended_at": getattr(current_context, "ended_at", None),
+        "boundary_reason": getattr(current_context, "boundary_reason", None),
+        "duration_sec": getattr(current_context, "duration_sec", None),
+        "active_project": getattr(current_context, "active_project", None),
+        "active_file": getattr(current_context, "active_file", None),
+        "probable_task": getattr(current_context, "probable_task", None),
+        "activity_level": getattr(current_context, "activity_level", None),
+        "focus_level": getattr(current_context, "focus_level", None),
+        "task_confidence": getattr(current_context, "task_confidence", None),
+        "user_presence_state": getattr(current_context, "user_presence_state", None),
+        "user_idle_seconds": getattr(current_context, "user_idle_seconds", None),
+        "terminal_action_category": getattr(current_context, "terminal_action_category", None),
+        "terminal_project": getattr(current_context, "terminal_project", None),
+        "terminal_cwd": getattr(current_context, "terminal_cwd", None),
+        "terminal_command": getattr(current_context, "terminal_command", None),
+        "terminal_success": getattr(current_context, "terminal_success", None),
+        "terminal_exit_code": getattr(current_context, "terminal_exit_code", None),
+        "terminal_duration_ms": getattr(current_context, "terminal_duration_ms", None),
+        "terminal_summary": getattr(current_context, "terminal_summary", None),
+        "active_app_duration_sec": getattr(signal_summary, "active_app_duration_sec", None),
+        "active_window_title_duration_sec": getattr(signal_summary, "active_window_title_duration_sec", None),
+        "app_switch_count_10m": getattr(signal_summary, "app_switch_count_10m", 0),
+        "ai_app_switch_count_10m": getattr(signal_summary, "ai_app_switch_count_10m", 0),
+    }
 
 
 def register_runtime_routes(
@@ -437,18 +472,7 @@ def register_runtime_routes(
         if get_current_context is not None:
             current_context = get_current_context()
             if current_context is not None:
-                context_payload = {
-                    "id": current_context.id,
-                    "session_id": current_context.session_id,
-                    "started_at": current_context.started_at,
-                    "ended_at": current_context.ended_at,
-                    "boundary_reason": current_context.boundary_reason,
-                    "duration_sec": current_context.duration_sec,
-                    "active_project": current_context.active_project,
-                    "probable_task": current_context.probable_task,
-                    "activity_level": current_context.activity_level,
-                    "task_confidence": current_context.task_confidence,
-                }
+                context_payload = _serialize_current_context(current_context)
                 state["current_context"] = context_payload
                 debug["current_context"] = context_payload
         if runtime_snapshot.signals:
