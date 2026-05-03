@@ -766,9 +766,30 @@ def _journal_date_from_path(journal_file: Path) -> str:
 
 def _write_journal_document(journal_file: Path, journal_date: str, entries: List[Dict[str, Any]]) -> None:
     rendered = _render_journal_document(journal_date, entries)
-    payload = json.dumps(entries, ensure_ascii=False, indent=2)
+    payload_entries = _journal_entries_for_hidden_payload(entries)
+    payload = json.dumps(payload_entries, ensure_ascii=False, indent=2)
     hidden_block = "\n".join(["", _JOURNAL_DATA_START, payload, _JOURNAL_DATA_END, ""])
     journal_file.write_text(rendered.rstrip() + hidden_block, encoding="utf-8")
+
+
+def _journal_entries_for_hidden_payload(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return canonical journal entries for the hidden structured payload.
+
+    The visible journal already renders the normalized/merged/overlap-resolved
+    view. Persisting raw entries in the hidden payload keeps obsolete snapshots
+    alive and makes later consumers re-read entries that were explicitly
+    absorbed or suppressed. Keep weak/noise entries for traceability, but drop
+    entries that the resolver marked as demoted or fully suppressed.
+    """
+    normalized_entries = [_normalize_journal_entry(raw_entry) for raw_entry in entries]
+    merged_entries = _merge_journal_entries(normalized_entries)
+    resolved_entries = _resolve_journal_entry_overlaps(merged_entries)
+    return [
+        entry
+        for entry in resolved_entries
+        if not entry.get("overlap_demoted")
+        and not _is_suppressed_journal_entry(entry)
+    ]
 
 
 def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -> str:
