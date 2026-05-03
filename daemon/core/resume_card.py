@@ -105,26 +105,9 @@ def build_resume_card_context(
         "diff_summary": diff_summary or "",
         "source_refs": source_refs,
     }
-    _attach_legacy_resume_context_aliases(context)
     return context
 
 
-def _attach_legacy_resume_context_aliases(context: dict[str, Any]) -> None:
-    """Expose old resume context keys while prompts/tools migrate.
-
-    Canonical keys:
-    - work_block_started_at
-    - work_block_commit_count
-    - recent_sessions
-
-    Legacy aliases:
-    - work_window_started_at
-    - work_window_commit_count
-    - closed_episodes
-    """
-    context["work_window_started_at"] = context["work_block_started_at"]
-    context["work_window_commit_count"] = context["work_block_commit_count"]
-    context["closed_episodes"] = context["recent_sessions"]
 
 
 def generate_resume_card(context: dict[str, Any], llm: Any = None) -> ResumeCard:
@@ -488,6 +471,7 @@ def _llm_prompt(context: dict[str, Any], fallback: ResumeCard) -> str:
         f"Fallback déterministe, à améliorer si possible:\n{json.dumps(fallback.to_event_payload(), ensure_ascii=False)}"
     )
 
+
 def _normalize_resume_card_terms(value: str) -> str:
     text = str(value or "")
     replacements = {
@@ -721,6 +705,7 @@ def _dedupe_text(values: list[str | None]) -> list[str]:
         seen.add(text)
         result.append(text)
     return result
+
 
 def _llm_card_text_limits(display_size: DisplaySize) -> tuple[int, int, int]:
     if display_size == "expanded":
