@@ -1,0 +1,176 @@
+from daemon.memory.work_heartbeat import (
+    classify_work_heartbeat,
+    is_work_heartbeat,
+    work_heartbeat_strength,
+)
+
+
+def test_meaningful_file_event_is_strong_work_heartbeat():
+    event = {
+        "type": "file_modified",
+        "payload": {
+            "path": "/Users/yugz/Projets/Pulse/Pulse/daemon/core/signal_scorer.py",
+            "is_meaningful": True,
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "strong"
+    assert heartbeat.reason == "meaningful_file_event"
+    assert is_work_heartbeat(event) is True
+
+
+def test_technical_file_event_is_not_work_heartbeat():
+    event = {
+        "type": "file_modified",
+        "payload": {
+            "path": "/Users/yugz/Projets/Pulse/Pulse/models_cache.json",
+            "is_meaningful": True,
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
+    assert is_work_heartbeat(event) is False
+
+
+def test_terminal_testing_command_is_strong_work_heartbeat():
+    event = {
+        "type": "terminal_command_finished",
+        "payload": {
+            "terminal_action_category": "testing",
+            "terminal_command": "python -m pytest tests/core/test_signal_scorer.py",
+            "terminal_project": "Pulse",
+            "terminal_success": True,
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "strong"
+    assert heartbeat.reason == "terminal_testing"
+    assert work_heartbeat_strength(event) == "strong"
+
+
+def test_terminal_project_command_without_category_is_strong_work_heartbeat():
+    event = {
+        "type": "terminal_command_finished",
+        "payload": {
+            "terminal_command": "curl -s http://127.0.0.1:8765/state",
+            "terminal_project": "Pulse",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "strong"
+    assert heartbeat.reason == "terminal_project_command"
+
+
+def test_git_status_is_weak_work_heartbeat():
+    event = {
+        "type": "terminal_command_finished",
+        "payload": {
+            "terminal_command": "git status",
+            "terminal_command_base": "git",
+            "terminal_project": "Pulse",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "weak"
+    assert heartbeat.reason == "terminal_git_status"
+
+
+def test_git_commit_is_strong_work_heartbeat():
+    event = {
+        "type": "terminal_command_finished",
+        "payload": {
+            "terminal_command": "git commit -m 'fix: persist session activity level'",
+            "terminal_command_base": "git",
+            "terminal_project": "Pulse",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "strong"
+    assert heartbeat.reason == "terminal_git_commit"
+
+
+def test_youtube_window_title_is_not_work_heartbeat_even_in_browser():
+    event = {
+        "type": "window_title_poll",
+        "payload": {
+            "app_name": "Google Chrome",
+            "title": "Some Video - YouTube",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
+
+
+def test_ai_app_activation_is_weak_work_heartbeat():
+    event = {
+        "type": "app_activated",
+        "payload": {
+            "app_name": "ChatGPT",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "weak"
+    assert heartbeat.reason == "ai_app_active"
+
+
+def test_recent_user_presence_is_not_work_heartbeat_by_itself():
+    event = {
+        "type": "user_presence",
+        "payload": {
+            "presence_state": "active",
+            "idle_seconds": "10",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
+
+
+def test_passive_user_presence_is_not_work_heartbeat():
+    event = {
+        "type": "user_presence",
+        "payload": {
+            "presence_state": "passive",
+            "idle_seconds": "300",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
+
+
+def test_unknown_app_does_not_become_work_without_corrobation():
+    event = {
+        "type": "app_activated",
+        "payload": {
+            "app_name": "Unknown Notes App",
+            "title": "Random window",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
