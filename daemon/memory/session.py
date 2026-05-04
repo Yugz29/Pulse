@@ -14,6 +14,7 @@ from daemon.memory.session_snapshot_builder import (
     build_session_snapshot as build_structured_session_snapshot,
     session_snapshot_to_legacy_dict,
 )
+from daemon.memory.work_heartbeat import classify_work_heartbeat
 
 _SESSION_TIMING_IGNORED_EVENT_TYPES = {
     "screen_locked",
@@ -789,19 +790,7 @@ class SessionMemory:
 
     @staticmethod
     def _is_meaningful_work_event(event: Dict[str, Any]) -> bool:
-        event_type = event["type"]
-        if event_type in {"screen_locked", "screen_unlocked", "user_idle"}:
-            return False
-        if event_type in _FILE_EVENT_TYPES:
-            path = str(event["payload"].get("path") or "")
-            return bool(path) and file_signal_significance(path) == "meaningful"
-        if event_type in {
-            "terminal_command_finished",
-            "mcp_command_received",
-            "claude_desktop_session",
-        }:
-            return True
-        return False
+        return classify_work_heartbeat(event).is_work
 
     @classmethod
     def _cluster_work_events(
@@ -809,17 +798,40 @@ class SessionMemory:
         events: List[Dict[str, Any]],
         *,
         gap_min: int = 30,
+        weak_bridge_min: int = 10,
     ) -> List[Dict[str, Any]]:
         if not events:
             return []
+
         max_gap = timedelta(minutes=gap_min)
+        max_weak_bridge = timedelta(minutes=weak_bridge_min)
         clusters: List[List[Dict[str, Any]]] = []
         current: List[Dict[str, Any]] = []
+        last_strong_at: Optional[datetime] = None
+
         for event in events:
-            if current and event["timestamp"] - current[-1]["timestamp"] > max_gap:
+            heartbeat = classify_work_heartbeat(event)
+            if heartbeat.strength == "none":
+                continue
+
+            observed_at = event["timestamp"]
+            if current and observed_at - current[-1]["timestamp"] > max_gap:
                 clusters.append(current)
                 current = []
-            current.append(event)
+                last_strong_at = None
+
+            if heartbeat.strength == "strong":
+                if not current:
+                    current = []
+                current.append(event)
+                last_strong_at = observed_at
+                continue
+
+            if heartbeat.strength == "weak":
+                if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_bridge:
+                    current.append(event)
+                continue
+
         if current:
             clusters.append(current)
 
