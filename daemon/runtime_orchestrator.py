@@ -224,7 +224,11 @@ class RuntimeOrchestrator:
         )
 
     def _export_memory_payload(self) -> dict:
-        return self.session_memory.export_memory_payload()
+        payload = self.session_memory.export_memory_payload()
+        present = self.runtime_state.get_present()
+        if present.activity_level:
+            payload.setdefault("activity_level", present.activity_level)
+        return payload
 
     def _resume_card_memory_payload(self, *, snapshot, base_payload: dict | None = None) -> dict:
         """Build a richer payload for resume cards without mutating session memory."""

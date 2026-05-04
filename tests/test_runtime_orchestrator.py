@@ -631,6 +631,43 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         mark_pending.assert_called_once()
         run_daydream.assert_called_once()
 
+    def test_export_memory_payload_injecte_activity_level_depuis_present_state(self):
+        """
+        Régression : les entrées journal snapshot avaient activity_level='unknown'
+        parce que export_memory_payload() ne retournait pas ce champ (absent de la
+        table sessions SQLite). L'orchestrateur doit l'injecter depuis PresentState.
+        """
+        signals = self._signals(activity_level="editing")
+        self._set_runtime_analysis(signals)
+        # Simule un payload snapshot sans activity_level — cas réel avant le fix
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+        }
+
+        payload = self.orchestrator._export_memory_payload()
+
+        self.assertIn("activity_level", payload)
+        self.assertEqual(payload["activity_level"], "editing")
+
+    def test_export_memory_payload_ne_ecrase_pas_activity_level_existant(self):
+        """
+        setdefault garantit qu'un activity_level déjà posé par la session
+        n'est pas écrasé par PresentState.
+        """
+        signals = self._signals(activity_level="executing")
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+            "activity_level": "editing",  # déjà présent
+        }
+
+        payload = self.orchestrator._export_memory_payload()
+
+        # Le payload existant doit être conservé, pas écrasé par PresentState
+        self.assertEqual(payload["activity_level"], "editing")
+
 
 if __name__ == "__main__":
     unittest.main()
