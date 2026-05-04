@@ -72,6 +72,9 @@ REPORT_COOLDOWN_MIN = 30
 MAX_SESSION_DURATION_MIN = 480
 _COOLDOWN_FILE = Path.home() / ".pulse" / "cooldown.json"
 
+# Number of pending journal entries to enrich at once
+PENDING_JOURNAL_ENRICH_LIMIT = 10
+
 _NOISE_SUFFIXES = {
     ".tmp", ".swp", ".swo", ".orig", ".bak",
     ".xcuserstate", ".DS_Store", "~",
@@ -291,7 +294,7 @@ def update_memories_from_session(
                 result = enrich_pending_journal_summaries(
                     memory_dir=base_dir,
                     llm=llm,
-                    limit=2,
+                    limit=PENDING_JOURNAL_ENRICH_LIMIT,
                     exclude_entry_ids={str(current_entry_id)},
                 )
                 if result.get("enriched") or result.get("failed"):
@@ -367,7 +370,7 @@ def enrich_pending_journal_summaries(
     memory_dir: Optional[Path] = None,
     llm: Any,
     journal_date: Optional[str] = None,
-    limit: int = 2,
+    limit: int = PENDING_JOURNAL_ENRICH_LIMIT,
     exclude_entry_ids: Optional[set[str]] = None,
 ) -> Dict[str, Any]:
     """Retry LLM summaries for fallback journal entries from one day.
