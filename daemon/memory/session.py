@@ -133,6 +133,7 @@ class SessionMemory:
                         active_project = ?,
                         active_file = ?,
                         probable_task = ?,
+                        activity_level = ?,
                         focus_level = ?,
                         friction_score = ?
                     WHERE id = ?
@@ -143,6 +144,7 @@ class SessionMemory:
                         present.active_project,
                         present.active_file,
                         present.probable_task,
+                        present.activity_level,
                         present.focus_level,
                         getattr(signals, "friction_score", 0.0),
                         self.session_id,
@@ -521,6 +523,7 @@ class SessionMemory:
             "active_project": session.get("active_project"),
             "active_file": session.get("active_file"),
             "probable_task": session.get("probable_task") or "general",
+            "activity_level": session.get("activity_level"),
             "focus_level": session.get("focus_level") or "normal",
             "friction_score": float(session.get("friction_score") or 0.0),
             "top_files": file_paths[:10],
@@ -618,11 +621,13 @@ class SessionMemory:
                     active_project TEXT,
                     active_file TEXT,
                     probable_task TEXT,
+                    activity_level TEXT,
                     focus_level TEXT,
                     friction_score REAL DEFAULT 0
                 )
                 """
             )
+            self._ensure_sessions_column(conn, "activity_level", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -651,6 +656,15 @@ class SessionMemory:
                 import logging
                 logging.getLogger("pulse").warning("FTS5 non disponible : %s", exc)
             conn.commit()
+
+    @staticmethod
+    def _ensure_sessions_column(conn: sqlite3.Connection, column_name: str, column_type: str) -> None:
+        columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if column_name not in columns:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {column_name} {column_type}")
 
     def _repair_stale_open_rows(self) -> None:
         """Ferme les sessions restées ouvertes après un arrêt brutal."""
@@ -769,7 +783,7 @@ class SessionMemory:
             "duration_sec": duration_sec,
             "active_project": session.get("active_project"),
             "probable_task": session.get("probable_task"),
-            "activity_level": None,
+            "activity_level": session.get("activity_level"),
             "task_confidence": None,
         }
 
