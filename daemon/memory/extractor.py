@@ -331,7 +331,14 @@ def enrich_session_report(
     top_files   = _clean_files(session_data.get("top_files", []))
     files_count = session_data.get("files_changed", 0)
     body = _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary)
-    return _replace_journal_entry(journal_file, entry_id, body)
+    return _replace_journal_entry(
+        journal_file,
+        entry_id,
+        body,
+        summary_source="llm",
+        summary_status="generated",
+        summary_error=None,
+    )
 
 
 def last_session_context(project: str, memory_dir: Optional[Path] = None, today: Optional["date"] = None) -> Optional[str]:
@@ -420,6 +427,9 @@ def _journal_entry_for_resume_card(entry: Dict[str, Any], journal_file: Path) ->
         "ended_at": entry.get("ended_at"),
         "boundary_reason": entry.get("boundary_reason"),
         "scope_source": entry.get("scope_source"),
+        "summary_source": entry.get("summary_source"),
+        "summary_status": entry.get("summary_status"),
+        "summary_error": entry.get("summary_error"),
     }
 
 
@@ -567,6 +577,10 @@ def _write_session_report(
         if files_from_diff:
             top_files = files_from_diff[:5]
 
+    summary_source = "deterministic_fallback"
+    summary_status = "llm_unavailable"
+    summary_error = None
+
     if llm is not None:
         try:
             body = _llm_summary(
@@ -574,8 +588,12 @@ def _write_session_report(
                 top_files, files_count, commit_message, diff_summary,
                 scope_source=scope_source,
             )
+            summary_source = "llm"
+            summary_status = "generated"
         except Exception as exc:
             log.warning("Memory : erreur résumé LLM, fallback déterministe utilisé : %s", exc)
+            summary_status = "failed"
+            summary_error = str(exc)
             body = _deterministic_summary(
                 duration, task, focus, friction, top_files, files_count,
                 commit_message, diff_summary=diff_summary,
@@ -606,6 +624,9 @@ def _write_session_report(
         boundary_reason=str(session_record.get("boundary_reason") or trigger or "unknown"),
         scope_source=scope_source,
         delivered_at=consolidation.get("delivered_at") or session.get("delivered_at"),
+        summary_source=summary_source,
+        summary_status=summary_status,
+        summary_error=summary_error,
     )
 
     with _memory_write_lock:
@@ -702,7 +723,15 @@ def _clean_files(files: List[str]) -> List[str]:
     return result
 
 
-def _replace_journal_entry(journal_file: Path, entry_id: str, body: str) -> bool:
+def _replace_journal_entry(
+    journal_file: Path,
+    entry_id: str,
+    body: str,
+    *,
+    summary_source: Optional[str] = None,
+    summary_status: Optional[str] = None,
+    summary_error: Optional[str] = None,
+) -> bool:
     with _memory_write_lock:
         if not journal_file.exists():
             return False
@@ -711,6 +740,11 @@ def _replace_journal_entry(journal_file: Path, entry_id: str, body: str) -> bool
         for entry in entries:
             if entry.get("entry_id") == entry_id:
                 entry["body"] = body.strip()
+                if summary_source is not None:
+                    entry["summary_source"] = summary_source
+                if summary_status is not None:
+                    entry["summary_status"] = summary_status
+                entry["summary_error"] = summary_error
                 updated = True
                 break
         if not updated:
@@ -725,7 +759,9 @@ def _new_entry_id(now: datetime) -> str:
 
 
 def _build_journal_entry(*, entry_id, active_project, probable_task, activity_level, task_confidence,
-    duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason, scope_source="snapshot", delivered_at=None) -> Dict[str, Any]:
+    duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason,
+    scope_source="snapshot", delivered_at=None,
+    summary_source="deterministic_fallback", summary_status="llm_unavailable", summary_error=None) -> Dict[str, Any]:
     return {
         "entry_id": entry_id,
         "active_project": active_project or "Autre",
@@ -743,6 +779,9 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
         "delivered_at": delivered_at,
         "boundary_reason": boundary_reason or "unknown",
         "scope_source": scope_source or "unknown",
+        "summary_source": summary_source or "deterministic_fallback",
+        "summary_status": summary_status or "unknown",
+        "summary_error": summary_error,
     }
 
 
@@ -879,6 +918,9 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
     normalized["commit_messages"] = _compact_strings([normalized.get("commit_message"), *normalized.get("commit_messages", [])])
     normalized["scope_source"] = str(normalized.get("scope_source") or "unknown")
+    normalized["summary_source"] = str(normalized.get("summary_source") or "unknown")
+    normalized["summary_status"] = str(normalized.get("summary_status") or "unknown")
+    normalized["summary_error"] = normalized.get("summary_error")
     normalized["probable_task"] = _correct_snapshot_task_from_scope(normalized)
     return normalized
 
