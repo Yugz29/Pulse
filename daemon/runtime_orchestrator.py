@@ -226,8 +226,8 @@ class RuntimeOrchestrator:
     def _export_memory_payload(self) -> dict:
         payload = self.session_memory.export_memory_payload()
         present = self.runtime_state.get_present()
-        if present.activity_level:
-            payload.setdefault("activity_level", present.activity_level)
+        if not payload.get("activity_level") and present.activity_level:
+            payload["activity_level"] = present.activity_level
         return payload
 
     def _resume_card_memory_payload(self, *, snapshot, base_payload: dict | None = None) -> dict:

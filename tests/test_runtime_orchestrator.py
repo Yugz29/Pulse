@@ -635,14 +635,17 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         """
         Régression : les entrées journal snapshot avaient activity_level='unknown'
         parce que export_memory_payload() ne retournait pas ce champ (absent de la
-        table sessions SQLite). L'orchestrateur doit l'injecter depuis PresentState.
+        table sessions SQLite). L'orchestrateur doit l'injecter depuis PresentState
+        si le champ est absent ou None dans le payload session.
         """
         signals = self._signals(activity_level="editing")
         self._set_runtime_analysis(signals)
-        # Simule un payload snapshot sans activity_level — cas réel avant le fix
+        # Simule un payload session avec activity_level=None (session toute neuve
+        # avant le premier cycle de scoring, ou DB sans la colonne)
         self.session_memory.export_memory_payload.return_value = {
             "active_project": "Pulse",
             "duration_min": 30,
+            "activity_level": None,
         }
 
         payload = self.orchestrator._export_memory_payload()
@@ -652,20 +655,20 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
     def test_export_memory_payload_ne_ecrase_pas_activity_level_existant(self):
         """
-        setdefault garantit qu'un activity_level déjà posé par la session
-        n'est pas écrasé par PresentState.
+        L'orchestrateur ne doit pas écraser un activity_level déjà posé par la
+        session (valeur DB non nulle prise en priorité sur PresentState).
         """
         signals = self._signals(activity_level="executing")
         self._set_runtime_analysis(signals)
         self.session_memory.export_memory_payload.return_value = {
             "active_project": "Pulse",
             "duration_min": 30,
-            "activity_level": "editing",  # déjà présent
+            "activity_level": "editing",  # déjà présent et non nul
         }
 
         payload = self.orchestrator._export_memory_payload()
 
-        # Le payload existant doit être conservé, pas écrasé par PresentState
+        # La valeur DB doit être conservée, pas écrasée par PresentState
         self.assertEqual(payload["activity_level"], "editing")
 
 
