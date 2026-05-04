@@ -283,6 +283,24 @@ def update_memories_from_session(
         llm=effective_llm, commit_message=commit_message, trigger=trigger, diff_summary=diff_summary,
     )
 
+    if trigger == "commit" and llm is not None and report_ref is not None:
+        _, current_entry_id = report_ref
+
+        def _enrich_pending():
+            try:
+                result = enrich_pending_journal_summaries(
+                    memory_dir=base_dir,
+                    llm=llm,
+                    limit=2,
+                    exclude_entry_ids={str(current_entry_id)},
+                )
+                if result.get("enriched") or result.get("failed"):
+                    log.debug("Memory : enrichissement différé journal : %s", result)
+            except Exception as exc:
+                log.debug("Memory : enrichissement différé ignoré : %s", exc)
+
+        threading.Thread(target=_enrich_pending, daemon=True, name="pulse-journal-enrich").start()
+
     _cooldown.last_report_at[project] = datetime.now()
     _save_cooldown()
     _update_index(base_dir)
@@ -315,6 +333,7 @@ def update_memories_from_session(
     return report_ref
 
 
+
 def enrich_session_report(
     report_ref, session_data: Dict[str, Any], llm: Any,
     *, commit_message: Optional[str] = None, diff_summary: Optional[str] = None,
@@ -339,6 +358,124 @@ def enrich_session_report(
         summary_status="generated",
         summary_error=None,
     )
+
+
+# -- Opportunistic enrichment of pending journal summaries --
+
+def enrich_pending_journal_summaries(
+    *,
+    memory_dir: Optional[Path] = None,
+    llm: Any,
+    journal_date: Optional[str] = None,
+    limit: int = 2,
+    exclude_entry_ids: Optional[set[str]] = None,
+) -> Dict[str, Any]:
+    """Retry LLM summaries for fallback journal entries from one day.
+
+    This is intentionally bounded and opportunistic: it repairs older fallback
+    commit summaries without blocking the main commit/report path.
+    """
+    if llm is None:
+        return {
+            "journal_date": journal_date,
+            "scanned": 0,
+            "eligible": 0,
+            "enriched": 0,
+            "failed": 0,
+            "skipped": 0,
+            "reason": "llm_unavailable",
+        }
+
+    base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
+    day = journal_date or datetime.now().strftime("%Y-%m-%d")
+    journal_file = base_dir / "sessions" / f"{day}.md"
+    exclude = {str(item) for item in (exclude_entry_ids or set())}
+    max_items = max(int(limit or 0), 0)
+
+    if max_items <= 0 or not journal_file.exists():
+        return {
+            "journal_date": day,
+            "scanned": 0,
+            "eligible": 0,
+            "enriched": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
+
+    entries = _load_journal_entries(journal_file)
+    result = {
+        "journal_date": day,
+        "scanned": len(entries),
+        "eligible": 0,
+        "enriched": 0,
+        "failed": 0,
+        "skipped": 0,
+    }
+
+    for entry in entries:
+        if result["eligible"] >= max_items:
+            break
+        normalized = _normalize_journal_entry(entry)
+        entry_id = str(normalized.get("entry_id") or "")
+        if entry_id in exclude:
+            result["skipped"] += 1
+            continue
+        if not _is_pending_llm_summary_entry(normalized):
+            result["skipped"] += 1
+            continue
+
+        result["eligible"] += 1
+        commit_message = str(normalized.get("commit_message") or "").strip()
+        try:
+            body = _llm_summary(
+                llm,
+                normalized.get("active_project") or "inconnu",
+                int(normalized.get("duration_min") or 0),
+                str(normalized.get("probable_task") or "general"),
+                "normal",
+                0.0,
+                _compact_strings(normalized.get("recent_apps", [])),
+                _compact_strings(normalized.get("top_files", [])),
+                int(normalized.get("files_count") or 0),
+                commit_message,
+                None,
+                scope_source=str(normalized.get("scope_source") or "unknown"),
+            )
+            if _replace_journal_entry(
+                journal_file,
+                entry_id,
+                body,
+                summary_source="llm",
+                summary_status="generated",
+                summary_error=None,
+            ):
+                result["enriched"] += 1
+            else:
+                result["failed"] += 1
+        except Exception as exc:
+            _replace_journal_entry(
+                journal_file,
+                entry_id,
+                str(normalized.get("body") or ""),
+                summary_source="deterministic_fallback",
+                summary_status="failed",
+                summary_error=str(exc),
+            )
+            result["failed"] += 1
+
+    return result
+
+
+def _is_pending_llm_summary_entry(entry: Dict[str, Any]) -> bool:
+    if str(entry.get("summary_source") or "") == "llm":
+        return False
+    if str(entry.get("summary_status") or "unknown") not in {"failed", "llm_unavailable", "unknown", "deferred"}:
+        return False
+    if not str(entry.get("commit_message") or "").strip():
+        return False
+    if _is_suppressed_journal_entry(entry) or _is_noise_journal_entry(entry):
+        return False
+    return True
 
 
 def last_session_context(project: str, memory_dir: Optional[Path] = None, today: Optional["date"] = None) -> Optional[str]:
