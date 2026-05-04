@@ -97,28 +97,64 @@ struct PresentData: Decodable {
 }
 
 struct SessionContextData: Decodable, Identifiable {
-    let id: String
-    let sessionId: String
-    let startedAt: String
+    private let rawId: String?
+    let sessionId: String?
+    let startedAt: String?
     let endedAt: String?
     let boundaryReason: String?
     let durationSec: Int?
     let activeProject: String?
+    let activeFile: String?
     let probableTask: String?
     let activityLevel: String?
+    let focusLevel: String?
     let taskConfidence: Double?
+    let userPresenceState: String?
+    let userIdleSeconds: Int?
+    let terminalActionCategory: String?
+    let terminalProject: String?
+    let terminalCwd: String?
+    let terminalCommand: String?
+    let terminalSuccess: Bool?
+    let activeAppDurationSec: Int?
+    let activeWindowTitleDurationSec: Int?
+    let appSwitchCount10m: Int?
+    let aiAppSwitchCount10m: Int?
+
+    var id: String {
+        if let rawId, !rawId.isEmpty { return rawId }
+        if let sessionId, !sessionId.isEmpty { return sessionId }
+        let fallback = [activeProject, activeFile, probableTask, activityLevel]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: "|")
+        return fallback.isEmpty ? "current-context" : fallback
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id
+        case rawId = "id"
         case sessionId = "session_id"
         case startedAt = "started_at"
         case endedAt = "ended_at"
         case boundaryReason = "boundary_reason"
         case durationSec = "duration_sec"
         case activeProject = "active_project"
+        case activeFile = "active_file"
         case probableTask = "probable_task"
         case activityLevel = "activity_level"
+        case focusLevel = "focus_level"
         case taskConfidence = "task_confidence"
+        case userPresenceState = "user_presence_state"
+        case userIdleSeconds = "user_idle_seconds"
+        case terminalActionCategory = "terminal_action_category"
+        case terminalProject = "terminal_project"
+        case terminalCwd = "terminal_cwd"
+        case terminalCommand = "terminal_command"
+        case terminalSuccess = "terminal_success"
+        case activeAppDurationSec = "active_app_duration_sec"
+        case activeWindowTitleDurationSec = "active_window_title_duration_sec"
+        case appSwitchCount10m = "app_switch_count_10m"
+        case aiAppSwitchCount10m = "ai_app_switch_count_10m"
     }
 
     var isActive: Bool {
@@ -166,7 +202,8 @@ struct SessionContextData: Decodable, Identifiable {
         case "executing": return "Exécution"
         case "navigating": return "Navigation"
         case "idle": return "Inactif"
-        default: return "—"
+        case nil: return "—"
+        default: return activityLevel ?? "—"
         }
     }
 
