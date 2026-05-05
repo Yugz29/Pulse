@@ -816,7 +816,27 @@ Dis ce qui a été livré et la portée principale — pas comment ni les détai
 Évite les tournures emphatiques comme « Ce commit améliore... ».
 Si le message de commit est explicite, reformule-le naturellement dans ce ton.
 N'invente aucun fait absent des données ci-dessus."""
-    return _llm_complete(llm, prompt, max_tokens=256, think=False)
+    return _sanitize_journal_summary(_llm_complete(llm, prompt, max_tokens=256, think=False))
+
+
+def _sanitize_journal_summary(value: Any) -> str:
+    """Keep LLM journal summaries as plain text so Markdown structure stays stable."""
+    text = str(value or "").strip()
+    if "<channel|>" in text:
+        text = text.rsplit("<channel|>", 1)[-1]
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    text = re.sub(r"</?[^>\n]+>", " ", text)
+    cleaned_lines: List[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s+", "", line)
+        line = line.replace("*", "")
+        line = re.sub(r"\s+", " ", line).strip()
+        if line:
+            cleaned_lines.append(line)
+    return " ".join(cleaned_lines).strip()
 
 
 def _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, *, diff_summary=None, terminal_summary=None, scope_source="snapshot") -> str:
@@ -1213,7 +1233,7 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
     if commit_messages:
         if len(commit_messages) == 1:
             # Commit unique : message en gras, résumé en dessous
-            lines.append(f"**{commit_messages[0]}**")
+            lines.append(_journal_commit_line(commit_messages[0]))
             if body:
                 lines.append(body)
             delivered_at = _format_journal_time(entry.get("delivered_at"))
@@ -1227,13 +1247,14 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
             body_parts = [p.strip() for p in body.split("\n") if p.strip()]
             if body_parts and len(body_parts) == len(commit_messages):
                 for i, (msg, summary) in enumerate(zip(commit_messages, body_parts)):
-                    lines.append(f"**{msg}**")
+                    lines.append(_journal_commit_line(msg))
                     lines.append(summary)
                     if i < len(commit_messages) - 1:
                         lines.append("")
                         lines.append("")
             else:
-                lines.append("Commits : " + " \u00b7 ".join(commit_messages))
+                for msg in commit_messages:
+                    lines.append(_journal_commit_line(msg))
                 if body:
                     lines.append(body)
     else:
@@ -1244,6 +1265,11 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
         duration = int(entry.get("duration_min") or 0)
         lines.append(f"Travail observ\u00e9 sur {_journal_entry_title(entry)} pendant {duration} min.")
     return "\n".join(lines)
+
+
+def _journal_commit_line(message: str) -> str:
+    escaped = str(message or "").replace("\\", "\\\\").replace("*", r"\*")
+    return f"**{escaped}**"
 
 
 def _journal_entry_scope(entry: Dict[str, Any]) -> str:

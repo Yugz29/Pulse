@@ -27,6 +27,12 @@ class FailingLLM:
         raise RuntimeError("offline")
 
 
+class MarkdownLLM:
+
+    def complete(self, prompt, max_tokens=200):
+        return "*   **Analyse :**\n6.  **\n<channel|>Résumé *court* avec **markdown** parasite."
+
+
 class TestExtractor(unittest.TestCase):
 
     def setUp(self):
@@ -1307,6 +1313,61 @@ class TestExtractor(unittest.TestCase):
         after = session_files[0].read_text()
         self.assertIn("Résumé court de la session.", after)
         self.assertIn("feat: commit enrichi", after)
+
+    def test_resume_llm_est_nettoye_avant_rendu_journal(self):
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "recent_apps": ["Cursor"],
+            "files_changed": 5,
+        }
+
+        report_ref = update_memories_from_session(
+            session,
+            llm=MarkdownLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: commit markdown",
+            defer_llm_enrichment=True,
+        )
+
+        ok = enrich_session_report(
+            report_ref,
+            session,
+            MarkdownLLM(),
+            commit_message="feat: commit markdown",
+        )
+        self.assertTrue(ok)
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        self.assertIn("**feat: commit markdown**", visible)
+        self.assertIn("Résumé court avec markdown parasite.", visible)
+        self.assertNotIn("6.  **", visible)
+        self.assertNotIn("*   **Analyse", visible)
+
+    def test_journal_garde_les_commits_groupes_en_gras(self):
+        rendered = extractor_module._render_journal_document(
+            "2026-05-05",
+            [
+                {
+                    "entry_id": "a",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "duration_min": 12,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:12:00",
+                    "body": "Résumé commun.",
+                    "commit_messages": ["feat: premier", "fix: second"],
+                    "top_files": ["extractor.py"],
+                }
+            ],
+        )
+
+        self.assertIn("**feat: premier**", rendered)
+        self.assertIn("**fix: second**", rendered)
+        self.assertNotIn("Commits : feat: premier", rendered)
 
     def test_commit_prefere_les_fichiers_du_diff_a_ceux_du_snapshot(self):
         update_memories_from_session(
