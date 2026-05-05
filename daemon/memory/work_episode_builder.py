@@ -23,6 +23,16 @@ DEFAULT_SCOPE_SHIFT_GAP_MIN = 12
 
 _FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed", "file_deleted", "file_change"}
 _APP_EVENT_TYPES = {"app_activated", "app_switch", "window_title_poll"}
+_BUSINESS_SCOPES = {
+    "work_episode",
+    "extractor",
+    "docs",
+    "tests",
+    "app_swift",
+    "memory",
+    "routes",
+    "daemon_python",
+}
 
 
 @dataclass(frozen=True)
@@ -342,6 +352,9 @@ def _dominant_scope(events: list[dict[str, Any]]) -> str | None:
         for event in events
         if classify_work_heartbeat(event).strength == "strong"
     ]
+    business_scope = _dominant_value(scope for scope in scopes if scope in _BUSINESS_SCOPES)
+    if business_scope:
+        return business_scope
     return _dominant_value(scope for scope in scopes if scope != "unknown") or (scopes[-1] if scopes else None)
 
 

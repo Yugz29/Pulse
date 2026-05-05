@@ -59,6 +59,10 @@ def git_command(command, minute=0):
     )
 
 
+def git_event(command, minute=0):
+    return git_command(command, minute)
+
+
 def test_user_presence_alone_creates_no_work_episode():
     events = [event("user_presence", 0, {"active": True})]
 
@@ -295,3 +299,77 @@ def test_same_scope_with_weak_support_and_short_gap_stays_one_episode():
 
     assert len(episodes) == 1
     assert episodes[0].evidence_count == 3
+
+
+def test_work_episode_scope_dominates_git_support_commands():
+    events = [
+        strong_path("daemon/memory/work_episode_builder.py", 0),
+        git_event("git add daemon/memory/work_episode_builder.py", 4),
+        git_event("git commit -m scope-fix", 8),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].dominant_scope == "work_episode"
+
+
+def test_scope_change_debug_prefers_next_business_scope_over_git_support():
+    events = [
+        strong_path("docs/FR/work-episodes-model.md", 0),
+        strong_path("daemon/memory/work_episode_builder.py", 18),
+        git_event("git add daemon/memory/work_episode_builder.py", 22),
+        git_event("git commit -m scope-fix", 26),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 2
+    assert episodes[0].boundary_reason == "scope_change"
+    assert episodes[0].dominant_scope == "docs"
+    assert episodes[0].next_scope == "work_episode"
+    assert episodes[0].debug_reason == "split after 18 min gap and scope change docs -> work_episode"
+    assert episodes[1].dominant_scope == "work_episode"
+    assert episodes[1].previous_scope == "docs"
+
+
+def test_git_only_episode_can_keep_git_as_dominant_scope():
+    events = [
+        git_event("git add daemon/memory/work_episode_builder.py", 0),
+        git_event("git commit -m scope-fix", 4),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].dominant_scope == "git"
+    assert episodes[0].probable_task == "version_control"
+
+
+def test_extractor_scope_dominates_tests_and_git_support_commands():
+    events = [
+        strong_path("daemon/memory/extractor.py", 0),
+        strong_path("tests/memory/test_extractor.py", 6),
+        git_event("git add daemon/memory/extractor.py tests/memory/test_extractor.py", 9),
+        git_event("git commit -m extractor-scope", 11),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].dominant_scope == "extractor"
+
+
+def test_scope_reclassification_does_not_change_strong_or_weak_counts():
+    events = [
+        strong_path("daemon/memory/work_episode_builder.py", 0),
+        git_event("git status", 3),
+        git_event("git commit -m scope-fix", 6),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].dominant_scope == "work_episode"
+    assert episodes[0].strong_event_count == 2
+    assert episodes[0].weak_event_count == 1
