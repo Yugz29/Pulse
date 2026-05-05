@@ -1503,6 +1503,48 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("**fix: second**", rendered)
         self.assertNotIn("Commits : feat: premier", rendered)
 
+    def test_journal_rend_un_resume_et_une_livraison_par_commit_groupe(self):
+        rendered = extractor_module._render_journal_document(
+            "2026-05-05",
+            [
+                {
+                    "entry_id": "first",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "executing",
+                    "duration_min": 35,
+                    "started_at": "2026-05-05T14:54:15",
+                    "ended_at": "2026-05-05T15:30:12",
+                    "body": "Résumé du premier commit.",
+                    "commit_message": "feat(memory): build today summary blocks from all events",
+                    "top_files": ["session.py", "test_session.py"],
+                    "scope_source": "commit_diff",
+                },
+                {
+                    "entry_id": "second",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "executing",
+                    "duration_min": 1,
+                    "started_at": "2026-05-05T15:30:12",
+                    "ended_at": "2026-05-05T15:30:12",
+                    "delivered_at": "2026-05-05T18:33:31",
+                    "body": "Résumé du second commit.",
+                    "commit_message": "feat(debug): expose work episodes for inspection",
+                    "top_files": ["runtime.py", "main.py"],
+                    "scope_source": "commit_diff",
+                },
+            ],
+        )
+
+        self.assertIn("### 14:54 → 15:30 — développement (35 min)", rendered)
+        self.assertIn("**feat(memory): build today summary blocks from all events**", rendered)
+        self.assertIn("Résumé du premier commit.", rendered)
+        self.assertIn("**feat(debug): expose work episodes for inspection**", rendered)
+        self.assertIn("Résumé du second commit.", rendered)
+        self.assertIn("Livré à 18:33.", rendered)
+        self.assertNotIn("14:54 → 18:33", rendered)
+
     def test_journal_met_seulement_le_sujet_du_commit_en_gras(self):
         full_commit_message = (
             "fix(memory): pass full commit message body to LLM summary prompt\n\n"

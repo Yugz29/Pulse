@@ -911,6 +911,9 @@ def _replace_journal_entry(
         for entry in entries:
             if entry.get("entry_id") == entry_id:
                 entry["body"] = body.strip()
+                commit_items = entry.get("commit_items")
+                if isinstance(commit_items, list) and len(commit_items) == 1 and isinstance(commit_items[0], dict):
+                    commit_items[0]["body"] = body.strip()
                 if summary_source is not None:
                     entry["summary_source"] = summary_source
                 if summary_status is not None:
@@ -933,7 +936,7 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
     duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason,
     scope_source="snapshot", delivered_at=None,
     summary_source="deterministic_fallback", summary_status="llm_unavailable", summary_error=None) -> Dict[str, Any]:
-    return {
+    entry = {
         "entry_id": entry_id,
         "active_project": active_project or "Autre",
         "probable_task": probable_task or "general",
@@ -954,6 +957,16 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
         "summary_status": summary_status or "unknown",
         "summary_error": summary_error,
     }
+    if (commit_message or "").strip():
+        entry["commit_items"] = [
+            {
+                "message": (commit_message or "").strip(),
+                "body": body.strip(),
+                "delivered_at": delivered_at,
+                "top_files": list(top_files[:5]),
+            }
+        ]
+    return entry
 
 
 def _load_journal_entries(journal_file: Path) -> List[Dict[str, Any]]:
@@ -1092,8 +1105,56 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized["summary_source"] = str(normalized.get("summary_source") or "unknown")
     normalized["summary_status"] = str(normalized.get("summary_status") or "unknown")
     normalized["summary_error"] = normalized.get("summary_error")
+    normalized["commit_items"] = _normalize_commit_items(normalized)
     normalized["probable_task"] = _correct_snapshot_task_from_scope(normalized)
     return normalized
+
+
+def _normalize_commit_items(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+    explicit_items = entry.get("commit_items")
+    if isinstance(explicit_items, list):
+        items: List[Dict[str, Any]] = []
+        for item in explicit_items:
+            if not isinstance(item, dict):
+                continue
+            message = str(item.get("message") or "").strip()
+            if not message:
+                continue
+            items.append(
+                {
+                    "message": message,
+                    "body": str(item.get("body") or "").strip(),
+                    "delivered_at": item.get("delivered_at"),
+                    "top_files": _compact_strings(item.get("top_files", [])),
+                }
+            )
+        if items:
+            return items
+
+    messages = _compact_strings(entry.get("commit_messages", []))
+    if not messages:
+        return []
+
+    body = str(entry.get("body") or "").strip()
+    body_parts = [part.strip() for part in body.split("\n") if part.strip()]
+    if len(messages) == 1:
+        bodies = [body]
+    elif len(body_parts) == len(messages):
+        bodies = body_parts
+    else:
+        bodies = [""] * len(messages)
+
+    top_files = _compact_strings(entry.get("top_files", []))
+    delivered_at = entry.get("delivered_at")
+    return [
+        {
+            "message": message,
+            "body": bodies[index] if index < len(bodies) else "",
+            "delivered_at": delivered_at,
+            "top_files": top_files,
+        }
+        for index, message in enumerate(messages)
+    ]
 
 
 # ── Code/snapshot task correction ─────────────────────────────────────────────
@@ -1162,10 +1223,12 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged = dict(left)
     merged["entry_id"] = str(left.get("entry_id") or right.get("entry_id") or "")
     merged["ended_at"] = right.get("ended_at") or left.get("ended_at")
+    merged["delivered_at"] = right.get("delivered_at") or left.get("delivered_at")
     merged["task_confidence"] = max(_float_or_zero(left.get("task_confidence")), _float_or_zero(right.get("task_confidence")))
     merged["files_count"] = max(int(left.get("files_count") or 0), len(_merge_unique_strings(left.get("top_files", []), right.get("top_files", []))), int(right.get("files_count") or 0))
     merged["top_files"] = _merge_unique_strings(left.get("top_files", []), right.get("top_files", []))
     merged["commit_messages"] = _merge_unique_strings(left.get("commit_messages", []), right.get("commit_messages", []))
+    merged["commit_items"] = _merge_commit_items(left.get("commit_items", []), right.get("commit_items", []))
     merged["recent_apps"] = _merge_unique_strings(left.get("recent_apps", []), right.get("recent_apps", []))
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
     merged["scope_source"] = _stronger_scope_source(left.get("scope_source"), right.get("scope_source"))
@@ -1206,14 +1269,31 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     # Si commit, concaténer uniquement les bodies des entrées qui ont un commit
     # pour que le comptage body_parts == commit_messages reste cohérent.
     if merged["commit_messages"]:
-        left_has_commit = bool((left.get("commit_message") or "").strip())
-        right_has_commit = bool((right.get("commit_message") or "").strip())
-        left_body = left.get("body") if left_has_commit else None
-        right_body = right.get("body") if right_has_commit else None
-        merged["body"] = "\n".join(_compact_strings([left_body, right_body]))
+        merged["body"] = "\n".join(_compact_strings([item.get("body") for item in merged.get("commit_items", [])]))
     else:
         merged["body"] = str(right.get("body") or left.get("body") or "").strip()
     return merged
+
+
+def _merge_commit_items(left_items: Any, right_items: Any) -> List[Dict[str, Any]]:
+    result: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in [*(left_items or []), *(right_items or [])]:
+        if not isinstance(item, dict):
+            continue
+        message = str(item.get("message") or "").strip()
+        if not message or message in seen:
+            continue
+        seen.add(message)
+        result.append(
+            {
+                "message": message,
+                "body": str(item.get("body") or "").strip(),
+                "delivered_at": item.get("delivered_at"),
+                "top_files": _compact_strings(item.get("top_files", [])),
+            }
+        )
+    return result
 
 
 def _journal_entry_title(entry: Dict[str, Any]) -> str:
@@ -1225,12 +1305,27 @@ def _journal_entry_title(entry: Dict[str, Any]) -> str:
 def _journal_entry_description(entry: Dict[str, Any]) -> str:
     lines: List[str] = []
     commit_messages = _compact_strings(entry.get("commit_messages", []))
+    commit_items = _commit_items_for_render(entry)
     body = str(entry.get("body") or "").strip()
     body = _strip_commit_sentence(body, commit_messages)
     if body.startswith(("Port\u00e9e : ", "Port\u00e9e estim\u00e9e : ")) and not commit_messages:
         body = ""
 
-    if commit_messages:
+    if commit_items:
+        ended_at = _format_journal_time(entry.get("ended_at"))
+        for index, item in enumerate(commit_items):
+            message = str(item.get("message") or "")
+            item_body = _strip_commit_sentence(str(item.get("body") or "").strip(), [message])
+            lines.append(_journal_commit_line(message))
+            if item_body:
+                lines.append(item_body)
+            delivered_at = _format_journal_time(item.get("delivered_at"))
+            if delivered_at != "??:??" and delivered_at != ended_at:
+                lines.append(f"Livré à {delivered_at}.")
+            if index < len(commit_items) - 1:
+                lines.append("")
+                lines.append("")
+    elif commit_messages:
         if len(commit_messages) == 1:
             # Commit unique : message en gras, résumé en dessous
             lines.append(_journal_commit_line(commit_messages[0]))
@@ -1255,8 +1350,8 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
             else:
                 for msg in commit_messages:
                     lines.append(_journal_commit_line(msg))
-                if body:
-                    lines.append(body)
+            if body:
+                lines.append(body)
     else:
         if body:
             lines.append(body)
@@ -1265,6 +1360,17 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
         duration = int(entry.get("duration_min") or 0)
         lines.append(f"Travail observ\u00e9 sur {_journal_entry_title(entry)} pendant {duration} min.")
     return "\n".join(lines)
+
+
+def _commit_items_for_render(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+    items = entry.get("commit_items")
+    if not isinstance(items, list):
+        return []
+    result = []
+    for item in items:
+        if isinstance(item, dict) and str(item.get("message") or "").strip():
+            result.append(item)
+    return result
 
 
 def _journal_commit_line(message: str) -> str:
