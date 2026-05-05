@@ -156,7 +156,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 0EE47B492F843C4100D67CA3 /* Build configuration list for PBXProject "App" */;
+			buildConfigurationList = 0EE47B492F843C4100D67CA3 /* Build configuration list for PBXProject "Pulse" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -450,7 +450,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		0EE47B492F843C4100D67CA3 /* Build configuration list for PBXProject "App" */ = {
+		0EE47B492F843C4100D67CA3 /* Build configuration list for PBXProject "Pulse" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0EE47B572F843C4400D67CA3 /* Debug */,

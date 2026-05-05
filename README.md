@@ -128,7 +128,7 @@ Références :
 ```text
 Pulse/
 ├── App/                            # App macOS SwiftUI
-│   └── App.xcodeproj
+│   └── Pulse.xcodeproj
 ├── AppTests/                       # Tests Swift
 ├── daemon/                         # Daemon Python local
 │   ├── main.py
@@ -334,7 +334,7 @@ La documentation de test détaillée est dans [docs/testing.md](./docs/FR/testin
 
 ## App Swift
 
-Ouvre `App/App.xcodeproj` dans Xcode et lance la target macOS.
+Ouvre `App/Pulse.xcodeproj` dans Xcode et lance la target macOS.
 
 L’app :
 - observe le système local
