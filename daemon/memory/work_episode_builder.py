@@ -51,6 +51,14 @@ class WorkEpisode:
     confidence: float
     boundary_reason: str
     uncertainty_flags: tuple[str, ...]
+    dominant_scope: str | None = None
+    previous_scope: str | None = None
+    next_scope: str | None = None
+    strong_event_count: int = 0
+    weak_event_count: int = 0
+    boundary_event_type: str | None = None
+    boundary_event_at: str | None = None
+    debug_reason: str | None = None
 
 
 def build_work_blocks(
@@ -109,15 +117,23 @@ def build_work_episodes(
 ) -> list[WorkEpisode]:
     """Build work episodes from all events so non-work boundaries are visible."""
     normalized_events = _normalize_events(events)
-    episode_event_groups = _cluster_episode_events(
+    episode_groups = _cluster_episode_events(
         normalized_events,
         weak_bridge_min=weak_bridge_min,
         block_gap_min=block_gap_min,
         episode_gap_min=episode_gap_min,
     )
+    dominant_scopes = [_dominant_scope(group["events"]) for group in episode_groups]
     return [
-        _episode_from_event_group(group, index, reason)
-        for index, (group, reason) in enumerate(episode_event_groups)
+        _episode_from_event_group(
+            group["events"],
+            index,
+            str(group["reason"]),
+            previous_scope=dominant_scopes[index - 1] if index > 0 else None,
+            next_scope=dominant_scopes[index + 1] if index + 1 < len(dominant_scopes) else None,
+            boundary_event=group.get("boundary_event"),
+        )
+        for index, group in enumerate(episode_groups)
     ]
 
 
@@ -127,12 +143,12 @@ def _cluster_episode_events(
     weak_bridge_min: int,
     block_gap_min: int,
     episode_gap_min: int,
-) -> list[tuple[list[dict[str, Any]], str]]:
+) -> list[dict[str, Any]]:
     max_block_gap = timedelta(minutes=block_gap_min)
     max_episode_gap = timedelta(minutes=episode_gap_min)
     max_weak_bridge = timedelta(minutes=weak_bridge_min)
     max_scope_shift_gap = timedelta(minutes=DEFAULT_SCOPE_SHIFT_GAP_MIN)
-    groups: list[tuple[list[dict[str, Any]], str]] = []
+    groups: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
     last_strong_at: datetime | None = None
     last_strong_scope: str | None = None
@@ -143,7 +159,7 @@ def _cluster_episode_events(
 
         boundary = _boundary_reason(event)
         if current and boundary is not None:
-            groups.append((current, boundary))
+            groups.append({"events": current, "reason": boundary, "boundary_event": event})
             current = []
             last_strong_at = None
             last_strong_scope = None
@@ -153,7 +169,7 @@ def _cluster_episode_events(
             continue
 
         if current and observed_at - current[-1]["timestamp"] > max_block_gap:
-            groups.append((current, "long_gap"))
+            groups.append({"events": current, "reason": "long_gap", "boundary_event": event})
             current = []
             last_strong_at = None
             last_strong_scope = None
@@ -166,11 +182,11 @@ def _cluster_episode_events(
                 and observed_at - last_strong_at > max_scope_shift_gap
                 and not _scopes_compatible(last_strong_scope, event_scope)
             ):
-                groups.append((current, "scope_change"))
+                groups.append({"events": current, "reason": "scope_change", "boundary_event": event})
                 current = []
 
             if current and last_strong_at is not None and observed_at - last_strong_at > max_episode_gap:
-                groups.append((current, "long_gap"))
+                groups.append({"events": current, "reason": "long_gap", "boundary_event": event})
                 current = []
 
             current.append(event)
@@ -184,7 +200,7 @@ def _cluster_episode_events(
             continue
 
     if current:
-        groups.append((current, "end_of_events"))
+        groups.append({"events": current, "reason": "end_of_events", "boundary_event": None})
     return groups
 
 
@@ -244,11 +260,24 @@ def _episode_from_blocks(blocks: list[WorkBlock], boundary_reason: str) -> WorkE
     )
 
 
-def _episode_from_event_group(events: list[dict[str, Any]], index: int, boundary_reason: str) -> WorkEpisode:
+def _episode_from_event_group(
+    events: list[dict[str, Any]],
+    index: int,
+    boundary_reason: str,
+    *,
+    previous_scope: str | None,
+    next_scope: str | None,
+    boundary_event: Mapping[str, Any] | None,
+) -> WorkEpisode:
     block = _block_from_cluster(events, index)
     evidence_count = len(events)
     project = block.project
     flags = _uncertainty_flags([block], project, evidence_count)
+    dominant_scope = _dominant_scope(events)
+    strong_count = _heartbeat_count(events, "strong")
+    weak_count = _heartbeat_count(events, "weak")
+    boundary_event_type = str(boundary_event.get("type")) if boundary_event else None
+    boundary_event_at = boundary_event.get("timestamp").isoformat() if boundary_event and boundary_event.get("timestamp") else None
     return WorkEpisode(
         id=f"work-episode-{block.started_at}",
         project=project,
@@ -262,6 +291,21 @@ def _episode_from_event_group(events: list[dict[str, Any]], index: int, boundary
         confidence=_confidence(evidence_count, project, flags),
         boundary_reason=boundary_reason,
         uncertainty_flags=flags,
+        dominant_scope=dominant_scope,
+        previous_scope=previous_scope,
+        next_scope=next_scope,
+        strong_event_count=strong_count,
+        weak_event_count=weak_count,
+        boundary_event_type=boundary_event_type,
+        boundary_event_at=boundary_event_at,
+        debug_reason=_debug_reason(
+            boundary_reason=boundary_reason,
+            dominant_scope=dominant_scope,
+            previous_scope=previous_scope,
+            next_scope=next_scope,
+            boundary_event=boundary_event,
+            events=events,
+        ),
     )
 
 
@@ -290,6 +334,73 @@ def _has_non_work_title(event: Mapping[str, Any]) -> bool:
     payload = event.get("payload") or {}
     title = str(payload.get("window_title") or payload.get("title") or "").lower()
     return bool(title and any(hint in title for hint in NON_WORK_TITLE_HINTS))
+
+
+def _dominant_scope(events: list[dict[str, Any]]) -> str | None:
+    scopes = [
+        _scope_from_event(event)
+        for event in events
+        if classify_work_heartbeat(event).strength == "strong"
+    ]
+    return _dominant_value(scope for scope in scopes if scope != "unknown") or (scopes[-1] if scopes else None)
+
+
+def _heartbeat_count(events: list[dict[str, Any]], strength: str) -> int:
+    return sum(1 for event in events if classify_work_heartbeat(event).strength == strength)
+
+
+def _debug_reason(
+    *,
+    boundary_reason: str,
+    dominant_scope: str | None,
+    previous_scope: str | None,
+    next_scope: str | None,
+    boundary_event: Mapping[str, Any] | None,
+    events: list[dict[str, Any]],
+) -> str | None:
+    if boundary_reason == "scope_change":
+        gap_min = _gap_from_last_strong_to_boundary(events, boundary_event)
+        source = dominant_scope or "unknown"
+        target = next_scope or _scope_from_event(boundary_event) if boundary_event else "unknown"
+        gap_label = f"{gap_min} min" if gap_min is not None else "unknown"
+        return f"split after {gap_label} gap and scope change {source} -> {target}"
+    if boundary_reason in {"screen_locked", "non_work_title"}:
+        event_type = str(boundary_event.get("type") or boundary_reason) if boundary_event else boundary_reason
+        return f"split on boundary event {event_type}"
+    if boundary_reason == "long_gap":
+        gap_min = _gap_from_last_event_to_boundary(events, boundary_event)
+        gap_label = f"{gap_min} min" if gap_min is not None else "unknown"
+        return f"split after {gap_label} long gap"
+    if boundary_reason == "end_of_events":
+        return "episode open until end of observed events"
+    if previous_scope and dominant_scope and previous_scope != dominant_scope:
+        return f"episode starts after scope change {previous_scope} -> {dominant_scope}"
+    return None
+
+
+def _gap_from_last_strong_to_boundary(
+    events: list[dict[str, Any]],
+    boundary_event: Mapping[str, Any] | None,
+) -> int | None:
+    if not boundary_event:
+        return None
+    boundary_at = boundary_event.get("timestamp")
+    strong_events = [event for event in events if classify_work_heartbeat(event).strength == "strong"]
+    if not strong_events or not isinstance(boundary_at, datetime):
+        return None
+    return max(int((boundary_at - strong_events[-1]["timestamp"]).total_seconds() / 60), 0)
+
+
+def _gap_from_last_event_to_boundary(
+    events: list[dict[str, Any]],
+    boundary_event: Mapping[str, Any] | None,
+) -> int | None:
+    if not events or not boundary_event:
+        return None
+    boundary_at = boundary_event.get("timestamp")
+    if not isinstance(boundary_at, datetime):
+        return None
+    return max(int((boundary_at - events[-1]["timestamp"]).total_seconds() / 60), 0)
 
 
 def _scope_from_event(event: Mapping[str, Any]) -> str:

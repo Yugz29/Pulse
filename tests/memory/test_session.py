@@ -581,11 +581,20 @@ class TestSessionMemory(unittest.TestCase):
                 "confidence",
                 "boundary_reason",
                 "uncertainty_flags",
+                "dominant_scope",
+                "previous_scope",
+                "next_scope",
+                "strong_event_count",
+                "weak_event_count",
+                "boundary_event_type",
+                "boundary_event_at",
+                "debug_reason",
             },
         )
         self.assertEqual(episode["project"], "Pulse")
         self.assertEqual(episode["probable_task"], "coding")
         self.assertEqual(episode["boundary_reason"], "screen_locked")
+        self.assertEqual(episode["boundary_event_type"], "screen_locked")
 
     def test_get_today_summary_youtube_chrome_presence_seuls_ne_creent_pas_de_work_block(self):
         today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)

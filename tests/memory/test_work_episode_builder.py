@@ -158,6 +158,66 @@ def test_screen_locked_between_strong_events_creates_two_episodes():
     assert episodes[0].boundary_reason == "screen_locked"
 
 
+def test_scope_change_exposes_scope_debug_fields():
+    events = [
+        strong_path("docs/FR/work-episodes-model.md", 0),
+        strong_path("daemon/memory/work_episode_builder.py", 18),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 2
+    assert episodes[0].boundary_reason == "scope_change"
+    assert episodes[0].dominant_scope == "docs"
+    assert episodes[0].previous_scope is None
+    assert episodes[0].next_scope == "work_episode"
+    assert episodes[0].boundary_event_type == "file_modified"
+    assert episodes[0].boundary_event_at == (BASE + timedelta(minutes=18)).isoformat()
+    assert episodes[0].debug_reason == "split after 18 min gap and scope change docs -> work_episode"
+    assert episodes[1].previous_scope == "docs"
+    assert episodes[1].dominant_scope == "work_episode"
+
+
+def test_screen_locked_boundary_exposes_boundary_event_debug_fields():
+    events = [
+        strong_file(0),
+        event("screen_locked", 5),
+        strong_file(6),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert episodes[0].boundary_reason == "screen_locked"
+    assert episodes[0].boundary_event_type == "screen_locked"
+    assert episodes[0].boundary_event_at == (BASE + timedelta(minutes=5)).isoformat()
+    assert episodes[0].debug_reason == "split on boundary event screen_locked"
+
+
+def test_work_episode_debug_counts_strong_and_weak_events():
+    events = [
+        strong_file(0),
+        weak_app("ChatGPT", 4),
+        strong_path("daemon/memory/current_context_builder.py", 8),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].strong_event_count == 2
+    assert episodes[0].weak_event_count == 1
+    assert episodes[0].evidence_count == 3
+
+
+def test_end_of_events_has_stable_debug_reason():
+    episodes = build_work_episodes([strong_file(0)])
+
+    assert len(episodes) == 1
+    assert episodes[0].boundary_reason == "end_of_events"
+    assert episodes[0].boundary_event_type is None
+    assert episodes[0].boundary_event_at is None
+    assert episodes[0].debug_reason == "episode open until end of observed events"
+
+
 def test_docs_then_daemon_python_after_notable_gap_create_two_episodes():
     events = [
         strong_path("docs/FR/work-episodes-model.md", 0),
