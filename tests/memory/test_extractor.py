@@ -1369,6 +1369,33 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("**fix: second**", rendered)
         self.assertNotIn("Commits : feat: premier", rendered)
 
+    def test_journal_met_seulement_le_sujet_du_commit_en_gras(self):
+        full_commit_message = (
+            "fix(memory): pass full commit message body to LLM summary prompt\n\n"
+            "_llm_summary was only using the first line of the commit message,\n"
+            "discarding the body which contains the problem description and solution."
+        )
+        rendered = extractor_module._render_journal_document(
+            "2026-05-05",
+            [
+                {
+                    "entry_id": "a",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "duration_min": 12,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:12:00",
+                    "body": "Résumé du commit.",
+                    "commit_messages": [full_commit_message],
+                    "top_files": ["extractor.py"],
+                }
+            ],
+        )
+
+        self.assertIn("**fix(memory): pass full commit message body to LLM summary prompt**", rendered)
+        self.assertNotIn("_llm_summary was only using the first line", rendered)
+        self.assertNotIn("solution.**", rendered)
+
     def test_commit_prefere_les_fichiers_du_diff_a_ceux_du_snapshot(self):
         update_memories_from_session(
             {

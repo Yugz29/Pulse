@@ -1268,7 +1268,8 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
 
 
 def _journal_commit_line(message: str) -> str:
-    escaped = str(message or "").replace("\\", "\\\\").replace("*", r"\*")
+    subject = next((line.strip() for line in str(message or "").splitlines() if line.strip()), "")
+    escaped = subject.replace("\\", "\\\\").replace("*", r"\*")
     return f"**{escaped}**"
 
 
