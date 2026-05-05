@@ -405,6 +405,77 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(summary["work_blocks"][1]["duration_min"], 1)
         self.assertEqual(summary["work_blocks"][1]["project"], "Pulse")
 
+    def test_get_today_summary_weak_isole_ne_cree_pas_de_work_block(self):
+        today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
+
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "terminal_command_finished",
+            {
+                "terminal_command": "git status",
+                "terminal_command_base": "git",
+                "terminal_project": "Pulse",
+            },
+            timestamp=today + timedelta(minutes=2),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 0)
+        self.assertEqual(summary["totals"]["worked_min"], 0)
+        self.assertEqual(summary["work_blocks"], [])
+
+    def test_get_today_summary_weak_apres_strong_prolonge_le_work_block(self):
+        today = datetime.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=5),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 1)
+        self.assertEqual(summary["totals"]["worked_min"], 5)
+        self.assertEqual(summary["work_blocks"][0]["duration_min"], 5)
+        self.assertEqual(summary["work_blocks"][0]["event_count"], 2)
+
+    def test_get_today_summary_youtube_chrome_presence_seuls_ne_creent_pas_de_work_block(self):
+        today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
+
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "Google Chrome"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "window_title_poll",
+            {"app_name": "Google Chrome", "title": "Some Video - YouTube"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "user_presence",
+            {"presence_state": "active", "idle_seconds": "3"},
+            timestamp=today + timedelta(minutes=2),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 0)
+        self.assertEqual(summary["totals"]["worked_min"], 0)
+        self.assertEqual(summary["work_blocks"], [])
+
     def test_get_today_summary_compte_les_commits_du_depot(self):
         repo = Path(self.tmpdir.name) / "repo"
         repo.mkdir()

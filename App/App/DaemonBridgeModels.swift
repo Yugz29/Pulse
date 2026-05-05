@@ -32,6 +32,21 @@ struct StateResponse: Decodable {
         case currentContext = "current_context"
         case recentSessions = "recent_sessions"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        activeApp = try container.decodeIfPresent(String.self, forKey: .activeApp)
+        activeFile = try container.decodeIfPresent(String.self, forKey: .activeFile)
+        activeProject = try container.decodeIfPresent(String.self, forKey: .activeProject)
+        sessionDurationMin = try container.decodeIfPresent(Int.self, forKey: .sessionDurationMin) ?? 0
+        lastEventType = try container.decodeIfPresent(String.self, forKey: .lastEventType)
+        runtimePaused = try container.decodeIfPresent(Bool.self, forKey: .runtimePaused)
+        present = try container.decodeIfPresent(PresentData.self, forKey: .present)
+        signals = try container.decodeIfPresent(SignalsData.self, forKey: .signals)
+        sessionFsm = try container.decodeIfPresent(SessionFSMData.self, forKey: .sessionFsm)
+        currentContext = try container.decodeIfPresent(SessionContextData.self, forKey: .currentContext)
+        recentSessions = try container.decodeIfPresent([SessionContextData].self, forKey: .recentSessions)
+    }
 }
 
 struct PresentData: Decodable {
@@ -116,6 +131,9 @@ struct SessionContextData: Decodable, Identifiable {
     let terminalCwd: String?
     let terminalCommand: String?
     let terminalSuccess: Bool?
+    let terminalExitCode: Int?
+    let terminalDurationMs: Int?
+    let terminalSummary: String?
     let activeAppDurationSec: Int?
     let activeWindowTitleDurationSec: Int?
     let appSwitchCount10m: Int?
@@ -151,6 +169,9 @@ struct SessionContextData: Decodable, Identifiable {
         case terminalCwd = "terminal_cwd"
         case terminalCommand = "terminal_command"
         case terminalSuccess = "terminal_success"
+        case terminalExitCode = "terminal_exit_code"
+        case terminalDurationMs = "terminal_duration_ms"
+        case terminalSummary = "terminal_summary"
         case activeAppDurationSec = "active_app_duration_sec"
         case activeWindowTitleDurationSec = "active_window_title_duration_sec"
         case appSwitchCount10m = "app_switch_count_10m"

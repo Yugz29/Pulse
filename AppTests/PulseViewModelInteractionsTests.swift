@@ -508,6 +508,16 @@ final class PulseViewModelInteractionsTests: XCTestCase {
                 return (response, Data("[]".utf8))
             }
 
+            if path == "/context-probes/requests" {
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data(#"{"requests":[],"debug":[],"count":0}"#.utf8))
+            }
+
             XCTFail("Chemin inattendu: \\(path)")
             let response = HTTPURLResponse(
                 url: url,
@@ -858,6 +868,15 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(state.currentContext?.probableTask, "debug")
         XCTAssertEqual(state.recentSessions?.first?.id, "session-recent")
         XCTAssertEqual(state.signals?.activeProject, "SignalsProject")
+    }
+
+    func testStateResponseDefaultsMissingOrNullSessionDurationToZero() throws {
+        let missing = try JSONDecoder().decode(StateResponse.self, from: Data(#"{"current_context":null}"#.utf8))
+        let nullValue = try JSONDecoder().decode(StateResponse.self, from: Data(#"{"session_duration_min":null}"#.utf8))
+
+        XCTAssertEqual(missing.sessionDurationMin, 0)
+        XCTAssertEqual(nullValue.sessionDurationMin, 0)
+        XCTAssertNil(missing.currentContext)
     }
 
     func testRefreshStateBuildsProductStateFromCurrentContextBeforeLegacyAlias() async {

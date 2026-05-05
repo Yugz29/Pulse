@@ -86,6 +86,26 @@ def test_git_status_is_weak_work_heartbeat():
     assert heartbeat.reason == "terminal_git_status"
 
 
+def test_read_only_git_variants_are_weak_work_heartbeats():
+    commands = [
+        "git -C repo status",
+        "git diff --stat",
+        "git show HEAD",
+    ]
+
+    for command in commands:
+        heartbeat = classify_work_heartbeat({
+            "type": "terminal_command_finished",
+            "payload": {
+                "terminal_command": command,
+                "terminal_command_base": "git",
+                "terminal_project": "Pulse",
+            },
+        })
+
+        assert heartbeat.strength == "weak"
+
+
 def test_git_commit_is_strong_work_heartbeat():
     event = {
         "type": "terminal_command_finished",

@@ -1314,6 +1314,97 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("Résumé court de la session.", after)
         self.assertIn("feat: commit enrichi", after)
 
+    def test_enrich_pending_journal_summaries_enrichit_failed_et_ignore_current_ou_sans_commit(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "failed-commit",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Fallback failed.",
+                    "commit_message": "fix: enrich later",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+                {
+                    "entry_id": "current-entry",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 20,
+                    "body": "Current fallback.",
+                    "commit_message": "feat: current commit",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["runtime.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T11:00:00",
+                    "ended_at": "2026-05-05T11:20:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+                {
+                    "entry_id": "no-commit",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 21,
+                    "body": "No commit fallback.",
+                    "commit_message": "",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["session.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:21:00",
+                    "boundary_reason": "screen_lock",
+                    "scope_source": "snapshot",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+            exclude_entry_ids={"current-entry"},
+        )
+        entries = {
+            entry["entry_id"]: entry
+            for entry in extractor_module._load_journal_entries(journal_file)
+        }
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(entries["failed-commit"]["summary_source"], "llm")
+        self.assertEqual(entries["failed-commit"]["summary_status"], "generated")
+        self.assertIsNone(entries["failed-commit"]["summary_error"])
+        self.assertEqual(entries["failed-commit"]["body"], "Résumé court de la session.")
+        self.assertEqual(entries["current-entry"]["summary_status"], "failed")
+        self.assertEqual(entries["current-entry"]["body"], "Current fallback.")
+        self.assertEqual(entries["no-commit"]["summary_status"], "failed")
+        self.assertEqual(entries["no-commit"]["body"], "No commit fallback.")
+
     def test_resume_llm_est_nettoye_avant_rendu_journal(self):
         session = {
             "active_project": "Pulse",
