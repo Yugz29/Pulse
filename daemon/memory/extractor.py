@@ -789,7 +789,9 @@ def _write_session_report(
 def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
     facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
     if commit_message:
-        facts.append(f'Commit : "{commit_message.splitlines()[0]}"')
+        lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
+        full_msg = "\n".join(lines).strip()[:400]
+        facts.append(f"Commit :\n{full_msg}")
     if diff_summary:
         for line in diff_summary.splitlines():
             facts.append(line)
