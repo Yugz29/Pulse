@@ -19,6 +19,7 @@ from daemon.memory.work_heartbeat import NON_WORK_TITLE_HINTS, classify_work_hea
 DEFAULT_WEAK_BRIDGE_MIN = 10
 DEFAULT_BLOCK_GAP_MIN = 30
 DEFAULT_EPISODE_GAP_MIN = 45
+DEFAULT_SCOPE_SHIFT_GAP_MIN = 12
 
 _FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed", "file_deleted", "file_change"}
 _APP_EVENT_TYPES = {"app_activated", "app_switch", "window_title_poll"}
@@ -108,32 +109,83 @@ def build_work_episodes(
 ) -> list[WorkEpisode]:
     """Build work episodes from all events so non-work boundaries are visible."""
     normalized_events = _normalize_events(events)
-    blocks = build_work_blocks(
+    episode_event_groups = _cluster_episode_events(
         normalized_events,
         weak_bridge_min=weak_bridge_min,
         block_gap_min=block_gap_min,
+        episode_gap_min=episode_gap_min,
     )
-    if not blocks:
-        return []
+    return [
+        _episode_from_event_group(group, index, reason)
+        for index, (group, reason) in enumerate(episode_event_groups)
+    ]
 
+
+def _cluster_episode_events(
+    events: list[dict[str, Any]],
+    *,
+    weak_bridge_min: int,
+    block_gap_min: int,
+    episode_gap_min: int,
+) -> list[tuple[list[dict[str, Any]], str]]:
+    max_block_gap = timedelta(minutes=block_gap_min)
     max_episode_gap = timedelta(minutes=episode_gap_min)
-    episodes: list[WorkEpisode] = []
-    current: list[WorkBlock] = [blocks[0]]
+    max_weak_bridge = timedelta(minutes=weak_bridge_min)
+    max_scope_shift_gap = timedelta(minutes=DEFAULT_SCOPE_SHIFT_GAP_MIN)
+    groups: list[tuple[list[dict[str, Any]], str]] = []
+    current: list[dict[str, Any]] = []
+    last_strong_at: datetime | None = None
+    last_strong_scope: str | None = None
 
-    for block in blocks[1:]:
-        previous = current[-1]
-        gap = _parse_datetime(block.started_at) - _parse_datetime(previous.ended_at)
-        boundary = _boundary_between(normalized_events, previous.ended_at, block.started_at)
-        if gap <= max_episode_gap and boundary is None and _compatible_blocks(previous, block):
-            current.append(block)
+    for event in events:
+        heartbeat = classify_work_heartbeat(event)
+        observed_at = event["timestamp"]
+
+        boundary = _boundary_reason(event)
+        if current and boundary is not None:
+            groups.append((current, boundary))
+            current = []
+            last_strong_at = None
+            last_strong_scope = None
             continue
 
-        reason = boundary or ("long_gap" if gap > max_episode_gap else "scope_change")
-        episodes.append(_episode_from_blocks(current, reason))
-        current = [block]
+        if heartbeat.strength == "none":
+            continue
 
-    episodes.append(_episode_from_blocks(current, "end_of_events"))
-    return episodes
+        if current and observed_at - current[-1]["timestamp"] > max_block_gap:
+            groups.append((current, "long_gap"))
+            current = []
+            last_strong_at = None
+            last_strong_scope = None
+
+        if heartbeat.strength == "strong":
+            event_scope = _scope_from_event(event)
+            if (
+                current
+                and last_strong_at is not None
+                and observed_at - last_strong_at > max_scope_shift_gap
+                and not _scopes_compatible(last_strong_scope, event_scope)
+            ):
+                groups.append((current, "scope_change"))
+                current = []
+
+            if current and last_strong_at is not None and observed_at - last_strong_at > max_episode_gap:
+                groups.append((current, "long_gap"))
+                current = []
+
+            current.append(event)
+            last_strong_at = observed_at
+            last_strong_scope = event_scope
+            continue
+
+        if heartbeat.strength == "weak":
+            if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_bridge:
+                current.append(event)
+            continue
+
+    if current:
+        groups.append((current, "end_of_events"))
+    return groups
 
 
 def _normalize_events(events: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -192,6 +244,27 @@ def _episode_from_blocks(blocks: list[WorkBlock], boundary_reason: str) -> WorkE
     )
 
 
+def _episode_from_event_group(events: list[dict[str, Any]], index: int, boundary_reason: str) -> WorkEpisode:
+    block = _block_from_cluster(events, index)
+    evidence_count = len(events)
+    project = block.project
+    flags = _uncertainty_flags([block], project, evidence_count)
+    return WorkEpisode(
+        id=f"work-episode-{block.started_at}",
+        project=project,
+        probable_task=block.probable_task,
+        activity_level=block.activity_level,
+        started_at=block.started_at,
+        ended_at=block.ended_at,
+        duration_min=block.duration_min,
+        work_block_ids=(block.id,),
+        evidence_count=evidence_count,
+        confidence=_confidence(evidence_count, project, flags),
+        boundary_reason=boundary_reason,
+        uncertainty_flags=flags,
+    )
+
+
 def _boundary_between(events: list[dict[str, Any]], after_iso: str, before_iso: str) -> str | None:
     after = _parse_datetime(after_iso)
     before = _parse_datetime(before_iso)
@@ -219,6 +292,59 @@ def _has_non_work_title(event: Mapping[str, Any]) -> bool:
     return bool(title and any(hint in title for hint in NON_WORK_TITLE_HINTS))
 
 
+def _scope_from_event(event: Mapping[str, Any]) -> str:
+    payload = event.get("payload") or {}
+    path = payload.get("path") or payload.get("file_path")
+    if path:
+        return _scope_from_path(str(path))
+    event_type = str(event.get("type") or "")
+    if event_type == "terminal_command_finished":
+        command = str(payload.get("terminal_command") or "").strip()
+        base = str(payload.get("terminal_command_base") or "").strip().lower()
+        if base == "git" or command.startswith("git "):
+            return "git"
+    return "unknown"
+
+
+def _scope_from_path(path: str) -> str:
+    normalized = path.replace("\\", "/")
+    name = Path(normalized).name
+    if "/docs/" in normalized:
+        return "docs"
+    if name in {"work_episode_builder.py", "test_work_episode_builder.py"}:
+        return "work_episode"
+    if name in {"extractor.py", "test_extractor.py"}:
+        return "extractor"
+    if "/daemon/routes/" in normalized:
+        return "routes"
+    if "/daemon/memory/" in normalized:
+        return "memory"
+    if "/daemon/" in normalized and name.endswith(".py"):
+        return "daemon_python"
+    if "/App/App/" in normalized and name.endswith(".swift"):
+        return "app_swift"
+    if "/AppTests/" in normalized and name.endswith(".swift"):
+        return "app_swift"
+    if "/tests/" in normalized:
+        return "tests"
+    return "unknown"
+
+
+def _scopes_compatible(left: str | None, right: str | None) -> bool:
+    left_scope = left or "unknown"
+    right_scope = right or "unknown"
+    if left_scope == "unknown" or right_scope == "unknown":
+        return True
+    if left_scope == right_scope:
+        return True
+    compatible_pairs = {
+        frozenset({"work_episode", "tests"}),
+        frozenset({"extractor", "tests"}),
+        frozenset({"app_swift", "tests"}),
+    }
+    return frozenset({left_scope, right_scope}) in compatible_pairs
+
+
 def _compatible_blocks(left: WorkBlock, right: WorkBlock) -> bool:
     if left.project and right.project and left.project != right.project:
         return False
@@ -235,8 +361,11 @@ def _probable_task_from_events(events: list[dict[str, Any]]) -> str:
     for event in events:
         event_type = event.get("type")
         payload = event.get("payload") or {}
+        scope = _scope_from_event(event)
         if event_type in _FILE_EVENT_TYPES:
             file_event_count += 1
+            if scope == "docs":
+                terminal_categories.append("writing")
         if event_type in {"mcp_command_received", "mcp_decision", "claude_desktop_session"}:
             assisted_event_count += 1
         if event_type == "terminal_command_finished":
@@ -255,6 +384,8 @@ def _probable_task_from_events(events: list[dict[str, Any]]) -> str:
         return "debug"
     if any(category == "build" for category in terminal_categories):
         return "build"
+    if any(category == "writing" for category in terminal_categories):
+        return "writing"
     if file_event_count:
         return "coding"
     if git_event_count >= 2:

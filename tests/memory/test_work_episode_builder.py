@@ -26,6 +26,17 @@ def strong_file(minute=0):
     )
 
 
+def strong_path(path, minute=0):
+    return event(
+        "file_modified",
+        minute,
+        {
+            "path": f"/Users/yugz/Projets/Pulse/Pulse/{path}",
+            "is_meaningful": True,
+        },
+    )
+
+
 def weak_app(app_name, minute):
     return event(
         "app_activated",
@@ -145,3 +156,82 @@ def test_screen_locked_between_strong_events_creates_two_episodes():
     assert len(blocks) == 2
     assert len(episodes) == 2
     assert episodes[0].boundary_reason == "screen_locked"
+
+
+def test_docs_then_daemon_python_after_notable_gap_create_two_episodes():
+    events = [
+        strong_path("docs/FR/work-episodes-model.md", 0),
+        strong_path("docs/EN/work-episodes-model.md", 4),
+        strong_path("daemon/memory/session.py", 18),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 2
+    assert episodes[0].probable_task == "writing"
+    assert episodes[1].probable_task == "coding"
+
+
+def test_swift_then_docs_after_notable_gap_create_two_episodes():
+    events = [
+        strong_path("App/App/DaemonBridgeModels.swift", 0),
+        strong_path("AppTests/PulseViewModelInteractionsTests.swift", 4),
+        strong_path("docs/FR/work-episodes-model.md", 20),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 2
+    assert episodes[0].probable_task == "coding"
+    assert episodes[1].probable_task == "writing"
+
+
+def test_work_episode_builder_and_its_tests_stay_in_same_episode_when_close():
+    events = [
+        strong_path("daemon/memory/work_episode_builder.py", 0),
+        strong_path("tests/memory/test_work_episode_builder.py", 8),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 2
+
+
+def test_extractor_and_its_tests_stay_in_same_episode_when_close():
+    events = [
+        strong_path("daemon/memory/extractor.py", 0),
+        strong_path("tests/memory/test_extractor.py", 8),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 2
+
+
+def test_weak_only_between_different_strong_scopes_does_not_force_fusion_after_notable_gap():
+    events = [
+        strong_path("docs/FR/work-episodes-model.md", 0),
+        weak_app("ChatGPT", 5),
+        weak_app("Codex", 10),
+        strong_path("daemon/memory/extractor.py", 18),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 2
+    assert [episode.probable_task for episode in episodes] == ["writing", "coding"]
+
+
+def test_same_scope_with_weak_support_and_short_gap_stays_one_episode():
+    events = [
+        strong_path("daemon/memory/session.py", 0),
+        weak_app("ChatGPT", 5),
+        strong_path("daemon/memory/current_context_builder.py", 9),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 3
