@@ -694,8 +694,17 @@ def _write_session_report(
     base_dir: Path, session: Dict[str, Any], *, consolidation: Dict[str, Any],
     llm: Optional[Any], commit_message: Optional[str], trigger: str, diff_summary: Optional[str] = None,
 ):
-    now   = datetime.now()
-    today = now.strftime("%Y-%m-%d")
+    now = datetime.now()
+    _date_ref = (
+        consolidation.get("ended_at")
+        or session.get("ended_at")
+        or session.get("updated_at")
+        or session.get("started_at")
+    )
+    try:
+        today = datetime.fromisoformat(str(_date_ref)).strftime("%Y-%m-%d")
+    except (ValueError, TypeError, AttributeError):
+        today = now.strftime("%Y-%m-%d")
     sessions_dir = base_dir / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
     journal_file = sessions_dir / f"{today}.md"
