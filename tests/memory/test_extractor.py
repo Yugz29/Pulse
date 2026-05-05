@@ -179,7 +179,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("développement (22 min)", journal)
         self.assertNotIn("- Sessions récentes :", projects)
 
-    def test_commit_tres_court_conserve_la_fenetre_session_si_session_record_est_tiny(self):
+    def test_commit_sans_work_block_n_herite_pas_d_une_session_fermee(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -212,8 +212,49 @@ class TestExtractor(unittest.TestCase):
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
 
-        self.assertIn("11:46 → 12:04", journal)
-        self.assertIn("développement (19 min)", journal)
+        self.assertNotIn("11:46 → 12:04", journal)
+        self.assertIn("12:04 — développement (1 min)", journal)
+        self.assertIn("développement (1 min)", journal)
+
+    def test_commit_sans_work_block_ignore_recent_session_ancienne_et_reste_pres_de_delivered_at(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 79,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Codex", "ChatGPT", "Code"],
+                "files_changed": 2,
+                "top_files": ["work_episode_builder.py", "test_work_episode_builder.py"],
+                "started_at": "2026-05-05T12:29:25",
+                "updated_at": "2026-05-05T13:48:29",
+                "delivered_at": "2026-05-05T13:46:38",
+                "recent_sessions": [
+                    {
+                        "id": "session-old",
+                        "session_id": "sess-old",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "executing",
+                        "started_at": "2026-05-05T11:16:09",
+                        "ended_at": "2026-05-05T12:29:14",
+                        "duration_sec": 4385,
+                        "boundary_reason": "session_end",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(memory): introduce pure work episode builder",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+
+        self.assertNotIn("11:16 → 12:29", journal)
+        self.assertNotIn("développement (73 min)", journal)
+        self.assertIn("13:46 — développement (1 min)", journal)
+        self.assertIn("développement (1 min)", journal)
+        self.assertNotIn("Livré à 13:46.", journal)
 
     def test_commit_prefere_work_block_explicite_aux_sessions_techniques(self):
         update_memories_from_session(
@@ -629,7 +670,7 @@ class TestExtractor(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         content = session_files[0].read_text()
-        self.assertNotIn("999", content)
+        self.assertNotIn("999 min", content)
         self.assertIn("480", content)
 
     def test_cooldown_persiste_apres_restart(self):
@@ -1166,6 +1207,8 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Cursor", "Terminal"],
                 "top_files": ["runtime_orchestrator.py", "episode_fsm.py"],
                 "files_changed": 2,
+                "commit_activity_started_at": "2026-04-24T10:00:00",
+                "commit_activity_ended_at": "2026-04-24T11:00:00",
                 "recent_sessions": [
                     {
                         "id": "ep-strong",

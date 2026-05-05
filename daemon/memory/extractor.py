@@ -1805,6 +1805,13 @@ def _build_consolidation_frame(
             "ended_at": work_block["ended_at"],
             "delivered_at": work_block.get("delivered_at"),
         }
+    if trigger == "commit" and commit_message and (session_data.get("delivered_at") or session_record is not None):
+        return _commit_only_consolidation_frame(
+            session_data,
+            active_project=session_data.get("active_project") or active_project,
+            probable_task=probable_task,
+            fallback_session_record=session_record,
+        )
     duration_min = _session_record_duration_min(session_record)
     use_session_window = _should_use_session_window_for_commit(
         trigger=trigger,
@@ -1829,6 +1836,34 @@ def _build_consolidation_frame(
         "duration_min": duration_min,
         "started_at": started_at or session_data.get("started_at"),
         "ended_at": ended_at or session_data.get("ended_at") or session_data.get("updated_at"),
+    }
+
+
+def _commit_only_consolidation_frame(
+    session_data: Dict[str, Any],
+    *,
+    active_project: Optional[str],
+    probable_task: str,
+    fallback_session_record: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    delivered_at = _parse_entry_datetime(
+        session_data.get("delivered_at")
+        or session_data.get("ended_at")
+        or session_data.get("updated_at")
+        or (fallback_session_record or {}).get("ended_at")
+        or (fallback_session_record or {}).get("started_at")
+    ) or datetime.now()
+    delivered_iso = delivered_at.isoformat()
+    return {
+        "session_record": None,
+        "active_project": active_project,
+        "probable_task": probable_task,
+        "activity_level": session_data.get("activity_level"),
+        "task_confidence": session_data.get("task_confidence"),
+        "duration_min": 1,
+        "started_at": delivered_iso,
+        "ended_at": delivered_iso,
+        "delivered_at": delivered_iso,
     }
 
 
