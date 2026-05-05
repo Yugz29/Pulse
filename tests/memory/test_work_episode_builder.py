@@ -396,13 +396,18 @@ def test_xcode_xcresult_artifacts_do_not_inflate_work_episode_evidence():
         ),
         xcode_artifact(
             "file_renamed",
-            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.def",
+            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/Staging/1_Test/Diagnostics.json",
             2,
         ),
         xcode_artifact(
             "file_created",
-            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.ghi",
+            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/refs.0~abc",
             3,
+        ),
+        xcode_artifact(
+            "file_modified",
+            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/1_Test/StandardOutputAndStandardError.txt",
+            4,
         ),
     ]
 

@@ -117,6 +117,8 @@ def classify_work_heartbeat(event: Mapping[str, Any]) -> WorkHeartbeat:
     payload = _payload(event)
 
     if event_type in STRONG_FILE_EVENT_TYPES:
+        if _is_technical_file_artifact_payload(payload):
+            return NONE_HEARTBEAT
         if _is_meaningful_file_payload(payload):
             return WorkHeartbeat("strong", "meaningful_file_event")
         return NONE_HEARTBEAT
@@ -223,16 +225,31 @@ def _is_meaningful_file_payload(payload: Mapping[str, Any]) -> bool:
     return not any(fragment in lowered for fragment in noisy_fragments)
 
 
+def _is_technical_file_artifact_payload(payload: Mapping[str, Any]) -> bool:
+    path = _text(payload.get("path") or payload.get("file_path"))
+    return bool(path and (_is_technical_xcode_artifact(path) or _is_global_dev_tool_artifact(path)))
+
+
 def _is_technical_xcode_artifact(path: str) -> bool:
     lowered = path.replace("\\", "/").lower()
     return any(
         fragment in lowered
         for fragment in (
-            "/.deriveddata/",
             ".deriveddata/",
             ".xcresult/",
             "/logs/test/",
-            "/data/_tmp",
+        )
+    )
+
+
+def _is_global_dev_tool_artifact(path: str) -> bool:
+    lowered = path.replace("\\", "/").lower()
+    return any(
+        fragment in lowered
+        for fragment in (
+            "/.vscode/extensions/",
+            "/.continue/index/",
+            "/.ollama/cache/",
         )
     )
 

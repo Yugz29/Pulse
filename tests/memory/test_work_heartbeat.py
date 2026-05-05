@@ -38,22 +38,143 @@ def test_technical_file_event_is_not_work_heartbeat():
 
 
 def test_xcode_xcresult_tmp_file_event_is_not_work_heartbeat():
+    paths = [
+        (
+            "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Logs/Test/"
+            "Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.abc123"
+        ),
+        (
+            "/Users/yugz/Projets/Pulse/Pulse/DerivedData/Logs/Test/"
+            "Test-App-2026.05.05_19-56-24-+0200.xcresult/Staging/1_Test/Diagnostics.json"
+        ),
+        (
+            "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Logs/Test/"
+            "Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/refs.0~abc"
+        ),
+        (
+            "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Logs/Test/"
+            "Test-App-2026.05.05_19-56-24-+0200.xcresult/1_Test/StandardOutputAndStandardError.txt"
+        ),
+    ]
+
+    for path in paths:
+        event = {
+            "type": "file_modified",
+            "payload": {
+                "path": path,
+                "is_meaningful": True,
+            },
+        }
+
+        heartbeat = classify_work_heartbeat(event)
+
+        assert heartbeat.strength == "none"
+        assert heartbeat.reason == "no_work_evidence"
+        assert is_work_heartbeat(event) is False
+
+
+def test_xcode_artifact_file_event_types_are_not_work_heartbeats():
+    cases = [
+        (
+            "file_renamed",
+            "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Build/Intermediates.noindex/Pulse.build/tmp",
+        ),
+        (
+            "file_renamed",
+            "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Logs/Test/Test-App.xcresult/Data/refs.0~abc",
+        ),
+        (
+            "file_deleted",
+            "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Logs/Test/Test-App.xcresult/Staging/1_Test/out.txt",
+        ),
+        (
+            "file_created",
+            "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Build/Products/Debug/App.app",
+        ),
+    ]
+
+    for event_type, path in cases:
+        event = {
+            "type": event_type,
+            "payload": {
+                "path": path,
+                "is_meaningful": True,
+            },
+        }
+
+        heartbeat = classify_work_heartbeat(event)
+
+        assert heartbeat.strength == "none"
+        assert heartbeat.reason == "no_work_evidence"
+        assert is_work_heartbeat(event) is False
+
+
+def test_real_file_renamed_event_remains_work_heartbeat():
     event = {
-        "type": "file_modified",
+        "type": "file_renamed",
         "payload": {
-            "path": (
-                "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Logs/Test/"
-                "Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.abc123"
-            ),
+            "path": "/Users/yugz/Projets/Pulse/Pulse/daemon/memory/work_episode_builder.py",
             "is_meaningful": True,
         },
     }
 
     heartbeat = classify_work_heartbeat(event)
 
-    assert heartbeat.strength == "none"
-    assert heartbeat.reason == "no_work_evidence"
-    assert is_work_heartbeat(event) is False
+    assert heartbeat.strength == "strong"
+    assert heartbeat.reason == "meaningful_file_event"
+    assert is_work_heartbeat(event) is True
+
+
+def test_global_dev_tool_artifacts_are_not_work_heartbeats():
+    cases = [
+        (
+            "file_modified",
+            "/Users/yugz/.vscode/extensions/extensions.json",
+        ),
+        (
+            "file_created",
+            "/Users/yugz/.vscode/extensions/continue.continue-1.0.0/package.json",
+        ),
+        (
+            "file_modified",
+            "/Users/yugz/.continue/index/globalContext.json",
+        ),
+        (
+            "file_renamed",
+            "/Users/yugz/.ollama/cache/model-recommendations.json",
+        ),
+    ]
+
+    for event_type, path in cases:
+        event = {
+            "type": event_type,
+            "payload": {
+                "path": path,
+                "is_meaningful": True,
+            },
+        }
+
+        heartbeat = classify_work_heartbeat(event)
+
+        assert heartbeat.strength == "none"
+        assert heartbeat.reason == "no_work_evidence"
+        assert is_work_heartbeat(event) is False
+
+
+def test_project_vscode_settings_is_not_filtered_as_global_dev_tool_artifact():
+    event = {
+        "type": "file_modified",
+        "payload": {
+            "path": "/Users/yugz/Projets/Pulse/Pulse/.vscode/settings.json",
+            "is_meaningful": True,
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "strong"
+    assert heartbeat.reason == "meaningful_file_event"
+    assert is_work_heartbeat(event) is True
 
 
 def test_terminal_testing_command_is_strong_work_heartbeat():
