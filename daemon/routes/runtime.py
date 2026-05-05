@@ -339,6 +339,7 @@ def register_runtime_routes(
     get_current_context: Callable[[], Any] | None = None,
     get_recent_sessions: Callable[[int], Any] | None = None,
     get_today_summary: Callable[[], dict[str, Any]] | None = None,
+    get_today_work_episodes: Callable[[], dict[str, Any]] | None = None,
     context_probe_store: ContextProbeRequestStore | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
@@ -1031,6 +1032,20 @@ def register_runtime_routes(
                 }
             )
         return jsonify(get_today_summary())
+
+    @app.route("/debug/work-episodes")
+    def get_debug_work_episodes_route():
+        if get_today_work_episodes is None:
+            now = datetime.now()
+            return jsonify(
+                {
+                    "date": now.date().isoformat(),
+                    "generated_at": now.isoformat(),
+                    "episode_count": 0,
+                    "episodes": [],
+                }
+            )
+        return jsonify(get_today_work_episodes())
 
     @app.route("/feed")
     def get_feed():

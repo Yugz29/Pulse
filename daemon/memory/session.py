@@ -2,6 +2,7 @@ import json
 import sqlite3
 import subprocess
 import threading
+from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,7 +15,7 @@ from daemon.memory.session_snapshot_builder import (
     build_session_snapshot as build_structured_session_snapshot,
     session_snapshot_to_legacy_dict,
 )
-from daemon.memory.work_episode_builder import build_work_blocks
+from daemon.memory.work_episode_builder import build_work_blocks, build_work_episodes
 from daemon.memory.work_heartbeat import classify_work_heartbeat
 
 _SESSION_TIMING_IGNORED_EVENT_TYPES = {
@@ -362,6 +363,49 @@ class SessionMemory:
                 "last_activity_at": last_activity,
             },
             "current_window": current_window,
+        }
+
+    def get_today_work_episodes(self) -> Dict[str, Any]:
+        """Return today's experimental work episodes for debug/observation only."""
+        now = datetime.now()
+        day_start = datetime.combine(now.date(), datetime.min.time())
+        day_end = day_start + timedelta(days=1)
+
+        with self._lock:
+            with self._connect() as conn:
+                event_rows = conn.execute(
+                    """
+                    SELECT event_type, payload_json, created_at
+                    FROM events
+                    WHERE created_at >= ? AND created_at < ?
+                    ORDER BY created_at ASC, id ASC
+                    """,
+                    (day_start.isoformat(), day_end.isoformat()),
+                ).fetchall()
+
+        all_events = []
+        for row in event_rows:
+            observed_at = _parse_iso_datetime(row["created_at"])
+            if observed_at is None:
+                continue
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                payload = {}
+            all_events.append(
+                {
+                    "type": row["event_type"],
+                    "payload": payload,
+                    "timestamp": observed_at,
+                }
+            )
+
+        episodes = [asdict(episode) for episode in build_work_episodes(all_events)]
+        return {
+            "date": now.date().isoformat(),
+            "generated_at": now.isoformat(),
+            "episode_count": len(episodes),
+            "episodes": episodes,
         }
 
     def find_file_activity_window(

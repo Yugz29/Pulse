@@ -541,6 +541,52 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(block["duration_min"], 5)
         self.assertEqual(block["event_count"], 2)
 
+    def test_get_today_work_episodes_expose_les_episodes_du_jour_en_debug(self):
+        today = datetime.now().replace(hour=11, minute=5, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=5),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/session.py"},
+            timestamp=today + timedelta(minutes=6),
+        ))
+
+        payload = self.memory.get_today_work_episodes()
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["episode_count"], 2)
+        episode = payload["episodes"][0]
+        self.assertEqual(
+            set(episode.keys()),
+            {
+                "id",
+                "project",
+                "probable_task",
+                "activity_level",
+                "started_at",
+                "ended_at",
+                "duration_min",
+                "work_block_ids",
+                "evidence_count",
+                "confidence",
+                "boundary_reason",
+                "uncertainty_flags",
+            },
+        )
+        self.assertEqual(episode["project"], "Pulse")
+        self.assertEqual(episode["probable_task"], "coding")
+        self.assertEqual(episode["boundary_reason"], "screen_locked")
+
     def test_get_today_summary_youtube_chrome_presence_seuls_ne_creent_pas_de_work_block(self):
         today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
 

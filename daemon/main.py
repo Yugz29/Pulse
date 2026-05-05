@@ -216,6 +216,7 @@ register_runtime_routes(
     get_current_context=lambda: runtime_orchestrator.current_context,
     get_recent_sessions=lambda limit: session_memory.get_recent_sessions(limit=limit),
     get_today_summary=lambda: session_memory.get_today_summary(),
+    get_today_work_episodes=lambda: session_memory.get_today_work_episodes(),
     llm_unload_background=_llm_unload_background,
     llm_warmup_background=_llm_warmup_background,
     shutdown_runtime=_shutdown_runtime,

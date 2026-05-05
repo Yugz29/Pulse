@@ -156,6 +156,50 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["projects"][0]["name"], "Pulse")
         self.assertEqual(payload["current_window"]["id"], "ww-1")
 
+    def test_debug_work_episodes_expose_les_episodes_du_jour(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_work_episodes=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T15:30:00",
+                "episode_count": 1,
+                "episodes": [
+                    {
+                        "id": "work-episode-1",
+                        "project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "editing",
+                        "started_at": "2026-05-05T15:02:15",
+                        "ended_at": "2026-05-05T15:02:41",
+                        "duration_min": 1,
+                        "work_block_ids": ["work-block-1"],
+                        "evidence_count": 2,
+                        "confidence": 0.75,
+                        "boundary_reason": "end_of_events",
+                        "uncertainty_flags": ["short_episode"],
+                    }
+                ],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/work-episodes")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+        self.assertEqual(payload["episode_count"], 1)
+        self.assertEqual(payload["episodes"][0]["project"], "Pulse")
+        self.assertEqual(payload["episodes"][0]["work_block_ids"], ["work-block-1"])
+
     def test_state_golden_legacy_json_output_exact(self):
         self.runtime_state.set_paused(True)
         signals = Signals(
