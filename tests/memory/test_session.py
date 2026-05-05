@@ -451,6 +451,96 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(summary["work_blocks"][0]["duration_min"], 5)
         self.assertEqual(summary["work_blocks"][0]["event_count"], 2)
 
+    def test_get_today_summary_youtube_coupe_le_bloc_et_empeche_le_weak_suivant(self):
+        today = datetime.now().replace(hour=10, minute=30, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "window_title_poll",
+            {"app_name": "Google Chrome", "title": "Some Video - YouTube"},
+            timestamp=today + timedelta(minutes=2),
+        ))
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=3),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 1)
+        self.assertEqual(summary["totals"]["worked_min"], 1)
+        self.assertEqual(len(summary["work_blocks"]), 1)
+        self.assertEqual(summary["work_blocks"][0]["duration_min"], 1)
+        self.assertEqual(summary["work_blocks"][0]["event_count"], 1)
+
+    def test_get_today_summary_screen_locked_coupe_la_continuite(self):
+        today = datetime.now().replace(hour=10, minute=45, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=5),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/session.py"},
+            timestamp=today + timedelta(minutes=6),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 2)
+        self.assertEqual(summary["totals"]["worked_min"], 2)
+        self.assertEqual(len(summary["work_blocks"]), 2)
+        self.assertEqual([block["duration_min"] for block in summary["work_blocks"]], [1, 1])
+
+    def test_get_today_summary_work_blocks_gardent_le_contrat_public(self):
+        today = datetime.now().replace(hour=10, minute=55, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=5),
+        ))
+
+        summary = self.memory.get_today_summary()
+        block = summary["work_blocks"][0]
+
+        self.assertTrue(block["id"].startswith("work-"))
+        self.assertEqual(
+            set(block.keys()),
+            {
+                "id",
+                "started_at",
+                "ended_at",
+                "duration_min",
+                "event_count",
+                "project",
+                "probable_task",
+                "activity_level",
+            },
+        )
+        self.assertEqual(block["duration_min"], 5)
+        self.assertEqual(block["event_count"], 2)
+
     def test_get_today_summary_youtube_chrome_presence_seuls_ne_creent_pas_de_work_block(self):
         today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
 

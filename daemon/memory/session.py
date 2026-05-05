@@ -14,6 +14,7 @@ from daemon.memory.session_snapshot_builder import (
     build_session_snapshot as build_structured_session_snapshot,
     session_snapshot_to_legacy_dict,
 )
+from daemon.memory.work_episode_builder import build_work_blocks
 from daemon.memory.work_heartbeat import classify_work_heartbeat
 
 _SESSION_TIMING_IGNORED_EVENT_TYPES = {
@@ -274,13 +275,29 @@ class SessionMemory:
             if self._is_meaningful_work_event(event):
                 work_events.append(event)
 
-        windows = self._cluster_work_events(work_events)
-        worked_min = sum(window["duration_min"] for window in windows)
+        builder_blocks = build_work_blocks(all_events)
+        worked_min = sum(block.duration_min for block in builder_blocks)
         commit_count = self._commit_count_for_period(all_events, since=day_start, until=day_end)
 
         session_dict = dict(session) if session is not None else {}
-        project = session_dict.get("active_project") or self._project_from_events(work_events or all_events)
+        project = (
+            session_dict.get("active_project")
+            or next((block.project for block in builder_blocks if block.project), None)
+            or self._project_from_events(work_events or all_events)
+        )
         fallback_task = session_dict.get("probable_task") or "general"
+        windows = [
+            {
+                "started_at": block.started_at,
+                "ended_at": block.ended_at,
+                "duration_min": block.duration_min,
+                "event_count": block.event_count,
+                "project": block.project or project,
+                "probable_task": block.probable_task or fallback_task,
+                "activity_level": block.activity_level,
+            }
+            for block in builder_blocks
+        ]
         current_window = None
         if windows:
             last = windows[-1]
@@ -308,7 +325,7 @@ class SessionMemory:
                     "ended_at": window["ended_at"],
                     "duration_min": window["duration_min"],
                     "event_count": window["event_count"],
-                    "project": project,
+                    "project": window.get("project") or project,
                     "probable_task": window_task,
                     "activity_level": window.get("activity_level"),
                 }
