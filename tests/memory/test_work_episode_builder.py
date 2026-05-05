@@ -37,6 +37,17 @@ def strong_path(path, minute=0):
     )
 
 
+def xcode_artifact(event_type, path, minute):
+    return event(
+        event_type,
+        minute,
+        {
+            "path": f"/Users/yugz/Projets/Pulse/Pulse/{path}",
+            "is_meaningful": True,
+        },
+    )
+
+
 def weak_app(app_name, minute):
     return event(
         "app_activated",
@@ -373,3 +384,35 @@ def test_scope_reclassification_does_not_change_strong_or_weak_counts():
     assert episodes[0].dominant_scope == "work_episode"
     assert episodes[0].strong_event_count == 2
     assert episodes[0].weak_event_count == 1
+
+
+def test_xcode_xcresult_artifacts_do_not_inflate_work_episode_evidence():
+    events = [
+        strong_path("daemon/memory/work_episode_builder.py", 0),
+        xcode_artifact(
+            "file_modified",
+            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.abc",
+            1,
+        ),
+        xcode_artifact(
+            "file_renamed",
+            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.def",
+            2,
+        ),
+        xcode_artifact(
+            "file_created",
+            ".derivedData/Logs/Test/Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.ghi",
+            3,
+        ),
+    ]
+
+    blocks = build_work_blocks(events)
+    episodes = build_work_episodes(events)
+
+    assert len(blocks) == 1
+    assert blocks[0].event_count == 1
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 1
+    assert episodes[0].strong_event_count == 1
+    assert episodes[0].weak_event_count == 0
+    assert episodes[0].dominant_scope == "work_episode"

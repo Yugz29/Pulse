@@ -37,6 +37,25 @@ def test_technical_file_event_is_not_work_heartbeat():
     assert is_work_heartbeat(event) is False
 
 
+def test_xcode_xcresult_tmp_file_event_is_not_work_heartbeat():
+    event = {
+        "type": "file_modified",
+        "payload": {
+            "path": (
+                "/Users/yugz/Projets/Pulse/Pulse/.derivedData/Logs/Test/"
+                "Test-App-2026.05.05_19-56-24-+0200.xcresult/Data/_tmp.abc123"
+            ),
+            "is_meaningful": True,
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
+    assert is_work_heartbeat(event) is False
+
+
 def test_terminal_testing_command_is_strong_work_heartbeat():
     event = {
         "type": "terminal_command_finished",

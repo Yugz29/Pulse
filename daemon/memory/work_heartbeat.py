@@ -209,6 +209,8 @@ def _is_meaningful_file_payload(payload: Mapping[str, Any]) -> bool:
     path = _text(payload.get("path") or payload.get("file_path"))
     if not path:
         return True
+    if _is_technical_xcode_artifact(path):
+        return False
     lowered = path.lower()
     noisy_fragments = {
         "/.git/",
@@ -219,6 +221,20 @@ def _is_meaningful_file_payload(payload: Mapping[str, Any]) -> bool:
         "model-recommendations.json",
     }
     return not any(fragment in lowered for fragment in noisy_fragments)
+
+
+def _is_technical_xcode_artifact(path: str) -> bool:
+    lowered = path.replace("\\", "/").lower()
+    return any(
+        fragment in lowered
+        for fragment in (
+            "/.deriveddata/",
+            ".deriveddata/",
+            ".xcresult/",
+            "/logs/test/",
+            "/data/_tmp",
+        )
+    )
 
 
 def _looks_like_project_path(path: str) -> bool:
@@ -252,4 +268,3 @@ def _text(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
-
