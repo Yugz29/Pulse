@@ -35,6 +35,7 @@ class CommitEpisodeLink:
     window_distance_min: int | None = None
     overlap_min: int | None = None
     score_breakdown: dict[str, Any] | None = None
+    evidence_level: str | None = None
 
 
 def link_commits_to_episodes(
@@ -96,7 +97,7 @@ def _link_one_commit(commit: Mapping[str, Any], candidates: list[Mapping[str, An
         flags.append("ambiguous_candidates")
     if _has_stale_journal_overlap_ignored(commit, candidates, best["candidate"]):
         flags.append("stale_journal_window_ignored")
-    confidence, flags = _calibrated_confidence(best["score"], flags)
+    confidence, flags = _calibrated_confidence(best["score"], flags, best["score_breakdown"])
     return _build_link(
         commit,
         best["candidate"],
@@ -155,6 +156,7 @@ def _score_candidate(commit: Mapping[str, Any], candidate: Mapping[str, Any]) ->
     flags.extend(_window_length_flags(commit, candidate))
     flags.append("candidate_no_commit_context")
     flags.append("no_file_scope_match")
+    flags.append("temporal_only_link")
     return {
         "candidate": candidate,
         "score": score,
@@ -204,6 +206,7 @@ def _build_link(
         window_distance_min=window_distance,
         overlap_min=overlap if overlap > 0 else 0,
         score_breakdown=score_breakdown,
+        evidence_level="temporal_only" if "temporal_only_link" in flags else None,
     )
 
 
@@ -281,17 +284,34 @@ def _window_length_flags(commit: Mapping[str, Any], candidate: Mapping[str, Any]
     return ("candidate_window_longer",)
 
 
-def _calibrated_confidence(score: float, flags: list[str]) -> tuple[float, list[str]]:
+def _calibrated_confidence(
+    score: float,
+    flags: list[str],
+    score_breakdown: Mapping[str, Any] | None = None,
+) -> tuple[float, list[str]]:
     caps: list[float] = []
+    has_no_file_scope = "no_file_scope_match" in flags
+    has_no_commit_context = "candidate_no_commit_context" in flags
+    overlap_min = 0
+    if score_breakdown is not None:
+        try:
+            overlap_min = int(score_breakdown.get("overlap_min") or 0)
+        except (TypeError, ValueError):
+            overlap_min = 0
+
     if "ambiguous_candidates" in flags:
-        caps.append(0.72)
-    if "candidate_no_commit_context" in flags or "no_file_scope_match" in flags:
-        caps.append(0.78)
-    if "commit_only_journal_entry" in flags:
-        caps.append(0.72)
+        caps.append(0.60)
+    if has_no_commit_context or has_no_file_scope:
+        caps.append(0.65)
+    if "commit_only_journal_entry" in flags and has_no_file_scope:
+        caps.append(0.55)
+    if "delivery_after_episode" in flags and has_no_file_scope:
+        caps.append(0.55)
+    if overlap_min == 0 and has_no_file_scope:
+        caps.append(0.55)
 
     confidence = min([score, *caps]) if caps else score
-    if confidence < score and ("candidate_no_commit_context" in flags or "no_file_scope_match" in flags):
+    if confidence < score and (has_no_commit_context or has_no_file_scope):
         flags.append("confidence_capped_no_commit_context")
     return round(float(confidence), 2), list(dict.fromkeys(flags))
 
