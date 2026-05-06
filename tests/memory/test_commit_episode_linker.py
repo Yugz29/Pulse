@@ -289,6 +289,169 @@ class TestCommitEpisodeLinker(unittest.TestCase):
             "feat(memory): deduplicate commit messages",
         )
 
+    def test_commit_message_full_body_et_commit_messages_subject_only_sont_deduplicates(self):
+        full_message = (
+            "feat(memory): compare journal entries with dry-run candidates\n\n"
+            "Add read-only debug journal candidates and comparison routes."
+        )
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": full_message,
+                    "commit_messages": [
+                        "feat(memory): compare journal entries with dry-run candidates",
+                    ],
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["links"][0]["commit_message"], full_message)
+        self.assertEqual(
+            payload["links"][0]["commit_subject"],
+            "feat(memory): compare journal entries with dry-run candidates",
+        )
+
+    def test_commit_message_full_body_et_commit_messages_different_subject_creent_deux_unites(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat(memory): first subject\n\nBody",
+                    "commit_messages": ["fix(memory): second subject"],
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["commit_count"], 2)
+        self.assertEqual(
+            [link["commit_subject"] for link in payload["links"]],
+            ["feat(memory): first subject", "fix(memory): second subject"],
+        )
+
+    def test_commit_messages_same_subject_keep_longest_body(self):
+        body_message = "feat(memory): same subject\n\nDetailed commit body."
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_messages": [
+                        "feat(memory): same subject",
+                        body_message,
+                    ],
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["links"][0]["commit_message"], body_message)
+
+    def test_commit_messages_different_subjects_remain_distinct(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_messages": [
+                        "feat(memory): first subject",
+                        "fix(memory): second subject",
+                    ],
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["commit_count"], 2)
+        self.assertEqual(
+            [link["commit_subject"] for link in payload["links"]],
+            ["feat(memory): first subject", "fix(memory): second subject"],
+        )
+
+    def test_commit_subject_deduplication_is_local_per_entry(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_messages": ["feat(memory): same subject"],
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                },
+                {
+                    "entry_id": "entry-2",
+                    "active_project": "Pulse",
+                    "commit_messages": ["feat(memory): same subject"],
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                },
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["commit_count"], 2)
+        self.assertEqual([link["entry_id"] for link in payload["links"]], ["entry-1", "entry-2"])
+
     def test_ambiguite_entre_deux_candidates_proches_est_signalee(self):
         payload = link_commits_to_episodes(
             [

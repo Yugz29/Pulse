@@ -230,15 +230,24 @@ def _extract_commits(journal_entries: list[Any]) -> list[dict[str, Any]]:
 
 def _commit_messages(entry: Mapping[str, Any]) -> list[str]:
     messages: list[str] = []
+    messages.append(_optional_text(entry.get("commit_message")))
     raw_messages = entry.get("commit_messages")
     if isinstance(raw_messages, list):
         messages.extend(_optional_text(message) for message in raw_messages)
-    else:
-        messages.append(_optional_text(entry.get("commit_message")))
-    compacted = list(dict.fromkeys(message for message in messages if message))
-    if not compacted and _optional_text(entry.get("commit_message")):
-        compacted.append(str(entry.get("commit_message")))
-    return compacted
+
+    order: list[str] = []
+    by_subject: dict[str, str] = {}
+    for message in (message for message in messages if message):
+        subject_key = _normalized_commit_subject(message)
+        if not subject_key:
+            continue
+        if subject_key not in by_subject:
+            order.append(subject_key)
+            by_subject[subject_key] = message
+            continue
+        if len(message) > len(by_subject[subject_key]):
+            by_subject[subject_key] = message
+    return [by_subject[subject_key] for subject_key in order]
 
 
 def _commit_subject(message: str) -> str:
@@ -247,6 +256,10 @@ def _commit_subject(message: str) -> str:
         if stripped and not stripped.startswith("#"):
             return stripped
     return str(message).strip()
+
+
+def _normalized_commit_subject(message: str) -> str:
+    return _commit_subject(message).strip().lower()
 
 
 def _commit_base_flags(commit: Mapping[str, Any]) -> tuple[str, ...]:
