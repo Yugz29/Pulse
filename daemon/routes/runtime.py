@@ -340,6 +340,8 @@ def register_runtime_routes(
     get_recent_sessions: Callable[[int], Any] | None = None,
     get_today_summary: Callable[[], dict[str, Any]] | None = None,
     get_today_work_episodes: Callable[[], dict[str, Any]] | None = None,
+    get_today_journal_candidates: Callable[[], dict[str, Any]] | None = None,
+    get_today_journal_comparison: Callable[[], dict[str, Any]] | None = None,
     context_probe_store: ContextProbeRequestStore | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
@@ -362,6 +364,26 @@ def register_runtime_routes(
     file_event_coalescer = _FileEventCoalescer(
         publisher=_publish_to_bus,
     )
+
+    def _parse_debug_date_query() -> tuple[datetime | None, Any | None]:
+        raw_date = request.args.get("date")
+        if not raw_date:
+            return None, None
+        try:
+            return datetime.strptime(raw_date, "%Y-%m-%d"), None
+        except ValueError:
+            return None, (
+                jsonify({
+                    "error": "invalid_date",
+                    "message": "date must use YYYY-MM-DD",
+                }),
+                400,
+            )
+
+    def _call_debug_date_callback(callback: Callable[..., dict[str, Any]], debug_date: datetime | None) -> dict[str, Any]:
+        if debug_date is None:
+            return callback()
+        return callback(debug_date)
 
     @app.route("/ping")
     def ping():
@@ -1035,8 +1057,11 @@ def register_runtime_routes(
 
     @app.route("/debug/work-episodes")
     def get_debug_work_episodes_route():
+        debug_date, error_response = _parse_debug_date_query()
+        if error_response is not None:
+            return error_response
         if get_today_work_episodes is None:
-            now = datetime.now()
+            now = debug_date or datetime.now()
             return jsonify(
                 {
                     "date": now.date().isoformat(),
@@ -1045,7 +1070,46 @@ def register_runtime_routes(
                     "episodes": [],
                 }
             )
-        return jsonify(get_today_work_episodes())
+        return jsonify(_call_debug_date_callback(get_today_work_episodes, debug_date))
+
+    @app.route("/debug/journal-candidates")
+    def get_debug_journal_candidates_route():
+        debug_date, error_response = _parse_debug_date_query()
+        if error_response is not None:
+            return error_response
+        if get_today_journal_candidates is None:
+            now = debug_date or datetime.now()
+            return jsonify(
+                {
+                    "date": now.date().isoformat(),
+                    "generated_at": now.isoformat(),
+                    "candidate_count": 0,
+                    "ignored_count": 0,
+                    "candidates": [],
+                    "ignored": [],
+                }
+            )
+        return jsonify(_call_debug_date_callback(get_today_journal_candidates, debug_date))
+
+    @app.route("/debug/journal-comparison")
+    def get_debug_journal_comparison_route():
+        debug_date, error_response = _parse_debug_date_query()
+        if error_response is not None:
+            return error_response
+        if get_today_journal_comparison is None:
+            now = debug_date or datetime.now()
+            return jsonify(
+                {
+                    "date": now.date().isoformat(),
+                    "generated_at": now.isoformat(),
+                    "journal_entry_count": 0,
+                    "candidate_count": 0,
+                    "matches": [],
+                    "unmatched_journal_entries": [],
+                    "unmatched_candidates": [],
+                }
+            )
+        return jsonify(_call_debug_date_callback(get_today_journal_comparison, debug_date))
 
     @app.route("/feed")
     def get_feed():

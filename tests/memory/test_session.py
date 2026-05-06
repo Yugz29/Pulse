@@ -1,3 +1,4 @@
+import json
 import tempfile
 import sqlite3
 import subprocess
@@ -595,6 +596,106 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(episode["probable_task"], "coding")
         self.assertEqual(episode["boundary_reason"], "screen_locked")
         self.assertEqual(episode["boundary_event_type"], "screen_locked")
+
+    def test_get_today_journal_candidates_retourne_candidates_et_ignored(self):
+        today = datetime.now().replace(hour=11, minute=15, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=5),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/tests/memory/test_work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=6),
+        ))
+
+        payload = self.memory.get_today_journal_candidates()
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["ignored_count"], 1)
+        self.assertEqual(payload["candidates"][0]["ignored"], False)
+        self.assertEqual(payload["candidates"][0]["boundary_reason"], "screen_locked")
+        self.assertEqual(payload["ignored"][0]["ignored"], True)
+        self.assertEqual(payload["ignored"][0]["ignore_reason"], "open_episode_end_of_events")
+
+    def test_get_today_journal_comparison_sans_fichier_journal_ne_plante_pas(self):
+        today = datetime.now().replace(hour=11, minute=30, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=8),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/tests/memory/test_work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=10),
+        ))
+
+        payload = self.memory.get_today_journal_comparison(date=today)
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["journal_entry_count"], 0)
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["matches"], [])
+        self.assertEqual(len(payload["unmatched_candidates"]), 1)
+
+    def test_get_today_journal_comparison_lit_le_payload_cache_du_journal(self):
+        today = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        session_dir = Path(self.tmpdir.name) / "memory" / "sessions"
+        session_dir.mkdir(parents=True)
+        journal_file = session_dir / f"{today.date().isoformat()}.md"
+        journal_entries = [
+            {
+                "entry_id": "journal-1",
+                "active_project": "Pulse",
+                "started_at": today.isoformat(),
+                "ended_at": (today + timedelta(minutes=8)).isoformat(),
+                "duration_min": 8,
+                "commit_message": "feat: journal entry",
+            }
+        ]
+        journal_file.write_text(
+            "# Journal\n\n"
+            "<!-- pulse-journal-data:start\n"
+            f"{json.dumps(journal_entries)}\n"
+            "pulse-journal-data:end -->",
+            encoding="utf-8",
+        )
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=8),
+        ))
+
+        payload = self.memory.get_today_journal_comparison(date=today)
+
+        self.assertEqual(payload["journal_entry_count"], 1)
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["matches"][0]["journal_entry_id"], "journal-1")
+        self.assertIn("journal_has_commit", payload["matches"][0]["flags"])
 
     def test_get_today_summary_youtube_chrome_presence_seuls_ne_creent_pas_de_work_block(self):
         today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)

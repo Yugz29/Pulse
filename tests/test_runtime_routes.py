@@ -200,6 +200,235 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["episodes"][0]["project"], "Pulse")
         self.assertEqual(payload["episodes"][0]["work_block_ids"], ["work-block-1"])
 
+    def test_debug_work_episodes_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_work_episodes=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T15:30:00",
+                "episode_count": 0,
+                "episodes": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/work-episodes?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_journal_candidates_expose_les_candidats_dry_run(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_candidates=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T15:45:00",
+                "candidate_count": 1,
+                "ignored_count": 1,
+                "candidates": [
+                    {
+                        "id": "journal-candidate-1",
+                        "episode_id": "work-episode-1",
+                        "project": "Pulse",
+                        "probable_task": "coding",
+                        "dominant_scope": "work_episode",
+                        "started_at": "2026-05-05T15:02:15",
+                        "ended_at": "2026-05-05T15:12:41",
+                        "duration_min": 10,
+                        "boundary_reason": "screen_locked",
+                        "strong_event_count": 2,
+                        "weak_event_count": 0,
+                        "confidence": 0.9,
+                        "status": "candidate",
+                        "ignored": False,
+                        "ignore_reason": None,
+                        "debug_reason": "split on boundary event screen_locked",
+                    }
+                ],
+                "ignored": [
+                    {
+                        "id": "journal-candidate-2",
+                        "episode_id": "work-episode-2",
+                        "project": "Pulse",
+                        "probable_task": "coding",
+                        "dominant_scope": "work_episode",
+                        "started_at": "2026-05-05T15:15:00",
+                        "ended_at": "2026-05-05T15:20:00",
+                        "duration_min": 5,
+                        "boundary_reason": "end_of_events",
+                        "strong_event_count": 1,
+                        "weak_event_count": 0,
+                        "confidence": 0.75,
+                        "status": "ignored",
+                        "ignored": True,
+                        "ignore_reason": "open_episode_end_of_events",
+                        "debug_reason": "episode open until end of observed events",
+                    }
+                ],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-candidates")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["ignored_count"], 1)
+        self.assertEqual(payload["candidates"][0]["episode_id"], "work-episode-1")
+        self.assertEqual(payload["ignored"][0]["ignore_reason"], "open_episode_end_of_events")
+
+    def test_debug_journal_candidates_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_candidates=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T15:45:00",
+                "candidate_count": 0,
+                "ignored_count": 0,
+                "candidates": [],
+                "ignored": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-candidates?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_journal_candidates_fallback_when_callback_absent(self):
+        response = self.client.get("/debug/journal-candidates")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["candidate_count"], 0)
+        self.assertEqual(payload["ignored_count"], 0)
+        self.assertEqual(payload["candidates"], [])
+        self.assertEqual(payload["ignored"], [])
+
+    def test_debug_journal_comparison_expose_les_ecarts_dry_run(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_comparison=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T16:00:00",
+                "journal_entry_count": 1,
+                "candidate_count": 1,
+                "matches": [
+                    {
+                        "journal_entry_id": "journal-1",
+                        "candidate_id": "candidate-1",
+                        "project": "Pulse",
+                        "journal_started_at": "2026-05-05T11:00:00",
+                        "journal_ended_at": "2026-05-05T11:20:00",
+                        "candidate_started_at": "2026-05-05T11:01:00",
+                        "candidate_ended_at": "2026-05-05T11:19:00",
+                        "start_delta_min": 1,
+                        "end_delta_min": -1,
+                        "duration_delta_min": -2,
+                        "flags": ["time_aligned", "journal_longer"],
+                    }
+                ],
+                "unmatched_journal_entries": [],
+                "unmatched_candidates": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-comparison")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+        self.assertEqual(payload["journal_entry_count"], 1)
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["matches"][0]["candidate_id"], "candidate-1")
+        self.assertIn("time_aligned", payload["matches"][0]["flags"])
+
+    def test_debug_journal_comparison_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_comparison=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T16:00:00",
+                "journal_entry_count": 0,
+                "candidate_count": 0,
+                "matches": [],
+                "unmatched_journal_entries": [],
+                "unmatched_candidates": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-comparison?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_date_invalide_retourne_400(self):
+        response = self.client.get("/debug/journal-comparison?date=2026-99-99")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "invalid_date")
+        self.assertEqual(payload["message"], "date must use YYYY-MM-DD")
+
+    def test_debug_journal_comparison_fallback_when_callback_absent(self):
+        response = self.client.get("/debug/journal-comparison")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["journal_entry_count"], 0)
+        self.assertEqual(payload["candidate_count"], 0)
+        self.assertEqual(payload["matches"], [])
+        self.assertEqual(payload["unmatched_journal_entries"], [])
+        self.assertEqual(payload["unmatched_candidates"], [])
+
     def test_state_golden_legacy_json_output_exact(self):
         self.runtime_state.set_paused(True)
         signals = Signals(
