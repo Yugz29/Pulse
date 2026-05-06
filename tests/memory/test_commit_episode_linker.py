@@ -32,6 +32,10 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertEqual(payload["linked_count"], 1)
         self.assertEqual(payload["links"][0]["episode_id"], "episode-1")
         self.assertIn("linked_by_overlap", payload["links"][0]["flags"])
+        self.assertEqual(payload["links"][0]["confidence"], 0.58)
+        self.assertEqual(payload["links"][0]["delivery_delta_min"], None)
+        self.assertEqual(payload["links"][0]["window_distance_min"], 0)
+        self.assertEqual(payload["links"][0]["overlap_min"], 15)
 
     def test_commit_delivered_at_proche_de_candidate_end_linked_by_delivery_proximity(self):
         payload = link_commits_to_episodes(
@@ -59,6 +63,9 @@ class TestCommitEpisodeLinker(unittest.TestCase):
 
         self.assertEqual(payload["linked_count"], 1)
         self.assertIn("linked_by_delivery_proximity", payload["links"][0]["flags"])
+        self.assertIn("delivery_after_episode", payload["links"][0]["flags"])
+        self.assertEqual(payload["links"][0]["delivery_delta_min"], 2)
+        self.assertLessEqual(payload["links"][0]["confidence"], 0.76)
 
     def test_commit_tres_loin_de_toute_candidate_reste_unlinked(self):
         payload = link_commits_to_episodes(
@@ -88,6 +95,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertEqual(payload["unlinked_count"], 1)
         self.assertIn("no_plausible_episode", payload["unlinked_commits"][0]["flags"])
         self.assertIn("no_delivery_near_episode", payload["unlinked_commits"][0]["flags"])
+        self.assertIn("delivery_far_from_episode", payload["unlinked_commits"][0]["flags"])
 
     def test_delivered_at_refuse_overlap_journal_stale(self):
         payload = link_commits_to_episodes(
@@ -152,6 +160,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertEqual(payload["linked_count"], 1)
         self.assertEqual(payload["links"][0]["episode_id"], "episode-2")
         self.assertIn("linked_by_delivery_proximity", payload["links"][0]["flags"])
+        self.assertIn("stale_journal_window_ignored", payload["links"][0]["flags"])
 
     def test_delivered_at_prefere_episode_couvrant_la_livraison(self):
         payload = link_commits_to_episodes(
@@ -187,6 +196,11 @@ class TestCommitEpisodeLinker(unittest.TestCase):
 
         self.assertEqual(payload["linked_count"], 1)
         self.assertEqual(payload["links"][0]["episode_id"], "episode-2")
+        self.assertIn("delivery_inside_episode", payload["links"][0]["flags"])
+        self.assertIn("no_file_scope_match", payload["links"][0]["flags"])
+        self.assertIn("confidence_capped_no_commit_context", payload["links"][0]["flags"])
+        self.assertEqual(payload["links"][0]["delivery_delta_min"], -2)
+        self.assertLessEqual(payload["links"][0]["confidence"], 0.78)
 
     def test_ignored_candidate_n_est_jamais_utilisee(self):
         payload = link_commits_to_episodes(
@@ -275,6 +289,96 @@ class TestCommitEpisodeLinker(unittest.TestCase):
 
         self.assertEqual(payload["linked_count"], 1)
         self.assertIn("ambiguous_candidates", payload["links"][0]["flags"])
+        self.assertLessEqual(payload["links"][0]["confidence"], 0.72)
+
+    def test_delivery_80_min_after_episode_has_prudent_confidence(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: delayed delivery",
+                    "delivered_at": "2026-05-05T13:20:00",
+                    "started_at": "2026-05-05T13:20:00",
+                    "ended_at": "2026-05-05T13:20:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T11:50:00",
+                    "ended_at": "2026-05-05T12:00:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["links"][0]["delivery_delta_min"], 80)
+        self.assertIn("delivery_after_episode", payload["links"][0]["flags"])
+        self.assertLessEqual(payload["links"][0]["confidence"], 0.62)
+
+    def test_commit_only_journal_entry_caps_confidence(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: commit only",
+                    "delivered_at": "2026-05-05T12:05:00",
+                    "started_at": "2026-05-05T12:05:00",
+                    "ended_at": "2026-05-05T12:05:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:10:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertIn("commit_only_journal_entry", payload["links"][0]["flags"])
+        self.assertLessEqual(payload["links"][0]["confidence"], 0.72)
+
+    def test_output_exposes_score_breakdown_and_distance_fields(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: distances",
+                    "delivered_at": "2026-05-05T12:12:00",
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:20:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-05T12:05:00",
+                    "ended_at": "2026-05-05T12:10:00",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        link = payload["links"][0]
+        self.assertIn("delivery_delta_min", link)
+        self.assertIn("window_distance_min", link)
+        self.assertIn("overlap_min", link)
+        self.assertEqual(link["score_breakdown"]["delivery_delta_min"], 2)
+        self.assertEqual(link["score_breakdown"]["window_distance_min"], 0)
+        self.assertEqual(link["score_breakdown"]["overlap_min"], 5)
 
 
 if __name__ == "__main__":

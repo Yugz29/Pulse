@@ -31,6 +31,10 @@ class CommitEpisodeLink:
     status: str
     link_reason: str | None
     flags: tuple[str, ...]
+    delivery_delta_min: int | None = None
+    window_distance_min: int | None = None
+    overlap_min: int | None = None
+    score_breakdown: dict[str, Any] | None = None
 
 
 def link_commits_to_episodes(
@@ -73,6 +77,7 @@ def _link_one_commit(commit: Mapping[str, Any], candidates: list[Mapping[str, An
         flags = [*_commit_base_flags(commit), "no_plausible_episode"]
         if _optional_text(commit.get("delivered_at")):
             flags.append("no_delivery_near_episode")
+            flags.append("delivery_far_from_episode")
         return _build_link(
             commit,
             None,
@@ -82,18 +87,22 @@ def _link_one_commit(commit: Mapping[str, Any], candidates: list[Mapping[str, An
             flags=tuple(flags),
         )
 
-    scored.sort(key=lambda item: item["score"], reverse=True)
+    scored.sort(key=lambda item: (item["score"], -item["rank_delta"]), reverse=True)
     best = scored[0]
     flags = list(best["flags"])
     if len(scored) > 1 and (best["score"] - scored[1]["score"]) <= _AMBIGUOUS_SCORE_DELTA:
         flags.append("ambiguous_candidates")
+    if _has_stale_journal_overlap_ignored(commit, candidates, best["candidate"]):
+        flags.append("stale_journal_window_ignored")
+    confidence, flags = _calibrated_confidence(best["score"], flags)
     return _build_link(
         commit,
         best["candidate"],
-        confidence=round(float(best["score"]), 2),
+        confidence=confidence,
         status="linked",
         link_reason=best["reason"],
         flags=tuple(flags),
+        score_breakdown=best["score_breakdown"],
     )
 
 
@@ -103,6 +112,7 @@ def _score_candidate(commit: Mapping[str, Any], candidate: Mapping[str, Any]) ->
 
     window_distance = _window_distance_min(commit, candidate)
     overlap = _overlap_min(commit, candidate)
+    delivery_delta = _delivery_delta_min(commit.get("delivered_at"), candidate.get("ended_at"))
     delivery_score = _delivery_score(commit.get("delivered_at"), candidate)
 
     flags = list(_commit_base_flags(commit))
@@ -115,12 +125,16 @@ def _score_candidate(commit: Mapping[str, Any], candidate: Mapping[str, Any]) ->
         score = delivery_score
         reason = "delivery_near_candidate_end"
         flags.append("linked_by_delivery_proximity")
+        if delivery_delta is not None and delivery_delta <= 0:
+            flags.append("delivery_inside_episode")
+        elif delivery_delta is not None:
+            flags.append("delivery_after_episode")
     elif overlap > 0:
-        score = 0.88
+        score = 0.58
         reason = "journal_candidate_overlap"
         flags.append("linked_by_overlap")
     elif window_distance is not None and window_distance <= _WINDOW_PROXIMITY_MIN:
-        score = 0.66
+        score = 0.45
         reason = "journal_window_near_candidate_window"
         flags.append("linked_by_window_proximity")
     else:
@@ -136,11 +150,19 @@ def _score_candidate(commit: Mapping[str, Any], candidate: Mapping[str, Any]) ->
 
     flags.extend(_window_length_flags(commit, candidate))
     flags.append("candidate_no_commit_context")
+    flags.append("no_file_scope_match")
     return {
         "candidate": candidate,
         "score": score,
         "reason": reason,
         "flags": tuple(dict.fromkeys(flags)),
+        "rank_delta": _delivery_rank_delta(commit.get("delivered_at"), candidate),
+        "score_breakdown": {
+            "base_score": score,
+            "delivery_delta_min": delivery_delta,
+            "window_distance_min": window_distance,
+            "overlap_min": overlap if overlap > 0 else 0,
+        },
     }
 
 
@@ -152,7 +174,11 @@ def _build_link(
     status: str,
     link_reason: str | None,
     flags: tuple[str, ...],
+    score_breakdown: dict[str, Any] | None = None,
 ) -> CommitEpisodeLink:
+    delivery_delta = _delivery_delta_min(commit.get("delivered_at"), candidate.get("ended_at")) if candidate is not None else None
+    window_distance = _window_distance_min(commit, candidate) if candidate is not None else None
+    overlap = _overlap_min(commit, candidate) if candidate is not None else 0
     return CommitEpisodeLink(
         id=str(commit.get("id") or ""),
         entry_id=str(commit.get("entry_id") or ""),
@@ -170,6 +196,10 @@ def _build_link(
         status=status,
         link_reason=link_reason,
         flags=flags,
+        delivery_delta_min=delivery_delta,
+        window_distance_min=window_distance,
+        overlap_min=overlap if overlap > 0 else 0,
+        score_breakdown=score_breakdown,
     )
 
 
@@ -234,6 +264,39 @@ def _window_length_flags(commit: Mapping[str, Any], candidate: Mapping[str, Any]
     return ("candidate_window_longer",)
 
 
+def _calibrated_confidence(score: float, flags: list[str]) -> tuple[float, list[str]]:
+    caps: list[float] = []
+    if "ambiguous_candidates" in flags:
+        caps.append(0.72)
+    if "candidate_no_commit_context" in flags or "no_file_scope_match" in flags:
+        caps.append(0.78)
+    if "commit_only_journal_entry" in flags:
+        caps.append(0.72)
+
+    confidence = min([score, *caps]) if caps else score
+    if confidence < score and ("candidate_no_commit_context" in flags or "no_file_scope_match" in flags):
+        flags.append("confidence_capped_no_commit_context")
+    return round(float(confidence), 2), list(dict.fromkeys(flags))
+
+
+def _has_stale_journal_overlap_ignored(
+    commit: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+    selected: Mapping[str, Any],
+) -> bool:
+    if not _optional_text(commit.get("delivered_at")):
+        return False
+    selected_id = _optional_text(selected.get("id"))
+    for candidate in candidates:
+        if _optional_text(candidate.get("id")) == selected_id:
+            continue
+        if not _projects_compatible(commit, candidate):
+            continue
+        if _overlap_min(commit, candidate) > 0:
+            return True
+    return False
+
+
 def _projects_compatible(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
     left_project = _project(left)
     right_project = _project(right)
@@ -279,12 +342,33 @@ def _delivery_score(delivered_at: Any, candidate: Mapping[str, Any]) -> float | 
         return None
     minutes_after_end = int((delivered - ended).total_seconds() / 60)
     if minutes_after_end <= 0:
-        return 0.98
+        return 0.82
     if minutes_after_end <= _STRONG_DELIVERY_PROXIMITY_MIN:
-        return 0.94 - (minutes_after_end / 1000)
+        return 0.76 - (minutes_after_end / 1000)
     if minutes_after_end <= _ACCEPTABLE_DELIVERY_PROXIMITY_MIN:
-        return 0.72 - (minutes_after_end / 1000)
+        return 0.62 - (minutes_after_end / 1000)
     return None
+
+
+def _delivery_delta_min(delivered_at: Any, candidate_ended_at: Any) -> int | None:
+    delivered = _parse_dt(delivered_at)
+    ended = _parse_dt(candidate_ended_at)
+    if delivered is None or ended is None:
+        return None
+    return int((delivered - ended).total_seconds() / 60)
+
+
+def _delivery_rank_delta(delivered_at: Any, candidate: Mapping[str, Any]) -> int:
+    delivered = _parse_dt(delivered_at)
+    started = _parse_dt(candidate.get("started_at"))
+    ended = _parse_dt(candidate.get("ended_at"))
+    if delivered is None or started is None or ended is None:
+        return 999999
+    if started <= delivered <= ended:
+        return 0
+    if delivered > ended:
+        return int((delivered - ended).total_seconds() / 60)
+    return int((started - delivered).total_seconds() / 60)
 
 
 def _duration_min(entry: Mapping[str, Any]) -> int | None:
