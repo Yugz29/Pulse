@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shlex
 import threading
 import time
 from dataclasses import dataclass
@@ -1289,65 +1288,25 @@ def _normalize_terminal_event_payload(event_type: str, payload: dict[str, Any]) 
 
 
 def _parse_event_timestamp(raw: Any) -> datetime | None:
-    if raw is None:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return None
-    if parsed.tzinfo is not None:
-        parsed = parsed.astimezone().replace(tzinfo=None)
-    return parsed
+    from daemon.core.terminal_event_normalizer import parse_event_timestamp
+    return parse_event_timestamp(raw)
 
 
 def _terminal_action_category(command: str, interpretation) -> str:
-    base_cmd, tokens = _split_command(command)
-    subcommands = set(tokens[1:])
-
-    if base_cmd == "git":
-        return "vcs"
-
-    if base_cmd in _TERMINAL_TEST_COMMANDS or "test" in subcommands:
-        return "testing"
-
-    if base_cmd in _TERMINAL_BUILD_COMMANDS:
-        return "build"
-
-    if base_cmd in _TERMINAL_SETUP_COMMANDS:
-        if subcommands & {"install", "add", "init", "bootstrap", "update"}:
-            return "setup"
-        if subcommands & {"build", "compile", "run"}:
-            return "build"
-
-    if interpretation.is_read_only:
-        return "inspection"
-
-    return "execution"
+    from daemon.core.terminal_event_normalizer import terminal_action_category
+    return terminal_action_category(command, interpretation)
 
 
 def _terminal_category_summary(category: str) -> str:
-    return {
-        "inspection": "Inspection terminal",
-        "testing": "Exécution de tests",
-        "vcs": "Commande de contrôle de version",
-        "build": "Commande de build",
-        "setup": "Commande de setup",
-        "execution": "Commande terminal",
-    }.get(category, "Commande terminal")
+    from daemon.core.terminal_event_normalizer import terminal_category_summary
+    return terminal_category_summary(category)
 
 
 def _split_command(command: str) -> tuple[str, list[str]]:
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        tokens = command.split()
-    return (tokens[0] if tokens else "", tokens)
+    from daemon.core.terminal_event_normalizer import split_command
+    return split_command(command)
 
 
 def _coerce_int(value: Any) -> int | None:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+    from daemon.core.terminal_event_normalizer import coerce_int
+    return coerce_int(value)
