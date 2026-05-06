@@ -428,7 +428,9 @@ def enrich_pending_journal_summaries(
             continue
 
         result["eligible"] += 1
-        commit_message = str(normalized.get("commit_message") or "").strip()
+        commit_message = "\n".join(_compact_strings(normalized.get("commit_messages", [])))
+        if not commit_message:
+            commit_message = str(normalized.get("commit_message") or "").strip()
         try:
             body = _llm_summary(
                 llm,
@@ -470,15 +472,34 @@ def enrich_pending_journal_summaries(
 
 
 def _is_pending_llm_summary_entry(entry: Dict[str, Any]) -> bool:
-    if str(entry.get("summary_source") or "") == "llm":
+    unresolved_commit_items = _entry_has_unresolved_commit_item_summaries(entry)
+    if str(entry.get("summary_source") or "") == "llm" and not unresolved_commit_items:
         return False
-    if str(entry.get("summary_status") or "unknown") not in {"failed", "llm_unavailable", "unknown", "deferred"}:
+    if (
+        str(entry.get("summary_status") or "unknown") not in {"failed", "llm_unavailable", "unknown", "deferred"}
+        and not unresolved_commit_items
+    ):
         return False
-    if not str(entry.get("commit_message") or "").strip():
+    commit_messages = _compact_strings([entry.get("commit_message"), *entry.get("commit_messages", [])])
+    if not commit_messages:
         return False
     if _is_suppressed_journal_entry(entry) or _is_noise_journal_entry(entry):
         return False
     return True
+
+
+def _commit_item_body_is_fallback(body: str) -> bool:
+    return str(body or "").strip().startswith("Livraison :")
+
+
+def _entry_has_unresolved_commit_item_summaries(entry: Dict[str, Any]) -> bool:
+    commit_items = entry.get("commit_items")
+    if not isinstance(commit_items, list):
+        return False
+    return any(
+        isinstance(item, dict) and _commit_item_body_is_fallback(str(item.get("body") or ""))
+        for item in commit_items
+    )
 
 
 def last_session_context(project: str, memory_dir: Optional[Path] = None, today: Optional["date"] = None) -> Optional[str]:
@@ -914,6 +935,16 @@ def _replace_journal_entry(
                 commit_items = entry.get("commit_items")
                 if isinstance(commit_items, list) and len(commit_items) == 1 and isinstance(commit_items[0], dict):
                     commit_items[0]["body"] = body.strip()
+                elif isinstance(commit_items, list) and _entry_has_unresolved_commit_item_summaries(entry):
+                    replacement_bodies = _commit_item_replacement_bodies(body, commit_items)
+                    for index, item in enumerate(commit_items):
+                        if not isinstance(item, dict):
+                            continue
+                        if not _commit_item_body_is_fallback(str(item.get("body") or "")):
+                            continue
+                        replacement = replacement_bodies[index] if index < len(replacement_bodies) else body.strip()
+                        if replacement:
+                            item["body"] = replacement
                 if summary_source is not None:
                     entry["summary_source"] = summary_source
                 if summary_status is not None:
@@ -926,6 +957,16 @@ def _replace_journal_entry(
         journal_date = _journal_date_from_path(journal_file)
         _write_journal_document(journal_file, journal_date, entries)
         return True
+
+
+def _commit_item_replacement_bodies(body: str, commit_items: List[Dict[str, Any]]) -> List[str]:
+    clean_body = str(body or "").strip()
+    if not clean_body:
+        return []
+    body_parts = [part.strip() for part in clean_body.split("\n") if part.strip()]
+    if len(body_parts) == len(commit_items):
+        return body_parts
+    return [clean_body] * len(commit_items)
 
 
 def _new_entry_id(now: datetime) -> str:

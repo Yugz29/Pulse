@@ -1448,6 +1448,179 @@ class TestExtractor(unittest.TestCase):
         self.assertEqual(entries["no-commit"]["summary_status"], "failed")
         self.assertEqual(entries["no-commit"]["body"], "No commit fallback.")
 
+    def test_enrich_pending_journal_summaries_ignore_generated_commit_items_resolus(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "generated-clean",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Résumé déjà propre.",
+                    "commit_message": "fix: clean summary",
+                    "commit_messages": ["fix: clean summary"],
+                    "commit_items": [
+                        {
+                            "message": "fix: clean summary",
+                            "body": "Résumé déjà propre.",
+                            "delivered_at": "2026-05-05T10:18:00",
+                            "top_files": ["extractor.py"],
+                        }
+                    ],
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "llm",
+                    "summary_status": "generated",
+                    "summary_error": None,
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+        )
+        entry = extractor_module._load_journal_entries(journal_file)[0]
+
+        self.assertEqual(result["eligible"], 0)
+        self.assertEqual(result["enriched"], 0)
+        self.assertEqual(entry["body"], "Résumé déjà propre.")
+        self.assertEqual(entry["commit_items"][0]["body"], "Résumé déjà propre.")
+
+    def test_enrich_pending_journal_summaries_reprend_generated_commit_items_fallback(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "generated-with-fallback-items",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Résumé global.",
+                    "commit_message": "fix: first commit",
+                    "commit_messages": ["fix: first commit", "fix: second commit"],
+                    "commit_items": [
+                        {
+                            "message": "fix: first commit",
+                            "body": "Livraison : « fix: first commit ».",
+                            "delivered_at": "2026-05-05T10:18:00",
+                            "top_files": ["extractor.py"],
+                        },
+                        {
+                            "message": "fix: second commit",
+                            "body": "Livraison : « fix: second commit ».",
+                            "delivered_at": "2026-05-05T10:20:00",
+                            "top_files": ["test_extractor.py"],
+                        },
+                    ],
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py", "test_extractor.py"],
+                    "files_count": 2,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "llm",
+                    "summary_status": "generated",
+                    "summary_error": None,
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+        )
+        entry = extractor_module._load_journal_entries(journal_file)[0]
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(entry["summary_source"], "llm")
+        self.assertEqual(entry["summary_status"], "generated")
+        self.assertEqual(entry["body"], "Résumé court de la session.")
+        self.assertEqual(
+            [item["body"] for item in entry["commit_items"]],
+            ["Résumé court de la session.", "Résumé court de la session."],
+        )
+        self.assertFalse(
+            any(
+                extractor_module._commit_item_body_is_fallback(item["body"])
+                for item in entry["commit_items"]
+            )
+        )
+
+    def test_enrich_pending_journal_summaries_commit_unique_garde_comportement(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "single-commit",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Fallback failed.",
+                    "commit_message": "fix: single commit",
+                    "commit_messages": ["fix: single commit"],
+                    "commit_items": [
+                        {
+                            "message": "fix: single commit",
+                            "body": "Livraison : « fix: single commit ».",
+                            "delivered_at": "2026-05-05T10:18:00",
+                            "top_files": ["extractor.py"],
+                        }
+                    ],
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+        )
+        entry = extractor_module._load_journal_entries(journal_file)[0]
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(entry["body"], "Résumé court de la session.")
+        self.assertEqual(entry["commit_items"][0]["body"], "Résumé court de la session.")
+
     def test_resume_llm_est_nettoye_avant_rendu_journal(self):
         session = {
             "active_project": "Pulse",
