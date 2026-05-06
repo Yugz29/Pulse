@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .event_bus import DEFAULT_EVENT_BUS_SIZE, EventBus
-from .file_classifier import classify_file_type, file_signal_significance, is_pulse_internal_path
+from .file_classifier import classify_file_type, is_pulse_internal_path
 from .git_diff import extract_file_names_from_diff_summary
 from .session_fsm import SESSION_TIMEOUT_MIN
 from .workspace_context import extract_project_name, find_workspace_root
@@ -101,7 +101,7 @@ class SignalScorer:
 
         file_events = [
             e for e in recent
-            if e.type in self._file_event_types()
+            if self._is_trackable_event_type(e.type)
             and self._is_trackable_file_path(e.payload.get("path"))
         ]
         meaningful_file_events = [
@@ -276,8 +276,13 @@ class SignalScorer:
         )
 
     def _file_event_types(self) -> set[str]:
-        return {
+        candidates = {
             "file_created", "file_modified", "file_renamed", "file_deleted", "file_change"
+        }
+        return {
+            event_type
+            for event_type in candidates
+            if self._is_trackable_event_type(event_type)
         }
 
     def _last_file_path(self, file_events: list) -> Optional[str]:
@@ -1007,10 +1012,18 @@ class SignalScorer:
         return classify_file_type(path)
 
     def _file_signal_significance(self, path: Optional[str]) -> str:
-        return file_signal_significance(path)
+        from daemon.core.event_meaning import _default_policy
+        return _default_policy.classify_path(path).file_significance
 
     def _is_trackable_file_path(self, path: Optional[str]) -> bool:
-        return file_signal_significance(path) != "technical_noise"
+        from daemon.core.event_meaning import _default_policy
+        decision = _default_policy.classify_path(path)
+        return decision.scoring_relevant
+
+    def _is_trackable_event_type(self, event_type: str) -> bool:
+        from daemon.core.event_meaning import _default_policy
+        decision = _default_policy.classify(event_type, {})
+        return decision.scoring_relevant
 
     def _is_pulse_internal_path(self, path: str) -> bool:
         return is_pulse_internal_path(path)

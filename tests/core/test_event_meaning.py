@@ -40,6 +40,22 @@ def test_uuid_named_file_is_technical_noise():
     )
 
     assert decision.file_significance == "technical_noise"
+    assert decision.scoring_relevant is False
+
+
+def test_neutral_file_path_remains_scoring_relevant():
+    decision = EventMeaningPolicy().classify_path(
+        "/Users/yugz/Projets/MonApp/poetry.lock"
+    )
+
+    assert decision.file_significance == "neutral"
+    assert decision.scoring_relevant is True
+
+
+def test_file_event_type_is_scoring_relevant_without_path():
+    decision = EventMeaningPolicy().classify("file_modified", {})
+
+    assert decision.scoring_relevant is True
 
 
 def test_pulse_internal_path_is_filtered():

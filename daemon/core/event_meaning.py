@@ -114,7 +114,7 @@ class EventMeaningPolicy:
         coalescing_priority = self._coalescing_priority(event_type, path)
         publish_to_bus = self._should_publish_to_bus(event_type, path)
         runtime_relevant = self._runtime_relevant(event_type, path, file_significance)
-        scoring_relevant = file_significance == "meaningful"
+        scoring_relevant = self._scoring_relevant(event_type, path, file_significance)
         noise_policy = self._noise_policy(path, file_significance)
         dedupe_key = self._dedupe_key(event_type, path, runtime_relevant)
 
@@ -156,7 +156,7 @@ class EventMeaningPolicy:
         return EventMeaningDecision(
             publish_to_bus=significance in {"meaningful", "observe_only"},
             runtime_relevant=significance == "meaningful",
-            scoring_relevant=significance == "meaningful",
+            scoring_relevant=significance != "technical_noise",
             file_significance=significance,
             coalescible=False,
             coalescing_priority=-1,
@@ -184,6 +184,13 @@ class EventMeaningPolicy:
         if path.endswith(".git/COMMIT_EDITMSG") or "/COMMIT_EDITMSG" in path:
             return True
         return file_significance == "meaningful"
+
+    def _scoring_relevant(self, event_type: str, path: str, file_significance: str) -> bool:
+        if event_type not in _BUS_FILE_EVENT_TYPES:
+            return False
+        if not path:
+            return True
+        return file_significance != "technical_noise"
 
     def _dedupe_key(self, event_type: str, path: str, runtime_relevant: bool) -> str | None:
         if not runtime_relevant or not event_type.startswith("file_") or not path:
