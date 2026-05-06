@@ -297,36 +297,28 @@ def _is_screenshot_path(path: str) -> bool:
 
 # Helper to serialize current_context for /state route
 def _serialize_current_context(current_context: Any) -> dict[str, Any]:
-    """Serialize CurrentContext while staying compatible with legacy SessionContext."""
-    signal_summary = getattr(current_context, "signal_summary", None)
-    return {
-        "id": getattr(current_context, "id", None),
-        "session_id": getattr(current_context, "session_id", None),
-        "started_at": getattr(current_context, "started_at", None),
-        "ended_at": getattr(current_context, "ended_at", None),
-        "boundary_reason": getattr(current_context, "boundary_reason", None),
-        "duration_sec": getattr(current_context, "duration_sec", None),
-        "active_project": getattr(current_context, "active_project", None),
-        "active_file": getattr(current_context, "active_file", None),
-        "probable_task": getattr(current_context, "probable_task", None),
-        "activity_level": getattr(current_context, "activity_level", None),
-        "focus_level": getattr(current_context, "focus_level", None),
-        "task_confidence": getattr(current_context, "task_confidence", None),
-        "user_presence_state": getattr(current_context, "user_presence_state", None),
-        "user_idle_seconds": getattr(current_context, "user_idle_seconds", None),
-        "terminal_action_category": getattr(current_context, "terminal_action_category", None),
-        "terminal_project": getattr(current_context, "terminal_project", None),
-        "terminal_cwd": getattr(current_context, "terminal_cwd", None),
-        "terminal_command": getattr(current_context, "terminal_command", None),
-        "terminal_success": getattr(current_context, "terminal_success", None),
-        "terminal_exit_code": getattr(current_context, "terminal_exit_code", None),
-        "terminal_duration_ms": getattr(current_context, "terminal_duration_ms", None),
-        "terminal_summary": getattr(current_context, "terminal_summary", None),
-        "active_app_duration_sec": getattr(signal_summary, "active_app_duration_sec", None),
-        "active_window_title_duration_sec": getattr(signal_summary, "active_window_title_duration_sec", None),
-        "app_switch_count_10m": getattr(signal_summary, "app_switch_count_10m", 0),
-        "ai_app_switch_count_10m": getattr(signal_summary, "ai_app_switch_count_10m", 0),
-    }
+    from daemon.routes.runtime_state_payloads import serialize_current_context
+    return serialize_current_context(current_context)
+
+
+def _build_state_payload(
+    *,
+    store_state: dict[str, Any],
+    runtime_snapshot: Any,
+    get_session_fsm: Callable[[], Any] | None = None,
+    get_current_context: Callable[[], Any] | None = None,
+    get_recent_sessions: Callable[[int], Any] | None = None,
+) -> dict[str, Any]:
+    from daemon.routes.runtime_state_payloads import build_state_payload
+    return build_state_payload(
+        store_state=store_state,
+        runtime_snapshot=runtime_snapshot,
+        get_session_fsm=get_session_fsm,
+        get_current_context=get_current_context,
+        get_recent_sessions=get_recent_sessions,
+        current_context_builder=_current_context_builder,
+        last_session_context_fn=last_session_context,
+    )
 
 
 def register_runtime_routes(
@@ -431,89 +423,13 @@ def register_runtime_routes(
     def get_state():
         # Legacy surface payload: still used for last_event_type / last_activity
         # and debug visibility only. Runtime-facing active_app comes from RuntimeState.
-        store_state = store.to_dict()
-        runtime_snapshot = runtime_state.get_runtime_snapshot()
-        present = runtime_snapshot.present
-        state = {
-            "active_app": runtime_snapshot.latest_active_app,
-            "active_file": present.active_file,
-            "active_project": present.active_project,
-            "session_duration_min": present.session_duration_min,
-            "last_event_type": store_state.get("last_event_type"),
-            "runtime_paused": runtime_snapshot.paused,
-            "present": present.to_dict(),
-        }
-
-        debug: dict[str, Any] = {
-            "store": store_state,
-            "runtime": {
-                "latest_active_app": runtime_snapshot.latest_active_app,
-                "lock_marker_active": runtime_snapshot.lock_marker_active,
-                "last_screen_locked_at": (
-                    runtime_snapshot.last_screen_locked_at.isoformat()
-                    if runtime_snapshot.last_screen_locked_at
-                    else None
-                ),
-                "memory_synced_at": (
-                    runtime_snapshot.memory_synced_at.isoformat()
-                    if runtime_snapshot.memory_synced_at
-                    else None
-                ),
-            },
-        }
-
-        if runtime_snapshot.decision:
-            decision_payload = {
-                "action": runtime_snapshot.decision.action,
-                "level": runtime_snapshot.decision.level,
-                "reason": runtime_snapshot.decision.reason,
-                "payload": runtime_snapshot.decision.payload,
-            }
-            state["decision"] = decision_payload
-            debug["decision"] = decision_payload
-        if get_session_fsm is not None:
-            fsm = get_session_fsm()
-            session_fsm_payload = {
-                "state": fsm.state,
-                "session_started_at": fsm.session_started_at.isoformat() if fsm.session_started_at else None,
-                "last_meaningful_activity_at": fsm.last_meaningful_activity_at.isoformat() if fsm.last_meaningful_activity_at else None,
-                "last_screen_locked_at": fsm.last_screen_locked_at.isoformat() if fsm.last_screen_locked_at else None,
-            }
-            state["session_fsm"] = session_fsm_payload
-            debug["session_fsm"] = session_fsm_payload
-        if get_current_context is not None:
-            current_context = get_current_context()
-            if current_context is not None:
-                context_payload = _serialize_current_context(current_context)
-                state["current_context"] = context_payload
-                debug["current_context"] = context_payload
-        if runtime_snapshot.signals:
-            current_context = _current_context_builder.build(
-                present=present,
-                active_app=state.get("active_app"),
-                signals=runtime_snapshot.signals,
-                find_git_root_fn=find_git_root,
-                find_workspace_root_fn=find_workspace_root,
-            )
-            legacy_signals = current_context_to_legacy_signals_payload(
-                current_context,
-                signals=runtime_snapshot.signals,
-                last_session_line=(
-                    last_session_context(current_context.active_project)
-                    if current_context.active_project
-                    else None
-                ),
-            )
-            # Compat / debug : la lecture produit passe par current_context
-            # puis present. Les signaux restent exposés pour instrumentation.
-            state["signals"] = legacy_signals
-            debug["signals"] = legacy_signals
-        if get_recent_sessions is not None:
-            sessions = get_recent_sessions(8)
-            if sessions:
-                state["recent_sessions"] = sessions
-                debug["recent_sessions"] = sessions
-        state["debug"] = debug
+        state = _build_state_payload(
+            store_state=store.to_dict(),
+            runtime_snapshot=runtime_state.get_runtime_snapshot(),
+            get_session_fsm=get_session_fsm,
+            get_current_context=get_current_context,
+            get_recent_sessions=get_recent_sessions,
+        )
         return jsonify(state)
 
     @app.route("/insights")
