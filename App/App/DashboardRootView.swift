@@ -9,6 +9,7 @@ private let gPurple = "#8B5CF6"
 
 enum DashboardSection: String, CaseIterable, Identifiable {
     case session = "Session"
+    case episodes = "Épisodes"
     case observation = "Observation"
     case memory = "Mémoire"
     case daydream = "DayDream"
@@ -23,6 +24,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .session: return "waveform.path.ecg"
+        case .episodes: return "rectangle.stack.badge.play"
         case .observation: return "eye"
         case .memory: return "brain.head.profile"
         case .daydream: return "moon.stars"
@@ -37,6 +39,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     var accent: String {
         switch self {
         case .session: return gGreen
+        case .episodes: return gOrange
         case .observation: return gPurple
         case .memory: return gBlue
         case .daydream: return "#8B5CF6"
@@ -170,6 +173,8 @@ struct DashboardRootView: View {
         switch selectedSection {
         case .session:
             sessionView
+        case .episodes:
+            episodesView
         case .observation:
             observationView
         case .memory:
@@ -318,6 +323,185 @@ struct DashboardRootView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var episodesView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Épisodes")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                        Text("Debug Phase 2a · \(vm.debugWorkEpisodes?.date ?? vm.debugCommitEpisodeLinks?.date ?? "aujourd’hui")")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        Task { await vm.refresh() }
+                    } label: {
+                        Label("Rafraîchir", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                HStack(alignment: .top, spacing: 16) {
+                    debugWorkEpisodesCard
+                    debugCommitLinksCard
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    private var debugWorkEpisodesCard: some View {
+        let episodes = vm.debugWorkEpisodes?.episodes ?? []
+
+        return GlassCard(accent: gOrange) {
+            VStack(alignment: .leading, spacing: 12) {
+                cardTitle("Work episodes", icon: "rectangle.stack")
+
+                if episodes.isEmpty {
+                    emptyState("Aucun épisode reçu ou route debug indisponible")
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(episodes.prefix(12)) { episode in
+                            VStack(alignment: .leading, spacing: 7) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text("\(dashboardAbsoluteTimestamp(episode.startedAt)) → \(dashboardAbsoluteTimestamp(episode.endedAt))")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Text(dashboardMinutes(episode.durationMin))
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                HStack(spacing: 6) {
+                                    debugPill(episode.project ?? "—", color: gBlue)
+                                    debugPill(episode.dominantScope ?? "scope —", color: gOrange)
+                                    debugPill(episode.probableTask ?? "task —", color: gGray)
+                                }
+
+                                HStack(spacing: 12) {
+                                    Text("boundary \(episode.boundaryReason ?? "—")")
+                                    Text("S \(episode.strongEventCount ?? 0) / W \(episode.weakEventCount ?? 0)")
+                                    Text("conf \(dashboardScore(episode.confidence))")
+                                }
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+
+                                if let reason = episode.debugReason, !reason.isEmpty {
+                                    Text(reason)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.tertiary)
+                                        .lineLimit(3)
+                                }
+                            }
+                            .padding(.vertical, 8)
+
+                            if episode.id != episodes.prefix(12).last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var debugCommitLinksCard: some View {
+        let payload = vm.debugCommitEpisodeLinks
+        let links = payload?.links ?? []
+        let unlinked = payload?.unlinkedCommits ?? []
+
+        return GlassCard(accent: gBlue) {
+            VStack(alignment: .leading, spacing: 12) {
+                cardTitle("Commit links", icon: "point.3.connected.trianglepath.dotted")
+
+                HStack(spacing: 14) {
+                    statBadge("Commits", dashboardCount(payload?.commitCount), gGray)
+                    statBadge("Liés", dashboardCount(payload?.linkedCount), gGreen)
+                    statBadge("Non liés", dashboardCount(payload?.unlinkedCount), gRed)
+                }
+
+                if links.isEmpty && unlinked.isEmpty {
+                    emptyState("Aucun commit link reçu ou route debug indisponible")
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(links.prefix(10)) { link in
+                            debugCommitLinkRow(link, linked: true)
+                            if link.id != links.prefix(10).last?.id || !unlinked.isEmpty {
+                                Divider()
+                            }
+                        }
+                        ForEach(unlinked.prefix(5)) { link in
+                            debugCommitLinkRow(link, linked: false)
+                            if link.id != unlinked.prefix(5).last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func debugCommitLinkRow(_ link: DebugCommitEpisodeLink, linked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(link.commitSubject ?? "Commit sans sujet")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Spacer()
+                Text(dashboardScore(link.confidence))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(linked ? Color(hex: gGreen) : Color(hex: gRed))
+            }
+
+            Text("\(dashboardAbsoluteTimestamp(link.episodeStartedAt)) → \(dashboardAbsoluteTimestamp(link.episodeEndedAt))")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Text(link.linkReason ?? (linked ? "linked" : "unlinked"))
+                Text("delivery Δ \(debugOptionalMinutes(link.deliveryDeltaMin))")
+                if let overlap = link.overlapMin {
+                    Text("overlap \(overlap) min")
+                }
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+
+            let flags = (link.flags ?? []).prefix(5)
+            if !flags.isEmpty {
+                HStack(spacing: 5) {
+                    ForEach(Array(flags), id: \.self) { flag in
+                        debugPill(flag, color: linked ? gBlue : gGray)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func debugPill(_ text: String, color: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(Color(hex: color))
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color(hex: color).opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func debugOptionalMinutes(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return "\(value) min"
     }
 
     private var sessionHero: some View {

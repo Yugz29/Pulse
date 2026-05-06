@@ -317,6 +317,20 @@ extension DaemonBridge {
         return try? decode(TodaySummaryResponse.self, from: data)
     }
 
+    func getDebugWorkEpisodes(date: String) async -> DebugWorkEpisodesResponse? {
+        guard let url = URL(string: "\(base)/debug/work-episodes?date=\(date)") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(DebugWorkEpisodesResponse.self, from: data)
+    }
+
+    func getDebugCommitEpisodeLinks(date: String) async -> DebugCommitEpisodeLinksResponse? {
+        guard let url = URL(string: "\(base)/debug/commit-episode-links?date=\(date)") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(DebugCommitEpisodeLinksResponse.self, from: data)
+    }
+
     func getScoringStatus() async -> ScoringStatusResponse? {
         guard let url = URL(string: "\(base)/scoring/status") else { return nil }
         guard let (data, response) = try? await data(from: url) else { return nil }

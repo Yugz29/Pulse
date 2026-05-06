@@ -694,6 +694,128 @@ struct TodayCurrentWindow: Decodable {
     }
 }
 
+struct DebugWorkEpisodesResponse: Decodable {
+    let date: String
+    let generatedAt: String?
+    let episodeCount: Int
+    let episodes: [DebugWorkEpisode]
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case generatedAt = "generated_at"
+        case episodeCount = "episode_count"
+        case episodes
+    }
+}
+
+struct DebugWorkEpisode: Decodable, Identifiable {
+    let id: String
+    let project: String?
+    let probableTask: String?
+    let activityLevel: String?
+    let startedAt: String?
+    let endedAt: String?
+    let durationMin: Int?
+    let evidenceCount: Int?
+    let confidence: Double?
+    let boundaryReason: String?
+    let uncertaintyFlags: [String]?
+    let dominantScope: String?
+    let previousScope: String?
+    let nextScope: String?
+    let strongEventCount: Int?
+    let weakEventCount: Int?
+    let boundaryEventType: String?
+    let boundaryEventAt: String?
+    let debugReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case project
+        case probableTask = "probable_task"
+        case activityLevel = "activity_level"
+        case startedAt = "started_at"
+        case endedAt = "ended_at"
+        case durationMin = "duration_min"
+        case evidenceCount = "evidence_count"
+        case confidence
+        case boundaryReason = "boundary_reason"
+        case uncertaintyFlags = "uncertainty_flags"
+        case dominantScope = "dominant_scope"
+        case previousScope = "previous_scope"
+        case nextScope = "next_scope"
+        case strongEventCount = "strong_event_count"
+        case weakEventCount = "weak_event_count"
+        case boundaryEventType = "boundary_event_type"
+        case boundaryEventAt = "boundary_event_at"
+        case debugReason = "debug_reason"
+    }
+}
+
+struct DebugCommitEpisodeLinksResponse: Decodable {
+    let date: String
+    let generatedAt: String?
+    let commitCount: Int
+    let linkedCount: Int
+    let unlinkedCount: Int
+    let links: [DebugCommitEpisodeLink]
+    let unlinkedCommits: [DebugCommitEpisodeLink]
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case generatedAt = "generated_at"
+        case commitCount = "commit_count"
+        case linkedCount = "linked_count"
+        case unlinkedCount = "unlinked_count"
+        case links
+        case unlinkedCommits = "unlinked_commits"
+    }
+}
+
+struct DebugCommitEpisodeLink: Decodable, Identifiable {
+    let id: String
+    let entryId: String?
+    let commitSubject: String?
+    let commitMessage: String?
+    let deliveredAt: String?
+    let journalStartedAt: String?
+    let journalEndedAt: String?
+    let episodeId: String?
+    let candidateId: String?
+    let episodeStartedAt: String?
+    let episodeEndedAt: String?
+    let project: String?
+    let confidence: Double?
+    let status: String?
+    let linkReason: String?
+    let flags: [String]?
+    let deliveryDeltaMin: Int?
+    let windowDistanceMin: Int?
+    let overlapMin: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case entryId = "entry_id"
+        case commitSubject = "commit_subject"
+        case commitMessage = "commit_message"
+        case deliveredAt = "delivered_at"
+        case journalStartedAt = "journal_started_at"
+        case journalEndedAt = "journal_ended_at"
+        case episodeId = "episode_id"
+        case candidateId = "candidate_id"
+        case episodeStartedAt = "episode_started_at"
+        case episodeEndedAt = "episode_ended_at"
+        case project
+        case confidence
+        case status
+        case linkReason = "link_reason"
+        case flags
+        case deliveryDeltaMin = "delivery_delta_min"
+        case windowDistanceMin = "window_distance_min"
+        case overlapMin = "overlap_min"
+    }
+}
+
 struct FactsStatsResponse: Decodable {
     let total: Int?
     let active: Int?

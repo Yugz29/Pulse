@@ -11,6 +11,8 @@ final class DashboardViewModel: ObservableObject {
     @Published var memory: MemoryResponse?
     @Published var sessionJournals: SessionsResponse?
     @Published var todaySummary: TodaySummaryResponse?
+    @Published var debugWorkEpisodes: DebugWorkEpisodesResponse?
+    @Published var debugCommitEpisodeLinks: DebugCommitEpisodeLinksResponse?
     @Published var events: [InsightEvent] = []
     @Published var proposals: [ProposalRecord] = []
     @Published var contextProbeRequests: [ContextProbeRequestPayload] = []
@@ -95,12 +97,15 @@ final class DashboardViewModel: ObservableObject {
         ping = await pingTask
 
         if shouldRefreshSlowData {
+            let debugDate = dashboardDebugDateString()
             async let factsTask = bridge.getFacts(limit: 30)
             async let archivedFactsTask = bridge.getArchivedFacts(limit: 30)
             async let factsStatsTask = bridge.getFactsStats()
             async let factsProfileTask = bridge.getFactsProfile()
             async let memoryTask = bridge.getMemory()
             async let sessionJournalsTask = bridge.getSessionJournals()
+            async let debugWorkEpisodesTask = bridge.getDebugWorkEpisodes(date: debugDate)
+            async let debugCommitEpisodeLinksTask = bridge.getDebugCommitEpisodeLinks(date: debugDate)
             async let eventsTask = bridge.getInsights(limit: 100)
             async let proposalsTask = bridge.getRecentProposals(limit: 20)
             async let contextProbesTask = bridge.getContextProbeRequests(includeTerminal: true)
@@ -115,6 +120,8 @@ final class DashboardViewModel: ObservableObject {
             factsProfile = await factsProfileTask
             memory = await memoryTask
             sessionJournals = await sessionJournalsTask
+            debugWorkEpisodes = await debugWorkEpisodesTask
+            debugCommitEpisodeLinks = await debugCommitEpisodeLinksTask
             events = await eventsTask
             proposals = await proposalsTask
             if let contextProbes = await contextProbesTask {
@@ -167,5 +174,13 @@ final class DashboardViewModel: ObservableObject {
 
     func resultForContextProbeRequest(_ request: ContextProbeRequestPayload) -> ContextProbeResultPayload? {
         contextProbeResults[request.requestId]
+    }
+
+    private func dashboardDebugDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
     }
 }
