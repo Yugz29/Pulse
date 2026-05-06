@@ -30,7 +30,6 @@ from daemon.core.current_context_adapters import current_context_to_markdown
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.contracts import CurrentContext, ProposalCandidate, SessionContext
 from daemon.core.event_bus import DEFAULT_EVENT_BUS_SIZE
-from daemon.core.file_classifier import file_signal_significance
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary, extract_file_names_from_diff_summary
 from daemon.core.proposal_candidate_adapter import proposal_candidate_to_proposal
 from daemon.core.proposals import proposal_store
@@ -747,15 +746,13 @@ class RuntimeOrchestrator:
     def _should_ignore_event(self, event) -> bool:
         if not event.type.startswith("file_"):
             return False
-        path = (event.payload or {}).get("path", "")
-        if not path:
+        from daemon.core.event_meaning import _default_policy
+
+        payload = event.payload or {}
+        decision = _default_policy.classify(event.type, payload)
+        if not decision.runtime_relevant:
             return True
-        if path.endswith(".git/COMMIT_EDITMSG") or "/COMMIT_EDITMSG" in path:
-            return False
-        if file_signal_significance(path) != "meaningful":
-            return True
-        dedupe_key = "{0}:{1}".format(event.type, path)
-        return self.runtime_state.should_ignore_file_event(dedupe_key=dedupe_key)
+        return self.runtime_state.should_ignore_file_event(event.type, payload.get("path", ""), payload)
 
     def _schedule_commit_watch(self, path: str) -> None:
         git_root = find_git_root(path)

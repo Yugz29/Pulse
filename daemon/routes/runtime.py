@@ -152,7 +152,7 @@ class _FileEventCoalescer:
         timestamp: datetime | None = None,
     ) -> None:
         path = payload.get("path")
-        if not self._is_coalescible(event_type, path):
+        if not self._is_coalescible(event_type, payload):
             self._publisher(event_type, payload, timestamp)
             return
 
@@ -186,7 +186,7 @@ class _FileEventCoalescer:
                     started_at=now,
                 )
             elif screenshot_event:
-                if self._priority(event_type, screenshot=True) > self._priority(pending.event_type, screenshot=True):
+                if self._priority(event_type, payload) > self._priority(pending.event_type, pending.payload):
                     pending.event_type = event_type
                     pending.payload = dict(payload)
                     pending.timestamp = timestamp
@@ -200,7 +200,7 @@ class _FileEventCoalescer:
                     started_at=now,
                 )
             else:
-                if self._priority(event_type) > self._priority(pending.event_type):
+                if self._priority(event_type, payload) > self._priority(pending.event_type, pending.payload):
                     pending.event_type = event_type
                     pending.payload = dict(payload)
                     pending.timestamp = timestamp
@@ -264,13 +264,13 @@ class _FileEventCoalescer:
             self._stopped = True
             self._condition.notify_all()
 
-    def _is_coalescible(self, event_type: str, path: Any) -> bool:
-        return bool(path) and event_type in _COALESCIBLE_FILE_EVENT_TYPES
+    def _is_coalescible(self, event_type: str, payload: dict[str, Any]) -> bool:
+        from daemon.core.event_meaning import _default_policy
+        return _default_policy.classify(event_type, payload).coalescible
 
-    def _priority(self, event_type: str, *, screenshot: bool = False) -> int:
-        if screenshot:
-            return _SCREENSHOT_FILE_EVENT_PRIORITY.get(event_type, -1)
-        return _FILE_EVENT_PRIORITY.get(event_type, -1)
+    def _priority(self, event_type: str, payload: dict[str, Any]) -> int:
+        from daemon.core.event_meaning import _default_policy
+        return _default_policy.classify(event_type, payload).coalescing_priority
 
 
 def _first_recent_session_value(recent_sessions: Any, key: str) -> Any:
