@@ -17,6 +17,7 @@ from daemon.memory.work_heartbeat import NON_WORK_TITLE_HINTS, classify_work_hea
 
 
 DEFAULT_WEAK_BRIDGE_MIN = 10
+WEAK_AFTER_STRONG_GRACE_MIN = 10
 DEFAULT_BLOCK_GAP_MIN = 30
 DEFAULT_EPISODE_GAP_MIN = 45
 DEFAULT_SCOPE_SHIFT_GAP_MIN = 12
@@ -79,7 +80,7 @@ def build_work_blocks(
 ) -> list[WorkBlock]:
     """Build short work blocks from qualified heartbeats."""
     max_gap = timedelta(minutes=block_gap_min)
-    max_weak_bridge = timedelta(minutes=weak_bridge_min)
+    max_weak_after_strong = timedelta(minutes=weak_bridge_min)
     clusters: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
     last_strong_at: datetime | None = None
@@ -108,8 +109,12 @@ def build_work_blocks(
             continue
 
         if heartbeat.strength == "weak":
-            if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_bridge:
+            if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_after_strong:
                 current.append(event)
+            elif current and last_strong_at is not None:
+                clusters.append(current)
+                current = []
+                last_strong_at = None
             continue
 
     if current:
@@ -121,7 +126,7 @@ def build_work_blocks(
 def build_work_episodes(
     events: list[Mapping[str, Any]],
     *,
-    weak_bridge_min: int = DEFAULT_WEAK_BRIDGE_MIN,
+    weak_bridge_min: int = WEAK_AFTER_STRONG_GRACE_MIN,
     block_gap_min: int = DEFAULT_BLOCK_GAP_MIN,
     episode_gap_min: int = DEFAULT_EPISODE_GAP_MIN,
 ) -> list[WorkEpisode]:
@@ -156,7 +161,7 @@ def _cluster_episode_events(
 ) -> list[dict[str, Any]]:
     max_block_gap = timedelta(minutes=block_gap_min)
     max_episode_gap = timedelta(minutes=episode_gap_min)
-    max_weak_bridge = timedelta(minutes=weak_bridge_min)
+    max_weak_after_strong = timedelta(minutes=weak_bridge_min)
     max_scope_shift_gap = timedelta(minutes=DEFAULT_SCOPE_SHIFT_GAP_MIN)
     groups: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
@@ -205,8 +210,13 @@ def _cluster_episode_events(
             continue
 
         if heartbeat.strength == "weak":
-            if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_bridge:
+            if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_after_strong:
                 current.append(event)
+            elif current and last_strong_at is not None:
+                groups.append({"events": current, "reason": "weak_after_strong_timeout", "boundary_event": event})
+                current = []
+                last_strong_at = None
+                last_strong_scope = None
             continue
 
     if current:
@@ -384,6 +394,10 @@ def _debug_reason(
         gap_min = _gap_from_last_event_to_boundary(events, boundary_event)
         gap_label = f"{gap_min} min" if gap_min is not None else "unknown"
         return f"split after {gap_label} long gap"
+    if boundary_reason == "weak_after_strong_timeout":
+        gap_min = _gap_from_last_strong_to_boundary(events, boundary_event)
+        gap_label = f"{gap_min} min" if gap_min is not None else "unknown"
+        return f"split after {gap_label} min without strong work evidence"
     if boundary_reason == "end_of_events":
         return "episode open until end of observed events"
     if previous_scope and dominant_scope and previous_scope != dominant_scope:

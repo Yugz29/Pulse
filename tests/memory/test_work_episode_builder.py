@@ -115,6 +115,64 @@ def test_strong_plus_recent_weak_stays_in_same_work_episode():
     assert len(episodes) == 1
     assert episodes[0].work_block_ids == (blocks[0].id,)
     assert episodes[0].evidence_count == 2
+    assert episodes[0].ended_at == (BASE + timedelta(minutes=5)).isoformat()
+
+
+def test_weak_far_after_strong_does_not_extend_episode_end():
+    events = [
+        strong_file(0),
+        weak_app("ChatGPT", 20),
+    ]
+
+    blocks = build_work_blocks(events)
+    episodes = build_work_episodes(events)
+
+    assert len(blocks) == 1
+    assert blocks[0].event_count == 1
+    assert blocks[0].ended_at == BASE.isoformat()
+    assert len(episodes) == 1
+    assert episodes[0].ended_at == BASE.isoformat()
+    assert episodes[0].duration_min == 1
+    assert episodes[0].strong_event_count == 1
+    assert episodes[0].weak_event_count == 0
+    assert episodes[0].evidence_count == 1
+    assert episodes[0].boundary_reason == "weak_after_strong_timeout"
+
+
+def test_recent_weak_between_two_strong_events_keeps_same_episode():
+    events = [
+        strong_file(0),
+        weak_app("ChatGPT", 8),
+        strong_file(15),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].started_at == BASE.isoformat()
+    assert episodes[0].ended_at == (BASE + timedelta(minutes=15)).isoformat()
+    assert episodes[0].strong_event_count == 2
+    assert episodes[0].weak_event_count == 1
+    assert episodes[0].evidence_count == 3
+
+
+def test_weak_chain_without_new_strong_does_not_create_hour_long_episode():
+    events = [strong_file(0)]
+    events.extend(weak_app("ChatGPT", minute) for minute in range(5, 65, 5))
+
+    blocks = build_work_blocks(events)
+    episodes = build_work_episodes(events)
+
+    assert len(blocks) == 1
+    assert blocks[0].duration_min == 10
+    assert blocks[0].event_count == 3
+    assert len(episodes) == 1
+    assert episodes[0].duration_min == 10
+    assert episodes[0].ended_at == (BASE + timedelta(minutes=10)).isoformat()
+    assert episodes[0].strong_event_count == 1
+    assert episodes[0].weak_event_count == 2
+    assert episodes[0].evidence_count == 3
+    assert episodes[0].boundary_reason == "weak_after_strong_timeout"
 
 
 def test_git_status_alone_creates_no_work_episode():
