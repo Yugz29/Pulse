@@ -2,7 +2,6 @@ import json
 import sqlite3
 import subprocess
 import threading
-from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,10 +14,7 @@ from daemon.memory.session_snapshot_builder import (
     build_session_snapshot as build_structured_session_snapshot,
     session_snapshot_to_legacy_dict,
 )
-from daemon.memory.commit_episode_linker import link_commits_to_episodes
-from daemon.memory.journal_candidate_builder import build_journal_candidates, journal_candidates_to_payload
-from daemon.memory.journal_candidate_comparator import compare_journal_candidates
-from daemon.memory.work_episode_builder import build_work_blocks, build_work_episodes
+from daemon.memory.work_episode_builder import build_work_blocks
 from daemon.memory.work_heartbeat import classify_work_heartbeat
 
 _SESSION_TIMING_IGNORED_EVENT_TYPES = {
@@ -28,8 +24,6 @@ _SESSION_TIMING_IGNORED_EVENT_TYPES = {
 
 _FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed", "file_deleted", "file_change"}
 _APP_EVENT_TYPES = {"app_activated", "app_switch"}
-_JOURNAL_DATA_START = "<!-- pulse-journal-data:start"
-_JOURNAL_DATA_END = "pulse-journal-data:end -->"
 
 
 class SessionMemory:
@@ -372,115 +366,27 @@ class SessionMemory:
 
     def get_today_work_episodes(self, date: Optional[datetime] = None) -> Dict[str, Any]:
         """Return today's experimental work episodes for debug/observation only."""
-        now = datetime.now()
-        target_date = (date or now).date()
-        day_start = datetime.combine(target_date, datetime.min.time())
-        day_end = day_start + timedelta(days=1)
+        from daemon.memory.debug_memory_views import DebugMemoryViews
 
-        with self._lock:
-            with self._connect() as conn:
-                event_rows = conn.execute(
-                    """
-                    SELECT event_type, payload_json, created_at
-                    FROM events
-                    WHERE created_at >= ? AND created_at < ?
-                    ORDER BY created_at ASC, id ASC
-                    """,
-                    (day_start.isoformat(), day_end.isoformat()),
-                ).fetchall()
-
-        all_events = []
-        for row in event_rows:
-            observed_at = _parse_iso_datetime(row["created_at"])
-            if observed_at is None:
-                continue
-            try:
-                payload = json.loads(row["payload_json"])
-            except Exception:
-                payload = {}
-            all_events.append(
-                {
-                    "type": row["event_type"],
-                    "payload": payload,
-                    "timestamp": observed_at,
-                }
-            )
-
-        episodes = [asdict(episode) for episode in build_work_episodes(all_events)]
-        return {
-            "date": target_date.isoformat(),
-            "generated_at": now.isoformat(),
-            "episode_count": len(episodes),
-            "episodes": episodes,
-        }
+        return DebugMemoryViews(self).get_work_episodes(date=date)
 
     def get_today_journal_candidates(self, date: Optional[datetime] = None) -> Dict[str, Any]:
         """Return dry-run journal candidates from work episodes without writing memory."""
-        episodes_payload = self.get_today_work_episodes(date=date)
-        candidates = build_journal_candidates(episodes_payload.get("episodes", []))
-        payload = journal_candidates_to_payload(candidates)
-        return {
-            "date": episodes_payload["date"],
-            "generated_at": datetime.now().isoformat(),
-            **payload,
-        }
+        from daemon.memory.debug_memory_views import DebugMemoryViews
+
+        return DebugMemoryViews(self).get_journal_candidates(date=date)
 
     def get_today_journal_comparison(self, date: Optional[datetime] = None) -> Dict[str, Any]:
         """Compare persisted journal entries and dry-run candidates for debug only."""
-        now = datetime.now()
-        target_date = (date or now).date()
-        candidates_payload = self.get_today_journal_candidates(date=date)
-        journal_entries = self._load_journal_entries_for_date(target_date.isoformat())
-        comparison = compare_journal_candidates(
-            journal_entries,
-            candidates_payload.get("candidates", []),
-        )
-        return {
-            "date": target_date.isoformat(),
-            "generated_at": now.isoformat(),
-            **comparison,
-        }
+        from daemon.memory.debug_memory_views import DebugMemoryViews
+
+        return DebugMemoryViews(self).get_journal_comparison(date=date)
 
     def get_today_commit_episode_links(self, date: Optional[datetime] = None) -> Dict[str, Any]:
         """Return dry-run commit-to-episode links for debug only."""
-        now = datetime.now()
-        target_date = (date or now).date()
-        candidates_payload = self.get_today_journal_candidates(date=date)
-        journal_entries = self._load_journal_entries_for_date(target_date.isoformat())
-        links = link_commits_to_episodes(
-            journal_entries,
-            candidates_payload.get("candidates", []),
-        )
-        return {
-            "date": target_date.isoformat(),
-            "generated_at": now.isoformat(),
-            **links,
-        }
+        from daemon.memory.debug_memory_views import DebugMemoryViews
 
-    def _load_journal_entries_for_date(self, day: str) -> List[Dict[str, Any]]:
-        journal_file = self.db_path.parent / "memory" / "sessions" / f"{day}.md"
-        if not journal_file.exists():
-            return []
-        try:
-            content = journal_file.read_text(encoding="utf-8")
-        except OSError:
-            return []
-        start_index = content.find(_JOURNAL_DATA_START)
-        if start_index < 0:
-            return []
-        payload_start = content.find("\n", start_index)
-        if payload_start < 0:
-            return []
-        end_index = content.find(_JOURNAL_DATA_END, payload_start)
-        if end_index < 0:
-            return []
-        try:
-            raw_entries = json.loads(content[payload_start:end_index].strip())
-        except (TypeError, ValueError, json.JSONDecodeError):
-            return []
-        if not isinstance(raw_entries, list):
-            return []
-        return [entry for entry in raw_entries if isinstance(entry, dict) and entry.get("entry_id")]
+        return DebugMemoryViews(self).get_commit_episode_links(date=date)
 
     def find_file_activity_window(
         self,
