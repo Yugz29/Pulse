@@ -4,49 +4,17 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from types import SimpleNamespace
+from datetime import datetime
 from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
-from daemon.core.current_context_adapters import current_context_to_legacy_signals_payload
 from daemon.core.current_context_builder import CurrentContextBuilder
-from daemon.core.context_probe_policy import (
-    ContextProbeConsent,
-    ContextProbeKind,
-    policy_for_probe,
-)
-from daemon.core.context_probe_debug import describe_context_probe_request_for_debug
-from daemon.core.context_probe_request import (
-    approve_context_probe_request,
-    create_context_probe_request,
-    execute_context_probe_request,
-    refuse_context_probe_request,
-)
-from daemon.core.context_probe_store import ContextProbeRequestStore, requests_to_dicts
-from daemon.core.context_probe_runner import run_app_context_probe, run_window_title_probe
+from daemon.core.context_probe_store import ContextProbeRequestStore
 from daemon.core.event_actor import EventActorClassifier
-from daemon.core.event_debug import describe_event_for_debug
-from daemon.core.event_envelope import (
-    PulseEventBucket,
-    PulseEventSource,
-    PulsePrivacyClass,
-    PulseRetention,
-)
-from daemon.core.file_classifier import file_signal_significance
-from daemon.core.resume_card import (
-    build_resume_card_context,
-    generate_resume_card,
-    generate_resume_card_with_debug,
-)
-from daemon.core.timeline_builder import span_from_current_context
-from daemon.core.timeline_debug import describe_timeline_span_for_debug
-from daemon.core.timeline_span import TimelineSpanKind
 from daemon.core.workspace_context import extract_project_name, find_workspace_root
-from daemon.core.work_context_card import build_work_context_card
 from daemon.interpreter.command_interpreter import CommandInterpreter
-from daemon.memory.extractor import find_git_root, get_recent_journal_entries, last_session_context
+from daemon.memory.extractor import last_session_context
 from daemon.routes.debug_memory import register_debug_memory_routes
 from daemon.routes.runtime_debug_routes import register_debug_routes
 from daemon.routes.runtime_feed_routes import register_feed_routes
@@ -275,19 +243,6 @@ class _FileEventCoalescer:
     def _priority(self, event_type: str, payload: dict[str, Any]) -> int:
         from daemon.core.event_meaning import _default_policy
         return _default_policy.classify(event_type, payload).coalescing_priority
-
-
-def _first_recent_session_value(recent_sessions: Any, key: str) -> Any:
-    if not isinstance(recent_sessions, list):
-        return None
-    for item in recent_sessions:
-        if not isinstance(item, dict):
-            continue
-        value = item.get(key)
-        if value is not None and value != "" and value != []:
-            return value
-    return None
-
 
 
 def _is_screenshot_path(path: str) -> bool:
