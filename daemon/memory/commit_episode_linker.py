@@ -76,6 +76,8 @@ def _link_one_commit(commit: Mapping[str, Any], candidates: list[Mapping[str, An
     if not scored:
         flags = [*_commit_base_flags(commit), "no_plausible_episode"]
         if _optional_text(commit.get("delivered_at")):
+            if _has_stale_short_episode_candidate(commit, candidates):
+                flags.append("stale_short_episode_candidate")
             flags.append("no_delivery_near_episode")
             flags.append("delivery_far_from_episode")
         return _build_link(
@@ -121,6 +123,8 @@ def _score_candidate(commit: Mapping[str, Any], candidate: Mapping[str, Any]) ->
 
     if _optional_text(commit.get("delivered_at")):
         if delivery_score is None:
+            return None
+        if _is_stale_short_episode_delivery(delivery_delta, overlap, candidate):
             return None
         score = delivery_score
         reason = "delivery_near_candidate_end"
@@ -295,6 +299,40 @@ def _has_stale_journal_overlap_ignored(
         if _overlap_min(commit, candidate) > 0:
             return True
     return False
+
+
+def _has_stale_short_episode_candidate(
+    commit: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+) -> bool:
+    if not _optional_text(commit.get("delivered_at")):
+        return False
+    for candidate in candidates:
+        if not _projects_compatible(commit, candidate):
+            continue
+        delivery_delta = _delivery_delta_min(commit.get("delivered_at"), candidate.get("ended_at"))
+        if _delivery_score(commit.get("delivered_at"), candidate) is not None and _is_stale_short_episode_delivery(
+            delivery_delta,
+            _overlap_min(commit, candidate),
+            candidate,
+        ):
+            return True
+    return False
+
+
+def _is_stale_short_episode_delivery(
+    delivery_delta: int | None,
+    overlap: int,
+    candidate: Mapping[str, Any],
+) -> bool:
+    candidate_duration = _duration_min(candidate)
+    return (
+        delivery_delta is not None
+        and delivery_delta > _STRONG_DELIVERY_PROXIMITY_MIN
+        and overlap == 0
+        and candidate_duration is not None
+        and candidate_duration <= 5
+    )
 
 
 def _projects_compatible(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:

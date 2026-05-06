@@ -353,6 +353,127 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertIn("delivery_after_episode", payload["links"][0]["flags"])
         self.assertLessEqual(payload["links"][0]["confidence"], 0.62)
 
+    def test_delivery_51_min_after_short_candidate_without_overlap_is_unlinked(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: late short episode delivery",
+                    "delivered_at": "2026-05-06T11:23:00",
+                    "started_at": "2026-05-06T11:23:00",
+                    "ended_at": "2026-05-06T11:23:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-06T10:29:36",
+                    "ended_at": "2026-05-06T10:31:52",
+                    "duration_min": 2,
+                    "dominant_scope": "unknown",
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 1)
+        flags = payload["unlinked_commits"][0]["flags"]
+        self.assertIn("stale_short_episode_candidate", flags)
+        self.assertIn("no_plausible_episode", flags)
+
+    def test_delivery_26_min_after_short_candidate_remains_linked(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: recent short episode delivery",
+                    "delivered_at": "2026-05-06T10:57:52",
+                    "started_at": "2026-05-06T10:57:52",
+                    "ended_at": "2026-05-06T10:57:52",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-06T10:29:36",
+                    "ended_at": "2026-05-06T10:31:52",
+                    "duration_min": 2,
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["links"][0]["delivery_delta_min"], 26)
+        self.assertIn("delivery_after_episode", payload["links"][0]["flags"])
+        self.assertNotIn("stale_short_episode_candidate", payload["links"][0]["flags"])
+        self.assertLessEqual(payload["links"][0]["confidence"], 0.76)
+
+    def test_delivery_inside_short_candidate_remains_linked(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: inside short episode",
+                    "delivered_at": "2026-05-06T10:30:00",
+                    "started_at": "2026-05-06T10:30:00",
+                    "ended_at": "2026-05-06T10:30:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-06T10:29:36",
+                    "ended_at": "2026-05-06T10:31:52",
+                    "duration_min": 2,
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["links"][0]["episode_id"], "episode-1")
+        self.assertIn("delivery_inside_episode", payload["links"][0]["flags"])
+
+    def test_delivery_60_min_after_long_candidate_remains_linked(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: long episode delayed delivery",
+                    "delivered_at": "2026-05-06T12:00:00",
+                    "started_at": "2026-05-06T12:00:00",
+                    "ended_at": "2026-05-06T12:00:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-1",
+                    "episode_id": "episode-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-06T10:00:00",
+                    "ended_at": "2026-05-06T11:00:00",
+                    "duration_min": 60,
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["links"][0]["delivery_delta_min"], 60)
+        self.assertIn("delivery_after_episode", payload["links"][0]["flags"])
+
     def test_commit_only_journal_entry_caps_confidence(self):
         payload = link_commits_to_episodes(
             [
