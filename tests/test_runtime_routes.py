@@ -717,8 +717,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             "session_duration_min": 0,
         }
 
-        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
-             patch("daemon.routes.runtime.find_workspace_root", return_value=None), \
+        with patch("daemon.routes.runtime.find_workspace_root", return_value=None), \
              patch("daemon.routes.runtime.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
             response = self.client.get("/state")
 
@@ -1167,8 +1166,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=None)
         self.runtime_state.set_latest_active_app("Code")
 
-        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
-             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
             response = self.client.get("/timeline/preview")
 
         self.assertEqual(response.status_code, 200)
@@ -1288,8 +1286,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=decision)
         self.runtime_state.set_latest_active_app("Code")
 
-        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
-             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
             response = self.client.get("/work-context")
 
         self.assertEqual(response.status_code, 200)
@@ -1383,8 +1380,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=None)
         self.runtime_state.set_latest_active_app("Code")
 
-        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
-             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
             response = self.client.get("/work-context")
 
         self.assertEqual(response.status_code, 200)
@@ -1713,8 +1709,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         self.assertEqual(approve_response.status_code, 200)
 
-        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
-             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
             execute_response = self.client.post(
                 f"/context-probes/requests/{created['request_id']}/execute"
             )
@@ -1790,8 +1785,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         self.assertEqual(approve_response.status_code, 200)
 
-        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
-             patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
             execute_response = self.client.post(
                 f"/context-probes/requests/{created['request_id']}/execute"
             )
