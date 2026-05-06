@@ -16,9 +16,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 
-from .file_classifier import file_signal_significance
-
-
 # ── Types publics ─────────────────────────────────────────────────────────────
 
 class EventActor(str, Enum):
@@ -109,15 +106,9 @@ def file_noise_policy(path: str) -> NoisePolicy:
     Retourne la NoisePolicy structurelle d'un fichier.
     Indépendant de l'actor et du contexte d'exécution.
     """
-    significance = file_signal_significance(path)
-    if significance == "observe_only":
-        return NoisePolicy.OBSERVE_ONLY
-    if significance == "technical_noise":
-        return NoisePolicy.IGNORE
-    name = path.split("/")[-1].lower()
-    if name in _DEPENDENCY_ARTIFACTS:
-        return NoisePolicy.DOWNRANK
-    return NoisePolicy.NORMAL
+    from daemon.core.event_meaning import _default_policy
+    decision = _default_policy.classify("file_modified", {"path": path})
+    return NoisePolicy(decision.noise_policy)
 
 
 # ── Scoring interne ───────────────────────────────────────────────────────────

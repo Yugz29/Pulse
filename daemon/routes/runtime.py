@@ -1211,29 +1211,17 @@ def _should_publish_to_bus(event_type: str, payload: dict, runtime_state: Any = 
       publication : seul content_kind est utilisé par le scorer. Défense en
       profondeur au cas où un ancien client Swift enverrait encore le contenu brut.
     """
-    _LOCK_PASSTHROUGH = {"screen_locked", "screen_unlocked"}
+    from daemon.core.event_meaning import _default_policy
 
-    # Pendant le verrou : seuls les events de transition verrouillage passent.
     if runtime_state is not None and runtime_state.is_screen_locked():
-        if event_type not in _LOCK_PASSTHROUGH:
+        if event_type not in {"screen_locked", "screen_unlocked"}:
             return False
 
-    if event_type not in _BUS_FILE_EVENT_TYPES:
-        # Défense en profondeur : retirer le contenu brut clipboard avant publication.
-        if event_type == "clipboard_updated" and "content" in payload:
-            payload.pop("content")
-        if event_type in _TERMINAL_EVENT_TYPES:
-            payload.pop("command", None)
-            payload.pop("raw", None)
-        return True
-
-    path = payload.get("path", "")
-
-    # Exception critique : COMMIT_EDITMSG déclenche la détection de commit.
-    if "COMMIT_EDITMSG" in path:
-        return True
-
-    return file_signal_significance(path) in {"meaningful", "observe_only"}
+    decision = _default_policy.classify(event_type, payload)
+    if decision.sanitized_payload is not None:
+        payload.clear()
+        payload.update(decision.sanitized_payload)
+    return decision.publish_to_bus
 
 
 def _normalize_terminal_event_payload(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
