@@ -51,6 +51,8 @@ from daemon.routes.debug_memory import register_debug_memory_routes
 from daemon.routes.runtime_debug_routes import register_debug_routes
 from daemon.routes.runtime_feed_routes import register_feed_routes
 from daemon.routes.runtime_probe_routes import register_probe_routes
+from daemon.routes.runtime_daemon_routes import register_daemon_routes
+from daemon.routes.runtime_resume_card_routes import register_resume_card_routes
 
 _actor_classifier = EventActorClassifier()
 _current_context_builder = CurrentContextBuilder()
@@ -392,6 +394,25 @@ def register_runtime_routes(
         current_context_builder=_current_context_builder,
     )
 
+    register_daemon_routes(
+        app,
+        bus=bus,
+        runtime_state=runtime_state,
+        shutdown_runtime=shutdown_runtime,
+        llm_unload_background=llm_unload_background,
+        llm_warmup_background=llm_warmup_background,
+        log=log,
+    )
+
+    register_resume_card_routes(
+        app,
+        bus=bus,
+        runtime_state=runtime_state,
+        get_recent_sessions=get_recent_sessions,
+        get_today_summary=get_today_summary,
+        resume_card_llm=resume_card_llm,
+    )
+
     @app.route("/ping")
     def ping():
         paused = runtime_state.touch_ping()
@@ -492,147 +513,6 @@ def register_runtime_routes(
         return jsonify(events)
 
 
-    def _build_debug_resume_card_context(data: dict[str, Any]) -> dict[str, Any]:
-        runtime_snapshot = runtime_state.get_runtime_snapshot()
-        present = runtime_snapshot.present
-
-        try:
-            sleep_minutes = float(data.get("sleep_minutes", 35))
-        except (TypeError, ValueError):
-            sleep_minutes = 35.0
-
-        signals = runtime_snapshot.signals
-        recent_sessions = get_recent_sessions(5) if get_recent_sessions is not None else []
-        today_summary = get_today_summary() if get_today_summary is not None else {}
-        current_window = today_summary.get("current_window") if isinstance(today_summary, dict) else None
-        if not isinstance(current_window, dict):
-            current_window = {}
-
-        journal_project = present.active_project or current_window.get("project")
-        recent_journal_entries = get_recent_journal_entries(
-            5,
-            project=journal_project,
-        )
-
-        top_files: list[str] = []
-        for candidate in [
-            present.active_file,
-            getattr(signals, "active_file", None) if signals is not None else None,
-        ]:
-            if candidate and candidate not in top_files:
-                top_files.append(candidate)
-
-        memory_payload = {
-            "active_project": (
-                present.active_project
-                or current_window.get("project")
-                or _first_recent_session_value(recent_sessions, "project")
-            ),
-            "probable_task": (
-                present.probable_task
-                or current_window.get("task")
-                or current_window.get("probable_task")
-                or _first_recent_session_value(recent_sessions, "task")
-                or _first_recent_session_value(recent_sessions, "probable_task")
-            ),
-            "activity_level": (
-                present.activity_level
-                or current_window.get("activity")
-                or current_window.get("activity_level")
-                or _first_recent_session_value(recent_sessions, "activity_level")
-            ),
-            "duration_min": (
-                present.session_duration_min
-                or current_window.get("duration_min")
-                or _first_recent_session_value(recent_sessions, "duration_min")
-            ),
-            "top_files": top_files[:8],
-            "recent_files": top_files[:8],
-            "recent_sessions": recent_sessions,
-            "recent_journal_entries": recent_journal_entries,
-            "today_summary": today_summary,
-            "active_app": runtime_snapshot.latest_active_app,
-            "window_title": getattr(signals, "window_title", None) if signals is not None else None,
-            "diff_summary": runtime_snapshot.last_diff_summary,
-            "work_block_started_at": current_window.get("started_at"),
-            "work_block_ended_at": current_window.get("ended_at"),
-        }
-        context = build_resume_card_context(
-            runtime_snapshot=runtime_snapshot,
-            memory_payload=memory_payload,
-            sleep_minutes=sleep_minutes,
-            diff_summary=runtime_snapshot.last_diff_summary,
-        )
-        context["debug_forced"] = True
-        return context
-
-    @app.route("/debug/resume-card", methods=["POST"])
-    def debug_resume_card():
-        """Force a deterministic resume card event for local UI testing."""
-        data = request.get_json(silent=True) or {}
-        context = _build_debug_resume_card_context(data)
-        card = generate_resume_card(context, llm=None)
-        payload = card.to_event_payload()
-        bus.publish("resume_card", payload)
-        return jsonify({"ok": True, "mode": "deterministic", "card": payload})
-
-    @app.route("/debug/resume-card/llm", methods=["POST"])
-    def debug_resume_card_llm():
-        """Force a resume card event using the configured LLM when available."""
-        data = request.get_json(silent=True) or {}
-        context = _build_debug_resume_card_context(data)
-        card, debug = generate_resume_card_with_debug(context, llm=resume_card_llm)
-        payload = card.to_event_payload()
-        bus.publish("resume_card", payload)
-        return jsonify({
-            "ok": True,
-            "mode": "llm" if resume_card_llm is not None else "deterministic_fallback",
-            "llm_available": resume_card_llm is not None,
-            "card": payload,
-            "debug": debug,
-        })
-
-    @app.route("/daemon/shutdown", methods=["POST"])
-    def daemon_shutdown():
-        log.info("Shutdown demandé via HTTP")
-        shutdown_runtime()
-
-        def _exit():
-            time.sleep(0.3)
-            os._exit(0)
-
-        threading.Thread(target=_exit, daemon=True).start()
-        return jsonify({"ok": True, "action": "shutdown"})
-
-    @app.route("/daemon/pause", methods=["POST"])
-    def daemon_pause():
-        runtime_state.set_paused(True)
-        threading.Thread(target=llm_unload_background, daemon=True).start()
-        return jsonify({"ok": True, "action": "pause", "paused": True})
-
-    @app.route("/daemon/resume", methods=["POST"])
-    def daemon_resume():
-        runtime_state.set_paused(False)
-
-        def _warmup_with_events():
-            bus.publish("llm_loading", {"model": ""})
-            llm_warmup_background()
-            bus.publish("llm_ready", {"model": ""})
-
-        threading.Thread(target=_warmup_with_events, daemon=True).start()
-        return jsonify({"ok": True, "action": "resume", "paused": False})
-
-    @app.route("/daemon/restart", methods=["POST"])
-    def daemon_restart():
-        log.info("Restart demandé via HTTP")
-        shutdown_runtime()
-
-        def _exit():
-            time.sleep(0.3)
-            os._exit(1)
-
-        threading.Thread(target=_exit, daemon=True).start()
-        return jsonify({"ok": True, "action": "restart"})
 
 
 # ── Bus entry filter ──────────────────────────────────────────────────────────
