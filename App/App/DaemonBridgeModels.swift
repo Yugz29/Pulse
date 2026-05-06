@@ -792,6 +792,7 @@ struct DebugCommitEpisodeLink: Decodable, Identifiable {
     let deliveryDeltaMin: Int?
     let windowDistanceMin: Int?
     let overlapMin: Int?
+    let evidenceLevel: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -813,6 +814,7 @@ struct DebugCommitEpisodeLink: Decodable, Identifiable {
         case deliveryDeltaMin = "delivery_delta_min"
         case windowDistanceMin = "window_distance_min"
         case overlapMin = "overlap_min"
+        case evidenceLevel = "evidence_level"
     }
 }
 

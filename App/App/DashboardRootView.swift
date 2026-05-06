@@ -330,7 +330,7 @@ struct DashboardRootView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Épisodes")
+                        Text("Timeline de travail")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                         Text("Debug Phase 2a · \(vm.debugWorkEpisodes?.date ?? vm.debugCommitEpisodeLinks?.date ?? "aujourd’hui")")
                             .font(.system(size: 11))
@@ -345,10 +345,11 @@ struct DashboardRootView: View {
                     .buttonStyle(.bordered)
                 }
 
-                HStack(alignment: .top, spacing: 16) {
-                    debugWorkEpisodesCard
-                    debugCommitLinksCard
-                }
+                WorkTimelineSection(
+                    episodes: vm.debugWorkEpisodes?.episodes ?? [],
+                    commitLinks: vm.debugCommitEpisodeLinks?.links ?? [],
+                    unlinkedCommits: vm.debugCommitEpisodeLinks?.unlinkedCommits ?? []
+                )
             }
             .padding(24)
         }
@@ -2102,6 +2103,431 @@ private struct GlassCard<Content: View>: View {
                     lineWidth: 1
                 )
         )
+    }
+}
+
+private struct WorkTimelineSection: View {
+    let episodes: [DebugWorkEpisode]
+    let commitLinks: [DebugCommitEpisodeLink]
+    let unlinkedCommits: [DebugCommitEpisodeLink]
+
+    private var linksByEpisode: [String: [DebugCommitEpisodeLink]] {
+        Dictionary(grouping: commitLinks.filter { ($0.status ?? "linked") == "linked" && $0.episodeId != nil }) {
+            $0.episodeId ?? ""
+        }
+    }
+
+    private var unlinked: [DebugCommitEpisodeLink] {
+        let fromLinks = commitLinks.filter { ($0.status == "unlinked") || $0.episodeId == nil }
+        return fromLinks + unlinkedCommits
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                timelineStat("Épisodes", "\(episodes.count)", gOrange)
+                timelineStat("Commits liés", "\(commitLinks.filter { ($0.status ?? "linked") == "linked" && $0.episodeId != nil }.count)", gGreen)
+                timelineStat("Non reliés", "\(unlinked.count)", gGray)
+            }
+
+            if episodes.isEmpty {
+                GlassCard(accent: gOrange) {
+                    HStack {
+                        Spacer()
+                        Text("Aucun épisode reçu ou route debug indisponible")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(sortedEpisodes) { episode in
+                        WorkEpisodeCard(
+                            episode: episode,
+                            linkedCommits: linksByEpisode[episode.id] ?? []
+                        )
+                    }
+                }
+            }
+
+            UnlinkedCommitsSection(commits: unlinked)
+        }
+    }
+
+    private var sortedEpisodes: [DebugWorkEpisode] {
+        episodes.sorted {
+            (dashboardDate(from: $0.startedAt) ?? .distantPast) > (dashboardDate(from: $1.startedAt) ?? .distantPast)
+        }
+    }
+
+    private func timelineStat(_ label: String, _ value: String, _ colorHex: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color(hex: colorHex))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct WorkEpisodeCard: View {
+    let episode: DebugWorkEpisode
+    let linkedCommits: [DebugCommitEpisodeLink]
+
+    private var status: EpisodeStatus {
+        if episode.boundaryReason == "end_of_events" {
+            return .ongoing
+        }
+        let scope = episode.dominantScope ?? "unknown"
+        let hasTemporalCommit = linkedCommits.contains { ($0.flags ?? []).contains("temporal_only_link") || ($0.flags ?? []).contains("no_file_scope_match") }
+        if (episode.durationMin ?? 0) <= 2 || scope == "unknown" || (episode.strongEventCount ?? 0) <= 1 || hasTemporalCommit {
+            return .needsReview
+        }
+        if (episode.confidence ?? 0) < 0.75 {
+            return .probable
+        }
+        if (episode.strongEventCount ?? 0) >= 5 && scope != "unknown" {
+            return .solid
+        }
+        return .probable
+    }
+
+    var body: some View {
+        GlassCard(accent: status.colorHex) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("\(dashboardTime(episode.startedAt)) → \(dashboardTime(episode.endedAt))")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(dashboardMinutes(episode.durationMin))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    timelinePill(status.label, color: status.colorHex)
+                }
+
+                HStack(spacing: 6) {
+                    timelinePill(episode.project ?? "Projet inconnu", color: gBlue)
+                    timelinePill(scopeLabel(episode.dominantScope), color: gOrange)
+                    timelinePill(taskLabel(episode.probableTask), color: gGray)
+                }
+
+                Text(episodeSummary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 14) {
+                    compactMetric("Strong", "\(episode.strongEventCount ?? 0)", gGreen)
+                    compactMetric("Weak", "\(episode.weakEventCount ?? 0)", gGray)
+                    compactMetric("Fin", boundaryLabel(episode.boundaryReason), status.colorHex)
+                    if let confidence = episode.confidence {
+                        compactMetric("Confiance", dashboardScore(confidence), gBlue)
+                    }
+                }
+
+                EpisodeLinkedCommitsView(commits: linkedCommits)
+                DebugDetailsView(episode: episode, commits: linkedCommits)
+            }
+        }
+    }
+
+    private var episodeSummary: String {
+        let scope = episode.dominantScope ?? "unknown"
+        let task = episode.probableTask ?? "general"
+        if episode.boundaryReason == "end_of_events" {
+            return "Pulse observe encore cette séquence de travail."
+        }
+        if (episode.durationMin ?? 0) <= 2 && (episode.strongEventCount ?? 0) <= 1 {
+            return "Courte activité isolée, probablement à vérifier."
+        }
+        switch scope {
+        case "routes":
+            return "Pulse a détecté une séquence de travail sur les routes debug mémoire."
+        case "work_episode":
+            return "Pulse pense que tu as travaillé sur les épisodes de travail."
+        case "tests":
+            return "Pulse pense que tu as travaillé sur les tests."
+        case "memory":
+            return "Pulse a détecté une séquence de travail sur la mémoire Pulse."
+        case "app_swift":
+            return "Pulse a détecté une séquence de travail sur l’app Swift."
+        case "git":
+            return "Activité de livraison ou de contrôle Git détectée."
+        case "unknown":
+            return "Pulse a détecté du travail, mais le contexte reste incertain."
+        default:
+            if task == "tests" {
+                return "Pulse pense que tu as travaillé sur les tests et la validation."
+            }
+            return "Pulse a détecté une séquence de travail \(taskLabel(task).lowercased())."
+        }
+    }
+
+    private func compactMetric(_ label: String, _ value: String, _ colorHex: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color(hex: colorHex))
+                .lineLimit(1)
+        }
+    }
+}
+
+private struct EpisodeLinkedCommitsView: View {
+    let commits: [DebugCommitEpisodeLink]
+
+    var body: some View {
+        if !commits.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Commits liés")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+                ForEach(commits) { commit in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(commit.commitSubject ?? "Commit sans sujet")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                            Spacer()
+                            Text(dashboardScore(commit.confidence))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color(hex: gBlue))
+                        }
+                        HStack(spacing: 6) {
+                            if let evidence = commit.evidenceLevel, !evidence.isEmpty {
+                                timelinePill(evidenceLabel(evidence), color: gOrange)
+                            }
+                            ForEach(importantFlags(commit.flags), id: \.self) { flag in
+                                timelinePill(flagLabel(flag), color: flagColor(flag))
+                            }
+                        }
+                    }
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 10)
+                    .background(Color.white.opacity(0.035))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+        }
+    }
+}
+
+private struct UnlinkedCommitsSection: View {
+    let commits: [DebugCommitEpisodeLink]
+
+    var body: some View {
+        if !commits.isEmpty {
+            GlassCard(accent: gGray) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Commits non reliés", systemImage: "link.badge.plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.4)
+
+                    ForEach(commits.prefix(10)) { commit in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(commit.commitSubject ?? "Commit sans sujet")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(2)
+                                Spacer()
+                                Text(dashboardTime(commit.deliveredAt))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text("Aucun épisode fermé plausible au moment du commit.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                ForEach(importantFlags(commit.flags), id: \.self) { flag in
+                                    timelinePill(flagLabel(flag), color: flagColor(flag))
+                                }
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct DebugDetailsView: View {
+    let episode: DebugWorkEpisode
+    let commits: [DebugCommitEpisodeLink]
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 5) {
+                debugLine("debug_reason", episode.debugReason)
+                debugLine("boundary_reason", episode.boundaryReason)
+                debugLine("dominant_scope", episode.dominantScope)
+                debugLine("probable_task", episode.probableTask)
+                debugLine("flags", episode.uncertaintyFlags?.joined(separator: ", "))
+                if !commits.isEmpty {
+                    debugLine("commit_flags", commits.flatMap { $0.flags ?? [] }.joined(separator: ", "))
+                }
+            }
+            .padding(.top, 6)
+        } label: {
+            Text("Détails debug")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.tertiary)
+        }
+        .font(.system(size: 10))
+        .foregroundStyle(.tertiary)
+    }
+
+    private func debugLine(_ label: String, _ value: String?) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(label)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 95, alignment: .leading)
+            Text(value?.isEmpty == false ? value! : "—")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+private enum EpisodeStatus {
+    case solid
+    case probable
+    case needsReview
+    case ongoing
+
+    var label: String {
+        switch self {
+        case .solid: return "Solide"
+        case .probable: return "Probable"
+        case .needsReview: return "À vérifier"
+        case .ongoing: return "En cours"
+        }
+    }
+
+    var colorHex: String {
+        switch self {
+        case .solid: return gGreen
+        case .probable: return gBlue
+        case .needsReview: return gOrange
+        case .ongoing: return gPurple
+        }
+    }
+}
+
+private func timelinePill(_ text: String, color: String) -> some View {
+    Text(text)
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(Color(hex: color))
+        .lineLimit(1)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Color(hex: color).opacity(0.12))
+        .clipShape(Capsule())
+}
+
+private func dashboardTime(_ raw: String?) -> String {
+    guard let date = dashboardDate(from: raw) else { return "—" }
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "fr_FR")
+    formatter.timeZone = .current
+    formatter.timeStyle = .short
+    formatter.dateStyle = .none
+    return formatter.string(from: date)
+}
+
+private func scopeLabel(_ scope: String?) -> String {
+    switch scope {
+    case "app_swift": return "App Swift"
+    case "routes": return "Routes"
+    case "memory": return "Mémoire"
+    case "work_episode": return "Épisodes de travail"
+    case "tests": return "Tests"
+    case "git": return "Git"
+    case "extractor": return "Extracteur"
+    case "docs": return "Docs"
+    case "daemon_python": return "Daemon Python"
+    case "unknown", nil: return "Contexte incertain"
+    default: return scope ?? "Contexte incertain"
+    }
+}
+
+private func taskLabel(_ task: String?) -> String {
+    switch task {
+    case "coding": return "Code"
+    case "tests": return "Tests"
+    case "writing": return "Rédaction"
+    case "version_control": return "Livraison"
+    case "debug": return "Debug"
+    case "build": return "Build"
+    case "general", nil: return "Travail"
+    default: return task ?? "Travail"
+    }
+}
+
+private func boundaryLabel(_ boundary: String?) -> String {
+    switch boundary {
+    case "screen_locked": return "Verrouillage"
+    case "non_work_title": return "Hors travail"
+    case "scope_change": return "Changement"
+    case "long_gap": return "Pause"
+    case "weak_after_strong_timeout": return "Signal faible"
+    case "end_of_events": return "Ouvert"
+    default: return boundary ?? "—"
+    }
+}
+
+private func evidenceLabel(_ evidence: String) -> String {
+    switch evidence {
+    case "temporal_only": return "Temporel seul"
+    default: return evidence
+    }
+}
+
+private func importantFlags(_ flags: [String]?) -> [String] {
+    let priority = [
+        "temporal_only_link",
+        "no_file_scope_match",
+        "ambiguous_candidates",
+        "commit_only_journal_entry",
+        "delivery_after_episode",
+    ]
+    let present = Set(flags ?? [])
+    return priority.filter { present.contains($0) }
+}
+
+private func flagLabel(_ flag: String) -> String {
+    switch flag {
+    case "temporal_only_link": return "Temporel"
+    case "no_file_scope_match": return "Sans fichiers"
+    case "ambiguous_candidates": return "Ambigu"
+    case "commit_only_journal_entry": return "Commit seul"
+    case "delivery_after_episode": return "Livré après"
+    default: return flag
+    }
+}
+
+private func flagColor(_ flag: String) -> String {
+    switch flag {
+    case "ambiguous_candidates", "commit_only_journal_entry", "delivery_after_episode": return gOrange
+    case "no_file_scope_match", "temporal_only_link": return gGray
+    default: return gBlue
     }
 }
 
