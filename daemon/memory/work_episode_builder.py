@@ -397,7 +397,7 @@ def _debug_reason(
     if boundary_reason == "weak_after_strong_timeout":
         gap_min = _gap_from_last_strong_to_boundary(events, boundary_event)
         gap_label = f"{gap_min} min" if gap_min is not None else "unknown"
-        return f"split after {gap_label} min without strong work evidence"
+        return f"split after {gap_label} without strong work evidence"
     if boundary_reason == "end_of_events":
         return "episode open until end of observed events"
     if previous_scope and dominant_scope and previous_scope != dominant_scope:

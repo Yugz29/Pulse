@@ -137,6 +137,7 @@ def test_weak_far_after_strong_does_not_extend_episode_end():
     assert episodes[0].weak_event_count == 0
     assert episodes[0].evidence_count == 1
     assert episodes[0].boundary_reason == "weak_after_strong_timeout"
+    assert episodes[0].debug_reason == "split after 20 min without strong work evidence"
 
 
 def test_recent_weak_between_two_strong_events_keeps_same_episode():
