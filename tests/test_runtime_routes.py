@@ -429,6 +429,103 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["unmatched_journal_entries"], [])
         self.assertEqual(payload["unmatched_candidates"], [])
 
+    def test_debug_commit_episode_links_expose_les_liens_dry_run(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_commit_episode_links=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T16:30:00",
+                "commit_count": 1,
+                "linked_count": 1,
+                "unlinked_count": 0,
+                "links": [
+                    {
+                        "id": "commit-link-journal-1-1",
+                        "entry_id": "journal-1",
+                        "commit_subject": "feat: dry run",
+                        "commit_message": "feat: dry run",
+                        "delivered_at": None,
+                        "journal_started_at": "2026-05-05T12:00:00",
+                        "journal_ended_at": "2026-05-05T12:10:00",
+                        "episode_id": "episode-1",
+                        "candidate_id": "candidate-1",
+                        "episode_started_at": "2026-05-05T12:01:00",
+                        "episode_ended_at": "2026-05-05T12:09:00",
+                        "project": "Pulse",
+                        "confidence": 0.88,
+                        "status": "linked",
+                        "link_reason": "journal_candidate_overlap",
+                        "flags": ["linked_by_overlap"],
+                    }
+                ],
+                "unlinked_commits": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/commit-episode-links")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["links"][0]["episode_id"], "episode-1")
+
+    def test_debug_commit_episode_links_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_commit_episode_links=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T16:30:00",
+                "commit_count": 0,
+                "linked_count": 0,
+                "unlinked_count": 0,
+                "links": [],
+                "unlinked_commits": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/commit-episode-links?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_commit_episode_links_date_invalide_retourne_400(self):
+        response = self.client.get("/debug/commit-episode-links?date=bad-date")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "invalid_date")
+
+    def test_debug_commit_episode_links_fallback_when_callback_absent(self):
+        response = self.client.get("/debug/commit-episode-links")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["commit_count"], 0)
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 0)
+        self.assertEqual(payload["links"], [])
+        self.assertEqual(payload["unlinked_commits"], [])
+
     def test_state_golden_legacy_json_output_exact(self):
         self.runtime_state.set_paused(True)
         signals = Signals(

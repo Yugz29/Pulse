@@ -697,6 +697,49 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(payload["matches"][0]["journal_entry_id"], "journal-1")
         self.assertIn("journal_has_commit", payload["matches"][0]["flags"])
 
+    def test_get_today_commit_episode_links_retourne_links_et_unlinked(self):
+        today = datetime.now().replace(hour=12, minute=30, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        session_dir = Path(self.tmpdir.name) / "memory" / "sessions"
+        session_dir.mkdir(parents=True)
+        journal_file = session_dir / f"{today.date().isoformat()}.md"
+        journal_entries = [
+            {
+                "entry_id": "journal-1",
+                "active_project": "Pulse",
+                "started_at": today.isoformat(),
+                "ended_at": (today + timedelta(minutes=2)).isoformat(),
+                "duration_min": 2,
+                "commit_message": "feat: link commit",
+            }
+        ]
+        journal_file.write_text(
+            "# Journal\n\n"
+            "<!-- pulse-journal-data:start\n"
+            f"{json.dumps(journal_entries)}\n"
+            "pulse-journal-data:end -->",
+            encoding="utf-8",
+        )
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=8),
+        ))
+
+        payload = self.memory.get_today_commit_episode_links(date=today)
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["unlinked_count"], 0)
+        self.assertEqual(payload["links"][0]["status"], "linked")
+
     def test_get_today_summary_youtube_chrome_presence_seuls_ne_creent_pas_de_work_block(self):
         today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
 

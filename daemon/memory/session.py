@@ -15,6 +15,7 @@ from daemon.memory.session_snapshot_builder import (
     build_session_snapshot as build_structured_session_snapshot,
     session_snapshot_to_legacy_dict,
 )
+from daemon.memory.commit_episode_linker import link_commits_to_episodes
 from daemon.memory.journal_candidate_builder import build_journal_candidates, journal_candidates_to_payload
 from daemon.memory.journal_candidate_comparator import compare_journal_candidates
 from daemon.memory.work_episode_builder import build_work_blocks, build_work_episodes
@@ -438,6 +439,22 @@ class SessionMemory:
             "date": target_date.isoformat(),
             "generated_at": now.isoformat(),
             **comparison,
+        }
+
+    def get_today_commit_episode_links(self, date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Return dry-run commit-to-episode links for debug only."""
+        now = datetime.now()
+        target_date = (date or now).date()
+        candidates_payload = self.get_today_journal_candidates(date=date)
+        journal_entries = self._load_journal_entries_for_date(target_date.isoformat())
+        links = link_commits_to_episodes(
+            journal_entries,
+            candidates_payload.get("candidates", []),
+        )
+        return {
+            "date": target_date.isoformat(),
+            "generated_at": now.isoformat(),
+            **links,
         }
 
     def _load_journal_entries_for_date(self, day: str) -> List[Dict[str, Any]]:

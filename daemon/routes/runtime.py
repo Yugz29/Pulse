@@ -342,6 +342,7 @@ def register_runtime_routes(
     get_today_work_episodes: Callable[[], dict[str, Any]] | None = None,
     get_today_journal_candidates: Callable[[], dict[str, Any]] | None = None,
     get_today_journal_comparison: Callable[[], dict[str, Any]] | None = None,
+    get_today_commit_episode_links: Callable[[], dict[str, Any]] | None = None,
     context_probe_store: ContextProbeRequestStore | None = None,
     llm_unload_background: Callable[[], None],
     llm_warmup_background: Callable[[], None],
@@ -1110,6 +1111,26 @@ def register_runtime_routes(
                 }
             )
         return jsonify(_call_debug_date_callback(get_today_journal_comparison, debug_date))
+
+    @app.route("/debug/commit-episode-links")
+    def get_debug_commit_episode_links_route():
+        debug_date, error_response = _parse_debug_date_query()
+        if error_response is not None:
+            return error_response
+        if get_today_commit_episode_links is None:
+            now = debug_date or datetime.now()
+            return jsonify(
+                {
+                    "date": now.date().isoformat(),
+                    "generated_at": now.isoformat(),
+                    "commit_count": 0,
+                    "linked_count": 0,
+                    "unlinked_count": 0,
+                    "links": [],
+                    "unlinked_commits": [],
+                }
+            )
+        return jsonify(_call_debug_date_callback(get_today_commit_episode_links, debug_date))
 
     @app.route("/feed")
     def get_feed():
