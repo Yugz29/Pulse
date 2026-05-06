@@ -231,7 +231,7 @@ def _commit_messages(entry: Mapping[str, Any]) -> list[str]:
         messages.extend(_optional_text(message) for message in raw_messages)
     else:
         messages.append(_optional_text(entry.get("commit_message")))
-    compacted = [message for message in messages if message]
+    compacted = list(dict.fromkeys(message for message in messages if message))
     if not compacted and _optional_text(entry.get("commit_message")):
         compacted.append(str(entry.get("commit_message")))
     return compacted
