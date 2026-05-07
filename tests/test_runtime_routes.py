@@ -9,7 +9,8 @@ from daemon.core.contracts import SessionContext
 from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
-from daemon.routes.runtime import _FileEventCoalescer, register_runtime_routes
+from daemon.core.file_event_coalescer import FileEventCoalescer as _FileEventCoalescer
+from daemon.routes.runtime import register_runtime_routes
 from daemon.runtime_state import RuntimeState
 
 
