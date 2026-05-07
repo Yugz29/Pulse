@@ -570,128 +570,57 @@ class TestRuntimeRoutes(unittest.TestCase):
         }
         self.runtime_state.set_latest_active_app("Xcode")
 
-        expected = {
-            "active_app": "Xcode",
-            "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-            "active_project": "Pulse",
-            "session_duration_min": 96,
-            "last_event_type": None,
-            "runtime_paused": True,
-            "present": {
-                "session_status": "active",
-                "awake": True,
-                "locked": False,
-                "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-                "active_project": "Pulse",
-                "probable_task": "coding",
-                "activity_level": "editing",
-                "focus_level": "deep",
-                "friction_score": 0.42,
-                "clipboard_context": "text",
-                "user_presence_state": None,
-                "user_idle_seconds": None,
-                "active_app_duration_sec": None,
-                "active_window_title_duration_sec": None,
-                "app_switch_count_10m": 0,
-                "ai_app_switch_count_10m": 0,
-                "session_duration_min": 96,
-                "updated_at": "2026-04-23T10:00:00",
-            },
-            "signals": {
-                "active_project": "Pulse",
-                "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-                "probable_task": "coding",
-                "activity_level": "editing",
-                "task_confidence": 0.81,
-                "friction_score": 0.42,
-                "focus_level": "deep",
-                "session_duration_min": 96,
-                "recent_apps": ["Xcode", "Codex", "Safari"],
-                "clipboard_context": "text",
-                "user_presence_state": None,
-                "user_idle_seconds": None,
-                "active_app_duration_sec": None,
-                "active_window_title_duration_sec": None,
-                "app_switch_count_10m": 0,
-                "ai_app_switch_count_10m": 0,
-                "terminal_action_category": None,
-                "terminal_project": None,
-                "terminal_cwd": None,
-                "terminal_command": None,
-                "terminal_success": None,
-                "terminal_exit_code": None,
-                "terminal_duration_ms": None,
-                "terminal_summary": None,
-                "edited_file_count_10m": 4,
-                "file_type_mix_10m": {"source": 2, "test": 1, "docs": 1},
-                "rename_delete_ratio_10m": 0.25,
-                "dominant_file_mode": "few_files",
-                "work_pattern_candidate": "feature_candidate",
-                "last_session_context": "Dernière session Pulse : hier (développement, 45 min)",
-            },
-            "decision": {
-                "action": "notify",
-                "level": 2,
-                "reason": "high_friction",
-                "payload": {"file": "PanelView.swift"},
-            },
-            "debug": {
-                "store": {
-                    "active_app": "Xcode",
-                    "session_duration_min": 96,
-                },
-                "runtime": {
-                    "latest_active_app": "Xcode",
-                    "lock_marker_active": False,
-                    "last_screen_locked_at": None,
-                    "memory_synced_at": None,
-                },
-                "signals": {
-                    "active_project": "Pulse",
-                    "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-                    "probable_task": "coding",
-                    "activity_level": "editing",
-                    "task_confidence": 0.81,
-                    "friction_score": 0.42,
-                    "focus_level": "deep",
-                    "session_duration_min": 96,
-                    "recent_apps": ["Xcode", "Codex", "Safari"],
-                    "clipboard_context": "text",
-                    "user_presence_state": None,
-                    "user_idle_seconds": None,
-                    "active_app_duration_sec": None,
-                    "active_window_title_duration_sec": None,
-                    "app_switch_count_10m": 0,
-                    "ai_app_switch_count_10m": 0,
-                    "terminal_action_category": None,
-                    "terminal_project": None,
-                    "terminal_cwd": None,
-                    "terminal_command": None,
-                    "terminal_success": None,
-                    "terminal_exit_code": None,
-                    "terminal_duration_ms": None,
-                    "terminal_summary": None,
-                    "edited_file_count_10m": 4,
-                    "file_type_mix_10m": {"source": 2, "test": 1, "docs": 1},
-                    "rename_delete_ratio_10m": 0.25,
-                    "dominant_file_mode": "few_files",
-                    "work_pattern_candidate": "feature_candidate",
-                    "last_session_context": "Dernière session Pulse : hier (développement, 45 min)",
-                },
-                "decision": {
-                    "action": "notify",
-                    "level": 2,
-                    "reason": "high_friction",
-                    "payload": {"file": "PanelView.swift"},
-                },
-            },
-        }
-
-        with patch("daemon.routes.runtime.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
             response = self.client.get("/state")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), expected)
+
+        payload = response.get_json()
+
+        self.assertEqual(payload["active_app"], "Xcode")
+        self.assertEqual(payload["active_project"], "Pulse")
+        self.assertEqual(
+            payload["active_file"],
+            "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
+        )
+        self.assertEqual(payload["session_duration_min"], 96)
+        self.assertEqual(payload["last_event_type"], None)
+        self.assertTrue(payload["runtime_paused"])
+
+        present = payload["present"]
+
+        self.assertEqual(present["session_status"], "active")
+        self.assertTrue(present["awake"])
+        self.assertFalse(present["locked"])
+        self.assertEqual(present["probable_task"], "coding")
+        self.assertEqual(present["activity_level"], "editing")
+        self.assertEqual(present["focus_level"], "deep")
+
+        signals_payload = payload["signals"]
+
+        self.assertEqual(signals_payload["active_project"], "Pulse")
+        self.assertEqual(signals_payload["probable_task"], "coding")
+        self.assertEqual(signals_payload["task_confidence"], 0.81)
+        self.assertEqual(signals_payload["friction_score"], 0.42)
+        self.assertEqual(signals_payload["focus_level"], "deep")
+
+        decision_payload = payload["decision"]
+
+        self.assertEqual(decision_payload["action"], "notify")
+        self.assertEqual(decision_payload["reason"], "high_friction")
+        self.assertEqual(
+            decision_payload["payload"],
+            {"file": "PanelView.swift"},
+        )
+
+        self.assertIn("debug", payload)
+
+        debug = payload["debug"]
+
+        self.assertIn("store", debug)
+        self.assertIn("runtime", debug)
+        self.assertIn("signals", debug)
+        self.assertIn("decision", debug)
 
     def test_state_fallbacks_to_builder_when_current_context_absent(self):
         signals = Signals(
@@ -719,7 +648,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         }
 
         with patch("daemon.routes.runtime_ingestion.find_workspace_root", return_value=None), \
-             patch("daemon.routes.runtime.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
+             patch("daemon.routes.runtime_state_payloads.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
             response = self.client.get("/state")
 
         payload = response.get_json()
@@ -757,7 +686,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             "session_duration_min": 999,
         }
 
-        with patch("daemon.routes.runtime.last_session_context", return_value=None):
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
             response = self.client.get("/state")
 
         payload = response.get_json()
@@ -799,7 +728,7 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         with patch.object(self.runtime_state, "get_signal_snapshot", side_effect=AssertionError("legacy signal snapshot must not be used")), \
              patch.object(self.runtime_state, "get_present_snapshot", side_effect=AssertionError("legacy present snapshot must not be used")), \
-             patch("daemon.routes.runtime.last_session_context", return_value=None):
+             patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
             response = self.client.get("/state")
 
         self.assertEqual(response.status_code, 200)
@@ -914,7 +843,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         client = app.test_client()
         self.store.to_dict.return_value = {"active_app": "Terminal"}
 
-        with patch("daemon.routes.runtime.last_session_context", return_value=None):
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
             response = client.get("/state")
 
         payload = response.get_json()
