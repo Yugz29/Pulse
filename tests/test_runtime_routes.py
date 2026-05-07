@@ -718,7 +718,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             "session_duration_min": 0,
         }
 
-        with patch("daemon.routes.runtime.find_workspace_root", return_value=None), \
+        with patch("daemon.routes.runtime_ingestion.find_workspace_root", return_value=None), \
              patch("daemon.routes.runtime.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
             response = self.client.get("/state")
 
@@ -1167,7 +1167,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=None)
         self.runtime_state.set_latest_active_app("Code")
 
-        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime_debug_routes.find_workspace_root", return_value=None):
             response = self.client.get("/timeline/preview")
 
         self.assertEqual(response.status_code, 200)
@@ -1287,7 +1287,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=decision)
         self.runtime_state.set_latest_active_app("Code")
 
-        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime_debug_routes.find_workspace_root", return_value=None):
             response = self.client.get("/work-context")
 
         self.assertEqual(response.status_code, 200)
@@ -1381,7 +1381,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=None)
         self.runtime_state.set_latest_active_app("Code")
 
-        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime_debug_routes.find_workspace_root", return_value=None):
             response = self.client.get("/work-context")
 
         self.assertEqual(response.status_code, 200)
@@ -1710,7 +1710,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         self.assertEqual(approve_response.status_code, 200)
 
-        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime_probe_routes.find_workspace_root", return_value=None):
             execute_response = self.client.post(
                 f"/context-probes/requests/{created['request_id']}/execute"
             )
@@ -1786,7 +1786,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         self.assertEqual(approve_response.status_code, 200)
 
-        with patch("daemon.routes.runtime.find_workspace_root", return_value=None):
+        with patch("daemon.routes.runtime_probe_routes.find_workspace_root", return_value=None):
             execute_response = self.client.post(
                 f"/context-probes/requests/{created['request_id']}/execute"
             )
@@ -1930,7 +1930,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.bus.publish.assert_not_called()
 
     def test_daemon_pause_returns_legacy_payload(self):
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/pause")
 
         self.assertEqual(response.status_code, 200)
@@ -1942,7 +1942,7 @@ class TestRuntimeRoutes(unittest.TestCase):
 
     def test_daemon_resume_returns_legacy_payload(self):
         self.runtime_state.set_paused(True)
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/resume")
 
         self.assertEqual(response.status_code, 200)
@@ -1953,7 +1953,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertFalse(self.runtime_state.is_paused())
 
     def test_daemon_shutdown_returns_legacy_payload(self):
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/shutdown")
 
         self.assertEqual(response.status_code, 200)
@@ -1964,7 +1964,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.shutdown_runtime.assert_called_once()
 
     def test_daemon_restart_returns_legacy_payload(self):
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/restart")
 
         self.assertEqual(response.status_code, 200)

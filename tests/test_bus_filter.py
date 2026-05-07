@@ -15,7 +15,7 @@ import unittest
 _TEST_HOME = tempfile.mkdtemp(prefix="pulse-tests-home-")
 os.environ.setdefault("HOME", _TEST_HOME)
 
-from daemon.routes.runtime import _should_publish_to_bus
+from daemon.routes.runtime_ingestion import _should_publish_to_bus
 
 
 class TestShouldPublishToBus(unittest.TestCase):
