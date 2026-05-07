@@ -78,6 +78,8 @@ class RuntimeState:
         self._recent_file_events: dict[str, datetime] = {}
         self._screen_is_locked: bool = False
         self._latest_active_app: str | None = None
+        self._user_presence_state: str | None = None
+        self._user_idle_seconds: int | None = None
         self._present = PresentState()
 
     def touch_ping(self, when: datetime | None = None) -> bool:
@@ -106,6 +108,17 @@ class RuntimeState:
         snapshot = self.get_runtime_snapshot()
         return snapshot.signals, snapshot.decision
 
+    def update_presence(
+        self,
+        *,
+        presence_state: str | None,
+        idle_seconds: int | None,
+    ) -> None:
+        """Stocke le dernier signal de présence IOKit reçu depuis Swift."""
+        with self._lock:
+            self._user_presence_state = presence_state
+            self._user_idle_seconds = idle_seconds
+
     def update_present(
         self,
         *,
@@ -115,6 +128,13 @@ class RuntimeState:
         locked: bool,
         updated_at: datetime | None = None,
     ) -> PresentState:
+        with self._lock:
+            stored_presence_state = self._user_presence_state
+            stored_idle_seconds = self._user_idle_seconds
+
+        signal_presence = getattr(signals, "user_presence_state", None)
+        signal_idle = getattr(signals, "user_idle_seconds", None)
+
         present = PresentState(
             session_status=session_status,
             awake=awake,
@@ -126,8 +146,8 @@ class RuntimeState:
             focus_level=getattr(signals, "focus_level", "normal"),
             friction_score=getattr(signals, "friction_score", 0.0),
             clipboard_context=getattr(signals, "clipboard_context", None),
-            user_presence_state=getattr(signals, "user_presence_state", None),
-            user_idle_seconds=getattr(signals, "user_idle_seconds", None),
+            user_presence_state=signal_presence or stored_presence_state,
+            user_idle_seconds=signal_idle if signal_idle is not None else stored_idle_seconds,
             active_app_duration_sec=getattr(signals, "active_app_duration_sec", None),
             active_window_title_duration_sec=getattr(signals, "active_window_title_duration_sec", None),
             app_switch_count_10m=getattr(signals, "app_switch_count_10m", 0),
@@ -269,4 +289,6 @@ class RuntimeState:
             self._screen_is_locked = False
             self._recent_file_events = {}
             self._latest_active_app = None
+            self._user_presence_state = None
+            self._user_idle_seconds = None
             self._present = PresentState()
