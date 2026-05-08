@@ -603,6 +603,98 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn(secret, json.dumps(hidden))
         self.assertIn("SECRET=[REDACTED_SECRET]", journal)
 
+    def test_journal_conserve_uncertainty_flags_et_affiche_assistance_outil(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Codex"],
+                "files_changed": 2,
+                "top_files": ["extractor.py", "test_extractor.py"],
+                "uncertainty_flags": ["tool_assisted"],
+                "task_confidence": 0.82,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertIn("Assistance outil détectée.", journal)
+        self.assertEqual(hidden[0]["uncertainty_flags"], ["tool_assisted"])
+        self.assertEqual(hidden[0]["task_confidence"], 0.82)
+
+    def test_journal_affiche_une_incertitude_sobre_pour_confidence_faible(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 1,
+                "top_files": ["extractor.py"],
+                "confidence": 0.35,
+                "uncertainty_flags": ["low_evidence", "short_episode"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertIn("Signaux de travail incertains.", journal)
+        self.assertEqual(hidden[0]["task_confidence"], 0.35)
+        self.assertEqual(hidden[0]["uncertainty_flags"], ["low_evidence", "short_episode"])
+
+    def test_journal_normal_n_affiche_pas_d_incertitude_inutile(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 2,
+                "top_files": ["extractor.py", "session.py"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+
+        self.assertNotIn("Assistance outil détectée.", journal)
+        self.assertNotIn("Signaux de travail incertains.", journal)
+
+    def test_journal_hidden_json_conserve_scope_source_fallback_snapshot(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Codex"],
+                "files_changed": 2,
+                "top_files": ["extractor.py", "session.py"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: fallback snapshot",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertEqual(hidden[0]["scope_source"], "fallback_snapshot")
+        self.assertIn("Portée estimée : extractor.py, session.py", journal)
+
     def test_llm_desactive_pour_screen_lock(self):
         """Le LLM ne doit PAS être appelé pour screen_lock — fallback déterministe uniquement."""
         call_count = {"n": 0}

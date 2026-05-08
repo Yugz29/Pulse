@@ -820,6 +820,7 @@ def _write_session_report(
         top_files=top_files, files_count=files_count, started_at=started_at, ended_at=ended_at,
         boundary_reason=str(session_record.get("boundary_reason") or trigger or "unknown"),
         scope_source=scope_source,
+        uncertainty_flags=consolidation.get("uncertainty_flags") or session.get("uncertainty_flags"),
         delivered_at=consolidation.get("delivered_at") or session.get("delivered_at"),
         summary_source=summary_source,
         summary_status=summary_status,
@@ -1005,18 +1006,28 @@ def _new_entry_id(now: datetime) -> str:
     return now.strftime("%Y%m%d%H%M%S%f")
 
 
+def _journal_task_confidence(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _build_journal_entry(*, entry_id, active_project, probable_task, activity_level, task_confidence,
     duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason,
-    scope_source="snapshot", delivered_at=None,
+    scope_source="snapshot", uncertainty_flags=None, delivered_at=None,
     summary_source="deterministic_fallback", summary_status="llm_unavailable", summary_error=None) -> Dict[str, Any]:
     body = _redact_memory_text(body)
     commit_message = _redact_memory_text(commit_message)
+    normalized_confidence = _journal_task_confidence(task_confidence)
     entry = {
         "entry_id": entry_id,
         "active_project": active_project or "Autre",
         "probable_task": probable_task or "general",
         "activity_level": activity_level or "unknown",
-        "task_confidence": task_confidence,
+        "task_confidence": normalized_confidence,
         "duration_min": int(max(duration_min, 0)),
         "body": body.strip(),
         "commit_message": (commit_message or "").strip(),
@@ -1028,6 +1039,7 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
         "delivered_at": delivered_at,
         "boundary_reason": boundary_reason or "unknown",
         "scope_source": scope_source or "unknown",
+        "uncertainty_flags": _compact_strings(uncertainty_flags or []),
         "summary_source": summary_source or "deterministic_fallback",
         "summary_status": summary_status or "unknown",
         "summary_error": summary_error,
@@ -1184,6 +1196,8 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
         ]
     )
     normalized["scope_source"] = str(normalized.get("scope_source") or "unknown")
+    normalized["uncertainty_flags"] = _compact_strings(normalized.get("uncertainty_flags", []))
+    normalized["task_confidence"] = _journal_task_confidence(normalized.get("task_confidence"))
     normalized["summary_source"] = str(normalized.get("summary_source") or "unknown")
     normalized["summary_status"] = str(normalized.get("summary_status") or "unknown")
     normalized["summary_error"] = normalized.get("summary_error")
@@ -1438,10 +1452,25 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
         if body:
             lines.append(body)
 
+    lines.extend(_journal_uncertainty_lines(entry))
+
     if not lines:
         duration = int(entry.get("duration_min") or 0)
         lines.append(f"Travail observ\u00e9 sur {_journal_entry_title(entry)} pendant {duration} min.")
     return "\n".join(lines)
+
+
+def _journal_uncertainty_lines(entry: Dict[str, Any]) -> List[str]:
+    flags = set(_compact_strings(entry.get("uncertainty_flags", [])))
+    confidence = _journal_task_confidence(entry.get("task_confidence"))
+    lines: List[str] = []
+    if "tool_assisted" in flags:
+        lines.append("Assistance outil détectée.")
+    if confidence is not None and confidence < 0.5:
+        lines.append("Signaux de travail incertains.")
+    elif flags.intersection({"low_evidence", "short_episode", "single_block"}):
+        lines.append("Signaux de travail incertains.")
+    return lines
 
 
 def _commit_items_for_render(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -1977,6 +2006,16 @@ def _build_consolidation_frame(
     session_record = _latest_recent_session(_session_records(session_data))
     active_project = (session_record or {}).get("active_project") or session_data.get("active_project")
     probable_task = (session_record or {}).get("probable_task") or session_data.get("probable_task") or "general"
+    task_confidence = (
+        (session_record or {}).get("task_confidence")
+        if (session_record or {}).get("task_confidence") is not None
+        else session_data.get("task_confidence", session_data.get("confidence"))
+    )
+    uncertainty_flags = (
+        (session_record or {}).get("uncertainty_flags")
+        or session_data.get("uncertainty_flags")
+        or []
+    )
     if commit_message:
         probable_task = _commit_task_correction(commit_message, probable_task)
     session_duration_min = int(session_data.get("duration_min", 0) or 0)
@@ -1987,7 +2026,8 @@ def _build_consolidation_frame(
             "active_project": active_project,
             "probable_task": probable_task,
             "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
-            "task_confidence": (session_record or {}).get("task_confidence") or session_data.get("task_confidence"),
+            "task_confidence": task_confidence,
+            "uncertainty_flags": uncertainty_flags,
             "duration_min": min(work_block["duration_min"], MAX_SESSION_DURATION_MIN),
             "started_at": work_block["started_at"],
             "ended_at": work_block["ended_at"],
@@ -1999,6 +2039,8 @@ def _build_consolidation_frame(
             active_project=session_data.get("active_project") or active_project,
             probable_task=probable_task,
             fallback_session_record=session_record,
+            task_confidence=task_confidence,
+            uncertainty_flags=uncertainty_flags,
         )
     duration_min = _session_record_duration_min(session_record)
     if duration_min is not None:
@@ -2022,7 +2064,8 @@ def _build_consolidation_frame(
         "active_project": active_project,
         "probable_task": probable_task,
         "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
-        "task_confidence": (session_record or {}).get("task_confidence") or session_data.get("task_confidence"),
+        "task_confidence": task_confidence,
+        "uncertainty_flags": uncertainty_flags,
         "duration_min": duration_min,
         "started_at": started_at or session_data.get("started_at"),
         "ended_at": ended_at or session_data.get("ended_at") or session_data.get("updated_at"),
@@ -2035,6 +2078,8 @@ def _commit_only_consolidation_frame(
     active_project: Optional[str],
     probable_task: str,
     fallback_session_record: Optional[Dict[str, Any]] = None,
+    task_confidence: Any = None,
+    uncertainty_flags: Any = None,
 ) -> Dict[str, Any]:
     delivered_at = _parse_entry_datetime(
         session_data.get("delivered_at")
@@ -2049,7 +2094,8 @@ def _commit_only_consolidation_frame(
         "active_project": active_project,
         "probable_task": probable_task,
         "activity_level": session_data.get("activity_level"),
-        "task_confidence": session_data.get("task_confidence"),
+        "task_confidence": task_confidence,
+        "uncertainty_flags": uncertainty_flags or [],
         "duration_min": 1,
         "started_at": delivered_iso,
         "ended_at": delivered_iso,
