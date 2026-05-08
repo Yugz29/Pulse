@@ -45,12 +45,12 @@ def register_status_routes(
     get_current_context: Callable[[], Any] | None = None,
     get_recent_sessions: Callable[[int], Any] | None = None,
 ) -> None:
-    @app.route("/ping")
+    @app.route("/ping", methods=["GET"])
     def ping():
         paused = runtime_state.touch_ping()
         return jsonify({"status": "ok", "version": "0.1.0", "paused": paused})
 
-    @app.route("/state")
+    @app.route("/state", methods=["GET"])
     def get_state():
         state = _build_state_payload(
             store_state=store.to_dict(),
@@ -62,7 +62,7 @@ def register_status_routes(
         )
         return jsonify(state)
 
-    @app.route("/insights")
+    @app.route("/insights", methods=["GET"])
     def get_insights():
         try:
             limit = int(request.args.get("limit", 25))

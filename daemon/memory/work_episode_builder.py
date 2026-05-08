@@ -115,7 +115,6 @@ def build_work_blocks(
                 clusters.append(current)
                 current = []
                 last_strong_at = None
-            continue
 
     if current:
         clusters.append(current)
@@ -217,7 +216,6 @@ def _cluster_episode_events(
                 current = []
                 last_strong_at = None
                 last_strong_scope = None
-            continue
 
     if current:
         groups.append({"events": current, "reason": "end_of_events", "boundary_event": None})

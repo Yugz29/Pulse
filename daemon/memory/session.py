@@ -871,7 +871,6 @@ class SessionMemory:
             if heartbeat.strength == "weak":
                 if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_bridge:
                     current.append(event)
-                continue
 
         if current:
             clusters.append(current)
