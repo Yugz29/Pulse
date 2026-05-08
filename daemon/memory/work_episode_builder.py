@@ -290,7 +290,7 @@ def _episode_from_event_group(
     block = _block_from_cluster(events, index)
     evidence_count = len(events)
     project = block.project
-    flags = _uncertainty_flags([block], project, evidence_count)
+    flags = _uncertainty_flags([block], project, evidence_count) + _actor_uncertainty_flags(events)
     dominant_scope = _dominant_scope(events)
     strong_count = _heartbeat_count(events, "strong")
     weak_count = _heartbeat_count(events, "weak")
@@ -572,6 +572,12 @@ def _uncertainty_flags(blocks: list[WorkBlock], project: str | None, evidence_co
     if sum(block.duration_min for block in blocks) <= 1:
         flags.append("short_episode")
     return tuple(flags)
+
+
+def _actor_uncertainty_flags(events: list[dict[str, Any]]) -> tuple[str, ...]:
+    if any((event.get("payload") or {}).get("_actor") == "tool_assisted" for event in events):
+        return ("tool_assisted",)
+    return ()
 
 
 def _confidence(evidence_count: int, project: str | None, flags: tuple[str, ...]) -> float:

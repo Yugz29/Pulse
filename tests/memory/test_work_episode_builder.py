@@ -37,6 +37,18 @@ def strong_path(path, minute=0):
     )
 
 
+def actor_file(actor, minute=0):
+    return event(
+        "file_modified",
+        minute,
+        {
+            "path": PROJECT_FILE,
+            "is_meaningful": True,
+            "_actor": actor,
+        },
+    )
+
+
 def xcode_artifact(event_type, path, minute):
     return event(
         event_type,
@@ -98,6 +110,61 @@ def test_file_event_strong_creates_short_work_episode():
     assert episodes[0].duration_min == 1
     assert episodes[0].evidence_count == 1
     assert episodes[0].probable_task == "coding"
+
+
+def test_system_file_event_alone_creates_no_work_episode():
+    events = [actor_file("system")]
+
+    assert build_work_blocks(events) == []
+    assert build_work_episodes(events) == []
+
+
+def test_user_file_event_alone_keeps_existing_work_episode_contract():
+    episodes = build_work_episodes([actor_file("user")])
+
+    assert len(episodes) == 1
+    assert episodes[0].probable_task == "coding"
+    assert episodes[0].strong_event_count == 1
+    assert "tool_assisted" not in episodes[0].uncertainty_flags
+
+
+def test_tool_assisted_file_event_creates_episode_with_assisted_flag():
+    episodes = build_work_episodes([actor_file("tool_assisted")])
+
+    assert len(episodes) == 1
+    assert episodes[0].probable_task == "coding"
+    assert episodes[0].strong_event_count == 1
+    assert "tool_assisted" in episodes[0].uncertainty_flags
+
+
+def test_user_and_tool_assisted_mix_keeps_episode_and_marks_assisted():
+    events = [
+        actor_file("user", 0),
+        actor_file("tool_assisted", 4),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 2
+    assert episodes[0].strong_event_count == 2
+    assert "tool_assisted" in episodes[0].uncertainty_flags
+
+
+def test_system_file_event_does_not_pollute_user_episode_scope_or_confidence():
+    baseline = build_work_episodes([strong_path("daemon/memory/work_episode_builder.py", 1)])
+    events = [
+        actor_file("system", 0),
+        strong_path("daemon/memory/work_episode_builder.py", 1),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].dominant_scope == "work_episode"
+    assert episodes[0].evidence_count == 1
+    assert episodes[0].strong_event_count == 1
+    assert episodes[0].confidence == baseline[0].confidence
 
 
 def test_strong_plus_recent_weak_stays_in_same_work_episode():

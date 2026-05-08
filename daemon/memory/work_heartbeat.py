@@ -117,6 +117,8 @@ def classify_work_heartbeat(event: Mapping[str, Any]) -> WorkHeartbeat:
     payload = _payload(event)
 
     if event_type in STRONG_FILE_EVENT_TYPES:
+        if payload.get("_actor") == "system":
+            return NONE_HEARTBEAT
         if _is_technical_file_artifact_payload(payload):
             return NONE_HEARTBEAT
         if _is_meaningful_file_payload(payload):
