@@ -673,6 +673,78 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("999 min", content)
         self.assertIn("480", content)
 
+    def test_duration_cap_via_session_record(self):
+        """Le cap MAX_SESSION_DURATION_MIN s'applique aussi quand la durée vient
+        de recent_sessions.duration_sec, pas seulement de session_data.duration_min.
+
+        Régression : _build_consolidation_frame lisait _session_record_duration_min
+        sans appliquer le cap, produisant des entrées de 600+ min après une nuit
+        avec la machine allumée.
+        """
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 999,
+                "probable_task": "coding",
+                "recent_apps": ["Xcode"],
+                "files_changed": 2,
+                "top_files": ["runtime_orchestrator.py", "session.py"],
+                "started_at": "2026-05-08T00:00:00",
+                "ended_at": "2026-05-08T10:00:00",
+                "recent_sessions": [
+                    {
+                        "id": "sess-overnight",
+                        "session_id": "sess-overnight",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "editing",
+                        "task_confidence": 0.7,
+                        "started_at": "2026-05-08T00:00:00",
+                        "ended_at": "2026-05-08T10:00:00",
+                        "duration_sec": 600 * 60,  # 10 heures — jamais plafonnées avant le fix
+                        "boundary_reason": "session_end",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        content = session_files[0].read_text()
+        self.assertNotIn("600 min", content)
+        self.assertNotIn("999 min", content)
+        self.assertIn("480 min", content)
+
+    def test_duration_cap_via_work_block(self):
+        """Le cap MAX_SESSION_DURATION_MIN s'applique aussi quand la durée vient
+        d'un work_block explicite (work_block_started_at / work_block_ended_at).
+
+        Régression : _resolve_commit_work_block calculait la durée depuis les
+        timestamps bruts sans appliquer le cap.
+        """
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 30,
+                "probable_task": "coding",
+                "recent_apps": ["Code"],
+                "files_changed": 2,
+                "top_files": ["extractor.py", "session.py"],
+                # work_block couvrant 10 heures — ne doit jamais produire 600 min
+                "work_block_started_at": "2026-05-08T00:00:00",
+                "work_block_ended_at": "2026-05-08T10:00:00",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(memory): overnight work block cap",
+        )
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        content = session_files[0].read_text()
+        self.assertNotIn("600 min", content)
+        self.assertIn("480 min", content)
+
     def test_cooldown_persiste_apres_restart(self):
         """Le curseur survit à une réinitialisation de _cooldown_loaded (simule un restart)."""
         session = {

@@ -1947,7 +1947,7 @@ def _build_consolidation_frame(
             "probable_task": probable_task,
             "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
             "task_confidence": (session_record or {}).get("task_confidence") or session_data.get("task_confidence"),
-            "duration_min": work_block["duration_min"],
+            "duration_min": min(work_block["duration_min"], MAX_SESSION_DURATION_MIN),
             "started_at": work_block["started_at"],
             "ended_at": work_block["ended_at"],
             "delivered_at": work_block.get("delivered_at"),
@@ -1960,6 +1960,8 @@ def _build_consolidation_frame(
             fallback_session_record=session_record,
         )
     duration_min = _session_record_duration_min(session_record)
+    if duration_min is not None:
+        duration_min = min(duration_min, MAX_SESSION_DURATION_MIN)
     use_session_window = _should_use_session_window_for_commit(
         trigger=trigger,
         session_duration_min=session_duration_min,
