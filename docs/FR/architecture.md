@@ -74,10 +74,10 @@ Règle de lecture :
 | `SessionFSM` | produire l'état de session et les frontières de session | calculer le contexte de travail |
 | `SignalScorer` | produire le contexte de travail courant | stocker le présent |
 | `RuntimeState` | stocker `PresentState` et exposer un snapshot atomique de lecture | recalculer la sémantique |
-| `RuntimeOrchestrator` | coordonner le pipeline runtime | devenir une god-source de vérité |
+| `RuntimeOrchestrator` | coordonner le pipeline runtime, les déclencheurs proactifs et les effets de bord contrôlés | devenir une god-source de vérité |
 | `DecisionEngine` | décider à partir de `PresentState` | reconsommer `signals` directement comme source principale |
 | `CurrentContextBuilder` | rendre un `CurrentContext` à partir de `present` | devenir une source de vérité |
-| `SessionMemory` | persister l'historique et les snapshots | corriger ou écrire le présent |
+| `SessionMemory` | persister l'historique, les snapshots et les projections de travail | corriger ou écrire le présent |
 | `StateStore` | shim de compat legacy | dériver `active_file`, `active_project` ou l'état session |
 
 ---
@@ -219,13 +219,29 @@ Le modèle actuel est plus simple :
 - `current_context` : lecture produit du contexte courant
 - `recent_sessions` : sessions fermées récentes, pour l'historique
 - `work_blocks` : blocs de travail dérivés des événements significatifs
-- `work_block_*` : fenêtre de travail utilisée par la mémoire et la ResumeCard
+- `work_block_*` : fenêtre de travail utilisée par la mémoire, les commits et la ResumeCard
 
 Les anciens noms restants sont exposés seulement pour compatibilité :
 - `work_window_*`
 - `closed_episodes`
 
 Ces alias ne doivent pas servir à écrire de nouvelles features.
+
+### Resume Card préparée
+
+La ResumeCard existe en deux chemins :
+- génération à la demande au retour utilisateur, avec fallback déterministe
+- préparation à chaud au `screen_locked`, stockée temporairement en mémoire puis consommée au prochain `screen_unlocked`
+
+Le chemin préparé est une optimisation UX.
+Il n'est pas une source de vérité.
+Il lit le snapshot runtime et le payload mémoire, puis publie un événement `resume_card` si la carte préparée est encore valide.
+
+Routes debug existantes :
+- `/debug/resume-card` : force une ResumeCard déterministe
+- `/debug/resume-card/llm` : force une ResumeCard LLM et retourne un diagnostic de génération
+
+Limite V1 : il n'existe pas encore de route debug dédiée au cycle de la carte préparée lui-même (`prepare`, `peek`, `consume`, `expire`).
 
 ---
 
@@ -250,6 +266,8 @@ Ces reliquats ne doivent pas être relus comme des sources de vérité concurren
 - le marqueur de lock legacy existe encore en parallèle du `present.locked`
 - l'extracteur mémoire contient encore du vocabulaire historique d'épisodes
 - `SessionSnapshot` reste une projection de compat, pas la forme canonique du présent
+- la ResumeCard préparée est stockée en mémoire seulement et disparaît si le daemon redémarre
+- il n'existe pas encore de route debug dédiée pour inspecter ou forcer le cycle `prepared_resume_card`
 
 ---
 
@@ -262,4 +280,5 @@ Pour lire le runtime correctement aujourd'hui :
 3. lire `CurrentContext` comme un rendu
 4. lire `signals` comme une couche de détails secondaires
 5. lire `StateStore` et les champs top-level `/state` comme compat, pas comme vérité
-6. lire `work_blocks` / `work_block_*` pour le temps de travail, pas les alias `work_window_*`
+6. lire `work_blocks` / `work_block_*` pour le temps de travail et les fenêtres de commit, pas les alias `work_window_*`
+7. lire la ResumeCard comme une projection de reprise, jamais comme une source de vérité du travail

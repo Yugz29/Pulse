@@ -18,6 +18,12 @@ class PresentState:
     focus_level: str = "normal"
     friction_score: float = 0.0
     clipboard_context: str | None = None
+    user_presence_state: str | None = None
+    user_idle_seconds: int | None = None
+    active_app_duration_sec: int | None = None
+    active_window_title_duration_sec: int | None = None
+    app_switch_count_10m: int = 0
+    ai_app_switch_count_10m: int = 0
     session_duration_min: int = 0
     updated_at: datetime | None = None
 
@@ -33,6 +39,12 @@ class PresentState:
             "focus_level": self.focus_level,
             "friction_score": self.friction_score,
             "clipboard_context": self.clipboard_context,
+            "user_presence_state": self.user_presence_state,
+            "user_idle_seconds": self.user_idle_seconds,
+            "active_app_duration_sec": self.active_app_duration_sec,
+            "active_window_title_duration_sec": self.active_window_title_duration_sec,
+            "app_switch_count_10m": self.app_switch_count_10m,
+            "ai_app_switch_count_10m": self.ai_app_switch_count_10m,
             "session_duration_min": self.session_duration_min,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -66,6 +78,8 @@ class RuntimeState:
         self._recent_file_events: dict[str, datetime] = {}
         self._screen_is_locked: bool = False
         self._latest_active_app: str | None = None
+        self._user_presence_state: str | None = None
+        self._user_idle_seconds: int | None = None
         self._present = PresentState()
 
     def touch_ping(self, when: datetime | None = None) -> bool:
@@ -94,6 +108,17 @@ class RuntimeState:
         snapshot = self.get_runtime_snapshot()
         return snapshot.signals, snapshot.decision
 
+    def update_presence(
+        self,
+        *,
+        presence_state: str | None,
+        idle_seconds: int | None,
+    ) -> None:
+        """Stocke le dernier signal de présence IOKit reçu depuis Swift."""
+        with self._lock:
+            self._user_presence_state = presence_state
+            self._user_idle_seconds = idle_seconds
+
     def update_present(
         self,
         *,
@@ -103,6 +128,13 @@ class RuntimeState:
         locked: bool,
         updated_at: datetime | None = None,
     ) -> PresentState:
+        with self._lock:
+            stored_presence_state = self._user_presence_state
+            stored_idle_seconds = self._user_idle_seconds
+
+        signal_presence = getattr(signals, "user_presence_state", None)
+        signal_idle = getattr(signals, "user_idle_seconds", None)
+
         present = PresentState(
             session_status=session_status,
             awake=awake,
@@ -114,6 +146,12 @@ class RuntimeState:
             focus_level=getattr(signals, "focus_level", "normal"),
             friction_score=getattr(signals, "friction_score", 0.0),
             clipboard_context=getattr(signals, "clipboard_context", None),
+            user_presence_state=signal_presence or stored_presence_state,
+            user_idle_seconds=signal_idle if signal_idle is not None else stored_idle_seconds,
+            active_app_duration_sec=getattr(signals, "active_app_duration_sec", None),
+            active_window_title_duration_sec=getattr(signals, "active_window_title_duration_sec", None),
+            app_switch_count_10m=getattr(signals, "app_switch_count_10m", 0),
+            ai_app_switch_count_10m=getattr(signals, "ai_app_switch_count_10m", 0),
             session_duration_min=getattr(signals, "session_duration_min", 0),
             updated_at=updated_at or datetime.now(),
         )
@@ -200,8 +238,11 @@ class RuntimeState:
 
     def should_ignore_file_event(
         self,
+        event_type: str | None = None,
+        path: str | None = None,
+        payload: dict | None = None,
         *,
-        dedupe_key: str,
+        dedupe_key: str | None = None,
         now: datetime | None = None,
         cleanup_ttl: timedelta = timedelta(seconds=5),
         dedupe_window: timedelta = timedelta(seconds=1),
@@ -209,18 +250,22 @@ class RuntimeState:
         # Dédoublonnage purement technique, calé sur le temps local de réception.
         # Il ne porte aucune sémantique métier : le timestamp source reste
         # persistant dans l'event lui-même pour le scoring et la mémoire.
-        current = now or datetime.now()
-        with self._lock:
-            last_seen = self._recent_file_events.get(dedupe_key)
-            self._recent_file_events = {
-                key: seen_at
-                for key, seen_at in self._recent_file_events.items()
-                if current - seen_at < cleanup_ttl
-            }
-            if last_seen and current - last_seen < dedupe_window:
-                return True
-            self._recent_file_events[dedupe_key] = current
+        from daemon.core.event_meaning import _default_policy
+
+        if dedupe_key is None:
+            event_payload = dict(payload or {})
+            if path is not None:
+                event_payload.setdefault("path", path)
+            decision = _default_policy.classify(event_type or "", event_payload)
+            dedupe_key = decision.dedupe_key
+        if dedupe_key is None:
             return False
+        return _default_policy.should_dedupe(
+            dedupe_key,
+            now=now,
+            cleanup_ttl=cleanup_ttl,
+            dedupe_window=dedupe_window,
+        )
 
     def set_latest_active_app(self, app_name: str) -> None:
         with self._lock:
@@ -244,4 +289,6 @@ class RuntimeState:
             self._screen_is_locked = False
             self._recent_file_events = {}
             self._latest_active_app = None
+            self._user_presence_state = None
+            self._user_idle_seconds = None
             self._present = PresentState()

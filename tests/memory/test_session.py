@@ -1,3 +1,4 @@
+import json
 import tempfile
 import sqlite3
 import subprocess
@@ -128,6 +129,34 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(window["duration_min"], 12)
         self.assertEqual(window["event_count"], 3)
 
+    def test_find_file_activity_window_fusionne_les_clusters_proches(self):
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        first_start = datetime(2026, 4, 29, 9, 0, 0)
+        first_end = datetime(2026, 4, 29, 9, 10, 0)
+        second_start = datetime(2026, 4, 29, 10, 0, 0)
+        second_end = datetime(2026, 4, 29, 10, 12, 0)
+        commit_at = datetime(2026, 4, 29, 10, 45, 0)
+
+        for observed_at in (first_start, first_end, second_start, second_end):
+            self.memory.record_event(Event(
+                "file_modified",
+                {"path": f"{repo}/daemon/runtime_orchestrator.py"},
+                timestamp=observed_at,
+            ))
+
+        window = self.memory.find_file_activity_window(
+            ["runtime_orchestrator.py"],
+            before=commit_at,
+            repo_root=repo,
+        )
+
+        self.assertIsNotNone(window)
+        self.assertEqual(window["started_at"], first_start.isoformat())
+        self.assertEqual(window["ended_at"], second_end.isoformat())
+        self.assertEqual(window["duration_min"], 72)
+        self.assertEqual(window["event_count"], 4)
+        self.assertEqual(window["cluster_count"], 2)
+
     def test_resume_session_realigne_started_at(self):
         restarted_from = datetime(2026, 4, 23, 16, 0, 0)
         self.memory.resume_session(started_at=restarted_from)
@@ -218,7 +247,7 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIn("Cursor", data["recent_apps"])
         self.assertEqual(data["max_friction"], 0.8)
 
-    def test_export_memory_payload_contient_les_champs_essentiels(self):
+    def test_export_memory_payload_contient_les_champs_canoniques(self):
         start = datetime(2026, 4, 28, 11, 0, 0)
         self.memory.started_at = start
         self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
@@ -259,8 +288,49 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIn("work_block_started_at", payload)
         self.assertIn("work_block_commit_count", payload)
         self.assertIn("recent_sessions", payload)
+        self.assertEqual(payload["work_block_started_at"], payload["started_at"])
+        self.assertEqual(payload["work_block_commit_count"], payload["commit_count"])
+
+    def test_export_memory_payload_expose_les_alias_legacy_temporairement(self):
+        start = datetime(2026, 4, 28, 11, 0, 0)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.record_event(
+            Event("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, timestamp=start)
+        )
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=20,
+                updated_at=start + timedelta(minutes=20),
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
+                probable_task="coding",
+                friction_score=0.2,
+                focus_level="normal",
+                session_duration_min=20,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+
+        payload = self.memory.export_memory_payload()
+
+        # Legacy aliases stay available only for older memory consumers.
         self.assertIn("work_window_started_at", payload)
         self.assertIn("work_window_commit_count", payload)
+        self.assertIn("closed_episodes", payload)
+        self.assertEqual(payload["work_window_started_at"], payload["work_block_started_at"])
+        self.assertEqual(payload["work_window_commit_count"], payload["work_block_commit_count"])
+        self.assertEqual(payload["closed_episodes"], payload["recent_sessions"])
 
     def test_export_memory_payload_compte_les_commits(self):
         """Les events COMMIT_EDITMSG sont comptés comme commits."""
@@ -280,7 +350,6 @@ class TestSessionMemory(unittest.TestCase):
         payload = self.memory.export_memory_payload()
         self.assertEqual(payload["commit_count"], 2)
         self.assertEqual(payload["work_block_commit_count"], 2)
-        self.assertEqual(payload["work_window_commit_count"], 2)
 
     def test_get_today_summary_derive_le_temps_depuis_les_evenements(self):
         today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
@@ -336,6 +405,365 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(summary["work_blocks"][0]["duration_min"], 10)
         self.assertEqual(summary["work_blocks"][1]["duration_min"], 1)
         self.assertEqual(summary["work_blocks"][1]["project"], "Pulse")
+
+    def test_get_today_summary_weak_isole_ne_cree_pas_de_work_block(self):
+        today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
+
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "terminal_command_finished",
+            {
+                "terminal_command": "git status",
+                "terminal_command_base": "git",
+                "terminal_project": "Pulse",
+            },
+            timestamp=today + timedelta(minutes=2),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 0)
+        self.assertEqual(summary["totals"]["worked_min"], 0)
+        self.assertEqual(summary["work_blocks"], [])
+
+    def test_get_today_summary_weak_apres_strong_prolonge_le_work_block(self):
+        today = datetime.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=5),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 1)
+        self.assertEqual(summary["totals"]["worked_min"], 5)
+        self.assertEqual(summary["work_blocks"][0]["duration_min"], 5)
+        self.assertEqual(summary["work_blocks"][0]["event_count"], 2)
+
+    def test_get_today_summary_youtube_coupe_le_bloc_et_empeche_le_weak_suivant(self):
+        today = datetime.now().replace(hour=10, minute=30, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "window_title_poll",
+            {"app_name": "Google Chrome", "title": "Some Video - YouTube"},
+            timestamp=today + timedelta(minutes=2),
+        ))
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=3),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 1)
+        self.assertEqual(summary["totals"]["worked_min"], 1)
+        self.assertEqual(len(summary["work_blocks"]), 1)
+        self.assertEqual(summary["work_blocks"][0]["duration_min"], 1)
+        self.assertEqual(summary["work_blocks"][0]["event_count"], 1)
+
+    def test_get_today_summary_screen_locked_coupe_la_continuite(self):
+        today = datetime.now().replace(hour=10, minute=45, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=5),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/session.py"},
+            timestamp=today + timedelta(minutes=6),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 2)
+        self.assertEqual(summary["totals"]["worked_min"], 2)
+        self.assertEqual(len(summary["work_blocks"]), 2)
+        self.assertEqual([block["duration_min"] for block in summary["work_blocks"]], [1, 1])
+
+    def test_get_today_summary_work_blocks_gardent_le_contrat_public(self):
+        today = datetime.now().replace(hour=10, minute=55, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "ChatGPT"},
+            timestamp=today + timedelta(minutes=5),
+        ))
+
+        summary = self.memory.get_today_summary()
+        block = summary["work_blocks"][0]
+
+        self.assertTrue(block["id"].startswith("work-"))
+        self.assertEqual(
+            set(block.keys()),
+            {
+                "id",
+                "started_at",
+                "ended_at",
+                "duration_min",
+                "event_count",
+                "project",
+                "probable_task",
+                "activity_level",
+            },
+        )
+        self.assertEqual(block["duration_min"], 5)
+        self.assertEqual(block["event_count"], 2)
+
+    def test_get_today_work_episodes_expose_les_episodes_du_jour_en_debug(self):
+        today = datetime.now().replace(hour=11, minute=5, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/main.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=5),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/session.py"},
+            timestamp=today + timedelta(minutes=6),
+        ))
+
+        payload = self.memory.get_today_work_episodes()
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["episode_count"], 2)
+        episode = payload["episodes"][0]
+        self.assertEqual(
+            set(episode.keys()),
+            {
+                "id",
+                "project",
+                "probable_task",
+                "activity_level",
+                "started_at",
+                "ended_at",
+                "duration_min",
+                "work_block_ids",
+                "evidence_count",
+                "confidence",
+                "boundary_reason",
+                "uncertainty_flags",
+                "dominant_scope",
+                "previous_scope",
+                "next_scope",
+                "strong_event_count",
+                "weak_event_count",
+                "boundary_event_type",
+                "boundary_event_at",
+                "debug_reason",
+            },
+        )
+        self.assertEqual(episode["project"], "Pulse")
+        self.assertEqual(episode["probable_task"], "coding")
+        self.assertEqual(episode["boundary_reason"], "screen_locked")
+        self.assertEqual(episode["boundary_event_type"], "screen_locked")
+
+    def test_get_today_journal_candidates_retourne_candidates_et_ignored(self):
+        today = datetime.now().replace(hour=11, minute=15, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=5),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/tests/memory/test_work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=6),
+        ))
+
+        payload = self.memory.get_today_journal_candidates()
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["ignored_count"], 1)
+        self.assertEqual(payload["candidates"][0]["ignored"], False)
+        self.assertEqual(payload["candidates"][0]["boundary_reason"], "screen_locked")
+        self.assertEqual(payload["ignored"][0]["ignored"], True)
+        self.assertEqual(payload["ignored"][0]["ignore_reason"], "open_episode_end_of_events")
+
+    def test_get_today_journal_comparison_sans_fichier_journal_ne_plante_pas(self):
+        today = datetime.now().replace(hour=11, minute=30, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=8),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/tests/memory/test_work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=10),
+        ))
+
+        payload = self.memory.get_today_journal_comparison(date=today)
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["journal_entry_count"], 0)
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["matches"], [])
+        self.assertEqual(len(payload["unmatched_candidates"]), 1)
+
+    def test_get_today_journal_comparison_lit_le_payload_cache_du_journal(self):
+        today = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        session_dir = Path(self.tmpdir.name) / "memory" / "sessions"
+        session_dir.mkdir(parents=True)
+        journal_file = session_dir / f"{today.date().isoformat()}.md"
+        journal_entries = [
+            {
+                "entry_id": "journal-1",
+                "active_project": "Pulse",
+                "started_at": today.isoformat(),
+                "ended_at": (today + timedelta(minutes=8)).isoformat(),
+                "duration_min": 8,
+                "commit_message": "feat: journal entry",
+            }
+        ]
+        journal_file.write_text(
+            "# Journal\n\n"
+            "<!-- pulse-journal-data:start\n"
+            f"{json.dumps(journal_entries)}\n"
+            "pulse-journal-data:end -->",
+            encoding="utf-8",
+        )
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=8),
+        ))
+
+        payload = self.memory.get_today_journal_comparison(date=today)
+
+        self.assertEqual(payload["journal_entry_count"], 1)
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["matches"][0]["journal_entry_id"], "journal-1")
+        self.assertIn("journal_has_commit", payload["matches"][0]["flags"])
+
+    def test_get_today_commit_episode_links_retourne_links_et_unlinked(self):
+        today = datetime.now().replace(hour=12, minute=30, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        session_dir = Path(self.tmpdir.name) / "memory" / "sessions"
+        session_dir.mkdir(parents=True)
+        journal_file = session_dir / f"{today.date().isoformat()}.md"
+        journal_entries = [
+            {
+                "entry_id": "journal-1",
+                "active_project": "Pulse",
+                "started_at": today.isoformat(),
+                "ended_at": (today + timedelta(minutes=2)).isoformat(),
+                "duration_min": 2,
+                "commit_message": "feat: link commit",
+            }
+        ]
+        journal_file.write_text(
+            "# Journal\n\n"
+            "<!-- pulse-journal-data:start\n"
+            f"{json.dumps(journal_entries)}\n"
+            "pulse-journal-data:end -->",
+            encoding="utf-8",
+        )
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/work_episode_builder.py"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=8),
+        ))
+
+        payload = self.memory.get_today_commit_episode_links(date=today)
+
+        self.assertEqual(payload["date"], today.date().isoformat())
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["unlinked_count"], 0)
+        self.assertEqual(payload["links"][0]["status"], "linked")
+
+    def test_get_today_summary_youtube_chrome_presence_seuls_ne_creent_pas_de_work_block(self):
+        today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
+
+        self.memory.record_event(Event(
+            "app_activated",
+            {"app_name": "Google Chrome"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "window_title_poll",
+            {"app_name": "Google Chrome", "title": "Some Video - YouTube"},
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "user_presence",
+            {"presence_state": "active", "idle_seconds": "3"},
+            timestamp=today + timedelta(minutes=2),
+        ))
+
+        summary = self.memory.get_today_summary()
+
+        self.assertEqual(summary["totals"]["window_count"], 0)
+        self.assertEqual(summary["totals"]["worked_min"], 0)
+        self.assertEqual(summary["work_blocks"], [])
 
     def test_get_today_summary_compte_les_commits_du_depot(self):
         repo = Path(self.tmpdir.name) / "repo"
@@ -412,13 +840,13 @@ class TestSessionMemory(unittest.TestCase):
         )
         self.memory.close(ended_at=end)
 
-        episodes = self.memory.get_recent_sessions()
+        sessions = self.memory.get_recent_sessions()
 
-        self.assertEqual(len(episodes), 1)
-        self.assertEqual(episodes[0]["session_id"], "test-session")
-        self.assertEqual(episodes[0]["active_project"], "Pulse")
-        self.assertEqual(episodes[0]["probable_task"], "coding")
-        self.assertEqual(episodes[0]["duration_sec"], 25 * 60)
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["session_id"], "test-session")
+        self.assertEqual(sessions[0]["active_project"], "Pulse")
+        self.assertEqual(sessions[0]["probable_task"], "coding")
+        self.assertEqual(sessions[0]["duration_sec"], 25 * 60)
 
     def test_build_session_snapshot_plus_adaptateur_legacy(self):
         session = {

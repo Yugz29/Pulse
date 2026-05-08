@@ -14,6 +14,8 @@ from daemon.memory.session_snapshot_builder import (
     build_session_snapshot as build_structured_session_snapshot,
     session_snapshot_to_legacy_dict,
 )
+from daemon.memory.work_episode_builder import build_work_blocks
+from daemon.memory.work_heartbeat import classify_work_heartbeat
 
 _SESSION_TIMING_IGNORED_EVENT_TYPES = {
     "screen_locked",
@@ -133,6 +135,7 @@ class SessionMemory:
                         active_project = ?,
                         active_file = ?,
                         probable_task = ?,
+                        activity_level = ?,
                         focus_level = ?,
                         friction_score = ?
                     WHERE id = ?
@@ -143,6 +146,7 @@ class SessionMemory:
                         present.active_project,
                         present.active_file,
                         present.probable_task,
+                        present.activity_level,
                         present.focus_level,
                         getattr(signals, "friction_score", 0.0),
                         self.session_id,
@@ -271,28 +275,49 @@ class SessionMemory:
             if self._is_meaningful_work_event(event):
                 work_events.append(event)
 
-        windows = self._cluster_work_events(work_events)
-        worked_min = sum(window["duration_min"] for window in windows)
+        builder_blocks = build_work_blocks(all_events)
+        worked_min = sum(block.duration_min for block in builder_blocks)
         commit_count = self._commit_count_for_period(all_events, since=day_start, until=day_end)
 
         session_dict = dict(session) if session is not None else {}
-        project = session_dict.get("active_project") or self._project_from_events(work_events or all_events)
-        task = session_dict.get("probable_task") or "general"
+        project = (
+            session_dict.get("active_project")
+            or next((block.project for block in builder_blocks if block.project), None)
+            or self._project_from_events(work_events or all_events)
+        )
+        fallback_task = session_dict.get("probable_task") or "general"
+        windows = [
+            {
+                "started_at": block.started_at,
+                "ended_at": block.ended_at,
+                "duration_min": block.duration_min,
+                "event_count": block.event_count,
+                "project": block.project or project,
+                "probable_task": block.probable_task or fallback_task,
+                "activity_level": block.activity_level,
+            }
+            for block in builder_blocks
+        ]
         current_window = None
         if windows:
             last = windows[-1]
+            current_window_task = last.get("probable_task") or fallback_task
             current_window = {
                 "id": f"work-{last['started_at']}",
                 "started_at": last["started_at"],
                 "updated_at": last["ended_at"],
                 "project": project,
-                "probable_task": task,
-                "activity_level": "editing",
+                "probable_task": current_window_task,
+                "activity_level": last.get("activity_level") or "editing",
                 "commit_count": commit_count,
             }
 
         work_blocks = []
+        observed_tasks: List[str] = []
         for index, window in enumerate(windows):
+            window_task = window.get("probable_task") or fallback_task
+            if window_task and window_task != "general" and window_task not in observed_tasks:
+                observed_tasks.append(window_task)
             work_blocks.append(
                 {
                     "id": f"work-{window['started_at']}",
@@ -300,8 +325,9 @@ class SessionMemory:
                     "ended_at": window["ended_at"],
                     "duration_min": window["duration_min"],
                     "event_count": window["event_count"],
-                    "project": project,
-                    "probable_task": task,
+                    "project": window.get("project") or project,
+                    "probable_task": window_task,
+                    "activity_level": window.get("activity_level"),
                 }
             )
 
@@ -313,7 +339,7 @@ class SessionMemory:
                     "worked_min": worked_min,
                     "active_min": worked_min,
                     "commit_count": commit_count,
-                    "top_tasks": [task] if task else [],
+                    "top_tasks": observed_tasks or ([fallback_task] if fallback_task else []),
                 }
             )
 
@@ -337,6 +363,30 @@ class SessionMemory:
             },
             "current_window": current_window,
         }
+
+    def get_today_work_episodes(self, date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Return today's experimental work episodes for debug/observation only."""
+        from daemon.memory.debug_memory_views import DebugMemoryViews
+
+        return DebugMemoryViews(self).get_work_episodes(date=date)
+
+    def get_today_journal_candidates(self, date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Return dry-run journal candidates from work episodes without writing memory."""
+        from daemon.memory.debug_memory_views import DebugMemoryViews
+
+        return DebugMemoryViews(self).get_journal_candidates(date=date)
+
+    def get_today_journal_comparison(self, date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Compare persisted journal entries and dry-run candidates for debug only."""
+        from daemon.memory.debug_memory_views import DebugMemoryViews
+
+        return DebugMemoryViews(self).get_journal_comparison(date=date)
+
+    def get_today_commit_episode_links(self, date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Return dry-run commit-to-episode links for debug only."""
+        from daemon.memory.debug_memory_views import DebugMemoryViews
+
+        return DebugMemoryViews(self).get_commit_episode_links(date=date)
 
     def find_file_activity_window(
         self,
@@ -403,15 +453,55 @@ class SessionMemory:
         if current:
             clusters.append(current)
 
-        cluster = clusters[-1]
-        started_at = cluster[0]
-        ended_at = cluster[-1]
+        selected_clusters = self._select_commit_activity_clusters(
+            clusters,
+            before=before,
+        )
+        activity_points = [observed_at for cluster in selected_clusters for observed_at in cluster]
+        started_at = activity_points[0]
+        ended_at = activity_points[-1]
         return {
             "started_at": started_at.isoformat(),
             "ended_at": ended_at.isoformat(),
             "duration_min": max(int((ended_at - started_at).total_seconds() / 60), 0),
-            "event_count": len(cluster),
+            "event_count": len(activity_points),
+            "cluster_count": len(selected_clusters),
         }
+
+    @staticmethod
+    def _select_commit_activity_clusters(
+        clusters: List[List[datetime]],
+        *,
+        before: datetime,
+        max_span_hours: int = 4,
+        bridge_gap_min: int = 75,
+    ) -> List[List[datetime]]:
+        """Select adjacent activity clusters likely belonging to one commit work block.
+
+        `find_file_activity_window` already filters by repo and commit file names.
+        This helper only decides whether separated clusters should be represented
+        as one broader commit activity window instead of keeping the last burst
+        only. It intentionally stops on large gaps to avoid swallowing a whole day.
+        """
+        if not clusters:
+            return []
+
+        selected: List[List[datetime]] = [clusters[-1]]
+        earliest_allowed = before - timedelta(hours=max_span_hours)
+        max_bridge_gap = timedelta(minutes=bridge_gap_min)
+
+        for cluster in reversed(clusters[:-1]):
+            if not cluster:
+                continue
+            if cluster[-1] < earliest_allowed:
+                break
+            next_start = selected[0][0]
+            gap = next_start - cluster[-1]
+            if gap > max_bridge_gap:
+                break
+            selected.insert(0, cluster)
+
+        return selected
 
     def build_session_snapshot(self):
         session = self.get_session()
@@ -475,6 +565,7 @@ class SessionMemory:
             "active_project": session.get("active_project"),
             "active_file": session.get("active_file"),
             "probable_task": session.get("probable_task") or "general",
+            "activity_level": session.get("activity_level"),
             "focus_level": session.get("focus_level") or "normal",
             "friction_score": float(session.get("friction_score") or 0.0),
             "top_files": file_paths[:10],
@@ -485,10 +576,7 @@ class SessionMemory:
             "work_block_commit_count": commit_count,
             "recent_sessions": recent_sessions,
         }
-        # Alias legacy pour l'extracteur mémoire et les anciennes ResumeCards.
-        payload["work_window_started_at"] = payload["work_block_started_at"]
-        payload["work_window_commit_count"] = payload["work_block_commit_count"]
-        payload["closed_episodes"] = recent_sessions
+        self._attach_legacy_memory_payload_aliases(payload, recent_sessions=recent_sessions)
         return payload
 
     def purge_old_events(self, keep_hours: int = 48) -> int:
@@ -537,6 +625,29 @@ class SessionMemory:
                 )
                 conn.commit()
 
+
+    @staticmethod
+    def _attach_legacy_memory_payload_aliases(
+        payload: Dict[str, Any],
+        *,
+        recent_sessions: List[Dict[str, Any]],
+    ) -> None:
+        """Expose old memory keys while consumers migrate to work_block/recent_sessions.
+
+        Canonical keys:
+        - work_block_started_at
+        - work_block_commit_count
+        - recent_sessions
+
+        Legacy aliases:
+        - work_window_started_at
+        - work_window_commit_count
+        - closed_episodes
+        """
+        payload["work_window_started_at"] = payload["work_block_started_at"]
+        payload["work_window_commit_count"] = payload["work_block_commit_count"]
+        payload["closed_episodes"] = recent_sessions
+
     # ── Internals ──────────────────────────────────────────────────────────────
 
     def _init_db(self) -> None:
@@ -552,11 +663,13 @@ class SessionMemory:
                     active_project TEXT,
                     active_file TEXT,
                     probable_task TEXT,
+                    activity_level TEXT,
                     focus_level TEXT,
                     friction_score REAL DEFAULT 0
                 )
                 """
             )
+            self._ensure_sessions_column(conn, "activity_level", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -585,6 +698,15 @@ class SessionMemory:
                 import logging
                 logging.getLogger("pulse").warning("FTS5 non disponible : %s", exc)
             conn.commit()
+
+    @staticmethod
+    def _ensure_sessions_column(conn: sqlite3.Connection, column_name: str, column_type: str) -> None:
+        columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if column_name not in columns:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {column_name} {column_type}")
 
     def _repair_stale_open_rows(self) -> None:
         """Ferme les sessions restées ouvertes après un arrêt brutal."""
@@ -703,42 +825,54 @@ class SessionMemory:
             "duration_sec": duration_sec,
             "active_project": session.get("active_project"),
             "probable_task": session.get("probable_task"),
-            "activity_level": None,
+            "activity_level": session.get("activity_level"),
             "task_confidence": None,
         }
 
     @staticmethod
     def _is_meaningful_work_event(event: Dict[str, Any]) -> bool:
-        event_type = event["type"]
-        if event_type in {"screen_locked", "screen_unlocked", "user_idle"}:
-            return False
-        if event_type in _FILE_EVENT_TYPES:
-            path = str(event["payload"].get("path") or "")
-            return bool(path) and file_signal_significance(path) == "meaningful"
-        if event_type in {
-            "terminal_command_finished",
-            "mcp_command_received",
-            "claude_desktop_session",
-        }:
-            return True
-        return False
+        return classify_work_heartbeat(event).is_work
 
-    @staticmethod
+    @classmethod
     def _cluster_work_events(
+        cls,
         events: List[Dict[str, Any]],
         *,
         gap_min: int = 30,
+        weak_bridge_min: int = 10,
     ) -> List[Dict[str, Any]]:
         if not events:
             return []
+
         max_gap = timedelta(minutes=gap_min)
+        max_weak_bridge = timedelta(minutes=weak_bridge_min)
         clusters: List[List[Dict[str, Any]]] = []
         current: List[Dict[str, Any]] = []
+        last_strong_at: Optional[datetime] = None
+
         for event in events:
-            if current and event["timestamp"] - current[-1]["timestamp"] > max_gap:
+            heartbeat = classify_work_heartbeat(event)
+            if heartbeat.strength == "none":
+                continue
+
+            observed_at = event["timestamp"]
+            if current and observed_at - current[-1]["timestamp"] > max_gap:
                 clusters.append(current)
                 current = []
-            current.append(event)
+                last_strong_at = None
+
+            if heartbeat.strength == "strong":
+                if not current:
+                    current = []
+                current.append(event)
+                last_strong_at = observed_at
+                continue
+
+            if heartbeat.strength == "weak":
+                if current and last_strong_at is not None and observed_at - last_strong_at <= max_weak_bridge:
+                    current.append(event)
+                continue
+
         if current:
             clusters.append(current)
 
@@ -753,9 +887,75 @@ class SessionMemory:
                     "ended_at": ended_at.isoformat(),
                     "duration_min": duration_min,
                     "event_count": len(cluster),
+                    "probable_task": cls._probable_task_from_events(cluster),
+                    "activity_level": cls._activity_level_from_events(cluster),
                 }
             )
         return windows
+
+    @staticmethod
+    def _probable_task_from_events(events: List[Dict[str, Any]]) -> str:
+        terminal_categories: List[str] = []
+        git_event_count = 0
+        inspection_event_count = 0
+        terminal_event_count = 0
+        file_event_count = 0
+        assisted_event_count = 0
+
+        for event in events:
+            event_type = event.get("type")
+            payload = event.get("payload") or {}
+
+            if event_type in _FILE_EVENT_TYPES:
+                file_event_count += 1
+
+            if event_type in {"mcp_command_received", "claude_desktop_session"}:
+                assisted_event_count += 1
+
+            if event_type == "terminal_command_finished":
+                terminal_event_count += 1
+                category = str(payload.get("terminal_action_category") or "").strip().lower()
+                if category:
+                    terminal_categories.append(category)
+                    if category == "inspection":
+                        inspection_event_count += 1
+                command = str(payload.get("terminal_command") or "").strip()
+                base = str(payload.get("terminal_command_base") or "").strip().lower()
+                if category in {"vcs", "git"} or base == "git" or command.startswith("git "):
+                    git_event_count += 1
+
+        if any(category in {"testing", "test"} for category in terminal_categories):
+            return "tests"
+        if any(category in {"debug", "debugging"} for category in terminal_categories):
+            return "debug"
+        if any(category == "build" for category in terminal_categories):
+            return "build"
+
+        if file_event_count >= 2:
+            return "coding"
+        if file_event_count >= 1 and git_event_count <= 1:
+            return "coding"
+        if git_event_count >= 2 and git_event_count >= max(file_event_count, inspection_event_count):
+            return "version_control"
+        if inspection_event_count >= 2 and inspection_event_count >= file_event_count:
+            return "inspection"
+        if inspection_event_count == 1 and terminal_event_count == 1 and file_event_count == 0:
+            return "inspection"
+        if assisted_event_count:
+            return "assisted_workflow"
+        if terminal_event_count:
+            return "terminal_execution"
+        return "general"
+
+    @staticmethod
+    def _activity_level_from_events(events: List[Dict[str, Any]]) -> str:
+        if any(event.get("type") == "terminal_command_finished" for event in events):
+            return "executing"
+        if any(event.get("type") in _FILE_EVENT_TYPES for event in events):
+            return "editing"
+        if any(event.get("type") in _APP_EVENT_TYPES for event in events):
+            return "navigating"
+        return "unknown"
 
     @staticmethod
     def _project_from_events(events: List[Dict[str, Any]]) -> Optional[str]:

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass(frozen=True)
@@ -19,6 +18,10 @@ class SignalSummary:
     rename_delete_ratio_10m: float = 0.0
     dominant_file_mode: str = "none"
     work_pattern_candidate: Optional[str] = None
+    active_app_duration_sec: Optional[int] = None
+    active_window_title_duration_sec: Optional[int] = None
+    app_switch_count_10m: int = 0
+    ai_app_switch_count_10m: int = 0
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,8 @@ class CurrentContext:
     task_confidence: float
     focus_level: str
     clipboard_context: Optional[str]
+    user_presence_state: Optional[str] = None
+    user_idle_seconds: Optional[int] = None
     mcp_action_category: Optional[str] = None
     mcp_is_read_only: Optional[bool] = None
     mcp_decision: Optional[str] = None
@@ -47,6 +52,8 @@ class CurrentContext:
     terminal_action_category: Optional[str] = None
     terminal_project: Optional[str] = None
     terminal_cwd: Optional[str] = None
+    terminal_command: Optional[str] = None
+    terminal_success: Optional[bool] = None
     terminal_exit_code: Optional[int] = None
     terminal_duration_ms: Optional[int] = None
     terminal_summary: Optional[str] = None
@@ -83,7 +90,7 @@ class SessionContext:
     """
     Projection déterministe du contexte de session courant.
 
-    Le modèle produit est exposé en JSON via current_context.
+    Ce contrat décrit le cycle de session courant, sans remplacer CurrentContext.
     """
 
     id: str
@@ -96,6 +103,7 @@ class SessionContext:
     probable_task: Optional[str] = None
     activity_level: Optional[str] = None
     task_confidence: Optional[float] = None
+
 
 @dataclass(frozen=True)
 class ProposalCandidate:

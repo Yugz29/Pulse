@@ -25,7 +25,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.runtime_state = RuntimeState()
         self.llm_runtime = MagicMock()
         self.log = MagicMock()
-        self.store.to_dict.return_value = {}
+        self.store.to_dict.side_effect = AssertionError("RuntimeOrchestrator must not read legacy StateStore")
 
         self.mock_fact_engine = MagicMock()
         self.mock_fact_engine.render_for_context.return_value = ""
@@ -70,13 +70,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.runtime_state.set_analysis(signals=signals, decision=decision)
 
     def test_build_context_snapshot_includes_state_signals_decision_and_memory(self):
-        self.store.to_dict.return_value = {
-            "active_project": "Pulse",
-            "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-            "active_app": "Xcode",
-            "session_duration_min": 96,
-            "last_event_type": "file_modified",
-        }
         signals = Signals(
             active_project="Pulse",
             active_file="/tmp/main.py",
@@ -139,13 +132,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertFalse(kwargs["locked"])
 
     def test_build_context_snapshot_golden_legacy_markdown_output_exact(self):
-        self.store.to_dict.return_value = {
-            "active_project": "Pulse",
-            "active_file": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
-            "active_app": "Cursor",
-            "session_duration_min": 96,
-            "last_event_type": "file_modified",
-        }
+        self.runtime_state.set_latest_active_app("Cursor")
         signals = Signals(
             active_project="Pulse",
             active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
@@ -193,7 +180,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
     def test_build_context_snapshot_uses_atomic_runtime_snapshot(self):
         signals = self._signals()
         self._set_runtime_analysis(signals)
-        self.store.to_dict.return_value = {"active_app": "Cursor", "last_event_type": "file_modified"}
 
         with patch.object(self.runtime_state, "get_context_snapshot", side_effect=AssertionError("legacy must not be used")), \
              patch.object(self.runtime_state, "get_present", side_effect=AssertionError("legacy must not be used")):
@@ -202,7 +188,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Projet : Pulse", snapshot)
 
     def test_build_context_snapshot_falls_back_to_signal_context_when_store_is_empty(self):
-        self.store.to_dict.return_value = {"active_project": None, "active_file": None, "active_app": None, "session_duration_min": 0}
         signals = Signals(
             active_project="Pulse", active_file="/tmp/main.py", probable_task="coding",
             friction_score=0.15, focus_level="normal", session_duration_min=24,
@@ -215,7 +200,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Fichier actif : /tmp/main.py", snapshot)
 
     def test_build_context_snapshot_falls_back_to_workspace_root_when_git_root_is_absent(self):
-        self.store.to_dict.return_value = {"active_project": "client-repo", "active_file": "/tmp/client-repo/src/main.py", "active_app": "Cursor", "session_duration_min": 18}
         signals = Signals(active_project="client-repo", active_file="/tmp/client-repo/src/main.py", probable_task="coding", friction_score=0.1, focus_level="normal", session_duration_min=18, recent_apps=["Cursor"], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
@@ -322,7 +306,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(snapshot["active_project"], "Pulse")
         self.assertEqual(snapshot["top_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
         self.assertEqual(snapshot["work_block_started_at"], "2026-04-28T11:46:01")
-        self.assertEqual(snapshot["work_window_started_at"], "2026-04-28T11:46:01")
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
         git_root = Path("/tmp/Pulse")
@@ -358,7 +341,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "duration_min": 15,
             "event_count": 4,
         }
-        snapshot = {"work_window_started_at": "2026-04-29T10:00:00", "work_window_ended_at": "2026-04-29T11:42:00"}
+        snapshot = {"work_block_started_at": "2026-04-29T10:00:00", "work_block_ended_at": "2026-04-29T11:42:00"}
         commit_at = datetime(2026, 4, 29, 11, 42, 0)
 
         self.orchestrator._annotate_commit_work_block(
@@ -369,9 +352,21 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertEqual(snapshot["work_block_started_at"], "2026-04-29T10:33:04")
         self.assertEqual(snapshot["work_block_ended_at"], "2026-04-29T10:48:12")
-        self.assertEqual(snapshot["work_window_started_at"], "2026-04-29T10:33:04")
-        self.assertEqual(snapshot["work_window_ended_at"], "2026-04-29T10:48:12")
         self.assertEqual(snapshot["commit_activity_event_count"], 4)
+
+    def test_annotate_commit_work_window_alias_reste_compatible(self):
+        snapshot = {
+            "work_window_started_at": "2026-04-29T10:00:00",
+            "work_window_ended_at": "2026-04-29T11:42:00",
+        }
+        commit_at = datetime(2026, 4, 29, 11, 42, 0)
+
+        self.orchestrator._annotate_commit_work_window(snapshot, commit_at=commit_at)
+
+        self.assertEqual(snapshot["work_block_started_at"], "2026-04-29T10:00:00")
+        self.assertEqual(snapshot["work_block_ended_at"], "2026-04-29T11:42:00")
+        self.assertEqual(snapshot["work_window_started_at"], "2026-04-29T10:00:00")
+        self.assertEqual(snapshot["work_window_ended_at"], "2026-04-29T11:42:00")
 
     def test_apply_restart_state_resume_aussi_la_session_memory(self):
         started_at = datetime(2026, 4, 23, 17, 0, 0)
@@ -466,10 +461,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.assertEqual(len(proposal_store.list_history()), 1)
 
-    # ── C4 : priorité signals > state pour active_file et active_project ──────
+    # ── C4 : le contexte runtime ne retombe plus sur StateStore ──────────────
 
     def test_c4_signals_active_file_prime_sur_state_active_file(self):
-        self.store.to_dict.return_value = {"active_project": "OldProject", "active_file": "/stale/path.py", "active_app": "Xcode", "session_duration_min": 999}
         signals = Signals(active_project="Pulse", active_file="/fresh/path/current.py", probable_task="coding", friction_score=0.1, focus_level="normal", session_duration_min=30, recent_apps=["Xcode"], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
@@ -478,7 +472,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertNotIn("/stale/path.py", snapshot)
 
     def test_c4_aucun_fallback_sur_state_si_present_n_a_pas_de_fichier(self):
-        self.store.to_dict.return_value = {"active_project": "FallbackProject", "active_file": "/fallback/from_store.py", "active_app": "Terminal", "session_duration_min": 10}
         signals = Signals(active_project=None, active_file=None, probable_task="general", friction_score=0.0, focus_level="normal", session_duration_min=5, recent_apps=[], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
@@ -486,10 +479,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("- Fichier actif : aucun", snapshot)
         self.assertNotIn("/fallback/from_store.py", snapshot)
 
-    # ── C5 : priorité signals > state pour session_duration_min ─────────────
+    # ── C5 : la durée vient du PresentState, pas du StateStore ───────────────
 
     def test_c5_signals_duration_prime_sur_state_duration(self):
-        self.store.to_dict.return_value = {"active_project": "Pulse", "active_file": None, "active_app": "Xcode", "session_duration_min": 240}
         signals = Signals(active_project="Pulse", active_file=None, probable_task="coding", friction_score=0.0, focus_level="normal", session_duration_min=45, recent_apps=["Xcode"], clipboard_context=None)
         self._set_runtime_analysis(signals)
 
@@ -591,8 +583,32 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "work_block_started_at": "2026-04-29T09:00:00",
         }
 
-        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+        with patch.object(self.orchestrator, "_schedule_resume_card_emit") as schedule:
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
 
+        schedule.assert_called_once()
+        kwargs = schedule.call_args.kwargs
+        self.assertEqual(kwargs["event_timestamp"], event.timestamp)
+        self.assertTrue(kwargs["wait_for_llm"])
+        self.assertEqual(kwargs["context"]["project"], "Pulse")
+        self.scorer.bus.publish.assert_not_called()
+
+    def test_resume_card_est_publiee_immediatement_sans_llm_utilisable(self):
+        self.orchestrator.summary_llm = None
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse", "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+
+        with patch.object(self.orchestrator, "_schedule_resume_card_emit") as schedule:
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+
+        schedule.assert_not_called()
         self.scorer.bus.publish.assert_called_once()
         args = self.scorer.bus.publish.call_args.args
         self.assertEqual(args[0], "resume_card")
@@ -614,6 +630,46 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             self.orchestrator._recover_missed_daydream()
         mark_pending.assert_called_once()
         run_daydream.assert_called_once()
+
+    def test_export_memory_payload_injecte_activity_level_depuis_present_state(self):
+        """
+        Régression : les entrées journal snapshot avaient activity_level='unknown'
+        parce que export_memory_payload() ne retournait pas ce champ (absent de la
+        table sessions SQLite). L'orchestrateur doit l'injecter depuis PresentState
+        si le champ est absent ou None dans le payload session.
+        """
+        signals = self._signals(activity_level="editing")
+        self._set_runtime_analysis(signals)
+        # Simule un payload session avec activity_level=None (session toute neuve
+        # avant le premier cycle de scoring, ou DB sans la colonne)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+            "activity_level": None,
+        }
+
+        payload = self.orchestrator._export_memory_payload()
+
+        self.assertIn("activity_level", payload)
+        self.assertEqual(payload["activity_level"], "editing")
+
+    def test_export_memory_payload_ne_ecrase_pas_activity_level_existant(self):
+        """
+        L'orchestrateur ne doit pas écraser un activity_level déjà posé par la
+        session (valeur DB non nulle prise en priorité sur PresentState).
+        """
+        signals = self._signals(activity_level="executing")
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+            "activity_level": "editing",  # déjà présent et non nul
+        }
+
+        payload = self.orchestrator._export_memory_payload()
+
+        # La valeur DB doit être conservée, pas écrasée par PresentState
+        self.assertEqual(payload["activity_level"], "editing")
 
 
 if __name__ == "__main__":

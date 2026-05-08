@@ -74,10 +74,10 @@ Read rule:
 | `SessionFSM` | produce session state and session boundaries | compute work context |
 | `SignalScorer` | produce the current work context | store the present |
 | `RuntimeState` | store `PresentState` and expose an atomic read snapshot | recompute semantics |
-| `RuntimeOrchestrator` | coordinate the runtime pipeline | become a god-source of truth |
+| `RuntimeOrchestrator` | coordinate the runtime pipeline, proactive triggers, and controlled side effects | become a god-source of truth |
 | `DecisionEngine` | decide from `PresentState` | consume `signals` directly as the main source |
 | `CurrentContextBuilder` | render `CurrentContext` from `present` | become a source of truth |
-| `SessionMemory` | persist history and snapshots | correct or write the present |
+| `SessionMemory` | persist history, snapshots, and work projections | correct or write the present |
 | `StateStore` | passive legacy shim | derive `active_file`, `active_project`, or session state |
 
 ---
@@ -219,13 +219,29 @@ The current model is simpler:
 - `current_context`: product-facing current context
 - `recent_sessions`: recently closed sessions for history
 - `work_blocks`: work blocks derived from meaningful events
-- `work_block_*`: work window data used by memory and the ResumeCard
+- `work_block_*`: work window data used by memory, commits, and the ResumeCard
 
 The remaining old names are exposed only for compatibility:
 - `work_window_*`
 - `closed_episodes`
 
 Those aliases must not be used for new features.
+
+### Prepared Resume Card
+
+The ResumeCard has two paths:
+- on-demand generation when the user returns, with deterministic fallback
+- warm preparation on `screen_locked`, stored temporarily in memory, then consumed on the next `screen_unlocked`
+
+The prepared path is a UX optimization.
+It is not a source of truth.
+It reads the runtime snapshot and memory payload, then publishes a `resume_card` event if the prepared card is still valid.
+
+Existing debug routes:
+- `/debug/resume-card`: forces a deterministic ResumeCard
+- `/debug/resume-card/llm`: forces an LLM ResumeCard and returns generation diagnostics
+
+V1 limit: there is not yet a dedicated debug route for the prepared card lifecycle itself (`prepare`, `peek`, `consume`, `expire`).
 
 ---
 
@@ -250,6 +266,8 @@ Those leftovers must not be treated as concurrent sources of truth.
 - the legacy lock marker still exists alongside `present.locked`
 - the memory extractor still contains historical episode vocabulary
 - `SessionSnapshot` remains a compatibility projection, not the canonical shape of the present
+- the prepared ResumeCard is stored in memory only and disappears if the daemon restarts
+- there is not yet a dedicated debug route to inspect or force the `prepared_resume_card` lifecycle
 
 ---
 
@@ -262,4 +280,5 @@ To read the runtime correctly today:
 3. read `CurrentContext` as a rendering
 4. read `signals` as a secondary-detail layer
 5. read `StateStore` and top-level `/state` fields as compatibility, not truth
-6. read `work_blocks` / `work_block_*` for work time, not the `work_window_*` aliases
+6. read `work_blocks` / `work_block_*` for work time and commit windows, not the `work_window_*` aliases
+7. read the ResumeCard as a resume projection, never as a source of truth for work

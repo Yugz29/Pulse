@@ -44,12 +44,16 @@ class CurrentContextBuilder:
             task_confidence=self._signal_attr(signals, "task_confidence", 0.5),
             focus_level=present.focus_level,
             clipboard_context=present.clipboard_context,
+            user_presence_state=present.user_presence_state,
+            user_idle_seconds=present.user_idle_seconds,
             mcp_action_category=self._signal_attr(signals, "mcp_action_category"),
             mcp_is_read_only=self._signal_attr(signals, "mcp_is_read_only"),
             mcp_decision=self._signal_attr(signals, "mcp_decision"),
             mcp_summary=self._signal_attr(signals, "mcp_summary"),
             terminal_action_category=self._signal_attr(signals, "terminal_action_category"),
             terminal_project=self._signal_attr(signals, "terminal_project"),
+            terminal_command=self._signal_attr(signals, "terminal_command"),
+            terminal_success=self._signal_attr(signals, "terminal_success"),
             terminal_cwd=terminal_cwd,
             terminal_exit_code=self._signal_attr(signals, "terminal_exit_code"),
             terminal_duration_ms=self._signal_attr(signals, "terminal_duration_ms"),
@@ -73,6 +77,10 @@ class CurrentContextBuilder:
             rename_delete_ratio_10m=self._signal_attr(signals, "rename_delete_ratio_10m", 0.0),
             dominant_file_mode=self._signal_attr(signals, "dominant_file_mode", "none"),
             work_pattern_candidate=self._signal_attr(signals, "work_pattern_candidate"),
+            active_app_duration_sec=self._signal_attr(signals, "active_app_duration_sec"),
+            active_window_title_duration_sec=self._signal_attr(signals, "active_window_title_duration_sec"),
+            app_switch_count_10m=self._signal_attr(signals, "app_switch_count_10m", 0),
+            ai_app_switch_count_10m=self._signal_attr(signals, "ai_app_switch_count_10m", 0),
         )
 
     @staticmethod

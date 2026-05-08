@@ -27,6 +27,12 @@ class FailingLLM:
         raise RuntimeError("offline")
 
 
+class MarkdownLLM:
+
+    def complete(self, prompt, max_tokens=200):
+        return "*   **Analyse :**\n6.  **\n<channel|>Résumé *court* avec **markdown** parasite."
+
+
 class TestExtractor(unittest.TestCase):
 
     def setUp(self):
@@ -107,9 +113,9 @@ class TestExtractor(unittest.TestCase):
                 "files_changed": 3,
                 "top_files": ["runtime_orchestrator.py", "episode_fsm.py"],
                 "max_friction": 0.2,
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-older",
+                        "id": "ep-older",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -121,7 +127,7 @@ class TestExtractor(unittest.TestCase):
                         "boundary_reason": "idle_timeout",
                     },
                     {
-                        "episode_id": "ep-latest",
+                        "id": "ep-latest",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "debug",
@@ -158,7 +164,7 @@ class TestExtractor(unittest.TestCase):
                 "files_changed": 2,
                 "top_files": ["main.py"],
                 "max_friction": 0.1,
-                "closed_episodes": [],
+                "recent_sessions": [],
             },
             memory_dir=self.memory_dir,
             trigger="screen_lock",
@@ -173,7 +179,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("développement (22 min)", journal)
         self.assertNotIn("- Sessions récentes :", projects)
 
-    def test_commit_tres_court_conserve_la_fenetre_session_si_session_record_est_tiny(self):
+    def test_commit_sans_work_block_n_herite_pas_d_une_session_fermee(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -184,9 +190,9 @@ class TestExtractor(unittest.TestCase):
                 "top_files": ["DashboardViewModel.swift", "daydream.py"],
                 "started_at": "2026-04-28T11:46:01",
                 "updated_at": "2026-04-28T12:04:55",
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-commit",
+                        "id": "ep-commit",
                         "session_id": "sess-2",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -206,10 +212,89 @@ class TestExtractor(unittest.TestCase):
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
 
-        self.assertIn("11:46 → 12:04", journal)
-        self.assertIn("développement (19 min)", journal)
+        self.assertNotIn("11:46 → 12:04", journal)
+        self.assertIn("12:04 — développement (1 min)", journal)
+        self.assertIn("développement (1 min)", journal)
 
-    def test_commit_prefere_work_window_explicite_aux_sous_episodes_techniques(self):
+    def test_commit_sans_work_block_ignore_recent_session_ancienne_et_reste_pres_de_delivered_at(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 79,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Codex", "ChatGPT", "Code"],
+                "files_changed": 2,
+                "top_files": ["work_episode_builder.py", "test_work_episode_builder.py"],
+                "started_at": "2026-05-05T12:29:25",
+                "updated_at": "2026-05-05T13:48:29",
+                "delivered_at": "2026-05-05T13:46:38",
+                "recent_sessions": [
+                    {
+                        "id": "session-old",
+                        "session_id": "sess-old",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "executing",
+                        "started_at": "2026-05-05T11:16:09",
+                        "ended_at": "2026-05-05T12:29:14",
+                        "duration_sec": 4385,
+                        "boundary_reason": "session_end",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(memory): introduce pure work episode builder",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+
+        self.assertNotIn("11:16 → 12:29", journal)
+        self.assertNotIn("développement (73 min)", journal)
+        self.assertIn("13:46 — développement (1 min)", journal)
+        self.assertIn("développement (1 min)", journal)
+        self.assertNotIn("Livré à 13:46.", journal)
+
+    def test_commit_prefere_work_block_explicite_aux_sessions_techniques(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 18,
+                "probable_task": "coding",
+                "recent_apps": ["Codex", "Pulse", "Code"],
+                "files_changed": 4,
+                "top_files": ["daydream.py", "DashboardViewModel.swift"],
+                "started_at": "2026-04-28T12:04:48.365316",
+                "updated_at": "2026-04-28T12:04:55.324833",
+                "work_block_started_at": "2026-04-28T11:46:01",
+                "work_block_ended_at": "2026-04-28T12:04:55.324833",
+                "recent_sessions": [
+                    {
+                        "id": "ep-commit",
+                        "session_id": "sess-2",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "executing",
+                        "task_confidence": 0.92,
+                        "started_at": "2026-04-28T12:04:48.365316",
+                        "ended_at": "2026-04-28T12:04:55.324833",
+                        "duration_sec": 7,
+                        "boundary_reason": "commit",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(daydream): add robust execution state",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+
+        self.assertIn("11:46 → 12:04", journal)
+        self.assertIn("développement (18 min)", journal)
+
+    def test_commit_accepte_encore_work_window_et_closed_episodes_legacy(self):
         update_memories_from_session(
             {
                 "active_project": "Pulse",
@@ -256,9 +341,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Cursor"],
                 "files_changed": 3,
                 "top_files": ["main.py", "state.py"],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-1",
+                        "id": "ep-1",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -283,9 +368,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Terminal"],
                 "files_changed": 2,
                 "top_files": ["runtime_orchestrator.py"],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-2",
+                        "id": "ep-2",
                         "session_id": "sess-2",
                         "active_project": "Pulse",
                         "probable_task": "debug",
@@ -585,8 +670,80 @@ class TestExtractor(unittest.TestCase):
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
         content = session_files[0].read_text()
-        self.assertNotIn("999", content)
+        self.assertNotIn("999 min", content)
         self.assertIn("480", content)
+
+    def test_duration_cap_via_session_record(self):
+        """Le cap MAX_SESSION_DURATION_MIN s'applique aussi quand la durée vient
+        de recent_sessions.duration_sec, pas seulement de session_data.duration_min.
+
+        Régression : _build_consolidation_frame lisait _session_record_duration_min
+        sans appliquer le cap, produisant des entrées de 600+ min après une nuit
+        avec la machine allumée.
+        """
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 999,
+                "probable_task": "coding",
+                "recent_apps": ["Xcode"],
+                "files_changed": 2,
+                "top_files": ["runtime_orchestrator.py", "session.py"],
+                "started_at": "2026-05-08T00:00:00",
+                "ended_at": "2026-05-08T10:00:00",
+                "recent_sessions": [
+                    {
+                        "id": "sess-overnight",
+                        "session_id": "sess-overnight",
+                        "active_project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "editing",
+                        "task_confidence": 0.7,
+                        "started_at": "2026-05-08T00:00:00",
+                        "ended_at": "2026-05-08T10:00:00",
+                        "duration_sec": 600 * 60,  # 10 heures — jamais plafonnées avant le fix
+                        "boundary_reason": "session_end",
+                    },
+                ],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        content = session_files[0].read_text()
+        self.assertNotIn("600 min", content)
+        self.assertNotIn("999 min", content)
+        self.assertIn("480 min", content)
+
+    def test_duration_cap_via_work_block(self):
+        """Le cap MAX_SESSION_DURATION_MIN s'applique aussi quand la durée vient
+        d'un work_block explicite (work_block_started_at / work_block_ended_at).
+
+        Régression : _resolve_commit_work_block calculait la durée depuis les
+        timestamps bruts sans appliquer le cap.
+        """
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 30,
+                "probable_task": "coding",
+                "recent_apps": ["Code"],
+                "files_changed": 2,
+                "top_files": ["extractor.py", "session.py"],
+                # work_block couvrant 10 heures — ne doit jamais produire 600 min
+                "work_block_started_at": "2026-05-08T00:00:00",
+                "work_block_ended_at": "2026-05-08T10:00:00",
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat(memory): overnight work block cap",
+        )
+        session_files = list((self.memory_dir / "sessions").glob("*.md"))
+        self.assertEqual(len(session_files), 1)
+        content = session_files[0].read_text()
+        self.assertNotIn("600 min", content)
+        self.assertIn("480 min", content)
 
     def test_cooldown_persiste_apres_restart(self):
         """Le curseur survit à une réinitialisation de _cooldown_loaded (simule un restart)."""
@@ -776,8 +933,8 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Pulse", "Codex"],
                 "top_files": ["DashboardContentView.swift"],
                 "files_changed": 1,
-                "work_window_started_at": "2026-04-29T10:00:00",
-                "work_window_ended_at": "2026-04-29T11:42:00",
+                "work_block_started_at": "2026-04-29T10:00:00",
+                "work_block_ended_at": "2026-04-29T11:42:00",
                 "commit_activity_started_at": "2026-04-29T10:33:04",
                 "commit_activity_ended_at": "2026-04-29T10:48:12",
                 "delivered_at": "2026-04-29T11:42:00",
@@ -969,7 +1126,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("21:55 → 22:14 — développement (18 min)", rendered)
         self.assertNotIn("21:35 → 22:14 — développement", rendered)
 
-    def test_commit_work_window_court_vaut_au_moins_une_minute(self):
+    def test_commit_work_block_court_vaut_au_moins_une_minute(self):
         frame = extractor_module._build_consolidation_frame(
             {
                 "active_project": "Pulse",
@@ -1122,9 +1279,11 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Cursor", "Terminal"],
                 "top_files": ["runtime_orchestrator.py", "episode_fsm.py"],
                 "files_changed": 2,
-                "closed_episodes": [
+                "commit_activity_started_at": "2026-04-24T10:00:00",
+                "commit_activity_ended_at": "2026-04-24T11:00:00",
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-strong",
+                        "id": "ep-strong",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "coding",
@@ -1149,9 +1308,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Safari"],
                 "files_changed": 0,
                 "top_files": [],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-weak",
+                        "id": "ep-weak",
                         "session_id": "sess-2",
                         "active_project": None,
                         "probable_task": "general",
@@ -1181,9 +1340,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Safari"],
                 "files_changed": 1,
                 "top_files": ["models_cache.json"],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-project-weak",
+                        "id": "ep-project-weak",
                         "session_id": "sess-1",
                         "active_project": "Pulse",
                         "probable_task": "general",
@@ -1207,9 +1366,9 @@ class TestExtractor(unittest.TestCase):
                 "recent_apps": ["Safari", "zoom.us"],
                 "files_changed": 0,
                 "top_files": [],
-                "closed_episodes": [
+                "recent_sessions": [
                     {
-                        "episode_id": "ep-off-project",
+                        "id": "ep-off-project",
                         "session_id": "sess-2",
                         "active_project": None,
                         "probable_task": "general",
@@ -1269,6 +1428,394 @@ class TestExtractor(unittest.TestCase):
         after = session_files[0].read_text()
         self.assertIn("Résumé court de la session.", after)
         self.assertIn("feat: commit enrichi", after)
+
+    def test_enrich_pending_journal_summaries_enrichit_failed_et_ignore_current_ou_sans_commit(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "failed-commit",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Fallback failed.",
+                    "commit_message": "fix: enrich later",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+                {
+                    "entry_id": "current-entry",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 20,
+                    "body": "Current fallback.",
+                    "commit_message": "feat: current commit",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["runtime.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T11:00:00",
+                    "ended_at": "2026-05-05T11:20:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+                {
+                    "entry_id": "no-commit",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 21,
+                    "body": "No commit fallback.",
+                    "commit_message": "",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["session.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T12:00:00",
+                    "ended_at": "2026-05-05T12:21:00",
+                    "boundary_reason": "screen_lock",
+                    "scope_source": "snapshot",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+            exclude_entry_ids={"current-entry"},
+        )
+        entries = {
+            entry["entry_id"]: entry
+            for entry in extractor_module._load_journal_entries(journal_file)
+        }
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(entries["failed-commit"]["summary_source"], "llm")
+        self.assertEqual(entries["failed-commit"]["summary_status"], "generated")
+        self.assertIsNone(entries["failed-commit"]["summary_error"])
+        self.assertEqual(entries["failed-commit"]["body"], "Résumé court de la session.")
+        self.assertEqual(entries["current-entry"]["summary_status"], "failed")
+        self.assertEqual(entries["current-entry"]["body"], "Current fallback.")
+        self.assertEqual(entries["no-commit"]["summary_status"], "failed")
+        self.assertEqual(entries["no-commit"]["body"], "No commit fallback.")
+
+    def test_enrich_pending_journal_summaries_ignore_generated_commit_items_resolus(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "generated-clean",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Résumé déjà propre.",
+                    "commit_message": "fix: clean summary",
+                    "commit_messages": ["fix: clean summary"],
+                    "commit_items": [
+                        {
+                            "message": "fix: clean summary",
+                            "body": "Résumé déjà propre.",
+                            "delivered_at": "2026-05-05T10:18:00",
+                            "top_files": ["extractor.py"],
+                        }
+                    ],
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "llm",
+                    "summary_status": "generated",
+                    "summary_error": None,
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+        )
+        entry = extractor_module._load_journal_entries(journal_file)[0]
+
+        self.assertEqual(result["eligible"], 0)
+        self.assertEqual(result["enriched"], 0)
+        self.assertEqual(entry["body"], "Résumé déjà propre.")
+        self.assertEqual(entry["commit_items"][0]["body"], "Résumé déjà propre.")
+
+    def test_enrich_pending_journal_summaries_reprend_generated_commit_items_fallback(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "generated-with-fallback-items",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Résumé global.",
+                    "commit_message": "fix: first commit",
+                    "commit_messages": ["fix: first commit", "fix: second commit"],
+                    "commit_items": [
+                        {
+                            "message": "fix: first commit",
+                            "body": "Livraison : « fix: first commit ».",
+                            "delivered_at": "2026-05-05T10:18:00",
+                            "top_files": ["extractor.py"],
+                        },
+                        {
+                            "message": "fix: second commit",
+                            "body": "Livraison : « fix: second commit ».",
+                            "delivered_at": "2026-05-05T10:20:00",
+                            "top_files": ["test_extractor.py"],
+                        },
+                    ],
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py", "test_extractor.py"],
+                    "files_count": 2,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "llm",
+                    "summary_status": "generated",
+                    "summary_error": None,
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+        )
+        entry = extractor_module._load_journal_entries(journal_file)[0]
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(entry["summary_source"], "llm")
+        self.assertEqual(entry["summary_status"], "generated")
+        self.assertEqual(entry["body"], "Résumé court de la session.")
+        self.assertEqual(
+            [item["body"] for item in entry["commit_items"]],
+            ["Résumé court de la session.", "Résumé court de la session."],
+        )
+        self.assertFalse(
+            any(
+                extractor_module._commit_item_body_is_fallback(item["body"])
+                for item in entry["commit_items"]
+            )
+        )
+
+    def test_enrich_pending_journal_summaries_commit_unique_garde_comportement(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "single-commit",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Fallback failed.",
+                    "commit_message": "fix: single commit",
+                    "commit_messages": ["fix: single commit"],
+                    "commit_items": [
+                        {
+                            "message": "fix: single commit",
+                            "body": "Livraison : « fix: single commit ».",
+                            "delivered_at": "2026-05-05T10:18:00",
+                            "top_files": ["extractor.py"],
+                        }
+                    ],
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+            ],
+        )
+
+        result = extractor_module.enrich_pending_journal_summaries(
+            memory_dir=self.memory_dir,
+            llm=FakeLLM(),
+            journal_date=journal_date,
+        )
+        entry = extractor_module._load_journal_entries(journal_file)[0]
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(entry["body"], "Résumé court de la session.")
+        self.assertEqual(entry["commit_items"][0]["body"], "Résumé court de la session.")
+
+    def test_resume_llm_est_nettoye_avant_rendu_journal(self):
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "recent_apps": ["Cursor"],
+            "files_changed": 5,
+        }
+
+        report_ref = update_memories_from_session(
+            session,
+            llm=MarkdownLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: commit markdown",
+            defer_llm_enrichment=True,
+        )
+
+        ok = enrich_session_report(
+            report_ref,
+            session,
+            MarkdownLLM(),
+            commit_message="feat: commit markdown",
+        )
+        self.assertTrue(ok)
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        self.assertIn("**feat: commit markdown**", visible)
+        self.assertIn("Résumé court avec markdown parasite.", visible)
+        self.assertNotIn("6.  **", visible)
+        self.assertNotIn("*   **Analyse", visible)
+
+    def test_journal_garde_les_commits_groupes_en_gras(self):
+        rendered = extractor_module._render_journal_document(
+            "2026-05-05",
+            [
+                {
+                    "entry_id": "a",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "duration_min": 12,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:12:00",
+                    "body": "Résumé commun.",
+                    "commit_messages": ["feat: premier", "fix: second"],
+                    "top_files": ["extractor.py"],
+                }
+            ],
+        )
+
+        self.assertIn("**feat: premier**", rendered)
+        self.assertIn("**fix: second**", rendered)
+        self.assertNotIn("Commits : feat: premier", rendered)
+
+    def test_journal_rend_un_resume_et_une_livraison_par_commit_groupe(self):
+        rendered = extractor_module._render_journal_document(
+            "2026-05-05",
+            [
+                {
+                    "entry_id": "first",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "executing",
+                    "duration_min": 35,
+                    "started_at": "2026-05-05T14:54:15",
+                    "ended_at": "2026-05-05T15:30:12",
+                    "body": "Résumé du premier commit.",
+                    "commit_message": "feat(memory): build today summary blocks from all events",
+                    "top_files": ["session.py", "test_session.py"],
+                    "scope_source": "commit_diff",
+                },
+                {
+                    "entry_id": "second",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "executing",
+                    "duration_min": 1,
+                    "started_at": "2026-05-05T15:30:12",
+                    "ended_at": "2026-05-05T15:30:12",
+                    "delivered_at": "2026-05-05T18:33:31",
+                    "body": "Résumé du second commit.",
+                    "commit_message": "feat(debug): expose work episodes for inspection",
+                    "top_files": ["runtime.py", "main.py"],
+                    "scope_source": "commit_diff",
+                },
+            ],
+        )
+
+        self.assertIn("### 14:54 → 15:30 — développement (35 min)", rendered)
+        self.assertIn("**feat(memory): build today summary blocks from all events**", rendered)
+        self.assertIn("Résumé du premier commit.", rendered)
+        self.assertIn("**feat(debug): expose work episodes for inspection**", rendered)
+        self.assertIn("Résumé du second commit.", rendered)
+        self.assertIn("Livré à 18:33.", rendered)
+        self.assertNotIn("14:54 → 18:33", rendered)
+
+    def test_journal_met_seulement_le_sujet_du_commit_en_gras(self):
+        full_commit_message = (
+            "fix(memory): pass full commit message body to LLM summary prompt\n\n"
+            "_llm_summary was only using the first line of the commit message,\n"
+            "discarding the body which contains the problem description and solution."
+        )
+        rendered = extractor_module._render_journal_document(
+            "2026-05-05",
+            [
+                {
+                    "entry_id": "a",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "duration_min": 12,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:12:00",
+                    "body": "Résumé du commit.",
+                    "commit_messages": [full_commit_message],
+                    "top_files": ["extractor.py"],
+                }
+            ],
+        )
+
+        self.assertIn("**fix(memory): pass full commit message body to LLM summary prompt**", rendered)
+        self.assertNotIn("_llm_summary was only using the first line", rendered)
+        self.assertNotIn("solution.**", rendered)
 
     def test_commit_prefere_les_fichiers_du_diff_a_ceux_du_snapshot(self):
         update_memories_from_session(

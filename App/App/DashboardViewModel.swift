@@ -11,8 +11,14 @@ final class DashboardViewModel: ObservableObject {
     @Published var memory: MemoryResponse?
     @Published var sessionJournals: SessionsResponse?
     @Published var todaySummary: TodaySummaryResponse?
+    @Published var debugWorkEpisodes: DebugWorkEpisodesResponse?
+    @Published var debugCommitEpisodeLinks: DebugCommitEpisodeLinksResponse?
     @Published var events: [InsightEvent] = []
     @Published var proposals: [ProposalRecord] = []
+    @Published var contextProbeRequests: [ContextProbeRequestPayload] = []
+    @Published var contextProbeDebug: [ContextProbeDebugPayload] = []
+    @Published var contextProbeResults: [String: ContextProbeResultPayload] = [:]
+    @Published var workContextCard: WorkContextCardPayload?
     @Published var feedHistory: [FeedEvent] = []
     @Published var observation: ObservationData? = nil
     @Published var daydreams: [DaydreamEntry] = []
@@ -91,14 +97,19 @@ final class DashboardViewModel: ObservableObject {
         ping = await pingTask
 
         if shouldRefreshSlowData {
+            let debugDate = dashboardDebugDateString()
             async let factsTask = bridge.getFacts(limit: 30)
             async let archivedFactsTask = bridge.getArchivedFacts(limit: 30)
             async let factsStatsTask = bridge.getFactsStats()
             async let factsProfileTask = bridge.getFactsProfile()
             async let memoryTask = bridge.getMemory()
             async let sessionJournalsTask = bridge.getSessionJournals()
+            async let debugWorkEpisodesTask = bridge.getDebugWorkEpisodes(date: debugDate)
+            async let debugCommitEpisodeLinksTask = bridge.getDebugCommitEpisodeLinks(date: debugDate)
             async let eventsTask = bridge.getInsights(limit: 100)
             async let proposalsTask = bridge.getRecentProposals(limit: 20)
+            async let contextProbesTask = bridge.getContextProbeRequests(includeTerminal: true)
+            async let workContextTask = bridge.getWorkContextCard()
             async let daydreamTask = bridge.getDaydreamData()
             async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
             async let scoringTask = bridge.getScoringStatus()
@@ -109,8 +120,17 @@ final class DashboardViewModel: ObservableObject {
             factsProfile = await factsProfileTask
             memory = await memoryTask
             sessionJournals = await sessionJournalsTask
+            debugWorkEpisodes = await debugWorkEpisodesTask
+            debugCommitEpisodeLinks = await debugCommitEpisodeLinksTask
             events = await eventsTask
             proposals = await proposalsTask
+            if let contextProbes = await contextProbesTask {
+                contextProbeRequests = contextProbes.requests
+                contextProbeDebug = contextProbes.debug
+            }
+            if let workContext = await workContextTask {
+                workContextCard = workContext.card
+            }
             let daydreamData = await daydreamTask
             daydreams = daydreamData.0
             daydreamStatus = daydreamData.1
@@ -120,5 +140,47 @@ final class DashboardViewModel: ObservableObject {
 
         lastRefreshedAt = Date()
         isLoading = false
+    }
+
+    func refreshContextProbeRequests(includeTerminal: Bool = true) async {
+        guard let payload = await bridge.getContextProbeRequests(includeTerminal: includeTerminal) else { return }
+        contextProbeRequests = payload.requests
+        contextProbeDebug = payload.debug
+        lastRefreshedAt = Date()
+    }
+
+    func approveContextProbeRequest(_ request: ContextProbeRequestPayload) async {
+        guard request.canApproveOrRefuse else { return }
+        guard await bridge.approveContextProbeRequest(request.requestId, reason: "Approved from Pulse Dashboard") != nil else { return }
+        await refreshContextProbeRequests()
+    }
+
+    func refuseContextProbeRequest(_ request: ContextProbeRequestPayload) async {
+        guard request.canApproveOrRefuse else { return }
+        guard await bridge.refuseContextProbeRequest(request.requestId, reason: "Refused from Pulse Dashboard") != nil else { return }
+        await refreshContextProbeRequests()
+    }
+
+    func executeContextProbeRequest(_ request: ContextProbeRequestPayload) async {
+        guard request.canExecute else { return }
+        guard let response = await bridge.executeContextProbeRequest(request.requestId) else { return }
+        contextProbeResults[request.requestId] = response.result
+        await refreshContextProbeRequests()
+    }
+
+    func debugForContextProbeRequest(_ request: ContextProbeRequestPayload) -> ContextProbeDebugPayload? {
+        contextProbeDebug.first { $0.requestId == request.requestId }
+    }
+
+    func resultForContextProbeRequest(_ request: ContextProbeRequestPayload) -> ContextProbeResultPayload? {
+        contextProbeResults[request.requestId]
+    }
+
+    private func dashboardDebugDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
     }
 }

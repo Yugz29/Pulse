@@ -28,9 +28,8 @@ from daemon.core.context_formatter import (
 )
 from daemon.core.current_context_adapters import current_context_to_markdown
 from daemon.core.current_context_builder import CurrentContextBuilder
-from daemon.core.contracts import ProposalCandidate, SessionContext
+from daemon.core.contracts import CurrentContext, ProposalCandidate, SessionContext
 from daemon.core.event_bus import DEFAULT_EVENT_BUS_SIZE
-from daemon.core.file_classifier import file_signal_significance
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary, extract_file_names_from_diff_summary
 from daemon.core.proposal_candidate_adapter import proposal_candidate_to_proposal
 from daemon.core.proposals import proposal_store
@@ -100,6 +99,14 @@ class RuntimeOrchestrator:
         self._last_diff_triggered: dict[str, float] = {}
         self._diff_trigger_lock = threading.Lock()
         self._last_resume_card_at: datetime | None = None
+        self._prepared_resume_card_lock = threading.Lock()
+        self._prepared_resume_card_payload: dict | None = None
+        self._prepared_resume_card_created_at: datetime | None = None
+        self._prepared_resume_card_ttl_sec: float = 8 * 60 * 60
+        self._pending_resume_card_lock = threading.Lock()
+        self._pending_resume_card = False
+        self._resume_card_wait_timeout_sec: float = 90.0
+        self._resume_card_wait_poll_sec: float = 0.5
         self._periodic_sync_interval_sec: float = 30 * 60
         self._periodic_sync_stopped: bool = False
         self._periodic_sync_worker = threading.Thread(
@@ -118,9 +125,18 @@ class RuntimeOrchestrator:
         return self._session_fsm
 
     @property
-    def current_context(self) -> SessionContext | None:
+    def current_context(self) -> CurrentContext | SessionContext | None:
         snapshot = self.runtime_state.get_runtime_snapshot()
         present = snapshot.present
+        signals = snapshot.signals
+
+        if signals is not None:
+            return self._render_current_context(
+                present=present,
+                signals=signals,
+                active_app=snapshot.latest_active_app,
+            )
+
         session = self.session_memory.get_session()
         started_at = (
             self._session_fsm.session_started_at.isoformat()
@@ -134,8 +150,6 @@ class RuntimeOrchestrator:
         if present.session_duration_min is not None:
             duration_sec = max(int(present.session_duration_min), 0) * 60
 
-        signals = snapshot.signals
-        task_confidence = getattr(signals, "task_confidence", None) if signals is not None else None
         return SessionContext(
             id=f"current-{self.session_memory.session_id}",
             session_id=self.session_memory.session_id,
@@ -146,7 +160,7 @@ class RuntimeOrchestrator:
             active_project=present.active_project or session.get("active_project"),
             probable_task=present.probable_task or session.get("probable_task"),
             activity_level=present.activity_level,
-            task_confidence=task_confidence,
+            task_confidence=None,
         )
 
     @property
@@ -209,7 +223,64 @@ class RuntimeOrchestrator:
         )
 
     def _export_memory_payload(self) -> dict:
-        return self.session_memory.export_memory_payload()
+        payload = self.session_memory.export_memory_payload()
+        present = self.runtime_state.get_present()
+        if not payload.get("activity_level") and present.activity_level:
+            payload["activity_level"] = present.activity_level
+        return payload
+
+    def _resume_card_memory_payload(self, *, snapshot, base_payload: dict | None = None) -> dict:
+        """Build a richer payload for resume cards without mutating session memory."""
+        payload = dict(base_payload or {})
+        present = snapshot.present
+        signals = snapshot.signals
+
+        active_project = present.active_project or payload.get("active_project")
+        if active_project:
+            payload["active_project"] = active_project
+
+        probable_task = present.probable_task or payload.get("probable_task")
+        if probable_task:
+            payload["probable_task"] = probable_task
+
+        activity_level = present.activity_level or payload.get("activity_level")
+        if activity_level:
+            payload["activity_level"] = activity_level
+
+        if present.session_duration_min is not None:
+            payload["duration_min"] = max(
+                int(payload.get("duration_min") or 0),
+                int(present.session_duration_min),
+            )
+
+        top_files = list(payload.get("top_files") or [])
+        for candidate in [
+            present.active_file,
+            getattr(signals, "active_file", None) if signals is not None else None,
+        ]:
+            if candidate and candidate not in top_files:
+                top_files.insert(0, candidate)
+
+        diff_summary = snapshot.last_diff_summary or ""
+        for candidate in extract_file_names_from_diff_summary(diff_summary)[:5]:
+            if candidate and candidate not in top_files:
+                top_files.append(candidate)
+
+        if top_files:
+            payload["top_files"] = top_files[:8]
+            payload.setdefault("recent_files", top_files[:8])
+
+        if diff_summary:
+            payload["diff_summary"] = diff_summary
+
+        if snapshot.latest_active_app:
+            payload["active_app"] = snapshot.latest_active_app
+
+        window_title = getattr(signals, "window_title", None) if signals is not None else None
+        if window_title:
+            payload["window_title"] = window_title
+
+        return payload
 
     def handle_event(self, event) -> None:
         if self._should_ignore_event(event):
@@ -228,7 +299,6 @@ class RuntimeOrchestrator:
         if event.type == "screen_locked":
             self._session_fsm.on_screen_locked(when=event.timestamp)
             self.runtime_state.mark_screen_locked(when=event.timestamp)
-            threading.Thread(target=self.llm_unload_background, daemon=True).start()
             self._run_daydream_if_pending()
 
         elif event.type == "screen_unlocked":
@@ -279,6 +349,35 @@ class RuntimeOrchestrator:
 
         self.session_memory.record_event(event)
 
+        if event.type == "user_presence":
+            payload = event.payload or {}
+            presence_state = payload.get("presence_state")
+            try:
+                idle_seconds = int(payload.get("idle_seconds", 0))
+            except (TypeError, ValueError):
+                idle_seconds = None
+            self.runtime_state.update_presence(
+                presence_state=presence_state,
+                idle_seconds=idle_seconds,
+            )
+
+        elif event.type == "user_idle":
+            payload = event.payload or {}
+            try:
+                idle_seconds = int(payload.get("seconds", 0))
+            except (TypeError, ValueError):
+                idle_seconds = None
+            self.runtime_state.update_presence(
+                presence_state="idle",
+                idle_seconds=idle_seconds,
+            )
+
+        elif event.type == "user_active":
+            self.runtime_state.update_presence(
+                presence_state="active",
+                idle_seconds=0,
+            )
+
         if event.type in {"app_activated", "window_title_poll"}:
             title = (event.payload or {}).get("window_title") or (event.payload or {}).get("title")
             if title and len(title) >= 15:
@@ -307,11 +406,108 @@ class RuntimeOrchestrator:
             self._enqueue_file_event(event)
         else:
             self._process_signals(event)
+            if event.type == "screen_locked":
+                self._schedule_prepared_resume_card(event=event)
             if event.type == "screen_unlocked":
                 self._maybe_emit_resume_card(
                     event=event,
                     sleep_minutes=resume_sleep_minutes,
                 )
+
+    def _schedule_prepared_resume_card(self, *, event) -> None:
+        threading.Thread(
+            target=self._prepare_resume_card_background,
+            kwargs={"event_timestamp": event.timestamp, "reason": event.type},
+            daemon=True,
+            name="pulse-prepare-resume-card",
+        ).start()
+
+    def _prepare_resume_card_background(self, *, event_timestamp: datetime, reason: str) -> None:
+        try:
+            snapshot = self.runtime_state.get_runtime_snapshot()
+            base_payload = self._export_memory_payload()
+            payload = self._resume_card_memory_payload(snapshot=snapshot, base_payload=base_payload)
+            if not self._should_prepare_resume_card(snapshot=snapshot, memory_payload=payload):
+                self.log.debug("prepared_resume_card skipped: insufficient context")
+                return
+            context = build_resume_card_context(
+                runtime_snapshot=snapshot,
+                memory_payload=payload,
+                sleep_minutes=None,
+                diff_summary=snapshot.last_diff_summary,
+            )
+            context["prepared_reason"] = reason
+            context["prepared_at"] = event_timestamp.isoformat()
+            card = generate_resume_card(context, llm=self.summary_llm)
+            card_payload = card.to_event_payload()
+            card_payload["prepared"] = True
+            card_payload["prepared_at"] = event_timestamp.isoformat()
+            card_payload["prepared_reason"] = reason
+            source_refs = list(card_payload.get("source_refs") or [])
+            if "prepared_resume_card" not in source_refs:
+                source_refs.append("prepared_resume_card")
+            card_payload["source_refs"] = source_refs
+            with self._prepared_resume_card_lock:
+                self._prepared_resume_card_payload = card_payload
+                self._prepared_resume_card_created_at = event_timestamp
+            self.log.info(
+                "prepared_resume_card stored project=%s generated_by=%s confidence=%.2f reason=%s",
+                card.project,
+                card.generated_by,
+                card.confidence,
+                reason,
+            )
+        except Exception as exc:
+            self.log.warning("prepared_resume_card skipped: %s", exc)
+        finally:
+            threading.Thread(target=self.llm_unload_background, daemon=True).start()
+
+    def _should_prepare_resume_card(self, *, snapshot, memory_payload: dict) -> bool:
+        active_project = snapshot.present.active_project or memory_payload.get("active_project")
+        duration_min = snapshot.present.session_duration_min or memory_payload.get("duration_min") or 0
+        has_files = bool(memory_payload.get("top_files") or memory_payload.get("recent_files"))
+        has_diff = bool(snapshot.last_diff_summary or memory_payload.get("diff_summary"))
+        return bool(active_project) and (int(duration_min or 0) >= 5 or has_files or has_diff)
+
+    def _emit_prepared_resume_card_if_available(
+        self,
+        *,
+        emitted_at: datetime,
+        active_project: str | None,
+    ) -> bool:
+        with self._prepared_resume_card_lock:
+            payload = dict(self._prepared_resume_card_payload or {})
+            prepared_at = self._prepared_resume_card_created_at
+            if not payload or prepared_at is None:
+                return False
+            age_sec = (emitted_at - prepared_at).total_seconds()
+            if age_sec < 0 or age_sec > self._prepared_resume_card_ttl_sec:
+                self._prepared_resume_card_payload = None
+                self._prepared_resume_card_created_at = None
+                self.log.debug("prepared_resume_card expired age=%.0fs", age_sec)
+                return False
+            prepared_project = payload.get("project")
+            if active_project and prepared_project and active_project != prepared_project:
+                self._prepared_resume_card_payload = None
+                self._prepared_resume_card_created_at = None
+                self.log.debug(
+                    "prepared_resume_card discarded project mismatch prepared=%s active=%s",
+                    prepared_project,
+                    active_project,
+                )
+                return False
+            self._prepared_resume_card_payload = None
+            self._prepared_resume_card_created_at = None
+
+        payload["prepared_consumed_at"] = emitted_at.isoformat()
+        self.scorer.bus.publish("resume_card", payload, emitted_at)
+        self.log.info(
+            "prepared_resume_card emitted project=%s generated_by=%s age=%.0fs",
+            payload.get("project"),
+            payload.get("generated_by"),
+            (emitted_at - prepared_at).total_seconds(),
+        )
+        return True
 
     def _maybe_emit_resume_card(
         self,
@@ -323,7 +519,8 @@ class RuntimeOrchestrator:
     ) -> None:
         try:
             snapshot = self.runtime_state.get_runtime_snapshot()
-            payload = memory_payload if isinstance(memory_payload, dict) else self._export_memory_payload()
+            base_payload = memory_payload if isinstance(memory_payload, dict) else self._export_memory_payload()
+            payload = self._resume_card_memory_payload(snapshot=snapshot, base_payload=base_payload)
             active_project = snapshot.present.active_project or payload.get("active_project")
             if not should_offer_resume_card(
                 event_type=event_type or event.type,
@@ -334,23 +531,105 @@ class RuntimeOrchestrator:
                 now=event.timestamp,
             ):
                 return
+            if self._emit_prepared_resume_card_if_available(
+                emitted_at=event.timestamp,
+                active_project=active_project,
+            ):
+                self._last_resume_card_at = event.timestamp
+                return
             context = build_resume_card_context(
                 runtime_snapshot=snapshot,
                 memory_payload=payload,
                 sleep_minutes=sleep_minutes,
                 diff_summary=snapshot.last_diff_summary,
             )
-            card = generate_resume_card(context, llm=self.summary_llm)
-            self._last_resume_card_at = event.timestamp
-            self.scorer.bus.publish("resume_card", card.to_event_payload(), event.timestamp)
-            self.log.info(
-                "resume_card emitted project=%s generated_by=%s confidence=%.2f",
-                card.project,
-                card.generated_by,
-                card.confidence,
+            should_wait_for_llm = (
+                self._resume_card_can_use_llm()
+                and (
+                    event_type in {None, "screen_unlocked", "resume_after_pause"}
+                    or event.type == "screen_unlocked"
+                )
             )
+            self._last_resume_card_at = event.timestamp
+            if should_wait_for_llm:
+                self._schedule_resume_card_emit(
+                    context=context,
+                    event_timestamp=event.timestamp,
+                    wait_for_llm=True,
+                )
+            else:
+                self._emit_resume_card_now(context=context, emitted_at=event.timestamp)
         except Exception as exc:
             self.log.warning("resume_card skipped: %s", exc)
+
+    def _resume_card_can_use_llm(self) -> bool:
+        return self.summary_llm is not None and hasattr(self.summary_llm, "complete")
+
+    def _emit_resume_card_now(self, *, context: dict, emitted_at: datetime, force_fallback: bool = False) -> None:
+        llm = None if force_fallback else self.summary_llm
+        card = generate_resume_card(context, llm=llm)
+        self.scorer.bus.publish("resume_card", card.to_event_payload(), emitted_at)
+        self.log.info(
+            "resume_card emitted project=%s generated_by=%s confidence=%.2f fallback=%s",
+            card.project,
+            card.generated_by,
+            card.confidence,
+            force_fallback,
+        )
+
+    def _schedule_resume_card_emit(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
+        with self._pending_resume_card_lock:
+            if self._pending_resume_card:
+                self.log.debug("resume_card already pending — skip duplicate schedule")
+                return
+            self._pending_resume_card = True
+
+        threading.Thread(
+            target=self._emit_resume_card_background,
+            kwargs={
+                "context": context,
+                "event_timestamp": event_timestamp,
+                "wait_for_llm": wait_for_llm,
+            },
+            daemon=True,
+            name="pulse-resume-card",
+        ).start()
+
+    def _emit_resume_card_background(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
+        try:
+            llm_ready = True
+            if wait_for_llm:
+                llm_ready = self._wait_for_llm_ready_for_resume(since=event_timestamp)
+            if llm_ready:
+                self._emit_resume_card_now(context=context, emitted_at=datetime.now())
+            else:
+                self._emit_resume_card_now(context=context, emitted_at=datetime.now(), force_fallback=True)
+        except Exception as exc:
+            self.log.warning("resume_card background emit skipped: %s", exc)
+        finally:
+            with self._pending_resume_card_lock:
+                self._pending_resume_card = False
+
+    def _wait_for_llm_ready_for_resume(self, *, since: datetime) -> bool:
+        deadline = time.monotonic() + self._resume_card_wait_timeout_sec
+        saw_loading = False
+        while time.monotonic() < deadline:
+            recent = self.scorer.bus.recent(DEFAULT_EVENT_BUS_SIZE)
+            for item in recent:
+                if item.timestamp < since:
+                    continue
+                if item.type == "llm_loading":
+                    saw_loading = True
+                if item.type == "llm_ready":
+                    if saw_loading:
+                        self.log.debug("resume_card: LLM ready observed after unlock")
+                    return True
+            time.sleep(self._resume_card_wait_poll_sec)
+        self.log.warning(
+            "resume_card: LLM readiness timeout after %.0fs — using deterministic fallback",
+            self._resume_card_wait_timeout_sec,
+        )
+        return False
 
     def shutdown_runtime(self) -> None:
         try:
@@ -398,12 +677,11 @@ class RuntimeOrchestrator:
         ).start()
 
     def build_context_snapshot(self) -> str:
-        state = self.store.to_dict()
         snapshot = self.runtime_state.get_runtime_snapshot()
         current_context = self._render_current_context(
             present=snapshot.present,
             signals=snapshot.signals,
-            active_app=snapshot.latest_active_app or state.get("active_app"),
+            active_app=snapshot.latest_active_app,
         )
 
         diff_summary: str | None = None
@@ -497,15 +775,13 @@ class RuntimeOrchestrator:
     def _should_ignore_event(self, event) -> bool:
         if not event.type.startswith("file_"):
             return False
-        path = (event.payload or {}).get("path", "")
-        if not path:
+        from daemon.core.event_meaning import _default_policy
+
+        payload = event.payload or {}
+        decision = _default_policy.classify(event.type, payload)
+        if not decision.runtime_relevant:
             return True
-        if path.endswith(".git/COMMIT_EDITMSG") or "/COMMIT_EDITMSG" in path:
-            return False
-        if file_signal_significance(path) != "meaningful":
-            return True
-        dedupe_key = "{0}:{1}".format(event.type, path)
-        return self.runtime_state.should_ignore_file_event(dedupe_key=dedupe_key)
+        return self.runtime_state.should_ignore_file_event(event.type, payload.get("path", ""), payload)
 
     def _schedule_commit_watch(self, path: str) -> None:
         git_root = find_git_root(path)
@@ -653,7 +929,11 @@ class RuntimeOrchestrator:
         except Exception:
             pass
 
-        snapshot = self._export_memory_payload()
+        runtime_snapshot = self.runtime_state.get_runtime_snapshot()
+        snapshot = self._resume_card_memory_payload(
+            snapshot=runtime_snapshot,
+            base_payload=self._export_memory_payload(),
+        )
         snapshot["active_project"] = git_root.name or snapshot.get("active_project")
         diff_files = extract_file_names_from_diff_summary(diff_summary or "")
         commit_scope_files = diff_files or read_commit_file_names(git_root)
@@ -711,8 +991,8 @@ class RuntimeOrchestrator:
         )
         if work_block_started_at is None:
             work_block_started_at = self._session_fsm.session_started_at
-        runtime_snapshot = self.runtime_state.get_runtime_snapshot()
         payload_block_end = _parse_optional_datetime(snapshot.get("work_block_ended_at") or snapshot.get("work_window_ended_at"))
+        runtime_snapshot = self.runtime_state.get_runtime_snapshot()
         block_end = payload_block_end or runtime_snapshot.present.updated_at or commit_at
         if block_end < commit_at:
             block_end = commit_at
@@ -721,20 +1001,24 @@ class RuntimeOrchestrator:
             self._set_commit_work_block(snapshot, started_at=work_block_started_at, ended_at=block_end)
         elif snapshot.get("started_at"):
             snapshot["work_block_started_at"] = snapshot.get("started_at")
-            snapshot["work_window_started_at"] = snapshot.get("started_at")
             snapshot["work_block_ended_at"] = block_end.isoformat()
-            snapshot["work_window_ended_at"] = block_end.isoformat()
 
-    def _annotate_commit_work_window(self, *args, **kwargs) -> None:
+    def _annotate_commit_work_window(self, snapshot: dict, *args, **kwargs) -> None:
         """Alias legacy pour les tests/outils qui utilisent encore work_window."""
-        self._annotate_commit_work_block(*args, **kwargs)
+        self._annotate_commit_work_block(snapshot, *args, **kwargs)
+        self._attach_legacy_commit_work_window_aliases(snapshot)
 
     @staticmethod
     def _set_commit_work_block(snapshot: dict, *, started_at: datetime, ended_at: datetime) -> None:
         snapshot["work_block_started_at"] = started_at.isoformat()
         snapshot["work_block_ended_at"] = ended_at.isoformat()
-        snapshot["work_window_started_at"] = snapshot["work_block_started_at"]
-        snapshot["work_window_ended_at"] = snapshot["work_block_ended_at"]
+
+    @staticmethod
+    def _attach_legacy_commit_work_window_aliases(snapshot: dict) -> None:
+        if snapshot.get("work_block_started_at"):
+            snapshot["work_window_started_at"] = snapshot["work_block_started_at"]
+        if snapshot.get("work_block_ended_at"):
+            snapshot["work_window_ended_at"] = snapshot["work_block_ended_at"]
 
     def _enqueue_file_event(self, event) -> None:
         with self._file_flush_condition:
@@ -1058,6 +1342,11 @@ class RuntimeOrchestrator:
             self._frozen_memory = None
             self._frozen_memory_at = None
         self._last_resume_card_at = None
+        with self._pending_resume_card_lock:
+            self._pending_resume_card = False
+        with self._prepared_resume_card_lock:
+            self._prepared_resume_card_payload = None
+            self._prepared_resume_card_created_at = None
         reset_fact_engine_for_tests()
         reset_cooldown_for_tests()
         self._fact_engine = get_fact_engine()

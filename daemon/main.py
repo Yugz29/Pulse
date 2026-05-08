@@ -216,9 +216,14 @@ register_runtime_routes(
     get_current_context=lambda: runtime_orchestrator.current_context,
     get_recent_sessions=lambda limit: session_memory.get_recent_sessions(limit=limit),
     get_today_summary=lambda: session_memory.get_today_summary(),
+    get_today_work_episodes=lambda date=None: session_memory.get_today_work_episodes(date=date),
+    get_today_journal_candidates=lambda date=None: session_memory.get_today_journal_candidates(date=date),
+    get_today_journal_comparison=lambda date=None: session_memory.get_today_journal_comparison(date=date),
+    get_today_commit_episode_links=lambda date=None: session_memory.get_today_commit_episode_links(date=date),
     llm_unload_background=_llm_unload_background,
     llm_warmup_background=_llm_warmup_background,
     shutdown_runtime=_shutdown_runtime,
+    resume_card_llm=summary_llm,
     log=log,
 )
 

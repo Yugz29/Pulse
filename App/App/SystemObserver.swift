@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import IOKit
 
 actor EventDeliveryQueue {
     private let bridge: DaemonBridge
@@ -43,6 +44,7 @@ class SystemObserver {
     private var lastClipboardContent: String = ""
     private var recentFileEvents: [String: Date] = [:]
     private var isUserIdle = false
+    private var lastPresenceHeartbeatAt: Date?
     private var lastMeaningfulFilePath: String?
     private let filesystemQueue = DispatchQueue(label: "pulse.systemobserver.filesystem", qos: .utility)
     private let claudeSessionQueue = DispatchQueue(label: "pulse.systemobserver.claude-sessions", qos: .utility)
@@ -50,7 +52,9 @@ class SystemObserver {
     // Déduplication des titres de fenêtres — supprimée : le titre est maintenant
     // intégré dans app_activated, la déduplication est gérée par le daemon.
     private let idleThresholdSeconds: TimeInterval = 900  // 15 min
+    private let passivePresenceThresholdSeconds: TimeInterval = 60
     private let idlePollInterval: TimeInterval = 15
+    private let presenceHeartbeatInterval: TimeInterval = 60
 
     private let watchedPaths: [String] = [NSHomeDirectory()]
 
@@ -525,19 +529,86 @@ class SystemObserver {
         }
     }
 
+    private func readSystemIdleSeconds() -> TimeInterval {
+        let service = IOServiceGetMatchingService(
+            kIOMainPortDefault,
+            IOServiceMatching("IOHIDSystem")
+        )
+        guard service != 0 else {
+            return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)
+        }
+        defer { IOObjectRelease(service) }
+
+        var properties: Unmanaged<CFMutableDictionary>?
+        let result = IORegistryEntryCreateCFProperties(
+            service,
+            &properties,
+            kCFAllocatorDefault,
+            0
+        )
+        guard result == KERN_SUCCESS,
+              let values = properties?.takeRetainedValue() as? [String: Any],
+              let idleTime = values["HIDIdleTime"] as? NSNumber
+        else {
+            return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)
+        }
+
+        // HIDIdleTime is expressed in nanoseconds since the last keyboard/mouse input.
+        return TimeInterval(idleTime.uint64Value) / 1_000_000_000
+    }
+
     private func checkUserIdle() {
-        let idleSeconds = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)
+        let idleSeconds = readSystemIdleSeconds()
+        let now = Date()
+        let roundedIdleSeconds = Int(idleSeconds.rounded())
+
+        sendUserPresenceHeartbeatIfNeeded(
+            idleSeconds: roundedIdleSeconds,
+            now: now
+        )
 
         if idleSeconds >= idleThresholdSeconds {
             guard !isUserIdle else { return }
             isUserIdle = true
-            sendEvent(["type": "user_idle", "seconds": String(Int(idleSeconds.rounded())), "timestamp": ISO8601DateFormatter().string(from: Date())])
+            sendEvent([
+                "type": "user_idle",
+                "seconds": String(roundedIdleSeconds),
+                "timestamp": ISO8601DateFormatter().string(from: now)
+            ])
             return
         }
 
         guard isUserIdle else { return }
         isUserIdle = false
-        sendEvent(["type": "user_active", "seconds": String(Int(idleSeconds.rounded())), "timestamp": ISO8601DateFormatter().string(from: Date())])
+        sendEvent([
+            "type": "user_active",
+            "seconds": String(roundedIdleSeconds),
+            "timestamp": ISO8601DateFormatter().string(from: now)
+        ])
+    }
+
+    private func sendUserPresenceHeartbeatIfNeeded(idleSeconds: Int, now: Date) {
+        if let lastHeartbeat = lastPresenceHeartbeatAt,
+           now.timeIntervalSince(lastHeartbeat) < presenceHeartbeatInterval {
+            return
+        }
+        lastPresenceHeartbeatAt = now
+
+        let presenceState: String
+        if TimeInterval(idleSeconds) >= idleThresholdSeconds {
+            presenceState = "idle"
+        } else if TimeInterval(idleSeconds) >= passivePresenceThresholdSeconds {
+            presenceState = "passive"
+        } else {
+            presenceState = "active"
+        }
+
+        sendEvent([
+            "type": "user_presence",
+            "idle_seconds": String(idleSeconds),
+            "presence_state": presenceState,
+            "timestamp": ISO8601DateFormatter().string(from: now)
+        ])
     }
 
     private func checkClipboard() {
@@ -585,11 +656,13 @@ class SystemObserver {
 
     @objc private func handleScreenLocked() {
         isUserIdle = true
+        lastPresenceHeartbeatAt = nil
         sendEvent(["type": "screen_locked", "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
 
     @objc private func handleScreenUnlocked() {
         isUserIdle = false
+        lastPresenceHeartbeatAt = nil
         sendEvent(["type": "screen_unlocked", "timestamp": ISO8601DateFormatter().string(from: Date())])
     }
 

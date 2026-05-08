@@ -46,9 +46,11 @@ Aujourd’hui, Pulse sait surtout :
 - structurer
 - mémoriser
 - contrôler
+- aider à reprendre le contexte après une pause via des Resume Cards
 
 Il ne sait pas encore :
-- comprendre finement la continuité du travail
+- modéliser parfaitement la continuité du travail sur plusieurs blocs
+- relier systématiquement sessions, commits, journal et reprises de contexte
 - proposer de manière vraiment intelligente selon le moment du travail
 - agir de manière autonome
 
@@ -117,13 +119,14 @@ event
 → RuntimeState.update_present()
 → DecisionEngine
 → SessionMemory
+→ projections de travail / journal / Resume Card
 ```
 
 Les responsabilités nettes sont :
 - `PresentState` = vérité canonique du présent
 - `SessionFSM` = état de session
 - `SignalScorer` = contexte de travail courant
-- `RuntimeOrchestrator` = orchestration uniquement
+- `RuntimeOrchestrator` = orchestration, déclencheurs proactifs et effets de bord contrôlés
 - `CurrentContextBuilder` = rendu pour lecture assistant/UI
 - `SessionMemory` = persistance historique
 
@@ -133,8 +136,10 @@ Cette partie est aujourd’hui la fondation la plus solide du projet.
 
 Pulse produit ensuite une mémoire locale rétrospective :
 - résumés de session
+- blocs de travail dérivés
 - faits utilisateur
 - contexte réutilisable dans les échanges assistant
+- cartes de reprise courtes pour aider l’utilisateur à revenir dans le fil
 
 Cette mémoire existe déjà, mais elle reste encore :
 - principalement session-centrique
@@ -144,19 +149,20 @@ Cette mémoire existe déjà, mais elle reste encore :
 Le LLM intervient seulement quand nécessaire :
 - résumé de commit
 - enrichissement limité
+- Resume Card LLM avec fallback déterministe
 - questions explicites
 
-### Routes aujourd’hui exposées
+### Surfaces locales exposées
 
-- `/state`
-- `/insights`
-- `/facts`
-- `/facts/stats`
-- `/facts/profile`
-- `/memory`
-- `/memory/sessions`
-- `/mcp/pending`
-- `/mcp/decision`
+Pulse expose des routes locales pour :
+- l’état runtime et le contexte courant
+- les insights, faits et profils locaux
+- la mémoire et les sessions récentes
+- les propositions MCP et décisions associées
+- les context probes soumises à validation
+- certains chemins debug, notamment les Resume Cards déterministes et LLM
+
+Ces routes sont des surfaces de lecture, de contrôle ou de debug local. Elles ne doivent pas devenir une nouvelle source de vérité parallèle.
 
 ---
 
@@ -189,9 +195,10 @@ La partie la plus difficile est encore devant :
 - enrichir la mémoire sans raconter des histoires
 
 En particulier, Pulse n’a pas encore :
-- de mémoire structurée par épisodes
-- de moteur de proposition vraiment contextuel
-- d’agentique contrôlée
+- une modélisation parfaite des blocs de travail sur la durée
+- une corrélation totalement fiable entre sessions, commits, journal et reprises de contexte
+- un moteur de proposition vraiment contextuel
+- une agentique contrôlée
 
 Autrement dit :
 - la fondation est faite
@@ -226,22 +233,28 @@ Pulse n’est plus seulement une idée ou un prototype flou.
 Le projet a franchi une première étape importante :
 - la fondation runtime est terminée
 - les contrats centraux existent
-- le lifecycle sessionnel est unifié
+- le lifecycle sessionnel est unifié via `SessionFSM`
+- `PresentState` porte la vérité canonique du présent
+- `current_context`, `recent_sessions` et `work_blocks` remplacent l’ancienne piste `EpisodeFSM`
 - le système est assez stable pour être observé sérieusement
 
-La prochaine étape logique n'est plus d'introduire les épisodes eux-mêmes.
+La prochaine étape logique n’est pas de réintroduire les épisodes.
 
 Le système possède déjà :
-- des épisodes temporels persistés
-- un épisode courant exposé dans le runtime
-- une sémantique figée sur les épisodes clos
+- un présent runtime canonique
+- des sessions récentes exploitables
+- des projections de travail via `work_blocks` / `work_block_*`
+- un journal local consolidé
+- des Resume Cards, dont une version LLM avec fallback déterministe
 
-Mais ces épisodes restent secondaires :
-- ils n'alimentent pas la vérité du présent
-- ils ne pilotent pas encore la mémoire ni les décisions
+Mais ces éléments restent encore perfectibles :
+- les blocs de travail sont encore des projections dérivées
+- la continuité entre longue session, commit final, journal et reprise de contexte doit encore être validée terrain
+- les propositions ne sont pas encore réellement pilotées par une compréhension stable du moment de travail
 
 Ce qui reste à rendre plus fort :
-- la mémoire structurée autour des épisodes
+- la corrélation des blocs de travail dans le temps
+- la mémoire structurée autour des sessions, work blocks et commits
 - les propositions réellement contextualisées par continuité de travail
 
 ---
@@ -260,6 +273,7 @@ Aujourd’hui, Pulse est surtout :
 - une couche locale d’observation
 - une structure de contexte
 - une mémoire simple mais utile
+- un système de reprise de contexte encore jeune
 - un cadre de contrôle utilisateur autour des IA
 
 Et c’est précisément ce qui le rend crédible à ce stade.

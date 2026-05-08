@@ -32,6 +32,21 @@ struct StateResponse: Decodable {
         case currentContext = "current_context"
         case recentSessions = "recent_sessions"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        activeApp = try container.decodeIfPresent(String.self, forKey: .activeApp)
+        activeFile = try container.decodeIfPresent(String.self, forKey: .activeFile)
+        activeProject = try container.decodeIfPresent(String.self, forKey: .activeProject)
+        sessionDurationMin = try container.decodeIfPresent(Int.self, forKey: .sessionDurationMin) ?? 0
+        lastEventType = try container.decodeIfPresent(String.self, forKey: .lastEventType)
+        runtimePaused = try container.decodeIfPresent(Bool.self, forKey: .runtimePaused)
+        present = try container.decodeIfPresent(PresentData.self, forKey: .present)
+        signals = try container.decodeIfPresent(SignalsData.self, forKey: .signals)
+        sessionFsm = try container.decodeIfPresent(SessionFSMData.self, forKey: .sessionFsm)
+        currentContext = try container.decodeIfPresent(SessionContextData.self, forKey: .currentContext)
+        recentSessions = try container.decodeIfPresent([SessionContextData].self, forKey: .recentSessions)
+    }
 }
 
 struct PresentData: Decodable {
@@ -97,28 +112,70 @@ struct PresentData: Decodable {
 }
 
 struct SessionContextData: Decodable, Identifiable {
-    let id: String
-    let sessionId: String
-    let startedAt: String
+    private let rawId: String?
+    let sessionId: String?
+    let startedAt: String?
     let endedAt: String?
     let boundaryReason: String?
     let durationSec: Int?
     let activeProject: String?
+    let activeFile: String?
     let probableTask: String?
     let activityLevel: String?
+    let focusLevel: String?
     let taskConfidence: Double?
+    let userPresenceState: String?
+    let userIdleSeconds: Int?
+    let terminalActionCategory: String?
+    let terminalProject: String?
+    let terminalCwd: String?
+    let terminalCommand: String?
+    let terminalSuccess: Bool?
+    let terminalExitCode: Int?
+    let terminalDurationMs: Int?
+    let terminalSummary: String?
+    let activeAppDurationSec: Int?
+    let activeWindowTitleDurationSec: Int?
+    let appSwitchCount10m: Int?
+    let aiAppSwitchCount10m: Int?
+
+    var id: String {
+        if let rawId, !rawId.isEmpty { return rawId }
+        if let sessionId, !sessionId.isEmpty { return sessionId }
+        let fallback = [activeProject, activeFile, probableTask, activityLevel]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: "|")
+        return fallback.isEmpty ? "current-context" : fallback
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id
+        case rawId = "id"
         case sessionId = "session_id"
         case startedAt = "started_at"
         case endedAt = "ended_at"
         case boundaryReason = "boundary_reason"
         case durationSec = "duration_sec"
         case activeProject = "active_project"
+        case activeFile = "active_file"
         case probableTask = "probable_task"
         case activityLevel = "activity_level"
+        case focusLevel = "focus_level"
         case taskConfidence = "task_confidence"
+        case userPresenceState = "user_presence_state"
+        case userIdleSeconds = "user_idle_seconds"
+        case terminalActionCategory = "terminal_action_category"
+        case terminalProject = "terminal_project"
+        case terminalCwd = "terminal_cwd"
+        case terminalCommand = "terminal_command"
+        case terminalSuccess = "terminal_success"
+        case terminalExitCode = "terminal_exit_code"
+        case terminalDurationMs = "terminal_duration_ms"
+        case terminalSummary = "terminal_summary"
+        case activeAppDurationSec = "active_app_duration_sec"
+        case activeWindowTitleDurationSec = "active_window_title_duration_sec"
+        case appSwitchCount10m = "app_switch_count_10m"
+        case aiAppSwitchCount10m = "ai_app_switch_count_10m"
     }
 
     var isActive: Bool {
@@ -166,7 +223,8 @@ struct SessionContextData: Decodable, Identifiable {
         case "executing": return "Exécution"
         case "navigating": return "Navigation"
         case "idle": return "Inactif"
-        default: return "—"
+        case nil: return "—"
+        default: return activityLevel ?? "—"
         }
     }
 
@@ -636,6 +694,130 @@ struct TodayCurrentWindow: Decodable {
     }
 }
 
+struct DebugWorkEpisodesResponse: Decodable {
+    let date: String
+    let generatedAt: String?
+    let episodeCount: Int
+    let episodes: [DebugWorkEpisode]
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case generatedAt = "generated_at"
+        case episodeCount = "episode_count"
+        case episodes
+    }
+}
+
+struct DebugWorkEpisode: Decodable, Identifiable {
+    let id: String
+    let project: String?
+    let probableTask: String?
+    let activityLevel: String?
+    let startedAt: String?
+    let endedAt: String?
+    let durationMin: Int?
+    let evidenceCount: Int?
+    let confidence: Double?
+    let boundaryReason: String?
+    let uncertaintyFlags: [String]?
+    let dominantScope: String?
+    let previousScope: String?
+    let nextScope: String?
+    let strongEventCount: Int?
+    let weakEventCount: Int?
+    let boundaryEventType: String?
+    let boundaryEventAt: String?
+    let debugReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case project
+        case probableTask = "probable_task"
+        case activityLevel = "activity_level"
+        case startedAt = "started_at"
+        case endedAt = "ended_at"
+        case durationMin = "duration_min"
+        case evidenceCount = "evidence_count"
+        case confidence
+        case boundaryReason = "boundary_reason"
+        case uncertaintyFlags = "uncertainty_flags"
+        case dominantScope = "dominant_scope"
+        case previousScope = "previous_scope"
+        case nextScope = "next_scope"
+        case strongEventCount = "strong_event_count"
+        case weakEventCount = "weak_event_count"
+        case boundaryEventType = "boundary_event_type"
+        case boundaryEventAt = "boundary_event_at"
+        case debugReason = "debug_reason"
+    }
+}
+
+struct DebugCommitEpisodeLinksResponse: Decodable {
+    let date: String
+    let generatedAt: String?
+    let commitCount: Int
+    let linkedCount: Int
+    let unlinkedCount: Int
+    let links: [DebugCommitEpisodeLink]
+    let unlinkedCommits: [DebugCommitEpisodeLink]
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case generatedAt = "generated_at"
+        case commitCount = "commit_count"
+        case linkedCount = "linked_count"
+        case unlinkedCount = "unlinked_count"
+        case links
+        case unlinkedCommits = "unlinked_commits"
+    }
+}
+
+struct DebugCommitEpisodeLink: Decodable, Identifiable {
+    let id: String
+    let entryId: String?
+    let commitSubject: String?
+    let commitMessage: String?
+    let deliveredAt: String?
+    let journalStartedAt: String?
+    let journalEndedAt: String?
+    let episodeId: String?
+    let candidateId: String?
+    let episodeStartedAt: String?
+    let episodeEndedAt: String?
+    let project: String?
+    let confidence: Double?
+    let status: String?
+    let linkReason: String?
+    let flags: [String]?
+    let deliveryDeltaMin: Int?
+    let windowDistanceMin: Int?
+    let overlapMin: Int?
+    let evidenceLevel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case entryId = "entry_id"
+        case commitSubject = "commit_subject"
+        case commitMessage = "commit_message"
+        case deliveredAt = "delivered_at"
+        case journalStartedAt = "journal_started_at"
+        case journalEndedAt = "journal_ended_at"
+        case episodeId = "episode_id"
+        case candidateId = "candidate_id"
+        case episodeStartedAt = "episode_started_at"
+        case episodeEndedAt = "episode_ended_at"
+        case project
+        case confidence
+        case status
+        case linkReason = "link_reason"
+        case flags
+        case deliveryDeltaMin = "delivery_delta_min"
+        case windowDistanceMin = "window_distance_min"
+        case overlapMin = "overlap_min"
+        case evidenceLevel = "evidence_level"
+    }
+}
+
 struct FactsStatsResponse: Decodable {
     let total: Int?
     let active: Int?
@@ -933,6 +1115,351 @@ struct ProposalRecord: Identifiable, Codable {
     }
 }
 
+struct ContextProbeListResponse: Decodable {
+    let requests: [ContextProbeRequestPayload]
+    let debug: [ContextProbeDebugPayload]
+    let count: Int
+}
+
+struct ContextProbeActionResponse: Decodable {
+    let request: ContextProbeRequestPayload
+    let debug: ContextProbeDebugPayload
+}
+
+struct ContextProbeExecuteResponse: Decodable {
+    let result: ContextProbeResultPayload
+    let request: ContextProbeRequestPayload
+    let debug: ContextProbeDebugPayload
+}
+
+struct ContextProbeRequestPayload: Decodable, Identifiable {
+    let requestId: String
+    let kind: String
+    let reason: String
+    let policy: ContextProbePolicyPayload
+    let status: String
+    let createdAt: String
+    let expiresAt: String?
+    let decidedAt: String?
+    let executedAt: String?
+    let decisionReason: String?
+    let metadataKeys: [String]
+    let isTerminal: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case kind
+        case reason
+        case policy
+        case status
+        case createdAt = "created_at"
+        case expiresAt = "expires_at"
+        case decidedAt = "decided_at"
+        case executedAt = "executed_at"
+        case decisionReason = "decision_reason"
+        case metadataKeys = "metadata_keys"
+        case isTerminal = "is_terminal"
+    }
+
+    var id: String { requestId }
+
+    var kindLabel: String {
+        switch kind {
+        case "app_context": return "Contexte app"
+        case "window_title": return "Titre fenêtre"
+        case "selected_text": return "Texte sélectionné"
+        case "clipboard_sample": return "Extrait clipboard"
+        case "screen_snapshot": return "Capture écran"
+        case "unknown": return "Probe inconnu"
+        default: return kind.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    var statusLabel: String {
+        switch status {
+        case "pending": return "À valider"
+        case "approved": return "Approuvée"
+        case "refused": return "Refusée"
+        case "expired": return "Expirée"
+        case "executed": return "Exécutée"
+        case "cancelled": return "Annulée"
+        default: return status
+        }
+    }
+
+    var statusAccentHex: String {
+        switch status {
+        case "approved": return "#5DCAA5"
+        case "executed": return "#5E9EFF"
+        case "refused": return "#ff453a"
+        case "expired", "cancelled": return "#7c7c80"
+        default: return "#EF9F27"
+        }
+    }
+
+    var canApproveOrRefuse: Bool {
+        status == "pending"
+    }
+
+    var canExecute: Bool {
+        status == "approved" && kind == "app_context"
+    }
+}
+
+struct ContextProbeDebugPayload: Decodable, Identifiable {
+    let requestId: String
+    let kind: String
+    let status: String
+    let reason: String
+    let createdAt: String
+    let expiresAt: String?
+    let decidedAt: String?
+    let executedAt: String?
+    let decisionReason: String?
+    let isTerminal: Bool
+    let isExpired: Bool
+    let policy: ContextProbePolicyPayload
+    let labels: ContextProbeLabelsPayload
+    let metadataKeys: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case kind
+        case status
+        case reason
+        case createdAt = "created_at"
+        case expiresAt = "expires_at"
+        case decidedAt = "decided_at"
+        case executedAt = "executed_at"
+        case decisionReason = "decision_reason"
+        case isTerminal = "is_terminal"
+        case isExpired = "is_expired"
+        case policy
+        case labels
+        case metadataKeys = "metadata_keys"
+    }
+
+    var id: String { requestId }
+}
+
+struct ContextProbePolicyPayload: Decodable {
+    let kind: String
+    let consent: String
+    let privacy: String
+    let retention: String
+    let allowRawValue: Bool
+    let allowPersistentStorage: Bool
+    let requiresUserVisibleReason: Bool
+    let maxChars: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case consent
+        case privacy
+        case retention
+        case allowRawValue = "allow_raw_value"
+        case allowPersistentStorage = "allow_persistent_storage"
+        case requiresUserVisibleReason = "requires_user_visible_reason"
+        case maxChars = "max_chars"
+    }
+
+    var consentLabel: String {
+        switch consent {
+        case "none": return "Aucun"
+        case "implicit_session": return "Session"
+        case "explicit_each_time": return "À chaque fois"
+        case "blocked": return "Bloqué"
+        default: return consent
+        }
+    }
+
+    var privacyLabel: String {
+        switch privacy {
+        case "public": return "Public"
+        case "path_sensitive": return "Chemin sensible"
+        case "content_sensitive": return "Contenu sensible"
+        case "secret_sensitive": return "Secret potentiel"
+        case "unknown": return "Inconnu"
+        default: return privacy
+        }
+    }
+
+    var retentionLabel: String {
+        switch retention {
+        case "ephemeral": return "Éphémère"
+        case "session": return "Session"
+        case "persistent": return "Persistant"
+        case "debug_only": return "Debug only"
+        default: return retention
+        }
+    }
+}
+
+struct ContextProbeLabelsPayload: Decodable {
+    let kind: String
+    let consent: String
+    let privacy: String
+    let retention: String
+    let risk: String
+
+    var riskAccentHex: String {
+        switch risk {
+        case "Low": return "#5DCAA5"
+        case "Moderate": return "#EF9F27"
+        case "Sensitive": return "#ff453a"
+        case "Blocked": return "#7c7c80"
+        default: return "#7c7c80"
+        }
+    }
+}
+
+struct ContextProbeResultPayload: Decodable {
+    let requestId: String
+    let kind: String
+    let captured: Bool
+    let data: [String: ContextProbeResultValue]
+    let privacy: String
+    let retention: String
+    let capturedAt: String
+    let blockedReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case kind
+        case captured
+        case data
+        case privacy
+        case retention
+        case capturedAt = "captured_at"
+        case blockedReason = "blocked_reason"
+    }
+}
+
+
+enum ContextProbeResultValue: Decodable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case stringArray([String])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Int.self) {
+            self = .int(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .double(value)
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode([String].self) {
+            self = .stringArray(value)
+        } else {
+            self = .null
+        }
+    }
+
+    var displayValue: String {
+        switch self {
+        case .string(let value): return value
+        case .int(let value): return "\(value)"
+        case .double(let value): return String(format: "%.2f", value)
+        case .bool(let value): return value ? "true" : "false"
+        case .stringArray(let value): return value.joined(separator: " · ")
+        case .null: return "—"
+        }
+    }
+
+    var stringArrayValue: [String]? {
+        if case .stringArray(let value) = self { return value }
+        return nil
+    }
+}
+
+struct WorkContextCardResponse: Decodable {
+    let card: WorkContextCardPayload
+}
+
+struct WorkContextCardPayload: Decodable {
+    let project: String?
+    let projectHint: String?
+    let projectHintConfidence: Double
+    let projectHintSource: String?
+    let activityLevel: String
+    let probableTask: String
+    let confidence: Double
+    let evidence: [String]
+    let missingContext: [String]
+    let safeNextProbes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case project
+        case projectHint = "project_hint"
+        case projectHintConfidence = "project_hint_confidence"
+        case projectHintSource = "project_hint_source"
+        case activityLevel = "activity_level"
+        case probableTask = "probable_task"
+        case confidence
+        case evidence
+        case missingContext = "missing_context"
+        case safeNextProbes = "safe_next_probes"
+    }
+
+    var projectLabel: String {
+        project?.isEmpty == false ? project! : "Projet inconnu"
+    }
+
+    var projectHintLabel: String? {
+        guard let projectHint, !projectHint.isEmpty else { return nil }
+        let confidence = Int((projectHintConfidence * 100).rounded())
+        if let projectHintSource, !projectHintSource.isEmpty {
+            return "Indice faible : \(projectHint) · \(projectHintSource) · \(confidence) %"
+        }
+        return "Indice faible : \(projectHint) · \(confidence) %"
+    }
+
+    var activityLabel: String {
+        switch activityLevel {
+        case "editing": return "Édition"
+        case "reading": return "Lecture"
+        case "executing": return "Exécution"
+        case "navigating": return "Navigation"
+        case "idle": return "Inactif"
+        case "unknown": return "Inconnu"
+        default: return activityLevel
+        }
+    }
+
+    var taskLabel: String {
+        switch probableTask {
+        case "coding": return "Développement"
+        case "writing": return "Rédaction"
+        case "debug": return "Débogage"
+        case "review": return "Revue"
+        case "test": return "Tests"
+        case "exploration", "browsing": return "Exploration"
+        case "general": return "Général"
+        default: return probableTask
+        }
+    }
+
+    var confidencePercentLabel: String {
+        "\(Int((confidence * 100).rounded())) %"
+    }
+
+    var confidenceAccentHex: String {
+        switch confidence {
+        case 0.75...: return "#5DCAA5"
+        case 0.45..<0.75: return "#EF9F27"
+        default: return "#7c7c80"
+        }
+    }
+}
+
 struct InsightEvent: Identifiable {
     let id = UUID()
     let type: String
@@ -1119,9 +1646,21 @@ struct ResumeCard: Identifiable, Equatable {
         case "compact":
             return NotchWindow.resumeCompactHeight
         case "expanded":
-            return NotchWindow.resumeExpandedHeight
+            return expandedDisplayHeight
         default:
             return NotchWindow.resumeStandardHeight
+        }
+    }
+
+    private var expandedDisplayHeight: CGFloat {
+        let totalLength = summary.count + lastObjective.count + nextAction.count
+        switch totalLength {
+        case 0..<260:
+            return 220
+        case 260..<380:
+            return 250
+        default:
+            return NotchWindow.resumeExpandedHeight
         }
     }
 }

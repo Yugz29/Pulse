@@ -49,6 +49,7 @@ class TestMainRuntimeState(unittest.TestCase):
             locked=False,
         )
         daemon_main.runtime_state.set_analysis(signals=signals, decision=decision)
+        daemon_main.runtime_state.set_latest_active_app("Xcode")
 
         with patch.object(
             daemon_main.store,

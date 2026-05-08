@@ -37,17 +37,22 @@ What it covers:
 - state store
 - `PresentState`, `CurrentContext` builders and legacy adapters
 - `SessionSnapshot` builders and legacy adapters
+- `work_blocks`, `work_block_*`, `recent_sessions`, and related legacy aliases
 - `ProposalCandidate` adapters
 - `SessionFSM`
 - runtime state matrix (`/ping`, `/state`, `/event`, `/insights`)
 - MCP handlers
 - session memory
+- commit / multi-cluster activity window correlation
 - FactEngine (facts, reinforce, contradict, decay, archive)
 - memory extractor (cooldown, journal, projects)
 - git diff module
 - `/facts` API routes
 - runtime orchestrator
 - LLM availability matrix
+- deterministic and LLM Resume Cards
+- Resume Card debug routes
+- context probes and approval/refusal transitions
 
 ## Contract Locking Tests
 
@@ -66,6 +71,11 @@ Important:
 - legacy `/state` fields may be tested for compatibility
 - they must not be used as the basis of new features
 
+The same rule applies to memory migration:
+- `work_blocks`, `work_block_*`, and `recent_sessions` are the canonical fields;
+- `work_window_*` and `closed_episodes` may remain tested only as temporary legacy aliases;
+- a legacy test must be explicitly named as such.
+
 These tests are used when Pulse must preserve behavior while changing internal
 structure. If one of these assertions fails, the default assumption is that the
 change is breaking until proven otherwise.
@@ -80,6 +90,9 @@ tested directly:
 - `SessionSnapshot`
 - `ProposalCandidate`
 - `SessionFSM`
+- `ResumeCard`
+- `work_blocks` / `work_block_*`
+- `ContextProbeRequest`
 
 They are not tested to justify behavior drift. They are tested to lock:
 - compatibility
@@ -92,7 +105,43 @@ Typical expectations:
 - a legacy adapter reproduces the exact previous contract
 - `RuntimeState.present` remains the canonical truth of the present
 - the session lifecycle has a single source of truth
+- Resume Cards remain context recovery projections and keep a deterministic fallback
+- context probes remain gated by validation and redaction
+- memory legacy aliases do not become canonical fields
 - a candidate-to-transport conversion does not mutate the final external payload
+
+## Resume Card Tests
+
+The Resume Card is tested as a context recovery projection, not as a source of truth.
+
+Locked points:
+- deterministic generation usable without an LLM;
+- deterministic fallback if the LLM is unavailable, invalid, or does not produce a final answer;
+- debug diagnostics on `/debug/resume-card/llm`;
+- modern sources (`PresentState`, `work_block_*`, `recent_sessions`, recent journal entries) preferred over legacy aliases;
+- `generated_by` distinguishes `deterministic` from `llm`.
+
+Useful debug routes:
+
+```bash
+curl -s -X POST http://127.0.0.1:8765/debug/resume-card \
+  -H "Content-Type: application/json" \
+  -d '{"sleep_minutes":35}' | python -m json.tool
+
+curl -s -X POST http://127.0.0.1:8765/debug/resume-card/llm \
+  -H "Content-Type: application/json" \
+  -d '{"sleep_minutes":35}' | python -m json.tool
+```
+
+Check in the LLM response:
+- `llm_available`
+- `debug.llm_called`
+- `debug.fallback_reason`
+- `debug.raw_preview`
+- `card.generated_by`
+
+The prepared Resume Card (`prepared_resume_card`) does not yet have a dedicated debug route for `prepare` / `peek` / `consume` / `expire`.
+It must still be validated mainly in the field through a real lock/unlock cycle.
 
 ## Interactive E2E
 
@@ -198,6 +247,23 @@ ls ~/.pulse/memory/sessions
 curl http://127.0.0.1:8765/facts
 curl http://127.0.0.1:8765/facts/profile
 ```
+
+### Prepared Resume Card
+
+- Work long enough to create real context.
+- Lock the screen.
+- Check daemon logs for a prepared card:
+
+```bash
+tail -n 120 ~/.pulse/logs/daemon.stdout.log ~/.pulse/logs/daemon.error.log | grep prepared_resume_card
+```
+
+- Unlock after a sufficient pause.
+- Verify the Resume Card appears quickly in the notch.
+- Check logs for:
+  - `prepared_resume_card stored`
+  - `prepared_resume_card emitted`
+- If no valid prepared card exists, verify the classic fallback path still works.
 
 ## LaunchAgent Checks
 

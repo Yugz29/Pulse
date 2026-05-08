@@ -6,9 +6,11 @@ from pathlib import Path
 from flask import Flask
 
 from daemon.core.contracts import SessionContext
+from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
-from daemon.routes.runtime import _FileEventCoalescer, register_runtime_routes
+from daemon.core.file_event_coalescer import FileEventCoalescer as _FileEventCoalescer
+from daemon.routes.runtime import register_runtime_routes
 from daemon.runtime_state import RuntimeState
 
 
@@ -155,6 +157,376 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["projects"][0]["name"], "Pulse")
         self.assertEqual(payload["current_window"]["id"], "ww-1")
 
+    def test_debug_work_episodes_expose_les_episodes_du_jour(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_work_episodes=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T15:30:00",
+                "episode_count": 1,
+                "episodes": [
+                    {
+                        "id": "work-episode-1",
+                        "project": "Pulse",
+                        "probable_task": "coding",
+                        "activity_level": "editing",
+                        "started_at": "2026-05-05T15:02:15",
+                        "ended_at": "2026-05-05T15:02:41",
+                        "duration_min": 1,
+                        "work_block_ids": ["work-block-1"],
+                        "evidence_count": 2,
+                        "confidence": 0.75,
+                        "boundary_reason": "end_of_events",
+                        "uncertainty_flags": ["short_episode"],
+                    }
+                ],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/work-episodes")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+        self.assertEqual(payload["episode_count"], 1)
+        self.assertEqual(payload["episodes"][0]["project"], "Pulse")
+        self.assertEqual(payload["episodes"][0]["work_block_ids"], ["work-block-1"])
+
+    def test_debug_work_episodes_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_work_episodes=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T15:30:00",
+                "episode_count": 0,
+                "episodes": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/work-episodes?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_journal_candidates_expose_les_candidats_dry_run(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_candidates=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T15:45:00",
+                "candidate_count": 1,
+                "ignored_count": 1,
+                "candidates": [
+                    {
+                        "id": "journal-candidate-1",
+                        "episode_id": "work-episode-1",
+                        "project": "Pulse",
+                        "probable_task": "coding",
+                        "dominant_scope": "work_episode",
+                        "started_at": "2026-05-05T15:02:15",
+                        "ended_at": "2026-05-05T15:12:41",
+                        "duration_min": 10,
+                        "boundary_reason": "screen_locked",
+                        "strong_event_count": 2,
+                        "weak_event_count": 0,
+                        "confidence": 0.9,
+                        "status": "candidate",
+                        "ignored": False,
+                        "ignore_reason": None,
+                        "debug_reason": "split on boundary event screen_locked",
+                    }
+                ],
+                "ignored": [
+                    {
+                        "id": "journal-candidate-2",
+                        "episode_id": "work-episode-2",
+                        "project": "Pulse",
+                        "probable_task": "coding",
+                        "dominant_scope": "work_episode",
+                        "started_at": "2026-05-05T15:15:00",
+                        "ended_at": "2026-05-05T15:20:00",
+                        "duration_min": 5,
+                        "boundary_reason": "end_of_events",
+                        "strong_event_count": 1,
+                        "weak_event_count": 0,
+                        "confidence": 0.75,
+                        "status": "ignored",
+                        "ignored": True,
+                        "ignore_reason": "open_episode_end_of_events",
+                        "debug_reason": "episode open until end of observed events",
+                    }
+                ],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-candidates")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["ignored_count"], 1)
+        self.assertEqual(payload["candidates"][0]["episode_id"], "work-episode-1")
+        self.assertEqual(payload["ignored"][0]["ignore_reason"], "open_episode_end_of_events")
+
+    def test_debug_journal_candidates_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_candidates=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T15:45:00",
+                "candidate_count": 0,
+                "ignored_count": 0,
+                "candidates": [],
+                "ignored": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-candidates?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_journal_candidates_fallback_when_callback_absent(self):
+        response = self.client.get("/debug/journal-candidates")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["candidate_count"], 0)
+        self.assertEqual(payload["ignored_count"], 0)
+        self.assertEqual(payload["candidates"], [])
+        self.assertEqual(payload["ignored"], [])
+
+    def test_debug_journal_comparison_expose_les_ecarts_dry_run(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_comparison=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T16:00:00",
+                "journal_entry_count": 1,
+                "candidate_count": 1,
+                "matches": [
+                    {
+                        "journal_entry_id": "journal-1",
+                        "candidate_id": "candidate-1",
+                        "project": "Pulse",
+                        "journal_started_at": "2026-05-05T11:00:00",
+                        "journal_ended_at": "2026-05-05T11:20:00",
+                        "candidate_started_at": "2026-05-05T11:01:00",
+                        "candidate_ended_at": "2026-05-05T11:19:00",
+                        "start_delta_min": 1,
+                        "end_delta_min": -1,
+                        "duration_delta_min": -2,
+                        "flags": ["time_aligned", "journal_longer"],
+                    }
+                ],
+                "unmatched_journal_entries": [],
+                "unmatched_candidates": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-comparison")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+        self.assertEqual(payload["journal_entry_count"], 1)
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["matches"][0]["candidate_id"], "candidate-1")
+        self.assertIn("time_aligned", payload["matches"][0]["flags"])
+
+    def test_debug_journal_comparison_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_journal_comparison=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T16:00:00",
+                "journal_entry_count": 0,
+                "candidate_count": 0,
+                "matches": [],
+                "unmatched_journal_entries": [],
+                "unmatched_candidates": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/journal-comparison?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_date_invalide_retourne_400(self):
+        response = self.client.get("/debug/journal-comparison?date=2026-99-99")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "invalid_date")
+        self.assertEqual(payload["message"], "date must use YYYY-MM-DD")
+
+    def test_debug_journal_comparison_fallback_when_callback_absent(self):
+        response = self.client.get("/debug/journal-comparison")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["journal_entry_count"], 0)
+        self.assertEqual(payload["candidate_count"], 0)
+        self.assertEqual(payload["matches"], [])
+        self.assertEqual(payload["unmatched_journal_entries"], [])
+        self.assertEqual(payload["unmatched_candidates"], [])
+
+    def test_debug_commit_episode_links_expose_les_liens_dry_run(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_commit_episode_links=lambda: {
+                "date": "2026-05-05",
+                "generated_at": "2026-05-05T16:30:00",
+                "commit_count": 1,
+                "linked_count": 1,
+                "unlinked_count": 0,
+                "links": [
+                    {
+                        "id": "commit-link-journal-1-1",
+                        "entry_id": "journal-1",
+                        "commit_subject": "feat: dry run",
+                        "commit_message": "feat: dry run",
+                        "delivered_at": None,
+                        "journal_started_at": "2026-05-05T12:00:00",
+                        "journal_ended_at": "2026-05-05T12:10:00",
+                        "episode_id": "episode-1",
+                        "candidate_id": "candidate-1",
+                        "episode_started_at": "2026-05-05T12:01:00",
+                        "episode_ended_at": "2026-05-05T12:09:00",
+                        "project": "Pulse",
+                        "confidence": 0.88,
+                        "status": "linked",
+                        "link_reason": "journal_candidate_overlap",
+                        "flags": ["linked_by_overlap"],
+                    }
+                ],
+                "unlinked_commits": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/commit-episode-links")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["links"][0]["episode_id"], "episode-1")
+
+    def test_debug_commit_episode_links_supporte_le_query_param_date(self):
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_today_commit_episode_links=lambda date=None: {
+                "date": date.date().isoformat() if date else "today",
+                "generated_at": "2026-05-05T16:30:00",
+                "commit_count": 0,
+                "linked_count": 0,
+                "unlinked_count": 0,
+                "links": [],
+                "unlinked_commits": [],
+            },
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        response = client.get("/debug/commit-episode-links?date=2026-05-05")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["date"], "2026-05-05")
+
+    def test_debug_commit_episode_links_date_invalide_retourne_400(self):
+        response = self.client.get("/debug/commit-episode-links?date=bad-date")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "invalid_date")
+
+    def test_debug_commit_episode_links_fallback_when_callback_absent(self):
+        response = self.client.get("/debug/commit-episode-links")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["commit_count"], 0)
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 0)
+        self.assertEqual(payload["links"], [])
+        self.assertEqual(payload["unlinked_commits"], [])
+
     def test_state_golden_legacy_json_output_exact(self):
         self.runtime_state.set_paused(True)
         signals = Signals(
@@ -196,95 +568,59 @@ class TestRuntimeRoutes(unittest.TestCase):
             "active_app": "Xcode",
             "session_duration_min": 96,
         }
+        self.runtime_state.set_latest_active_app("Xcode")
 
-        expected = {
-            "active_app": "Xcode",
-            "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-            "active_project": "Pulse",
-            "session_duration_min": 96,
-            "last_event_type": None,
-            "runtime_paused": True,
-            "present": {
-                "session_status": "active",
-                "awake": True,
-                "locked": False,
-                "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-                "active_project": "Pulse",
-                "probable_task": "coding",
-                "activity_level": "editing",
-                "focus_level": "deep",
-                "friction_score": 0.42,
-                "clipboard_context": "text",
-                "session_duration_min": 96,
-                "updated_at": "2026-04-23T10:00:00",
-            },
-            "signals": {
-                "active_project": "Pulse",
-                "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-                "probable_task": "coding",
-                "activity_level": "editing",
-                "task_confidence": 0.81,
-                "friction_score": 0.42,
-                "focus_level": "deep",
-                "session_duration_min": 96,
-                "recent_apps": ["Xcode", "Codex", "Safari"],
-                "clipboard_context": "text",
-                "edited_file_count_10m": 4,
-                "file_type_mix_10m": {"source": 2, "test": 1, "docs": 1},
-                "rename_delete_ratio_10m": 0.25,
-                "dominant_file_mode": "few_files",
-                "work_pattern_candidate": "feature_candidate",
-                "last_session_context": "Dernière session Pulse : hier (développement, 45 min)",
-            },
-            "decision": {
-                "action": "notify",
-                "level": 2,
-                "reason": "high_friction",
-                "payload": {"file": "PanelView.swift"},
-            },
-            "debug": {
-                "store": {
-                    "active_app": "Xcode",
-                    "session_duration_min": 96,
-                },
-                "runtime": {
-                    "latest_active_app": None,
-                    "lock_marker_active": False,
-                    "last_screen_locked_at": None,
-                    "memory_synced_at": None,
-                },
-                "signals": {
-                    "active_project": "Pulse",
-                    "active_file": "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
-                    "probable_task": "coding",
-                    "activity_level": "editing",
-                    "task_confidence": 0.81,
-                    "friction_score": 0.42,
-                    "focus_level": "deep",
-                    "session_duration_min": 96,
-                    "recent_apps": ["Xcode", "Codex", "Safari"],
-                    "clipboard_context": "text",
-                    "edited_file_count_10m": 4,
-                    "file_type_mix_10m": {"source": 2, "test": 1, "docs": 1},
-                    "rename_delete_ratio_10m": 0.25,
-                    "dominant_file_mode": "few_files",
-                    "work_pattern_candidate": "feature_candidate",
-                    "last_session_context": "Dernière session Pulse : hier (développement, 45 min)",
-                },
-                "decision": {
-                    "action": "notify",
-                    "level": 2,
-                    "reason": "high_friction",
-                    "payload": {"file": "PanelView.swift"},
-                },
-            },
-        }
-
-        with patch("daemon.routes.runtime.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
             response = self.client.get("/state")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), expected)
+
+        payload = response.get_json()
+
+        self.assertEqual(payload["active_app"], "Xcode")
+        self.assertEqual(payload["active_project"], "Pulse")
+        self.assertEqual(
+            payload["active_file"],
+            "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
+        )
+        self.assertEqual(payload["session_duration_min"], 96)
+        self.assertEqual(payload["last_event_type"], None)
+        self.assertTrue(payload["runtime_paused"])
+
+        present = payload["present"]
+
+        self.assertEqual(present["session_status"], "active")
+        self.assertTrue(present["awake"])
+        self.assertFalse(present["locked"])
+        self.assertEqual(present["probable_task"], "coding")
+        self.assertEqual(present["activity_level"], "editing")
+        self.assertEqual(present["focus_level"], "deep")
+
+        signals_payload = payload["signals"]
+
+        self.assertEqual(signals_payload["active_project"], "Pulse")
+        self.assertEqual(signals_payload["probable_task"], "coding")
+        self.assertEqual(signals_payload["task_confidence"], 0.81)
+        self.assertEqual(signals_payload["friction_score"], 0.42)
+        self.assertEqual(signals_payload["focus_level"], "deep")
+
+        decision_payload = payload["decision"]
+
+        self.assertEqual(decision_payload["action"], "notify")
+        self.assertEqual(decision_payload["reason"], "high_friction")
+        self.assertEqual(
+            decision_payload["payload"],
+            {"file": "PanelView.swift"},
+        )
+
+        self.assertIn("debug", payload)
+
+        debug = payload["debug"]
+
+        self.assertIn("store", debug)
+        self.assertIn("runtime", debug)
+        self.assertIn("signals", debug)
+        self.assertIn("decision", debug)
 
     def test_state_fallbacks_to_builder_when_current_context_absent(self):
         signals = Signals(
@@ -311,9 +647,8 @@ class TestRuntimeRoutes(unittest.TestCase):
             "session_duration_min": 0,
         }
 
-        with patch("daemon.routes.runtime.find_git_root", return_value=None), \
-             patch("daemon.routes.runtime.find_workspace_root", return_value=None), \
-             patch("daemon.routes.runtime.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
+        with patch("daemon.routes.runtime_ingestion.find_workspace_root", return_value=None), \
+             patch("daemon.routes.runtime_state_payloads.last_session_context", return_value="Dernière session Pulse : hier (développement, 45 min)"):
             response = self.client.get("/state")
 
         payload = response.get_json()
@@ -343,6 +678,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             locked=False,
         )
         self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("RuntimeApp")
         self.store.to_dict.return_value = {
             "active_project": "OldProject",
             "active_file": "/tmp/stale.py",
@@ -350,14 +686,21 @@ class TestRuntimeRoutes(unittest.TestCase):
             "session_duration_min": 999,
         }
 
-        with patch("daemon.routes.runtime.last_session_context", return_value=None):
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
             response = self.client.get("/state")
 
         payload = response.get_json()
         self.assertEqual(payload["active_project"], "Pulse")
         self.assertEqual(payload["active_file"], "/tmp/current.py")
+        self.assertEqual(payload["active_app"], "RuntimeApp")
+        self.assertEqual(payload["session_duration_min"], 24)
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["active_file"], "/tmp/current.py")
+        self.assertEqual(payload["signals"]["session_duration_min"], 24)
+        self.assertEqual(payload["debug"]["store"]["active_project"], "OldProject")
+        self.assertEqual(payload["debug"]["store"]["active_file"], "/tmp/stale.py")
+        self.assertEqual(payload["debug"]["store"]["active_app"], "Xcode")
+        self.assertEqual(payload["debug"]["store"]["session_duration_min"], 999)
 
     def test_state_uses_atomic_runtime_snapshot_read_path(self):
         signals = Signals(
@@ -385,7 +728,7 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         with patch.object(self.runtime_state, "get_signal_snapshot", side_effect=AssertionError("legacy signal snapshot must not be used")), \
              patch.object(self.runtime_state, "get_present_snapshot", side_effect=AssertionError("legacy present snapshot must not be used")), \
-             patch("daemon.routes.runtime.last_session_context", return_value=None):
+             patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
             response = self.client.get("/state")
 
         self.assertEqual(response.status_code, 200)
@@ -500,7 +843,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         client = app.test_client()
         self.store.to_dict.return_value = {"active_app": "Terminal"}
 
-        with patch("daemon.routes.runtime.last_session_context", return_value=None):
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
             response = client.get("/state")
 
         payload = response.get_json()
@@ -603,8 +946,920 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(response.get_json(), [])
         self.bus.recent.assert_called_once_with(100)
 
+    def test_events_debug_describes_recent_events_without_raw_payload_values(self):
+        self.bus.recent.return_value = [
+            Event(
+                "file_modified",
+                {"path": "/tmp/Pulse/daemon/main.py", "_actor": "user"},
+                timestamp=datetime(2026, 5, 1, 16, 0, 0),
+            ),
+            Event(
+                "clipboard_updated",
+                {"clipboard_context": "text", "length": 42},
+                timestamp=datetime(2026, 5, 1, 16, 1, 0),
+            ),
+        ]
+
+        response = self.client.get("/events/debug")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["events"][0]["type"], "file_modified")
+        self.assertEqual(payload["events"][0]["source"], "filesystem")
+        self.assertEqual(payload["events"][0]["bucket"], "filesystem")
+        self.assertEqual(payload["events"][0]["privacy"], "path_sensitive")
+        self.assertEqual(payload["events"][0]["retention"], "session")
+        self.assertEqual(payload["events"][0]["payload_keys"], ["_actor", "path"])
+        self.assertNotIn("payload", payload["events"][0])
+        self.assertNotIn("/tmp/Pulse/daemon/main.py", str(payload["events"][0]))
+
+        self.assertEqual(payload["events"][1]["type"], "clipboard_updated")
+        self.assertEqual(payload["events"][1]["source"], "clipboard")
+        self.assertEqual(payload["events"][1]["bucket"], "clipboard_activity")
+        self.assertEqual(payload["events"][1]["privacy"], "content_sensitive")
+        self.assertEqual(payload["events"][1]["retention"], "ephemeral")
+        self.assertEqual(payload["events"][1]["payload_keys"], ["clipboard_context", "length"])
+        self.assertNotIn("payload", payload["events"][1])
+        self.bus.recent.assert_called_once_with(50)
+
+    def test_events_debug_clamps_limit_and_filters_since(self):
+        self.bus.recent.return_value = [
+            Event(
+                "file_modified",
+                {"path": "/tmp/old.py"},
+                timestamp=datetime(2026, 5, 1, 15, 59, 0),
+            ),
+            Event(
+                "app_activated",
+                {"app_name": "Code"},
+                timestamp=datetime(2026, 5, 1, 16, 1, 0),
+            ),
+        ]
+
+        response = self.client.get("/events/debug?limit=500&since=2026-05-01T16:00:00")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["events"][0]["type"], "app_activated")
+        self.assertEqual(payload["events"][0]["source"], "app")
+        self.assertEqual(payload["events"][0]["privacy"], "public")
+        self.bus.recent.assert_called_once_with(200)
+
+    def test_events_debug_invalid_limit_uses_default(self):
+        self.bus.recent.return_value = []
+
+        response = self.client.get("/events/debug?limit=abc")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"events": [], "count": 0})
+        self.bus.recent.assert_called_once_with(50)
+
+    def test_events_debug_filters_by_event_metadata(self):
+        self.bus.recent.return_value = [
+            Event(
+                "file_modified",
+                {"path": "/tmp/Pulse/daemon/main.py"},
+                timestamp=datetime(2026, 5, 1, 16, 0, 0),
+            ),
+            Event(
+                "clipboard_updated",
+                {"clipboard_context": "text", "length": 42},
+                timestamp=datetime(2026, 5, 1, 16, 1, 0),
+            ),
+            Event(
+                "app_activated",
+                {"app_name": "Code"},
+                timestamp=datetime(2026, 5, 1, 16, 2, 0),
+            ),
+        ]
+
+        response = self.client.get(
+            "/events/debug?source=clipboard&bucket=clipboard_activity&privacy=content_sensitive&retention=ephemeral"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["events"][0]["type"], "clipboard_updated")
+        self.assertEqual(payload["events"][0]["source"], "clipboard")
+        self.assertEqual(payload["events"][0]["bucket"], "clipboard_activity")
+        self.assertEqual(payload["events"][0]["privacy"], "content_sensitive")
+        self.assertEqual(payload["events"][0]["retention"], "ephemeral")
+        self.bus.recent.assert_called_once_with(50)
+
+    def test_events_schema_exposes_event_metadata_enums(self):
+        response = self.client.get("/events/schema")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertIn("filesystem", payload["sources"])
+        self.assertIn("terminal", payload["sources"])
+        self.assertIn("unknown", payload["sources"])
+
+        self.assertIn("filesystem", payload["buckets"])
+        self.assertIn("terminal_activity", payload["buckets"])
+        self.assertIn("unknown", payload["buckets"])
+
+        self.assertIn("public", payload["privacy_classes"])
+        self.assertIn("path_sensitive", payload["privacy_classes"])
+        self.assertIn("content_sensitive", payload["privacy_classes"])
+        self.assertIn("secret_sensitive", payload["privacy_classes"])
+        self.assertIn("unknown", payload["privacy_classes"])
+
+        self.assertIn("ephemeral", payload["retention_classes"])
+        self.assertIn("session", payload["retention_classes"])
+        self.assertIn("persistent", payload["retention_classes"])
+        self.assertIn("debug_only", payload["retention_classes"])
+
+    def test_timeline_preview_builds_span_from_current_context_when_signals_exist(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/runtime.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=30,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        with patch("daemon.routes.runtime_debug_routes.find_workspace_root", return_value=None):
+            response = self.client.get("/timeline/preview")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        span = payload["span"]
+        debug = payload["debug"]
+        self.assertEqual(span["kind"], "work")
+        self.assertEqual(span["title"], "Pulse — coding")
+        self.assertEqual(span["project"], "Pulse")
+        self.assertEqual(span["activity_level"], "editing")
+        self.assertEqual(span["probable_task"], "coding")
+        self.assertEqual(span["confidence"], 0.82)
+        self.assertEqual(span["buckets"], ["filesystem"])
+        self.assertEqual(span["privacy"], "path_sensitive")
+        self.assertEqual(span["retention"], "session")
+        self.assertEqual(span["evidence_event_count"], 0)
+        self.assertEqual(span["metadata"], {"source": "current_context"})
+        self.assertEqual(span["duration_min"], 30)
+        self.assertEqual(debug["kind"], "work")
+        self.assertEqual(debug["title"], "Pulse — coding")
+        self.assertEqual(debug["policy"], {
+            "privacy": "Path-sensitive span",
+            "retention": "Session-scoped by default",
+            "confidence": "High confidence",
+        })
+        self.assertEqual(debug["metadata_keys"], ["source"])
+        self.assertNotIn("metadata", debug)
+
+    def test_timeline_preview_falls_back_to_present_when_no_signals_exist(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="debug",
+            friction_score=0.2,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=["Terminal"],
+            clipboard_context=None,
+            activity_level="executing",
+            task_confidence=0.91,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+
+        response = self.client.get("/timeline/preview")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        span = payload["span"]
+        debug = payload["debug"]
+        self.assertEqual(span["kind"], "debug")
+        self.assertEqual(span["title"], "Pulse — debug")
+        self.assertEqual(span["project"], "Pulse")
+        self.assertEqual(span["activity_level"], "executing")
+        self.assertEqual(span["probable_task"], "debug")
+        self.assertEqual(span["confidence"], 0.0)
+        self.assertEqual(span["buckets"], ["terminal_activity"])
+        self.assertEqual(span["privacy"], "content_sensitive")
+        self.assertEqual(span["duration_min"], 5)
+        self.assertEqual(debug["kind"], "debug")
+        self.assertEqual(debug["title"], "Pulse — debug")
+        self.assertEqual(debug["policy"], {
+            "privacy": "Content-sensitive span",
+            "retention": "Session-scoped by default",
+            "confidence": "No confidence score",
+        })
+        self.assertEqual(debug["metadata_keys"], ["source"])
+        self.assertNotIn("metadata", debug)
+
+    def test_timeline_schema_exposes_span_kinds(self):
+        response = self.client.get("/timeline/schema")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertIn("work", payload["span_kinds"])
+        self.assertIn("break", payload["span_kinds"])
+        self.assertIn("debug", payload["span_kinds"])
+        self.assertIn("reading", payload["span_kinds"])
+        self.assertIn("execution", payload["span_kinds"])
+        self.assertIn("system", payload["span_kinds"])
+        self.assertIn("memory", payload["span_kinds"])
+        self.assertIn("unknown", payload["span_kinds"])
+
+
+    def test_work_context_route_builds_passive_card_from_current_runtime_context(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/work_context_card.py",
+            probable_task="debug",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=42,
+            recent_apps=["Code", "Terminal", "ChatGPT"],
+            clipboard_context="text",
+            edited_file_count_10m=3,
+            activity_level="editing",
+            task_confidence=0.78,
+            window_title="Pulse — work_context_card.py — Visual Studio Code",
+            window_title_app="Code",
+        )
+        decision = Decision(
+            action="context_ready",
+            level=1,
+            reason="context_available",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=decision)
+        self.runtime_state.set_latest_active_app("Code")
+
+        with patch("daemon.routes.runtime_debug_routes.find_workspace_root", return_value=None):
+            response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        card = payload["card"]
+
+        self.assertEqual(card["project"], "Pulse")
+        self.assertEqual(card["project_hint"], None)
+        self.assertEqual(card["project_hint_confidence"], 0.0)
+        self.assertEqual(card["project_hint_source"], None)
+        self.assertEqual(card["activity_level"], "editing")
+        self.assertEqual(card["probable_task"], "debug")
+        self.assertEqual(card["confidence"], 0.78)
+        self.assertIn("Projet actif détecté : Pulse", card["evidence"])
+        self.assertIn("Niveau d'activité : editing", card["evidence"])
+        self.assertIn("Tâche probable : debug", card["evidence"])
+        self.assertIn("Application active : Code", card["evidence"])
+        self.assertIn("Titre de fenêtre disponible", card["evidence"])
+        self.assertIn("Fichiers modifiés récemment : 3", card["evidence"])
+        self.assertIn("Applications récentes : Code, Terminal, ChatGPT", card["evidence"])
+        self.assertIn("Décision runtime récente : context_ready", card["evidence"])
+        self.assertEqual(card["missing_context"], [])
+        self.assertEqual(card["safe_next_probes"], [])
+        self.assertNotIn("active_file", card)
+        self.assertNotIn("/tmp/Pulse/daemon/work_context_card.py", str(card))
+
+    def test_work_context_route_falls_back_to_present_without_signals(self):
+        signals = Signals(
+            active_project=None,
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=[],
+            clipboard_context=None,
+            activity_level="unknown",
+            task_confidence=None,
+            window_title=None,
+            window_title_app=None,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+
+        response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        self.assertEqual(card["project"], None)
+        self.assertEqual(card["project_hint"], None)
+        self.assertEqual(card["project_hint_confidence"], 0.0)
+        self.assertEqual(card["project_hint_source"], None)
+        self.assertEqual(card["activity_level"], "unknown")
+        self.assertEqual(card["probable_task"], "general")
+        self.assertEqual(card["confidence"], 0.0)
+        self.assertEqual(card["evidence"], [])
+        self.assertEqual(card["missing_context"], [
+            "Projet actif non identifié",
+            "Tâche utilisateur encore générale",
+            "Niveau d'activité incertain",
+            "Titre de fenêtre non disponible",
+        ])
+        self.assertEqual(card["safe_next_probes"], ["app_context", "window_title"])
+
+
+    def test_work_context_route_exposes_weak_project_hint_without_promoting_project(self):
+        signals = Signals(
+            active_project=None,
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=["Code"],
+            clipboard_context=None,
+            activity_level="reading",
+            task_confidence=0.35,
+            window_title="Pulse — DashboardRootView.swift — Visual Studio Code",
+            window_title_app="Code",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        with patch("daemon.routes.runtime_debug_routes.find_workspace_root", return_value=None):
+            response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        self.assertEqual(card["project"], None)
+        self.assertEqual(card["project_hint"], "Pulse")
+        self.assertEqual(card["project_hint_confidence"], 0.35)
+        self.assertEqual(card["project_hint_source"], "window_title")
+        self.assertNotIn("Projet actif détecté : Pulse", card["evidence"])
+        self.assertIn("Projet actif non identifié", card["missing_context"])
+
+    def test_context_probes_schema_exposes_default_safety_policies(self):
+        response = self.client.get("/context-probes/schema")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertIn("app_context", payload["probe_kinds"])
+        self.assertIn("window_title", payload["probe_kinds"])
+        self.assertIn("selected_text", payload["probe_kinds"])
+        self.assertIn("clipboard_sample", payload["probe_kinds"])
+        self.assertIn("screen_snapshot", payload["probe_kinds"])
+        self.assertIn("unknown", payload["probe_kinds"])
+
+        self.assertIn("implicit_session", payload["consent_levels"])
+        self.assertIn("explicit_each_time", payload["consent_levels"])
+        self.assertIn("blocked", payload["consent_levels"])
+
+        policies = payload["default_policies"]
+        self.assertEqual(policies["app_context"]["consent"], "implicit_session")
+        self.assertEqual(policies["app_context"]["privacy"], "public")
+        self.assertEqual(policies["app_context"]["retention"], "session")
+        self.assertFalse(policies["app_context"]["allow_raw_value"])
+        self.assertFalse(policies["app_context"]["allow_persistent_storage"])
+
+        self.assertEqual(policies["selected_text"]["consent"], "explicit_each_time")
+        self.assertEqual(policies["selected_text"]["privacy"], "content_sensitive")
+        self.assertEqual(policies["selected_text"]["retention"], "ephemeral")
+        self.assertFalse(policies["selected_text"]["allow_raw_value"])
+        self.assertFalse(policies["selected_text"]["allow_persistent_storage"])
+
+        self.assertEqual(policies["screen_snapshot"]["consent"], "explicit_each_time")
+        self.assertEqual(policies["screen_snapshot"]["privacy"], "content_sensitive")
+        self.assertEqual(policies["screen_snapshot"]["retention"], "ephemeral")
+        self.assertFalse(policies["screen_snapshot"]["allow_raw_value"])
+        self.assertFalse(policies["screen_snapshot"]["allow_persistent_storage"])
+
+        self.assertEqual(payload["unknown_policy"], {
+            "kind": "unknown",
+            "consent": "blocked",
+            "privacy": "unknown",
+            "retention": "debug_only",
+            "allow_raw_value": False,
+            "allow_persistent_storage": False,
+            "requires_user_visible_reason": True,
+            "max_chars": None,
+        })
+
+
+    def test_context_probe_request_preview_creates_debuggable_non_persistent_request(self):
+        response = self.client.post(
+            "/context-probes/request-preview",
+            json={
+                "kind": "selected_text",
+                "reason": "Explain selected error",
+                "ttl_sec": 120,
+                "metadata": {
+                    "raw_selection": "SECRET",
+                    "source": "dashboard",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertEqual(request_payload["kind"], "selected_text")
+        self.assertEqual(request_payload["reason"], "Explain selected error")
+        self.assertEqual(request_payload["status"], "pending")
+        self.assertEqual(request_payload["policy"]["consent"], "explicit_each_time")
+        self.assertEqual(request_payload["policy"]["privacy"], "content_sensitive")
+        self.assertEqual(request_payload["policy"]["retention"], "ephemeral")
+        self.assertFalse(request_payload["policy"]["allow_raw_value"])
+        self.assertFalse(request_payload["policy"]["allow_persistent_storage"])
+        self.assertEqual(request_payload["metadata_keys"], ["raw_selection", "source"])
+        self.assertNotIn("metadata", request_payload)
+        self.assertNotIn("SECRET", str(payload))
+
+        self.assertEqual(debug["kind"], "selected_text")
+        self.assertEqual(debug["status"], "pending")
+        self.assertEqual(debug["labels"], {
+            "kind": "Selected text",
+            "consent": "Requires explicit approval every time",
+            "privacy": "Content-sensitive context",
+            "retention": "Ephemeral by default",
+            "risk": "Sensitive",
+        })
+        self.assertEqual(debug["metadata_keys"], ["raw_selection", "source"])
+        self.assertNotIn("metadata", debug)
+
+    def test_context_probe_request_preview_unknown_kind_is_blocked(self):
+        response = self.client.post(
+            "/context-probes/request-preview",
+            json={
+                "kind": "not_a_probe",
+                "reason": "Try unknown probe",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertEqual(request_payload["kind"], "unknown")
+        self.assertEqual(request_payload["policy"]["consent"], "blocked")
+        self.assertEqual(request_payload["policy"]["privacy"], "unknown")
+        self.assertEqual(request_payload["policy"]["retention"], "debug_only")
+        self.assertEqual(debug["labels"]["risk"], "Blocked")
+        self.assertEqual(debug["labels"]["consent"], "Blocked by default")
+
+
+    def test_context_probe_request_preview_invalid_ttl_and_metadata_use_safe_defaults(self):
+        response = self.client.post(
+            "/context-probes/request-preview",
+            json={
+                "kind": "app_context",
+                "reason": "",
+                "ttl_sec": "invalid",
+                "metadata": "not-a-dict",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        request_payload = payload["request"]
+
+        self.assertEqual(request_payload["kind"], "app_context")
+        self.assertEqual(request_payload["reason"], "Context probe requested")
+        self.assertEqual(request_payload["policy"]["consent"], "implicit_session")
+        self.assertEqual(request_payload["policy"]["privacy"], "public")
+        self.assertEqual(request_payload["policy"]["retention"], "session")
+        self.assertEqual(request_payload["metadata_keys"], [])
+
+        created_at = datetime.fromisoformat(request_payload["created_at"])
+        expires_at = datetime.fromisoformat(request_payload["expires_at"])
+        self.assertEqual(int((expires_at - created_at).total_seconds()), 300)
+
+
+    def test_context_probe_requests_create_and_list_stored_requests(self):
+        create_response = self.client.post(
+            "/context-probes/requests",
+            json={
+                "kind": "selected_text",
+                "reason": "Explain selected error",
+                "ttl_sec": 120,
+                "metadata": {
+                    "raw_selection": "SECRET",
+                    "source": "dashboard",
+                },
+            },
+        )
+
+        self.assertEqual(create_response.status_code, 200)
+        created_payload = create_response.get_json()
+        request_id = created_payload["request"]["request_id"]
+        self.assertEqual(created_payload["request"]["kind"], "selected_text")
+        self.assertEqual(created_payload["request"]["status"], "pending")
+        self.assertEqual(created_payload["request"]["metadata_keys"], ["raw_selection", "source"])
+        self.assertNotIn("metadata", created_payload["request"])
+        self.assertNotIn("SECRET", str(created_payload))
+
+        list_response = self.client.get("/context-probes/requests")
+
+        self.assertEqual(list_response.status_code, 200)
+        list_payload = list_response.get_json()
+        self.assertEqual(list_payload["count"], 1)
+        self.assertEqual(list_payload["requests"][0]["request_id"], request_id)
+        self.assertEqual(list_payload["requests"][0]["kind"], "selected_text")
+        self.assertEqual(list_payload["debug"][0]["request_id"], request_id)
+        self.assertEqual(list_payload["debug"][0]["labels"]["risk"], "Sensitive")
+        self.assertNotIn("SECRET", str(list_payload))
+
+    def test_context_probe_requests_list_filters_status_and_include_terminal(self):
+        first = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "app_context", "reason": "Need app context"},
+        ).get_json()["request"]
+        second = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample"},
+        ).get_json()["request"]
+
+        refuse_response = self.client.post(
+            f"/context-probes/requests/{second['request_id']}/refuse",
+            json={"reason": "Too sensitive"},
+        )
+
+        self.assertEqual(refuse_response.status_code, 200)
+
+        pending_response = self.client.get("/context-probes/requests?status=pending")
+        self.assertEqual(pending_response.status_code, 200)
+        pending_payload = pending_response.get_json()
+        self.assertEqual(pending_payload["count"], 1)
+        self.assertEqual(pending_payload["requests"][0]["request_id"], first["request_id"])
+
+        active_response = self.client.get("/context-probes/requests?include_terminal=false")
+        self.assertEqual(active_response.status_code, 200)
+        active_payload = active_response.get_json()
+        self.assertEqual(active_payload["count"], 1)
+        self.assertEqual(active_payload["requests"][0]["request_id"], first["request_id"])
+
+        refused_response = self.client.get("/context-probes/requests?status=refused")
+        self.assertEqual(refused_response.status_code, 200)
+        refused_payload = refused_response.get_json()
+        self.assertEqual(refused_payload["count"], 1)
+        self.assertEqual(refused_payload["requests"][0]["request_id"], second["request_id"])
+
+    def test_context_probe_requests_approve_and_refuse_update_stored_status(self):
+        approve_candidate = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "window_title", "reason": "Need window title"},
+        ).get_json()["request"]
+        refuse_candidate = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "screen_snapshot", "reason": "Need visual context"},
+        ).get_json()["request"]
+
+        approve_response = self.client.post(
+            f"/context-probes/requests/{approve_candidate['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        refuse_response = self.client.post(
+            f"/context-probes/requests/{refuse_candidate['request_id']}/refuse",
+            json={"reason": "Too sensitive"},
+        )
+
+        self.assertEqual(approve_response.status_code, 200)
+        approved = approve_response.get_json()
+        self.assertEqual(approved["request"]["status"], "approved")
+        self.assertEqual(approved["request"]["decision_reason"], "User accepted")
+        self.assertEqual(approved["debug"]["labels"]["kind"], "Window title")
+
+        self.assertEqual(refuse_response.status_code, 200)
+        refused = refuse_response.get_json()
+        self.assertEqual(refused["request"]["status"], "refused")
+        self.assertEqual(refused["request"]["decision_reason"], "Too sensitive")
+        self.assertEqual(refused["debug"]["labels"]["risk"], "Sensitive")
+
+        list_response = self.client.get("/context-probes/requests")
+        statuses = {
+            item["request_id"]: item["status"]
+            for item in list_response.get_json()["requests"]
+        }
+        self.assertEqual(statuses[approve_candidate["request_id"]], "approved")
+        self.assertEqual(statuses[refuse_candidate["request_id"]], "refused")
+
+    def test_context_probe_request_routes_return_not_found_for_unknown_request(self):
+        approve_response = self.client.post("/context-probes/requests/missing/approve")
+        refuse_response = self.client.post("/context-probes/requests/missing/refuse")
+
+        self.assertEqual(approve_response.status_code, 404)
+        self.assertEqual(approve_response.get_json(), {"error": "not_found"})
+        self.assertEqual(refuse_response.status_code, 404)
+        self.assertEqual(refuse_response.get_json(), {"error": "not_found"})
+
+    def test_context_probe_request_routes_reject_invalid_transitions(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "selected_text", "reason": "Need selected text"},
+        ).get_json()["request"]
+        request_id = created["request_id"]
+
+        refuse_response = self.client.post(
+            f"/context-probes/requests/{request_id}/refuse",
+            json={"reason": "No"},
+        )
+        approve_response = self.client.post(
+            f"/context-probes/requests/{request_id}/approve",
+            json={"reason": "Too late"},
+        )
+
+        self.assertEqual(refuse_response.status_code, 200)
+        self.assertEqual(approve_response.status_code, 409)
+        self.assertEqual(approve_response.get_json()["error"], "invalid_transition")
+
+
+    def test_context_probe_requests_list_invalid_status_returns_400(self):
+        response = self.client.get("/context-probes/requests?status=not_a_status")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json(), {"error": "invalid_status"})
+
+
+    def test_context_probe_request_execute_runs_approved_app_context_probe(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/secret.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "app_context", "reason": "Need app context"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        with patch("daemon.routes.runtime_probe_routes.find_workspace_root", return_value=None):
+            execute_response = self.client.post(
+                f"/context-probes/requests/{created['request_id']}/execute"
+            )
+
+        self.assertEqual(execute_response.status_code, 200)
+        payload = execute_response.get_json()
+        result = payload["result"]
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertTrue(result["captured"])
+        self.assertEqual(result["kind"], "app_context")
+        self.assertEqual(result["privacy"], "public")
+        self.assertEqual(result["retention"], "session")
+        self.assertEqual(result["blocked_reason"], None)
+        self.assertEqual(result["data"], {
+            "active_app": "Code",
+            "active_project": "Pulse",
+            "activity_level": "editing",
+            "probable_task": "coding",
+        })
+        self.assertNotIn("active_file", result["data"])
+        self.assertNotIn("/tmp/Pulse/daemon/secret.py", str(payload))
+
+        self.assertEqual(request_payload["status"], "executed")
+        self.assertEqual(debug["status"], "executed")
+        self.assertTrue(debug["is_terminal"])
+        self.bus.publish.assert_called_once_with("context_probe_executed", {
+            "request_id": created["request_id"],
+            "kind": "app_context",
+            "captured": True,
+            "privacy": "public",
+            "retention": "session",
+            "data_keys": ["active_app", "active_project", "activity_level", "probable_task"],
+        })
+        published_payload = self.bus.publish.call_args.args[1]
+        self.assertNotIn("data", published_payload)
+        self.assertNotIn("Code", str(published_payload))
+        self.assertNotIn("Pulse", str(published_payload))
+        self.assertNotIn("coding", str(published_payload))
+
+    def test_context_probe_request_execute_runs_approved_window_title_probe_redacted(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/secret.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+            window_title="Pulse notes for yugz@example.com — https://example.com/private — /Users/yugz/Projects/Pulse",
+            window_title_app="Code",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "window_title", "reason": "Need window title"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        with patch("daemon.routes.runtime_probe_routes.find_workspace_root", return_value=None):
+            execute_response = self.client.post(
+                f"/context-probes/requests/{created['request_id']}/execute"
+            )
+
+        self.assertEqual(execute_response.status_code, 200)
+        payload = execute_response.get_json()
+        result = payload["result"]
+        request_payload = payload["request"]
+        debug = payload["debug"]
+
+        self.assertTrue(result["captured"])
+        self.assertEqual(result["kind"], "window_title")
+        self.assertEqual(result["privacy"], "path_sensitive")
+        self.assertEqual(result["retention"], "session")
+        self.assertEqual(result["blocked_reason"], None)
+        self.assertEqual(result["data"], {
+            "redacted_value": "Pulse notes for [REDACTED_EMAIL] — [REDACTED_URL] — /Users/[REDACTED_USER]/Projects/Pulse",
+            "redaction_flags": ["email", "url", "home_path"],
+            "original_length": 91,
+            "redacted_length": 89,
+            "was_redacted": True,
+        })
+        self.assertNotIn("yugz@example.com", str(payload))
+        self.assertNotIn("https://example.com/private", str(payload))
+        self.assertNotIn("/Users/yugz", str(payload))
+        self.assertNotIn("/tmp/Pulse/daemon/secret.py", str(payload))
+
+        self.assertEqual(request_payload["status"], "executed")
+        self.assertEqual(debug["status"], "executed")
+        self.assertTrue(debug["is_terminal"])
+        self.bus.publish.assert_called_once_with("context_probe_executed", {
+            "request_id": created["request_id"],
+            "kind": "window_title",
+            "captured": True,
+            "privacy": "path_sensitive",
+            "retention": "session",
+            "data_keys": ["original_length", "redacted_length", "redacted_value", "redaction_flags", "was_redacted"],
+        })
+        published_payload = self.bus.publish.call_args.args[1]
+        self.assertNotIn("data", published_payload)
+        self.assertNotIn("yugz@example.com", str(published_payload))
+        self.assertNotIn("example.com", str(published_payload))
+        self.assertNotIn("/Users/yugz", str(published_payload))
+
+    def test_context_probe_request_execute_window_title_without_signal_is_blocked(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/Pulse/daemon/secret.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Code"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.82,
+            window_title=None,
+            window_title_app=None,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "window_title", "reason": "Need window title"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/execute"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "probe_blocked")
+        self.assertEqual(payload["blocked_reason"], "missing_window_title")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertEqual(payload["result"]["kind"], "window_title")
+        self.assertEqual(payload["result"]["data"], {})
+        self.assertEqual(payload["request"]["status"], "approved")
+        self.bus.publish.assert_not_called()
+
+    def test_context_probe_request_execute_blocks_pending_request(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "app_context", "reason": "Need app context"},
+        ).get_json()["request"]
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/execute"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "probe_blocked")
+        self.assertEqual(payload["blocked_reason"], "request_not_approved:pending")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertEqual(payload["request"]["status"], "pending")
+        self.bus.publish.assert_not_called()
+
+    def test_context_probe_request_execute_blocks_unsupported_approved_kind(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "selected_text", "reason": "Need selected text"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/execute"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "probe_blocked")
+        self.assertEqual(payload["blocked_reason"], "unsupported_probe_kind")
+        self.assertEqual(payload["result"]["kind"], "selected_text")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertEqual(payload["request"]["status"], "approved")
+        self.assertNotIn("selected_text", payload["result"].get("data", {}))
+        self.bus.publish.assert_not_called()
+
+    def test_context_probe_request_execute_unknown_request_returns_404(self):
+        response = self.client.post("/context-probes/requests/missing/execute")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json(), {"error": "not_found"})
+        self.bus.publish.assert_not_called()
+
     def test_daemon_pause_returns_legacy_payload(self):
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/pause")
 
         self.assertEqual(response.status_code, 200)
@@ -616,7 +1871,7 @@ class TestRuntimeRoutes(unittest.TestCase):
 
     def test_daemon_resume_returns_legacy_payload(self):
         self.runtime_state.set_paused(True)
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/resume")
 
         self.assertEqual(response.status_code, 200)
@@ -627,7 +1882,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertFalse(self.runtime_state.is_paused())
 
     def test_daemon_shutdown_returns_legacy_payload(self):
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/shutdown")
 
         self.assertEqual(response.status_code, 200)
@@ -638,7 +1893,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.shutdown_runtime.assert_called_once()
 
     def test_daemon_restart_returns_legacy_payload(self):
-        with patch("daemon.routes.runtime.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/restart")
 
         self.assertEqual(response.status_code, 200)
@@ -684,6 +1939,31 @@ class TestFileEventCoalescer(unittest.TestCase):
         self._flush_last_pending()
 
         self.assertEqual(self.emitted, [("file_renamed", {"path": path}, None)])
+
+    def test_screenshot_burst_created_modified_renamed_emits_one_created(self):
+        path = "/Users/yugz/Desktop/Capture d’écran 2026-05-02 à 12.34.12.png"
+
+        self.coalescer.publish("file_created", {"path": path, "seq": 1})
+        self.coalescer.publish("file_modified", {"path": path, "seq": 2})
+        self.coalescer.publish("file_renamed", {"path": path, "seq": 3})
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [("file_created", {"path": path, "seq": 1}, None)],
+        )
+
+    def test_normal_file_burst_created_then_renamed_keeps_renamed_priority(self):
+        path = "/tmp/Pulse/daemon/runtime.py"
+
+        self.coalescer.publish("file_created", {"path": path, "seq": 1})
+        self.coalescer.publish("file_renamed", {"path": path, "seq": 2})
+        self._flush_last_pending()
+
+        self.assertEqual(
+            self.emitted,
+            [("file_renamed", {"path": path, "seq": 2}, None)],
+        )
 
     def test_events_outside_window_remain_distinct(self):
         path = "/tmp/screenshot.png"

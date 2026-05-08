@@ -37,17 +37,22 @@ Ce que cela couvre :
 - state store
 - `PresentState`, builders `CurrentContext` et adaptateurs legacy
 - builders `SessionSnapshot` et adaptateurs legacy
+- `work_blocks`, `work_block_*`, `recent_sessions` et alias legacy associés
 - adaptateurs `ProposalCandidate`
 - `SessionFSM`
 - matrice runtime (`/ping`, `/state`, `/event`, `/insights`)
 - handlers MCP
 - mémoire de session
+- corrélation commit / fenêtre d'activité multi-cluster
 - FactEngine (facts, reinforce, contradict, decay, archive)
 - memory extractor (cooldown, journal, projects)
 - module git diff
 - routes API `/facts`
 - runtime orchestrator
 - matrice de disponibilité LLM
+- Resume Card déterministe et LLM
+- routes debug Resume Card
+- context probes et transitions d'approbation/refus
 
 ## Tests de verrouillage de contrat
 
@@ -66,6 +71,11 @@ Important :
 - les champs legacy de `/state` peuvent être testés pour compatibilité
 - ils ne doivent pas servir de base à de nouvelles features
 
+Même règle pour la migration mémoire :
+- `work_blocks`, `work_block_*` et `recent_sessions` sont les champs canoniques ;
+- `work_window_*` et `closed_episodes` peuvent rester testés uniquement comme alias legacy temporaires ;
+- un test legacy doit être explicitement nommé comme tel.
+
 Ces tests servent quand Pulse doit conserver le même comportement tout en changeant sa structure interne.
 Si l’un de ces tests casse, l’hypothèse par défaut est que le changement est cassant tant que le contraire n’est pas démontré.
 
@@ -78,6 +88,9 @@ La fondation actuelle du runtime introduit plusieurs artéfacts structurels qui 
 - `SessionSnapshot`
 - `ProposalCandidate`
 - `SessionFSM`
+- `ResumeCard`
+- `work_blocks` / `work_block_*`
+- `ContextProbeRequest`
 
 Ils ne sont pas testés pour justifier une dérive de comportement.
 Ils sont testés pour verrouiller :
@@ -91,7 +104,43 @@ Attendus typiques :
 - un adaptateur legacy reproduit exactement le contrat précédent
 - `RuntimeState.present` reste la vérité canonique du présent
 - le lifecycle de session garde une seule source de vérité
+- les Resume Cards restent des projections de reprise et gardent un fallback déterministe
+- les probes de contexte restent soumises à validation et masquage
+- les alias legacy mémoire ne deviennent pas des champs canoniques
 - une conversion candidate -> transport ne modifie pas le payload externe final
+
+## Tests Resume Card
+
+La Resume Card est testée comme une projection de reprise, pas comme une source de vérité.
+
+Points verrouillés :
+- génération déterministe utilisable sans LLM ;
+- fallback déterministe si le LLM est indisponible, invalide ou ne produit pas de réponse finale ;
+- diagnostic debug sur `/debug/resume-card/llm` ;
+- sources modernes (`PresentState`, `work_block_*`, `recent_sessions`, journal récent) préférées aux alias legacy ;
+- `generated_by` permet de distinguer `deterministic` et `llm`.
+
+Routes debug utiles :
+
+```bash
+curl -s -X POST http://127.0.0.1:8765/debug/resume-card \
+  -H "Content-Type: application/json" \
+  -d '{"sleep_minutes":35}' | python -m json.tool
+
+curl -s -X POST http://127.0.0.1:8765/debug/resume-card/llm \
+  -H "Content-Type: application/json" \
+  -d '{"sleep_minutes":35}' | python -m json.tool
+```
+
+À vérifier dans la réponse LLM :
+- `llm_available`
+- `debug.llm_called`
+- `debug.fallback_reason`
+- `debug.raw_preview`
+- `card.generated_by`
+
+La Resume Card préparée (`prepared_resume_card`) n'a pas encore de route debug dédiée pour `prepare` / `peek` / `consume` / `expire`.
+Elle doit donc encore être validée principalement en terrain via lock/unlock réel.
 
 ## E2E interactif
 
@@ -197,6 +246,23 @@ ls ~/.pulse/memory/sessions
 curl http://127.0.0.1:8765/facts
 curl http://127.0.0.1:8765/facts/profile
 ```
+
+### Resume Card préparée
+
+- Travailler assez longtemps pour créer un contexte réel.
+- Verrouiller l'écran.
+- Vérifier dans les logs daemon qu'une carte est préparée :
+
+```bash
+tail -n 120 ~/.pulse/logs/daemon.stdout.log ~/.pulse/logs/daemon.error.log | grep prepared_resume_card
+```
+
+- Déverrouiller après une pause suffisante.
+- Vérifier que la Resume Card apparaît rapidement dans l'encoche.
+- Vérifier dans les logs :
+  - `prepared_resume_card stored`
+  - `prepared_resume_card emitted`
+- Si aucune carte préparée valide n'existe, vérifier que le fallback classique reste fonctionnel.
 
 ## Vérifications LaunchAgent
 

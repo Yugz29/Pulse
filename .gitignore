@@ -37,7 +37,10 @@ build/
 # Pulse spécifique
 daemon/.venv/
 # Xcode user-specific files
+.derivedData/
 App/App.xcodeproj/project.xcworkspace/xcuserdata/
 App/App.xcodeproj/xcuserdata/
+App/Pulse.xcodeproj/project.xcworkspace/xcuserdata/
+App/Pulse.xcodeproj/xcuserdata/
 *.xcuserstate
 cortex-snapshot.json

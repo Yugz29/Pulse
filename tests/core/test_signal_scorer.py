@@ -512,6 +512,7 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.file_type_mix_10m, {})
         self.assertEqual(signals.probable_task, "general")
 
+
     def test_long_burst_ne_tronque_pas_les_signaux_fichier_dans_la_fenetre_10m(self):
         bus = EventBus()
         scorer = SignalScorer(bus)
@@ -529,6 +530,31 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.edited_file_count_10m, 220)
         self.assertEqual(signals.dominant_file_mode, "multi_file")
         self.assertEqual(signals.file_type_mix_10m, {"source": 220})
+
+
+    def test_window_title_poll_alimente_window_title_signal(self):
+        self._push("window_title_poll", {
+            "app": "Code",
+            "title": "Pulse — signal_scorer.py — Visual Studio Code",
+        })
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.window_title, "Pulse — signal_scorer.py — Visual Studio Code")
+        self.assertEqual(signals.window_title_app, "Code")
+
+    def test_window_title_poll_peut_alimenter_active_file_fallback(self):
+        self._push("app_activated", {"app_name": "Code"})
+        self._push("window_title_poll", {
+            "app": "Code",
+            "title": "signal_scorer.py — Pulse — Visual Studio Code",
+        })
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.window_title, "signal_scorer.py — Pulse — Visual Studio Code")
+        self.assertEqual(signals.window_title_app, "Code")
+        self.assertEqual(signals.active_file, "signal_scorer.py")
 
 
     # ── I1 : recent_apps — dernière occurrence gagne ────────────────────────────
@@ -794,6 +820,25 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(signals.focus_level, "normal",
             "6 switches + 3 fichiers modifies doit etre 'normal', pas 'scattered'")
+
+    def test_4c_workflow_ia_assiste_ne_devient_pas_scattered(self):
+        """
+        Code ↔ ChatGPT fréquent peut être un workflow assisté normal.
+        Si le contexte dev reste stable et qu'il existe une activité projet,
+        les switches IA ne doivent pas être traités comme de la dispersion brute.
+        """
+        apps = ["Code", "ChatGPT", "Code", "ChatGPT", "Code", "ChatGPT"]
+        for app in apps:
+            self._push("app_activated", {"app_name": app})
+        self._push("user_presence", {"presence_state": "active", "idle_seconds": "3"})
+        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.app_switch_count_10m, 6)
+        self.assertEqual(signals.ai_app_switch_count_10m, 3)
+        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.focus_level, "normal")
 
     def test_4c_seuil_2_fichiers_insuffisant_pour_annuler_scattered(self):
         """2 fichiers ne suffisent pas pour annuler scattered (seuil = 3)."""
