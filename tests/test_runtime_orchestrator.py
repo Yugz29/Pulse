@@ -12,6 +12,22 @@ from daemon.runtime_orchestrator import RuntimeOrchestrator
 from daemon.runtime_state import RuntimeState
 
 
+class _LifecycleThread:
+    def __init__(self, *args, **kwargs):
+        self.target = kwargs.get("target")
+        self.args = kwargs.get("args", ())
+        self.kwargs = kwargs.get("kwargs", {})
+        self.name = kwargs.get("name")
+        self.daemon = kwargs.get("daemon", False)
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+    def is_alive(self):
+        return self.started
+
+
 class TestRuntimeOrchestrator(unittest.TestCase):
     def setUp(self):
         proposal_store.clear()
@@ -50,6 +66,22 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 commit_confirm_timeout_sec=0.5,
             )
 
+    def _new_orchestrator(self):
+        with patch("daemon.runtime_orchestrator.get_fact_engine", return_value=self.mock_fact_engine):
+            return RuntimeOrchestrator(
+                store=self.store,
+                scorer=self.scorer,
+                decision_engine=self.decision_engine,
+                summary_llm=self.summary_llm,
+                session_memory=self.session_memory,
+                memory_store=self.memory_store,
+                runtime_state=self.runtime_state,
+                llm_runtime=self.llm_runtime,
+                log=self.log,
+                commit_poll_sec=0.0,
+                commit_confirm_timeout_sec=0.5,
+            )
+
     def _signals(self, **overrides):
         payload = {
             "active_project": "Pulse",
@@ -68,6 +100,73 @@ class TestRuntimeOrchestrator(unittest.TestCase):
     def _set_runtime_analysis(self, signals, *, decision=None, session_status="active", awake=True, locked=False):
         self.runtime_state.update_present(signals=signals, session_status=session_status, awake=awake, locked=locked)
         self.runtime_state.set_analysis(signals=signals, decision=decision)
+
+    def test_init_ne_demarre_pas_les_workers_permanents(self):
+        with patch("daemon.runtime_orchestrator.threading.Thread") as thread_cls:
+            orchestrator = self._new_orchestrator()
+
+        thread_cls.assert_not_called()
+        self.assertFalse(orchestrator._started)
+        self.assertIsNone(orchestrator._file_flush_worker)
+        self.assertIsNone(orchestrator._periodic_sync_worker)
+
+    def test_start_demarre_les_deux_workers_permanents(self):
+        created_threads = []
+
+        def fake_thread(*args, **kwargs):
+            thread = _LifecycleThread(*args, **kwargs)
+            created_threads.append(thread)
+            return thread
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=fake_thread):
+            self.orchestrator.start()
+
+        self.assertTrue(self.orchestrator._started)
+        self.assertEqual([thread.name for thread in created_threads], ["pulse-file-burst", "pulse-periodic-sync"])
+        self.assertTrue(all(thread.started for thread in created_threads))
+        self.assertFalse(self.orchestrator._file_flush_stopped)
+        self.assertFalse(self.orchestrator._periodic_sync_stopped)
+
+    def test_start_est_idempotente(self):
+        created_threads = []
+
+        def fake_thread(*args, **kwargs):
+            thread = _LifecycleThread(*args, **kwargs)
+            created_threads.append(thread)
+            return thread
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=fake_thread):
+            self.orchestrator.start()
+            self.orchestrator.start()
+
+        self.assertTrue(self.orchestrator._started)
+        self.assertEqual(len(created_threads), 2)
+
+    def test_shutdown_runtime_stoppe_les_flags_des_workers_permanents(self):
+        self.orchestrator._started = True
+        self.orchestrator._file_flush_stopped = False
+        self.orchestrator._periodic_sync_stopped = False
+        self.session_memory.export_memory_payload.return_value = {"duration_min": 0}
+
+        with patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure") as refresh:
+            self.orchestrator.shutdown_runtime()
+
+        refresh.assert_called_once_with(drain_pending=True)
+        self.assertFalse(self.orchestrator._started)
+        self.assertTrue(self.orchestrator._file_flush_stopped)
+        self.assertTrue(self.orchestrator._periodic_sync_stopped)
+        self.session_memory.close.assert_called_once_with(close_reason="session_end")
+
+    def test_reset_for_tests_ne_demarre_pas_si_runtime_pas_started(self):
+        self.assertFalse(self.orchestrator._started)
+
+        with patch("daemon.runtime_orchestrator.threading.Thread") as thread_cls:
+            self.orchestrator.reset_for_tests()
+
+        thread_cls.assert_not_called()
+        self.assertFalse(self.orchestrator._started)
+        self.assertIsNone(self.orchestrator._file_flush_worker)
+        self.assertIsNone(self.orchestrator._periodic_sync_worker)
 
     def test_build_context_snapshot_includes_state_signals_decision_and_memory(self):
         signals = Signals(

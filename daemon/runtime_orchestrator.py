@@ -85,12 +85,10 @@ class RuntimeOrchestrator:
         self._file_flush_condition = threading.Condition(self._debounce_lock)
         self._file_flush_stopped = False
         self._accumulated_window_titles: list[str] = []
-        self._file_flush_worker = threading.Thread(
-            target=self._file_flush_loop,
-            daemon=True,
-            name="pulse-file-burst",
-        )
-        self._file_flush_worker.start()
+        self._lifecycle_lock = threading.Lock()
+        self._started = False
+        self._file_flush_worker: threading.Thread | None = None
+        self._file_flush_stop_event: threading.Event | None = None
         self._last_head_sha: dict[str, str] = {}
         self._head_sha_lock = threading.Lock()
         self._commit_watch_lock = threading.Lock()
@@ -109,16 +107,38 @@ class RuntimeOrchestrator:
         self._resume_card_wait_poll_sec: float = 0.5
         self._periodic_sync_interval_sec: float = 30 * 60
         self._periodic_sync_stopped: bool = False
-        self._periodic_sync_worker = threading.Thread(
-            target=self._periodic_sync_loop,
-            daemon=True,
-            name="pulse-periodic-sync",
-        )
-        self._periodic_sync_worker.start()
+        self._periodic_sync_worker: threading.Thread | None = None
+        self._periodic_sync_stop_event: threading.Event | None = None
         self._fact_engine = get_fact_engine()
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
         self._restart_manager = RestartManager()
+
+    def start(self) -> None:
+        with self._lifecycle_lock:
+            if self._started:
+                return
+            self._file_flush_stopped = False
+            self._periodic_sync_stopped = False
+            file_flush_stop_event = threading.Event()
+            periodic_sync_stop_event = threading.Event()
+            self._file_flush_stop_event = file_flush_stop_event
+            self._periodic_sync_stop_event = periodic_sync_stop_event
+            self._file_flush_worker = threading.Thread(
+                target=self._file_flush_loop,
+                args=(file_flush_stop_event,),
+                daemon=True,
+                name="pulse-file-burst",
+            )
+            self._periodic_sync_worker = threading.Thread(
+                target=self._periodic_sync_loop,
+                args=(periodic_sync_stop_event,),
+                daemon=True,
+                name="pulse-periodic-sync",
+            )
+            self._file_flush_worker.start()
+            self._periodic_sync_worker.start()
+            self._started = True
 
     @property
     def session_fsm(self) -> SessionFSM:
@@ -633,9 +653,16 @@ class RuntimeOrchestrator:
 
     def shutdown_runtime(self) -> None:
         try:
-            with self._file_flush_condition:
-                self._file_flush_stopped = True
-                self._file_flush_condition.notify_all()
+            with self._lifecycle_lock:
+                self._started = False
+                self._periodic_sync_stopped = True
+                if self._periodic_sync_stop_event is not None:
+                    self._periodic_sync_stop_event.set()
+                if self._file_flush_stop_event is not None:
+                    self._file_flush_stop_event.set()
+                with self._file_flush_condition:
+                    self._file_flush_stopped = True
+                    self._file_flush_condition.notify_all()
             self._refresh_runtime_signals_for_closure(drain_pending=True)
             snapshot = self._export_memory_payload()
             if snapshot.get("duration_min", 0) > 0:
@@ -798,12 +825,14 @@ class RuntimeOrchestrator:
             daemon=True,
         ).start()
 
-    def _periodic_sync_loop(self) -> None:
-        import time as _time
-        _time.sleep(60)
-        while not self._periodic_sync_stopped:
-            _time.sleep(self._periodic_sync_interval_sec)
-            if self._periodic_sync_stopped:
+    def _periodic_sync_loop(self, stop_event: threading.Event | None = None) -> None:
+        stop_event = stop_event or threading.Event()
+        if stop_event.wait(60):
+            return
+        while not self._periodic_sync_stopped and not stop_event.is_set():
+            if stop_event.wait(self._periodic_sync_interval_sec):
+                return
+            if self._periodic_sync_stopped or stop_event.is_set():
                 return
             try:
                 if self.runtime_state.is_paused():
@@ -1026,12 +1055,17 @@ class RuntimeOrchestrator:
             self._file_flush_deadline = time.monotonic() + self.file_debounce_sec
             self._file_flush_condition.notify_all()
 
-    def _file_flush_loop(self) -> None:
+    def _file_flush_loop(self, stop_event: threading.Event | None = None) -> None:
+        stop_event = stop_event or threading.Event()
         while True:
             with self._file_flush_condition:
-                while not self._file_flush_stopped and not self._pending_file_events:
+                while (
+                    not self._file_flush_stopped
+                    and not stop_event.is_set()
+                    and not self._pending_file_events
+                ):
                     self._file_flush_condition.wait()
-                if self._file_flush_stopped:
+                if self._file_flush_stopped or stop_event.is_set():
                     return
                 deadline = self._file_flush_deadline
                 if deadline is None:
@@ -1320,18 +1354,22 @@ class RuntimeOrchestrator:
         return None
 
     def reset_for_tests(self) -> None:
-        with self._debounce_lock:
+        was_started = self._started
+        if self._file_flush_stop_event is not None:
+            self._file_flush_stop_event.set()
+        if self._periodic_sync_stop_event is not None:
+            self._periodic_sync_stop_event.set()
+        with self._file_flush_condition:
             self._pending_file_events = []
             self._file_flush_deadline = None
             self._file_flush_stopped = False
-        if self._file_flush_worker is None or not self._file_flush_worker.is_alive():
-            self._file_flush_worker = threading.Thread(
-                target=self._file_flush_loop,
-                daemon=True,
-                name="pulse-file-burst",
-            )
-            self._file_flush_worker.start()
-        self._periodic_sync_stopped = True
+            self._file_flush_condition.notify_all()
+        self._periodic_sync_stopped = False
+        self._started = False
+        self._file_flush_worker = None
+        self._periodic_sync_worker = None
+        self._file_flush_stop_event = None
+        self._periodic_sync_stop_event = None
         with self._commit_watch_lock:
             self._pending_commit_watch = set()
         with self._head_sha_lock:
@@ -1352,6 +1390,8 @@ class RuntimeOrchestrator:
         self._fact_engine = get_fact_engine()
         self._session_fsm.reset_for_tests()
         proposal_store.clear()
+        if was_started:
+            self.start()
 
     def _refresh_runtime_signals_for_closure(self, *, drain_pending: bool) -> None:
         if drain_pending:
@@ -1389,11 +1429,7 @@ class RuntimeOrchestrator:
         )
 
     def _drain_pending_file_events(self) -> None:
-        with self._debounce_lock:
-            events = self._pending_file_events[:]
-            self._pending_file_events = []
-            self._file_flush_deadline = None
-        self._process_file_burst(events)
+        self._flush_file_events()
 
     def _process_file_burst(self, events) -> None:
         if not events:

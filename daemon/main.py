@@ -109,6 +109,7 @@ runtime_orchestrator = RuntimeOrchestrator(
     llm_runtime=llm_runtime,
     log=log,
 )
+runtime_orchestrator.start()
 
 WATCHDOG_TIMEOUT_SEC = 30
 WATCHDOG_GRACE_SEC = 15
