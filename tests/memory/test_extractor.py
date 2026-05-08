@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 import sqlite3
@@ -504,6 +505,103 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("Livraison", content)
         self.assertIn("wip", content)
         self.assertIn("Portée estimée : main.py.", content)
+
+    def test_journal_redacte_commit_message_et_diff_summary_avant_markdown_hidden_json_et_llm(self):
+        secret = "sk-secretcommit123456"
+        diff_secret = "diff-secret-token"
+        captured = {}
+
+        class CapturingLLM:
+            def complete(self, prompt, max_tokens=200, think=False):
+                captured["prompt"] = prompt
+                return f"Résumé sans secret pour TOKEN={diff_secret}."
+
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Codex"],
+                "files_changed": 3,
+                "top_files": ["extractor.py"],
+            },
+            llm=CapturingLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message=f"feat: redact commit --token {secret}",
+            diff_summary=f"Diff en cours : extractor.py (+3 -1)\nAPI_KEY={diff_secret}",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertNotIn(secret, journal)
+        self.assertNotIn(diff_secret, journal)
+        self.assertNotIn(secret, json.dumps(hidden))
+        self.assertNotIn(diff_secret, json.dumps(hidden))
+        self.assertNotIn(secret, captured["prompt"])
+        self.assertNotIn(diff_secret, captured["prompt"])
+        self.assertIn("feat: redact commit --token [REDACTED_SECRET]", journal)
+        self.assertIn("API_KEY=[REDACTED_SECRET]", captured["prompt"])
+
+    def test_journal_redacte_terminal_summary_deterministe(self):
+        secret = "terminal-summary-secret"
+
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Terminal"],
+                "files_changed": 0,
+                "terminal_summary": f"Commande observée avec PASSWORD={secret}",
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertNotIn(secret, journal)
+        self.assertNotIn(secret, json.dumps(hidden))
+        self.assertIn("PASSWORD=[REDACTED_SECRET]", journal)
+
+    def test_journal_redacte_body_avant_ecriture_visible_et_hidden_json(self):
+        secret = "body-secret-token"
+        journal_file = self.memory_dir / "sessions" / "2026-05-05.md"
+        journal_file.parent.mkdir(parents=True)
+        entry = extractor_module._build_journal_entry(
+            entry_id="body-secret",
+            active_project="Pulse",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.8,
+            duration_min=12,
+            body=f"Résumé manuel avec SECRET={secret}",
+            commit_message=None,
+            recent_apps=["Codex"],
+            top_files=["extractor.py"],
+            files_count=1,
+            started_at="2026-05-05T10:00:00",
+            ended_at="2026-05-05T10:12:00",
+            boundary_reason="screen_lock",
+        )
+
+        extractor_module._write_journal_document(journal_file, "2026-05-05", [entry])
+
+        journal = journal_file.read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertNotIn(secret, journal)
+        self.assertNotIn(secret, json.dumps(hidden))
+        self.assertIn("SECRET=[REDACTED_SECRET]", journal)
 
     def test_llm_desactive_pour_screen_lock(self):
         """Le LLM ne doit PAS être appelé pour screen_lock — fallback déterministe uniquement."""

@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from daemon.core.command_redaction import redact_sensitive_command
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
 from daemon.memory.facts import FactEngine
@@ -204,6 +205,23 @@ def _commit_task_correction(commit_message: str, current_task: str) -> str:
 
 # ── API publique ───────────────────────────────────────────────────────────────
 
+def _redact_memory_text(value: Any) -> str:
+    return redact_sensitive_command(value, max_chars=-1)
+
+
+def _redact_optional_memory_text(value: Optional[Any]) -> Optional[str]:
+    if value is None:
+        return None
+    return _redact_memory_text(value)
+
+
+def _redact_session_free_text(session_data: Dict[str, Any]) -> Dict[str, Any]:
+    redacted = dict(session_data)
+    for key in ("body", "terminal_summary"):
+        if key in redacted:
+            redacted[key] = _redact_memory_text(redacted[key])
+    return redacted
+
 def update_memories_from_session(
     session_data: Dict[str, Any],
     llm: Optional[Any] = None,
@@ -216,6 +234,9 @@ def update_memories_from_session(
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     base_dir.mkdir(parents=True, exist_ok=True)
     _load_cooldown()
+    session_data = _redact_session_free_text(session_data)
+    commit_message = _redact_optional_memory_text(commit_message)
+    diff_summary = _redact_optional_memory_text(diff_summary)
 
     if "duration_min" in session_data:
         session_data = dict(session_data)
@@ -343,6 +364,9 @@ def enrich_session_report(
 ) -> bool:
     if report_ref is None or llm is None:
         return False
+    session_data = _redact_session_free_text(session_data)
+    commit_message = _redact_optional_memory_text(commit_message)
+    diff_summary = _redact_optional_memory_text(diff_summary)
     journal_file, entry_id = report_ref
     project     = session_data.get("active_project") or "inconnu"
     duration    = session_data.get("duration_min", 0)
@@ -715,6 +739,9 @@ def _write_session_report(
     base_dir: Path, session: Dict[str, Any], *, consolidation: Dict[str, Any],
     llm: Optional[Any], commit_message: Optional[str], trigger: str, diff_summary: Optional[str] = None,
 ):
+    session = _redact_session_free_text(session)
+    commit_message = _redact_optional_memory_text(commit_message)
+    diff_summary = _redact_optional_memory_text(diff_summary)
     now = datetime.now()
     _date_ref = (
         consolidation.get("ended_at")
@@ -808,6 +835,8 @@ def _write_session_report(
 
 
 def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
+    commit_message = _redact_memory_text(commit_message)
+    diff_summary = _redact_memory_text(diff_summary)
     facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
     if commit_message:
         lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
@@ -837,7 +866,7 @@ Dis ce qui a été livré et la portée principale — pas comment ni les détai
 Évite les tournures emphatiques comme « Ce commit améliore... ».
 Si le message de commit est explicite, reformule-le naturellement dans ce ton.
 N'invente aucun fait absent des données ci-dessus."""
-    return _sanitize_journal_summary(_llm_complete(llm, prompt, max_tokens=256, think=False))
+    return _redact_memory_text(_sanitize_journal_summary(_llm_complete(llm, prompt, max_tokens=256, think=False)))
 
 
 def _sanitize_journal_summary(value: Any) -> str:
@@ -861,6 +890,8 @@ def _sanitize_journal_summary(value: Any) -> str:
 
 
 def _deterministic_summary(duration, task, focus, friction, top_files, files_count, commit_message, *, diff_summary=None, terminal_summary=None, scope_source="snapshot") -> str:
+    commit_message = _redact_memory_text(commit_message)
+    terminal_summary = _redact_memory_text(terminal_summary)
     focus_str = {"deep": "focus profond", "scattered": "travail dispersé", "idle": "session légère", "normal": ""}.get(focus, "")
     parts = []
     if commit_message:
@@ -875,7 +906,7 @@ def _deterministic_summary(duration, task, focus, friction, top_files, files_cou
         parts.append("Friction : élevée.")
     if not parts:
         parts.append(f"Session de {duration} min.")
-    return " ".join(parts)
+    return _redact_memory_text(" ".join(parts))
 
 
 def _has_substantive_commit_signal(*, commit_message, diff_summary, top_files, files_count) -> bool:
@@ -924,6 +955,7 @@ def _replace_journal_entry(
     summary_status: Optional[str] = None,
     summary_error: Optional[str] = None,
 ) -> bool:
+    body = _redact_memory_text(body)
     with _memory_write_lock:
         if not journal_file.exists():
             return False
@@ -977,6 +1009,8 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
     duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason,
     scope_source="snapshot", delivered_at=None,
     summary_source="deterministic_fallback", summary_status="llm_unavailable", summary_error=None) -> Dict[str, Any]:
+    body = _redact_memory_text(body)
+    commit_message = _redact_memory_text(commit_message)
     entry = {
         "entry_id": entry_id,
         "active_project": active_project or "Autre",
@@ -1141,7 +1175,14 @@ def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized["top_files"] = [str(item) for item in normalized.get("top_files", []) if isinstance(item, str) and item.strip()]
     normalized["recent_apps"] = _compact_strings(normalized.get("recent_apps", []))
     normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
-    normalized["commit_messages"] = _compact_strings([normalized.get("commit_message"), *normalized.get("commit_messages", [])])
+    normalized["body"] = _redact_memory_text(normalized.get("body"))
+    normalized["commit_message"] = _redact_memory_text(normalized.get("commit_message"))
+    normalized["commit_messages"] = _compact_strings(
+        [
+            _redact_memory_text(normalized.get("commit_message")),
+            *(_redact_memory_text(item) for item in (normalized.get("commit_messages") or [])),
+        ]
+    )
     normalized["scope_source"] = str(normalized.get("scope_source") or "unknown")
     normalized["summary_source"] = str(normalized.get("summary_source") or "unknown")
     normalized["summary_status"] = str(normalized.get("summary_status") or "unknown")
@@ -1158,13 +1199,13 @@ def _normalize_commit_items(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
         for item in explicit_items:
             if not isinstance(item, dict):
                 continue
-            message = str(item.get("message") or "").strip()
+            message = _redact_memory_text(item.get("message")).strip()
             if not message:
                 continue
             items.append(
                 {
                     "message": message,
-                    "body": str(item.get("body") or "").strip(),
+                    "body": _redact_memory_text(item.get("body")).strip(),
                     "delivered_at": item.get("delivered_at"),
                     "top_files": _compact_strings(item.get("top_files", [])),
                 }
@@ -1176,7 +1217,7 @@ def _normalize_commit_items(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not messages:
         return []
 
-    body = str(entry.get("body") or "").strip()
+    body = _redact_memory_text(entry.get("body")).strip()
     body_parts = [part.strip() for part in body.split("\n") if part.strip()]
     if len(messages) == 1:
         bodies = [body]
