@@ -69,7 +69,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.shutdown_runtime = MagicMock()
         self.log = MagicMock()
 
-        register_runtime_routes(
+        self.coalescer = register_runtime_routes(
             self.app,
             bus=self.bus,
             store=self.store,
@@ -923,6 +923,28 @@ class TestRuntimeRoutes(unittest.TestCase):
         event_type, payload, observed_at = self.bus.publish.call_args.args
         self.assertEqual(event_type, "app_activated")
         self.assertEqual(payload, {"app_name": "Cursor"})
+        self.assertEqual(observed_at.isoformat(), "2026-04-23T10:15:30")
+
+    def test_event_file_pending_dans_coalescer_est_publie_au_close(self):
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "file_modified",
+                "path": "/tmp/Pulse/daemon/main.py",
+                "timestamp": "2026-04-23T10:15:30",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"ok": True})
+        self.bus.publish.assert_not_called()
+
+        self.coalescer.close()
+
+        self.bus.publish.assert_called_once()
+        event_type, payload, observed_at = self.bus.publish.call_args.args
+        self.assertEqual(event_type, "file_modified")
+        self.assertEqual(payload["path"], "/tmp/Pulse/daemon/main.py")
         self.assertEqual(observed_at.isoformat(), "2026-04-23T10:15:30")
 
     def test_insights_uses_default_limit_of_twenty_five(self):
@@ -2024,6 +2046,20 @@ class TestFileEventCoalescer(unittest.TestCase):
         self.assertEqual(
             self.emitted,
             [("file_created", {"path": path}, created_at)],
+        )
+
+    def test_close_draine_les_events_pending_meme_avant_echeance(self):
+        path = "/tmp/main.py"
+        created_at = datetime(2026, 4, 23, 9, 0, 0)
+
+        self.coalescer.publish("file_modified", {"path": path}, created_at)
+        self.assertEqual(self.emitted, [])
+
+        self.coalescer.close()
+
+        self.assertEqual(
+            self.emitted,
+            [("file_modified", {"path": path}, created_at)],
         )
 
 

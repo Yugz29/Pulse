@@ -196,9 +196,16 @@ class FileEventCoalescer:
                 self._publisher(*emit)
 
     def close(self) -> None:
+        emits: list[tuple[str, dict[str, Any], datetime | None]] = []
         with self._condition:
+            for pending in self._pending_by_path.values():
+                emits.append((pending.event_type, pending.payload, pending.timestamp))
+            self._pending_by_path = {}
             self._stopped = True
             self._condition.notify_all()
+
+        for emit in emits:
+            self._publisher(*emit)
 
     def _is_coalescible(self, event_type: str, payload: dict[str, Any]) -> bool:
         from daemon.core.event_meaning import _default_policy

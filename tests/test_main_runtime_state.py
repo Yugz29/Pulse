@@ -188,6 +188,24 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertTrue(payload["ignored"])
         publish.assert_not_called()
 
+    def test_shutdown_draine_coalescer_avant_runtime_orchestrator(self):
+        calls = []
+
+        with patch.object(
+            daemon_main.runtime_event_coalescer,
+            "close",
+            side_effect=lambda: calls.append("coalescer"),
+        ) as close_coalescer, patch.object(
+            daemon_main.runtime_orchestrator,
+            "shutdown_runtime",
+            side_effect=lambda: calls.append("runtime"),
+        ) as shutdown_runtime:
+            daemon_main._shutdown_runtime()
+
+        close_coalescer.assert_called_once()
+        shutdown_runtime.assert_called_once()
+        self.assertEqual(calls, ["coalescer", "runtime"])
+
     def test_insights_uses_default_limit_of_twenty_five(self):
         with patch.object(daemon_main.bus, "recent", return_value=[]) as recent:
             response = self.client.get("/insights")

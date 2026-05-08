@@ -39,12 +39,12 @@ def register_runtime_routes(
     shutdown_runtime: Callable[[], None],
     log: Any,
     resume_card_llm: Any = None,
-) -> None:
+) -> Any:
     probe_store = context_probe_store or ContextProbeRequestStore()
 
     current_context_builder = CurrentContextBuilder()
 
-    register_ingestion_routes(app, bus=bus, runtime_state=runtime_state)
+    coalescer = register_ingestion_routes(app, bus=bus, runtime_state=runtime_state)
 
     register_debug_memory_routes(
         app,
@@ -107,3 +107,5 @@ def register_runtime_routes(
         get_current_context=get_current_context,
         get_recent_sessions=get_recent_sessions,
     )
+
+    return coalescer

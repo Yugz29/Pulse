@@ -152,6 +152,10 @@ def _persist_selected_models() -> None:
 
 
 def _shutdown_runtime() -> None:
+    try:
+        runtime_event_coalescer.close()
+    except Exception as exc:
+        log.warning("shutdown coalescer failed: %s", exc)
     runtime_orchestrator.shutdown_runtime()
 
 
@@ -208,7 +212,7 @@ def get_scoring_status():
 bus.subscribe(store.update)
 bus.subscribe(_handle_event)
 
-register_runtime_routes(
+runtime_event_coalescer = register_runtime_routes(
     app,
     bus=bus,
     store=store,
