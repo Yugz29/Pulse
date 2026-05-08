@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from daemon.core.command_redaction import redact_sensitive_command
 from daemon.core.event_bus import Event
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.uid import new_uid
@@ -91,8 +92,9 @@ class SessionMemory:
                 conn.commit()
 
     def record_event(self, event: Event) -> None:
-        payload_json = json.dumps(event.payload, ensure_ascii=True)
-        payload_text = self._payload_to_text(event.payload)
+        payload_for_storage = self._payload_for_storage(event)
+        payload_json = json.dumps(payload_for_storage, ensure_ascii=True)
+        payload_text = self._payload_to_text(payload_for_storage)
         updates_session_timing = event.type not in _SESSION_TIMING_IGNORED_EVENT_TYPES
 
         with self._lock:
@@ -766,6 +768,18 @@ class SessionMemory:
             if isinstance(v, str) and v.strip():
                 parts.append(v.strip())
         return " ".join(parts)
+
+    @staticmethod
+    def _payload_for_storage(event: Event) -> dict:
+        payload = dict(event.payload or {})
+        if event.type in {"terminal_command_started", "terminal_command_finished"}:
+            payload.pop("command", None)
+            payload.pop("raw", None)
+            if "terminal_command" in payload:
+                payload["terminal_command"] = redact_sensitive_command(payload["terminal_command"])
+        elif event.type == "mcp_command_received" and "command" in payload:
+            payload["command"] = redact_sensitive_command(payload["command"])
+        return payload
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path))

@@ -55,6 +55,19 @@ class TestSessionMemory(unittest.TestCase):
         events = self.memory.get_recent_events()
         self.assertEqual(events[0]["timestamp"], source_ts.isoformat())
 
+    def test_record_event_redacts_command_storage_without_mutating_event(self):
+        secret = "sk-test-secret-1234567890"
+        event = Event(
+            "mcp_command_received",
+            {"command": f"cat {secret}", "mcp_action_category": "inspection"},
+        )
+
+        self.memory.record_event(event)
+
+        stored_payload = self.memory.get_recent_events()[0]["payload"]
+        self.assertEqual(stored_payload["command"], "cat [REDACTED_TOKEN]")
+        self.assertEqual(event.payload["command"], f"cat {secret}")
+
     def test_record_event_aligne_started_at_updated_at_et_duree_sur_temps_observe(self):
         older = datetime(2026, 4, 23, 16, 0, 0)
         newer = datetime(2026, 4, 23, 16, 10, 0)

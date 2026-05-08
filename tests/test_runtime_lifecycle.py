@@ -42,6 +42,86 @@ class TestRuntimeLifecycle(unittest.TestCase):
                 file_debounce_sec=file_debounce_sec,
             )
 
+    def _runtime_app(self, tmp: Path, *, file_debounce_sec: float = 60.0):
+        app = Flask(__name__)
+        bus = EventBus()
+        runtime_state = RuntimeState()
+        session_memory = SessionMemory(db_path=str(tmp / "session.db"))
+        memory_store = MagicMock()
+        memory_store.render.return_value = ""
+        llm_runtime = MagicMock()
+        fact_engine = MagicMock()
+        fact_engine.render_for_context.return_value = ""
+        orchestrator = self._orchestrator(
+            bus=bus,
+            session_memory=session_memory,
+            runtime_state=runtime_state,
+            memory_store=memory_store,
+            llm_runtime=llm_runtime,
+            fact_engine=fact_engine,
+            file_debounce_sec=file_debounce_sec,
+        )
+        coalescer = register_runtime_routes(
+            app,
+            bus=bus,
+            store=MagicMock(),
+            runtime_state=runtime_state,
+            llm_unload_background=MagicMock(),
+            llm_warmup_background=MagicMock(),
+            shutdown_runtime=MagicMock(),
+            log=MagicMock(),
+        )
+        return app, bus, runtime_state, session_memory, orchestrator, coalescer
+
+    @staticmethod
+    def _file_event_payload(session_memory: SessionMemory) -> dict:
+        events = session_memory.get_recent_events(limit=20)
+        matches = [event for event in events if event["type"] == "file_modified"]
+        if not matches:
+            raise AssertionError(f"missing file_modified event in {events}")
+        return matches[-1]["payload"]
+
+    def _run_file_event_flow(
+        self,
+        *,
+        app_name: str,
+        file_path: Path,
+        tmp: Path,
+    ):
+        app, bus, runtime_state, session_memory, orchestrator, coalescer = self._runtime_app(tmp)
+        client = app.test_client()
+
+        with patch("daemon.core.restart_manager._read_project_head_sha", return_value=None), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+            orchestrator.start()
+            bus.subscribe(orchestrator.handle_event)
+
+            app_response = client.post(
+                "/event",
+                json={
+                    "type": "app_activated",
+                    "app_name": app_name,
+                    "timestamp": datetime.now().isoformat(),
+                },
+            )
+            self.assertEqual(app_response.status_code, 200)
+
+            response = client.post(
+                "/event",
+                json={
+                    "type": "file_modified",
+                    "path": str(file_path),
+                    "timestamp": datetime.now().isoformat(),
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json(), {"ok": True})
+
+            coalescer.close()
+            orchestrator._flush_file_events()
+
+            return bus, runtime_state, session_memory, orchestrator
+
     def test_runtime_lifecycle_short_restart_restores_session_start(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -223,6 +303,200 @@ class TestRuntimeLifecycle(unittest.TestCase):
                 self.assertEqual(active_session["active_project"], "Pulse")
                 self.assertEqual(active_session["active_file"], str(file_path))
 
+                orchestrator.shutdown_runtime()
+
+    def test_file_event_dev_app_is_ingested_as_user_activity(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            tmp = Path(tmpdir)
+            tmp_project = tmp / "Pulse"
+            source_dir = tmp_project / "src"
+            source_dir.mkdir(parents=True)
+            (tmp_project / ".git").mkdir()
+            file_path = source_dir / "main.py"
+            file_path.write_text("print('pulse')\n")
+
+            _, runtime_state, session_memory, orchestrator = self._run_file_event_flow(
+                app_name="Xcode",
+                file_path=file_path,
+                tmp=tmp,
+            )
+
+            payload = self._file_event_payload(session_memory)
+            self.assertEqual(payload["path"], str(file_path))
+            self.assertEqual(payload["_actor"], "user")
+            self.assertLess(payload["_automation_score"], 0.5)
+
+            present = runtime_state.get_present()
+            self.assertEqual(present.active_project, "Pulse")
+            self.assertEqual(present.active_file, str(file_path))
+            self.assertEqual(present.activity_level, "editing")
+            orchestrator.shutdown_runtime()
+
+    def test_file_event_codex_app_is_accepted_as_tool_assisted_activity(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            tmp = Path(tmpdir)
+            tmp_project = tmp / "Pulse"
+            source_dir = tmp_project / "src"
+            source_dir.mkdir(parents=True)
+            (tmp_project / ".git").mkdir()
+            file_path = source_dir / "main.py"
+            file_path.write_text("print('pulse')\n")
+
+            _, runtime_state, session_memory, orchestrator = self._run_file_event_flow(
+                app_name="Codex",
+                file_path=file_path,
+                tmp=tmp,
+            )
+
+            payload = self._file_event_payload(session_memory)
+            self.assertEqual(payload["path"], str(file_path))
+            self.assertEqual(payload["_actor"], "tool_assisted")
+            self.assertGreaterEqual(payload["_automation_score"], 0.5)
+
+            present = runtime_state.get_present()
+            self.assertEqual(present.active_project, "Pulse")
+            self.assertEqual(present.active_file, str(file_path))
+            orchestrator.shutdown_runtime()
+
+    def test_system_cache_file_event_is_filtered_before_bus_and_runtime_state(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            tmp = Path(tmpdir)
+            app, bus, runtime_state, session_memory, orchestrator, _ = self._runtime_app(tmp)
+            client = app.test_client()
+            system_path = tmp / "Pulse" / "node_modules" / "pkg" / "index.js"
+            system_path.parent.mkdir(parents=True)
+            system_path.write_text("module.exports = {}\n")
+
+            with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+                orchestrator.start()
+                bus.subscribe(orchestrator.handle_event)
+                response = client.post(
+                    "/event",
+                    json={
+                        "type": "file_modified",
+                        "path": str(system_path),
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json(), {"ok": True, "filtered": True})
+                self.assertEqual(bus.recent(5), [])
+                self.assertEqual(session_memory.get_recent_events(limit=5), [])
+                self.assertIsNone(runtime_state.get_present().active_file)
+                self.assertIsNone(runtime_state.get_present().active_project)
+                orchestrator.shutdown_runtime()
+
+    def test_terminal_event_privacy_persists_redacted_command_but_not_raw_fields(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            tmp = Path(tmpdir)
+            app, bus, _, session_memory, orchestrator, _ = self._runtime_app(tmp)
+            client = app.test_client()
+            fake_secret = "sk-test-secret-1234567890"
+            raw_command = f"curl -H 'Authorization: Bearer {fake_secret}' https://example.test"
+
+            with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+                orchestrator.start()
+                bus.subscribe(orchestrator.handle_event)
+                response = client.post(
+                    "/event",
+                    json={
+                        "type": "terminal_command_finished",
+                        "command": raw_command,
+                        "raw": f"raw {fake_secret}",
+                        "cwd": str(tmp),
+                        "exit_code": 0,
+                        "duration_ms": 12,
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                events = session_memory.get_recent_events(limit=5)
+                self.assertEqual(len(events), 1)
+                payload = events[0]["payload"]
+                self.assertNotIn("command", payload)
+                self.assertNotIn("raw", payload)
+                self.assertIn("terminal_command", payload)
+                self.assertIn("Authorization: Bearer [REDACTED_TOKEN]", payload["terminal_command"])
+                self.assertNotIn(fake_secret, payload["terminal_command"])
+                self.assertIn("terminal_action_category", payload)
+                self.assertTrue(payload["terminal_action_category"])
+                self.assertIn("terminal_summary", payload)
+                orchestrator.shutdown_runtime()
+
+    def test_terminal_event_privacy_keeps_simple_command_readable(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            tmp = Path(tmpdir)
+            app, bus, _, session_memory, orchestrator, _ = self._runtime_app(tmp)
+            client = app.test_client()
+
+            with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+                orchestrator.start()
+                bus.subscribe(orchestrator.handle_event)
+                response = client.post(
+                    "/event",
+                    json={
+                        "type": "terminal_command_finished",
+                        "command": "python -m pytest tests/test_runtime_lifecycle.py",
+                        "cwd": str(tmp),
+                        "exit_code": 0,
+                        "duration_ms": 12,
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                payload = session_memory.get_recent_events(limit=5)[0]["payload"]
+                self.assertEqual(
+                    payload["terminal_command"],
+                    "python -m pytest tests/test_runtime_lifecycle.py",
+                )
+                self.assertNotIn("command", payload)
+                self.assertNotIn("raw", payload)
+                orchestrator.shutdown_runtime()
+
+    def test_mcp_command_received_persists_redacted_command(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            tmp = Path(tmpdir)
+            bus = EventBus()
+            runtime_state = RuntimeState()
+            session_memory = SessionMemory(db_path=str(tmp / "session.db"))
+            memory_store = MagicMock()
+            memory_store.render.return_value = ""
+            llm_runtime = MagicMock()
+            fact_engine = MagicMock()
+            fact_engine.render_for_context.return_value = ""
+            fake_secret = "sk-test-secret-1234567890"
+            orchestrator = self._orchestrator(
+                bus=bus,
+                session_memory=session_memory,
+                runtime_state=runtime_state,
+                memory_store=memory_store,
+                llm_runtime=llm_runtime,
+                fact_engine=fact_engine,
+            )
+
+            with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+                orchestrator.start()
+                bus.subscribe(orchestrator.handle_event)
+                bus.publish(
+                    "mcp_command_received",
+                    {
+                        "command": f"cat {fake_secret}",
+                        "tool_use_id": "tool-1",
+                        "mcp_action_category": "inspection",
+                        "mcp_summary": "Inspection MCP",
+                    },
+                    datetime.now(),
+                )
+
+                events = session_memory.get_recent_events(limit=5)
+                self.assertEqual(len(events), 1)
+                payload = events[0]["payload"]
+                self.assertEqual(payload["command"], "cat [REDACTED_TOKEN]")
+                self.assertNotIn(fake_secret, payload["command"])
+                self.assertEqual(payload["mcp_action_category"], "inspection")
                 orchestrator.shutdown_runtime()
 
 
