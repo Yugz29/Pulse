@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from daemon.core.event_bus import EventBus, Event
 from daemon.core.signal_scorer import SignalScorer
+from daemon.runtime_state import RuntimeState
 
 
 class TestSignalScorer(unittest.TestCase):
@@ -124,6 +125,109 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/App/App/SystemObserver.swift")
+
+    def test_sequence_dev_et_terminal_test_failed_garde_ancrage_present_state(self):
+        self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
+        self._push(
+            "file_modified",
+            {
+                "path": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+                "_actor": "user",
+            },
+            minutes_ago=1,
+        )
+        self._push(
+            "terminal_command_finished",
+            {
+                "terminal_action_category": "testing",
+                "terminal_success": False,
+                "terminal_project": "Pulse",
+                "terminal_command": "pytest tests/test_runtime_orchestrator.py",
+            },
+        )
+
+        signals = self.scorer.compute()
+        present = RuntimeState().update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+
+        self.assertEqual(present.active_project, "Pulse")
+        self.assertEqual(
+            present.active_file,
+            "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+        )
+        self.assertEqual(present.activity_level, "executing")
+        self.assertEqual(present.probable_task, "coding")
+        self.assertEqual(signals.terminal_action_category, "testing")
+        self.assertFalse(signals.terminal_success)
+
+    def test_tool_assisted_file_event_ancre_projet_sans_compter_comme_edition_user(self):
+        self._push("app_activated", {"app_name": "Codex"})
+        self._push(
+            "file_modified",
+            {
+                "path": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+                "_actor": "tool_assisted",
+                "_automation_score": 0.8,
+            },
+        )
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(
+            signals.active_file,
+            "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+        )
+        self.assertEqual(signals.edited_file_count_10m, 0)
+        self.assertEqual(signals.file_type_mix_10m, {})
+        self.assertEqual(signals.dominant_file_mode, "none")
+        self.assertEqual(signals.probable_task, "general")
+
+    def test_project_hint_stale_ne_survit_pas_sans_signal_de_continuite(self):
+        self._push("app_activated", {"app_name": "Slack"})
+
+        signals = self.scorer.compute(project_hint="Pulse")
+
+        self.assertIsNone(signals.active_project)
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.probable_task, "general")
+
+    def test_fichier_ancien_n_ancre_pas_le_projet_sans_confirmation_recente(self):
+        self._push(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py"},
+            minutes_ago=30,
+        )
+        self._push("app_activated", {"app_name": "Slack"})
+
+        signals = self.scorer.compute(project_hint="Other")
+
+        self.assertIsNone(signals.active_project)
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.edited_file_count_10m, 0)
+        self.assertEqual(signals.probable_task, "general")
+
+    def test_mcp_inspection_sans_fichier_reste_exploration_sans_inventer_projet(self):
+        self._push(
+            "mcp_command_received",
+            {
+                "mcp_action_category": "inspection",
+                "mcp_is_read_only": True,
+                "mcp_summary": "Inspect repository status",
+            },
+        )
+
+        signals = self.scorer.compute()
+
+        self.assertIsNone(signals.active_project)
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.edited_file_count_10m, 0)
+        self.assertEqual(signals.probable_task, "exploration")
+        self.assertEqual(signals.activity_level, "reading")
 
     def test_derive_file_type_mix_and_feature_candidate(self):
         self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})

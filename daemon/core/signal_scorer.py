@@ -124,12 +124,12 @@ class SignalScorer:
         dominant_workspace_root = self._dominant_workspace_root(recent_live_meaningful_file_events)
         if dominant_workspace_root:
             active_file = self._last_file_path_for_workspace(
-                live_meaningful_file_events,
+                recent_live_meaningful_file_events,
                 dominant_workspace_root,
             )
             active_project = self._extract_project_from_workspace(dominant_workspace_root)
         else:
-            active_file = self._last_file_path(live_meaningful_file_events)
+            active_file = self._last_file_path(recent_live_meaningful_file_events)
             active_project = self._extract_project(active_file)
 
         if not active_project:
@@ -138,7 +138,7 @@ class SignalScorer:
                 active_project = self._extract_project_from_workspace(anchor_workspace_root)
                 if not active_file:
                     active_file = self._last_file_path_for_workspace(
-                        project_anchor_file_events,
+                        recent_project_anchor_file_events,
                         anchor_workspace_root,
                     )
 
