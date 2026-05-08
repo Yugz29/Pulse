@@ -86,6 +86,20 @@ def git_event(command, minute=0):
     return git_command(command, minute)
 
 
+def terminal_test(command, minute=0, success=True):
+    return event(
+        "terminal_command_finished",
+        minute,
+        {
+            "terminal_command": command,
+            "terminal_command_base": "pytest",
+            "terminal_action_category": "testing",
+            "terminal_success": success,
+            "terminal_project": "Pulse",
+        },
+    )
+
+
 def test_user_presence_alone_creates_no_work_episode():
     events = [event("user_presence", 0, {"active": True})]
 
@@ -165,6 +179,78 @@ def test_system_file_event_does_not_pollute_user_episode_scope_or_confidence():
     assert episodes[0].evidence_count == 1
     assert episodes[0].strong_event_count == 1
     assert episodes[0].confidence == baseline[0].confidence
+
+
+def test_source_and_matching_test_close_stay_in_same_episode():
+    events = [
+        strong_path("daemon/core/signal_scorer.py", 0),
+        strong_path("tests/core/test_signal_scorer.py", 4),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 2
+    assert episodes[0].probable_task == "coding"
+    assert episodes[0].dominant_scope in {"daemon_python", "tests"}
+
+
+def test_source_and_docs_close_stay_in_same_episode_without_hard_boundary():
+    events = [
+        strong_path("daemon/runtime_orchestrator.py", 0),
+        strong_path("docs/runtime.md", 6),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 2
+    assert episodes[0].probable_task == "writing"
+    assert episodes[0].dominant_scope in {"daemon_python", "docs"}
+
+
+def test_source_tests_docs_and_pytest_close_stay_in_same_episode():
+    events = [
+        strong_path("daemon/core/signal_scorer.py", 0),
+        strong_path("tests/core/test_signal_scorer.py", 4),
+        strong_path("docs/signals.md", 8),
+        terminal_test("pytest tests/core/test_signal_scorer.py", 10, success=False),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].evidence_count == 4
+    assert episodes[0].strong_event_count == 4
+    assert episodes[0].probable_task == "tests"
+    assert episodes[0].activity_level == "executing"
+
+
+def test_real_subject_change_after_notable_gap_cuts_episode():
+    events = [
+        strong_path("daemon/memory/session.py", 0),
+        strong_path("App/App/DashboardView.swift", 18),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 2
+    assert episodes[0].boundary_reason == "scope_change"
+    assert episodes[0].dominant_scope == "memory"
+    assert episodes[1].dominant_scope == "app_swift"
+
+
+def test_docs_only_episode_is_writing_not_coding():
+    events = [
+        strong_path("docs/runtime.md", 0),
+        strong_path("docs/signals.md", 4),
+    ]
+
+    episodes = build_work_episodes(events)
+
+    assert len(episodes) == 1
+    assert episodes[0].probable_task == "writing"
+    assert episodes[0].dominant_scope == "docs"
 
 
 def test_strong_plus_recent_weak_stays_in_same_work_episode():
