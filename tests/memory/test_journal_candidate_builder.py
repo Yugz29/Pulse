@@ -58,6 +58,7 @@ def test_low_evidence_short_episode_remains_candidate_with_flags():
         episode(
             duration_min=1,
             evidence_count=1,
+            confidence=0.25,
             uncertainty_flags=["single_block", "low_evidence", "short_episode"],
             debug_reason="split after 60 min long gap",
         )
@@ -65,5 +66,7 @@ def test_low_evidence_short_episode_remains_candidate_with_flags():
 
     candidate = candidates[0]
     assert candidate.ignored is False
+    assert candidate.status == "candidate"
+    assert candidate.confidence == 0.25
     assert candidate.uncertainty_flags == ("single_block", "low_evidence", "short_episode")
     assert candidate.debug_reason == "split after 60 min long gap"

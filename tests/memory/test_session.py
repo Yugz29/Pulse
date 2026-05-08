@@ -640,6 +640,102 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(payload["ignored"][0]["ignored"], True)
         self.assertEqual(payload["ignored"][0]["ignore_reason"], "open_episode_end_of_events")
 
+    def test_get_today_journal_candidates_conserve_tool_assisted_uncertainty(self):
+        today = datetime.now().replace(hour=11, minute=18, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {
+                "path": f"{repo}/daemon/memory/work_episode_builder.py",
+                "_actor": "tool_assisted",
+            },
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=4),
+        ))
+
+        payload = self.memory.get_today_journal_candidates(date=today)
+
+        self.assertEqual(payload["candidate_count"], 1)
+        candidate = payload["candidates"][0]
+        self.assertEqual(candidate["status"], "candidate")
+        self.assertIn("tool_assisted", candidate["uncertainty_flags"])
+
+    def test_get_today_journal_candidates_ne_reexpose_pas_secret_terminal(self):
+        today = datetime.now().replace(hour=11, minute=21, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        token = "terminal-secret-token"
+        raw_secret = "raw-terminal-secret"
+        command_secret = "command-terminal-secret"
+
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/session.py"},
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "terminal_command_finished",
+            {
+                "terminal_command": f"curl --token {token} https://example.test",
+                "terminal_command_base": "curl",
+                "terminal_action_category": "inspection",
+                "terminal_project": "Pulse",
+                "command": f"curl --token {command_secret}",
+                "raw": f"Authorization: Bearer {raw_secret}",
+            },
+            timestamp=today + timedelta(minutes=1),
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=3),
+        ))
+
+        episodes_payload = self.memory.get_today_work_episodes(date=today)
+        candidates_payload = self.memory.get_today_journal_candidates(date=today)
+        debug_payload = json.dumps(
+            {"episodes": episodes_payload, "candidates": candidates_payload},
+            sort_keys=True,
+        )
+
+        self.assertEqual(candidates_payload["candidate_count"], 1)
+        self.assertNotIn(token, debug_payload)
+        self.assertNotIn(raw_secret, debug_payload)
+        self.assertNotIn(command_secret, debug_payload)
+
+    def test_get_today_journal_candidates_ne_reexpose_pas_secret_mcp(self):
+        today = datetime.now().replace(hour=11, minute=24, second=0, microsecond=0)
+        token = "mcp-secret-token"
+
+        self.memory.record_event(Event(
+            "mcp_command_received",
+            {
+                "command": f"run-check --token {token}",
+                "mcp_action_category": "inspection",
+                "project": "Pulse",
+            },
+            timestamp=today,
+        ))
+        self.memory.record_event(Event(
+            "screen_locked",
+            {},
+            timestamp=today + timedelta(minutes=2),
+        ))
+
+        episodes_payload = self.memory.get_today_work_episodes(date=today)
+        candidates_payload = self.memory.get_today_journal_candidates(date=today)
+        debug_payload = json.dumps(
+            {"episodes": episodes_payload, "candidates": candidates_payload},
+            sort_keys=True,
+        )
+
+        self.assertEqual(candidates_payload["candidate_count"], 1)
+        self.assertNotIn(token, debug_payload)
+
     def test_get_today_journal_comparison_sans_fichier_journal_ne_plante_pas(self):
         today = datetime.now().replace(hour=11, minute=30, second=0, microsecond=0)
         repo = "/Users/yugz/Projets/Pulse/Pulse"
