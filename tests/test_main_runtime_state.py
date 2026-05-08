@@ -188,6 +188,31 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertTrue(payload["ignored"])
         publish.assert_not_called()
 
+    def test_import_main_ne_demarre_pas_les_workers_permanents(self):
+        self.assertFalse(daemon_main.runtime_orchestrator._started)
+        self.assertIsNone(daemon_main.runtime_orchestrator._file_flush_worker)
+        self.assertIsNone(daemon_main.runtime_orchestrator._periodic_sync_worker)
+
+    def test_start_runtime_services_delegue_a_orchestrator_start(self):
+        with patch.object(daemon_main.runtime_orchestrator, "start") as start:
+            daemon_main.start_runtime_services()
+
+        start.assert_called_once()
+
+    def test_start_runtime_services_s_appuie_sur_start_idempotent(self):
+        with patch.object(daemon_main.runtime_orchestrator, "start") as start:
+            daemon_main.start_runtime_services()
+            daemon_main.start_runtime_services()
+
+        self.assertEqual(start.call_count, 2)
+
+    def test_globals_legacy_restent_disponibles(self):
+        self.assertIsNotNone(daemon_main.app)
+        self.assertIsNotNone(daemon_main.bus)
+        self.assertIsNotNone(daemon_main.runtime_state)
+        self.assertIsNotNone(daemon_main.runtime_orchestrator)
+        self.assertIsNotNone(daemon_main.runtime_event_coalescer)
+
     def test_shutdown_draine_coalescer_avant_runtime_orchestrator(self):
         calls = []
 

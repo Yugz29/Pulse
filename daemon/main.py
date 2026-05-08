@@ -109,7 +109,6 @@ runtime_orchestrator = RuntimeOrchestrator(
     llm_runtime=llm_runtime,
     log=log,
 )
-runtime_orchestrator.start()
 
 WATCHDOG_TIMEOUT_SEC = 30
 WATCHDOG_GRACE_SEC = 15
@@ -149,6 +148,10 @@ def set_unified_model(model: str) -> bool:
 
 def _persist_selected_models() -> None:
     llm_runtime.persist_selected_models()
+
+
+def start_runtime_services() -> None:
+    runtime_orchestrator.start()
 
 
 def _shutdown_runtime() -> None:
@@ -279,6 +282,7 @@ register_facts_routes(
 
 
 if __name__ == "__main__":
+    start_runtime_services()
     atexit.register(_shutdown_runtime)
     start_mcp_server(host="127.0.0.1", port=8766)
     threading.Thread(target=_watchdog_loop, daemon=True, name="pulse-watchdog").start()
