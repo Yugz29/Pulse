@@ -157,6 +157,73 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertTrue(self.orchestrator._periodic_sync_stopped)
         self.session_memory.close.assert_called_once_with(close_reason="session_end")
 
+    def test_shutdown_runtime_draine_les_file_events_pending_meme_worker_stoppe(self):
+        events = [
+            Event("file_modified", {"path": "/tmp/Pulse/a.py"}),
+            Event("file_modified", {"path": "/tmp/Pulse/b.py"}),
+        ]
+        with self.orchestrator._file_flush_condition:
+            self.orchestrator._pending_file_events = events[:]
+            self.orchestrator._file_flush_deadline = 123.0
+        self.orchestrator._started = True
+        self.orchestrator._file_flush_stopped = False
+        self.orchestrator._periodic_sync_stopped = False
+        self.scorer.compute.return_value = None
+        self.session_memory.export_memory_payload.return_value = {"duration_min": 0}
+
+        with patch.object(self.orchestrator, "_process_file_burst") as process_file_burst:
+            self.orchestrator.shutdown_runtime()
+
+        process_file_burst.assert_called_once_with(events)
+        self.assertEqual(self.orchestrator._pending_file_events, [])
+        self.assertIsNone(self.orchestrator._file_flush_deadline)
+        self.assertTrue(self.orchestrator._file_flush_stopped)
+        self.assertTrue(self.orchestrator._periodic_sync_stopped)
+
+    def test_start_shutdown_start_recree_un_cycle_de_workers_coherent(self):
+        created_threads = []
+
+        def fake_thread(*args, **kwargs):
+            thread = _LifecycleThread(*args, **kwargs)
+            created_threads.append(thread)
+            return thread
+
+        self.session_memory.export_memory_payload.return_value = {"duration_min": 0}
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=fake_thread), \
+             patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure"):
+            self.orchestrator.start()
+            first_file_stop_event = self.orchestrator._file_flush_stop_event
+            first_periodic_stop_event = self.orchestrator._periodic_sync_stop_event
+
+            self.orchestrator.shutdown_runtime()
+
+            self.assertFalse(self.orchestrator._started)
+            self.assertTrue(self.orchestrator._file_flush_stopped)
+            self.assertTrue(self.orchestrator._periodic_sync_stopped)
+            self.assertTrue(first_file_stop_event.is_set())
+            self.assertTrue(first_periodic_stop_event.is_set())
+
+            self.orchestrator.start()
+
+        self.assertTrue(self.orchestrator._started)
+        self.assertFalse(self.orchestrator._file_flush_stopped)
+        self.assertFalse(self.orchestrator._periodic_sync_stopped)
+        self.assertEqual(len(created_threads), 4)
+        self.assertEqual(
+            [thread.name for thread in created_threads],
+            [
+                "pulse-file-burst",
+                "pulse-periodic-sync",
+                "pulse-file-burst",
+                "pulse-periodic-sync",
+            ],
+        )
+        self.assertIsNot(self.orchestrator._file_flush_stop_event, first_file_stop_event)
+        self.assertIsNot(self.orchestrator._periodic_sync_stop_event, first_periodic_stop_event)
+        self.assertFalse(self.orchestrator._file_flush_stop_event.is_set())
+        self.assertFalse(self.orchestrator._periodic_sync_stop_event.is_set())
+
     def test_reset_for_tests_ne_demarre_pas_si_runtime_pas_started(self):
         self.assertFalse(self.orchestrator._started)
 
