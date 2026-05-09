@@ -1,3 +1,5 @@
+import json
+import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -8,6 +10,7 @@ from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
 from daemon.core.proposals import proposal_store
 from daemon.core.signal_scorer import Signals
+from daemon.memory.extractor import update_memories_from_session
 from daemon.runtime_orchestrator import RuntimeOrchestrator
 from daemon.runtime_state import RuntimeState
 
@@ -444,7 +447,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "started_at": "2026-04-28T11:46:01",
             "updated_at": "2026-04-28T12:04:48.365316",
             "top_files": ["plugin.json", "openai.yaml"],
-            "files_changed": 20,
+            "files_changed": 160,
         }
         self.scorer.compute.return_value = self._signals(session_duration_min=19)
         self.orchestrator.session_fsm.restore_session_start(datetime(2026, 4, 28, 11, 46, 1))
@@ -462,22 +465,59 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 captured_threads.append(self)
             def start(self): return None
 
+        diff_summary = (
+            "Diff en cours : DashboardViewModel.swift (+10 -2), "
+            "DashboardRootView.swift (+22 -4), DashboardContentView.swift (+8 -1)"
+        )
         with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
              patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
-             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Diff en cours : DashboardViewModel.swift (+10 -2), DashboardRootView.swift (+22 -4)"):
+             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value=diff_summary):
             self.orchestrator._process_confirmed_commit(git_root)
 
         sync_thread = next(t for t in captured_threads if t.target == self.orchestrator._sync_memory_background)
         snapshot = sync_thread.args[0]
         self.assertEqual(snapshot["active_project"], "Pulse")
-        self.assertEqual(snapshot["top_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
+        self.assertEqual(snapshot["top_files"], [
+            "DashboardViewModel.swift",
+            "DashboardRootView.swift",
+            "DashboardContentView.swift",
+        ])
+        self.assertEqual(snapshot["files_changed"], 3)
         self.assertEqual(snapshot["work_block_started_at"], "2026-04-28T11:46:01")
+
+        fake_fact_engine = MagicMock()
+        fake_fact_engine.observe_session.return_value = []
+        fake_fact_engine.clear_runtime_error.return_value = None
+        with tempfile.TemporaryDirectory() as temp_dir, \
+             patch("daemon.memory.extractor.get_fact_engine", return_value=fake_fact_engine), \
+             patch("daemon.memory.extractor.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)):
+            update_memories_from_session(
+                snapshot,
+                memory_dir=Path(temp_dir),
+                commit_message="feat: split episode",
+                trigger="commit",
+                diff_summary=diff_summary,
+            )
+            journal = next((Path(temp_dir) / "sessions").glob("*.md")).read_text()
+            hidden = json.loads(
+                journal.split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                    "\npulse-journal-data:end -->",
+                    1,
+                )[0]
+            )
+
+        self.assertEqual(hidden[0]["files_count"], 3)
+        self.assertEqual(hidden[0]["top_files"], [
+            "DashboardViewModel.swift",
+            "DashboardRootView.swift",
+            "DashboardContentView.swift",
+        ])
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
         git_root = Path("/tmp/Pulse")
         self.session_memory.export_memory_payload.return_value = {
             "active_project": "plugins", "duration_min": 19,
-            "top_files": ["plugin.json", "openai.yaml"], "files_changed": 20,
+            "top_files": ["plugin.json", "openai.yaml"], "files_changed": 160,
         }
         self.scorer.compute.return_value = self._signals(session_duration_min=19)
 
@@ -492,13 +532,19 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
              patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
              patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Fonctions touchées : refresh"), \
-             patch("daemon.runtime_orchestrator.read_commit_file_names", return_value=["DashboardViewModel.swift", "DashboardRootView.swift"]):
+             patch("daemon.runtime_orchestrator.read_commit_file_names", return_value=[
+                 "DashboardViewModel.swift",
+                 "DashboardRootView.swift",
+                 "DashboardViewModel.swift",
+             ]):
             self.orchestrator._process_confirmed_commit(git_root)
 
         sync_thread = next(t for t in captured_threads if t.target == self.orchestrator._sync_memory_background)
         snapshot = sync_thread.args[0]
         self.assertEqual(snapshot["active_project"], "Pulse")
         self.assertEqual(snapshot["commit_scope_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
+        self.assertEqual(snapshot["top_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
+        self.assertEqual(snapshot["files_changed"], 2)
 
     def test_annotate_commit_work_block_prefere_l_activite_des_fichiers_du_commit(self):
         self.session_memory.find_file_activity_window.return_value = {

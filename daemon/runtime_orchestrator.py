@@ -965,13 +965,11 @@ class RuntimeOrchestrator:
         )
         snapshot["active_project"] = git_root.name or snapshot.get("active_project")
         diff_files = extract_file_names_from_diff_summary(diff_summary or "")
-        commit_scope_files = diff_files or read_commit_file_names(git_root)
-        if diff_files:
-            snapshot["top_files"] = diff_files[:5]
-            snapshot["files_changed"] = max(
-                int(snapshot.get("files_changed", 0) or 0),
-                len(diff_files),
-            )
+        raw_commit_scope_files = diff_files or read_commit_file_names(git_root)
+        commit_scope_files = list(dict.fromkeys(raw_commit_scope_files))
+        if commit_scope_files:
+            snapshot["top_files"] = commit_scope_files[:5]
+            snapshot["files_changed"] = len(commit_scope_files)
         snapshot["commit_scope_files"] = commit_scope_files[:8]
         self._annotate_commit_work_block(
             snapshot,
