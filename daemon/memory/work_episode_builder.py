@@ -1,9 +1,8 @@
 """Pure work block and work episode builders.
 
-This module is intentionally not wired into runtime, journal, or dashboard code
-yet. It mirrors part of ``SessionMemory._cluster_work_events`` for Phase 2a
-tranche 1; convergence with the existing session clustering should happen in a
-later tranche once the episode model is proven by tests.
+This module is intentionally used for debug work episodes and journal candidate
+dry-runs, while the persisted journal still goes through SessionMemory exports
+and the extractor pipeline.
 """
 
 from __future__ import annotations
