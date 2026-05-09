@@ -1,6 +1,8 @@
-
-
 # Context Probes — Politique de sécurité et flux d'approbation
+
+Ce document décrit le **niveau 1.5** de Pulse : les lectures contextuelles ponctuelles, contrôlées et _read-only_. Il se situe entre l'observation passive (`/event`, signaux système, fichiers, terminal, présence) et les couches plus hautes de qualification, mémoire, proposition ou action.
+
+Les context probes ne sont donc ni une capture permanente, ni une proposition d'action, ni un mécanisme d'autonomie. Leur rôle est de permettre à Pulse de demander temporairement un contexte limité lorsque l'observation passive ne suffit pas.
 
 ## Objectif
 
@@ -19,7 +21,39 @@ Pulse veut lire du contexte
 
 Cette phase prépare le futur enrichissement contextuel de Pulse, mais elle reste volontairement prudente.
 
-Aujourd'hui, deux probes sont réellement exécutables : `app_context` et `window_title`. `window_title` ne retourne jamais le titre brut : il passe obligatoirement par la couche de redaction avant toute sortie. Les probes plus sensibles (`selected_text`, `clipboard_sample`, `screen_snapshot`) sont modélisés, mais non exécutés.
+## Position dans la pyramide Pulse
+
+Les context probes appartiennent au **niveau 1.5 — contexte ponctuel contrôlé**.
+
+```text
+Niveau 0   Runtime / lifecycle
+Niveau 1   Observation passive
+Niveau 1.5 Context probes read-only contrôlées
+Niveau 2   Qualification
+Niveau 3   Présent
+Niveau 4   Continuité
+Niveau 5+  Mémoire, assistance, proposition, action
+```
+
+Cette couche existe pour éviter deux extrêmes :
+
+```text
+observer trop peu → Pulse reste aveugle
+observer trop → Pulse devient intrusif
+```
+
+Le contrat est donc :
+
+```text
+lecture ponctuelle
+raison explicite
+approbation avant exécution
+résultat limité
+pas de persistance brute
+trace sans valeurs sensibles
+```
+
+Aujourd'hui, cette couche est volontairement peu exploitée. Elle sert surtout de base de sécurité et de transparence pour de futures lectures contextuelles plus riches. Tant que les niveaux 0 à 4 ne sont pas stabilisés, les probes sensibles restent non exécutables.
 
 ---
 
@@ -445,6 +479,8 @@ Si le probe est bloqué, la route retourne :
 
 ## Ce qui n'est pas encore fait
 
+Cette liste est volontaire. Ces capacités ne sont pas simplement “à finir” : elles sont bloquées tant que leur contrat de sécurité n'est pas assez clair.
+
 Pulse ne fait pas encore :
 
 ```text
@@ -464,6 +500,8 @@ Ces points doivent rester hors scope tant que leurs règles d'approbation, de re
 ---
 
 ## Principe à conserver
+
+Le système existe déjà, mais il doit rester borné : il fournit un cadre de demande et d'approbation, pas une invitation à capturer davantage de données par défaut.
 
 Pulse ne doit pas devenir un aspirateur à données.
 
