@@ -512,6 +512,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "updated_at": "2026-04-28T12:04:48.365316",
             "top_files": ["plugin.json", "openai.yaml"],
             "files_changed": 160,
+            "activity_level": "idle",
+            "uncertainty_flags": ["tool_assisted"],
         }
         self.scorer.compute.return_value = self._signals(session_duration_min=19)
         self.orchestrator.session_fsm.restore_session_start(datetime(2026, 4, 28, 11, 46, 1))
@@ -550,6 +552,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "DashboardContentView.swift",
         ])
         self.assertEqual(snapshot["files_changed"], 3)
+        self.assertEqual(snapshot["activity_level"], "idle")
+        self.assertEqual(snapshot["uncertainty_flags"], ["tool_assisted", "async_commit"])
         self.assertEqual(snapshot["work_block_started_at"], "2026-04-28T11:46:01")
 
         fake_fact_engine = MagicMock()
@@ -574,11 +578,14 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             )
 
         self.assertEqual(hidden[0]["files_count"], 3)
+        self.assertEqual(hidden[0]["activity_level"], "idle")
+        self.assertEqual(hidden[0]["uncertainty_flags"], ["tool_assisted", "async_commit"])
         self.assertEqual(hidden[0]["top_files"], [
             "DashboardViewModel.swift",
             "DashboardRootView.swift",
             "DashboardContentView.swift",
         ])
+        self.assertIn("Livraison asynchrone détectée.", journal)
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
         git_root = Path("/tmp/Pulse")
@@ -615,6 +622,38 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(snapshot["commit_scope_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
         self.assertEqual(snapshot["top_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
         self.assertEqual(snapshot["files_changed"], 2)
+
+    def test_process_confirmed_commit_non_idle_n_ajoute_pas_async_commit(self):
+        git_root = Path("/tmp/Pulse")
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 19,
+            "top_files": ["plugin.json"],
+            "files_changed": 12,
+            "activity_level": "executing",
+            "uncertainty_flags": ["tool_assisted"],
+        }
+        self.scorer.compute.return_value = self._signals(session_duration_min=19)
+
+        captured_threads = []
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                captured_threads.append(self)
+            def start(self): return None
+
+        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+             patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
+             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Diff en cours : runtime.py (+10 -2)"):
+            self.orchestrator._process_confirmed_commit(git_root)
+
+        sync_thread = next(
+            t for t in captured_threads
+            if getattr(t, "pulse_target", None) == self.orchestrator._sync_memory_background
+        )
+        snapshot = sync_thread.pulse_args[0]
+        self.assertEqual(snapshot["activity_level"], "executing")
+        self.assertEqual(snapshot["uncertainty_flags"], ["tool_assisted"])
 
     def test_annotate_commit_work_block_prefere_l_activite_des_fichiers_du_commit(self):
         self.session_memory.find_file_activity_window.return_value = {

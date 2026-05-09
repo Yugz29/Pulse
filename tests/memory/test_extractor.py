@@ -628,6 +628,58 @@ class TestExtractor(unittest.TestCase):
         self.assertEqual(hidden[0]["uncertainty_flags"], ["tool_assisted"])
         self.assertEqual(hidden[0]["task_confidence"], 0.82)
 
+    def test_journal_affiche_livraison_asynchrone_pour_commit_idle(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "activity_level": "idle",
+                "recent_apps": ["Codex"],
+                "files_changed": 1,
+                "top_files": ["runtime_orchestrator.py"],
+                "uncertainty_flags": ["tool_assisted", "async_commit"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="feat: stabilize runtime shutdown",
+            diff_summary="Diff en cours : runtime_orchestrator.py (+10 -2)",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertIn("Livraison asynchrone détectée.", journal)
+        self.assertIn("Assistance outil détectée.", journal)
+        self.assertEqual(hidden[0]["activity_level"], "idle")
+        self.assertEqual(hidden[0]["uncertainty_flags"], ["tool_assisted", "async_commit"])
+
+    def test_journal_session_idle_sans_commit_n_ajoute_pas_async_commit(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "general",
+                "activity_level": "idle",
+                "recent_apps": ["Cursor"],
+                "files_changed": 1,
+                "top_files": ["runtime_orchestrator.py"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+
+        self.assertNotIn("Livraison asynchrone détectée.", journal)
+        self.assertEqual(hidden[0]["activity_level"], "idle")
+        self.assertNotIn("async_commit", hidden[0]["uncertainty_flags"])
+
     def test_journal_affiche_une_incertitude_sobre_pour_confidence_faible(self):
         update_memories_from_session(
             {

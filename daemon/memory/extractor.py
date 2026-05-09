@@ -1466,6 +1466,8 @@ def _journal_uncertainty_lines(entry: Dict[str, Any]) -> List[str]:
     lines: List[str] = []
     if "tool_assisted" in flags:
         lines.append("Assistance outil détectée.")
+    if "async_commit" in flags:
+        lines.append("Livraison asynchrone détectée.")
     if confidence is not None and confidence < 0.5:
         lines.append("Signaux de travail incertains.")
     elif flags.intersection({"low_evidence", "short_episode", "single_block"}):

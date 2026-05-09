@@ -1069,10 +1069,13 @@ class RuntimeOrchestrator:
             pass
 
         runtime_snapshot = self.runtime_state.get_runtime_snapshot()
+        base_payload = self._export_memory_payload()
         snapshot = self._resume_card_memory_payload(
             snapshot=runtime_snapshot,
-            base_payload=self._export_memory_payload(),
+            base_payload=base_payload,
         )
+        if base_payload.get("activity_level"):
+            snapshot["activity_level"] = base_payload.get("activity_level")
         snapshot["active_project"] = git_root.name or snapshot.get("active_project")
         diff_files = extract_file_names_from_diff_summary(diff_summary or "")
         raw_commit_scope_files = diff_files or read_commit_file_names(git_root)
@@ -1081,6 +1084,8 @@ class RuntimeOrchestrator:
             snapshot["top_files"] = commit_scope_files[:5]
             snapshot["files_changed"] = len(commit_scope_files)
         snapshot["commit_scope_files"] = commit_scope_files[:8]
+        if snapshot.get("activity_level") == "idle":
+            self._append_uncertainty_flag(snapshot, "async_commit")
         self._annotate_commit_work_block(
             snapshot,
             commit_at=commit_at,
@@ -1088,6 +1093,17 @@ class RuntimeOrchestrator:
             git_root=git_root,
         )
         self._schedule_memory_sync(snapshot, self.summary_llm, commit_msg, "commit", diff_summary)
+
+    @staticmethod
+    def _append_uncertainty_flag(snapshot: dict, flag: str) -> None:
+        flags = [
+            str(item)
+            for item in (snapshot.get("uncertainty_flags") or [])
+            if str(item).strip()
+        ]
+        if flag not in flags:
+            flags.append(flag)
+        snapshot["uncertainty_flags"] = flags
 
     def _annotate_commit_work_block(
         self,
