@@ -150,7 +150,10 @@ memory_store = runtime.memory_store
 runtime_state = runtime.runtime_state
 llm_runtime = runtime.llm_runtime
 runtime_orchestrator = runtime.runtime_orchestrator
-idle_presence_heartbeat = create_idle_presence_heartbeat(bus)
+idle_presence_heartbeat = create_idle_presence_heartbeat(
+    bus,
+    is_locked=runtime_state.is_screen_locked,
+)
 
 WATCHDOG_TIMEOUT_SEC = 30
 WATCHDOG_GRACE_SEC = 15

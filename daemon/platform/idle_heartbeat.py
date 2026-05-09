@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 
 from daemon.platform.idle_probe import get_user_idle_seconds
 
@@ -16,12 +17,14 @@ class IdlePresenceHeartbeat:
         interval_sec: float = 30.0,
         idle_threshold_sec: int = 300,
         source: str = "iokit",
+        is_locked: Callable[[], bool] | None = None,
     ) -> None:
         self.bus = bus
         self.probe = probe
         self.interval_sec = interval_sec
         self.idle_threshold_sec = idle_threshold_sec
         self.source = source
+        self.is_locked = is_locked
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -46,6 +49,8 @@ class IdlePresenceHeartbeat:
             thread.join(timeout=timeout)
 
     def tick_once(self) -> bool:
+        if self._is_runtime_locked():
+            return False
         idle_seconds = self.probe()
         if idle_seconds is None:
             return False
@@ -68,7 +73,20 @@ class IdlePresenceHeartbeat:
         while not self._stop_event.wait(self.interval_sec):
             self.tick_once()
 
+    def _is_runtime_locked(self) -> bool:
+        if self.is_locked is None:
+            return False
+        try:
+            return bool(self.is_locked())
+        except Exception:
+            # Fail closed: a missing presence heartbeat is safer than a stale
+            # active signal while the runtime may be screen-locked.
+            return True
 
-def create_idle_presence_heartbeat(bus) -> IdlePresenceHeartbeat:
-    return IdlePresenceHeartbeat(bus=bus)
 
+def create_idle_presence_heartbeat(
+    bus,
+    *,
+    is_locked: Callable[[], bool] | None = None,
+) -> IdlePresenceHeartbeat:
+    return IdlePresenceHeartbeat(bus=bus, is_locked=is_locked)

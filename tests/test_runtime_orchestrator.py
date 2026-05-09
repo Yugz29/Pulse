@@ -130,6 +130,20 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertFalse(self.orchestrator._file_flush_stopped)
         self.assertFalse(self.orchestrator._periodic_sync_stopped)
 
+    def test_user_presence_externe_est_ignore_pendant_screen_lock(self):
+        self.runtime_state.mark_screen_locked()
+
+        self.orchestrator.handle_event(
+            Event(
+                "user_presence",
+                {"presence_state": "active", "idle_seconds": 10, "source": "external"},
+            )
+        )
+
+        self.session_memory.record_event.assert_not_called()
+        self.assertIsNone(self.runtime_state.get_present().user_presence_state)
+        self.scorer.bus.recent.assert_not_called()
+
     def test_start_est_idempotente(self):
         created_threads = []
 

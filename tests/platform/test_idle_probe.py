@@ -46,6 +46,19 @@ def test_idle_heartbeat_publie_active_quand_idle_seconds_bas():
     }
 
 
+def test_idle_heartbeat_publie_active_quand_runtime_non_locke():
+    bus = EventBus()
+    heartbeat = IdlePresenceHeartbeat(
+        bus=bus,
+        probe=lambda: 10,
+        idle_threshold_sec=300,
+        is_locked=lambda: False,
+    )
+
+    assert heartbeat.tick_once() is True
+    assert bus.recent(1)[0].payload["presence_state"] == "active"
+
+
 def test_idle_heartbeat_publie_idle_quand_idle_seconds_depasse_seuil():
     bus = EventBus()
     heartbeat = IdlePresenceHeartbeat(bus=bus, probe=lambda: 420, idle_threshold_sec=300)
@@ -58,6 +71,49 @@ def test_idle_heartbeat_publie_idle_quand_idle_seconds_depasse_seuil():
         "idle_seconds": 420,
         "source": "iokit",
     }
+
+
+def test_idle_heartbeat_ne_publie_pas_active_quand_runtime_locke():
+    bus = EventBus()
+    heartbeat = IdlePresenceHeartbeat(
+        bus=bus,
+        probe=lambda: 10,
+        idle_threshold_sec=300,
+        is_locked=lambda: True,
+    )
+
+    assert heartbeat.tick_once() is False
+    assert bus.recent() == []
+
+
+def test_idle_heartbeat_ne_publie_pas_idle_quand_runtime_locke():
+    bus = EventBus()
+    heartbeat = IdlePresenceHeartbeat(
+        bus=bus,
+        probe=lambda: 420,
+        idle_threshold_sec=300,
+        is_locked=lambda: True,
+    )
+
+    assert heartbeat.tick_once() is False
+    assert bus.recent() == []
+
+
+def test_idle_heartbeat_ne_publie_pas_si_lock_callback_echoue():
+    bus = EventBus()
+
+    def broken_lock_state():
+        raise RuntimeError("lock unavailable")
+
+    heartbeat = IdlePresenceHeartbeat(
+        bus=bus,
+        probe=lambda: 10,
+        idle_threshold_sec=300,
+        is_locked=broken_lock_state,
+    )
+
+    assert heartbeat.tick_once() is False
+    assert bus.recent() == []
 
 
 def test_runtime_state_expose_user_idle_seconds_et_source():
@@ -78,4 +134,3 @@ def test_runtime_state_expose_user_idle_seconds_et_source():
     assert present.user_idle_seconds == 420
     assert present.user_presence_source == "iokit"
     assert state.get_present_snapshot()["user_idle_seconds"] == 420
-

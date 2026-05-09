@@ -192,6 +192,7 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertFalse(daemon_main.runtime_orchestrator._started)
         self.assertIsNone(daemon_main.runtime_orchestrator._file_flush_worker)
         self.assertIsNone(daemon_main.runtime_orchestrator._periodic_sync_worker)
+        self.assertIsNone(daemon_main.idle_presence_heartbeat._thread)
 
     def test_start_runtime_services_delegue_a_orchestrator_start(self):
         with patch.object(daemon_main.runtime_orchestrator, "start") as start, \
