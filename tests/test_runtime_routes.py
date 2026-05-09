@@ -1041,6 +1041,39 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(response.get_json(), [])
         self.bus.recent.assert_called_once_with(100)
 
+    def test_insights_contract_is_debug_raw_recent_event_payloads(self):
+        self.bus.recent.return_value = [
+            Event(
+                "terminal_command_finished",
+                {
+                    "terminal_command": "curl -H 'Authorization: Bearer SECRET_TOKEN' https://example.test",
+                    "terminal_cwd": "/Users/yugz/Projets/Pulse/Pulse",
+                    "git_context": {
+                        "repo_root": "/Users/yugz/Projets/Pulse/Pulse",
+                        "repo_name": "Pulse",
+                        "branch": "main",
+                    },
+                },
+                timestamp=datetime(2026, 5, 1, 16, 0, 0),
+            ),
+            Event(
+                "window_title_poll",
+                {
+                    "window_title": "Pulse notes yugz@example.com /Users/yugz/private",
+                    "app_name": "Code",
+                },
+                timestamp=datetime(2026, 5, 1, 16, 1, 0),
+            ),
+        ]
+
+        response = self.client.get("/insights")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload[0]["payload"]["terminal_command"], self.bus.recent.return_value[0].payload["terminal_command"])
+        self.assertEqual(payload[0]["payload"]["git_context"]["repo_root"], "/Users/yugz/Projets/Pulse/Pulse")
+        self.assertEqual(payload[1]["payload"]["window_title"], "Pulse notes yugz@example.com /Users/yugz/private")
+
     def test_events_debug_describes_recent_events_without_raw_payload_values(self):
         self.bus.recent.return_value = [
             Event(
@@ -1416,6 +1449,54 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["project_hint_source"], "window_title")
         self.assertNotIn("Projet actif détecté : Pulse", card["evidence"])
         self.assertIn("Projet actif non identifié", card["missing_context"])
+
+    def test_work_context_route_does_not_expose_raw_paths_commands_or_window_title(self):
+        secret = "SECRET_TOKEN"
+        full_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_state.py"
+        raw_title = "Pulse notes yugz@example.com /Users/yugz/private"
+        command = f"curl -H 'Authorization: Bearer {secret}' https://example.test"
+        signals = Signals(
+            active_project="Pulse",
+            active_file=full_path,
+            probable_task="debug",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=["Code", "Terminal"],
+            clipboard_context=None,
+            activity_level="executing",
+            task_confidence=0.66,
+            terminal_action_category="testing",
+            terminal_command=command,
+            terminal_summary="pytest failed",
+            terminal_project="Pulse",
+            terminal_success=False,
+            window_title=raw_title,
+            window_title_app="Code",
+            edited_file_count_10m=2,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Code")
+
+        response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        card_text = str(card)
+        self.assertEqual(card["project"], "Pulse")
+        self.assertIn("Titre de fenêtre disponible", card["evidence"])
+        self.assertIn("Terminal : pytest failed", card["evidence"])
+        self.assertNotIn(full_path, card_text)
+        self.assertNotIn(command, card_text)
+        self.assertNotIn(secret, card_text)
+        self.assertNotIn(raw_title, card_text)
+        self.assertNotIn("yugz@example.com", card_text)
 
     def test_context_probes_schema_exposes_default_safety_policies(self):
         response = self.client.get("/context-probes/schema")

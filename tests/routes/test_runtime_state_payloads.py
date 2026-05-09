@@ -7,6 +7,7 @@ from daemon.routes.runtime_state_payloads import (
     build_state_payload,
     serialize_current_context,
 )
+from daemon.runtime_state import PresentState
 
 
 class StoreStub:
@@ -88,6 +89,62 @@ def _signals():
     )
 
 
+def _sensitive_signals():
+    return SimpleNamespace(
+        task_confidence=0.82,
+        friction_score=0.14,
+        user_presence_state="active",
+        user_idle_seconds=3,
+        active_app_duration_sec=120,
+        active_window_title_duration_sec=90,
+        app_switch_count_10m=1,
+        ai_app_switch_count_10m=0,
+        terminal_action_category="testing",
+        terminal_project="Pulse",
+        terminal_cwd="/Users/yugz/Projets/Pulse/Pulse",
+        terminal_command="curl -H 'Authorization: Bearer SECRET_TOKEN' https://example.test",
+        terminal_success=False,
+        terminal_exit_code=1,
+        terminal_duration_ms=1234,
+        terminal_summary="pytest failed",
+        window_title="Pulse notes yugz@example.com /Users/yugz/private",
+        git_context={
+            "repo_root": "/Users/yugz/Projets/Pulse/Pulse",
+            "repo_name": "Pulse",
+            "branch": "main",
+        },
+        raw_output="SECRET stdout",
+        stdout="SECRET stdout",
+        stderr="SECRET stderr",
+    )
+
+
+def test_present_state_product_projection_stays_minimal():
+    present = PresentState(
+        active_project="Pulse",
+        active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
+        probable_task="testing",
+        activity_level="executing",
+        user_presence_state="active",
+        user_idle_seconds=12,
+        user_presence_source="iokit",
+    )
+
+    payload = present.to_dict()
+
+    assert payload["user_idle_seconds"] == 12
+    assert payload["user_presence_source"] == "iokit"
+    assert "terminal_command" not in payload
+    assert "command" not in payload
+    assert "mcp_command" not in payload
+    assert "window_title" not in payload
+    assert "git_context" not in payload
+    assert "repo_root" not in payload
+    assert "stdout" not in payload
+    assert "stderr" not in payload
+    assert "raw_output" not in payload
+
+
 def test_serialize_current_context_returns_expected_top_level_keys():
     context = SimpleNamespace(
         id="ctx-1",
@@ -126,6 +183,31 @@ def test_build_state_payload_legacy_signals_contains_expected_fields():
     assert payload["signals"]["task_confidence"] == 0.82
     assert payload["signals"]["terminal_command"] == "pytest"
     assert payload["signals"]["last_session_context"] == "last session for Pulse"
+
+
+def test_build_state_payload_keeps_present_minimal_when_state_signals_are_enriched():
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_sensitive_signals()),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+    )
+
+    serialized = str(payload)
+
+    assert payload["present"]["active_project"] == "Pulse"
+    assert "terminal_command" not in payload["present"]
+    assert "window_title" not in payload["present"]
+    assert "git_context" not in payload["present"]
+    assert "raw_output" not in payload["present"]
+
+    assert payload["signals"]["terminal_command"] == _sensitive_signals().terminal_command
+    assert "window_title" not in payload["signals"]
+    assert "git_context" not in payload["signals"]
+    assert "raw_output" not in payload["signals"]
+    assert "SECRET_TOKEN" in serialized
+    assert "Pulse notes yugz@example.com" not in serialized
+    assert "SECRET stdout" not in serialized
 
 
 def test_build_state_payload_debug_contains_expected_fields():
