@@ -68,6 +68,48 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(stored_payload["command"], "cat [REDACTED_TOKEN]")
         self.assertEqual(event.payload["command"], f"cat {secret}")
 
+    def test_record_event_redacts_mcp_decision_command_storage_without_mutating_event(self):
+        command = (
+            "curl -H 'Authorization: Bearer bearer-secret-token' "
+            "TOKEN=env-secret password=plain-secret"
+        )
+        event = Event(
+            "mcp_decision",
+            {
+                "command": command,
+                "tool_use_id": "tool-1",
+                "mcp_decision": "allow",
+                "mcp_action_category": "execution",
+            },
+        )
+
+        self.memory.record_event(event)
+
+        stored_payload = self.memory.get_recent_events()[0]["payload"]
+        self.assertIn("Authorization: Bearer [REDACTED_TOKEN]", stored_payload["command"])
+        self.assertIn("TOKEN=[REDACTED_SECRET]", stored_payload["command"])
+        self.assertIn("password=[REDACTED_SECRET]", stored_payload["command"])
+        self.assertNotIn("bearer-secret-token", stored_payload["command"])
+        self.assertNotIn("env-secret", stored_payload["command"])
+        self.assertNotIn("plain-secret", stored_payload["command"])
+        self.assertEqual(event.payload["command"], command)
+
+    def test_record_event_preserve_mcp_simple_command_readable(self):
+        event = Event(
+            "mcp_decision",
+            {
+                "command": "pytest tests/memory/test_session.py",
+                "tool_use_id": "tool-2",
+                "mcp_decision": "allow",
+                "mcp_action_category": "testing",
+            },
+        )
+
+        self.memory.record_event(event)
+
+        stored_payload = self.memory.get_recent_events()[0]["payload"]
+        self.assertEqual(stored_payload["command"], "pytest tests/memory/test_session.py")
+
     def test_record_event_aligne_started_at_updated_at_et_duree_sur_temps_observe(self):
         older = datetime(2026, 4, 23, 16, 0, 0)
         newer = datetime(2026, 4, 23, 16, 10, 0)

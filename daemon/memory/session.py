@@ -777,7 +777,7 @@ class SessionMemory:
             payload.pop("raw", None)
             if "terminal_command" in payload:
                 payload["terminal_command"] = redact_sensitive_command(payload["terminal_command"])
-        elif event.type == "mcp_command_received" and "command" in payload:
+        elif event.type in {"mcp_command_received", "mcp_decision"} and "command" in payload:
             payload["command"] = redact_sensitive_command(payload["command"])
         return payload
 
