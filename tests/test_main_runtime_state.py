@@ -206,6 +206,36 @@ class TestMainRuntimeState(unittest.TestCase):
 
         self.assertEqual(start.call_count, 2)
 
+    def test_create_runtime_retourne_un_bundle_complet_sans_start(self):
+        runtime = daemon_main.create_runtime()
+
+        self.assertIsNotNone(runtime.bus)
+        self.assertIsNotNone(runtime.store)
+        self.assertIsNotNone(runtime.scorer)
+        self.assertIsNotNone(runtime.decision_engine)
+        self.assertIsNotNone(runtime.summary_llm)
+        self.assertIsNotNone(runtime.session_memory)
+        self.assertIsNotNone(runtime.memory_store)
+        self.assertIsNotNone(runtime.runtime_state)
+        self.assertIsNotNone(runtime.llm_runtime)
+        self.assertIsNotNone(runtime.runtime_orchestrator)
+        self.assertFalse(runtime.runtime_orchestrator._started)
+        self.assertIsNone(runtime.runtime_orchestrator._file_flush_worker)
+        self.assertIsNone(runtime.runtime_orchestrator._periodic_sync_worker)
+        runtime.runtime_orchestrator.shutdown_runtime()
+
+    def test_globals_legacy_pointent_vers_le_bundle_global(self):
+        self.assertIs(daemon_main.bus, daemon_main.runtime.bus)
+        self.assertIs(daemon_main.store, daemon_main.runtime.store)
+        self.assertIs(daemon_main.scorer, daemon_main.runtime.scorer)
+        self.assertIs(daemon_main.decision_engine, daemon_main.runtime.decision_engine)
+        self.assertIs(daemon_main.summary_llm, daemon_main.runtime.summary_llm)
+        self.assertIs(daemon_main.session_memory, daemon_main.runtime.session_memory)
+        self.assertIs(daemon_main.memory_store, daemon_main.runtime.memory_store)
+        self.assertIs(daemon_main.runtime_state, daemon_main.runtime.runtime_state)
+        self.assertIs(daemon_main.llm_runtime, daemon_main.runtime.llm_runtime)
+        self.assertIs(daemon_main.runtime_orchestrator, daemon_main.runtime.runtime_orchestrator)
+
     def test_globals_legacy_restent_disponibles(self):
         self.assertIsNotNone(daemon_main.app)
         self.assertIsNotNone(daemon_main.bus)

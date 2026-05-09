@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -81,34 +82,75 @@ def _build_summary_llm():
         log.warning("LLM router indisponible au démarrage: %s", exc)
         return UnavailableLLMRouter(reason=exc)
 
-bus = EventBus()
-store = StateStore()
-scorer = SignalScorer(bus)
-decision_engine = DecisionEngine()
-summary_llm = _build_summary_llm()
-configure_llm_router(summary_llm)
-session_memory = SessionMemory()
-memory_store = MemoryStore()
-runtime_state = RuntimeState()
-settings_path = Path.home() / ".pulse" / "settings.json"
-llm_runtime = LLMRuntime(
-    summary_llm=summary_llm,
-    settings_path=settings_path,
-    get_available_models=get_available_llm_models,
-    get_selected_command_model=get_selected_command_llm_model,
-    set_selected_command_model=set_selected_command_llm_model,
-)
-runtime_orchestrator = RuntimeOrchestrator(
-    store=store,
-    scorer=scorer,
-    decision_engine=decision_engine,
-    summary_llm=summary_llm,
-    session_memory=session_memory,
-    memory_store=memory_store,
-    runtime_state=runtime_state,
-    llm_runtime=llm_runtime,
-    log=log,
-)
+
+@dataclass(frozen=True)
+class RuntimeBundle:
+    bus: EventBus
+    store: StateStore
+    scorer: SignalScorer
+    decision_engine: DecisionEngine
+    summary_llm: object
+    session_memory: SessionMemory
+    memory_store: MemoryStore
+    runtime_state: RuntimeState
+    llm_runtime: LLMRuntime
+    runtime_orchestrator: RuntimeOrchestrator
+
+
+def create_runtime() -> RuntimeBundle:
+    runtime_bus = EventBus()
+    runtime_store = StateStore()
+    runtime_scorer = SignalScorer(runtime_bus)
+    runtime_decision_engine = DecisionEngine()
+    runtime_summary_llm = _build_summary_llm()
+    configure_llm_router(runtime_summary_llm)
+    runtime_session_memory = SessionMemory()
+    runtime_memory_store = MemoryStore()
+    runtime_state_obj = RuntimeState()
+    runtime_settings_path = Path.home() / ".pulse" / "settings.json"
+    runtime_llm = LLMRuntime(
+        summary_llm=runtime_summary_llm,
+        settings_path=runtime_settings_path,
+        get_available_models=get_available_llm_models,
+        get_selected_command_model=get_selected_command_llm_model,
+        set_selected_command_model=set_selected_command_llm_model,
+    )
+    orchestrator = RuntimeOrchestrator(
+        store=runtime_store,
+        scorer=runtime_scorer,
+        decision_engine=runtime_decision_engine,
+        summary_llm=runtime_summary_llm,
+        session_memory=runtime_session_memory,
+        memory_store=runtime_memory_store,
+        runtime_state=runtime_state_obj,
+        llm_runtime=runtime_llm,
+        log=log,
+    )
+    return RuntimeBundle(
+        bus=runtime_bus,
+        store=runtime_store,
+        scorer=runtime_scorer,
+        decision_engine=runtime_decision_engine,
+        summary_llm=runtime_summary_llm,
+        session_memory=runtime_session_memory,
+        memory_store=runtime_memory_store,
+        runtime_state=runtime_state_obj,
+        llm_runtime=runtime_llm,
+        runtime_orchestrator=orchestrator,
+    )
+
+
+runtime = create_runtime()
+bus = runtime.bus
+store = runtime.store
+scorer = runtime.scorer
+decision_engine = runtime.decision_engine
+summary_llm = runtime.summary_llm
+session_memory = runtime.session_memory
+memory_store = runtime.memory_store
+runtime_state = runtime.runtime_state
+llm_runtime = runtime.llm_runtime
+runtime_orchestrator = runtime.runtime_orchestrator
 
 WATCHDOG_TIMEOUT_SEC = 30
 WATCHDOG_GRACE_SEC = 15
