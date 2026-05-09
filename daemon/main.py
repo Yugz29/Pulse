@@ -46,8 +46,6 @@ logging.basicConfig(
 )
 log = logging.getLogger("pulse")
 
-app = Flask(__name__)
-
 
 class _RoutineGetLogFilter(logging.Filter):
     """Masque les GET de polling normaux pour garder daemon.error.log exploitable."""
@@ -254,73 +252,83 @@ def get_scoring_status():
     }
 
 
+def create_app(runtime: RuntimeBundle) -> Flask:
+    flask_app = Flask(__name__)
+
+    coalescer = register_runtime_routes(
+        flask_app,
+        bus=runtime.bus,
+        store=runtime.store,
+        runtime_state=runtime.runtime_state,
+        get_session_fsm=lambda: runtime.runtime_orchestrator.session_fsm,
+        get_current_context=lambda: runtime.runtime_orchestrator.current_context,
+        get_recent_sessions=lambda limit: runtime.session_memory.get_recent_sessions(limit=limit),
+        get_today_summary=lambda: runtime.session_memory.get_today_summary(),
+        get_today_work_episodes=lambda date=None: runtime.session_memory.get_today_work_episodes(date=date),
+        get_today_journal_candidates=lambda date=None: runtime.session_memory.get_today_journal_candidates(date=date),
+        get_today_journal_comparison=lambda date=None: runtime.session_memory.get_today_journal_comparison(date=date),
+        get_today_commit_episode_links=lambda date=None: runtime.session_memory.get_today_commit_episode_links(date=date),
+        llm_unload_background=_llm_unload_background,
+        llm_warmup_background=_llm_warmup_background,
+        shutdown_runtime=_shutdown_runtime,
+        resume_card_llm=runtime.summary_llm,
+        log=log,
+    )
+    setattr(flask_app, "runtime_event_coalescer", coalescer)
+
+    register_assistant_routes(
+        flask_app,
+        cognitive_ask=cognitive_ask,
+        cognitive_ask_stream=cognitive_ask_stream,
+        cognitive_ask_stream_with_tools=cognitive_ask_stream_with_tools,
+        llm=runtime.summary_llm,
+        build_context_snapshot=build_context_snapshot,
+        get_frozen_memory=lambda: runtime.runtime_orchestrator.get_frozen_memory(),
+        get_available_models=lambda: get_available_llm_models(),
+        get_selected_command_model=lambda: get_selected_command_llm_model(),
+        get_selected_summary_model=lambda: get_selected_summary_llm_model(),
+        set_unified_model=lambda model: set_unified_model(model),
+        persist_selected_models=lambda: _persist_selected_models(),
+        ollama_ping=lambda: _ollama_ping(),
+        llm_provider=lambda: _llm_provider(),
+    )
+
+    register_memory_routes(
+        flask_app,
+        memory_store=runtime.memory_store,
+        session_memory=runtime.session_memory,
+        get_frozen_memory_at=lambda: runtime.runtime_orchestrator.get_frozen_memory_at(),
+    )
+
+    register_mcp_routes(
+        flask_app,
+        bus=runtime.bus,
+        get_pending_command=lambda: get_pending_command(),
+        get_proposal_history=lambda limit: get_proposal_history(limit),
+        intercept_command=lambda command, tool_use_id: intercept_command(command, tool_use_id),
+        build_runtime_signal=lambda command, tool_use_id, **kwargs: build_runtime_signal(
+            command,
+            tool_use_id,
+            **kwargs,
+        ),
+        receive_decision=lambda tool_use_id, decision: receive_decision(tool_use_id, decision),
+        get_scoring_status=lambda: get_scoring_status(),
+        log=log,
+    )
+
+    register_facts_routes(
+        flask_app,
+        get_fact_engine=lambda: runtime.runtime_orchestrator.fact_engine,
+    )
+
+    return flask_app
+
+
 bus.subscribe(store.update)
 bus.subscribe(_handle_event)
 
-runtime_event_coalescer = register_runtime_routes(
-    app,
-    bus=bus,
-    store=store,
-    runtime_state=runtime_state,
-    get_session_fsm=lambda: runtime_orchestrator.session_fsm,
-    get_current_context=lambda: runtime_orchestrator.current_context,
-    get_recent_sessions=lambda limit: session_memory.get_recent_sessions(limit=limit),
-    get_today_summary=lambda: session_memory.get_today_summary(),
-    get_today_work_episodes=lambda date=None: session_memory.get_today_work_episodes(date=date),
-    get_today_journal_candidates=lambda date=None: session_memory.get_today_journal_candidates(date=date),
-    get_today_journal_comparison=lambda date=None: session_memory.get_today_journal_comparison(date=date),
-    get_today_commit_episode_links=lambda date=None: session_memory.get_today_commit_episode_links(date=date),
-    llm_unload_background=_llm_unload_background,
-    llm_warmup_background=_llm_warmup_background,
-    shutdown_runtime=_shutdown_runtime,
-    resume_card_llm=summary_llm,
-    log=log,
-)
-
-register_assistant_routes(
-    app,
-    cognitive_ask=cognitive_ask,
-    cognitive_ask_stream=cognitive_ask_stream,
-    cognitive_ask_stream_with_tools=cognitive_ask_stream_with_tools,
-    llm=summary_llm,
-    build_context_snapshot=build_context_snapshot,
-    get_frozen_memory=lambda: runtime_orchestrator.get_frozen_memory(),
-    get_available_models=lambda: get_available_llm_models(),
-    get_selected_command_model=lambda: get_selected_command_llm_model(),
-    get_selected_summary_model=lambda: get_selected_summary_llm_model(),
-    set_unified_model=lambda model: set_unified_model(model),
-    persist_selected_models=lambda: _persist_selected_models(),
-    ollama_ping=lambda: _ollama_ping(),
-    llm_provider=lambda: _llm_provider(),
-)
-
-register_memory_routes(
-    app,
-    memory_store=memory_store,
-    session_memory=session_memory,
-    get_frozen_memory_at=lambda: runtime_orchestrator.get_frozen_memory_at(),
-)
-
-register_mcp_routes(
-    app,
-    bus=bus,
-    get_pending_command=lambda: get_pending_command(),
-    get_proposal_history=lambda limit: get_proposal_history(limit),
-    intercept_command=lambda command, tool_use_id: intercept_command(command, tool_use_id),
-    build_runtime_signal=lambda command, tool_use_id, **kwargs: build_runtime_signal(
-        command,
-        tool_use_id,
-        **kwargs,
-    ),
-    receive_decision=lambda tool_use_id, decision: receive_decision(tool_use_id, decision),
-    get_scoring_status=lambda: get_scoring_status(),
-    log=log,
-)
-
-register_facts_routes(
-    app,
-    get_fact_engine=lambda: runtime_orchestrator.fact_engine,
-)
+app = create_app(runtime)
+runtime_event_coalescer = app.runtime_event_coalescer
 
 
 if __name__ == "__main__":

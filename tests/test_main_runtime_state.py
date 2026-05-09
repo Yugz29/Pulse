@@ -236,12 +236,39 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertIs(daemon_main.llm_runtime, daemon_main.runtime.llm_runtime)
         self.assertIs(daemon_main.runtime_orchestrator, daemon_main.runtime.runtime_orchestrator)
 
+    def test_create_app_enregistre_les_routes_sans_demarrer_runtime(self):
+        runtime = daemon_main.create_runtime()
+        app = daemon_main.create_app(runtime)
+
+        try:
+            response = app.test_client().get("/ping")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertFalse(runtime.runtime_orchestrator._started)
+            self.assertIsNone(runtime.runtime_orchestrator._file_flush_worker)
+            self.assertIsNone(runtime.runtime_orchestrator._periodic_sync_worker)
+        finally:
+            app.runtime_event_coalescer.close()
+            runtime.runtime_orchestrator.shutdown_runtime()
+
+    def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
+        runtime = daemon_main.create_runtime()
+        app = daemon_main.create_app(runtime)
+
+        try:
+            self.assertIsNotNone(app.runtime_event_coalescer)
+            self.assertTrue(hasattr(app.runtime_event_coalescer, "close"))
+        finally:
+            app.runtime_event_coalescer.close()
+            runtime.runtime_orchestrator.shutdown_runtime()
+
     def test_globals_legacy_restent_disponibles(self):
         self.assertIsNotNone(daemon_main.app)
         self.assertIsNotNone(daemon_main.bus)
         self.assertIsNotNone(daemon_main.runtime_state)
         self.assertIsNotNone(daemon_main.runtime_orchestrator)
         self.assertIsNotNone(daemon_main.runtime_event_coalescer)
+        self.assertIs(daemon_main.runtime_event_coalescer, daemon_main.app.runtime_event_coalescer)
 
     def test_shutdown_draine_coalescer_avant_runtime_orchestrator(self):
         calls = []
