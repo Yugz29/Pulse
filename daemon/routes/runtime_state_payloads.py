@@ -28,6 +28,7 @@ def serialize_current_context(current_context: Any) -> dict[str, Any]:
         "task_confidence": getattr(current_context, "task_confidence", None),
         "user_presence_state": getattr(current_context, "user_presence_state", None),
         "user_idle_seconds": getattr(current_context, "user_idle_seconds", None),
+        "user_presence_source": getattr(current_context, "user_presence_source", None),
         "terminal_action_category": getattr(current_context, "terminal_action_category", None),
         "terminal_project": getattr(current_context, "terminal_project", None),
         "terminal_cwd": getattr(current_context, "terminal_cwd", None),

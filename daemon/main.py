@@ -31,6 +31,7 @@ from daemon.mcp.handlers import (
 from daemon.mcp.server import start_mcp_server
 from daemon.memory.session import SessionMemory
 from daemon.memory.store import MemoryStore
+from daemon.platform.idle_heartbeat import create_idle_presence_heartbeat
 from daemon.routes.assistant import register_assistant_routes
 from daemon.routes.facts import register_facts_routes
 from daemon.routes.mcp import register_mcp_routes
@@ -149,6 +150,7 @@ memory_store = runtime.memory_store
 runtime_state = runtime.runtime_state
 llm_runtime = runtime.llm_runtime
 runtime_orchestrator = runtime.runtime_orchestrator
+idle_presence_heartbeat = create_idle_presence_heartbeat(bus)
 
 WATCHDOG_TIMEOUT_SEC = 30
 WATCHDOG_GRACE_SEC = 15
@@ -192,9 +194,14 @@ def _persist_selected_models() -> None:
 
 def start_runtime_services() -> None:
     runtime_orchestrator.start()
+    idle_presence_heartbeat.start()
 
 
 def _shutdown_runtime() -> None:
+    try:
+        idle_presence_heartbeat.stop()
+    except Exception as exc:
+        log.warning("shutdown idle heartbeat failed: %s", exc)
     try:
         runtime_event_coalescer.close()
     except Exception as exc:

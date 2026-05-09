@@ -194,17 +194,21 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertIsNone(daemon_main.runtime_orchestrator._periodic_sync_worker)
 
     def test_start_runtime_services_delegue_a_orchestrator_start(self):
-        with patch.object(daemon_main.runtime_orchestrator, "start") as start:
+        with patch.object(daemon_main.runtime_orchestrator, "start") as start, \
+             patch.object(daemon_main.idle_presence_heartbeat, "start") as idle_start:
             daemon_main.start_runtime_services()
 
         start.assert_called_once()
+        idle_start.assert_called_once()
 
     def test_start_runtime_services_s_appuie_sur_start_idempotent(self):
-        with patch.object(daemon_main.runtime_orchestrator, "start") as start:
+        with patch.object(daemon_main.runtime_orchestrator, "start") as start, \
+             patch.object(daemon_main.idle_presence_heartbeat, "start") as idle_start:
             daemon_main.start_runtime_services()
             daemon_main.start_runtime_services()
 
         self.assertEqual(start.call_count, 2)
+        self.assertEqual(idle_start.call_count, 2)
 
     def test_create_runtime_retourne_un_bundle_complet_sans_start(self):
         runtime = daemon_main.create_runtime()

@@ -467,6 +467,7 @@ class RuntimeOrchestrator:
             self.runtime_state.update_presence(
                 presence_state=presence_state,
                 idle_seconds=idle_seconds,
+                source=payload.get("source"),
             )
 
         elif event.type == "user_idle":
@@ -478,12 +479,14 @@ class RuntimeOrchestrator:
             self.runtime_state.update_presence(
                 presence_state="idle",
                 idle_seconds=idle_seconds,
+                source=payload.get("source"),
             )
 
         elif event.type == "user_active":
             self.runtime_state.update_presence(
                 presence_state="active",
                 idle_seconds=0,
+                source=(event.payload or {}).get("source"),
             )
 
         if event.type in {"app_activated", "window_title_poll"}:

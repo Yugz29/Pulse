@@ -45,6 +45,7 @@ class CurrentContext:
     clipboard_context: Optional[str]
     user_presence_state: Optional[str] = None
     user_idle_seconds: Optional[int] = None
+    user_presence_source: Optional[str] = None
     mcp_action_category: Optional[str] = None
     mcp_is_read_only: Optional[bool] = None
     mcp_decision: Optional[str] = None

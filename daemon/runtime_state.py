@@ -20,6 +20,7 @@ class PresentState:
     clipboard_context: str | None = None
     user_presence_state: str | None = None
     user_idle_seconds: int | None = None
+    user_presence_source: str | None = None
     active_app_duration_sec: int | None = None
     active_window_title_duration_sec: int | None = None
     app_switch_count_10m: int = 0
@@ -41,6 +42,7 @@ class PresentState:
             "clipboard_context": self.clipboard_context,
             "user_presence_state": self.user_presence_state,
             "user_idle_seconds": self.user_idle_seconds,
+            "user_presence_source": self.user_presence_source,
             "active_app_duration_sec": self.active_app_duration_sec,
             "active_window_title_duration_sec": self.active_window_title_duration_sec,
             "app_switch_count_10m": self.app_switch_count_10m,
@@ -80,6 +82,7 @@ class RuntimeState:
         self._latest_active_app: str | None = None
         self._user_presence_state: str | None = None
         self._user_idle_seconds: int | None = None
+        self._user_presence_source: str | None = None
         self._present = PresentState()
 
     def touch_ping(self, when: datetime | None = None) -> bool:
@@ -113,11 +116,13 @@ class RuntimeState:
         *,
         presence_state: str | None,
         idle_seconds: int | None,
+        source: str | None = None,
     ) -> None:
         """Stocke le dernier signal de présence IOKit reçu depuis Swift."""
         with self._lock:
             self._user_presence_state = presence_state
             self._user_idle_seconds = idle_seconds
+            self._user_presence_source = source
 
     def update_present(
         self,
@@ -131,6 +136,7 @@ class RuntimeState:
         with self._lock:
             stored_presence_state = self._user_presence_state
             stored_idle_seconds = self._user_idle_seconds
+            stored_presence_source = self._user_presence_source
 
         signal_presence = getattr(signals, "user_presence_state", None)
         signal_idle = getattr(signals, "user_idle_seconds", None)
@@ -148,6 +154,7 @@ class RuntimeState:
             clipboard_context=getattr(signals, "clipboard_context", None),
             user_presence_state=signal_presence or stored_presence_state,
             user_idle_seconds=signal_idle if signal_idle is not None else stored_idle_seconds,
+            user_presence_source=stored_presence_source,
             active_app_duration_sec=getattr(signals, "active_app_duration_sec", None),
             active_window_title_duration_sec=getattr(signals, "active_window_title_duration_sec", None),
             app_switch_count_10m=getattr(signals, "app_switch_count_10m", 0),
@@ -291,4 +298,5 @@ class RuntimeState:
             self._latest_active_app = None
             self._user_presence_state = None
             self._user_idle_seconds = None
+            self._user_presence_source = None
             self._present = PresentState()

@@ -46,6 +46,7 @@ class CurrentContextBuilder:
             clipboard_context=present.clipboard_context,
             user_presence_state=present.user_presence_state,
             user_idle_seconds=present.user_idle_seconds,
+            user_presence_source=present.user_presence_source,
             mcp_action_category=self._signal_attr(signals, "mcp_action_category"),
             mcp_is_read_only=self._signal_attr(signals, "mcp_is_read_only"),
             mcp_decision=self._signal_attr(signals, "mcp_decision"),
