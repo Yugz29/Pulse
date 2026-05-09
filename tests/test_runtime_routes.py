@@ -907,6 +907,31 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["terminal_duration_ms"], 1200)
         self.assertNotIn("command", payload)
 
+    def test_event_endpoint_adds_test_result_for_testing_terminal_event(self):
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "terminal_command_finished",
+                "command": "python -m pytest tests/core/test_signal_scorer.py",
+                "cwd": "/Users/yugz/Projets/Pulse/Pulse",
+                "exit_code": 1,
+                "stdout": "full stacktrace should not be forwarded",
+                "stdout_summary": "1 error, 3 failed, 20 passed, 2 skipped in 5.1s",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.bus.publish.assert_called_once()
+        event_type, payload = self.bus.publish.call_args.args
+        self.assertEqual(event_type, "terminal_command_finished")
+        self.assertNotIn("stdout", payload)
+        self.assertEqual(payload["test_result"]["framework"], "pytest")
+        self.assertEqual(payload["test_result"]["error_count"], 1)
+        self.assertEqual(payload["test_result"]["failed_count"], 3)
+        self.assertEqual(payload["test_result"]["passed_count"], 20)
+        self.assertEqual(payload["test_result"]["skipped_count"], 2)
+        self.assertEqual(payload["test_result"]["target"], "tests/core/test_signal_scorer.py")
+
     def test_event_endpoint_transmet_le_timestamp_source_au_bus(self):
         source_ts = "2026-04-23T10:15:30"
 

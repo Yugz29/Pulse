@@ -127,8 +127,15 @@ def _normalize_terminal_event_payload(
         terminal_action_category,
         terminal_category_summary,
     )
+    from daemon.core.test_result_parser import parse_test_result
 
     command = str(payload.pop("command", "") or payload.pop("raw", "")).strip()
+    output_summary = str(
+        payload.get("stdout_summary")
+        or payload.get("test_output_summary")
+        or payload.get("output_summary")
+        or ""
+    ).strip()
     cwd = str(payload.get("cwd", "")).strip() or None
     shell = str(payload.get("shell", "")).strip() or None
     terminal_program = str(payload.get("terminal_program", "")).strip() or None
@@ -183,6 +190,15 @@ def _normalize_terminal_event_payload(
         "terminal_success": (exit_code == 0) if exit_code is not None else None,
         "terminal_summary": summary,
     })
+    test_result = parse_test_result(
+        command=command,
+        terminal_action_category=action_category,
+        success=normalized["terminal_success"],
+        exit_code=exit_code,
+        output_summary=output_summary,
+    )
+    if test_result:
+        normalized["test_result"] = test_result
     return normalized
 
 

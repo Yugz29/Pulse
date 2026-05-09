@@ -456,6 +456,42 @@ class TestRuntimeLifecycle(unittest.TestCase):
                 self.assertNotIn("raw", payload)
                 orchestrator.shutdown_runtime()
 
+    def test_terminal_testing_event_persists_structured_test_result_without_stdout(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            tmp = Path(tmpdir)
+            app, bus, _, session_memory, orchestrator, _ = self._runtime_app(tmp)
+            client = app.test_client()
+            raw_stdout = "SECRET_STACKTRACE should not be stored\n2 failed, 64 passed in 12.3s"
+
+            with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+                orchestrator.start()
+                bus.subscribe(orchestrator.handle_event)
+                response = client.post(
+                    "/event",
+                    json={
+                        "type": "terminal_command_finished",
+                        "command": "python -m pytest tests/core/test_signal_scorer.py",
+                        "cwd": str(tmp),
+                        "exit_code": 1,
+                        "duration_ms": 12000,
+                        "stdout": raw_stdout,
+                        "stdout_summary": "2 failed, 64 passed in 12.3s",
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                payload = session_memory.get_recent_events(limit=5)[0]["payload"]
+                self.assertNotIn("stdout", payload)
+                self.assertNotIn("SECRET_STACKTRACE", json.dumps(payload, sort_keys=True))
+                self.assertEqual(payload["terminal_action_category"], "testing")
+                self.assertEqual(payload["test_result"]["framework"], "pytest")
+                self.assertEqual(payload["test_result"]["failed_count"], 2)
+                self.assertEqual(payload["test_result"]["passed_count"], 64)
+                self.assertEqual(payload["test_result"]["target"], "tests/core/test_signal_scorer.py")
+                self.assertEqual(payload["test_result"]["summary"], "2 failed, 64 passed")
+                orchestrator.shutdown_runtime()
+
     def test_mcp_command_received_persists_redacted_command(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
             tmp = Path(tmpdir)

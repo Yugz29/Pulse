@@ -37,7 +37,7 @@ def terminal_action_category(command: str, interpretation) -> str:
     if base_cmd == "git":
         return "vcs"
 
-    if base_cmd in TERMINAL_TEST_COMMANDS or "test" in subcommands:
+    if base_cmd in TERMINAL_TEST_COMMANDS or "pytest" in subcommands or "test" in subcommands:
         return "testing"
 
     if base_cmd in TERMINAL_BUILD_COMMANDS:
