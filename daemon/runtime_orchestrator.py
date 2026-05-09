@@ -10,12 +10,15 @@ from daemon.memory.extractor import (
     enrich_session_report,
     find_git_root,
     get_fact_engine,
+    join_background_writers,
     last_session_context,
     load_memory_context,
     read_commit_file_names,
     render_project_memory,
     read_commit_message,
     read_head_sha,
+    request_background_writer_shutdown,
+    reset_background_writers_for_tests,
     reset_cooldown_for_tests,
     reset_fact_engine_for_tests,
     should_use_llm_for_commit,
@@ -761,6 +764,7 @@ class RuntimeOrchestrator:
         try:
             with self._critical_worker_lock:
                 self._shutdown_requested = True
+            request_background_writer_shutdown()
             with self._lifecycle_lock:
                 self._started = False
                 self._periodic_sync_stopped = True
@@ -777,6 +781,7 @@ class RuntimeOrchestrator:
                 update_memories_from_session(snapshot)
             self._restart_manager.save(snapshot, session_fsm=self._session_fsm)
             self._join_critical_workers()
+            join_background_writers(timeout=self._critical_worker_join_timeout_sec)
             self.session_memory.close(close_reason="session_end")
         except Exception as exc:
             self.log.warning("shutdown sync failed: %s", exc)
@@ -1505,6 +1510,7 @@ class RuntimeOrchestrator:
             self._prepared_resume_card_created_at = None
         reset_fact_engine_for_tests()
         reset_cooldown_for_tests()
+        reset_background_writers_for_tests()
         self._fact_engine = get_fact_engine()
         self._session_fsm.reset_for_tests()
         proposal_store.clear()

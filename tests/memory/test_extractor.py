@@ -10,6 +10,9 @@ from flask import Flask
 from daemon.memory.extractor import (
     enrich_session_report,
     load_memory_context,
+    request_background_writer_shutdown,
+    join_background_writers,
+    reset_background_writers_for_tests,
     update_memories_from_session,
 )
 import daemon.memory.extractor as extractor_module
@@ -40,6 +43,7 @@ class TestExtractor(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.memory_dir = Path(self.tmpdir.name)
         # Réinitialise le curseur et l'état de chargement entre chaque test
+        reset_background_writers_for_tests()
         extractor_module.reset_cooldown_for_tests()
         extractor_module.reset_fact_engine_for_tests()
         extractor_module._fact_engine = extractor_module.FactEngine(
@@ -52,6 +56,9 @@ class TestExtractor(unittest.TestCase):
         extractor_module._COOLDOWN_FILE = Path(self.tmpdir.name) / "cooldown.json"
 
     def tearDown(self):
+        request_background_writer_shutdown()
+        join_background_writers(timeout=0.01)
+        reset_background_writers_for_tests()
         extractor_module.reset_fact_engine_for_tests()
         extractor_module._COOLDOWN_FILE = self._orig_cooldown_file
         self.tmpdir.cleanup()
@@ -77,6 +84,140 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("[projects](projects.md)", index)
         # habits.md n'est plus écrit — remplacé par facts.md
         self.assertFalse((self.memory_dir / "habits.md").exists())
+
+    def test_background_writer_vectorize_est_lance_via_registre(self):
+        created_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.daemon = kwargs.get("daemon")
+                self.name = kwargs.get("name")
+                self.started = False
+
+            def start(self):
+                self.started = True
+
+            def is_alive(self):
+                return self.started
+
+        def fake_thread(*args, **kwargs):
+            thread = DummyThread(*args, **kwargs)
+            created_threads.append(thread)
+            return thread
+
+        with patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 25,
+                    "probable_task": "coding",
+                    "files_changed": 2,
+                },
+                memory_dir=self.memory_dir,
+            )
+
+        self.assertEqual([thread.name for thread in created_threads], ["pulse-vectorize"])
+        self.assertTrue(created_threads[0].daemon)
+        self.assertTrue(created_threads[0].started)
+        self.assertIn(created_threads[0], extractor_module._background_writer_threads)
+
+    def test_background_writer_journal_enrich_est_lance_via_registre(self):
+        created_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.daemon = kwargs.get("daemon")
+                self.name = kwargs.get("name")
+                self.started = False
+
+            def start(self):
+                self.started = True
+
+            def is_alive(self):
+                return self.started
+
+        def fake_thread(*args, **kwargs):
+            thread = DummyThread(*args, **kwargs)
+            created_threads.append(thread)
+            return thread
+
+        with patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 25,
+                    "probable_task": "coding",
+                    "files_changed": 3,
+                },
+                llm=FakeLLM(),
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message="feat: background writers",
+                defer_llm_enrichment=True,
+            )
+
+        self.assertEqual(
+            [thread.name for thread in created_threads],
+            ["pulse-journal-enrich", "pulse-vectorize"],
+        )
+        self.assertTrue(all(thread.daemon for thread in created_threads))
+        self.assertTrue(all(thread.started for thread in created_threads))
+        self.assertTrue(set(created_threads).issubset(extractor_module._background_writer_threads))
+
+    def test_shutdown_background_writer_empeche_vectorize_et_enrich_sans_bloquer_ecriture(self):
+        request_background_writer_shutdown()
+
+        with patch("daemon.memory.extractor.threading.Thread") as thread_cls:
+            report_ref = update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 25,
+                    "probable_task": "coding",
+                    "files_changed": 3,
+                },
+                llm=FakeLLM(),
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message="feat: shutdown writer guard",
+                defer_llm_enrichment=True,
+            )
+
+        self.assertIsNotNone(report_ref)
+        self.assertTrue(list((self.memory_dir / "sessions").glob("*.md")))
+        thread_cls.assert_not_called()
+
+    def test_join_background_writers_attend_les_threads_enregistres(self):
+        calls = []
+
+        class RunningWriter:
+            def __init__(self):
+                self.alive = True
+
+            def is_alive(self):
+                return self.alive
+
+            def join(self, timeout=None):
+                calls.append(("join", timeout))
+                self.alive = False
+
+        writer = RunningWriter()
+        extractor_module._background_writer_threads.add(writer)
+
+        join_background_writers(timeout=0.2)
+
+        self.assertTrue(calls)
+        self.assertNotIn(writer, extractor_module._background_writer_threads)
+
+    def test_reset_background_writers_for_tests_nettoie_flag_et_registre(self):
+        request_background_writer_shutdown()
+        extractor_module._background_writer_threads.add(object())
+
+        reset_background_writers_for_tests()
+
+        self.assertFalse(extractor_module._background_writer_shutdown.is_set())
+        self.assertEqual(extractor_module._background_writer_threads, set())
 
     def test_update_projects_met_a_jour_un_projet_existant(self):
         update_memories_from_session(

@@ -11,6 +11,7 @@ from daemon.core.decision_engine import Decision
 from daemon.core.proposals import proposal_store
 from daemon.core.signal_scorer import Signals
 from daemon.memory.extractor import update_memories_from_session
+from daemon.memory import extractor as extractor_module
 from daemon.runtime_orchestrator import RuntimeOrchestrator
 from daemon.runtime_state import RuntimeState
 
@@ -33,6 +34,7 @@ class _LifecycleThread:
 
 class TestRuntimeOrchestrator(unittest.TestCase):
     def setUp(self):
+        extractor_module.reset_background_writers_for_tests()
         proposal_store.clear()
         self.store = MagicMock()
         self.scorer = MagicMock()
@@ -68,6 +70,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 commit_poll_sec=0.0,
                 commit_confirm_timeout_sec=0.5,
             )
+
+    def tearDown(self):
+        extractor_module.reset_background_writers_for_tests()
 
     def _new_orchestrator(self):
         with patch("daemon.runtime_orchestrator.get_fact_engine", return_value=self.mock_fact_engine):
@@ -288,6 +293,52 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("join", calls)
         self.assertIn("close", calls)
         self.assertLess(calls.index("join"), calls.index("close"))
+
+    def test_shutdown_demande_et_join_les_background_writers_avant_close(self):
+        calls = []
+        self.session_memory.export_memory_payload.return_value = {"duration_min": 0}
+        self.session_memory.close.side_effect = lambda **kwargs: calls.append("close")
+
+        with patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure"), \
+             patch.object(self.orchestrator._restart_manager, "save", side_effect=lambda *a, **k: calls.append("save")), \
+             patch("daemon.runtime_orchestrator.request_background_writer_shutdown", side_effect=lambda: calls.append("request")), \
+             patch("daemon.runtime_orchestrator.join_background_writers", side_effect=lambda **kwargs: calls.append("join")):
+            self.orchestrator.shutdown_runtime()
+
+        self.assertIn("request", calls)
+        self.assertIn("join", calls)
+        self.assertIn("close", calls)
+        self.assertLess(calls.index("request"), calls.index("close"))
+        self.assertLess(calls.index("join"), calls.index("close"))
+
+    def test_shutdown_final_ne_lance_pas_vectorize_apres_shutdown_demande(self):
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 25,
+            "probable_task": "coding",
+            "files_changed": 2,
+        }
+
+        fake_fact_engine = MagicMock()
+        fake_fact_engine.observe_session.return_value = []
+        fake_fact_engine.clear_runtime_error.return_value = None
+        with tempfile.TemporaryDirectory() as temp_dir, \
+             patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure"), \
+             patch.object(self.orchestrator._restart_manager, "save"), \
+             patch("daemon.memory.extractor.get_fact_engine", return_value=fake_fact_engine), \
+             patch("daemon.memory.extractor.threading.Thread") as extractor_thread:
+
+            def sync_to_temp(snapshot):
+                return extractor_module.update_memories_from_session(
+                    snapshot,
+                    memory_dir=Path(temp_dir),
+                )
+
+            with patch("daemon.runtime_orchestrator.update_memories_from_session", side_effect=sync_to_temp):
+                self.orchestrator.shutdown_runtime()
+
+        extractor_thread.assert_not_called()
+        self.session_memory.close.assert_called_once_with(close_reason="session_end")
 
     def test_resume_card_pending_ne_publie_pas_apres_shutdown(self):
         with self.orchestrator._critical_worker_lock:

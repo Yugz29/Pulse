@@ -19,6 +19,9 @@ class TestMainRuntimeState(unittest.TestCase):
         daemon_main.bus.clear()
         self.client = daemon_main.app.test_client()
 
+    def tearDown(self):
+        daemon_main.runtime_orchestrator.reset_for_tests()
+
     def test_state_exposes_runtime_signals_and_decision(self):
         daemon_main.runtime_state.set_paused(True)
         signals = Signals(

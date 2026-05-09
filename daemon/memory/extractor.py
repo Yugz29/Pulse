@@ -110,6 +110,9 @@ class _CooldownState:
 
 _cooldown = _CooldownState()
 _memory_write_lock = threading.Lock()
+_background_writer_shutdown = threading.Event()
+_background_writer_lock = threading.Lock()
+_background_writer_threads: set[threading.Thread] = set()
 _JOURNAL_DATA_START = "<!-- pulse-journal-data:start"
 _JOURNAL_DATA_END = "pulse-journal-data:end -->"
 _JOURNAL_HIDDEN_RE = re.compile(
@@ -204,6 +207,80 @@ def _commit_task_correction(commit_message: str, current_task: str) -> str:
 
 
 # ── API publique ───────────────────────────────────────────────────────────────
+
+def _start_background_writer(
+    *,
+    name: str,
+    target,
+    args: tuple = (),
+    kwargs: Optional[dict] = None,
+) -> threading.Thread | None:
+    if _background_writer_shutdown.is_set():
+        return None
+    kwargs = kwargs or {}
+
+    def _run() -> None:
+        try:
+            if _background_writer_shutdown.is_set():
+                return
+            target(*args, **kwargs)
+        finally:
+            with _background_writer_lock:
+                _background_writer_threads.discard(threading.current_thread())
+
+    thread = threading.Thread(target=_run, daemon=True, name=name)
+    with _background_writer_lock:
+        if _background_writer_shutdown.is_set():
+            return None
+        _background_writer_threads.add(thread)
+    try:
+        thread.start()
+    except Exception:
+        with _background_writer_lock:
+            _background_writer_threads.discard(thread)
+        raise
+    return thread
+
+
+def request_background_writer_shutdown() -> None:
+    _background_writer_shutdown.set()
+
+
+def join_background_writers(timeout: float = 1.0) -> None:
+    import time as _time
+
+    deadline = _time.monotonic() + max(float(timeout or 0.0), 0.0)
+    while True:
+        with _background_writer_lock:
+            writers = [
+                writer
+                for writer in _background_writer_threads
+                if writer is not threading.current_thread()
+            ]
+        if not writers:
+            return
+        remaining = deadline - _time.monotonic()
+        if remaining <= 0:
+            return
+        for writer in writers:
+            is_alive = getattr(writer, "is_alive", lambda: False)
+            if not is_alive():
+                with _background_writer_lock:
+                    _background_writer_threads.discard(writer)
+                continue
+            join = getattr(writer, "join", None)
+            if join is None:
+                with _background_writer_lock:
+                    _background_writer_threads.discard(writer)
+                continue
+            join(timeout=min(0.1, max(remaining, 0.0)))
+
+
+def reset_background_writers_for_tests() -> None:
+    _background_writer_shutdown.clear()
+    with _background_writer_lock:
+        _background_writer_threads.clear()
+
 
 def _redact_memory_text(value: Any) -> str:
     return redact_sensitive_command(value, max_chars=-1)
@@ -323,7 +400,7 @@ def update_memories_from_session(
             except Exception as exc:
                 log.debug("Memory : enrichissement différé ignoré : %s", exc)
 
-        threading.Thread(target=_enrich_pending, daemon=True, name="pulse-journal-enrich").start()
+        _start_background_writer(name="pulse-journal-enrich", target=_enrich_pending)
 
     _cooldown.last_report_at[project] = datetime.now()
     _save_cooldown()
@@ -352,7 +429,7 @@ def update_memories_from_session(
                     log.debug("Vectorisé en mémoire : id=%d projet=%s", mid, entry.get("active_project"))
             except Exception as exc:
                 log.debug("Vectorisation ignorée : %s", exc)
-        threading.Thread(target=_vectorize, daemon=True, name="pulse-vectorize").start()
+        _start_background_writer(name="pulse-vectorize", target=_vectorize)
 
     return report_ref
 
