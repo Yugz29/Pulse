@@ -932,6 +932,53 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["test_result"]["skipped_count"], 2)
         self.assertEqual(payload["test_result"]["target"], "tests/core/test_signal_scorer.py")
 
+    def test_event_endpoint_adds_git_context_for_terminal_cwd_in_repo(self):
+        git_context = {
+            "repo_root": "/Users/yugz/Projets/Pulse/Pulse",
+            "repo_name": "Pulse",
+            "branch": "main",
+            "head_sha": "abc1234",
+            "is_dirty": True,
+            "staged_count": 2,
+            "unstaged_count": 1,
+            "untracked_count": 0,
+        }
+
+        with patch("daemon.core.git_context.read_git_context", return_value=git_context):
+            response = self.client.post(
+                "/event",
+                json={
+                    "type": "terminal_command_finished",
+                    "command": "git status",
+                    "cwd": "/Users/yugz/Projets/Pulse/Pulse",
+                    "exit_code": 0,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.bus.publish.assert_called_once()
+        _, payload = self.bus.publish.call_args.args
+        self.assertEqual(payload["git_context"], git_context)
+        self.assertNotIn("files", payload["git_context"])
+        self.assertNotIn("diff", payload["git_context"])
+
+    def test_event_endpoint_omits_git_context_when_unavailable(self):
+        with patch("daemon.core.git_context.read_git_context", return_value=None):
+            response = self.client.post(
+                "/event",
+                json={
+                    "type": "terminal_command_finished",
+                    "command": "git status",
+                    "cwd": "/tmp/not-a-repo",
+                    "exit_code": 0,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.bus.publish.assert_called_once()
+        _, payload = self.bus.publish.call_args.args
+        self.assertNotIn("git_context", payload)
+
     def test_event_endpoint_transmet_le_timestamp_source_au_bus(self):
         source_ts = "2026-04-23T10:15:30"
 

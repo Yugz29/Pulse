@@ -127,6 +127,7 @@ def _normalize_terminal_event_payload(
         terminal_action_category,
         terminal_category_summary,
     )
+    from daemon.core.git_context import read_git_context
     from daemon.core.test_result_parser import parse_test_result
 
     command = str(payload.pop("command", "") or payload.pop("raw", "")).strip()
@@ -157,6 +158,9 @@ def _normalize_terminal_event_payload(
         workspace_root = find_workspace_root(cwd)
         if workspace_root:
             normalized["terminal_workspace_root"] = str(workspace_root)
+        git_context = read_git_context(cwd)
+        if git_context:
+            normalized["git_context"] = git_context
 
     if exit_code is not None:
         normalized["terminal_exit_code"] = exit_code
