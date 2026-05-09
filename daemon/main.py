@@ -37,6 +37,7 @@ from daemon.routes.facts import register_facts_routes
 from daemon.routes.mcp import register_mcp_routes
 from daemon.routes.memory import register_memory_routes
 from daemon.routes.runtime import register_runtime_routes
+from daemon.routes.runtime_daemon_routes import DAEMON_EXIT_GRACE_SEC
 from daemon.runtime_orchestrator import RuntimeOrchestrator
 from daemon.runtime_state import RuntimeState
 
@@ -244,6 +245,7 @@ def _watchdog_loop() -> None:
         if silence > WATCHDOG_TIMEOUT_SEC:
             log.info("Client Swift absent depuis %.0fs → arrêt daemon (mode dev)", silence)
             _shutdown_runtime()
+            time.sleep(DAEMON_EXIT_GRACE_SEC)
             os._exit(0)
 
 

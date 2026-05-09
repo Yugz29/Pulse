@@ -9,6 +9,9 @@ from typing import Any, Callable
 from flask import Flask, jsonify
 
 
+DAEMON_EXIT_GRACE_SEC = 1.0
+
+
 def register_daemon_routes(
     app: Flask,
     *,
@@ -27,7 +30,7 @@ def register_daemon_routes(
         shutdown_runtime()
 
         def _exit():
-            time.sleep(0.3)
+            time.sleep(DAEMON_EXIT_GRACE_SEC)
             os._exit(0)
 
         threading.Thread(target=_exit, daemon=True).start()
@@ -57,7 +60,7 @@ def register_daemon_routes(
         shutdown_runtime()
 
         def _exit():
-            time.sleep(0.3)
+            time.sleep(DAEMON_EXIT_GRACE_SEC)
             os._exit(1)
 
         threading.Thread(target=_exit, daemon=True).start()

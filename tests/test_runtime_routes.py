@@ -11,6 +11,7 @@ from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
 from daemon.core.file_event_coalescer import FileEventCoalescer as _FileEventCoalescer
 from daemon.routes.runtime import register_runtime_routes
+from daemon.routes.runtime_daemon_routes import DAEMON_EXIT_GRACE_SEC
 from daemon.runtime_state import RuntimeState
 
 
@@ -1914,6 +1915,24 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         self.shutdown_runtime.assert_called_once()
 
+    def test_daemon_shutdown_exit_attend_la_grace_apres_shutdown(self):
+        calls = []
+        self.shutdown_runtime.side_effect = lambda: calls.append("shutdown")
+
+        def fake_sleep(delay):
+            calls.append(("sleep", delay))
+
+        def fake_exit(code):
+            calls.append(("exit", code))
+
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _ImmediateThread(*a, **k)), \
+             patch("daemon.routes.runtime_daemon_routes.time.sleep", side_effect=fake_sleep), \
+             patch("daemon.routes.runtime_daemon_routes.os._exit", side_effect=fake_exit):
+            response = self.client.post("/daemon/shutdown")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(calls, ["shutdown", ("sleep", DAEMON_EXIT_GRACE_SEC), ("exit", 0)])
+
     def test_daemon_restart_returns_legacy_payload(self):
         with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/restart")
@@ -1924,6 +1943,24 @@ class TestRuntimeRoutes(unittest.TestCase):
             {"ok": True, "action": "restart"},
         )
         self.shutdown_runtime.assert_called_once()
+
+    def test_daemon_restart_exit_attend_la_grace_apres_shutdown(self):
+        calls = []
+        self.shutdown_runtime.side_effect = lambda: calls.append("shutdown")
+
+        def fake_sleep(delay):
+            calls.append(("sleep", delay))
+
+        def fake_exit(code):
+            calls.append(("exit", code))
+
+        with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _ImmediateThread(*a, **k)), \
+             patch("daemon.routes.runtime_daemon_routes.time.sleep", side_effect=fake_sleep), \
+             patch("daemon.routes.runtime_daemon_routes.os._exit", side_effect=fake_exit):
+            response = self.client.post("/daemon/restart")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(calls, ["shutdown", ("sleep", DAEMON_EXIT_GRACE_SEC), ("exit", 1)])
 
 
 class TestFileEventCoalescer(unittest.TestCase):

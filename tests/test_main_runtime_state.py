@@ -296,6 +296,36 @@ class TestMainRuntimeState(unittest.TestCase):
         shutdown_runtime.assert_called_once()
         self.assertEqual(calls, ["coalescer", "runtime"])
 
+    def test_watchdog_shutdown_attend_la_grace_avant_exit(self):
+        calls = []
+        stale_ping = datetime.now() - timedelta(seconds=daemon_main.WATCHDOG_TIMEOUT_SEC + 5)
+
+        def fake_sleep(delay):
+            calls.append(("sleep", delay))
+
+        def fake_exit(code):
+            calls.append(("exit", code))
+            raise SystemExit(code)
+
+        with patch.object(daemon_main, "_is_launchd_child", return_value=False), \
+             patch.object(daemon_main.runtime_state, "get_last_ping_at", return_value=stale_ping), \
+             patch.object(daemon_main, "_shutdown_runtime", side_effect=lambda: calls.append("shutdown")), \
+             patch.object(daemon_main.time, "sleep", side_effect=fake_sleep), \
+             patch.object(daemon_main.os, "_exit", side_effect=fake_exit):
+            with self.assertRaises(SystemExit):
+                daemon_main._watchdog_loop()
+
+        self.assertEqual(
+            calls,
+            [
+                ("sleep", daemon_main.WATCHDOG_GRACE_SEC),
+                ("sleep", 10),
+                "shutdown",
+                ("sleep", daemon_main.DAEMON_EXIT_GRACE_SEC),
+                ("exit", 0),
+            ],
+        )
+
     def test_insights_uses_default_limit_of_twenty_five(self):
         with patch.object(daemon_main.bus, "recent", return_value=[]) as recent:
             response = self.client.get("/insights")
