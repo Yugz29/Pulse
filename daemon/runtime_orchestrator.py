@@ -109,12 +109,18 @@ class RuntimeOrchestrator:
         self._periodic_sync_stopped: bool = False
         self._periodic_sync_worker: threading.Thread | None = None
         self._periodic_sync_stop_event: threading.Event | None = None
+        self._shutdown_requested = False
+        self._critical_worker_lock = threading.Lock()
+        self._critical_workers: set[threading.Thread] = set()
+        self._critical_worker_join_timeout_sec: float = 1.0
         self._fact_engine = get_fact_engine()
         self._current_context_builder = CurrentContextBuilder()
         self._session_fsm = SessionFSM()
         self._restart_manager = RestartManager()
 
     def start(self) -> None:
+        with self._critical_worker_lock:
+            self._shutdown_requested = False
         with self._lifecycle_lock:
             if self._started:
                 return
@@ -139,6 +145,88 @@ class RuntimeOrchestrator:
             self._file_flush_worker.start()
             self._periodic_sync_worker.start()
             self._started = True
+
+    def _is_shutdown_requested(self) -> bool:
+        with self._critical_worker_lock:
+            return self._shutdown_requested
+
+    def _start_critical_worker(
+        self,
+        *,
+        target,
+        args: tuple = (),
+        kwargs: dict | None = None,
+        name: str | None = None,
+    ) -> threading.Thread | None:
+        kwargs = kwargs or {}
+        with self._critical_worker_lock:
+            if self._shutdown_requested:
+                return None
+
+        def _run() -> None:
+            try:
+                if self._is_shutdown_requested():
+                    return
+                target(*args, **kwargs)
+            finally:
+                with self._critical_worker_lock:
+                    self._critical_workers.discard(threading.current_thread())
+
+        thread = threading.Thread(
+            target=_run,
+            daemon=True,
+            name=name,
+        )
+        setattr(thread, "pulse_target", target)
+        setattr(thread, "pulse_args", args)
+        setattr(thread, "pulse_kwargs", kwargs)
+        with self._critical_worker_lock:
+            if self._shutdown_requested:
+                return None
+            self._critical_workers.add(thread)
+        thread.start()
+        return thread
+
+    def _schedule_memory_sync(
+        self,
+        snapshot,
+        llm,
+        commit_message=None,
+        trigger="screen_lock",
+        diff_summary=None,
+    ) -> threading.Thread | None:
+        return self._start_critical_worker(
+            target=self._sync_memory_background,
+            args=(snapshot, llm, commit_message, trigger, diff_summary),
+            name="pulse-memory-sync",
+        )
+
+    def _join_critical_workers(self) -> None:
+        deadline = time.monotonic() + self._critical_worker_join_timeout_sec
+        while True:
+            with self._critical_worker_lock:
+                workers = [
+                    worker
+                    for worker in self._critical_workers
+                    if worker is not threading.current_thread()
+                ]
+            if not workers:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            for worker in workers:
+                is_alive = getattr(worker, "is_alive", lambda: False)
+                if not is_alive():
+                    with self._critical_worker_lock:
+                        self._critical_workers.discard(worker)
+                    continue
+                join = getattr(worker, "join", None)
+                if join is None:
+                    with self._critical_worker_lock:
+                        self._critical_workers.discard(worker)
+                    continue
+                join(timeout=min(0.1, max(remaining, 0.0)))
 
     @property
     def session_fsm(self) -> SessionFSM:
@@ -435,12 +523,11 @@ class RuntimeOrchestrator:
                 )
 
     def _schedule_prepared_resume_card(self, *, event) -> None:
-        threading.Thread(
+        self._start_critical_worker(
             target=self._prepare_resume_card_background,
             kwargs={"event_timestamp": event.timestamp, "reason": event.type},
-            daemon=True,
             name="pulse-prepare-resume-card",
-        ).start()
+        )
 
     def _prepare_resume_card_background(self, *, event_timestamp: datetime, reason: str) -> None:
         try:
@@ -467,6 +554,8 @@ class RuntimeOrchestrator:
             if "prepared_resume_card" not in source_refs:
                 source_refs.append("prepared_resume_card")
             card_payload["source_refs"] = source_refs
+            if self._is_shutdown_requested():
+                return
             with self._prepared_resume_card_lock:
                 self._prepared_resume_card_payload = card_payload
                 self._prepared_resume_card_created_at = event_timestamp
@@ -495,6 +584,8 @@ class RuntimeOrchestrator:
         emitted_at: datetime,
         active_project: str | None,
     ) -> bool:
+        if self._is_shutdown_requested():
+            return False
         with self._prepared_resume_card_lock:
             payload = dict(self._prepared_resume_card_payload or {})
             prepared_at = self._prepared_resume_card_created_at
@@ -586,6 +677,8 @@ class RuntimeOrchestrator:
         return self.summary_llm is not None and hasattr(self.summary_llm, "complete")
 
     def _emit_resume_card_now(self, *, context: dict, emitted_at: datetime, force_fallback: bool = False) -> None:
+        if self._is_shutdown_requested():
+            return
         llm = None if force_fallback else self.summary_llm
         card = generate_resume_card(context, llm=llm)
         self.scorer.bus.publish("resume_card", card.to_event_payload(), emitted_at)
@@ -598,28 +691,36 @@ class RuntimeOrchestrator:
         )
 
     def _schedule_resume_card_emit(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
+        if self._is_shutdown_requested():
+            return
         with self._pending_resume_card_lock:
             if self._pending_resume_card:
                 self.log.debug("resume_card already pending — skip duplicate schedule")
                 return
             self._pending_resume_card = True
 
-        threading.Thread(
+        worker = self._start_critical_worker(
             target=self._emit_resume_card_background,
             kwargs={
                 "context": context,
                 "event_timestamp": event_timestamp,
                 "wait_for_llm": wait_for_llm,
             },
-            daemon=True,
             name="pulse-resume-card",
-        ).start()
+        )
+        if worker is None:
+            with self._pending_resume_card_lock:
+                self._pending_resume_card = False
 
     def _emit_resume_card_background(self, *, context: dict, event_timestamp: datetime, wait_for_llm: bool) -> None:
         try:
+            if self._is_shutdown_requested():
+                return
             llm_ready = True
             if wait_for_llm:
                 llm_ready = self._wait_for_llm_ready_for_resume(since=event_timestamp)
+            if self._is_shutdown_requested():
+                return
             if llm_ready:
                 self._emit_resume_card_now(context=context, emitted_at=datetime.now())
             else:
@@ -634,6 +735,8 @@ class RuntimeOrchestrator:
         deadline = time.monotonic() + self._resume_card_wait_timeout_sec
         saw_loading = False
         while time.monotonic() < deadline:
+            if self._is_shutdown_requested():
+                return False
             recent = self.scorer.bus.recent(DEFAULT_EVENT_BUS_SIZE)
             for item in recent:
                 if item.timestamp < since:
@@ -653,6 +756,8 @@ class RuntimeOrchestrator:
 
     def shutdown_runtime(self) -> None:
         try:
+            with self._critical_worker_lock:
+                self._shutdown_requested = True
             with self._lifecycle_lock:
                 self._started = False
                 self._periodic_sync_stopped = True
@@ -668,6 +773,7 @@ class RuntimeOrchestrator:
             if snapshot.get("duration_min", 0) > 0:
                 update_memories_from_session(snapshot)
             self._restart_manager.save(snapshot, session_fsm=self._session_fsm)
+            self._join_critical_workers()
             self.session_memory.close(close_reason="session_end")
         except Exception as exc:
             self.log.warning("shutdown sync failed: %s", exc)
@@ -688,6 +794,8 @@ class RuntimeOrchestrator:
                 self._run_daydream_if_pending()
 
     def _run_daydream_if_pending(self) -> None:
+        if self._is_shutdown_requested():
+            return
         from daemon.memory.daydream import claim_daydream_run, trigger_daydream
         ref_date = claim_daydream_run()
         if ref_date is None:
@@ -696,12 +804,11 @@ class RuntimeOrchestrator:
         llm = self.llm_runtime.provider()
         window_titles = list(self._accumulated_window_titles)
         self._accumulated_window_titles.clear()
-        threading.Thread(
+        self._start_critical_worker(
             target=trigger_daydream,
             kwargs={"llm": llm, "window_titles": window_titles, "ref_date": ref_date},
-            daemon=True,
             name="pulse-daydream",
-        ).start()
+        )
 
     def build_context_snapshot(self) -> str:
         snapshot = self.runtime_state.get_runtime_snapshot()
@@ -811,6 +918,8 @@ class RuntimeOrchestrator:
         return self.runtime_state.should_ignore_file_event(event.type, payload.get("path", ""), payload)
 
     def _schedule_commit_watch(self, path: str) -> None:
+        if self._is_shutdown_requested():
+            return
         git_root = find_git_root(path)
         if not git_root:
             return
@@ -819,11 +928,14 @@ class RuntimeOrchestrator:
             if root_key in self._pending_commit_watch:
                 return
             self._pending_commit_watch.add(root_key)
-        threading.Thread(
+        worker = self._start_critical_worker(
             target=self._handle_commit_event,
             args=(path,),
-            daemon=True,
-        ).start()
+            name="pulse-commit-watch",
+        )
+        if worker is None:
+            with self._commit_watch_lock:
+                self._pending_commit_watch.discard(root_key)
 
     def _periodic_sync_loop(self, stop_event: threading.Event | None = None) -> None:
         stop_event = stop_event or threading.Event()
@@ -853,15 +965,13 @@ class RuntimeOrchestrator:
                 self.log.info("periodic sync déclenché (diff actif, %d min de session)",
                               snapshot.present.session_duration_min)
                 memory_snapshot = self._export_memory_payload()
-                threading.Thread(
-                    target=self._sync_memory_background,
-                    args=(memory_snapshot, None, None, "screen_lock", diff_summary),
-                    daemon=True,
-                ).start()
+                self._schedule_memory_sync(memory_snapshot, None, None, "screen_lock", diff_summary)
             except Exception as exc:
                 self.log.warning("periodic sync échouée : %s", exc)
 
     def _trigger_diff_background(self, workspace: str) -> None:
+        if self._is_shutdown_requested():
+            return
         now = time.monotonic()
         with self._diff_trigger_lock:
             last = self._last_diff_triggered.get(workspace)
@@ -977,11 +1087,7 @@ class RuntimeOrchestrator:
             commit_scope_files=commit_scope_files,
             git_root=git_root,
         )
-        threading.Thread(
-            target=self._sync_memory_background,
-            args=(snapshot, self.summary_llm, commit_msg, "commit", diff_summary),
-            daemon=True,
-        ).start()
+        self._schedule_memory_sync(snapshot, self.summary_llm, commit_msg, "commit", diff_summary)
 
     def _annotate_commit_work_block(
         self,
@@ -1111,11 +1217,7 @@ class RuntimeOrchestrator:
                 snapshot = self._export_memory_payload()
                 resume_memory_payload = snapshot
                 if snapshot.get("duration_min", 0) >= 5:
-                    threading.Thread(
-                        target=self._sync_memory_background,
-                        args=(snapshot, None, None, "screen_lock"),
-                        daemon=True,
-                    ).start()
+                    self._schedule_memory_sync(snapshot, None, None, "screen_lock")
             except Exception as exc:
                 self.log.warning("session boundary flush échouée : %s", exc)
             if lifecycle_transition.should_start_new_session:
@@ -1186,11 +1288,7 @@ class RuntimeOrchestrator:
                 "user_idle": "user_idle",
             }
             trigger = trigger_map.get(trigger_event.type, "screen_lock")
-            threading.Thread(
-                target=self._sync_memory_background,
-                args=(snapshot, llm, None, trigger),
-                daemon=True,
-            ).start()
+            self._schedule_memory_sync(snapshot, llm, None, trigger)
         if decision.action != "silent":
             self.log.info(
                 "decision=%s level=%s reason=%s",
@@ -1305,11 +1403,11 @@ class RuntimeOrchestrator:
             )
             self.freeze_memory()
             if defer_llm and report_ref is not None:
-                threading.Thread(
+                self._start_critical_worker(
                     target=self._enrich_commit_summary_background,
                     args=(report_ref, snapshot, llm, commit_message, diff_summary),
-                    daemon=True,
-                ).start()
+                    name="pulse-commit-enrich",
+                )
         except Exception as exc:
             self.log.warning("memory sync échouée : %s", exc)
 
@@ -1368,6 +1466,9 @@ class RuntimeOrchestrator:
         self._periodic_sync_worker = None
         self._file_flush_stop_event = None
         self._periodic_sync_stop_event = None
+        with self._critical_worker_lock:
+            self._shutdown_requested = False
+            self._critical_workers = set()
         with self._commit_watch_lock:
             self._pending_commit_watch = set()
         with self._head_sha_lock:

@@ -227,6 +227,70 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertFalse(self.orchestrator._file_flush_stop_event.is_set())
         self.assertFalse(self.orchestrator._periodic_sync_stop_event.is_set())
 
+    def test_shutdown_bloque_un_nouveau_commit_watch(self):
+        with self.orchestrator._critical_worker_lock:
+            self.orchestrator._shutdown_requested = True
+
+        with patch("daemon.runtime_orchestrator.threading.Thread") as thread_cls, \
+             patch("daemon.runtime_orchestrator.find_git_root", return_value=Path("/tmp/Pulse")):
+            self.orchestrator._schedule_commit_watch("/tmp/Pulse/.git/COMMIT_EDITMSG")
+
+        thread_cls.assert_not_called()
+        self.assertEqual(self.orchestrator._pending_commit_watch, set())
+
+    def test_shutdown_bloque_une_nouvelle_memory_sync_async(self):
+        with self.orchestrator._critical_worker_lock:
+            self.orchestrator._shutdown_requested = True
+
+        with patch("daemon.runtime_orchestrator.threading.Thread") as thread_cls:
+            worker = self.orchestrator._schedule_memory_sync(
+                {"active_project": "Pulse", "duration_min": 42},
+                None,
+            )
+
+        self.assertIsNone(worker)
+        thread_cls.assert_not_called()
+
+    def test_shutdown_attend_un_worker_critique_avant_de_fermer_session_memory(self):
+        calls = []
+
+        class RunningWorker:
+            def is_alive(self):
+                return True
+
+            def join(self, timeout=None):
+                calls.append("join")
+
+        with self.orchestrator._critical_worker_lock:
+            self.orchestrator._critical_workers.add(RunningWorker())
+        self.orchestrator._critical_worker_join_timeout_sec = 0.01
+        self.session_memory.export_memory_payload.return_value = {"duration_min": 0}
+        self.session_memory.close.side_effect = lambda **kwargs: calls.append("close")
+
+        with patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure"), \
+             patch.object(self.orchestrator._restart_manager, "save", side_effect=lambda *a, **k: calls.append("save")):
+            self.orchestrator.shutdown_runtime()
+
+        self.assertIn("join", calls)
+        self.assertIn("close", calls)
+        self.assertLess(calls.index("join"), calls.index("close"))
+
+    def test_resume_card_pending_ne_publie_pas_apres_shutdown(self):
+        with self.orchestrator._critical_worker_lock:
+            self.orchestrator._shutdown_requested = True
+        with self.orchestrator._pending_resume_card_lock:
+            self.orchestrator._pending_resume_card = True
+
+        with patch.object(self.orchestrator, "_emit_resume_card_now") as emit_now:
+            self.orchestrator._emit_resume_card_background(
+                context={},
+                event_timestamp=datetime(2026, 4, 28, 12, 0, 0),
+                wait_for_llm=False,
+            )
+
+        emit_now.assert_not_called()
+        self.assertFalse(self.orchestrator._pending_resume_card)
+
     def test_reset_for_tests_ne_demarre_pas_si_runtime_pas_started(self):
         self.assertFalse(self.orchestrator._started)
 
@@ -474,8 +538,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
              patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value=diff_summary):
             self.orchestrator._process_confirmed_commit(git_root)
 
-        sync_thread = next(t for t in captured_threads if t.target == self.orchestrator._sync_memory_background)
-        snapshot = sync_thread.args[0]
+        sync_thread = next(
+            t for t in captured_threads
+            if getattr(t, "pulse_target", None) == self.orchestrator._sync_memory_background
+        )
+        snapshot = sync_thread.pulse_args[0]
         self.assertEqual(snapshot["active_project"], "Pulse")
         self.assertEqual(snapshot["top_files"], [
             "DashboardViewModel.swift",
@@ -539,8 +606,11 @@ class TestRuntimeOrchestrator(unittest.TestCase):
              ]):
             self.orchestrator._process_confirmed_commit(git_root)
 
-        sync_thread = next(t for t in captured_threads if t.target == self.orchestrator._sync_memory_background)
-        snapshot = sync_thread.args[0]
+        sync_thread = next(
+            t for t in captured_threads
+            if getattr(t, "pulse_target", None) == self.orchestrator._sync_memory_background
+        )
+        snapshot = sync_thread.pulse_args[0]
         self.assertEqual(snapshot["active_project"], "Pulse")
         self.assertEqual(snapshot["commit_scope_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
         self.assertEqual(snapshot["top_files"], ["DashboardViewModel.swift", "DashboardRootView.swift"])
