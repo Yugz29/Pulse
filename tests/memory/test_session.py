@@ -110,6 +110,55 @@ class TestSessionMemory(unittest.TestCase):
         stored_payload = self.memory.get_recent_events()[0]["payload"]
         self.assertEqual(stored_payload["command"], "pytest tests/memory/test_session.py")
 
+    def test_record_event_redacts_window_title_storage_without_mutating_event(self):
+        raw_title = (
+            "Client yugz@example.com — https://example.com/private — "
+            "/Users/yugz/Projects/Pulse — sk-abcdefghijklmnopqrstuvwxyz123456"
+        )
+        event = Event(
+            "window_title_poll",
+            {"window_title": raw_title, "app_name": "Code"},
+        )
+
+        self.memory.record_event(event)
+
+        stored_payload = self.memory.get_recent_events()[0]["payload"]
+        self.assertNotIn("yugz@example.com", stored_payload["window_title"])
+        self.assertNotIn("https://example.com/private", stored_payload["window_title"])
+        self.assertNotIn("/Users/yugz", stored_payload["window_title"])
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", stored_payload["window_title"])
+        self.assertIn("[REDACTED_EMAIL]", stored_payload["window_title"])
+        self.assertEqual(event.payload["window_title"], raw_title)
+
+    def test_record_event_minimizes_git_context_repo_root_in_storage(self):
+        event = Event(
+            "terminal_command_finished",
+            {
+                "terminal_command": "git status",
+                "terminal_action_category": "vcs",
+                "git_context": {
+                    "repo_root": "/Users/yugz/Projets/Pulse/Pulse",
+                    "repo_name": "Pulse",
+                    "branch": "main",
+                    "head_sha": "abc1234",
+                    "is_dirty": True,
+                    "staged_count": 2,
+                    "unstaged_count": 1,
+                    "untracked_count": 0,
+                },
+            },
+        )
+
+        self.memory.record_event(event)
+
+        stored_git_context = self.memory.get_recent_events()[0]["payload"]["git_context"]
+        self.assertNotIn("repo_root", stored_git_context)
+        self.assertEqual(stored_git_context["repo_name"], "Pulse")
+        self.assertEqual(stored_git_context["branch"], "main")
+        self.assertEqual(stored_git_context["head_sha"], "abc1234")
+        self.assertEqual(stored_git_context["staged_count"], 2)
+        self.assertIn("repo_root", event.payload["git_context"])
+
     def test_record_event_aligne_started_at_updated_at_et_duree_sur_temps_observe(self):
         older = datetime(2026, 4, 23, 16, 0, 0)
         newer = datetime(2026, 4, 23, 16, 10, 0)

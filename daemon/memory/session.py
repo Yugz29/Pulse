@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from daemon.core.command_redaction import redact_sensitive_command
+from daemon.core.context_probe_redaction import redact_context_probe_value
 from daemon.core.event_bus import Event
 from daemon.core.file_classifier import file_signal_significance
 from daemon.core.uid import new_uid
@@ -772,6 +773,11 @@ class SessionMemory:
     @staticmethod
     def _payload_for_storage(event: Event) -> dict:
         payload = dict(event.payload or {})
+        git_context = payload.get("git_context")
+        if isinstance(git_context, dict):
+            safe_git_context = dict(git_context)
+            safe_git_context.pop("repo_root", None)
+            payload["git_context"] = safe_git_context
         if event.type in {"terminal_command_started", "terminal_command_finished"}:
             payload.pop("command", None)
             payload.pop("raw", None)
@@ -783,6 +789,13 @@ class SessionMemory:
                 payload["terminal_command"] = redact_sensitive_command(payload["terminal_command"])
         elif event.type in {"mcp_command_received", "mcp_decision"} and "command" in payload:
             payload["command"] = redact_sensitive_command(payload["command"])
+        elif event.type in {"app_activated", "app_switch", "window_title_poll"}:
+            for key in ("window_title", "title"):
+                if key in payload:
+                    payload[key] = redact_context_probe_value(
+                        payload[key],
+                        max_chars=256,
+                    ).redacted_value
         return payload
 
     def _connect(self) -> sqlite3.Connection:
