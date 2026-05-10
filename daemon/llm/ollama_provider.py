@@ -33,7 +33,7 @@ class OllamaProvider:
         url: str = "http://localhost:11434",
         model: str = "mistral",
         num_ctx: int = 8192,
-        keep_alive: str = "10m",
+        keep_alive: str = "30m",
     ):
         self.url        = url.rstrip("/")
         self.model      = model
@@ -101,7 +101,7 @@ class OllamaProvider:
             method="POST",
         )
         try:
-            with request.urlopen(req, timeout=30) as _:
+            with request.urlopen(req, timeout=60) as _:
                 self._mark_success()
                 return True
         except Exception as exc:
@@ -191,7 +191,7 @@ class OllamaProvider:
         saw_reasoning = False
         raw_chunk_count = 0
         try:
-            with request.urlopen(req, timeout=120) as response:
+            with request.urlopen(req, timeout=300) as response:
                 for raw_line in response:
                     raw_chunk_count += 1
                     line = raw_line.decode("utf-8").strip()
@@ -281,7 +281,7 @@ class OllamaProvider:
         saw_reasoning = False
         raw_chunk_count = 0
         try:
-            with request.urlopen(req, timeout=120) as response:
+            with request.urlopen(req, timeout=300) as response:
                 for raw_line in response:
                     raw_chunk_count += 1
                     line = raw_line.decode("utf-8").strip()
