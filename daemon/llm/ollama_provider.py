@@ -13,6 +13,7 @@ Format /api/chat streaming :
 
 import json
 import logging
+import re
 import threading
 import time
 from urllib import request, error
@@ -398,6 +399,8 @@ class OllamaProvider:
         ):
             tokens.append(token)
         text = "".join(tokens).strip()
+        # Filtrer les blocs <think>...</think> résiduels (Qwen3 thinking leak)
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
         if not text:
             log.warning("Ollama complete sans contenu final exploitable model=%s", self.model)
             raise _invalid_final_response("empty_final")

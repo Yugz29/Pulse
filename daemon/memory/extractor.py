@@ -943,8 +943,9 @@ Adopte un ton de note de journal concise et factuelle.
 Dis ce qui a été livré et la portée principale — pas comment ni les détails techniques.
 Évite les tournures emphatiques comme « Ce commit améliore... ».
 Si le message de commit est explicite, reformule-le naturellement dans ce ton.
-N'invente aucun fait absent des données ci-dessus."""
-    return _redact_memory_text(_sanitize_journal_summary(_llm_complete(llm, prompt, max_tokens=256, think=False)))
+N'invente aucun fait absent des données ci-dessus.
+Commence directement par la synthèse en français, sans introduction ni raisonnement préliminaire."""
+    return _redact_memory_text(_sanitize_journal_summary(_llm_complete(llm, prompt, max_tokens=400, think=False)))
 
 
 def _sanitize_journal_summary(value: Any) -> str:
@@ -954,6 +955,20 @@ def _sanitize_journal_summary(value: Any) -> str:
         text = text.rsplit("<channel|>", 1)[-1]
     text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
     text = re.sub(r"</?[^>\n]+>", " ", text)
+    # Détecter le reasoning leak non-bailisé de Qwen3 :
+    # le modèle génère parfois du raisonnement en prose anglaise avant la réponse
+    # ("Okay, let's tackle..."). On cherche la première coupure double-\n
+    # et on garde ce qui suit si le début ressemble à du raisonnement.
+    _REASONING_STARTS = ("okay", "let me", "let's", "first,", "alright", "i need", "the user", "looking at", "based on")
+    if any(text[:60].lower().strip().startswith(s) for s in _REASONING_STARTS):
+        double_break = text.find("\n\n")
+        if double_break > 0 and double_break < len(text) - 20:
+            text = text[double_break:].strip()
+        else:
+            # Pas de coupure claire : garder la dernière phrase si elle semble en français
+            last_period = text.rfind(".")
+            if 0 < last_period < len(text) - 1:
+                text = text[last_period + 1:].strip() or text
     cleaned_lines: List[str] = []
     for raw_line in text.splitlines():
         line = raw_line.strip()
