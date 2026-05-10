@@ -970,32 +970,38 @@ N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <fina
         log.debug("Memory : résumé LLM invalide, retry final-only : %s", first_error)
 
     retry_prompt = f"""\
-La réponse précédente ne respecte pas le format attendu pour une note de journal Pulse.
+    La réponse précédente ne respecte pas le format attendu pour une note de journal Pulse.
 
-Voici les données factuelles du commit livré :
+    Voici les données factuelles du commit livré :
 
-{facts_block}
+    {facts_block}
 
-Retourne uniquement un bloc unique au format exact, sans texte avant ni après :
+    Retourne uniquement un bloc unique au format exact, sans texte avant ni après :
 
-<final>
-1 à 2 phrases courtes en français, factuelles et sobres.
-</final>
+    <final>
+    1 à 2 phrases courtes en français, factuelles et sobres.
+    </final>
 
-Contraintes :
-- N'invente aucun fait absent des données ci-dessus.
-- N'ajoute aucune hypothèse sur l'intention, l'impact ou la suite du travail.
-- N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <final>.
-- Évite les tournures emphatiques comme « Ce commit améliore... », « Cette mise à jour permet... », « Le système est désormais... »."""
+    Contraintes :
+    - N'invente aucun fait absent des données ci-dessus.
+    - N'ajoute aucune hypothèse sur l'intention, l'impact ou la suite du travail.
+    - N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <final>.
+    - Évite les tournures emphatiques comme « Ce commit améliore... », « Cette mise à jour permet... », « Le système est désormais... »."""
     return _finalize_journal_summary(
-        _llm_complete(llm, retry_prompt, max_tokens=240, think=False)
+        _llm_complete(llm, retry_prompt, max_tokens=400, think=False),
+        allow_plain_text=True,
     )
 
 
 # New helpers for extracting and validating journal summary blocks
 
-def _finalize_journal_summary(value: Any) -> str:
-    final_summary = _extract_final_journal_summary(value)
+def _finalize_journal_summary(value: Any, *, allow_plain_text: bool = False) -> str:
+    try:
+        final_summary = _extract_final_journal_summary(value)
+    except ValueError as exc:
+        if not allow_plain_text or str(exc) != "missing_final_journal_summary_block":
+            raise
+        final_summary = str(value or "").strip()
     sanitized_summary = _sanitize_journal_summary(final_summary)
     _validate_journal_summary(sanitized_summary)
     return _redact_memory_text(sanitized_summary)

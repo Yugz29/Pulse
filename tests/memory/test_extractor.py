@@ -637,7 +637,45 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("Okay, let's tackle", journal)
         self.assertEqual(hidden[0]["summary_source"], "deterministic_fallback")
         self.assertEqual(hidden[0]["summary_status"], "failed")
-        self.assertEqual(hidden[0]["summary_error"], "missing_final_journal_summary_block")
+        self.assertEqual(hidden[0]["summary_error"], "reasoning_leak_in_journal_summary")
+
+    def test_llm_summary_retry_accepte_texte_brut_propre_sans_bloc_final(self):
+        class RetryPlainTextLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def complete(self, prompt, max_tokens=200, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    return "Okay, let's tackle this query. The user wants a concise French journal note."
+                return "Les résumés de journaux sont retentés en mode final-only avant fallback."
+
+        llm = RetryPlainTextLLM()
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 3,
+                "top_files": ["extractor.py"],
+            },
+            llm=llm,
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): allow plain final-only journal retry",
+            diff_summary="Diff en cours : extractor.py (+12 -3)",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+        self.assertEqual(llm.calls, 2)
+        self.assertIn("Les résumés de journaux sont retentés", journal)
+        self.assertEqual(hidden[0]["summary_source"], "llm")
+        self.assertEqual(hidden[0]["summary_status"], "generated")
+        self.assertIsNone(hidden[0]["summary_error"])
 
     def test_llm_summary_fallback_si_bloc_final_contient_du_raisonnement(self):
         class ContaminatedFinalLLM:
