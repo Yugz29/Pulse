@@ -273,7 +273,7 @@ def _llm_narrative(
     )
 
     if hasattr(llm, "complete"):
-        return llm.complete(prompt, max_tokens=200).strip()
+        return llm.complete(prompt, max_tokens=200, think=True).strip()
     return _deterministic_narrative(entries, commits, total_min)
 
 

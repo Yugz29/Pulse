@@ -76,8 +76,12 @@ logging.getLogger("werkzeug").addFilter(_RoutineGetLogFilter())
 
 def _build_summary_llm():
     try:
+        from daemon.settings import load_runtime_settings
+        settings = load_runtime_settings(Path.home() / ".pulse" / "settings.json")
+        model = (settings.get("model") or settings.get("command_model") or "").strip()
+        config = {"llm": {"model": model}} if model else {}
         router_module = importlib.import_module("daemon.llm.router")
-        return router_module.LLMRouter()
+        return router_module.LLMRouter(config=config)
     except Exception as exc:
         log.warning("LLM router indisponible au démarrage: %s", exc)
         return UnavailableLLMRouter(reason=exc)
