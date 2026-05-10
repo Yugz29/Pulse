@@ -956,7 +956,7 @@ Contraintes :
 
     try:
         return _finalize_journal_summary(
-            _llm_complete(llm, prompt, max_tokens=2000, think=True, system=_JOURNAL_SYSTEM),
+            _llm_complete(llm, prompt, max_tokens=8192, think=True, system=_JOURNAL_SYSTEM),
             allow_plain_text=True,
             stage="initial",
         )
@@ -976,7 +976,7 @@ Aucun préambule.
 Aucune analyse."""
 
     return _finalize_journal_summary(
-        _llm_complete(llm, retry_prompt, max_tokens=2000, think=True, system=_JOURNAL_SYSTEM),
+        _llm_complete(llm, retry_prompt, max_tokens=8192, think=True, system=_JOURNAL_SYSTEM),
         allow_plain_text=True,
         stage="retry",
     )
