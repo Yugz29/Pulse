@@ -913,7 +913,6 @@ def _write_session_report(
 
 
 def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
-    # Build facts block.
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
     facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
@@ -934,68 +933,51 @@ def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files,
     if friction >= 0.7:
         facts.append("Friction : élevée")
     facts_block = "\n".join(f"- {f}" for f in facts)
-    prompt = f"""\
-Voici les données factuelles du commit livré :
 
+    prompt = f"""\
+Données factuelles du commit livré :
 {facts_block}
 
-Objectif :
-Écris une note de journal courte en français.
-
+Écris une note de journal Pulse en français.
 Contraintes :
-- Écris 1 à 2 phrases maximum.
-- Adopte un ton factuel, sobre, non marketing.
+- 1 à 2 phrases maximum.
+- Ton factuel, sobre, non marketing.
 - Dis ce qui a été livré et la portée principale.
-- Ne décris pas les détails d'implémentation sauf s'ils sont nécessaires pour comprendre la livraison.
-- Si le message de commit est explicite, reformule-le naturellement.
-- N'invente aucun fait absent des données ci-dessus.
-- N'ajoute aucune hypothèse sur l'intention, l'impact ou la suite du travail.
-- Évite les tournures emphatiques comme « Ce commit améliore... », « Cette mise à jour permet... », « Le système est désormais... ».
+- N'invente aucun fait absent des données.
+- Aucune analyse, aucun raisonnement, aucun commentaire méta.
+- Réponds uniquement avec la note finale."""
 
-Tu peux analyser les données si nécessaire, mais la seule partie persistable est le bloc final.
-
-À la fin, retourne obligatoirement un bloc unique au format exact :
-
-<final>
-1 à 2 phrases courtes en français.
-</final>
-
-Le contenu hors du bloc <final> sera ignoré.
-N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <final>."""
     try:
         return _finalize_journal_summary(
-            _llm_complete(llm, prompt, max_tokens=600, think=True)
+            _llm_complete(llm, prompt, max_tokens=400, think=False),
+            allow_plain_text=True,
+            stage="initial",
         )
     except ValueError as first_error:
-        log.debug("Memory : résumé LLM invalide, retry final-only : %s", first_error)
+        log.debug(
+            "Memory : résumé LLM initial invalide, retry : %s",
+            first_error,
+        )
 
     retry_prompt = f"""\
-    La réponse précédente ne respecte pas le format attendu pour une note de journal Pulse.
+Données factuelles :
+{facts_block}
 
-    Voici les données factuelles du commit livré :
+Écris uniquement une phrase française factuelle pour le journal Pulse.
+N'invente rien.
+Aucun préambule.
+Aucune analyse."""
 
-    {facts_block}
-
-    Retourne uniquement un bloc unique au format exact, sans texte avant ni après :
-
-    <final>
-    1 à 2 phrases courtes en français, factuelles et sobres.
-    </final>
-
-    Contraintes :
-    - N'invente aucun fait absent des données ci-dessus.
-    - N'ajoute aucune hypothèse sur l'intention, l'impact ou la suite du travail.
-    - N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <final>.
-    - Évite les tournures emphatiques comme « Ce commit améliore... », « Cette mise à jour permet... », « Le système est désormais... »."""
     return _finalize_journal_summary(
-        _llm_complete(llm, retry_prompt, max_tokens=400, think=False),
+        _llm_complete(llm, retry_prompt, max_tokens=300, think=False),
         allow_plain_text=True,
+        stage="retry",
     )
 
 
 # New helpers for extracting and validating journal summary blocks
 
-def _finalize_journal_summary(value: Any, *, allow_plain_text: bool = False) -> str:
+def _finalize_journal_summary(value: Any, *, allow_plain_text: bool = False, stage: str = "unknown") -> str:
     try:
         final_summary = _extract_final_journal_summary(value)
     except ValueError as exc:
@@ -1003,7 +985,7 @@ def _finalize_journal_summary(value: Any, *, allow_plain_text: bool = False) -> 
             raise
         final_summary = str(value or "").strip()
     sanitized_summary = _sanitize_journal_summary(final_summary)
-    _validate_journal_summary(sanitized_summary)
+    _validate_journal_summary(sanitized_summary, stage=stage)
     return _redact_memory_text(sanitized_summary)
 
 def _extract_final_journal_summary(value: Any) -> str:
@@ -1018,39 +1000,47 @@ def _extract_final_journal_summary(value: Any) -> str:
     return summary
 
 
-def _validate_journal_summary(value: Any) -> None:
+def _validate_journal_summary(value: Any, *, stage: str = "unknown") -> None:
     """Reject LLM reasoning or prompt/meta text before journal persistence."""
     text = str(value or "").strip()
     if not text:
         raise ValueError("empty_journal_summary")
 
     lowered = text.lower()
-    forbidden_markers = (
-        "okay, let's",
-        "let's tackle",
-        "the user wants",
-        "i need to",
-        "we need to",
-        "let me",
-        "i should",
-        "the prompt asks",
-        "final answer",
-        "reasoning",
-        "step by step",
-        "analysis",
-        "je dois",
-        "l'utilisateur veut",
-        "je vais",
-        "raisonnement",
-        "analyse les données",
-        "bloc final",
-        "<think",
-        "</think>",
-        "<final",
-        "</final>",
-    )
-    if any(marker in lowered for marker in forbidden_markers):
-        raise ValueError("reasoning_leak_in_journal_summary")
+    forbidden_markers = {
+        "okay, let's":      "okay_lets",
+        "let's tackle":     "lets_tackle",
+        "the user wants":   "the_user_wants",
+        "i need to":        "i_need_to",
+        "we need to":       "we_need_to",
+        "let me":           "let_me",
+        "i should":         "i_should",
+        "the prompt asks":  "the_prompt_asks",
+        "final answer":     "final_answer",
+        "reasoning":        "reasoning",
+        "step by step":     "step_by_step",
+        "analysis":         "analysis",
+        "je dois":          "je_dois",
+        "l'utilisateur veut": "utilisateur_veut",
+        "je vais":          "je_vais",
+        "raisonnement":     "raisonnement",
+        "analyse les données": "analyse_donnees",
+        "bloc final":       "bloc_final",
+        "<think":           "think_tag",
+        "</think>":         "think_close_tag",
+        "<final":           "final_tag",
+        "</final>":         "final_close_tag",
+        "the project is":   "the_project_is",
+        "the commit is":    "the_commit_is",
+        "first,":           "first_comma",
+        "looking at":       "looking_at",
+        "based on":         "based_on",
+    }
+    for marker_text, marker_key in forbidden_markers.items():
+        if marker_text in lowered:
+            raise ValueError(
+                f"reasoning_leak_in_journal_summary:marker={marker_key}:stage={stage}:len={len(text)}"
+            )
 
 
 def _sanitize_journal_summary(value: Any) -> str:
