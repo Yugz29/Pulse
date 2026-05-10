@@ -913,7 +913,7 @@ def _write_session_report(
 
 
 def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
-# Build facts block
+    # Build facts block.
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
     facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
@@ -962,13 +962,43 @@ Tu peux analyser les données si nécessaire, mais la seule partie persistable e
 
 Le contenu hors du bloc <final> sera ignoré.
 N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <final>."""
-    raw_summary = _llm_complete(llm, prompt, max_tokens=600, think=True)
-    final_summary = _extract_final_journal_summary(raw_summary)
+    try:
+        return _finalize_journal_summary(
+            _llm_complete(llm, prompt, max_tokens=600, think=True)
+        )
+    except ValueError as first_error:
+        log.debug("Memory : résumé LLM invalide, retry final-only : %s", first_error)
+
+    retry_prompt = f"""\
+La réponse précédente ne respecte pas le format attendu pour une note de journal Pulse.
+
+Voici les données factuelles du commit livré :
+
+{facts_block}
+
+Retourne uniquement un bloc unique au format exact, sans texte avant ni après :
+
+<final>
+1 à 2 phrases courtes en français, factuelles et sobres.
+</final>
+
+Contraintes :
+- N'invente aucun fait absent des données ci-dessus.
+- N'ajoute aucune hypothèse sur l'intention, l'impact ou la suite du travail.
+- N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <final>.
+- Évite les tournures emphatiques comme « Ce commit améliore... », « Cette mise à jour permet... », « Le système est désormais... »."""
+    return _finalize_journal_summary(
+        _llm_complete(llm, retry_prompt, max_tokens=240, think=False)
+    )
+
+
+# New helpers for extracting and validating journal summary blocks
+
+def _finalize_journal_summary(value: Any) -> str:
+    final_summary = _extract_final_journal_summary(value)
     sanitized_summary = _sanitize_journal_summary(final_summary)
     _validate_journal_summary(sanitized_summary)
     return _redact_memory_text(sanitized_summary)
-
-# New helpers for extracting and validating journal summary blocks
 
 def _extract_final_journal_summary(value: Any) -> str:
     """Extract the only LLM text allowed to become persistent journal memory."""

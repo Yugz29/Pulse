@@ -1456,7 +1456,11 @@ class RuntimeOrchestrator:
         except Exception as exc:
             latency_ms = int((time.monotonic() - started_at) * 1000)
             project = snapshot.get("active_project")
-            self.log.error(f"llm_request_terminal request_kind=commit_summary status=error provider=ollama model={model} latency_ms={latency_ms} project={project} reason={exc.__class__.__name__.lower()}")
+            reason = exc.__class__.__name__.lower()
+            detail = str(exc).strip()
+            if detail:
+                reason = f"{reason}:{detail}"
+            self.log.error(f"llm_request_terminal request_kind=commit_summary status=error provider=ollama model={model} latency_ms={latency_ms} project={project} reason={reason}")
 
     def _should_sync_memory(self, event_type, present, previous_sync_at) -> bool:
         if present.session_duration_min < 20:
