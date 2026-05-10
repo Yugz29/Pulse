@@ -75,7 +75,8 @@ extension DaemonBridge {
                 success: dict["success"] as? Bool,
                 command: dict["command"] as? String,
                 timestamp: timestamp,
-                resumeCard: Self.resumeCard(from: dict["resume_card"] as? [String: Any])
+                resumeCard: Self.resumeCard(from: dict["resume_card"] as? [String: Any]),
+                loadTimeSec: dict["load_time_sec"] as? Double
             )
         }
     }

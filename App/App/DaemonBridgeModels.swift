@@ -1600,6 +1600,7 @@ struct FeedEvent: Identifiable {
     let command: String?
     let timestamp: String
     let resumeCard: ResumeCard?
+    let loadTimeSec: Double?
 
     var accentHex: String {
         switch kind {

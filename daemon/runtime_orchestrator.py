@@ -452,9 +452,13 @@ class RuntimeOrchestrator:
                     self.runtime_state.clear_sleep_markers()
 
             def _warmup_with_events():
-                self.scorer.bus.publish("llm_loading", {"model": ""})
+                provider = self.llm_runtime.provider()
+                model_name = provider.model if provider else ""
+                self.scorer.bus.publish("llm_loading", {"model": model_name})
+                t0 = time.monotonic()
                 self.llm_warmup_background()
-                self.scorer.bus.publish("llm_ready", {"model": ""})
+                load_time_sec = round(time.monotonic() - t0, 2)
+                self.scorer.bus.publish("llm_ready", {"model": model_name, "load_time_sec": load_time_sec})
 
             threading.Thread(target=_warmup_with_events, daemon=True).start()
 
@@ -890,12 +894,14 @@ class RuntimeOrchestrator:
         if provider and hasattr(provider, "warmup"):
             self.log.info("LLM warmup en cours (%s)...", provider.model)
             self.scorer.bus.publish("llm_loading", {"model": provider.model})
+            t0 = time.monotonic()
             ok = provider.warmup()
+            load_time_sec = round(time.monotonic() - t0, 2)
             if ok:
-                self.log.info("LLM warmup terminé (%s)", provider.model)
+                self.log.info("LLM warmup terminé (%s) en %.1fs", provider.model, load_time_sec)
             else:
                 self.log.warning("LLM warmup échoué au démarrage (Ollama indisponible ?)")
-            self.scorer.bus.publish("llm_ready", {"model": provider.model})
+            self.scorer.bus.publish("llm_ready", {"model": provider.model, "load_time_sec": load_time_sec})
         self._recover_missed_daydream()
         self.log.info("\u2713 Init différé terminé")
 

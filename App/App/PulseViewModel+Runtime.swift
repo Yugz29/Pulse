@@ -101,10 +101,19 @@ extension PulseViewModel {
                                 persistent: true
                             )
                         } else if event.kind == "llm_ready" {
-                            // Dismiss immédiat de la notification loading
-                            withAnimation(.easeOut(duration: 0.4)) {
-                                self.transientStatusText = nil
-                                self.isStartupExpanded = false
+                            // Délai adaptatif : la notification reste visible au minimum 2s au total.
+                            // Si le modèle a chargé en 0.8s → on attend encore 1.2s.
+                            // Si le modèle a chargé en 3s → dismiss immédiat.
+                            let loadTimeSec = event.loadTimeSec ?? 0.0
+                            let remainingDelay = max(0.0, 2.0 - loadTimeSec)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + remainingDelay) { [weak self] in
+                                guard let self else { return }
+                                withAnimation(.easeOut(duration: 0.4)) {
+                                    if self.transientStatusText == "Chargement du modèle…" {
+                                        self.transientStatusText = nil
+                                        self.isStartupExpanded = false
+                                    }
+                                }
                             }
                         } else if event.kind == "resume_card", let card = event.resumeCard {
                             self.showResumeCard(card)

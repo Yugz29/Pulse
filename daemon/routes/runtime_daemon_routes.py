@@ -44,12 +44,15 @@ def register_daemon_routes(
 
     @app.route("/daemon/resume", methods=["POST"])
     def daemon_resume():
+        import time as _time
         runtime_state.set_paused(False)
 
         def _warmup_with_events():
             bus.publish("llm_loading", {"model": ""})
+            t0 = _time.monotonic()
             llm_warmup_background()
-            bus.publish("llm_ready", {"model": ""})
+            load_time_sec = round(_time.monotonic() - t0, 2)
+            bus.publish("llm_ready", {"model": "", "load_time_sec": load_time_sec})
 
         threading.Thread(target=_warmup_with_events, daemon=True).start()
         return jsonify({"ok": True, "action": "resume", "paused": False})
