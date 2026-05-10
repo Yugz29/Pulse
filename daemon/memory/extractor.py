@@ -913,6 +913,7 @@ def _write_session_report(
 
 
 def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
+# Build facts block
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
     facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
@@ -938,14 +939,82 @@ Voici les données factuelles du commit livré :
 
 {facts_block}
 
-Écris 1 à 2 phrases courtes en français.
-Adopte un ton de note de journal concise et factuelle.
-Dis ce qui a été livré et la portée principale — pas comment ni les détails techniques.
-Évite les tournures emphatiques comme « Ce commit améliore... ».
-Si le message de commit est explicite, reformule-le naturellement dans ce ton.
-N'invente aucun fait absent des données ci-dessus.
-Commence directement par la synthèse en français, sans introduction ni raisonnement préliminaire."""
-    return _redact_memory_text(_sanitize_journal_summary(_llm_complete(llm, prompt, max_tokens=400, think=False)))
+Objectif :
+Écris une note de journal courte en français.
+
+Contraintes :
+- Écris 1 à 2 phrases maximum.
+- Adopte un ton factuel, sobre, non marketing.
+- Dis ce qui a été livré et la portée principale.
+- Ne décris pas les détails d'implémentation sauf s'ils sont nécessaires pour comprendre la livraison.
+- Si le message de commit est explicite, reformule-le naturellement.
+- N'invente aucun fait absent des données ci-dessus.
+- N'ajoute aucune hypothèse sur l'intention, l'impact ou la suite du travail.
+- Évite les tournures emphatiques comme « Ce commit améliore... », « Cette mise à jour permet... », « Le système est désormais... ».
+
+Tu peux analyser les données si nécessaire, mais la seule partie persistable est le bloc final.
+
+À la fin, retourne obligatoirement un bloc unique au format exact :
+
+<final>
+1 à 2 phrases courtes en français.
+</final>
+
+Le contenu hors du bloc <final> sera ignoré.
+N'inclus aucun raisonnement, aucune consigne, aucun commentaire méta dans <final>."""
+    raw_summary = _llm_complete(llm, prompt, max_tokens=600, think=True)
+    final_summary = _extract_final_journal_summary(raw_summary)
+    sanitized_summary = _sanitize_journal_summary(final_summary)
+    _validate_journal_summary(sanitized_summary)
+    return _redact_memory_text(sanitized_summary)
+
+# New helpers for extracting and validating journal summary blocks
+
+def _extract_final_journal_summary(value: Any) -> str:
+    """Extract the only LLM text allowed to become persistent journal memory."""
+    text = str(value or "").strip()
+    match = re.search(r"<final>\s*(.*?)\s*</final>", text, flags=re.DOTALL | re.IGNORECASE)
+    if match is None:
+        raise ValueError("missing_final_journal_summary_block")
+    summary = match.group(1).strip()
+    if not summary:
+        raise ValueError("empty_final_journal_summary_block")
+    return summary
+
+
+def _validate_journal_summary(value: Any) -> None:
+    """Reject LLM reasoning or prompt/meta text before journal persistence."""
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("empty_journal_summary")
+
+    lowered = text.lower()
+    forbidden_markers = (
+        "okay, let's",
+        "let's tackle",
+        "the user wants",
+        "i need to",
+        "we need to",
+        "let me",
+        "i should",
+        "the prompt asks",
+        "final answer",
+        "reasoning",
+        "step by step",
+        "analysis",
+        "je dois",
+        "l'utilisateur veut",
+        "je vais",
+        "raisonnement",
+        "analyse les données",
+        "bloc final",
+        "<think",
+        "</think>",
+        "<final",
+        "</final>",
+    )
+    if any(marker in lowered for marker in forbidden_markers):
+        raise ValueError("reasoning_leak_in_journal_summary")
 
 
 def _sanitize_journal_summary(value: Any) -> str:
@@ -955,20 +1024,6 @@ def _sanitize_journal_summary(value: Any) -> str:
         text = text.rsplit("<channel|>", 1)[-1]
     text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
     text = re.sub(r"</?[^>\n]+>", " ", text)
-    # Détecter le reasoning leak non-bailisé de Qwen3 :
-    # le modèle génère parfois du raisonnement en prose anglaise avant la réponse
-    # ("Okay, let's tackle..."). On cherche la première coupure double-\n
-    # et on garde ce qui suit si le début ressemble à du raisonnement.
-    _REASONING_STARTS = ("okay", "let me", "let's", "first,", "alright", "i need", "the user", "looking at", "based on")
-    if any(text[:60].lower().strip().startswith(s) for s in _REASONING_STARTS):
-        double_break = text.find("\n\n")
-        if double_break > 0 and double_break < len(text) - 20:
-            text = text[double_break:].strip()
-        else:
-            # Pas de coupure claire : garder la dernière phrase si elle semble en français
-            last_period = text.rfind(".")
-            if 0 < last_period < len(text) - 1:
-                text = text[last_period + 1:].strip() or text
     cleaned_lines: List[str] = []
     for raw_line in text.splitlines():
         line = raw_line.strip()

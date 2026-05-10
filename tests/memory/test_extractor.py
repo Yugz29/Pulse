@@ -21,20 +21,20 @@ from daemon.routes.facts import register_facts_routes
 
 class FakeLLM:
 
-    def complete(self, prompt, max_tokens=200):
-        return "Résumé court de la session."
+    def complete(self, prompt, max_tokens=200, **kwargs):
+        return "<final>\nRésumé court de la session.\n</final>"
 
 
 class FailingLLM:
 
-    def complete(self, prompt, max_tokens=200):
+    def complete(self, prompt, max_tokens=200, **kwargs):
         raise RuntimeError("offline")
 
 
 class MarkdownLLM:
 
-    def complete(self, prompt, max_tokens=200):
-        return "*   **Analyse :**\n6.  **\n<channel|>Résumé *court* avec **markdown** parasite."
+    def complete(self, prompt, max_tokens=200, **kwargs):
+        return "*   **Analyse :**\n6.  **\n<final>Résumé *court* avec **markdown** parasite.</final>"
 
 
 class TestExtractor(unittest.TestCase):
@@ -573,6 +573,102 @@ class TestExtractor(unittest.TestCase):
         # habits.md est exclu de load_memory_context (remplacé par facts.md à terme)
         self.assertNotIn("# Habitudes", context)
 
+    def test_llm_summary_extrait_uniquement_le_bloc_final(self):
+        class ReasoningLLM:
+            def complete(self, prompt, max_tokens=200, **kwargs):
+                self.prompt = prompt
+                self.kwargs = kwargs
+                return (
+                    "Okay, let's tackle this query. The user wants a concise French journal note.\n\n"
+                    "<final>\n"
+                    "La génération des journaux est sécurisée pour ne conserver que la synthèse finale validée.\n"
+                    "</final>"
+                )
+
+        llm = ReasoningLLM()
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 3,
+                "top_files": ["extractor.py"],
+            },
+            llm=llm,
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): validate journal final block",
+            diff_summary="Diff en cours : extractor.py (+12 -3)",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("La génération des journaux est sécurisée", journal)
+        self.assertNotIn("Okay, let's tackle", journal)
+        self.assertNotIn("The user wants", journal)
+        self.assertIn("<final>", llm.prompt)
+        self.assertEqual(llm.kwargs.get("think"), True)
+
+    def test_llm_summary_fallback_si_bloc_final_absent(self):
+        class ReasoningOnlyLLM:
+            def complete(self, prompt, max_tokens=200, **kwargs):
+                return "Okay, let's tackle this query. The user wants a concise French journal note."
+
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 3,
+                "top_files": ["extractor.py"],
+            },
+            llm=ReasoningOnlyLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): fallback missing final block",
+            diff_summary="Diff en cours : extractor.py (+12 -3)",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+        self.assertNotIn("Okay, let's tackle", journal)
+        self.assertEqual(hidden[0]["summary_source"], "deterministic_fallback")
+        self.assertEqual(hidden[0]["summary_status"], "failed")
+        self.assertEqual(hidden[0]["summary_error"], "missing_final_journal_summary_block")
+
+    def test_llm_summary_fallback_si_bloc_final_contient_du_raisonnement(self):
+        class ContaminatedFinalLLM:
+            def complete(self, prompt, max_tokens=200, **kwargs):
+                return "<final>Okay, let's tackle this query. La note devrait être courte.</final>"
+
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 45,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 3,
+                "top_files": ["extractor.py"],
+            },
+            llm=ContaminatedFinalLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): reject contaminated final block",
+            diff_summary="Diff en cours : extractor.py (+12 -3)",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+        )
+        self.assertNotIn("Okay, let's tackle", journal)
+        self.assertEqual(hidden[0]["summary_source"], "deterministic_fallback")
+        self.assertEqual(hidden[0]["summary_status"], "failed")
+        self.assertEqual(hidden[0]["summary_error"], "reasoning_leak_in_journal_summary")
+
     def test_resume_llm_ecrit_une_session_si_duree_suffisante(self):
         # trigger='commit' pour que le LLM soit effectivement appelé
         update_memories_from_session(
@@ -619,7 +715,7 @@ class TestExtractor(unittest.TestCase):
         call_count = {"n": 0}
 
         class CountingLLM:
-            def complete(self, prompt, max_tokens=200):
+            def complete(self, prompt, max_tokens=200, **kwargs):
                 call_count["n"] += 1
                 return "Ne devrait pas apparaître."
 
@@ -653,9 +749,10 @@ class TestExtractor(unittest.TestCase):
         captured = {}
 
         class CapturingLLM:
-            def complete(self, prompt, max_tokens=200, think=False):
+            def complete(self, prompt, max_tokens=200, **kwargs):
                 captured["prompt"] = prompt
-                return f"Résumé sans secret pour TOKEN={diff_secret}."
+                captured["kwargs"] = kwargs
+                return f"<final>\nRésumé sans secret pour TOKEN={diff_secret}.\n</final>"
 
         update_memories_from_session(
             {
@@ -893,7 +990,7 @@ class TestExtractor(unittest.TestCase):
         call_count = {"n": 0}
 
         class CountingLLM:
-            def complete(self, prompt, max_tokens=200):
+            def complete(self, prompt, max_tokens=200, **kwargs):
                 call_count["n"] += 1
                 return "Ne devrait pas apparaître."
 
@@ -922,7 +1019,7 @@ class TestExtractor(unittest.TestCase):
         call_count = {"n": 0}
 
         class CountingLLM:
-            def complete(self, prompt, max_tokens=200):
+            def complete(self, prompt, max_tokens=200, **kwargs):
                 call_count["n"] += 1
                 return "Ne devrait pas apparaître."
 

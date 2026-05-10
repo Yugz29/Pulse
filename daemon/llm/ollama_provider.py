@@ -370,11 +370,16 @@ class OllamaProvider:
                 self.model,
                 retry_budget,
             )
-            final_prompt = (
-                f"{prompt}\n\n"
+            final_instruction = (
                 "IMPORTANT: Réponds maintenant uniquement avec la réponse finale exploitable. "
                 "N'inclus aucun raisonnement, aucune étape interne, aucun commentaire hors format."
             )
+            if "<final>" in prompt.lower() or "</final>" in prompt.lower():
+                final_instruction = (
+                    "IMPORTANT: Réponds maintenant uniquement avec le bloc <final> demandé. "
+                    "N'inclus aucun raisonnement, aucune étape interne, aucun commentaire hors du bloc <final>."
+                )
+            final_prompt = f"{prompt}\n\n{final_instruction}"
             return self._complete_once(
                 prompt=final_prompt,
                 system=system,
