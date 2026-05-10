@@ -912,6 +912,13 @@ def _write_session_report(
     return (journal_file, entry_id)
 
 
+_JOURNAL_SYSTEM = (
+    "Tu es un assistant de journal de bord développeur. "
+    "Tu réponds toujours directement en français, sans introduction, "
+    "sans raisonnement en anglais, sans préambule d'aucune sorte."
+)
+
+
 def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
@@ -949,7 +956,7 @@ Contraintes :
 
     try:
         return _finalize_journal_summary(
-            _llm_complete(llm, prompt, max_tokens=400, think=False),
+            _llm_complete(llm, prompt, max_tokens=2000, think=True, system=_JOURNAL_SYSTEM),
             allow_plain_text=True,
             stage="initial",
         )
@@ -969,7 +976,7 @@ Aucun préambule.
 Aucune analyse."""
 
     return _finalize_journal_summary(
-        _llm_complete(llm, retry_prompt, max_tokens=300, think=False),
+        _llm_complete(llm, retry_prompt, max_tokens=2000, think=True, system=_JOURNAL_SYSTEM),
         allow_plain_text=True,
         stage="retry",
     )
@@ -2464,14 +2471,17 @@ def _time_slot(hour: int) -> str:
     return "soir"
 
 
-def _llm_complete(llm: Any, prompt: str, max_tokens: int = 150, think: Optional[bool] = None) -> str:
+def _llm_complete(llm: Any, prompt: str, max_tokens: int = 150, think: Optional[bool] = None, system: str = "") -> str:
     if hasattr(llm, "complete"):
-        kwargs = {"max_tokens": max_tokens}
+        kwargs: Dict[str, Any] = {"max_tokens": max_tokens}
         if think is not None:
             kwargs["think"] = think
+        if system:
+            kwargs["system"] = system
         try:
             return llm.complete(prompt, **kwargs)
         except TypeError:
             kwargs.pop("think", None)
+            kwargs.pop("system", None)
             return llm.complete(prompt, **kwargs)
     raise TypeError("LLM provider incompatible")
