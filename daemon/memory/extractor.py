@@ -956,7 +956,7 @@ Contraintes :
 
     try:
         return _finalize_journal_summary(
-            _llm_complete(llm, prompt, max_tokens=8192, think=True, system=_JOURNAL_SYSTEM),
+            _llm_complete(llm, prompt, max_tokens=8192, think=True, system=_JOURNAL_SYSTEM, profile="journal_summary"),
             allow_plain_text=True,
             stage="initial",
         )
@@ -976,7 +976,7 @@ Aucun préambule.
 Aucune analyse."""
 
     return _finalize_journal_summary(
-        _llm_complete(llm, retry_prompt, max_tokens=8192, think=True, system=_JOURNAL_SYSTEM),
+        _llm_complete(llm, retry_prompt, max_tokens=8192, think=True, system=_JOURNAL_SYSTEM, profile="journal_summary"),
         allow_plain_text=True,
         stage="retry",
     )
@@ -2471,9 +2471,9 @@ def _time_slot(hour: int) -> str:
     return "soir"
 
 
-def _llm_complete(llm: Any, prompt: str, max_tokens: int = 150, think: Optional[bool] = None, system: str = "") -> str:
+def _llm_complete(llm: Any, prompt: str, max_tokens: int = 150, think: Optional[bool] = None, system: str = "", profile: str = "default") -> str:
     if hasattr(llm, "complete"):
-        kwargs: Dict[str, Any] = {"max_tokens": max_tokens}
+        kwargs: Dict[str, Any] = {"max_tokens": max_tokens, "profile": profile}
         if think is not None:
             kwargs["think"] = think
         if system:
@@ -2483,5 +2483,6 @@ def _llm_complete(llm: Any, prompt: str, max_tokens: int = 150, think: Optional[
         except TypeError:
             kwargs.pop("think", None)
             kwargs.pop("system", None)
+            kwargs.pop("profile", None)
             return llm.complete(prompt, **kwargs)
     raise TypeError("LLM provider incompatible")
