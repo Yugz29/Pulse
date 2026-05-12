@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let bridge = DaemonBridge()
     private var dashboardWindow: DashboardWindow?
     private var dashboardVM: DashboardViewModel?
+    private var appleFoundationWorker: AppleFoundationWorker?
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandlerRef: EventHandlerRef?
 
@@ -109,6 +110,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         setupFullscreenDetection()
         registerGlobalShortcut()
+        appleFoundationWorker = AppleFoundationWorker(bridge: bridge)
+        appleFoundationWorker?.start()
         observer = SystemObserver()
         observer?.startObserving()
         vm.onObservationToggle = { [weak self] enabled in
@@ -224,6 +227,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        appleFoundationWorker?.stop()
         observer?.stopObserving()
         dashboardVM?.stopPolling()
         if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }

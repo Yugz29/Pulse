@@ -920,39 +920,16 @@ _JOURNAL_SYSTEM = (
 
 
 def _llm_summary(llm, project, duration, task, focus, friction, apps, top_files, files_count, commit_message, diff_summary, *, scope_source="snapshot") -> str:
-    commit_message = _redact_memory_text(commit_message)
-    diff_summary = _redact_memory_text(diff_summary)
-    facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
-    if commit_message:
-        lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
-        full_msg = "\n".join(lines).strip()[:400]
-        facts.append(f"Commit :\n{full_msg}")
-    if diff_summary:
-        for line in diff_summary.splitlines():
-            facts.append(line)
-    elif top_files:
-        prefix = "Fichiers du commit"
-        if scope_source == "fallback_snapshot":
-            prefix = "Portée estimée depuis l'observation de session"
-        facts.append(f"{prefix} : {cluster_files_for_display(top_files)}")
-    elif files_count:
-        facts.append(f"Fichiers modifiés : {files_count}")
-    if friction >= 0.7:
-        facts.append("Friction : élevée")
-    facts_block = "\n".join(f"- {f}" for f in facts)
-
-    prompt = f"""\
-Données factuelles du commit livré :
-{facts_block}
-
-Écris une note de journal Pulse en français.
-Contraintes :
-- 1 à 2 phrases maximum.
-- Ton factuel, sobre, non marketing.
-- Dis ce qui a été livré et la portée principale.
-- N'invente aucun fait absent des données.
-- Aucune analyse, aucun raisonnement, aucun commentaire méta.
-- Réponds uniquement avec la note finale."""
+    prompt = build_journal_summary_prompt(
+        project, duration, task, focus, friction, apps,
+        top_files, files_count, commit_message, diff_summary,
+        scope_source=scope_source,
+    )
+    facts_block = _journal_summary_facts_block(
+        project, duration, task, focus, friction, apps,
+        top_files, files_count, commit_message, diff_summary,
+        scope_source=scope_source,
+    )
 
     try:
         return _finalize_journal_summary(
@@ -979,6 +956,84 @@ Aucune analyse."""
         _llm_complete(llm, retry_prompt, max_tokens=8192, think=True, system=_JOURNAL_SYSTEM, profile="journal_summary"),
         allow_plain_text=True,
         stage="retry",
+    )
+
+
+def build_journal_summary_prompt(
+    project, duration, task, focus, friction, apps, top_files, files_count,
+    commit_message, diff_summary, *, scope_source="snapshot",
+) -> str:
+    facts_block = _journal_summary_facts_block(
+        project, duration, task, focus, friction, apps,
+        top_files, files_count, commit_message, diff_summary,
+        scope_source=scope_source,
+    )
+    return f"""\
+Données factuelles du commit livré :
+{facts_block}
+
+Écris une note de journal Pulse en français.
+Contraintes :
+- 1 à 2 phrases maximum.
+- Ton factuel, sobre, non marketing.
+- Dis ce qui a été livré et la portée principale.
+- N'invente aucun fait absent des données.
+- Aucune analyse, aucun raisonnement, aucun commentaire méta.
+- Réponds uniquement avec la note finale."""
+
+
+def _journal_summary_facts_block(
+    project, duration, task, focus, friction, apps, top_files, files_count,
+    commit_message, diff_summary, *, scope_source="snapshot",
+) -> str:
+    commit_message = _redact_memory_text(commit_message)
+    diff_summary = _redact_memory_text(diff_summary)
+    facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
+    if commit_message:
+        lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
+        full_msg = "\n".join(lines).strip()[:400]
+        facts.append(f"Commit :\n{full_msg}")
+    if diff_summary:
+        for line in diff_summary.splitlines():
+            facts.append(line)
+    elif top_files:
+        prefix = "Fichiers du commit"
+        if scope_source == "fallback_snapshot":
+            prefix = "Portée estimée depuis l'observation de session"
+        facts.append(f"{prefix} : {cluster_files_for_display(top_files)}")
+    elif files_count:
+        facts.append(f"Fichiers modifiés : {files_count}")
+    if friction >= 0.7:
+        facts.append("Friction : élevée")
+    return "\n".join(f"- {f}" for f in facts)
+
+
+def apply_validated_journal_summary(
+    report_ref,
+    text: Any,
+    *,
+    summary_source: str,
+    stage: str,
+) -> bool:
+    journal_file, entry_id = report_ref
+    body = _finalize_journal_summary(text, allow_plain_text=True, stage=stage)
+    return _replace_journal_entry(
+        journal_file,
+        str(entry_id),
+        body,
+        summary_source=summary_source,
+        summary_status="generated",
+        summary_error=None,
+    )
+
+
+def mark_journal_summary_failed(report_ref, error: Any) -> bool:
+    journal_file, entry_id = report_ref
+    return _update_journal_entry_summary_metadata(
+        journal_file,
+        str(entry_id),
+        summary_status="failed",
+        summary_error=str(error or "unknown_error"),
     )
 
 
@@ -1158,6 +1213,35 @@ def _replace_journal_entry(
                         replacement = replacement_bodies[index] if index < len(replacement_bodies) else body.strip()
                         if replacement:
                             item["body"] = replacement
+                if summary_source is not None:
+                    entry["summary_source"] = summary_source
+                if summary_status is not None:
+                    entry["summary_status"] = summary_status
+                entry["summary_error"] = summary_error
+                updated = True
+                break
+        if not updated:
+            return False
+        journal_date = _journal_date_from_path(journal_file)
+        _write_journal_document(journal_file, journal_date, entries)
+        return True
+
+
+def _update_journal_entry_summary_metadata(
+    journal_file: Path,
+    entry_id: str,
+    *,
+    summary_status: Optional[str] = None,
+    summary_error: Optional[str] = None,
+    summary_source: Optional[str] = None,
+) -> bool:
+    with _memory_write_lock:
+        if not journal_file.exists():
+            return False
+        entries = _load_journal_entries(journal_file)
+        updated = False
+        for entry in entries:
+            if entry.get("entry_id") == entry_id:
                 if summary_source is not None:
                     entry["summary_source"] = summary_source
                 if summary_status is not None:

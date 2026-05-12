@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 import subprocess
 
 from daemon.memory.extractor import (
+    apply_validated_journal_summary,
+    build_journal_summary_prompt,
     enrich_session_report,
     find_git_root,
     get_fact_engine,
@@ -18,6 +20,7 @@ from daemon.memory.extractor import (
     read_commit_message,
     read_head_sha,
     request_background_writer_shutdown,
+    mark_journal_summary_failed,
     reset_background_writers_for_tests,
     reset_cooldown_for_tests,
     reset_fact_engine_for_tests,
@@ -59,6 +62,7 @@ class RuntimeOrchestrator:
         memory_store,
         runtime_state,
         llm_runtime,
+        lightweight_queue=None,
         log,
         sleep_session_threshold_min: int = 30,
         file_debounce_sec: float = 0.25,
@@ -73,6 +77,7 @@ class RuntimeOrchestrator:
         self.memory_store = memory_store
         self.runtime_state = runtime_state
         self.llm_runtime = llm_runtime
+        self.lightweight_queue = lightweight_queue
         self.log = log
         self.sleep_session_threshold_min = sleep_session_threshold_min
         self.file_debounce_sec = file_debounce_sec
@@ -1433,13 +1438,109 @@ class RuntimeOrchestrator:
             )
             self.freeze_memory()
             if defer_llm and report_ref is not None:
-                self._start_critical_worker(
-                    target=self._enrich_commit_summary_background,
-                    args=(report_ref, snapshot, llm, commit_message, diff_summary),
-                    name="pulse-commit-enrich",
-                )
+                if self.lightweight_queue is not None:
+                    self._enqueue_lightweight_commit_summary(
+                        report_ref=report_ref,
+                        snapshot=snapshot,
+                        commit_message=commit_message,
+                        diff_summary=diff_summary,
+                    )
+                else:
+                    self._start_critical_worker(
+                        target=self._enrich_commit_summary_background,
+                        args=(report_ref, snapshot, llm, commit_message, diff_summary),
+                        name="pulse-commit-enrich",
+                    )
         except Exception as exc:
             self.log.warning("memory sync échouée : %s", exc)
+
+    def _enqueue_lightweight_commit_summary(self, *, report_ref, snapshot, commit_message, diff_summary) -> None:
+        try:
+            project = snapshot.get("active_project") or "inconnu"
+            duration = int(snapshot.get("duration_min") or 0)
+            task = snapshot.get("probable_task", "general")
+            focus = snapshot.get("focus_level", "normal")
+            friction = float(snapshot.get("max_friction", 0.0))
+            apps = snapshot.get("recent_apps", [])
+            top_files = snapshot.get("top_files", []) or []
+            files_count = snapshot.get("files_changed", 0) or 0
+            prompt = build_journal_summary_prompt(
+                project,
+                duration,
+                task,
+                focus,
+                friction,
+                apps,
+                top_files,
+                files_count,
+                commit_message,
+                diff_summary,
+                scope_source="commit_diff" if diff_summary else "commit_files",
+            )
+            item = self.lightweight_queue.enqueue(
+                kind="journal_commit_summary",
+                prompt=prompt,
+                max_tokens=160,
+                metadata={
+                    "report_ref": report_ref,
+                    "project": project,
+                },
+            )
+            self.log.info(
+                "llm_request_terminal request_kind=commit_summary status=queued provider=apple_foundation request_id=%s project=%s",
+                item.id,
+                project,
+            )
+        except Exception as exc:
+            self.log.warning("lightweight commit summary enqueue skipped: %s", exc)
+
+    def apply_lightweight_llm_result(self, *, request_id: str, status: str, text: str = "", error=None) -> dict:
+        try:
+            item = self.lightweight_queue.complete(
+                request_id,
+                status=status,
+                text=text,
+                error=error,
+            )
+        except KeyError:
+            return {"ok": False, "error": "request_not_found", "http_status": 404}
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc), "http_status": 400}
+
+        if item.kind != "journal_commit_summary":
+            return {"ok": False, "error": "unsupported_kind", "http_status": 400}
+
+        report_ref = item.metadata.get("report_ref")
+        if not report_ref:
+            return {"ok": False, "error": "missing_report_ref", "http_status": 400}
+
+        project = item.metadata.get("project")
+        if status != "generated":
+            applied = mark_journal_summary_failed(report_ref, error or "apple_foundation_failed")
+            return {"ok": True, "applied": applied, "status": "failed", "error": error}
+
+        try:
+            applied = apply_validated_journal_summary(
+                report_ref,
+                text,
+                summary_source="apple_foundation",
+                stage="apple_foundation",
+            )
+            if applied:
+                self.freeze_memory()
+                self.log.info(
+                    "llm_request_terminal request_kind=commit_summary status=success provider=apple_foundation project=%s",
+                    project,
+                )
+            return {"ok": True, "applied": applied, "status": "generated"}
+        except Exception as exc:
+            applied = mark_journal_summary_failed(report_ref, exc)
+            self.log.warning(
+                "llm_request_terminal request_kind=commit_summary status=invalid provider=apple_foundation project=%s reason=%s",
+                project,
+                exc,
+            )
+            return {"ok": True, "applied": False, "metadata_updated": applied, "status": "failed", "error": str(exc)}
 
     def _enrich_commit_summary_background(self, report_ref, snapshot, llm, commit_message, diff_summary):
         started_at = time.monotonic()

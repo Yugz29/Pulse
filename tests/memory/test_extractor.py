@@ -8,8 +8,10 @@ from datetime import datetime, timedelta
 from flask import Flask
 
 from daemon.memory.extractor import (
+    apply_validated_journal_summary,
     enrich_session_report,
     load_memory_context,
+    mark_journal_summary_failed,
     request_background_writer_shutdown,
     join_background_writers,
     reset_background_writers_for_tests,
@@ -606,7 +608,8 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("La génération des journaux est sécurisée", journal)
         self.assertNotIn("Okay, let's tackle", journal)
         self.assertNotIn("The user wants", journal)
-        self.assertIn("<final>", llm.prompt)
+        self.assertIn("Réponds uniquement avec la note finale", llm.prompt)
+        self.assertNotIn("<final>", llm.prompt)
         self.assertEqual(llm.kwargs.get("think"), True)
 
     def test_llm_summary_fallback_si_bloc_final_absent(self):
@@ -637,7 +640,9 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("Okay, let's tackle", journal)
         self.assertEqual(hidden[0]["summary_source"], "deterministic_fallback")
         self.assertEqual(hidden[0]["summary_status"], "failed")
-        self.assertEqual(hidden[0]["summary_error"], "reasoning_leak_in_journal_summary")
+        self.assertTrue(hidden[0]["summary_error"].startswith("reasoning_leak_in_journal_summary:"))
+        self.assertIn("marker=okay_lets", hidden[0]["summary_error"])
+        self.assertIn("stage=retry", hidden[0]["summary_error"])
 
     def test_llm_summary_retry_accepte_texte_brut_propre_sans_bloc_final(self):
         class RetryPlainTextLLM:
@@ -705,7 +710,9 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("Okay, let's tackle", journal)
         self.assertEqual(hidden[0]["summary_source"], "deterministic_fallback")
         self.assertEqual(hidden[0]["summary_status"], "failed")
-        self.assertEqual(hidden[0]["summary_error"], "reasoning_leak_in_journal_summary")
+        self.assertTrue(hidden[0]["summary_error"].startswith("reasoning_leak_in_journal_summary:"))
+        self.assertIn("marker=okay_lets", hidden[0]["summary_error"])
+        self.assertIn("stage=retry", hidden[0]["summary_error"])
 
     def test_resume_llm_ecrit_une_session_si_duree_suffisante(self):
         # trigger='commit' pour que le LLM soit effectivement appelé
@@ -1946,6 +1953,80 @@ class TestExtractor(unittest.TestCase):
         after = session_files[0].read_text()
         self.assertIn("Résumé court de la session.", after)
         self.assertIn("feat: commit enrichi", after)
+
+    def test_apple_summary_failed_preserve_exactement_le_body_fallback(self):
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "recent_apps": ["Cursor"],
+            "files_changed": 5,
+        }
+        report_ref = update_memories_from_session(
+            session,
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix: fallback preserved",
+            defer_llm_enrichment=True,
+        )
+        journal_file = report_ref[0]
+        before_hidden = json.loads(
+            journal_file.read_text().split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        fallback_body = before_hidden[0]["body"]
+
+        ok = mark_journal_summary_failed(report_ref, "apple_foundation_unavailable")
+
+        self.assertTrue(ok)
+        after_hidden = json.loads(
+            journal_file.read_text().split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        self.assertEqual(after_hidden[0]["body"], fallback_body)
+        self.assertEqual(after_hidden[0]["commit_items"][0]["body"], fallback_body)
+        self.assertEqual(after_hidden[0]["summary_status"], "failed")
+        self.assertEqual(after_hidden[0]["summary_error"], "apple_foundation_unavailable")
+
+    def test_apple_summary_validated_remplace_le_body(self):
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "recent_apps": ["Cursor"],
+            "files_changed": 5,
+        }
+        report_ref = update_memories_from_session(
+            session,
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix: apple summary",
+            defer_llm_enrichment=True,
+        )
+
+        ok = apply_validated_journal_summary(
+            report_ref,
+            "Le commit clarifie le résumé journal généré localement.",
+            summary_source="apple_foundation",
+            stage="apple_foundation",
+        )
+
+        self.assertTrue(ok)
+        hidden = json.loads(
+            report_ref[0].read_text().split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        self.assertEqual(hidden[0]["summary_source"], "apple_foundation")
+        self.assertEqual(hidden[0]["summary_status"], "generated")
+        self.assertIn("clarifie le résumé journal", hidden[0]["body"])
 
     def test_enrich_pending_journal_summaries_enrichit_failed_et_ignore_current_ou_sans_commit(self):
         journal_date = "2026-05-05"

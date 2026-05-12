@@ -16,6 +16,7 @@ from daemon.core.event_bus import EventBus
 from daemon.core.signal_scorer import SignalScorer
 from daemon.core.state_store import StateStore
 from daemon.llm.runtime import LLMRuntime
+from daemon.llm.lightweight_queue import LightweightLLMQueue
 from daemon.llm.unavailable import UnavailableLLMRouter
 from daemon.mcp.handlers import (
     build_runtime_signal,
@@ -60,6 +61,7 @@ class _RoutineGetLogFilter(logging.Filter):
         "/observation",
         "/daydreams",
         "/mcp/pending",
+        "/llm/lightweight/pending",
     }
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -98,6 +100,7 @@ class RuntimeBundle:
     memory_store: MemoryStore
     runtime_state: RuntimeState
     llm_runtime: LLMRuntime
+    lightweight_queue: LightweightLLMQueue
     runtime_orchestrator: RuntimeOrchestrator
 
 
@@ -111,6 +114,7 @@ def create_runtime() -> RuntimeBundle:
     runtime_session_memory = SessionMemory()
     runtime_memory_store = MemoryStore()
     runtime_state_obj = RuntimeState()
+    runtime_lightweight_queue = LightweightLLMQueue()
     runtime_settings_path = Path.home() / ".pulse" / "settings.json"
     runtime_llm = LLMRuntime(
         summary_llm=runtime_summary_llm,
@@ -128,6 +132,7 @@ def create_runtime() -> RuntimeBundle:
         memory_store=runtime_memory_store,
         runtime_state=runtime_state_obj,
         llm_runtime=runtime_llm,
+        lightweight_queue=runtime_lightweight_queue,
         log=log,
     )
     return RuntimeBundle(
@@ -140,6 +145,7 @@ def create_runtime() -> RuntimeBundle:
         memory_store=runtime_memory_store,
         runtime_state=runtime_state_obj,
         llm_runtime=runtime_llm,
+        lightweight_queue=runtime_lightweight_queue,
         runtime_orchestrator=orchestrator,
     )
 
@@ -154,6 +160,7 @@ session_memory = runtime.session_memory
 memory_store = runtime.memory_store
 runtime_state = runtime.runtime_state
 llm_runtime = runtime.llm_runtime
+lightweight_queue = runtime.lightweight_queue
 runtime_orchestrator = runtime.runtime_orchestrator
 idle_presence_heartbeat = create_idle_presence_heartbeat(
     bus,
@@ -288,6 +295,8 @@ def create_app(runtime: RuntimeBundle) -> Flask:
         llm_warmup_background=_llm_warmup_background,
         shutdown_runtime=_shutdown_runtime,
         resume_card_llm=runtime.summary_llm,
+        lightweight_queue=runtime.lightweight_queue,
+        apply_lightweight_llm_result=runtime.runtime_orchestrator.apply_lightweight_llm_result,
         log=log,
     )
     setattr(flask_app, "runtime_event_coalescer", coalescer)

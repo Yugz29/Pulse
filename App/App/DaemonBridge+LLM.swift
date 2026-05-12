@@ -1,6 +1,23 @@
 import Foundation
 
 extension DaemonBridge {
+    func fetchLightweightLLMRequest() async throws -> LightweightLLMRequest? {
+        let url = try makeURL("/llm/lightweight/pending")
+        let (data, response) = try await data(from: url)
+        try validate(response, expectedStatus: 200)
+        return try decode(LightweightLLMPendingResponse.self, from: data).request
+    }
+
+    func sendLightweightLLMResult(_ result: LightweightLLMResult) async throws {
+        let request = try jsonRequest(
+            path: "/llm/lightweight/result",
+            body: result,
+            timeout: 10
+        )
+        let (_, response) = try await data(for: request)
+        try validate(response, expectedStatus: 200)
+    }
+
     func getContext() async throws -> String {
         let url = try makeURL("/context")
         let (data, httpResponse) = try await data(from: url)

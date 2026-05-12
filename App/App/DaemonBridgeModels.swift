@@ -6,6 +6,35 @@ struct PingResponse: Codable {
     let paused: Bool?
 }
 
+struct LightweightLLMPendingResponse: Decodable {
+    let request: LightweightLLMRequest?
+}
+
+struct LightweightLLMRequest: Decodable {
+    let id: String
+    let kind: String
+    let prompt: String
+    let maxTokens: Int?
+    let createdAt: String
+    let status: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case prompt
+        case maxTokens = "max_tokens"
+        case createdAt = "created_at"
+        case status
+    }
+}
+
+struct LightweightLLMResult: Encodable {
+    let id: String
+    let status: String
+    let text: String
+    let error: String?
+}
+
 struct StateResponse: Decodable {
     let activeApp: String?
     let activeFile: String?

@@ -15,6 +15,7 @@ from daemon.routes.runtime_probe_routes import register_probe_routes
 from daemon.routes.runtime_daemon_routes import register_daemon_routes
 from daemon.routes.runtime_resume_card_routes import register_resume_card_routes
 from daemon.routes.runtime_status_routes import register_status_routes
+from daemon.routes.lightweight_llm import register_lightweight_llm_routes
 
 
 
@@ -39,6 +40,8 @@ def register_runtime_routes(
     shutdown_runtime: Callable[[], None],
     log: Any,
     resume_card_llm: Any = None,
+    lightweight_queue: Any = None,
+    apply_lightweight_llm_result: Callable[..., dict[str, Any]] | None = None,
 ) -> Any:
     probe_store = context_probe_store or ContextProbeRequestStore()
 
@@ -96,6 +99,12 @@ def register_runtime_routes(
         resume_card_llm=resume_card_llm,
     )
 
+    if lightweight_queue is not None and apply_lightweight_llm_result is not None:
+        register_lightweight_llm_routes(
+            app,
+            lightweight_queue=lightweight_queue,
+            apply_result=apply_lightweight_llm_result,
+        )
 
     register_status_routes(
         app,

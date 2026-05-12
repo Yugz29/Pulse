@@ -2,7 +2,6 @@ import logging
 from typing import Optional
 
 from .ollama_provider import OllamaProvider
-from .apple_foundation_provider import AppleFoundationProvider
 
 log = logging.getLogger("pulse")
 
@@ -21,20 +20,6 @@ class LLMRouter:
             model=llm_cfg.get("model", "mistral"),
         )
 
-        # Provider Apple Foundation Models — optionnel.
-        # Utilisé pour les tâches légères (journal summaries, classification).
-        # Fallback automatique vers Ollama si Perspective Server est indisponible.
-        self.apple: Optional[AppleFoundationProvider] = None
-        try:
-            self.apple = AppleFoundationProvider()
-        except Exception as exc:
-            log.warning("AppleFoundationProvider non chargé : %s", exc)
-
-    # ── Profils de tâche ──────────────────────────────────────────────────────
-    #
-    # journal_summary  → Apple Foundation Models (rapide, sans reasoning)
-    # default          → Ollama (Qwen3 + think=True pour DayDream, etc.)
-
     def complete(
         self,
         prompt: str,
@@ -43,17 +28,6 @@ class LLMRouter:
         think: bool | None = None,
         profile: str = "default",
     ) -> str:
-        if profile == "journal_summary" and self.apple is not None:
-            try:
-                return self.apple.complete(
-                    prompt=prompt,
-                    system=system,
-                    max_tokens=max_tokens,
-                )
-            except Exception as exc:
-                log.warning(
-                    "Apple Foundation indisponible pour journal_summary, fallback Ollama : %s", exc
-                )
         return self.default.complete(
             prompt=prompt,
             system=system,

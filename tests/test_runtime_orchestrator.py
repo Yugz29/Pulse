@@ -10,6 +10,7 @@ from daemon.core.event_bus import Event
 from daemon.core.decision_engine import Decision
 from daemon.core.proposals import proposal_store
 from daemon.core.signal_scorer import Signals
+from daemon.llm.lightweight_queue import LightweightLLMQueue
 from daemon.memory.extractor import update_memories_from_session
 from daemon.memory import extractor as extractor_module
 from daemon.runtime_orchestrator import RuntimeOrchestrator
@@ -811,6 +812,56 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 self.orchestrator._sync_memory_background({"active_project": "Pulse", "duration_min": 45}, llm=None)
         self.assertIsNotNone(self.runtime_state.get_last_memory_sync_at())
         freeze_memory.assert_called_once()
+
+    def test_sync_memory_background_enqueue_lightweight_commit_summary_si_queue_presente(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        snapshot = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "files_changed": 3,
+            "top_files": ["runtime.py", "extractor.py"],
+        }
+
+        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")), \
+             patch.object(self.orchestrator, "_start_critical_worker") as start_worker:
+            self.orchestrator._sync_memory_background(
+                snapshot,
+                llm=self.summary_llm,
+                commit_message="fix: lightweight queue",
+                trigger="commit",
+                diff_summary="diff --git a/runtime.py b/runtime.py",
+            )
+
+        pending = queue.claim_next()
+        self.assertIsNotNone(pending)
+        self.assertEqual(pending.kind, "journal_commit_summary")
+        self.assertEqual(pending.metadata["report_ref"], ("journal.md", "entry-1"))
+        self.assertIn("fix: lightweight queue", pending.prompt)
+        start_worker.assert_not_called()
+
+    def test_sync_memory_background_garde_fallback_ollama_si_queue_absente(self):
+        snapshot = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "files_changed": 3,
+            "top_files": ["runtime.py", "extractor.py"],
+        }
+
+        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")), \
+             patch.object(self.orchestrator, "_start_critical_worker") as start_worker:
+            self.orchestrator._sync_memory_background(
+                snapshot,
+                llm=self.summary_llm,
+                commit_message="fix: ollama compat",
+                trigger="commit",
+                diff_summary="diff --git a/runtime.py b/runtime.py",
+            )
+
+        start_worker.assert_called_once()
+        self.assertEqual(start_worker.call_args.kwargs["target"], self.orchestrator._enrich_commit_summary_background)
 
     def test_process_signals_cree_une_proposition_executee_pour_context_ready(self):
         signals = Signals(
