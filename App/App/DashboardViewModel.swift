@@ -25,18 +25,25 @@ final class DashboardViewModel: ObservableObject {
     @Published var daydreamStatus: DaydreamStatus?
     @Published var ping: PingResponse?
     @Published var llmModels: LLMModelsResponse?
+    @Published var lightweightLLMStatus: LightweightLLMStatusResponse?
+    @Published var appleFoundationLocalStatus: AppleFoundationLocalStatus?
     @Published var scoringStatus: ScoringStatusResponse?
     @Published var isLoading = false
     @Published var lastRefreshedAt: Date?
 
     private let bridge: DaemonBridge
+    private let appleFoundationStatusProvider: (() async -> AppleFoundationLocalStatus?)?
     private var pollTask: Task<Void, Never>?
     private let refreshInterval: TimeInterval = 10
     private let slowRefreshEveryTicks = 6
     private var slowRefreshTick = 0
 
-    init(bridge: DaemonBridge = DaemonBridge()) {
+    init(
+        bridge: DaemonBridge = DaemonBridge(),
+        appleFoundationStatusProvider: (() async -> AppleFoundationLocalStatus?)? = nil
+    ) {
         self.bridge = bridge
+        self.appleFoundationStatusProvider = appleFoundationStatusProvider
     }
 
     var daemonBaseURL: String {
@@ -112,6 +119,8 @@ final class DashboardViewModel: ObservableObject {
             async let workContextTask = bridge.getWorkContextCard()
             async let daydreamTask = bridge.getDaydreamData()
             async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
+            async let lightweightTask: LightweightLLMStatusResponse? = try? await bridge.getLightweightLLMStatus()
+            async let appleLocalTask = appleFoundationStatusProvider?()
             async let scoringTask = bridge.getScoringStatus()
 
             facts = await factsTask
@@ -135,6 +144,8 @@ final class DashboardViewModel: ObservableObject {
             daydreams = daydreamData.0
             daydreamStatus = daydreamData.1
             llmModels = await llmTask
+            lightweightLLMStatus = await lightweightTask
+            appleFoundationLocalStatus = await appleLocalTask
             scoringStatus = await scoringTask
         }
 

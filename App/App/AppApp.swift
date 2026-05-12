@@ -244,7 +244,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func toggleDashboard() {
         if dashboardWindow == nil {
-            let vm = DashboardViewModel(bridge: bridge)
+            let vm = DashboardViewModel(
+                bridge: bridge,
+                appleFoundationStatusProvider: { [weak self] in
+                    await self?.appleFoundationWorker?.status()
+                }
+            )
             dashboardVM = vm
 
             let window = DashboardWindow()

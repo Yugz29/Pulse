@@ -1649,6 +1649,41 @@ struct DashboardRootView: View {
                     .frame(maxWidth: .infinity)
                 }
 
+                GlassCard(accent: vm.appleFoundationLocalStatus?.available == true ? gGreen : gGray) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        cardTitle("Apple Foundation", icon: "sparkles")
+                        HStack(spacing: 8) {
+                            statBadge(
+                                "Apple",
+                                dashboardBoolLabel(vm.appleFoundationLocalStatus?.available),
+                                vm.appleFoundationLocalStatus?.available == true ? gGreen : gGray
+                            )
+                            statBadge(
+                                "Worker",
+                                dashboardBoolLabel(vm.appleFoundationLocalStatus?.workerRunning),
+                                vm.appleFoundationLocalStatus?.workerRunning == true ? gGreen : gGray
+                            )
+                        }
+                        if let queue = vm.lightweightLLMStatus?.queue {
+                            HStack(spacing: 8) {
+                                statBadge("Pending", "\(queue.pending)", queue.pending > 0 ? gOrange : gGray)
+                                statBadge("Run", "\(queue.inProgress)", queue.inProgress > 0 ? gBlue : gGray)
+                                statBadge("OK", "\(queue.completed)", gGreen)
+                                statBadge("Fail", "\(queue.failed)", queue.failed > 0 ? gOrange : gGray)
+                            }
+                        }
+                        if let last = vm.lightweightLLMStatus?.lastResult {
+                            Divider()
+                            signalRow("Dernier", last.status)
+                            signalRow("Type", last.kind)
+                            signalRow("Terminé", dashboardAbsoluteTimestamp(last.completedAt))
+                            if let error = last.error, !error.isEmpty {
+                                signalRow("Erreur", error)
+                            }
+                        }
+                    }
+                }
+
                 GlassCard {
                     VStack(alignment: .leading, spacing: 10) {
                         cardTitle("Cortex Scoring", icon: "chart.bar.doc.horizontal")

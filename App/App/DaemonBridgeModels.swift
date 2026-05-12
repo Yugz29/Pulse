@@ -35,6 +35,51 @@ struct LightweightLLMResult: Encodable {
     let error: String?
 }
 
+struct LightweightLLMStatusResponse: Decodable {
+    let queue: LightweightLLMQueueStatus
+    let lastResult: LightweightLLMLastResult?
+
+    enum CodingKeys: String, CodingKey {
+        case queue
+        case lastResult = "last_result"
+    }
+}
+
+struct LightweightLLMQueueStatus: Decodable {
+    let pending: Int
+    let inProgress: Int
+    let completed: Int
+    let failed: Int
+
+    enum CodingKeys: String, CodingKey {
+        case pending
+        case inProgress = "in_progress"
+        case completed
+        case failed
+    }
+}
+
+struct LightweightLLMLastResult: Decodable {
+    let id: String
+    let kind: String
+    let status: String
+    let error: String?
+    let completedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case status
+        case error
+        case completedAt = "completed_at"
+    }
+}
+
+struct AppleFoundationLocalStatus {
+    let available: Bool
+    let workerRunning: Bool
+}
+
 struct StateResponse: Decodable {
     let activeApp: String?
     let activeFile: String?

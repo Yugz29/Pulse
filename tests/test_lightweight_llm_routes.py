@@ -46,6 +46,26 @@ class TestLightweightLLMRoutes(unittest.TestCase):
         self.assertEqual(payload["kind"], "journal_commit_summary")
         self.assertEqual(payload["status"], "in_progress")
 
+    def test_status_returns_counts_and_last_result_without_content(self):
+        item = self.queue.enqueue(kind="journal_commit_summary", prompt="Prompt privé")
+        self.client.get("/llm/lightweight/pending")
+        self.client.post(
+            "/llm/lightweight/result",
+            json={"id": item.id, "status": "generated", "text": "Texte privé", "error": None},
+        )
+
+        response = self.client.get("/llm/lightweight/status")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["queue"]["completed"], 1)
+        self.assertEqual(payload["last_result"]["id"], item.id)
+        self.assertEqual(payload["last_result"]["kind"], "journal_commit_summary")
+        self.assertEqual(payload["last_result"]["status"], "generated")
+        self.assertIsNone(payload["last_result"]["error"])
+        self.assertNotIn("prompt", payload["last_result"])
+        self.assertNotIn("text", payload["last_result"])
+
     def test_result_posts_to_apply_callback(self):
         item = self.queue.enqueue(kind="journal_commit_summary", prompt="Résume")
 

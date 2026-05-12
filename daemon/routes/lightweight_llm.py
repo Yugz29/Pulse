@@ -11,6 +11,10 @@ def register_lightweight_llm_routes(
     lightweight_queue: Any,
     apply_result: Callable[..., dict[str, Any]],
 ) -> None:
+    @app.route("/llm/lightweight/status")
+    def get_lightweight_status():
+        return jsonify(lightweight_queue.status())
+
     @app.route("/llm/lightweight/pending")
     def get_lightweight_pending():
         item = lightweight_queue.claim_next()

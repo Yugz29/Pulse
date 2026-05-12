@@ -18,6 +18,13 @@ extension DaemonBridge {
         try validate(response, expectedStatus: 200)
     }
 
+    func getLightweightLLMStatus() async throws -> LightweightLLMStatusResponse {
+        let url = try makeURL("/llm/lightweight/status")
+        let (data, response) = try await data(from: url)
+        try validate(response, expectedStatus: 200)
+        return try decode(LightweightLLMStatusResponse.self, from: data)
+    }
+
     func getContext() async throws -> String {
         let url = try makeURL("/context")
         let (data, httpResponse) = try await data(from: url)

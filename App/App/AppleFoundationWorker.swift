@@ -49,4 +49,15 @@ final class AppleFoundationWorker {
         task?.cancel()
         task = nil
     }
+
+    var isRunning: Bool {
+        task != nil && task?.isCancelled == false
+    }
+
+    func status() async -> AppleFoundationLocalStatus {
+        AppleFoundationLocalStatus(
+            available: await service.isAvailable(),
+            workerRunning: isRunning
+        )
+    }
 }

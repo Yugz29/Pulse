@@ -29,6 +29,29 @@ class TestLightweightLLMQueue(unittest.TestCase):
         self.assertEqual(completed.text, "Résumé.")
         self.assertEqual(completed.metadata["report_ref"], ("journal.md", "entry-1"))
 
+    def test_status_counts_without_exposing_prompt_or_text(self):
+        queue = LightweightLLMQueue()
+        pending = queue.enqueue(kind="journal_commit_summary", prompt="Prompt sensible")
+        in_progress = queue.enqueue(kind="journal_commit_summary", prompt="Autre prompt")
+        generated = queue.enqueue(kind="journal_commit_summary", prompt="Secret")
+        failed = queue.enqueue(kind="journal_commit_summary", prompt="Secret")
+        self.assertEqual(queue.claim_next().id, pending.id)
+        self.assertEqual(queue.claim_next().id, in_progress.id)
+        queue.complete(generated.id, status="generated", text="Texte généré sensible")
+        queue.complete(failed.id, status="failed", error="offline")
+
+        status = queue.status()
+
+        self.assertEqual(status["queue"], {
+            "pending": 0,
+            "in_progress": 2,
+            "completed": 1,
+            "failed": 1,
+        })
+        self.assertIn(status["last_result"]["status"], {"generated", "failed"})
+        self.assertNotIn("prompt", status["last_result"])
+        self.assertNotIn("text", status["last_result"])
+
     def test_complete_rejects_invalid_status(self):
         queue = LightweightLLMQueue()
         item = queue.enqueue(kind="journal_commit_summary", prompt="Résume")

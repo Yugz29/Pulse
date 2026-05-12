@@ -123,12 +123,49 @@ class LightweightLLMQueue:
             self._purge_locked(now=datetime.now())
             return list(self._items)
 
+    def status(self) -> dict[str, Any]:
+        with self._lock:
+            self._purge_locked(now=datetime.now())
+            counts = {
+                "pending": 0,
+                "in_progress": 0,
+                "completed": 0,
+                "failed": 0,
+            }
+            terminal_items: list[LightweightLLMRequest] = []
+            for item in self._items:
+                if item.status == PENDING:
+                    counts["pending"] += 1
+                elif item.status == IN_PROGRESS:
+                    counts["in_progress"] += 1
+                elif item.status == GENERATED:
+                    counts["completed"] += 1
+                    terminal_items.append(item)
+                elif item.status == FAILED:
+                    counts["failed"] += 1
+                    terminal_items.append(item)
+
+            last_result = None
+            if terminal_items:
+                latest = max(terminal_items, key=lambda item: _parse_iso(item.completed_at or item.created_at))
+                last_result = {
+                    "id": latest.id,
+                    "kind": latest.kind,
+                    "status": latest.status,
+                    "error": latest.error,
+                    "completed_at": latest.completed_at,
+                }
+            return {
+                "queue": counts,
+                "last_result": last_result,
+            }
+
     def _purge_locked(self, *, now: datetime) -> None:
         cutoff = now - self.ttl
         self._items = [
             item
             for item in self._items
-            if _parse_iso(item.created_at) >= cutoff and item.status not in TERMINAL_STATUSES
+            if _parse_iso(item.created_at) >= cutoff
         ]
 
 
