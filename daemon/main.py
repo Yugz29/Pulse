@@ -1,12 +1,15 @@
 import atexit
 import importlib
 import logging
+import re
 import os
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import Flask
 
@@ -42,35 +45,88 @@ from daemon.routes.runtime_daemon_routes import DAEMON_EXIT_GRACE_SEC
 from daemon.runtime_orchestrator import RuntimeOrchestrator
 from daemon.runtime_state import RuntimeState
 
+_LOG_FORMAT = "[Daemon %(asctime)s] %(levelname)s %(message)s"
+_LOG_DATE_FORMAT = "%H:%M:%S"
+_APP_LOG_MAX_BYTES = 5 * 1024 * 1024
+_APP_LOG_BACKUP_COUNT = 5
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+_ACCESS_REQUEST_RE = re.compile(
+    r'"(?P<method>GET|POST) (?P<target>\S+) HTTP/[^"]*" (?P<status>\d{3}) '
+)
+
+
+def _resolve_daemon_log_level(environ=None) -> int:
+    environ = os.environ if environ is None else environ
+    configured_level = str(environ.get("PULSE_LOG_LEVEL", "")).strip().upper()
+    if configured_level:
+        level = getattr(logging, configured_level, None)
+        if isinstance(level, int):
+            return level
+
+    debug_flag = str(environ.get("PULSE_DEBUG", "")).strip().lower()
+    if debug_flag in {"1", "true", "yes", "on"}:
+        return logging.DEBUG
+    return logging.INFO
+
+
+def _build_logging_handlers(log_dir: Path | None = None) -> list[logging.Handler]:
+    resolved_log_dir = log_dir or (Path.home() / ".pulse" / "logs")
+    resolved_log_dir.mkdir(parents=True, exist_ok=True)
+
+    return [
+        logging.StreamHandler(),
+        RotatingFileHandler(
+            resolved_log_dir / "daemon.app.log",
+            maxBytes=_APP_LOG_MAX_BYTES,
+            backupCount=_APP_LOG_BACKUP_COUNT,
+            encoding="utf-8",
+            delay=True,
+        ),
+    ]
+
+
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="[Daemon %(asctime)s] %(levelname)s %(message)s",
-    datefmt="%H:%M:%S",
+    level=_resolve_daemon_log_level(),
+    format=_LOG_FORMAT,
+    datefmt=_LOG_DATE_FORMAT,
+    handlers=_build_logging_handlers(),
 )
 log = logging.getLogger("pulse")
 
 
 class _RoutineGetLogFilter(logging.Filter):
-    """Masque les GET de polling normaux pour garder daemon.error.log exploitable."""
+    """Masque les access logs HTTP routiniers pour garder daemon.error.log exploitable."""
 
-    _ROUTINE_GET_PATHS = {
-        "/ping",
-        "/state",
-        "/feed",
-        "/today_summary",
-        "/observation",
-        "/daydreams",
-        "/mcp/pending",
-        "/llm/lightweight/pending",
+    _ROUTINE_PATHS_BY_METHOD = {
+        "GET": {
+            "/ping",
+            "/state",
+            "/feed",
+            "/today_summary",
+            "/observation",
+            "/daydreams",
+            "/mcp/pending",
+            "/llm/lightweight/pending",
+            "/context-probes/requests",
+            "/llm/models",
+        },
+        "POST": {
+            "/event",
+        },
     }
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.levelno >= logging.WARNING:
             return True
-        message = record.getMessage()
-        if "\"GET " not in message:
+        message = _ANSI_ESCAPE_RE.sub("", record.getMessage())
+        match = _ACCESS_REQUEST_RE.search(message)
+        if match is None:
             return True
-        return not any(f"\"GET {path} " in message for path in self._ROUTINE_GET_PATHS)
+        if int(match.group("status")) >= 400:
+            return True
+        method = match.group("method")
+        path = urlsplit(match.group("target")).path
+        return path not in self._ROUTINE_PATHS_BY_METHOD.get(method, set())
 
 
 logging.getLogger("werkzeug").addFilter(_RoutineGetLogFilter())
