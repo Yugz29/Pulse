@@ -23,6 +23,8 @@ Qualité LLM
   screen_lock / user_idle — le fallback déterministe est plus honnête.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import re
@@ -384,7 +386,7 @@ def update_memories_from_session(
         llm=effective_llm, commit_message=commit_message, trigger=trigger, diff_summary=diff_summary,
     )
 
-    if trigger == "commit" and llm is not None and report_ref is not None:
+    if trigger == "commit" and llm is not None and report_ref is not None and not defer_llm_enrichment:
         _, current_entry_id = report_ref
 
         def _enrich_pending():

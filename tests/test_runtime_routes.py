@@ -2057,6 +2057,25 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         self.assertFalse(self.runtime_state.is_paused())
 
+    def test_daemon_resume_ne_warm_pas_ollama_par_defaut(self):
+        self.runtime_state.set_paused(True)
+        with patch.dict("os.environ", {}, clear=True), \
+             patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _ImmediateThread(*a, **k)):
+            response = self.client.post("/daemon/resume")
+
+        self.assertEqual(response.status_code, 200)
+        self.llm_warmup_background.assert_not_called()
+        self.bus.publish.assert_not_called()
+
+    def test_daemon_resume_warm_ollama_si_autowarm_active(self):
+        self.runtime_state.set_paused(True)
+        with patch.dict("os.environ", {"PULSE_HEAVY_LLM_AUTOWARM": "1"}), \
+             patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _ImmediateThread(*a, **k)):
+            response = self.client.post("/daemon/resume")
+
+        self.assertEqual(response.status_code, 200)
+        self.llm_warmup_background.assert_called_once()
+
     def test_daemon_shutdown_returns_legacy_payload(self):
         with patch("daemon.routes.runtime_daemon_routes.threading.Thread", side_effect=lambda *a, **k: _DummyThread(*a, **k)):
             response = self.client.post("/daemon/shutdown")

@@ -7,6 +7,7 @@ import time
 from typing import Any, Callable
 
 from flask import Flask, jsonify
+from daemon.llm.lifecycle_policy import is_heavy_llm_autowarm_enabled
 
 
 DAEMON_EXIT_GRACE_SEC = 1.0
@@ -54,7 +55,8 @@ def register_daemon_routes(
             load_time_sec = round(_time.monotonic() - t0, 2)
             bus.publish("llm_ready", {"model": "", "load_time_sec": load_time_sec})
 
-        threading.Thread(target=_warmup_with_events, daemon=True).start()
+        if is_heavy_llm_autowarm_enabled():
+            threading.Thread(target=_warmup_with_events, daemon=True).start()
         return jsonify({"ok": True, "action": "resume", "paused": False})
 
     @app.route("/daemon/restart", methods=["POST"])

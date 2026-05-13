@@ -88,6 +88,31 @@ class TestExtractor(unittest.TestCase):
         # habits.md n'est plus écrit — remplacé par facts.md
         self.assertFalse((self.memory_dir / "habits.md").exists())
 
+    def test_commit_deferred_llm_ne_lance_pas_repair_pending_ollama(self):
+        llm = FakeLLM()
+        with patch.object(extractor_module, "_start_background_writer") as start_background:
+            report_ref = update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 25,
+                    "probable_task": "coding",
+                    "recent_apps": ["Xcode"],
+                    "files_changed": 2,
+                    "top_files": ["daemon/runtime_orchestrator.py"],
+                    "max_friction": 0.1,
+                },
+                llm=llm,
+                memory_dir=self.memory_dir,
+                commit_message="feat: add lightweight queue",
+                trigger="commit",
+                diff_summary="Diff en cours : daemon/runtime_orchestrator.py (+10 -1)",
+                defer_llm_enrichment=True,
+            )
+
+        self.assertIsNotNone(report_ref)
+        writer_names = [call.kwargs.get("name") for call in start_background.call_args_list]
+        self.assertNotIn("pulse-journal-enrich", writer_names)
+
     def test_background_writer_vectorize_est_lance_via_registre(self):
         created_threads = []
 
@@ -158,7 +183,7 @@ class TestExtractor(unittest.TestCase):
                 memory_dir=self.memory_dir,
                 trigger="commit",
                 commit_message="feat: background writers",
-                defer_llm_enrichment=True,
+                defer_llm_enrichment=False,
             )
 
         self.assertEqual(

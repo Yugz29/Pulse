@@ -531,7 +531,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             self.orchestrator.freeze_memory()
         self.assertEqual(self.orchestrator.get_frozen_memory(), "Legacy memory")
 
-    def test_deferred_startup_loads_models_purges_memory_and_warms_provider(self):
+    def test_deferred_startup_loads_models_purges_memory_without_warmup_by_default(self):
         provider = MagicMock()
         provider.model = "gemma4:e4b"
         provider.warmup.return_value = True
@@ -544,6 +544,20 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         self.llm_runtime.load_persisted_models.assert_called_once()
         self.memory_store.purge_expired.assert_called_once()
+        self.llm_runtime.provider.assert_not_called()
+        provider.warmup.assert_not_called()
+
+    def test_deferred_startup_warms_provider_si_autowarm_active(self):
+        provider = MagicMock()
+        provider.model = "qwen3:4b"
+        provider.warmup.return_value = True
+        self.llm_runtime.provider.return_value = provider
+
+        with patch.dict("os.environ", {"PULSE_HEAVY_LLM_AUTOWARM": "1"}), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None):
+            self.orchestrator.deferred_startup()
+
+        self.llm_runtime.provider.assert_called_once()
         provider.warmup.assert_called_once()
 
     def test_handle_commit_event_waits_for_new_head_before_processing(self):
@@ -844,6 +858,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIn("Changements détectés", pending.prompt)
         self.assertIn("ajoute une route GET /llm/lightweight/status", pending.prompt)
         self.assertNotIn("<final>", pending.prompt)
+        self.summary_llm.complete.assert_not_called()
         start_worker.assert_not_called()
 
     def test_sync_memory_background_garde_fallback_ollama_si_queue_absente(self):
@@ -1011,6 +1026,31 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             self.orchestrator.handle_event(Event("screen_unlocked", {}))
 
         self.assertIsNone(self.runtime_state.get_last_screen_locked_at())
+
+    def test_screen_unlock_ne_warm_pas_ollama_par_defaut(self):
+        t_lock = datetime.now() - timedelta(minutes=5)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+
+        with patch.dict("os.environ", {}, clear=True), \
+             patch.object(self.orchestrator, "_process_signals"), \
+             patch.object(self.orchestrator, "_maybe_emit_resume_card"):
+            self.orchestrator.handle_event(Event("screen_unlocked", {}))
+
+        self.llm_runtime.provider.assert_not_called()
+        self.llm_runtime.warmup_background.assert_not_called()
+
+    def test_resume_card_planifiee_warm_ollama_meme_sans_autowarm(self):
+        with patch.dict("os.environ", {}, clear=True), \
+             patch.object(self.orchestrator, "_start_critical_worker") as start_worker, \
+             patch.object(self.orchestrator, "_schedule_heavy_llm_warmup") as warmup:
+            self.orchestrator._schedule_resume_card_emit(
+                context={"active_project": "Pulse"},
+                event_timestamp=datetime.now(),
+                wait_for_llm=True,
+            )
+
+        warmup.assert_called_once_with(reason="resume_card")
+        start_worker.assert_called_once()
 
     # ── Resume card ──────────────────────────────────────────────────────────
 

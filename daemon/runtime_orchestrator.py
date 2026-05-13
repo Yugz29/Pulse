@@ -49,6 +49,7 @@ from daemon.core.session_fsm import SessionFSM
 from daemon.core.uid import new_uid
 from daemon.core.restart_manager import RestartManager
 from daemon.core.workspace_context import find_workspace_root
+from daemon.llm.lifecycle_policy import is_heavy_llm_autowarm_enabled
 
 
 class RuntimeOrchestrator:
@@ -291,6 +292,18 @@ class RuntimeOrchestrator:
     def llm_warmup_background(self) -> None:
         self.llm_runtime.warmup_background(self.log)
 
+    def _schedule_heavy_llm_warmup(self, *, reason: str = "autowarm") -> None:
+        def _warmup_with_events():
+            provider = self.llm_runtime.provider()
+            model_name = provider.model if provider else ""
+            self.scorer.bus.publish("llm_loading", {"model": model_name, "reason": reason})
+            t0 = time.monotonic()
+            self.llm_warmup_background()
+            load_time_sec = round(time.monotonic() - t0, 2)
+            self.scorer.bus.publish("llm_ready", {"model": model_name, "load_time_sec": load_time_sec, "reason": reason})
+
+        threading.Thread(target=_warmup_with_events, daemon=True).start()
+
     def get_frozen_memory(self) -> str:
         with self._runtime_lock:
             return self._frozen_memory or ""
@@ -458,16 +471,8 @@ class RuntimeOrchestrator:
                 if transition.should_clear_sleep_markers:
                     self.runtime_state.clear_sleep_markers()
 
-            def _warmup_with_events():
-                provider = self.llm_runtime.provider()
-                model_name = provider.model if provider else ""
-                self.scorer.bus.publish("llm_loading", {"model": model_name})
-                t0 = time.monotonic()
-                self.llm_warmup_background()
-                load_time_sec = round(time.monotonic() - t0, 2)
-                self.scorer.bus.publish("llm_ready", {"model": model_name, "load_time_sec": load_time_sec})
-
-            threading.Thread(target=_warmup_with_events, daemon=True).start()
+            if is_heavy_llm_autowarm_enabled():
+                self._schedule_heavy_llm_warmup(reason="screen_unlocked")
 
         self.session_memory.record_event(event)
 
@@ -716,6 +721,9 @@ class RuntimeOrchestrator:
                 return
             self._pending_resume_card = True
 
+        if wait_for_llm and not is_heavy_llm_autowarm_enabled():
+            self._schedule_heavy_llm_warmup(reason="resume_card")
+
         worker = self._start_critical_worker(
             target=self._emit_resume_card_background,
             kwargs={
@@ -897,7 +905,7 @@ class RuntimeOrchestrator:
             self.log.warning("Facts : decay échoué : %s", exc)
 
         self.freeze_memory()
-        provider = self.llm_runtime.provider()
+        provider = self.llm_runtime.provider() if is_heavy_llm_autowarm_enabled() else None
         if provider and hasattr(provider, "warmup"):
             self.log.info("LLM warmup en cours (%s)...", provider.model)
             self.scorer.bus.publish("llm_loading", {"model": provider.model})
