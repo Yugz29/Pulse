@@ -1224,6 +1224,25 @@ struct ContextProbeActionResponse: Decodable {
     let debug: ContextProbeDebugPayload
 }
 
+struct ContextProbeCreateRequest: Encodable {
+    let kind: String
+    let reason: String
+    let ttlSec: Int
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case reason
+        case ttlSec = "ttl_sec"
+        case metadata
+    }
+}
+
+struct ContextProbeCreateResponse: Decodable {
+    let request: ContextProbeRequestPayload
+    let debug: ContextProbeDebugPayload
+}
+
 struct ContextProbeExecuteResponse: Decodable {
     let result: ContextProbeResultPayload
     let request: ContextProbeRequestPayload
@@ -1265,6 +1284,7 @@ struct ContextProbeRequestPayload: Decodable, Identifiable {
         switch kind {
         case "app_context": return "Contexte app"
         case "window_title": return "Titre fenêtre"
+        case "focused_element_text": return "Champ texte actif"
         case "selected_text": return "Texte sélectionné"
         case "clipboard_sample": return "Extrait clipboard"
         case "screen_snapshot": return "Capture écran"
@@ -1301,6 +1321,10 @@ struct ContextProbeRequestPayload: Decodable, Identifiable {
 
     var canExecute: Bool {
         status == "approved" && kind == "app_context"
+    }
+
+    var canCaptureFromAccessibility: Bool {
+        status == "approved" && kind == "focused_element_text"
     }
 }
 

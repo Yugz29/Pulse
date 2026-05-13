@@ -44,6 +44,7 @@ def _kind_label(kind: ContextProbeKind) -> str:
     labels = {
         ContextProbeKind.APP_CONTEXT: "Application context",
         ContextProbeKind.WINDOW_TITLE: "Window title",
+        ContextProbeKind.FOCUSED_ELEMENT_TEXT: "Focused element text",
         ContextProbeKind.SELECTED_TEXT: "Selected text",
         ContextProbeKind.CLIPBOARD_SAMPLE: "Clipboard sample",
         ContextProbeKind.SCREEN_SNAPSHOT: "Screen snapshot",

@@ -1348,6 +1348,12 @@ struct DashboardRootView: View {
                         HStack {
                             cardTitle("Context Probes", icon: "shield.lefthalf.filled")
                             Spacer()
+                            Button {
+                                Task { await vm.createFocusedElementTextProbeRequest() }
+                            } label: {
+                                Label("Lire le champ texte actif", systemImage: "text.cursor")
+                            }
+                            .buttonStyle(.bordered)
                             statBadge("Demandes", "\(vm.contextProbeRequests.count)", gBlue)
                         }
                         Text("Demandes de contexte contrôlées par validation humaine. Les metadata brutes et les valeurs capturées ne sont pas affichées ici.")
@@ -1492,6 +1498,16 @@ struct DashboardRootView: View {
                     .tint(Color(hex: gBlue))
                 }
 
+                if request.canCaptureFromAccessibility {
+                    Button {
+                        Task { await vm.captureFocusedElementText(request) }
+                    } label: {
+                        Label("Lire maintenant", systemImage: "text.cursor")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: gBlue))
+                }
+
                 Spacer()
 
                 if let decision = request.decisionReason, !decision.isEmpty {
@@ -1519,7 +1535,9 @@ struct DashboardRootView: View {
                     .foregroundStyle(.tertiary)
             }
 
-            if result.kind == "window_title" {
+            if result.kind == "window_title"
+                || result.kind == "focused_element_text"
+                || result.kind == "selected_text" {
                 contextProbeWindowTitleResult(result)
             } else {
                 contextProbeGenericResult(result)

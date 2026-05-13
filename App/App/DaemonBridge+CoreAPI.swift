@@ -224,6 +224,27 @@ extension DaemonBridge {
         return try? decode(ContextProbeListResponse.self, from: data)
     }
 
+    func createFocusedElementTextProbeRequest() async -> ContextProbeCreateResponse? {
+        let requestBody = ContextProbeCreateRequest(
+            kind: "focused_element_text",
+            reason: "Read the active text field on explicit user request",
+            ttlSec: 300,
+            metadata: ["source": "dashboard_manual"]
+        )
+        let request: URLRequest
+        do {
+            request = try jsonRequest(
+                path: "/context-probes/requests",
+                body: requestBody
+            )
+        } catch {
+            return nil
+        }
+        guard let (data, response) = try? await data(for: request) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(ContextProbeCreateResponse.self, from: data)
+    }
+
     func approveContextProbeRequest(_ requestId: String, reason: String? = nil) async -> ContextProbeActionResponse? {
         await sendContextProbeDecision(requestId: requestId, action: "approve", reason: reason)
     }
@@ -239,6 +260,25 @@ extension DaemonBridge {
             request = try jsonObjectRequest(
                 path: "/context-probes/requests/\(encodedId)/execute",
                 body: [:]
+            )
+        } catch {
+            return nil
+        }
+        guard let (data, response) = try? await data(for: request) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(ContextProbeExecuteResponse.self, from: data)
+    }
+
+    func submitContextProbeResult(
+        _ requestId: String,
+        capture: AccessibilityTextProbeCapture
+    ) async -> ContextProbeExecuteResponse? {
+        guard let encodedId = requestId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        let request: URLRequest
+        do {
+            request = try jsonRequest(
+                path: "/context-probes/requests/\(encodedId)/result",
+                body: capture
             )
         } catch {
             return nil

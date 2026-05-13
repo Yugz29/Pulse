@@ -19,7 +19,11 @@ from daemon.core.context_probe_request import (
     refuse_context_probe_request,
 )
 from daemon.core.context_probe_store import ContextProbeRequestStore, requests_to_dicts
-from daemon.core.context_probe_runner import run_app_context_probe, run_window_title_probe
+from daemon.core.context_probe_runner import (
+    run_app_context_probe,
+    run_window_title_probe,
+    submit_accessibility_text_probe_result,
+)
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.memory.extractor import find_git_root
 from daemon.core.workspace_context import find_workspace_root
@@ -198,6 +202,45 @@ def register_probe_routes(
         else:
             result = run_app_context_probe(probe_request, probe_context)
 
+        if not result.captured:
+            return jsonify({
+                "error": "probe_blocked",
+                "blocked_reason": result.blocked_reason,
+                "result": result.to_dict(),
+                "request": probe_request.to_dict(),
+                "debug": describe_context_probe_request_for_debug(probe_request),
+            }), 409
+
+        try:
+            executed = execute_context_probe_request(probe_request)
+        except ValueError as exc:
+            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        probe_store.update(executed)
+        bus.publish("context_probe_executed", {
+            "request_id": executed.request_id,
+            "kind": result.kind,
+            "captured": result.captured,
+            "privacy": result.privacy,
+            "retention": result.retention,
+            "data_keys": sorted(result.data.keys()),
+        })
+        return jsonify({
+            "result": result.to_dict(),
+            "request": executed.to_dict(),
+            "debug": describe_context_probe_request_for_debug(executed),
+        })
+
+    @app.route("/context-probes/requests/<request_id>/result", methods=["POST"])
+    def submit_context_probe_result_route(request_id: str):
+        """Accept a bounded Swift AX text result for an approved content probe."""
+        probe_request = probe_store.get(request_id)
+        if probe_request is None:
+            return jsonify({"error": "not_found"}), 404
+
+        result = submit_accessibility_text_probe_result(
+            probe_request,
+            request.get_json(silent=True) or {},
+        )
         if not result.captured:
             return jsonify({
                 "error": "probe_blocked",

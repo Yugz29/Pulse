@@ -919,7 +919,7 @@ class RuntimeOrchestrator:
             else:
                 self.log.warning("LLM warmup échoué au démarrage (Ollama indisponible ?)")
             self.scorer.bus.publish("llm_ready", {"model": provider.model, "load_time_sec": load_time_sec})
-        self._recover_missed_daydream()
+        self._mark_missed_daydream_pending()
         self.log.info("\u2713 Init différé terminé")
 
         threading.Thread(
@@ -936,6 +936,14 @@ class RuntimeOrchestrator:
             self._run_daydream_if_pending()
         except Exception as exc:
             self.log.warning("DayDream catch-up échoué : %s", exc)
+
+    def _mark_missed_daydream_pending(self) -> None:
+        try:
+            from daemon.memory.daydream import mark_daydream_pending
+            yesterday = (datetime.now() - timedelta(days=1)).date()
+            mark_daydream_pending(ref_date=yesterday)
+        except Exception as exc:
+            self.log.warning("DayDream catch-up planification échouée : %s", exc)
 
     def _should_ignore_event(self, event) -> bool:
         if not event.type.startswith("file_"):

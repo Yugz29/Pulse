@@ -179,6 +179,116 @@ def run_window_title_probe(
     )
 
 
+_FOCUSED_TEXT_KINDS = {
+    ContextProbeKind.FOCUSED_ELEMENT_TEXT,
+    ContextProbeKind.SELECTED_TEXT,
+}
+_FOCUSED_TEXT_ALLOWED_ROLES = {"AXTextArea", "AXTextField", "AXComboBox"}
+_FOCUSED_TEXT_BLOCKED_ROLES = {"AXSecureTextField", "AXWebArea"}
+_FOCUSED_TEXT_SOURCES = {"focused_element_text", "selected_text"}
+
+
+def submit_accessibility_text_probe_result(
+    request: ContextProbeRequest,
+    payload: Mapping[str, Any],
+    *,
+    captured_at: Optional[datetime] = None,
+) -> ContextProbeResult:
+    """Accept a Swift AX text capture after validating policy and payload."""
+    plan = build_context_probe_execution_plan(request)
+    now = captured_at or datetime.now()
+
+    if not plan.allowed:
+        return ContextProbeResult(
+            request_id=request.request_id,
+            kind=request.kind.value,
+            captured=False,
+            data={},
+            privacy=request.policy.privacy.value,
+            retention=request.policy.retention.value,
+            captured_at=now,
+            blocked_reason=plan.blocked_reason,
+        )
+
+    if request.kind not in _FOCUSED_TEXT_KINDS:
+        return ContextProbeResult(
+            request_id=request.request_id,
+            kind=request.kind.value,
+            captured=False,
+            data={},
+            privacy=request.policy.privacy.value,
+            retention=request.policy.retention.value,
+            captured_at=now,
+            blocked_reason="unsupported_probe_kind",
+        )
+
+    role = _str_or_none(payload.get("role"))
+    if role in _FOCUSED_TEXT_BLOCKED_ROLES:
+        return _blocked_submit_result(request, now, "forbidden_role")
+    if role not in _FOCUSED_TEXT_ALLOWED_ROLES:
+        return _blocked_submit_result(request, now, "unsupported_role")
+
+    source = _str_or_none(payload.get("source"))
+    if source not in _FOCUSED_TEXT_SOURCES:
+        return _blocked_submit_result(request, now, "unsupported_source")
+    if request.kind is ContextProbeKind.SELECTED_TEXT and source != "selected_text":
+        return _blocked_submit_result(request, now, "kind_source_mismatch")
+
+    raw_value = payload.get("text", payload.get("value"))
+    value = _str_or_none(raw_value)
+    if value is None:
+        return _blocked_submit_result(request, now, "missing_text")
+
+    redaction = redact_context_probe_value(
+        value,
+        max_chars=request.policy.max_chars or 2_000,
+    )
+    try:
+        original_char_count = max(int(payload.get("char_count", len(value))), 0)
+    except (TypeError, ValueError):
+        original_char_count = len(value)
+
+    return ContextProbeResult(
+        request_id=request.request_id,
+        kind=request.kind.value,
+        captured=True,
+        data={
+            "app_name": _str_or_none(payload.get("app_name")),
+            "bundle_id": _str_or_none(payload.get("bundle_id")),
+            "role": role,
+            "source": source,
+            "char_count": original_char_count,
+            "client_truncated": bool(payload.get("truncated", False)),
+            "redacted_value": redaction.redacted_value,
+            "redaction_flags": [flag.value for flag in redaction.flags],
+            "original_length": redaction.original_length,
+            "redacted_length": redaction.redacted_length,
+            "was_redacted": redaction.was_redacted,
+        },
+        privacy=request.policy.privacy.value,
+        retention=request.policy.retention.value,
+        captured_at=now,
+        blocked_reason=None,
+    )
+
+
+def _blocked_submit_result(
+    request: ContextProbeRequest,
+    now: datetime,
+    reason: str,
+) -> ContextProbeResult:
+    return ContextProbeResult(
+        request_id=request.request_id,
+        kind=request.kind.value,
+        captured=False,
+        data={},
+        privacy=request.policy.privacy.value,
+        retention=request.policy.retention.value,
+        captured_at=now,
+        blocked_reason=reason,
+    )
+
+
 def _str_or_none(value: Any) -> Optional[str]:
     if value is None:
         return None

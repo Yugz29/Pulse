@@ -160,6 +160,11 @@ final class DashboardViewModel: ObservableObject {
         lastRefreshedAt = Date()
     }
 
+    func createFocusedElementTextProbeRequest() async {
+        guard await bridge.createFocusedElementTextProbeRequest() != nil else { return }
+        await refreshContextProbeRequests()
+    }
+
     func approveContextProbeRequest(_ request: ContextProbeRequestPayload) async {
         guard request.canApproveOrRefuse else { return }
         guard await bridge.approveContextProbeRequest(request.requestId, reason: "Approved from Pulse Dashboard") != nil else { return }
@@ -175,6 +180,19 @@ final class DashboardViewModel: ObservableObject {
     func executeContextProbeRequest(_ request: ContextProbeRequestPayload) async {
         guard request.canExecute else { return }
         guard let response = await bridge.executeContextProbeRequest(request.requestId) else { return }
+        contextProbeResults[request.requestId] = response.result
+        await refreshContextProbeRequests()
+    }
+
+    func captureFocusedElementText(_ request: ContextProbeRequestPayload) async {
+        guard request.canCaptureFromAccessibility else { return }
+        let capture: AccessibilityTextProbeCapture
+        do {
+            capture = try AccessibilityContextProbeService().captureFocusedText()
+        } catch {
+            return
+        }
+        guard let response = await bridge.submitContextProbeResult(request.requestId, capture: capture) else { return }
         contextProbeResults[request.requestId] = response.result
         await refreshContextProbeRequests()
     }

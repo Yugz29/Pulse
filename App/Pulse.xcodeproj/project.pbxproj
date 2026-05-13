@@ -11,6 +11,7 @@
 		7A2F10102F843C4100D67CA3 /* DaemonBridgeLLMTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2F10132F843C4100D67CA3 /* DaemonBridgeLLMTests.swift */; };
 		7A2F10112F843C4100D67CA3 /* PulseViewModelInteractionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2F10142F843C4100D67CA3 /* PulseViewModelInteractionsTests.swift */; };
 		7A2F10122F843C4100D67CA3 /* MockURLProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2F10162F843C4100D67CA3 /* MockURLProtocol.swift */; };
+		7A2F10182F843C4100D67CA3 /* AccessibilityContextProbeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2F10192F843C4100D67CA3 /* AccessibilityContextProbeServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -30,6 +31,7 @@
 		7A2F10132F843C4100D67CA3 /* DaemonBridgeLLMTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonBridgeLLMTests.swift; sourceTree = "<group>"; };
 		7A2F10142F843C4100D67CA3 /* PulseViewModelInteractionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseViewModelInteractionsTests.swift; sourceTree = "<group>"; };
 		7A2F10162F843C4100D67CA3 /* MockURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockURLProtocol.swift; sourceTree = "<group>"; };
+		7A2F10192F843C4100D67CA3 /* AccessibilityContextProbeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityContextProbeServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -83,6 +85,7 @@
 			children = (
 				7A2F10132F843C4100D67CA3 /* DaemonBridgeLLMTests.swift */,
 				7A2F10142F843C4100D67CA3 /* PulseViewModelInteractionsTests.swift */,
+				7A2F10192F843C4100D67CA3 /* AccessibilityContextProbeServiceTests.swift */,
 				7A2F10172F843C4100D67CA3 /* Support */,
 			);
 			path = ../AppTests;
@@ -208,6 +211,7 @@
 				7A2F10102F843C4100D67CA3 /* DaemonBridgeLLMTests.swift in Sources */,
 				7A2F10112F843C4100D67CA3 /* PulseViewModelInteractionsTests.swift in Sources */,
 				7A2F10122F843C4100D67CA3 /* MockURLProtocol.swift in Sources */,
+				7A2F10182F843C4100D67CA3 /* AccessibilityContextProbeServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

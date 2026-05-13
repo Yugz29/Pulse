@@ -1513,6 +1513,7 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         self.assertIn("app_context", payload["probe_kinds"])
         self.assertIn("window_title", payload["probe_kinds"])
+        self.assertIn("focused_element_text", payload["probe_kinds"])
         self.assertIn("selected_text", payload["probe_kinds"])
         self.assertIn("clipboard_sample", payload["probe_kinds"])
         self.assertIn("screen_snapshot", payload["probe_kinds"])
@@ -1534,6 +1535,13 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(policies["selected_text"]["retention"], "ephemeral")
         self.assertFalse(policies["selected_text"]["allow_raw_value"])
         self.assertFalse(policies["selected_text"]["allow_persistent_storage"])
+
+        self.assertEqual(policies["focused_element_text"]["consent"], "explicit_each_time")
+        self.assertEqual(policies["focused_element_text"]["privacy"], "content_sensitive")
+        self.assertEqual(policies["focused_element_text"]["retention"], "ephemeral")
+        self.assertEqual(policies["focused_element_text"]["max_chars"], 2000)
+        self.assertFalse(policies["focused_element_text"]["allow_raw_value"])
+        self.assertFalse(policies["focused_element_text"]["allow_persistent_storage"])
 
         self.assertEqual(policies["screen_snapshot"]["consent"], "explicit_each_time")
         self.assertEqual(policies["screen_snapshot"]["privacy"], "content_sensitive")
@@ -2039,6 +2047,98 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.get_json(), {"error": "not_found"})
+        self.bus.publish.assert_not_called()
+
+    def test_context_probe_result_route_rejects_unapproved_request(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "focused_element_text", "reason": "Read focused text"},
+        ).get_json()["request"]
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "role": "AXTextArea",
+                "source": "focused_element_text",
+                "text": "Secret draft",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["blocked_reason"], "request_not_approved:pending")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertNotIn("Secret draft", str(payload))
+        self.bus.publish.assert_not_called()
+
+    def test_context_probe_result_route_accepts_approved_result_redacts_and_emits_metadata_only(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "focused_element_text", "reason": "Read focused text"},
+        ).get_json()["request"]
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "app_name": "Code",
+                "bundle_id": "com.example.code",
+                "role": "AXTextArea",
+                "source": "focused_element_text",
+                "char_count": 2400,
+                "truncated": True,
+                "text": "https://example.com/private sk-abcdefghijklmnopqrstuvwxyz123456 " + ("mot " * 700),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        result = payload["result"]
+        self.assertTrue(result["captured"])
+        self.assertEqual(result["kind"], "focused_element_text")
+        self.assertEqual(result["retention"], "ephemeral")
+        self.assertEqual(result["data"]["role"], "AXTextArea")
+        self.assertIn("url", result["data"]["redaction_flags"])
+        self.assertIn("token", result["data"]["redaction_flags"])
+        self.assertIn("truncated", result["data"]["redaction_flags"])
+        self.assertNotIn("https://example.com/private", str(payload))
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", str(payload))
+        self.assertEqual(payload["request"]["status"], "executed")
+        self.bus.publish.assert_called_once()
+        published = self.bus.publish.call_args.args[1]
+        self.assertEqual(published["kind"], "focused_element_text")
+        self.assertIn("redacted_value", published["data_keys"])
+        self.assertNotIn("data", published)
+        self.assertNotIn("example.com", str(published))
+        self.assertNotIn("abcdefghijklmnopqrstuvwxyz", str(published))
+
+    def test_context_probe_result_route_rejects_forbidden_role(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "focused_element_text", "reason": "Read focused text"},
+        ).get_json()["request"]
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "role": "AXSecureTextField",
+                "source": "focused_element_text",
+                "text": "SECRET",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["blocked_reason"], "forbidden_role")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertNotIn("SECRET", str(payload))
         self.bus.publish.assert_not_called()
 
     def test_daemon_pause_returns_legacy_payload(self):

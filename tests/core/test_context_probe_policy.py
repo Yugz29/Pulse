@@ -49,6 +49,19 @@ def test_selected_text_policy_requires_explicit_each_time_and_is_ephemeral():
     assert is_probe_allowed_by_default(ContextProbeKind.SELECTED_TEXT) is False
 
 
+def test_focused_element_text_policy_requires_explicit_each_time_and_is_ephemeral():
+    policy = policy_for_probe(ContextProbeKind.FOCUSED_ELEMENT_TEXT)
+
+    assert policy.kind is ContextProbeKind.FOCUSED_ELEMENT_TEXT
+    assert policy.consent is ContextProbeConsent.EXPLICIT_EACH_TIME
+    assert policy.privacy is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert policy.retention is PulseRetention.EPHEMERAL
+    assert policy.allow_raw_value is False
+    assert policy.allow_persistent_storage is False
+    assert policy.max_chars == 2_000
+    assert is_probe_allowed_by_default(ContextProbeKind.FOCUSED_ELEMENT_TEXT) is False
+
+
 def test_clipboard_sample_policy_requires_explicit_each_time_and_is_ephemeral():
     policy = policy_for_probe(ContextProbeKind.CLIPBOARD_SAMPLE)
 

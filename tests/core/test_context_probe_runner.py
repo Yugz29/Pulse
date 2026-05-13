@@ -7,7 +7,11 @@ from daemon.core.context_probe_request import (
     create_context_probe_request,
     refuse_context_probe_request,
 )
-from daemon.core.context_probe_runner import run_app_context_probe, run_window_title_probe
+from daemon.core.context_probe_runner import (
+    run_app_context_probe,
+    run_window_title_probe,
+    submit_accessibility_text_probe_result,
+)
 
 
 def _approved_request(kind: ContextProbeKind | str = ContextProbeKind.APP_CONTEXT):
@@ -218,6 +222,78 @@ def test_run_window_title_probe_returns_redacted_title_only():
     assert "yugz@example.com" not in str(result.to_dict())
     assert "https://example.com/private" not in str(result.to_dict())
     assert "/Users/yugz" not in str(result.to_dict())
+
+
+def test_submit_accessibility_text_probe_result_redacts_and_truncates():
+    request = _approved_request(ContextProbeKind.FOCUSED_ELEMENT_TEXT)
+    payload = {
+        "app_name": "Code",
+        "bundle_id": "com.example.code",
+        "role": "AXTextArea",
+        "source": "focused_element_text",
+        "char_count": 2_400,
+        "truncated": True,
+        "text": "token sk-abcdefghijklmnopqrstuvwxyz123456 " + ("mot " * 700),
+    }
+
+    result = submit_accessibility_text_probe_result(
+        request,
+        payload,
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+
+    assert result.captured is True
+    assert result.kind == "focused_element_text"
+    assert result.privacy == "content_sensitive"
+    assert result.retention == "ephemeral"
+    assert result.data["role"] == "AXTextArea"
+    assert result.data["client_truncated"] is True
+    assert result.data["char_count"] == 2400
+    assert "sk-abcdefghijklmnopqrstuvwxyz123456" not in str(result.to_dict())
+    assert "[REDACTED_TOKEN]" in result.data["redacted_value"]
+    assert "truncated" in result.data["redaction_flags"]
+    assert len(result.data["redacted_value"]) <= 2001
+
+
+def test_submit_accessibility_text_probe_result_rejects_forbidden_and_unknown_roles():
+    request = _approved_request(ContextProbeKind.FOCUSED_ELEMENT_TEXT)
+    secure = submit_accessibility_text_probe_result(
+        request,
+        {
+            "role": "AXSecureTextField",
+            "source": "focused_element_text",
+            "text": "SECRET",
+        },
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+    web = submit_accessibility_text_probe_result(
+        request,
+        {
+            "role": "AXWebArea",
+            "source": "focused_element_text",
+            "text": "SECRET",
+        },
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+    unknown = submit_accessibility_text_probe_result(
+        request,
+        {
+            "role": "AXGroup",
+            "source": "focused_element_text",
+            "text": "SECRET",
+        },
+        captured_at=datetime(2099, 5, 1, 18, 2, 0),
+    )
+
+    assert secure.captured is False
+    assert secure.blocked_reason == "forbidden_role"
+    assert web.captured is False
+    assert web.blocked_reason == "forbidden_role"
+    assert unknown.captured is False
+    assert unknown.blocked_reason == "unsupported_role"
+    assert "SECRET" not in str(secure.to_dict())
+    assert "SECRET" not in str(web.to_dict())
+    assert "SECRET" not in str(unknown.to_dict())
 
 
 def test_run_window_title_probe_blocks_pending_refused_and_expired_requests():
