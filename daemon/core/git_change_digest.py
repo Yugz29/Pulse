@@ -84,6 +84,10 @@ class _DiffState:
         self.symbols: list[str] = []
         self.status_privacy_checks = False
         self.provider_decoupled = False
+        self.log_noise_bounded = False
+        self.log_retention_cleanup = False
+        self.heavy_warmup_gated = False
+        self.embeddings_disabled = False
 
     def touch_file(self, file_path: str) -> None:
         if file_path not in self.files and len(self.files) < MAX_FILES:
@@ -98,8 +102,15 @@ class _DiffState:
             self.bridge_touched = True
         if name.endswith("Service.swift") or name.endswith("Worker.swift"):
             _append_unique(self.services, Path(name).stem, limit=3)
+        if "log_retention" in lower or "retention" in lower:
+            self.log_retention_cleanup = True
+        if "lifecycle_policy" in lower or "runtime_orchestrator" in lower or "runtime_daemon_routes" in lower:
+            self.heavy_warmup_gated = True
+        if "embedding_policy" in lower or "vector_store" in lower:
+            self.embeddings_disabled = True
 
     def observe_added_line(self, file_path: str, added: str, *, created: bool) -> None:
+        lower_added = added.lower()
         route = _extract_route(added)
         if route and route not in self.routes:
             self.routes.append(route)
@@ -116,30 +127,54 @@ class _DiffState:
             self.provider_decoupled = True
         if 'assertNotIn("prompt"' in added or 'assertNotIn("text"' in added:
             self.status_privacy_checks = True
+        if (
+            "routine" in lower_added
+            or "access" in lower_added
+            or "maxbytes" in lower_added
+            or "backupcount" in lower_added
+            or "bounded" in lower_added
+        ) and ("log" in lower_added or "logging" in lower_added or "werkzeug" in lower_added):
+            self.log_noise_bounded = True
+        if "retention" in lower_added and ("log" in lower_added or "cleanup" in lower_added or "delete" in lower_added):
+            self.log_retention_cleanup = True
+        if "pulse_heavy_llm_autowarm" in lower_added or "autowarm" in lower_added or "warmup" in lower_added:
+            self.heavy_warmup_gated = True
+        if "pulse_embeddings_enabled" in lower_added or "embeddings_enabled" in lower_added:
+            self.embeddings_disabled = True
 
     def bullets(self) -> list[str]:
         bullets: list[str] = []
-        for method, path in self.routes[:2]:
-            bullets.append(f"ajoute une route {method} {path}")
-        if self.models:
-            bullets.append("ajoute des modèles " + ", ".join(self.models[:3]))
-        if self.services:
-            bullets.append("ajoute " + ", ".join(self.services[:2]))
+        high_level = False
+        if self.log_noise_bounded:
+            bullets.append("borne les journaux du daemon et réduit le bruit des accès routiniers")
+            high_level = True
+        if self.log_retention_cleanup:
+            bullets.append("ajoute un nettoyage sûr de rétention des logs")
+            high_level = True
+        if self.heavy_warmup_gated:
+            bullets.append("évite le warmup du modèle lourd sur les flux lightweight")
+            high_level = True
+        if self.embeddings_disabled:
+            bullets.append("désactive les embeddings par défaut pour éviter un chargement implicite")
+            high_level = True
+        if not high_level:
+            for method, path in self.routes[:2]:
+                bullets.append(f"ajoute une route {method} {path}")
+            if self.services:
+                bullets.append("ajoute un service ou worker local " + ", ".join(self.services[:2]))
         if self.dashboard_touched:
             bullets.append("affiche l'état Apple Foundation dans le Dashboard Système")
         if self.bridge_touched:
             bullets.append("étend le bridge Swift/daemon pour les requêtes lightweight")
         if self.tests_touched:
-            bullets.append("ajoute des tests pour les routes et la queue lightweight")
+            bullets.append("ajoute des tests de régression ou de garde-fous")
         if self.status_privacy_checks:
             bullets.append("vérifie que le statut n'expose ni prompt ni texte généré")
         if self.provider_decoupled:
             bullets.append("décâble le provider Apple Foundation expérimental du router")
-        created = [Path(path).name for path in self.files if path in self.created_files]
-        if created:
+        created = [Path(path).name for path in self.files if path in self.created_files and not _is_test_file(path)]
+        if created and not high_level:
             bullets.append("ajoute " + ", ".join(created[:3]))
-        if self.symbols:
-            bullets.append("touche " + ", ".join(self.symbols[:MAX_SYMBOLS]))
         return bullets
 
 
@@ -192,6 +227,11 @@ def _extract_model_name(line: str) -> str | None:
     if match:
         return match.group(1)
     return None
+
+
+def _is_test_file(path: str) -> bool:
+    lower = str(path or "").lower()
+    return "/tests/" in lower or lower.startswith("tests/") or "test_" in lower or lower.endswith("tests.swift")
 
 
 def _extract_symbol_name(line: str) -> str | None:

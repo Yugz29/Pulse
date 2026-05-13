@@ -999,9 +999,12 @@ def build_lightweight_journal_summary_prompt(
     return f"""\
 Tu rédiges une note de journal de développement à partir de faits observés.
 Objectif : aider à comprendre ce qui a réellement changé, pas seulement reformuler le titre du commit.
-Utilise les faits fournis. Ignore les détails de fichiers sauf s'ils expliquent le changement.
+Utilise d'abord l'intention du commit et les changements détectés.
+Préférer l'effet livré : comportement changé, bug corrigé, capacité ajoutée, sécurité, performance ou effet local-first.
+Ignore les détails de fichiers, routes, fonctions, classes et tests sauf s'ils expliquent directement le comportement.
+Ne liste pas de noms de classes de test, fonctions internes ou fichiers.
 N'invente pas d'intention, de bénéfice ou de comportement qui n'apparaît pas dans les faits.
-Réponds en français, en 1 à 3 phrases courtes.
+Réponds en français, en 1 à 2 phrases courtes.
 
 Faits observés :
 {facts_block}"""
@@ -1049,6 +1052,9 @@ def _lightweight_journal_facts_block(
         commit_type = _commit_type_from_message(full_msg)
         if commit_type:
             facts.append(f"- Type : {commit_type}")
+        delivery_hint = _commit_delivery_hint(full_msg)
+        if delivery_hint:
+            facts.append(f"- Intention du commit : {delivery_hint}")
     if change_digest:
         digest_lines = _safe_change_digest_lines(change_digest)
         if digest_lines:
@@ -1094,6 +1100,51 @@ def _commit_type_from_message(commit_message: str) -> Optional[str]:
     if not match:
         return None
     return match.group(1)
+
+
+def _commit_delivery_hint(commit_message: str) -> Optional[str]:
+    subject = str(commit_message or "").splitlines()[0].strip()
+    if not subject:
+        return None
+    match = re.match(r"^(\w+)(?:\(([^)]*)\))?!?:\s*(.+)$", subject)
+    if not match:
+        return None
+    commit_type, scope, description = match.groups()
+    commit_type = commit_type.lower()
+    scope = (scope or "").strip().lower()
+    description = _humanize_commit_description(description)
+    subsystem = {
+        "daemon": "daemon",
+        "storage": "stockage",
+        "llm": "LLM local",
+        "memory": "mémoire et journal",
+        "journal": "journal",
+    }.get(scope, scope)
+    if commit_type == "fix":
+        if subsystem:
+            return f"corrige un problème côté {subsystem} : {description}"
+        return f"corrige un problème : {description}"
+    if commit_type == "feat":
+        if subsystem:
+            return f"ajoute une capacité côté {subsystem} : {description}"
+        return f"ajoute une capacité : {description}"
+    if commit_type == "test":
+        return f"ajoute ou renforce des tests : {description}"
+    if commit_type == "refactor":
+        return f"réorganise le code sans changer l'objectif produit : {description}"
+    return description
+
+
+def _humanize_commit_description(description: str) -> str:
+    text = str(description or "").strip().rstrip(".")
+    normalized = re.sub(r"\s+", " ", text.lower())
+    replacements = {
+        "bound logs and suppress routine access noise": "borne les journaux et réduit le bruit des accès routiniers",
+        "add safe log retention cleanup": "ajoute un nettoyage sûr de rétention des logs",
+        "avoid heavy model warmup for lightweight flows": "évite le warmup du modèle lourd sur les flux lightweight",
+        "disable embeddings by default": "désactive les embeddings par défaut",
+    }
+    return replacements.get(normalized, text)
 
 
 def _limit_text(value: str, max_chars: int) -> str:

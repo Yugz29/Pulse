@@ -717,6 +717,64 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("Pulse", prompt)
         self.assertNotIn("<final>", prompt)
 
+    def test_lightweight_prompt_oriente_vers_effet_livre_plutot_qu_artifacts(self):
+        prompt = build_lightweight_journal_summary_prompt(
+            "Pulse",
+            35,
+            "coding",
+            "normal",
+            0.1,
+            ["Cursor"],
+            ["daemon/llm/lifecycle_policy.py", "tests/test_runtime_orchestrator.py"],
+            2,
+            "fix(llm): avoid heavy model warmup for lightweight flows",
+            "Diff en cours : lifecycle_policy.py (+20 -0), runtime_orchestrator.py (+8 -12)",
+            change_digest="- évite le warmup du modèle lourd sur les flux lightweight\n- ajoute des tests de régression ou de garde-fous",
+            scope_source="commit_diff",
+        )
+
+        self.assertIn("Intention du commit : corrige un problème côté LLM local", prompt)
+        self.assertIn("évite le warmup du modèle lourd sur les flux lightweight", prompt)
+        self.assertIn("Préférer l'effet livré", prompt)
+        self.assertIn("Ne liste pas de noms de classes de test", prompt)
+        self.assertNotIn("TestEmbeddingPolicy", prompt)
+        self.assertNotIn("DummyThread", prompt)
+        self.assertNotIn("a touché plusieurs fonctions", prompt)
+        self.assertNotIn("a ajouté trois nouveaux modèles", prompt)
+
+    def test_lightweight_prompt_real_commits_formulent_intention_metier(self):
+        cases = [
+            (
+                "fix(daemon): bound logs and suppress routine access noise",
+                "corrige un problème côté daemon : borne les journaux et réduit le bruit des accès routiniers",
+            ),
+            (
+                "feat(storage): add safe log retention cleanup",
+                "ajoute une capacité côté stockage : ajoute un nettoyage sûr de rétention des logs",
+            ),
+            (
+                "fix(memory): disable embeddings by default",
+                "corrige un problème côté mémoire et journal : désactive les embeddings par défaut",
+            ),
+        ]
+        for commit_message, expected in cases:
+            with self.subTest(commit_message=commit_message):
+                prompt = build_lightweight_journal_summary_prompt(
+                    "Pulse",
+                    20,
+                    "coding",
+                    "normal",
+                    0.0,
+                    [],
+                    [],
+                    0,
+                    commit_message,
+                    "",
+                    change_digest="",
+                )
+                self.assertIn(expected, prompt)
+                self.assertNotIn("a ajouté trois nouveaux modèles", prompt)
+
     def test_llm_summary_fallback_si_bloc_final_absent(self):
         class ReasoningOnlyLLM:
             def complete(self, prompt, max_tokens=200, **kwargs):
