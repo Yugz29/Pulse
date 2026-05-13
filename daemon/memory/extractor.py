@@ -964,11 +964,12 @@ Aucune analyse."""
 
 def build_journal_summary_prompt(
     project, duration, task, focus, friction, apps, top_files, files_count,
-    commit_message, diff_summary, *, scope_source="snapshot",
+    commit_message, diff_summary, *, work_intent=None, scope_source="snapshot",
 ) -> str:
     facts_block = _journal_summary_facts_block(
         project, duration, task, focus, friction, apps,
         top_files, files_count, commit_message, diff_summary,
+        work_intent=work_intent,
         scope_source=scope_source,
     )
     return f"""\
@@ -988,12 +989,14 @@ Contraintes :
 def build_lightweight_journal_summary_prompt(
     project, duration, task, focus, friction, apps, top_files, files_count,
     commit_message, diff_summary, *, change_digest: Optional[str] = None,
+    work_intent=None,
     scope_source="snapshot",
 ) -> str:
     facts_block = _lightweight_journal_facts_block(
         project, duration, task, focus, friction, apps,
         top_files, files_count, commit_message, diff_summary,
         change_digest=change_digest,
+        work_intent=work_intent,
         scope_source=scope_source,
     )
     return f"""\
@@ -1012,11 +1015,14 @@ Faits observés :
 
 def _journal_summary_facts_block(
     project, duration, task, focus, friction, apps, top_files, files_count,
-    commit_message, diff_summary, *, scope_source="snapshot",
+    commit_message, diff_summary, *, work_intent=None, scope_source="snapshot",
 ) -> str:
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
     facts: List[str] = [f"Projet : {project}", f"Durée : {duration} minutes"]
+    intent = _safe_work_intent(work_intent)
+    if intent:
+        facts.append(f"Objectif de travail : {intent}")
     if commit_message:
         lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
         full_msg = "\n".join(lines).strip()[:400]
@@ -1039,12 +1045,16 @@ def _journal_summary_facts_block(
 def _lightweight_journal_facts_block(
     project, duration, task, focus, friction, apps, top_files, files_count,
     commit_message, diff_summary, *, change_digest: Optional[str] = None,
+    work_intent=None,
     scope_source="snapshot",
 ) -> str:
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
     change_digest = _redact_memory_text(change_digest)
     facts: List[str] = [f"- Projet : {project}", f"- Durée : {duration} minutes"]
+    intent = _safe_work_intent(work_intent)
+    if intent:
+        facts.append(f"- Objectif de travail : {intent}")
     if commit_message:
         lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
         full_msg = "\n".join(lines).strip()[:400]
@@ -1074,6 +1084,22 @@ def _lightweight_journal_facts_block(
     if friction >= 0.7:
         facts.append("- Friction : élevée")
     return _limit_text("\n".join(facts), 1500)
+
+
+def _safe_work_intent(work_intent) -> Optional[str]:
+    if work_intent is None:
+        return None
+    if hasattr(work_intent, "to_dict"):
+        work_intent = work_intent.to_dict()
+    if isinstance(work_intent, dict):
+        summary = work_intent.get("summary")
+    else:
+        summary = str(work_intent)
+    summary = _redact_memory_text(summary)
+    summary = re.sub(r"\s+", " ", str(summary or "")).strip()
+    if not summary:
+        return None
+    return summary[:240]
 
 
 def _safe_change_digest_lines(change_digest: str) -> List[str]:

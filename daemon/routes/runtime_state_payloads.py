@@ -37,6 +37,7 @@ def serialize_current_context(current_context: Any) -> dict[str, Any]:
         "terminal_exit_code": getattr(current_context, "terminal_exit_code", None),
         "terminal_duration_ms": getattr(current_context, "terminal_duration_ms", None),
         "terminal_summary": getattr(current_context, "terminal_summary", None),
+        "work_intent": getattr(current_context, "work_intent", None),
         "active_app_duration_sec": getattr(signal_summary, "active_app_duration_sec", None),
         "active_window_title_duration_sec": getattr(signal_summary, "active_window_title_duration_sec", None),
         "app_switch_count_10m": getattr(signal_summary, "app_switch_count_10m", 0),

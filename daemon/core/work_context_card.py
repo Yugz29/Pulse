@@ -22,6 +22,7 @@ class WorkContextCard:
     activity_level: str
     probable_task: str
     confidence: float
+    work_intent: Optional[dict[str, Any]] = None
     evidence: tuple[str, ...] = field(default_factory=tuple)
     missing_context: tuple[str, ...] = field(default_factory=tuple)
     safe_next_probes: tuple[str, ...] = field(default_factory=tuple)
@@ -35,6 +36,7 @@ class WorkContextCard:
             "project_hint_source": self.project_hint_source,
             "activity_level": self.activity_level,
             "probable_task": self.probable_task,
+            "work_intent": dict(self.work_intent) if self.work_intent else None,
             "confidence": self.confidence,
             "evidence": list(self.evidence),
             "missing_context": list(self.missing_context),
@@ -75,6 +77,12 @@ def build_work_context_card(
         getattr(present, "probable_task", None),
         "general",
     ) or "general"
+    work_intent = _normalized_work_intent(
+        _first_present(
+            getattr(current_context, "work_intent", None),
+            getattr(present, "work_intent", None),
+        )
+    )
 
     confidence = _clamp_confidence(
         _first_number(
@@ -116,6 +124,7 @@ def build_work_context_card(
         project_hint_source=project_hint_source,
         activity_level=activity_level,
         probable_task=probable_task,
+        work_intent=work_intent,
         confidence=confidence,
         evidence=tuple(evidence),
         missing_context=tuple(missing_context),
@@ -141,6 +150,14 @@ def _build_evidence(
         evidence.append(f"Niveau d'activité : {activity_level}")
     if probable_task and probable_task != "general":
         evidence.append(f"Tâche probable : {probable_task}")
+    work_intent = _normalized_work_intent(
+        _first_present(
+            getattr(current_context, "work_intent", None),
+            getattr(present, "work_intent", None),
+        )
+    )
+    if work_intent:
+        evidence.append(f"Objectif de travail : {work_intent['summary']}")
     presence_state = _first_non_empty(
         getattr(current_context, "user_presence_state", None),
         getattr(signals, "user_presence_state", None),
@@ -322,6 +339,31 @@ def _has_window_title(*, signals: Any, current_context: Any) -> bool:
     )
 
 
+def _normalized_work_intent(value: Any) -> Optional[dict[str, Any]]:
+    if value is None:
+        return None
+    if hasattr(value, "to_dict"):
+        value = value.to_dict()
+    if not isinstance(value, dict):
+        return None
+    summary = str(value.get("summary") or "").strip()
+    if not summary:
+        return None
+    return {
+        "summary": summary[:240],
+        "source": str(value.get("source") or "inferred").strip() or "inferred",
+        "confidence": _clamp_confidence(value.get("confidence")),
+        "project": value.get("project"),
+        "created_at": value.get("created_at"),
+        "expires_at": value.get("expires_at"),
+        "evidence_refs": [
+            str(item).strip()[:120]
+            for item in (value.get("evidence_refs") or [])
+            if str(item).strip()
+        ][:5],
+    }
+
+
 # --- Project hint logic ---
 def _build_project_hint(
     *,
@@ -400,6 +442,13 @@ def _first_non_empty(*values: Any) -> Optional[str]:
     return None
 
 
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def _first_number(*values: Any) -> Optional[float]:
     for value in values:
         if value is None:
@@ -414,7 +463,11 @@ def _first_number(*values: Any) -> Optional[float]:
 def _clamp_confidence(value: Optional[float]) -> float:
     if value is None:
         return 0.0
-    return max(0.0, min(1.0, round(value, 2)))
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, round(number, 2)))
 
 
 def _dedupe(values: Iterable[str]) -> list[str]:

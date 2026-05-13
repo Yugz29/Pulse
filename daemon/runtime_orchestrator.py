@@ -358,6 +358,8 @@ class RuntimeOrchestrator:
         present = self.runtime_state.get_present()
         if not payload.get("activity_level") and present.activity_level:
             payload["activity_level"] = present.activity_level
+        if present.work_intent:
+            payload["work_intent"] = present.work_intent.to_dict()
         return payload
 
     def _resume_card_memory_payload(self, *, snapshot, base_payload: dict | None = None) -> dict:
@@ -1492,6 +1494,7 @@ class RuntimeOrchestrator:
                 commit_message,
                 diff_summary,
                 change_digest=change_digest,
+                work_intent=snapshot.get("work_intent"),
                 scope_source="commit_diff" if diff_summary else "commit_files",
             )
             item = self.lightweight_queue.enqueue(

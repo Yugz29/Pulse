@@ -12,7 +12,7 @@ from daemon.core.signal_scorer import Signals
 from daemon.core.file_event_coalescer import FileEventCoalescer as _FileEventCoalescer
 from daemon.routes.runtime import register_runtime_routes
 from daemon.routes.runtime_daemon_routes import DAEMON_EXIT_GRACE_SEC
-from daemon.runtime_state import RuntimeState
+from daemon.runtime_state import RuntimeState, WorkIntent
 
 
 class _DummyThread:
@@ -1341,6 +1341,12 @@ class TestRuntimeRoutes(unittest.TestCase):
             awake=True,
             locked=False,
         )
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual",
+            confidence=0.9,
+            project="Pulse",
+        ))
         self.runtime_state.set_analysis(signals=signals, decision=decision)
         self.runtime_state.set_latest_active_app("Code")
 
@@ -1357,6 +1363,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["project_hint_source"], None)
         self.assertEqual(card["activity_level"], "editing")
         self.assertEqual(card["probable_task"], "debug")
+        self.assertEqual(card["work_intent"]["summary"], "réduire les coûts cachés du modèle local")
         self.assertEqual(card["confidence"], 0.78)
         self.assertIn("Projet actif détecté : Pulse", card["evidence"])
         self.assertIn("Niveau d'activité : editing", card["evidence"])

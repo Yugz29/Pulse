@@ -59,6 +59,11 @@ class CurrentContextBuilder:
             terminal_exit_code=self._signal_attr(signals, "terminal_exit_code"),
             terminal_duration_ms=self._signal_attr(signals, "terminal_duration_ms"),
             terminal_summary=self._signal_attr(signals, "terminal_summary"),
+            work_intent=(
+                present.work_intent.to_dict()
+                if getattr(present, "work_intent", None)
+                else None
+            ),
             signal_summary=self._build_signal_summary(signals),
         )
         log.debug(

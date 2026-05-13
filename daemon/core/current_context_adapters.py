@@ -38,6 +38,9 @@ def current_context_to_markdown(
         f"- Tâche probable : {context.probable_task}",
         f"- Focus : {context.focus_level}",
     ]
+    work_intent = getattr(context, "work_intent", None)
+    if isinstance(work_intent, dict) and work_intent.get("summary"):
+        lines.append(f"- Objectif de travail : {work_intent['summary']}")
 
     if signals:
         file_activity = format_file_activity_summary(signals)

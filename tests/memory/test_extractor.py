@@ -716,6 +716,7 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("Projet : ClientApp", prompt)
         self.assertNotIn("Pulse", prompt)
         self.assertNotIn("<final>", prompt)
+        self.assertNotIn("Objectif de travail", prompt)
 
     def test_lightweight_prompt_oriente_vers_effet_livre_plutot_qu_artifacts(self):
         prompt = build_lightweight_journal_summary_prompt(
@@ -741,6 +742,37 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("DummyThread", prompt)
         self.assertNotIn("a touché plusieurs fonctions", prompt)
         self.assertNotIn("a ajouté trois nouveaux modèles", prompt)
+
+    def test_lightweight_prompt_inclut_work_intent_sans_modifier_probable_task(self):
+        prompt = build_lightweight_journal_summary_prompt(
+            "Pulse",
+            20,
+            "coding",
+            "normal",
+            0.0,
+            [],
+            [],
+            0,
+            "fix(memory): disable embeddings by default",
+            "",
+            change_digest="",
+            work_intent={
+                "summary": "réduire les coûts cachés du modèle local en évitant les embeddings implicites",
+                "source": "manual",
+                "confidence": 0.9,
+                "project": "Pulse",
+                "evidence_refs": ["commit_message"],
+            },
+        )
+
+        self.assertIn(
+            "Objectif de travail : réduire les coûts cachés du modèle local en évitant les embeddings implicites",
+            prompt,
+        )
+        self.assertIn("Type : fix", prompt)
+        self.assertNotIn("window_title", prompt)
+        self.assertNotIn("clipboard", prompt)
+        self.assertNotIn("conversation", prompt)
 
     def test_lightweight_prompt_real_commits_formulent_intention_metier(self):
         cases = [

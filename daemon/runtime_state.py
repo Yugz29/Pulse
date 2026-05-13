@@ -1,9 +1,47 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
+
+
+@dataclass(frozen=True)
+class WorkIntent:
+    summary: str
+    source: str
+    confidence: float = 0.0
+    project: str | None = None
+    created_at: datetime | None = None
+    expires_at: datetime | None = None
+    evidence_refs: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "summary": self.summary,
+            "source": self.source,
+            "confidence": self.confidence,
+            "project": self.project,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "evidence_refs": list(self.evidence_refs),
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "WorkIntent":
+        return cls(
+            summary=str(value.get("summary") or "").strip(),
+            source=str(value.get("source") or "inferred").strip() or "inferred",
+            confidence=_clamp_float(value.get("confidence"), default=0.0),
+            project=str(value.get("project")).strip() if value.get("project") else None,
+            created_at=_parse_datetime(value.get("created_at")),
+            expires_at=_parse_datetime(value.get("expires_at")),
+            evidence_refs=tuple(
+                str(item).strip()[:120]
+                for item in (value.get("evidence_refs") or [])
+                if str(item).strip()
+            )[:5],
+        )
 
 
 @dataclass(frozen=True)
@@ -26,6 +64,7 @@ class PresentState:
     app_switch_count_10m: int = 0
     ai_app_switch_count_10m: int = 0
     session_duration_min: int = 0
+    work_intent: WorkIntent | None = None
     updated_at: datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -48,6 +87,7 @@ class PresentState:
             "app_switch_count_10m": self.app_switch_count_10m,
             "ai_app_switch_count_10m": self.ai_app_switch_count_10m,
             "session_duration_min": self.session_duration_min,
+            "work_intent": self.work_intent.to_dict() if self.work_intent else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
@@ -83,6 +123,7 @@ class RuntimeState:
         self._user_presence_state: str | None = None
         self._user_idle_seconds: int | None = None
         self._user_presence_source: str | None = None
+        self._work_intent: WorkIntent | None = None
         self._present = PresentState()
 
     def touch_ping(self, when: datetime | None = None) -> bool:
@@ -137,6 +178,7 @@ class RuntimeState:
             stored_presence_state = self._user_presence_state
             stored_idle_seconds = self._user_idle_seconds
             stored_presence_source = self._user_presence_source
+            stored_work_intent = self._work_intent
 
         signal_presence = getattr(signals, "user_presence_state", None)
         signal_idle = getattr(signals, "user_idle_seconds", None)
@@ -160,6 +202,7 @@ class RuntimeState:
             app_switch_count_10m=getattr(signals, "app_switch_count_10m", 0),
             ai_app_switch_count_10m=getattr(signals, "ai_app_switch_count_10m", 0),
             session_duration_min=getattr(signals, "session_duration_min", 0),
+            work_intent=stored_work_intent,
             updated_at=updated_at or datetime.now(),
         )
         with self._lock:
@@ -215,6 +258,17 @@ class RuntimeState:
     def get_last_memory_sync_at(self) -> datetime | None:
         with self._lock:
             return self._last_memory_sync_at
+
+    def set_work_intent(self, intent: WorkIntent | dict[str, Any] | None) -> None:
+        with self._lock:
+            if intent is None:
+                self._work_intent = None
+            elif isinstance(intent, WorkIntent):
+                self._work_intent = intent
+            else:
+                parsed = WorkIntent.from_dict(intent)
+                self._work_intent = parsed if parsed.summary else None
+            self._present = replace(self._present, work_intent=self._work_intent)
 
     def mark_screen_locked(self, when: datetime | None = None) -> None:
         with self._lock:
@@ -299,4 +353,24 @@ class RuntimeState:
             self._user_presence_state = None
             self._user_idle_seconds = None
             self._user_presence_source = None
+            self._work_intent = None
             self._present = PresentState()
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except Exception:
+        return None
+
+
+def _clamp_float(value: Any, *, default: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, min(number, 1.0))

@@ -7,7 +7,7 @@ from daemon.routes.runtime_state_payloads import (
     build_state_payload,
     serialize_current_context,
 )
-from daemon.runtime_state import PresentState
+from daemon.runtime_state import PresentState, WorkIntent
 
 
 class StoreStub:
@@ -145,6 +145,30 @@ def test_present_state_product_projection_stays_minimal():
     assert "raw_output" not in payload
 
 
+def test_present_state_exposes_optional_work_intent_without_raw_context():
+    present = PresentState(
+        active_project="Pulse",
+        probable_task="coding",
+        work_intent=WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual",
+            confidence=0.9,
+            project="Pulse",
+            evidence_refs=("commit_message",),
+        ),
+    )
+
+    payload = present.to_dict()
+
+    assert payload["probable_task"] == "coding"
+    assert payload["work_intent"]["summary"] == "réduire les coûts cachés du modèle local"
+    assert payload["work_intent"]["source"] == "manual"
+    assert payload["work_intent"]["evidence_refs"] == ["commit_message"]
+    assert "window_title" not in payload["work_intent"]
+    assert "clipboard" not in payload["work_intent"]
+    assert "conversation" not in payload["work_intent"]
+
+
 def test_serialize_current_context_returns_expected_top_level_keys():
     context = SimpleNamespace(
         id="ctx-1",
@@ -156,6 +180,11 @@ def test_serialize_current_context_returns_expected_top_level_keys():
         activity_level="editing",
         focus_level="deep",
         task_confidence=0.8,
+        work_intent={
+            "summary": "stabiliser le résumé journal",
+            "source": "manual",
+            "confidence": 0.8,
+        },
     )
 
     payload = serialize_current_context(context)
@@ -166,6 +195,7 @@ def test_serialize_current_context_returns_expected_top_level_keys():
     assert payload["active_file"] == "/tmp/pulse.py"
     assert payload["probable_task"] == "coding"
     assert payload["task_confidence"] == 0.8
+    assert payload["work_intent"]["summary"] == "stabiliser le résumé journal"
     assert payload["app_switch_count_10m"] == 0
 
 

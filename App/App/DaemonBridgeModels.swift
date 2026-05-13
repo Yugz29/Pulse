@@ -135,6 +135,7 @@ struct PresentData: Decodable {
     let frictionScore: Double
     let clipboardContext: String?
     let sessionDurationMin: Int
+    let workIntent: WorkIntentData?
     let updatedAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -149,6 +150,7 @@ struct PresentData: Decodable {
         case frictionScore = "friction_score"
         case clipboardContext = "clipboard_context"
         case sessionDurationMin = "session_duration_min"
+        case workIntent = "work_intent"
         case updatedAt = "updated_at"
     }
 
@@ -185,6 +187,26 @@ struct PresentData: Decodable {
     }
 }
 
+struct WorkIntentData: Decodable {
+    let summary: String
+    let source: String
+    let confidence: Double?
+    let project: String?
+    let createdAt: String?
+    let expiresAt: String?
+    let evidenceRefs: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case summary
+        case source
+        case confidence
+        case project
+        case createdAt = "created_at"
+        case expiresAt = "expires_at"
+        case evidenceRefs = "evidence_refs"
+    }
+}
+
 struct SessionContextData: Decodable, Identifiable {
     private let rawId: String?
     let sessionId: String?
@@ -208,6 +230,7 @@ struct SessionContextData: Decodable, Identifiable {
     let terminalExitCode: Int?
     let terminalDurationMs: Int?
     let terminalSummary: String?
+    let workIntent: WorkIntentData?
     let activeAppDurationSec: Int?
     let activeWindowTitleDurationSec: Int?
     let appSwitchCount10m: Int?
@@ -246,6 +269,7 @@ struct SessionContextData: Decodable, Identifiable {
         case terminalExitCode = "terminal_exit_code"
         case terminalDurationMs = "terminal_duration_ms"
         case terminalSummary = "terminal_summary"
+        case workIntent = "work_intent"
         case activeAppDurationSec = "active_app_duration_sec"
         case activeWindowTitleDurationSec = "active_window_title_duration_sec"
         case appSwitchCount10m = "app_switch_count_10m"

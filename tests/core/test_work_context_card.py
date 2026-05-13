@@ -39,6 +39,33 @@ def test_build_work_context_card_from_current_context_and_signals():
     assert card.safe_next_probes == ()
 
 
+def test_build_work_context_card_exposes_work_intent_separately_from_probable_task():
+    current_context = SimpleNamespace(
+        active_project="Pulse",
+        activity_level="editing",
+        probable_task="coding",
+        task_confidence=0.7,
+        work_intent={
+            "summary": "réduire les coûts cachés du modèle local",
+            "source": "manual",
+            "confidence": 0.9,
+            "project": "Pulse",
+            "evidence_refs": ["commit_message"],
+        },
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.probable_task == "coding"
+    assert card.work_intent["summary"] == "réduire les coûts cachés du modèle local"
+    assert "Objectif de travail : réduire les coûts cachés du modèle local" in card.evidence
+    payload = card.to_dict()
+    assert payload["work_intent"]["source"] == "manual"
+    assert "window_title" not in payload["work_intent"]
+    assert "clipboard" not in payload["work_intent"]
+    assert "conversation" not in payload["work_intent"]
+
+
 def test_build_work_context_card_falls_back_to_present():
     current_context = SimpleNamespace(
         active_project=None,
@@ -213,6 +240,7 @@ def test_work_context_card_to_dict_is_json_ready():
         activity_level="editing",
         probable_task="debug",
         confidence=0.8,
+        work_intent=None,
         evidence=("Projet actif détecté : Pulse",),
         missing_context=("Objectif utilisateur non explicite",),
         safe_next_probes=("app_context", "window_title"),
@@ -225,6 +253,7 @@ def test_work_context_card_to_dict_is_json_ready():
         "project_hint_source": None,
         "activity_level": "editing",
         "probable_task": "debug",
+        "work_intent": None,
         "confidence": 0.8,
         "evidence": ["Projet actif détecté : Pulse"],
         "missing_context": ["Objectif utilisateur non explicite"],

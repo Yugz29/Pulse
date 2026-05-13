@@ -58,6 +58,7 @@ class CurrentContext:
     terminal_exit_code: Optional[int] = None
     terminal_duration_ms: Optional[int] = None
     terminal_summary: Optional[str] = None
+    work_intent: Optional[dict[str, Any]] = None
     signal_summary: SignalSummary = field(default_factory=SignalSummary)
 
 

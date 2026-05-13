@@ -10,6 +10,7 @@ os.environ["HOME"] = _TEST_HOME
 import daemon.main as daemon_main
 from daemon.core.decision_engine import Decision
 from daemon.core.signal_scorer import Signals
+from daemon.runtime_state import WorkIntent
 
 
 class TestMainRuntimeState(unittest.TestCase):
@@ -51,6 +52,12 @@ class TestMainRuntimeState(unittest.TestCase):
             awake=True,
             locked=False,
         )
+        daemon_main.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual",
+            confidence=0.9,
+            project="Pulse",
+        ))
         daemon_main.runtime_state.set_analysis(signals=signals, decision=decision)
         daemon_main.runtime_state.set_latest_active_app("Xcode")
 
@@ -69,6 +76,11 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(payload["present"]["session_status"], "active")
         self.assertFalse(payload["present"]["locked"])
         self.assertEqual(payload["present"]["active_project"], "Pulse")
+        self.assertEqual(
+            payload["present"]["work_intent"]["summary"],
+            "réduire les coûts cachés du modèle local",
+        )
+        self.assertEqual(payload["present"]["probable_task"], "coding")
         self.assertEqual(
             payload["present"]["active_file"],
             "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
