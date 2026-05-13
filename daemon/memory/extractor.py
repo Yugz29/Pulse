@@ -39,6 +39,7 @@ from daemon.core.command_redaction import redact_sensitive_command
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
 from daemon.memory.facts import FactEngine
+from daemon.memory.embedding_policy import embeddings_enabled
 from daemon.memory.vector_store import VectorStore
 
 log = logging.getLogger("pulse")
@@ -410,7 +411,7 @@ def update_memories_from_session(
 
     # Vectoriser l'entrée dans un thread séparé — ne pas bloquer le pipeline.
     # L'embedding est lent (1-2s au premier appel) mais non critique.
-    if report_ref is not None:
+    if report_ref is not None and embeddings_enabled():
         def _vectorize():
             try:
                 store = _get_vector_store()

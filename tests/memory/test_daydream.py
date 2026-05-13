@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from daemon.memory import daydream
 
@@ -127,6 +127,39 @@ class TestDayDream(unittest.TestCase):
         self.assertEqual(status["status"], "skipped")
         self.assertEqual(status["done_for_date"], "2026-04-27")
         self.assertEqual(status["last_reason"], "no_journal_entries")
+
+    def test_vectorize_daydream_respecte_policy_desactivee(self):
+        content = {
+            "narrative": "Synthèse",
+            "commits": [],
+            "top_files": [],
+            "window_titles": [],
+            "projects": ["Pulse"],
+            "date": "2026-04-27",
+            "total_min": 42,
+        }
+        with patch.dict("os.environ", {}, clear=True), \
+             patch("daemon.memory.vector_store.VectorStore") as vector_store:
+            daydream._vectorize_daydream(content, date(2026, 4, 27))
+
+        vector_store.assert_not_called()
+
+    def test_vectorize_daydream_respecte_policy_activee(self):
+        content = {
+            "narrative": "Synthèse",
+            "commits": [],
+            "top_files": [],
+            "window_titles": [],
+            "projects": ["Pulse"],
+            "date": "2026-04-27",
+            "total_min": 42,
+        }
+        fake_store = MagicMock()
+        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1"}), \
+             patch("daemon.memory.vector_store.VectorStore", return_value=fake_store):
+            daydream._vectorize_daydream(content, date(2026, 4, 27))
+
+        fake_store.index_text.assert_called_once()
 
 
 if __name__ == "__main__":

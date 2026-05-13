@@ -360,6 +360,9 @@ def _daydream_output_path(ref_date: date) -> Path:
 
 
 def _vectorize_daydream(content: dict, ref_date: date) -> None:
+    from daemon.memory.embedding_policy import embeddings_enabled
+    if not embeddings_enabled():
+        return
     try:
         from daemon.memory.vector_store import VectorStore
         store = VectorStore()

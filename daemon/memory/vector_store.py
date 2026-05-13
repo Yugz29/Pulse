@@ -27,6 +27,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from daemon.memory.embedding_policy import (
+    apply_embedding_offline_env,
+    embeddings_enabled,
+    embeddings_offline_only,
+)
+
 log = logging.getLogger(__name__)
 
 # Chemin de la base vectorielle — séparée de session.db pour ne pas la polluer.
@@ -47,22 +53,26 @@ _model_lock = threading.Lock()
 def _get_model():
     """Charge le modèle d'embedding une seule fois (lazy loading)."""
     global _model
+    if not embeddings_enabled():
+        return None
     if _model is not None:
         return _model
     with _model_lock:
         if _model is not None:
             return _model
         try:
+            apply_embedding_offline_env()
             from sentence_transformers import SentenceTransformer
-            import os
             log.info("Chargement du modèle d'embedding %s…", _EMBED_MODEL_NAME)
-            # TRANSFORMERS_OFFLINE=1 après le premier téléchargement
-            # pour éviter les vérifications réseau à chaque démarrage.
-            os.environ.setdefault("TRANSFORMERS_OFFLINE", "0")
-            _model = SentenceTransformer(_EMBED_MODEL_NAME, trust_remote_code=True)
-            # Une fois chargé, on passe en mode offline pour les prochains calls.
-            os.environ["TRANSFORMERS_OFFLINE"] = "1"
-            log.info("Modèle d'embedding chargé (mode offline actif).")
+            kwargs = {"trust_remote_code": True}
+            if embeddings_offline_only():
+                kwargs["local_files_only"] = True
+            try:
+                _model = SentenceTransformer(_EMBED_MODEL_NAME, **kwargs)
+            except TypeError:
+                kwargs.pop("local_files_only", None)
+                _model = SentenceTransformer(_EMBED_MODEL_NAME, **kwargs)
+            log.info("Modèle d'embedding chargé.")
         except Exception as exc:
             log.warning("Impossible de charger le modèle d'embedding : %s", exc)
     return _model

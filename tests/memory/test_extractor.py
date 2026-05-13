@@ -113,7 +113,7 @@ class TestExtractor(unittest.TestCase):
         writer_names = [call.kwargs.get("name") for call in start_background.call_args_list]
         self.assertNotIn("pulse-journal-enrich", writer_names)
 
-    def test_background_writer_vectorize_est_lance_via_registre(self):
+    def test_embeddings_desactivees_par_defaut_empechent_vectorize_journal(self):
         created_threads = []
 
         class DummyThread:
@@ -134,7 +134,43 @@ class TestExtractor(unittest.TestCase):
             created_threads.append(thread)
             return thread
 
-        with patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
+        with patch.dict("os.environ", {}, clear=True), \
+             patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 25,
+                    "probable_task": "coding",
+                    "files_changed": 2,
+                },
+                memory_dir=self.memory_dir,
+            )
+
+        self.assertEqual([thread.name for thread in created_threads], [])
+
+    def test_embeddings_activees_lancent_vectorize_journal(self):
+        created_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.daemon = kwargs.get("daemon")
+                self.name = kwargs.get("name")
+                self.started = False
+
+            def start(self):
+                self.started = True
+
+            def is_alive(self):
+                return self.started
+
+        def fake_thread(*args, **kwargs):
+            thread = DummyThread(*args, **kwargs)
+            created_threads.append(thread)
+            return thread
+
+        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1"}), \
+             patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
             update_memories_from_session(
                 {
                     "active_project": "Pulse",
@@ -171,7 +207,8 @@ class TestExtractor(unittest.TestCase):
             created_threads.append(thread)
             return thread
 
-        with patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
+        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1"}), \
+             patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
             update_memories_from_session(
                 {
                     "active_project": "Pulse",
