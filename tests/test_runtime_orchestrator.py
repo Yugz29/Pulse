@@ -832,6 +832,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 commit_message="fix: lightweight queue",
                 trigger="commit",
                 diff_summary="diff --git a/runtime.py b/runtime.py",
+                change_digest="- ajoute une route GET /llm/lightweight/status",
             )
 
         pending = queue.claim_next()
@@ -839,6 +840,10 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(pending.kind, "journal_commit_summary")
         self.assertEqual(pending.metadata["report_ref"], ("journal.md", "entry-1"))
         self.assertIn("fix: lightweight queue", pending.prompt)
+        self.assertIn("Tu rédiges une note de journal de développement", pending.prompt)
+        self.assertIn("Changements détectés", pending.prompt)
+        self.assertIn("ajoute une route GET /llm/lightweight/status", pending.prompt)
+        self.assertNotIn("<final>", pending.prompt)
         start_worker.assert_not_called()
 
     def test_sync_memory_background_garde_fallback_ollama_si_queue_absente(self):

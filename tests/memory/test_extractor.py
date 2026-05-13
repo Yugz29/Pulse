@@ -9,6 +9,7 @@ from flask import Flask
 
 from daemon.memory.extractor import (
     apply_validated_journal_summary,
+    build_lightweight_journal_summary_prompt,
     enrich_session_report,
     load_memory_context,
     mark_journal_summary_failed,
@@ -611,6 +612,48 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("Réponds uniquement avec la note finale", llm.prompt)
         self.assertNotIn("<final>", llm.prompt)
         self.assertEqual(llm.kwargs.get("think"), True)
+
+    def test_lightweight_prompt_inclut_digest_sans_code_brut(self):
+        prompt = build_lightweight_journal_summary_prompt(
+            "Pulse",
+            45,
+            "coding",
+            "normal",
+            0.2,
+            ["Cursor"],
+            ["runtime.py"],
+            1,
+            "feat: expose lightweight status",
+            "Diff en cours : runtime.py (+10 -2)",
+            change_digest="- ajoute une route GET /llm/lightweight/status\n- return jsonify(lightweight_queue.status())",
+            scope_source="commit_diff",
+        )
+
+        self.assertIn("Tu rédiges une note de journal de développement à partir de faits observés.", prompt)
+        self.assertIn("Projet : Pulse", prompt)
+        self.assertIn("Changements détectés", prompt)
+        self.assertIn("ajoute une route GET /llm/lightweight/status", prompt)
+        self.assertNotIn("<final>", prompt)
+        self.assertNotIn("return jsonify", prompt)
+
+    def test_lightweight_prompt_ne_hardcode_pas_pulse_hors_faits(self):
+        prompt = build_lightweight_journal_summary_prompt(
+            "ClientApp",
+            20,
+            "coding",
+            "normal",
+            0.0,
+            [],
+            [],
+            0,
+            "fix: status endpoint",
+            "",
+            change_digest="",
+        )
+
+        self.assertIn("Projet : ClientApp", prompt)
+        self.assertNotIn("Pulse", prompt)
+        self.assertNotIn("<final>", prompt)
 
     def test_llm_summary_fallback_si_bloc_final_absent(self):
         class ReasoningOnlyLLM:
