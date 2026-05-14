@@ -71,6 +71,31 @@ def test_store_update_requires_existing_request():
     assert store.get("probe-1") is approved
 
 
+def test_store_result_is_in_memory_and_removed_with_request():
+    store = ContextProbeRequestStore()
+    request = _request("probe-1")
+    store.add(request)
+
+    stored = store.store_result("probe-1", {
+        "request_id": "probe-1",
+        "data": {"redacted_value": "[REDACTED_TOKEN]"},
+    })
+
+    assert stored["data"]["redacted_value"] == "[REDACTED_TOKEN]"
+    assert store.get_result("probe-1")["data"]["redacted_value"] == "[REDACTED_TOKEN]"
+
+    store.remove("probe-1")
+
+    assert store.get_result("probe-1") is None
+
+
+def test_store_result_requires_existing_request():
+    store = ContextProbeRequestStore()
+
+    with pytest.raises(KeyError):
+        store.store_result("missing", {"data": {}})
+
+
 def test_store_list_orders_by_created_at_and_filters_status():
     store = ContextProbeRequestStore()
     later = _request("later", created_at=datetime(2026, 5, 1, 18, 2, 0))
@@ -97,18 +122,22 @@ def test_store_remove_and_clear():
     second = _request("probe-2")
     store.add(first)
     store.add(second)
+    store.store_result("probe-1", {"data": {"redacted_value": "safe"}})
 
     removed = store.remove("probe-1")
 
     assert removed is first
     assert store.get("probe-1") is None
+    assert store.get_result("probe-1") is None
     assert store.remove("missing") is None
     assert len(store) == 1
 
+    store.store_result("probe-2", {"data": {"redacted_value": "safe"}})
     store.clear()
 
     assert len(store) == 0
     assert store.list() == []
+    assert store.get_result("probe-2") is None
 
 
 def test_store_expire_due_only_expires_pending_due_requests():
@@ -123,6 +152,7 @@ def test_store_expire_due_only_expires_pending_due_requests():
     store.add(due)
     store.add(future)
     store.add(already_refused)
+    store.store_result("due", {"data": {"redacted_value": "stale"}})
 
     expired = store.expire_due(now=now)
 
@@ -130,6 +160,7 @@ def test_store_expire_due_only_expires_pending_due_requests():
     assert store.get("due").status is ContextProbeRequestStatus.EXPIRED
     assert store.get("due").decided_at == now
     assert store.get("due").decision_reason == "expired"
+    assert store.get_result("due") is None
     assert store.get("future").status is ContextProbeRequestStatus.PENDING
     assert store.get("refused").status is ContextProbeRequestStatus.REFUSED
 
@@ -148,13 +179,17 @@ def test_store_remove_terminal_removes_only_terminal_requests_ordered_by_created
     store.add(pending)
     store.add(refused)
     store.add(approved)
+    store.store_result("refused", {"data": {"redacted_value": "safe"}})
+    store.store_result("approved", {"data": {"redacted_value": "kept"}})
 
     removed = store.remove_terminal()
 
     assert [request.request_id for request in removed] == ["refused"]
     assert store.get("refused") is None
+    assert store.get_result("refused") is None
     assert store.get("pending") is pending
     assert store.get("approved") is approved
+    assert store.get_result("approved")["data"]["redacted_value"] == "kept"
 
 
 def test_requests_to_dicts_returns_json_ready_payloads_without_metadata_values():

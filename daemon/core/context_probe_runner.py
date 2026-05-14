@@ -186,6 +186,10 @@ _FOCUSED_TEXT_KINDS = {
 _FOCUSED_TEXT_ALLOWED_ROLES = {"AXTextArea", "AXTextField", "AXComboBox"}
 _FOCUSED_TEXT_BLOCKED_ROLES = {"AXSecureTextField", "AXWebArea"}
 _FOCUSED_TEXT_SOURCES = {"focused_element_text", "selected_text"}
+_TEXT_RESULT_SOURCES_BY_KIND = {
+    ContextProbeKind.CLIPBOARD_SAMPLE: "next_clipboard_text",
+    ContextProbeKind.MANUAL_CONTEXT_NOTE: "manual_context_note",
+}
 
 
 def submit_accessibility_text_probe_result(
@@ -194,7 +198,7 @@ def submit_accessibility_text_probe_result(
     *,
     captured_at: Optional[datetime] = None,
 ) -> ContextProbeResult:
-    """Accept a Swift AX text capture after validating policy and payload."""
+    """Accept a Swift content probe result after validating policy and payload."""
     plan = build_context_probe_execution_plan(request)
     now = captured_at or datetime.now()
 
@@ -210,18 +214,28 @@ def submit_accessibility_text_probe_result(
             blocked_reason=plan.blocked_reason,
         )
 
-    if request.kind not in _FOCUSED_TEXT_KINDS:
-        return ContextProbeResult(
-            request_id=request.request_id,
-            kind=request.kind.value,
-            captured=False,
-            data={},
-            privacy=request.policy.privacy.value,
-            retention=request.policy.retention.value,
-            captured_at=now,
-            blocked_reason="unsupported_probe_kind",
-        )
+    if request.kind in _FOCUSED_TEXT_KINDS:
+        return _submit_focused_text_probe_result(request, payload, now)
+    if request.kind in _TEXT_RESULT_SOURCES_BY_KIND:
+        return _submit_plain_text_probe_result(request, payload, now)
 
+    return ContextProbeResult(
+        request_id=request.request_id,
+        kind=request.kind.value,
+        captured=False,
+        data={},
+        privacy=request.policy.privacy.value,
+        retention=request.policy.retention.value,
+        captured_at=now,
+        blocked_reason="unsupported_probe_kind",
+    )
+
+
+def _submit_focused_text_probe_result(
+    request: ContextProbeRequest,
+    payload: Mapping[str, Any],
+    now: datetime,
+) -> ContextProbeResult:
     role = _str_or_none(payload.get("role"))
     if role in _FOCUSED_TEXT_BLOCKED_ROLES:
         return _blocked_submit_result(request, now, "forbidden_role")
@@ -243,10 +257,7 @@ def submit_accessibility_text_probe_result(
         value,
         max_chars=request.policy.max_chars or 2_000,
     )
-    try:
-        original_char_count = max(int(payload.get("char_count", len(value))), 0)
-    except (TypeError, ValueError):
-        original_char_count = len(value)
+    original_char_count = _payload_char_count(payload, value)
 
     return ContextProbeResult(
         request_id=request.request_id,
@@ -270,6 +281,64 @@ def submit_accessibility_text_probe_result(
         captured_at=now,
         blocked_reason=None,
     )
+
+
+def _submit_plain_text_probe_result(
+    request: ContextProbeRequest,
+    payload: Mapping[str, Any],
+    now: datetime,
+) -> ContextProbeResult:
+    source = _str_or_none(payload.get("source"))
+    if source != _TEXT_RESULT_SOURCES_BY_KIND[request.kind]:
+        return _blocked_submit_result(request, now, "kind_source_mismatch")
+
+    value = _str_or_none(payload.get("text", payload.get("value")))
+    if value is None:
+        return _blocked_submit_result(request, now, "missing_text")
+
+    redaction = redact_context_probe_value(
+        value,
+        max_chars=request.policy.max_chars or 2_000,
+    )
+    original_char_count = _payload_char_count(payload, value)
+
+    return ContextProbeResult(
+        request_id=request.request_id,
+        kind=request.kind.value,
+        captured=True,
+        data={
+            "source": source,
+            "content_kind": _str_or_none(payload.get("content_kind")) or "text",
+            "char_count": original_char_count,
+            "client_truncated": bool(payload.get("truncated", False)),
+            "redacted_value": redaction.redacted_value,
+            "redaction_flags": [flag.value for flag in redaction.flags],
+            "original_length": redaction.original_length,
+            "redacted_length": redaction.redacted_length,
+            "was_redacted": redaction.was_redacted,
+        },
+        privacy=request.policy.privacy.value,
+        retention=request.policy.retention.value,
+        captured_at=now,
+        blocked_reason=None,
+    )
+
+
+def _payload_char_count(payload: Mapping[str, Any], value: str) -> int:
+    try:
+        return max(int(payload.get("char_count", len(value))), 0)
+    except (TypeError, ValueError):
+        return len(value)
+
+
+def submit_context_probe_result(
+    request: ContextProbeRequest,
+    payload: Mapping[str, Any],
+    *,
+    captured_at: Optional[datetime] = None,
+) -> ContextProbeResult:
+    """Alias for the generic content result submission path."""
+    return submit_accessibility_text_probe_result(request, payload, captured_at=captured_at)
 
 
 def _blocked_submit_result(

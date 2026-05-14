@@ -1354,12 +1354,21 @@ struct DashboardRootView: View {
                                 Label("Lire le champ texte actif", systemImage: "text.cursor")
                             }
                             .buttonStyle(.bordered)
+                            Button {
+                                vm.diagnoseActiveAccessibilityElement()
+                            } label: {
+                                Label("Diagnostiquer l'élément actif", systemImage: "stethoscope")
+                            }
+                            .buttonStyle(.bordered)
                             statBadge("Demandes", "\(vm.contextProbeRequests.count)", gBlue)
                         }
                         Text("Demandes de contexte contrôlées par validation humaine. Les metadata brutes et les valeurs capturées ne sont pas affichées ici.")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        if let diagnostic = vm.accessibilityProbeDiagnostic {
+                            accessibilityDiagnosticBlock(diagnostic)
+                        }
                     }
                 }
 
@@ -1399,6 +1408,67 @@ struct DashboardRootView: View {
             if left.status == "approved" && right.status != "approved" { return true }
             if left.status != "approved" && right.status == "approved" { return false }
             return left.createdAt > right.createdAt
+        }
+    }
+
+    private func accessibilityDiagnosticBlock(_ diagnostic: AccessibilityTextProbeDiagnostic) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            HStack(spacing: 8) {
+                Image(systemName: diagnostic.isAllowed ? "checkmark.shield" : "exclamationmark.shield")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(diagnostic.isAllowed ? Color(hex: gGreen) : Color(hex: "#F5A623"))
+                Text("Diagnostic AX local")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(diagnostic.rejectionReason)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(diagnostic.isAllowed ? Color(hex: gGreen) : Color(hex: "#F5A623"))
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading, spacing: 6) {
+                contextProbeMetaPill("App", diagnostic.appName)
+                contextProbeMetaPill("Bundle", diagnostic.bundleId)
+                contextProbeMetaPill("PID", "\(diagnostic.pid)")
+                contextProbeMetaPill("AX trusted", diagnostic.axTrusted ? "oui" : "non")
+                contextProbeMetaPill("Focused", diagnostic.focusedElementStatus)
+                contextProbeMetaPill("Role", diagnostic.focusedRole ?? "n/a")
+                contextProbeMetaPill("Subrole", diagnostic.focusedSubrole ?? "n/a")
+                contextProbeMetaPill("Description", diagnostic.roleDescription ?? "n/a")
+                contextProbeMetaPill("Selected", diagnostic.canReadSelectedText ? "\(diagnostic.selectedTextLength ?? 0) chars" : "non")
+                contextProbeMetaPill("Value", diagnostic.canReadValue ? "\(diagnostic.valueLength ?? 0) chars" : "non")
+                contextProbeMetaPill("Window", diagnostic.focusedWindowStatus)
+                contextProbeMetaPill("Window role", diagnostic.focusedWindowRole ?? "n/a")
+                contextProbeMetaPill("Window title", diagnostic.focusedWindowTitleAvailable ? "oui" : "non")
+                contextProbeMetaPill("Secure", diagnostic.isSecureField ? "oui" : "non")
+                contextProbeMetaPill("WebArea", diagnostic.isWebArea ? "oui" : "non")
+            }
+            if let tree = diagnostic.treeSummary {
+                Divider()
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading, spacing: 6) {
+                    contextProbeMetaPill("Tree inspected", tree.treeInspected ? "oui" : "non")
+                    contextProbeMetaPill("Tree depth", "\(tree.treeDepthLimit)")
+                    contextProbeMetaPill("Tree nodes", "\(tree.totalNodesSeen)/\(tree.treeNodeLimit)")
+                    contextProbeMetaPill("Tree truncated", tree.treeTruncated ? "oui" : "non")
+                    contextProbeMetaPill("Editable", "\(tree.editableCandidateCount)")
+                    contextProbeMetaPill("TextArea", "\(tree.textAreaCount)")
+                    contextProbeMetaPill("TextField", "\(tree.textFieldCount)")
+                    contextProbeMetaPill("ComboBox", "\(tree.comboBoxCount)")
+                    contextProbeMetaPill("SearchField", "\(tree.searchFieldCount)")
+                    contextProbeMetaPill("WebArea", "\(tree.webAreaCount)")
+                    contextProbeMetaPill("SecureField", "\(tree.secureTextFieldCount)")
+                    contextProbeMetaPill("Unknown roles", "\(tree.unknownRoleCount)")
+                    contextProbeMetaPill("Candidates", tree.candidateRolesFound.isEmpty ? "aucun" : tree.candidateRolesFound.joined(separator: " > "))
+                    contextProbeMetaPill("First path", tree.firstCandidatePathRoles.isEmpty ? "n/a" : tree.firstCandidatePathRoles.joined(separator: " > "))
+                    contextProbeMetaPill("Tree rejection", tree.rejectionSummary ?? "n/a")
+                }
+                if !tree.rolesCount.isEmpty {
+                    Text(tree.rolesCount.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: " · "))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 
@@ -1537,7 +1607,9 @@ struct DashboardRootView: View {
 
             if result.kind == "window_title"
                 || result.kind == "focused_element_text"
-                || result.kind == "selected_text" {
+                || result.kind == "selected_text"
+                || result.kind == "clipboard_sample"
+                || result.kind == "manual_context_note" {
                 contextProbeWindowTitleResult(result)
             } else {
                 contextProbeGenericResult(result)

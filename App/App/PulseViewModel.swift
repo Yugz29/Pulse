@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import AppKit
 
 @MainActor
 final class PulseViewModel: ObservableObject {
@@ -24,6 +25,9 @@ final class PulseViewModel: ObservableObject {
     @Published var focusLevel: String = "normal"
     @Published var pendingCommand: CommandAnalysis? = nil
     @Published var pendingContextProbe: ContextProbeRequestPayload? = nil
+    @Published var contextInputMode: ContextInputMode = .choosing
+    @Published var contextManualNoteText: String = ""
+    @Published var contextInputStatusText: String? = nil
     @Published var availableModels: [String] = []
     @Published var selectedModel: String = ""
     @Published var selectedCommandModel: String = ""
@@ -60,6 +64,9 @@ final class PulseViewModel: ObservableObject {
     var pollTask: Task<Void, Never>?
     var askTask: Task<Void, Never>?
     var shouldShowCancellationFeedback = true
+    private let oneShotClipboardService = OneShotClipboardContextService()
+    private var oneShotClipboardTimer: Timer?
+    private var activeContextResultRequestId: String?
 
     init(bridge: DaemonBridge = DaemonBridge()) {
         self.bridge = bridge
@@ -124,11 +131,19 @@ final class PulseViewModel: ObservableObject {
     }
 
     func refreshPendingContextProbe() async {
-        guard let payload = await bridge.getContextProbeRequests(status: "pending", includeTerminal: false) else {
-            pendingContextProbe = nil
+        if activeContextResultRequestId != nil {
             return
         }
-        pendingContextProbe = payload.requests.first
+        guard let payload = await bridge.getContextProbeRequests(status: "pending", includeTerminal: false) else {
+            pendingContextProbe = nil
+            resetContextInputState()
+            return
+        }
+        let next = payload.requests.first
+        if next?.requestId != pendingContextProbe?.requestId {
+            resetContextInputState()
+        }
+        pendingContextProbe = next
     }
 
     func approvePendingContextProbe() async {
@@ -137,6 +152,7 @@ final class PulseViewModel: ObservableObject {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             pendingContextProbe = nil
             isExpanded = false
+            resetContextInputState()
         }
     }
 
@@ -146,6 +162,165 @@ final class PulseViewModel: ObservableObject {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             pendingContextProbe = nil
             isExpanded = false
+            resetContextInputState()
         }
+    }
+
+    func chooseNextClipboardContext() async {
+        guard let request = await prepareContentProbeRequest(
+            kind: "clipboard_sample",
+            reason: "Use the next copied text as explicit context",
+            sourceMetadata: "notch_next_clipboard"
+        ) else { return }
+        activeContextResultRequestId = request.requestId
+        contextInputMode = .clipboardArmed
+        contextInputStatusText = "En attente du prochain texte copié..."
+        oneShotClipboardService.arm(baselineChangeCount: NSPasteboard.general.changeCount)
+        startOneShotClipboardPolling()
+    }
+
+    func showManualContextNoteInput() {
+        contextInputMode = .manualNote
+        contextInputStatusText = nil
+    }
+
+    func submitManualContextNote() async {
+        let note = contextManualNoteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !note.isEmpty else {
+            contextInputStatusText = "Note vide."
+            return
+        }
+        guard let request = await prepareContentProbeRequest(
+            kind: "manual_context_note",
+            reason: "Use a quick manual note as explicit context",
+            sourceMetadata: "notch_manual_note"
+        ) else { return }
+        let capture = ContextTextProbeCapture.manualContextNote(note)
+        await submitContextTextProbeResult(requestId: request.requestId, capture: capture)
+    }
+
+    func ignorePendingContextInput() async {
+        if activeContextResultRequestId != nil || contextInputMode == .clipboardArmed {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                pendingContextProbe = nil
+                isExpanded = false
+                resetContextInputState()
+            }
+            return
+        }
+        await refusePendingContextProbe()
+    }
+
+    private func prepareContentProbeRequest(
+        kind: String,
+        reason: String,
+        sourceMetadata: String
+    ) async -> ContextProbeRequestPayload? {
+        guard let visibleRequest = pendingContextProbe else { return nil }
+        if visibleRequest.kind == kind {
+            guard let approved = await bridge.approveContextProbeRequest(
+                visibleRequest.requestId,
+                reason: "Approved from Pulse Notch"
+            ) else {
+                contextInputMode = .failed("Impossible d'approuver la demande.")
+                return nil
+            }
+            return approved.request
+        }
+
+        guard let created = await bridge.createContextProbeRequest(
+            kind: kind,
+            reason: reason,
+            ttlSec: kind == "clipboard_sample" ? 3_600 : 60,
+            metadata: ["source": sourceMetadata]
+        ) else {
+            contextInputMode = .failed("Impossible de créer la demande.")
+            return nil
+        }
+        guard let approved = await bridge.approveContextProbeRequest(
+            created.request.requestId,
+            reason: "Approved from Pulse Notch"
+        ) else {
+            contextInputMode = .failed("Impossible d'approuver la demande.")
+            return nil
+        }
+        _ = await bridge.refuseContextProbeRequest(
+            visibleRequest.requestId,
+            reason: "Replaced by explicit \(kind) source from Pulse Notch"
+        )
+        pendingContextProbe = approved.request
+        return approved.request
+    }
+
+    private func startOneShotClipboardPolling() {
+        oneShotClipboardTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pollOneShotClipboard()
+            }
+        }
+        oneShotClipboardTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func pollOneShotClipboard() {
+        guard let requestId = activeContextResultRequestId else { return }
+        let pasteboard = NSPasteboard.general
+        guard let oneShot = oneShotClipboardService.captureIfChanged(
+            changeCount: pasteboard.changeCount,
+            text: pasteboard.string(forType: .string)
+        ) else {
+            if !oneShotClipboardService.isArmed {
+                stopOneShotClipboardPolling()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    pendingContextProbe = nil
+                    isExpanded = false
+                    resetContextInputState()
+                }
+            }
+            return
+        }
+        stopOneShotClipboardPolling()
+        contextInputStatusText = "Texte copié reçu (\(oneShot.capture.charCount) caractères)."
+        Task { @MainActor in
+            await submitContextTextProbeResult(requestId: requestId, capture: oneShot.capture)
+        }
+    }
+
+    func submitContextTextProbeResult(
+        requestId: String,
+        capture: ContextTextProbeCapture
+    ) async {
+        guard await bridge.submitContextProbeResult(requestId, capture: capture) != nil else {
+            contextInputMode = .failed("Envoi impossible.")
+            return
+        }
+        NotificationCenter.default.post(name: .contextProbeResultSubmitted, object: requestId)
+        contextInputMode = .submitted
+        contextInputStatusText = capture.truncated
+            ? "Contexte envoyé avec troncature locale."
+            : "Contexte envoyé."
+        contextManualNoteText = ""
+        activeContextResultRequestId = nil
+        pendingContextProbe = nil
+        oneShotClipboardService.disarm()
+        stopOneShotClipboardPolling()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            isExpanded = false
+        }
+    }
+
+    private func stopOneShotClipboardPolling() {
+        oneShotClipboardTimer?.invalidate()
+        oneShotClipboardTimer = nil
+    }
+
+    private func resetContextInputState() {
+        contextInputMode = .choosing
+        contextManualNoteText = ""
+        contextInputStatusText = nil
+        activeContextResultRequestId = nil
+        oneShotClipboardService.disarm()
+        stopOneShotClipboardPolling()
     }
 }

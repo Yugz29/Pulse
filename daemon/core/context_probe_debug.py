@@ -47,6 +47,7 @@ def _kind_label(kind: ContextProbeKind) -> str:
         ContextProbeKind.FOCUSED_ELEMENT_TEXT: "Focused element text",
         ContextProbeKind.SELECTED_TEXT: "Selected text",
         ContextProbeKind.CLIPBOARD_SAMPLE: "Clipboard sample",
+        ContextProbeKind.MANUAL_CONTEXT_NOTE: "Manual context note",
         ContextProbeKind.SCREEN_SNAPSHOT: "Screen snapshot",
         ContextProbeKind.UNKNOWN: "Unknown probe",
     }

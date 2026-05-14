@@ -1,6 +1,10 @@
 import Foundation
 import Combine
 
+extension Notification.Name {
+    static let contextProbeResultSubmitted = Notification.Name("PulseContextProbeResultSubmitted")
+}
+
 @MainActor
 final class DashboardViewModel: ObservableObject {
     @Published var state: StateResponse?
@@ -18,6 +22,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var contextProbeRequests: [ContextProbeRequestPayload] = []
     @Published var contextProbeDebug: [ContextProbeDebugPayload] = []
     @Published var contextProbeResults: [String: ContextProbeResultPayload] = [:]
+    @Published var accessibilityProbeDiagnostic: AccessibilityTextProbeDiagnostic?
     @Published var workContextCard: WorkContextCardPayload?
     @Published var feedHistory: [FeedEvent] = []
     @Published var observation: ObservationData? = nil
@@ -34,6 +39,7 @@ final class DashboardViewModel: ObservableObject {
     private let bridge: DaemonBridge
     private let appleFoundationStatusProvider: (() async -> AppleFoundationLocalStatus?)?
     private var pollTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
     private let refreshInterval: TimeInterval = 10
     private let slowRefreshEveryTicks = 6
     private var slowRefreshTick = 0
@@ -44,6 +50,14 @@ final class DashboardViewModel: ObservableObject {
     ) {
         self.bridge = bridge
         self.appleFoundationStatusProvider = appleFoundationStatusProvider
+        NotificationCenter.default.publisher(for: .contextProbeResultSubmitted)
+            .compactMap { $0.object as? String }
+            .sink { [weak self] requestId in
+                Task { @MainActor [weak self] in
+                    await self?.refreshContextProbeAfterSubmittedResult(requestId: requestId)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     var daemonBaseURL: String {
@@ -153,11 +167,67 @@ final class DashboardViewModel: ObservableObject {
         isLoading = false
     }
 
-    func refreshContextProbeRequests(includeTerminal: Bool = true) async {
+    func refreshContextProbeRequests(
+        includeTerminal: Bool = true,
+        refreshExecutedDetails: Bool = true
+    ) async {
         guard let payload = await bridge.getContextProbeRequests(includeTerminal: includeTerminal) else { return }
         contextProbeRequests = payload.requests
         contextProbeDebug = payload.debug
+        if refreshExecutedDetails {
+            await refreshExecutedContextProbeResults(for: payload.requests)
+        }
         lastRefreshedAt = Date()
+    }
+
+    @discardableResult
+    func refreshContextProbeDetail(requestId: String) async -> Bool {
+        guard let detail = await bridge.getContextProbeRequestDetail(requestId) else { return false }
+        upsertContextProbeRequest(detail.request)
+        upsertContextProbeDebug(detail.debug)
+        if let result = detail.result {
+            contextProbeResults[requestId] = result
+        } else {
+            contextProbeResults.removeValue(forKey: requestId)
+        }
+        lastRefreshedAt = Date()
+        return true
+    }
+
+    private func refreshExecutedContextProbeResults(for requests: [ContextProbeRequestPayload]) async {
+        let executed = requests.filter { $0.status == "executed" }
+        let visibleIds = Set(executed.map(\.requestId))
+        contextProbeResults = contextProbeResults.filter { visibleIds.contains($0.key) }
+
+        for request in executed {
+            guard let detail = await bridge.getContextProbeRequestDetail(request.requestId) else { continue }
+            if let result = detail.result {
+                contextProbeResults[request.requestId] = result
+            } else {
+                contextProbeResults.removeValue(forKey: request.requestId)
+            }
+        }
+    }
+
+    private func refreshContextProbeAfterSubmittedResult(requestId: String) async {
+        await refreshContextProbeRequests(includeTerminal: true, refreshExecutedDetails: false)
+        _ = await refreshContextProbeDetail(requestId: requestId)
+    }
+
+    private func upsertContextProbeRequest(_ request: ContextProbeRequestPayload) {
+        if let index = contextProbeRequests.firstIndex(where: { $0.requestId == request.requestId }) {
+            contextProbeRequests[index] = request
+        } else {
+            contextProbeRequests.append(request)
+        }
+    }
+
+    private func upsertContextProbeDebug(_ debug: ContextProbeDebugPayload) {
+        if let index = contextProbeDebug.firstIndex(where: { $0.requestId == debug.requestId }) {
+            contextProbeDebug[index] = debug
+        } else {
+            contextProbeDebug.append(debug)
+        }
     }
 
     func createFocusedElementTextProbeRequest() async {
@@ -195,6 +265,38 @@ final class DashboardViewModel: ObservableObject {
         guard let response = await bridge.submitContextProbeResult(request.requestId, capture: capture) else { return }
         contextProbeResults[request.requestId] = response.result
         await refreshContextProbeRequests()
+    }
+
+    func diagnoseActiveAccessibilityElement() {
+        do {
+            setAccessibilityProbeDiagnostic(try AccessibilityContextProbeService().diagnoseFocusedElement())
+        } catch {
+            setAccessibilityProbeDiagnostic(AccessibilityTextProbeDiagnostic(
+                appName: "unknown",
+                bundleId: "unknown",
+                pid: 0,
+                axTrusted: false,
+                focusedElementStatus: "error",
+                focusedRole: nil,
+                focusedSubrole: nil,
+                focusedRoleDescription: nil,
+                canReadSelectedText: false,
+                selectedTextLength: nil,
+                canReadValue: false,
+                valueLength: nil,
+                focusedWindowStatus: "error",
+                focusedWindowRole: nil,
+                focusedWindowTitleAvailable: false,
+                rejectionReason: "diagnostic_failed:\(error)",
+                isSecureField: false,
+                isWebArea: false,
+                treeSummary: nil
+            ))
+        }
+    }
+
+    func setAccessibilityProbeDiagnostic(_ diagnostic: AccessibilityTextProbeDiagnostic?) {
+        accessibilityProbeDiagnostic = diagnostic
     }
 
     func debugForContextProbeRequest(_ request: ContextProbeRequestPayload) -> ContextProbeDebugPayload? {

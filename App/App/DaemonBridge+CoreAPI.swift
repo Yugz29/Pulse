@@ -224,12 +224,34 @@ extension DaemonBridge {
         return try? decode(ContextProbeListResponse.self, from: data)
     }
 
+    func getContextProbeRequestDetail(_ requestId: String) async -> ContextProbeDetailResponse? {
+        guard let encodedId = requestId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        guard let url = URL(string: "\(base)/context-probes/requests/\(encodedId)") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(ContextProbeDetailResponse.self, from: data)
+    }
+
     func createFocusedElementTextProbeRequest() async -> ContextProbeCreateResponse? {
-        let requestBody = ContextProbeCreateRequest(
+        await createContextProbeRequest(
             kind: "focused_element_text",
             reason: "Read the active text field on explicit user request",
             ttlSec: 300,
             metadata: ["source": "dashboard_manual"]
+        )
+    }
+
+    func createContextProbeRequest(
+        kind: String,
+        reason: String,
+        ttlSec: Int,
+        metadata: [String: String]
+    ) async -> ContextProbeCreateResponse? {
+        let requestBody = ContextProbeCreateRequest(
+            kind: kind,
+            reason: reason,
+            ttlSec: ttlSec,
+            metadata: metadata
         )
         let request: URLRequest
         do {
@@ -272,6 +294,20 @@ extension DaemonBridge {
     func submitContextProbeResult(
         _ requestId: String,
         capture: AccessibilityTextProbeCapture
+    ) async -> ContextProbeExecuteResponse? {
+        await submitEncodableContextProbeResult(requestId, capture: capture)
+    }
+
+    func submitContextProbeResult(
+        _ requestId: String,
+        capture: ContextTextProbeCapture
+    ) async -> ContextProbeExecuteResponse? {
+        await submitEncodableContextProbeResult(requestId, capture: capture)
+    }
+
+    private func submitEncodableContextProbeResult<T: Encodable>(
+        _ requestId: String,
+        capture: T
     ) async -> ContextProbeExecuteResponse? {
         guard let encodedId = requestId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
         let request: URLRequest

@@ -18,6 +18,14 @@ enum PanelMode {
     case resumeCard
 }
 
+enum ContextInputMode: Equatable {
+    case choosing
+    case clipboardArmed
+    case manualNote
+    case submitted
+    case failed(String)
+}
+
 enum PulseServiceStatus {
     case daemonOffline
     case daemonPaused

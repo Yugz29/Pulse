@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from threading import RLock
-from typing import Iterable, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 from daemon.core.context_probe_request import (
     ContextProbeRequest,
@@ -26,11 +26,13 @@ class ContextProbeRequestStore:
     def __init__(self) -> None:
         self._lock = RLock()
         self._requests: dict[str, ContextProbeRequest] = {}
+        self._results: dict[str, Mapping[str, Any]] = {}
 
     def add(self, request: ContextProbeRequest) -> ContextProbeRequest:
         """Add or replace a request by id."""
         with self._lock:
             self._requests[request.request_id] = request
+            self._results.pop(request.request_id, None)
             return request
 
     def get(self, request_id: str) -> Optional[ContextProbeRequest]:
@@ -49,6 +51,20 @@ class ContextProbeRequestStore:
                 raise KeyError(request.request_id)
             self._requests[request.request_id] = request
             return request
+
+    def store_result(self, request_id: str, result: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Store a redacted context probe result in memory only."""
+        with self._lock:
+            if request_id not in self._requests:
+                raise KeyError(request_id)
+            self._results[request_id] = dict(result)
+            return self._results[request_id]
+
+    def get_result(self, request_id: str) -> Optional[Mapping[str, Any]]:
+        """Return a stored redacted result by request id, if present."""
+        with self._lock:
+            result = self._results.get(request_id)
+            return dict(result) if result is not None else None
 
     def list(
         self,
@@ -70,6 +86,7 @@ class ContextProbeRequestStore:
     def remove(self, request_id: str) -> Optional[ContextProbeRequest]:
         """Remove and return a request, if present."""
         with self._lock:
+            self._results.pop(request_id, None)
             return self._requests.pop(request_id, None)
 
     def expire_due(self, *, now: Optional[datetime] = None) -> list[ContextProbeRequest]:
@@ -84,6 +101,7 @@ class ContextProbeRequestStore:
                     continue
                 updated = expire_context_probe_request(request, decided_at=current_time)
                 self._requests[updated.request_id] = updated
+                self._results.pop(updated.request_id, None)
                 expired.append(updated)
         return expired
 
@@ -94,12 +112,14 @@ class ContextProbeRequestStore:
             for request_id, request in list(self._requests.items()):
                 if request.is_terminal:
                     removed.append(self._requests.pop(request_id))
+                    self._results.pop(request_id, None)
         return sorted(removed, key=lambda request: request.created_at)
 
     def clear(self) -> None:
         """Remove all stored requests."""
         with self._lock:
             self._requests.clear()
+            self._results.clear()
 
     def __len__(self) -> int:
         with self._lock:

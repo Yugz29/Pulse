@@ -25,6 +25,7 @@ class ContextProbeKind(str, Enum):
     FOCUSED_ELEMENT_TEXT = "focused_element_text"
     SELECTED_TEXT = "selected_text"
     CLIPBOARD_SAMPLE = "clipboard_sample"
+    MANUAL_CONTEXT_NOTE = "manual_context_note"
     SCREEN_SNAPSHOT = "screen_snapshot"
     UNKNOWN = "unknown"
 
@@ -122,7 +123,16 @@ def policy_for_probe(kind: ContextProbeKind | str) -> ContextProbePolicy:
             consent=ContextProbeConsent.EXPLICIT_EACH_TIME,
             privacy=PulsePrivacyClass.CONTENT_SENSITIVE,
             retention=PulseRetention.EPHEMERAL,
-            max_chars=1_000,
+            max_chars=4_000,
+        )
+
+    if probe_kind is ContextProbeKind.MANUAL_CONTEXT_NOTE:
+        return ContextProbePolicy(
+            kind=probe_kind,
+            consent=ContextProbeConsent.EXPLICIT_EACH_TIME,
+            privacy=PulsePrivacyClass.CONTENT_SENSITIVE,
+            retention=PulseRetention.EPHEMERAL,
+            max_chars=2_000,
         )
 
     if probe_kind is ContextProbeKind.SCREEN_SNAPSHOT:

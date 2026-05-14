@@ -1011,4 +1011,541 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(summary.workBlocks.first?.taskLabel, "Développement")
         XCTAssertEqual(summary.currentWindow?.commitCount, 3)
     }
+
+    func testDashboardRefreshFetchesExecutedContextProbeDetails() async {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let listJSON = """
+        {
+          "requests": [
+            {
+              "request_id": "manual-1",
+              "kind": "manual_context_note",
+              "reason": "Need context",
+              "policy": {
+                "kind": "manual_context_note",
+                "consent": "explicit_each_time",
+                "privacy": "content_sensitive",
+                "retention": "ephemeral",
+                "allow_raw_value": false,
+                "allow_persistent_storage": false,
+                "requires_user_visible_reason": true,
+                "max_chars": 2000
+              },
+              "status": "executed",
+              "created_at": "2026-05-14T10:00:00",
+              "expires_at": null,
+              "decided_at": "2026-05-14T10:01:00",
+              "executed_at": "2026-05-14T10:02:00",
+              "decision_reason": "Approved",
+              "metadata_keys": [],
+              "is_terminal": true
+            },
+            {
+              "request_id": "clipboard-1",
+              "kind": "clipboard_sample",
+              "reason": "Need context",
+              "policy": {
+                "kind": "clipboard_sample",
+                "consent": "explicit_each_time",
+                "privacy": "content_sensitive",
+                "retention": "ephemeral",
+                "allow_raw_value": false,
+                "allow_persistent_storage": false,
+                "requires_user_visible_reason": true,
+                "max_chars": 4000
+              },
+              "status": "executed",
+              "created_at": "2026-05-14T10:00:00",
+              "expires_at": null,
+              "decided_at": "2026-05-14T10:01:00",
+              "executed_at": "2026-05-14T10:02:00",
+              "decision_reason": "Approved",
+              "metadata_keys": [],
+              "is_terminal": true
+            }
+          ],
+          "debug": [],
+          "count": 2
+        }
+        """
+        let manualDetailJSON = contextProbeDetailJSON(
+            requestId: "manual-1",
+            kind: "manual_context_note",
+            source: "manual_context_note",
+            redactedValue: "note [REDACTED_TOKEN]",
+            charCount: 42
+        )
+        let clipboardDetailJSON = contextProbeDetailJSON(
+            requestId: "clipboard-1",
+            kind: "clipboard_sample",
+            source: "next_clipboard_text",
+            redactedValue: "copied [REDACTED_TOKEN]",
+            charCount: 84
+        )
+
+        MockURLProtocol.handler = { request in
+            let path = try XCTUnwrap(request.url?.path)
+            let body: String
+            switch path {
+            case "/context-probes/requests":
+                body = listJSON
+            case "/context-probes/requests/manual-1":
+                body = manualDetailJSON
+            case "/context-probes/requests/clipboard-1":
+                body = clipboardDetailJSON
+            default:
+                XCTFail("Unexpected path \(path)")
+                body = "{}"
+            }
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(body.utf8))
+        }
+        let bridge = DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+        let vm = DashboardViewModel(bridge: bridge)
+
+        await vm.refreshContextProbeRequests()
+
+        XCTAssertEqual(vm.contextProbeRequests.count, 2)
+        XCTAssertEqual(vm.contextProbeResults["manual-1"]?.data["source"]?.displayValue, "manual_context_note")
+        XCTAssertEqual(vm.contextProbeResults["manual-1"]?.data["char_count"]?.displayValue, "42")
+        XCTAssertEqual(vm.contextProbeResults["manual-1"]?.data["redacted_value"]?.displayValue, "note [REDACTED_TOKEN]")
+        XCTAssertEqual(vm.contextProbeResults["clipboard-1"]?.data["source"]?.displayValue, "next_clipboard_text")
+        XCTAssertEqual(vm.contextProbeResults["clipboard-1"]?.data["char_count"]?.displayValue, "84")
+        XCTAssertEqual(vm.contextProbeResults["clipboard-1"]?.data["redacted_value"]?.displayValue, "copied [REDACTED_TOKEN]")
+    }
+
+    func testDashboardHandlesNotchSubmittedManualContextResultNotification() async {
+        let bridge = makeContextProbeNotificationBridge(
+            requestId: "manual-1",
+            kind: "manual_context_note",
+            source: "manual_context_note",
+            redactedValue: "latest note [REDACTED_TOKEN]",
+            charCount: 33
+        )
+        let vm = DashboardViewModel(bridge: bridge)
+
+        NotificationCenter.default.post(name: .contextProbeResultSubmitted, object: "manual-1")
+        await waitUntil { vm.contextProbeResults["manual-1"] != nil }
+
+        XCTAssertEqual(vm.contextProbeRequests.first?.status, "executed")
+        XCTAssertEqual(vm.contextProbeResults["manual-1"]?.data["source"]?.displayValue, "manual_context_note")
+        XCTAssertEqual(vm.contextProbeResults["manual-1"]?.data["redacted_value"]?.displayValue, "latest note [REDACTED_TOKEN]")
+    }
+
+    func testDashboardHandlesNotchSubmittedClipboardResultNotification() async {
+        let bridge = makeContextProbeNotificationBridge(
+            requestId: "clipboard-1",
+            kind: "clipboard_sample",
+            source: "next_clipboard_text",
+            redactedValue: "latest clipboard [REDACTED_TOKEN]",
+            charCount: 64
+        )
+        let vm = DashboardViewModel(bridge: bridge)
+
+        NotificationCenter.default.post(name: .contextProbeResultSubmitted, object: "clipboard-1")
+        await waitUntil { vm.contextProbeResults["clipboard-1"] != nil }
+
+        XCTAssertEqual(vm.contextProbeRequests.first?.status, "executed")
+        XCTAssertEqual(vm.contextProbeResults["clipboard-1"]?.data["source"]?.displayValue, "next_clipboard_text")
+        XCTAssertEqual(vm.contextProbeResults["clipboard-1"]?.data["char_count"]?.displayValue, "64")
+        XCTAssertEqual(vm.contextProbeResults["clipboard-1"]?.data["redacted_value"]?.displayValue, "latest clipboard [REDACTED_TOKEN]")
+    }
+
+    func testContextProbeQuickNoteChoiceSwitchesNotchStateWithoutCapture() {
+        let vm = PulseViewModel()
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+
+        vm.showManualContextNoteInput()
+
+        XCTAssertEqual(vm.contextInputMode, .manualNote)
+        XCTAssertEqual(vm.contextManualNoteText, "")
+        XCTAssertNotNil(vm.pendingContextProbe)
+    }
+
+    func testClipboardContextArmedStateHasNoVisibleCountdown() async {
+        let bridge = makeClipboardChoiceBridge()
+        let vm = PulseViewModel(bridge: bridge)
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+
+        await vm.chooseNextClipboardContext()
+
+        XCTAssertEqual(vm.contextInputMode, .clipboardArmed)
+        XCTAssertEqual(vm.contextInputStatusText, "En attente du prochain texte copié...")
+        XCTAssertFalse((vm.contextInputStatusText ?? "").contains("60"))
+        XCTAssertFalse((vm.contextInputStatusText ?? "").localizedCaseInsensitiveContains("délai"))
+    }
+
+    func testClipboardContextCancelClosesAndResetsState() async {
+        let vm = PulseViewModel()
+        vm.pendingContextProbe = contextProbeRequest(kind: "clipboard_sample", status: "approved")
+        vm.contextInputMode = .clipboardArmed
+        vm.contextInputStatusText = "En attente du prochain texte copié..."
+        vm.isExpanded = true
+
+        await vm.ignorePendingContextInput()
+
+        XCTAssertNil(vm.pendingContextProbe)
+        XCTAssertFalse(vm.isExpanded)
+        XCTAssertEqual(vm.contextInputMode, .choosing)
+        XCTAssertNil(vm.contextInputStatusText)
+    }
+
+    func testClipboardContextSuccessfulSubmitClosesAndResetsNotch() async {
+        let bridge = makeSubmitContextProbeResultBridge(
+            requestId: "clipboard-1",
+            kind: "clipboard_sample",
+            source: "next_clipboard_text"
+        )
+        let vm = PulseViewModel(bridge: bridge)
+        vm.pendingContextProbe = contextProbeRequest(kind: "clipboard_sample", status: "approved")
+        vm.contextInputMode = .clipboardArmed
+        vm.contextInputStatusText = "En attente du prochain texte copié..."
+        vm.isExpanded = true
+
+        await vm.submitContextTextProbeResult(
+            requestId: "clipboard-1",
+            capture: .nextClipboardText("fresh context")
+        )
+
+        XCTAssertNil(vm.pendingContextProbe)
+        XCTAssertFalse(vm.isExpanded)
+        XCTAssertEqual(vm.contextInputMode, .submitted)
+        XCTAssertEqual(vm.contextInputStatusText, "Contexte envoyé.")
+    }
+
+    private func contextProbeRequest(kind: String, status: String) -> ContextProbeRequestPayload {
+        ContextProbeRequestPayload(
+            requestId: "\(kind)-\(status)",
+            kind: kind,
+            reason: "Need context",
+            policy: ContextProbePolicyPayload(
+                kind: kind,
+                consent: "explicit_each_time",
+                privacy: "content_sensitive",
+                retention: "ephemeral",
+                allowRawValue: false,
+                allowPersistentStorage: false,
+                requiresUserVisibleReason: true,
+                maxChars: 2000
+            ),
+            status: status,
+            createdAt: "2026-05-14T10:00:00",
+            expiresAt: nil,
+            decidedAt: nil,
+            executedAt: nil,
+            decisionReason: nil,
+            metadataKeys: [],
+            isTerminal: false
+        )
+    }
+
+    private func contextProbeDetailJSON(
+        requestId: String,
+        kind: String,
+        source: String,
+        redactedValue: String,
+        charCount: Int
+    ) -> String {
+        """
+        {
+          "request": {
+            "request_id": "\(requestId)",
+            "kind": "\(kind)",
+            "reason": "Need context",
+            "policy": {
+              "kind": "\(kind)",
+              "consent": "explicit_each_time",
+              "privacy": "content_sensitive",
+              "retention": "ephemeral",
+              "allow_raw_value": false,
+              "allow_persistent_storage": false,
+              "requires_user_visible_reason": true,
+              "max_chars": 2000
+            },
+            "status": "executed",
+            "created_at": "2026-05-14T10:00:00",
+            "expires_at": null,
+            "decided_at": "2026-05-14T10:01:00",
+            "executed_at": "2026-05-14T10:02:00",
+            "decision_reason": "Approved",
+            "metadata_keys": [],
+            "is_terminal": true
+          },
+          "debug": {
+            "request_id": "\(requestId)",
+            "kind": "\(kind)",
+            "status": "executed",
+            "reason": "Need context",
+            "policy": {
+              "kind": "\(kind)",
+              "consent": "explicit_each_time",
+              "privacy": "content_sensitive",
+              "retention": "ephemeral",
+              "allow_raw_value": false,
+              "allow_persistent_storage": false,
+              "requires_user_visible_reason": true,
+              "max_chars": 2000
+            },
+            "labels": {
+              "kind": "Context",
+              "consent": "Explicit",
+              "privacy": "Sensitive",
+              "retention": "Ephemeral",
+              "risk": "Sensitive",
+              "risk_accent_hex": "#ff453a"
+            },
+            "created_at": "2026-05-14T10:00:00",
+            "expires_at": null,
+            "decided_at": "2026-05-14T10:01:00",
+            "executed_at": "2026-05-14T10:02:00",
+            "decision_reason": "Approved",
+            "metadata_keys": [],
+            "is_expired": false,
+            "is_terminal": true
+          },
+          "result": {
+            "request_id": "\(requestId)",
+            "kind": "\(kind)",
+            "captured": true,
+            "data": {
+              "source": "\(source)",
+              "char_count": \(charCount),
+              "redacted_value": "\(redactedValue)",
+              "redaction_flags": ["token"],
+              "original_length": \(charCount),
+              "redacted_length": \(redactedValue.count),
+              "was_redacted": true
+            },
+            "privacy": "content_sensitive",
+            "retention": "ephemeral",
+            "captured_at": "2026-05-14T10:02:00",
+            "blocked_reason": null
+          }
+        }
+        """
+    }
+
+    private func makeContextProbeNotificationBridge(
+        requestId: String,
+        kind: String,
+        source: String,
+        redactedValue: String,
+        charCount: Int
+    ) -> DaemonBridge {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let listJSON = contextProbeListJSON(requestId: requestId, kind: kind)
+        let detailJSON = contextProbeDetailJSON(
+            requestId: requestId,
+            kind: kind,
+            source: source,
+            redactedValue: redactedValue,
+            charCount: charCount
+        )
+
+        MockURLProtocol.handler = { request in
+            let path = try XCTUnwrap(request.url?.path)
+            let body: String
+            switch path {
+            case "/context-probes/requests":
+                body = listJSON
+            case "/context-probes/requests/\(requestId)":
+                body = detailJSON
+            default:
+                XCTFail("Unexpected path \(path)")
+                body = "{}"
+            }
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(body.utf8))
+        }
+
+        return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
+    private func contextProbeListJSON(requestId: String, kind: String) -> String {
+        """
+        {
+          "requests": [
+            {
+              "request_id": "\(requestId)",
+              "kind": "\(kind)",
+              "reason": "Need context",
+              "policy": {
+                "kind": "\(kind)",
+                "consent": "explicit_each_time",
+                "privacy": "content_sensitive",
+                "retention": "ephemeral",
+                "allow_raw_value": false,
+                "allow_persistent_storage": false,
+                "requires_user_visible_reason": true,
+                "max_chars": 2000
+              },
+              "status": "executed",
+              "created_at": "2026-05-14T10:00:00",
+              "expires_at": null,
+              "decided_at": "2026-05-14T10:01:00",
+              "executed_at": "2026-05-14T10:02:00",
+              "decision_reason": "Approved",
+              "metadata_keys": [],
+              "is_terminal": true
+            }
+          ],
+          "debug": [],
+          "count": 1
+        }
+        """
+    }
+
+    private func makeClipboardChoiceBridge() -> DaemonBridge {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let createJSON = contextProbeActionJSON(
+            requestId: "clipboard-created",
+            kind: "clipboard_sample",
+            status: "pending"
+        )
+        let approveJSON = contextProbeActionJSON(
+            requestId: "clipboard-created",
+            kind: "clipboard_sample",
+            status: "approved"
+        )
+        let refuseJSON = contextProbeActionJSON(
+            requestId: "focused_element_text-pending",
+            kind: "focused_element_text",
+            status: "refused"
+        )
+
+        MockURLProtocol.handler = { request in
+            let path = try XCTUnwrap(request.url?.path)
+            let method = request.httpMethod ?? "GET"
+            let body: String
+            switch (method, path) {
+            case ("POST", "/context-probes/requests"):
+                body = createJSON
+            case ("POST", "/context-probes/requests/clipboard-created/approve"):
+                body = approveJSON
+            case ("POST", "/context-probes/requests/focused_element_text-pending/refuse"):
+                body = refuseJSON
+            default:
+                XCTFail("Unexpected \(method) \(path)")
+                body = "{}"
+            }
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(body.utf8))
+        }
+
+        return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
+    private func makeSubmitContextProbeResultBridge(
+        requestId: String,
+        kind: String,
+        source: String
+    ) -> DaemonBridge {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let responseJSON = contextProbeDetailJSON(
+            requestId: requestId,
+            kind: kind,
+            source: source,
+            redactedValue: "fresh context",
+            charCount: 13
+        )
+
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/context-probes/requests/\(requestId)/result")
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(responseJSON.utf8))
+        }
+
+        return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
+    private func contextProbeActionJSON(requestId: String, kind: String, status: String) -> String {
+        """
+        {
+          "request": {
+            "request_id": "\(requestId)",
+            "kind": "\(kind)",
+            "reason": "Need context",
+            "policy": {
+              "kind": "\(kind)",
+              "consent": "explicit_each_time",
+              "privacy": "content_sensitive",
+              "retention": "ephemeral",
+              "allow_raw_value": false,
+              "allow_persistent_storage": false,
+              "requires_user_visible_reason": true,
+              "max_chars": 4000
+            },
+            "status": "\(status)",
+            "created_at": "2026-05-14T10:00:00",
+            "expires_at": null,
+            "decided_at": "2026-05-14T10:01:00",
+            "executed_at": null,
+            "decision_reason": "Approved",
+            "metadata_keys": [],
+            "is_terminal": false
+          },
+          "debug": {
+            "request_id": "\(requestId)",
+            "kind": "\(kind)",
+            "status": "\(status)",
+            "reason": "Need context",
+            "policy": {
+              "kind": "\(kind)",
+              "consent": "explicit_each_time",
+              "privacy": "content_sensitive",
+              "retention": "ephemeral",
+              "allow_raw_value": false,
+              "allow_persistent_storage": false,
+              "requires_user_visible_reason": true,
+              "max_chars": 4000
+            },
+            "labels": {
+              "kind": "Context",
+              "consent": "Explicit",
+              "privacy": "Sensitive",
+              "retention": "Ephemeral",
+              "risk": "Sensitive",
+              "risk_accent_hex": "#ff453a"
+            },
+            "created_at": "2026-05-14T10:00:00",
+            "expires_at": null,
+            "decided_at": "2026-05-14T10:01:00",
+            "executed_at": null,
+            "decision_reason": "Approved",
+            "metadata_keys": [],
+            "is_expired": false,
+            "is_terminal": false
+          }
+        }
+        """
+    }
 }

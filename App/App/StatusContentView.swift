@@ -376,6 +376,79 @@ struct ContextProbeDecisionView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            actionContent
+                .padding(.leading, 40)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .frame(height: NotchWindow.contextProbeHeight - .panelContentGap)
+    }
+
+    @ViewBuilder
+    private var actionContent: some View {
+        if request.isContentSensitiveContextProbe {
+            switch vm.contextInputMode {
+            case .choosing:
+                HStack(spacing: 8) {
+                    pillButton("Prochain copier") {
+                        Task { await vm.chooseNextClipboardContext() }
+                    }
+                    .foregroundColor(Color(hex: "#5DCAA5"))
+
+                    pillButton("Note rapide") {
+                        vm.showManualContextNoteInput()
+                    }
+                    .foregroundColor(Color(hex: "#5E9EFF"))
+
+                    pillButton("Ignorer") {
+                        Task { await vm.ignorePendingContextInput() }
+                    }
+                    .foregroundColor(Color(hex: "#ff453a"))
+                }
+            case .clipboardArmed:
+                HStack(spacing: 8) {
+                    compactStatus(vm.contextInputStatusText ?? "En attente du prochain texte copié...")
+                    pillButton("Annuler") {
+                        Task { await vm.ignorePendingContextInput() }
+                    }
+                    .foregroundColor(Color(hex: "#ff453a"))
+                }
+            case .manualNote:
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Note courte", text: $vm.contextManualNoteText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.88))
+                        .lineLimit(2, reservesSpace: true)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    HStack(spacing: 8) {
+                        pillButton("Envoyer") {
+                            Task { await vm.submitManualContextNote() }
+                        }
+                        .foregroundColor(Color(hex: "#5DCAA5"))
+
+                        pillButton("Ignorer") {
+                            Task { await vm.ignorePendingContextInput() }
+                        }
+                        .foregroundColor(Color(hex: "#ff453a"))
+                    }
+                }
+            case .submitted:
+                compactStatus(vm.contextInputStatusText ?? "Contexte envoyé.")
+            case .failed(let message):
+                HStack(spacing: 8) {
+                    compactStatus(message)
+                    pillButton("Ignorer") {
+                        Task { await vm.ignorePendingContextInput() }
+                    }
+                    .foregroundColor(Color(hex: "#ff453a"))
+                }
+            }
+        } else {
             HStack(spacing: 10) {
                 pillButton("Approuver") {
                     Task { await vm.approvePendingContextProbe() }
@@ -389,11 +462,15 @@ struct ContextProbeDecisionView: View {
                 .foregroundColor(Color(hex: "#ff453a"))
                 .frame(maxWidth: .infinity)
             }
-            .padding(.leading, 40)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .frame(height: NotchWindow.contextProbeHeight - .panelContentGap)
+    }
+
+    private func compactStatus(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(0.68))
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

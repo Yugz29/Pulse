@@ -2,6 +2,85 @@ import XCTest
 @testable import App
 
 final class AccessibilityContextProbeServiceTests: XCTestCase {
+    func testOneShotClipboardIgnoresStaleClipboard() {
+        let service = OneShotClipboardContextService()
+        let now = Date()
+        service.arm(baselineChangeCount: 10, now: now, ttl: 60)
+
+        let capture = service.captureIfChanged(
+            changeCount: 10,
+            text: "old text",
+            now: now.addingTimeInterval(1)
+        )
+
+        XCTAssertNil(capture)
+        XCTAssertTrue(service.isArmed)
+    }
+
+    func testOneShotClipboardCapturesOnlyAfterChangeCountAdvances() {
+        let service = OneShotClipboardContextService()
+        let now = Date()
+        service.arm(baselineChangeCount: 10, now: now, ttl: 60)
+
+        let capture = service.captureIfChanged(
+            changeCount: 11,
+            text: "fresh context",
+            now: now.addingTimeInterval(1)
+        )
+
+        XCTAssertEqual(capture?.changeCount, 11)
+        XCTAssertEqual(capture?.capture.source, "next_clipboard_text")
+        XCTAssertEqual(capture?.capture.text, "fresh context")
+        XCTAssertFalse(service.isArmed)
+    }
+
+    func testOneShotClipboardIgnoresNonTextChangeAndStaysArmed() {
+        let service = OneShotClipboardContextService()
+        let now = Date()
+        service.arm(baselineChangeCount: 10, now: now, ttl: 60)
+
+        let first = service.captureIfChanged(
+            changeCount: 11,
+            text: nil,
+            now: now.addingTimeInterval(1)
+        )
+        let second = service.captureIfChanged(
+            changeCount: 12,
+            text: "text after image",
+            now: now.addingTimeInterval(2)
+        )
+
+        XCTAssertNil(first)
+        XCTAssertEqual(second?.capture.text, "text after image")
+        XCTAssertFalse(service.isArmed)
+    }
+
+    func testOneShotClipboardTimeoutDisarms() {
+        let service = OneShotClipboardContextService()
+        let now = Date()
+        service.arm(baselineChangeCount: 10, now: now, ttl: 1)
+
+        let capture = service.captureIfChanged(
+            changeCount: 11,
+            text: "late context",
+            now: now.addingTimeInterval(2)
+        )
+
+        XCTAssertNil(capture)
+        XCTAssertFalse(service.isArmed)
+    }
+
+    func testManualContextNoteTruncatesLocally() {
+        let raw = String(repeating: "n", count: 2_050)
+
+        let capture = ContextTextProbeCapture.manualContextNote(raw)
+
+        XCTAssertEqual(capture.source, "manual_context_note")
+        XCTAssertEqual(capture.charCount, 2_050)
+        XCTAssertTrue(capture.truncated)
+        XCTAssertEqual(capture.text.count, 2_000)
+    }
+
     func testAllowedRolesStayNarrow() {
         XCTAssertTrue(AccessibilityContextProbeService.isAllowedRole("AXTextArea"))
         XCTAssertTrue(AccessibilityContextProbeService.isAllowedRole("AXTextField"))

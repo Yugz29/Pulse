@@ -22,7 +22,7 @@ from daemon.core.context_probe_store import ContextProbeRequestStore, requests_t
 from daemon.core.context_probe_runner import (
     run_app_context_probe,
     run_window_title_probe,
-    submit_accessibility_text_probe_result,
+    submit_context_probe_result,
 )
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.memory.extractor import find_git_root
@@ -123,6 +123,19 @@ def register_probe_routes(
             "count": len(requests_list),
         })
 
+    @app.route("/context-probes/requests/<request_id>", methods=["GET"])
+    def get_context_probe_request_route(request_id: str):
+        """Return one context probe request and its stored redacted result, if any."""
+        probe_store.expire_due()
+        probe_request = probe_store.get(request_id)
+        if probe_request is None:
+            return jsonify({"error": "not_found"}), 404
+        return jsonify({
+            "request": probe_request.to_dict(),
+            "debug": describe_context_probe_request_for_debug(probe_request),
+            "result": probe_store.get_result(request_id),
+        })
+
     @app.route("/context-probes/requests/<request_id>/approve", methods=["POST"])
     def approve_context_probe_request_route(request_id: str):
         """Approve a stored context probe request without executing it."""
@@ -216,6 +229,7 @@ def register_probe_routes(
         except ValueError as exc:
             return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
         probe_store.update(executed)
+        probe_store.store_result(executed.request_id, result.to_dict())
         bus.publish("context_probe_executed", {
             "request_id": executed.request_id,
             "kind": result.kind,
@@ -237,7 +251,7 @@ def register_probe_routes(
         if probe_request is None:
             return jsonify({"error": "not_found"}), 404
 
-        result = submit_accessibility_text_probe_result(
+        result = submit_context_probe_result(
             probe_request,
             request.get_json(silent=True) or {},
         )
@@ -255,6 +269,7 @@ def register_probe_routes(
         except ValueError as exc:
             return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
         probe_store.update(executed)
+        probe_store.store_result(executed.request_id, result.to_dict())
         bus.publish("context_probe_executed", {
             "request_id": executed.request_id,
             "kind": result.kind,

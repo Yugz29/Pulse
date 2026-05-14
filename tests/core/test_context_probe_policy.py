@@ -71,8 +71,21 @@ def test_clipboard_sample_policy_requires_explicit_each_time_and_is_ephemeral():
     assert policy.retention is PulseRetention.EPHEMERAL
     assert policy.allow_raw_value is False
     assert policy.allow_persistent_storage is False
-    assert policy.max_chars == 1_000
+    assert policy.max_chars == 4_000
     assert is_probe_allowed_by_default(ContextProbeKind.CLIPBOARD_SAMPLE) is False
+
+
+def test_manual_context_note_policy_requires_explicit_each_time_and_is_ephemeral():
+    policy = policy_for_probe(ContextProbeKind.MANUAL_CONTEXT_NOTE)
+
+    assert policy.kind is ContextProbeKind.MANUAL_CONTEXT_NOTE
+    assert policy.consent is ContextProbeConsent.EXPLICIT_EACH_TIME
+    assert policy.privacy is PulsePrivacyClass.CONTENT_SENSITIVE
+    assert policy.retention is PulseRetention.EPHEMERAL
+    assert policy.allow_raw_value is False
+    assert policy.allow_persistent_storage is False
+    assert policy.max_chars == 2_000
+    assert is_probe_allowed_by_default(ContextProbeKind.MANUAL_CONTEXT_NOTE) is False
 
 
 def test_screen_snapshot_policy_requires_explicit_each_time_and_is_ephemeral():

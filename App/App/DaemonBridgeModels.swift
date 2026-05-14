@@ -1243,6 +1243,12 @@ struct ContextProbeCreateResponse: Decodable {
     let debug: ContextProbeDebugPayload
 }
 
+struct ContextProbeDetailResponse: Decodable {
+    let request: ContextProbeRequestPayload
+    let debug: ContextProbeDebugPayload
+    let result: ContextProbeResultPayload?
+}
+
 struct ContextProbeExecuteResponse: Decodable {
     let result: ContextProbeResultPayload
     let request: ContextProbeRequestPayload
@@ -1286,7 +1292,8 @@ struct ContextProbeRequestPayload: Decodable, Identifiable {
         case "window_title": return "Titre fenêtre"
         case "focused_element_text": return "Champ texte actif"
         case "selected_text": return "Texte sélectionné"
-        case "clipboard_sample": return "Extrait clipboard"
+        case "clipboard_sample": return "Prochain copier"
+        case "manual_context_note": return "Note rapide"
         case "screen_snapshot": return "Capture écran"
         case "unknown": return "Probe inconnu"
         default: return kind.replacingOccurrences(of: "_", with: " ")
@@ -1325,6 +1332,10 @@ struct ContextProbeRequestPayload: Decodable, Identifiable {
 
     var canCaptureFromAccessibility: Bool {
         status == "approved" && kind == "focused_element_text"
+    }
+
+    var isContentSensitiveContextProbe: Bool {
+        policy.privacy == "content_sensitive" || policy.privacy == "secret_sensitive"
     }
 }
 

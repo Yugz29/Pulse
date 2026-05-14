@@ -1685,7 +1685,16 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(list_payload["requests"][0]["kind"], "selected_text")
         self.assertEqual(list_payload["debug"][0]["request_id"], request_id)
         self.assertEqual(list_payload["debug"][0]["labels"]["risk"], "Sensitive")
+        self.assertNotIn("result", str(list_payload["requests"][0]))
+        self.assertNotIn("redacted_value", str(list_payload))
         self.assertNotIn("SECRET", str(list_payload))
+
+        detail_response = self.client.get(f"/context-probes/requests/{request_id}")
+        self.assertEqual(detail_response.status_code, 200)
+        detail_payload = detail_response.get_json()
+        self.assertEqual(detail_payload["request"]["request_id"], request_id)
+        self.assertIsNone(detail_payload["result"])
+        self.assertNotIn("SECRET", str(detail_payload))
 
     def test_context_probe_requests_list_filters_status_and_include_terminal(self):
         first = self.client.post(
@@ -1764,11 +1773,14 @@ class TestRuntimeRoutes(unittest.TestCase):
     def test_context_probe_request_routes_return_not_found_for_unknown_request(self):
         approve_response = self.client.post("/context-probes/requests/missing/approve")
         refuse_response = self.client.post("/context-probes/requests/missing/refuse")
+        detail_response = self.client.get("/context-probes/requests/missing")
 
         self.assertEqual(approve_response.status_code, 404)
         self.assertEqual(approve_response.get_json(), {"error": "not_found"})
         self.assertEqual(refuse_response.status_code, 404)
         self.assertEqual(refuse_response.get_json(), {"error": "not_found"})
+        self.assertEqual(detail_response.status_code, 404)
+        self.assertEqual(detail_response.get_json(), {"error": "not_found"})
 
     def test_context_probe_request_routes_reject_invalid_transitions(self):
         created = self.client.post(
@@ -1872,6 +1884,13 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertNotIn("Pulse", str(published_payload))
         self.assertNotIn("coding", str(published_payload))
 
+        detail_response = self.client.get(f"/context-probes/requests/{created['request_id']}")
+        self.assertEqual(detail_response.status_code, 200)
+        detail_payload = detail_response.get_json()
+        self.assertEqual(detail_payload["request"]["status"], "executed")
+        self.assertEqual(detail_payload["result"]["data"]["active_app"], "Code")
+        self.assertNotIn("/tmp/Pulse/daemon/secret.py", str(detail_payload))
+
     def test_context_probe_request_execute_runs_approved_window_title_probe_redacted(self):
         signals = Signals(
             active_project="Pulse",
@@ -1950,6 +1969,16 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertNotIn("yugz@example.com", str(published_payload))
         self.assertNotIn("example.com", str(published_payload))
         self.assertNotIn("/Users/yugz", str(published_payload))
+
+        detail_response = self.client.get(f"/context-probes/requests/{created['request_id']}")
+        self.assertEqual(detail_response.status_code, 200)
+        detail_payload = detail_response.get_json()
+        self.assertEqual(
+            detail_payload["result"]["data"]["redacted_value"],
+            "Pulse notes for [REDACTED_EMAIL] — [REDACTED_URL] — /Users/[REDACTED_USER]/Projects/Pulse",
+        )
+        self.assertNotIn("yugz@example.com", str(detail_payload))
+        self.assertNotIn("https://example.com/private", str(detail_payload))
 
     def test_context_probe_request_execute_window_title_without_signal_is_blocked(self):
         signals = Signals(
@@ -2114,6 +2143,149 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertNotIn("data", published)
         self.assertNotIn("example.com", str(published))
         self.assertNotIn("abcdefghijklmnopqrstuvwxyz", str(published))
+
+    def test_context_probe_result_route_accepts_approved_next_clipboard_text(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Use next copied text"},
+        ).get_json()["request"]
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User selected next copied text"},
+        )
+
+        secret = "clipboard draft sk-abcdefghijklmnopqrstuvwxyz123456 " + ("mot " * 1_200)
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "next_clipboard_text",
+                "content_kind": "text",
+                "char_count": len(secret),
+                "truncated": True,
+                "text": secret,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        result = payload["result"]
+        self.assertTrue(result["captured"])
+        self.assertEqual(result["kind"], "clipboard_sample")
+        self.assertEqual(result["data"]["source"], "next_clipboard_text")
+        self.assertIn("token", result["data"]["redaction_flags"])
+        self.assertIn("truncated", result["data"]["redaction_flags"])
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", str(payload))
+        self.assertEqual(payload["request"]["status"], "executed")
+        published = self.bus.publish.call_args.args[1]
+        self.assertEqual(published["kind"], "clipboard_sample")
+        self.assertIn("redacted_value", published["data_keys"])
+        self.assertNotIn("data", published)
+        self.assertNotIn("clipboard draft", str(published))
+
+        detail_response = self.client.get(f"/context-probes/requests/{created['request_id']}")
+        self.assertEqual(detail_response.status_code, 200)
+        detail_payload = detail_response.get_json()
+        self.assertEqual(detail_payload["result"]["kind"], "clipboard_sample")
+        self.assertEqual(detail_payload["result"]["data"]["source"], "next_clipboard_text")
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", str(detail_payload))
+
+        list_payload = self.client.get("/context-probes/requests").get_json()
+        self.assertNotIn("redacted_value", str(list_payload))
+        self.assertNotIn("clipboard draft", str(list_payload))
+
+    def test_context_probe_result_route_accepts_approved_manual_context_note(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "manual_context_note", "reason": "Write quick note"},
+        ).get_json()["request"]
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User wrote note"},
+        )
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "manual_context_note",
+                "char_count": 55,
+                "truncated": False,
+                "text": "Context note with sk-abcdefghijklmnopqrstuvwxyz123456",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["result"]["captured"])
+        self.assertEqual(payload["result"]["kind"], "manual_context_note")
+        self.assertEqual(payload["result"]["data"]["source"], "manual_context_note")
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", str(payload))
+        self.assertEqual(payload["request"]["status"], "executed")
+        published = self.bus.publish.call_args.args[1]
+        self.assertEqual(published["kind"], "manual_context_note")
+        self.assertNotIn("data", published)
+        self.assertNotIn("Context note", str(published))
+
+        detail_response = self.client.get(f"/context-probes/requests/{created['request_id']}")
+        self.assertEqual(detail_response.status_code, 200)
+        detail_payload = detail_response.get_json()
+        self.assertEqual(detail_payload["result"]["kind"], "manual_context_note")
+        self.assertEqual(detail_payload["result"]["data"]["source"], "manual_context_note")
+        self.assertEqual(detail_payload["result"]["data"]["char_count"], 55)
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", str(detail_payload))
+
+    def test_context_probe_result_route_rejects_source_mismatch(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Use next copied text"},
+        ).get_json()["request"]
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "manual_context_note",
+                "text": "SHOULD_NOT_LEAK",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["blocked_reason"], "kind_source_mismatch")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertNotIn("SHOULD_NOT_LEAK", str(payload))
+        self.bus.publish.assert_not_called()
+
+    def test_context_probe_result_route_rejects_expired_content_request(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={
+                "kind": "manual_context_note",
+                "reason": "Write quick note",
+                "ttl_sec": 0,
+            },
+        ).get_json()["request"]
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "User accepted"},
+        )
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "manual_context_note",
+                "text": "EXPIRED_SECRET",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["blocked_reason"], "request_expired")
+        self.assertFalse(payload["result"]["captured"])
+        self.assertNotIn("EXPIRED_SECRET", str(payload))
+        self.bus.publish.assert_not_called()
 
     def test_context_probe_result_route_rejects_forbidden_role(self):
         created = self.client.post(
