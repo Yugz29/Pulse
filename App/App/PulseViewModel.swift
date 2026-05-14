@@ -201,6 +201,12 @@ final class PulseViewModel: ObservableObject {
 
     func ignorePendingContextInput() async {
         if activeContextResultRequestId != nil || contextInputMode == .clipboardArmed {
+            if let requestId = activeContextResultRequestId {
+                _ = await bridge.abortContextProbeRequest(
+                    requestId,
+                    reason: "Cancelled from Pulse Notch"
+                )
+            }
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 pendingContextProbe = nil
                 isExpanded = false

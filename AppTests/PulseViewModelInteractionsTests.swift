@@ -1197,6 +1197,38 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertNil(vm.contextInputStatusText)
     }
 
+    func testClipboardContextCancelAbortsConcreteClipboardRequest() async {
+        var calls: [String] = []
+        let bridge = makeClipboardCancelBridge { method, path in
+            calls.append("\(method) \(path)")
+        }
+        let vm = PulseViewModel(bridge: bridge)
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+        vm.isExpanded = true
+
+        await vm.chooseNextClipboardContext()
+        await vm.ignorePendingContextInput()
+
+        XCTAssertTrue(calls.contains("POST /context-probes/requests/clipboard-created/abort"))
+        XCTAssertNil(vm.pendingContextProbe)
+        XCTAssertFalse(vm.isExpanded)
+        XCTAssertEqual(vm.contextInputMode, .choosing)
+    }
+
+    func testClipboardContextCancelResetsEvenWhenAbortFails() async {
+        let bridge = makeClipboardCancelBridge(abortStatusCode: 503) { _, _ in }
+        let vm = PulseViewModel(bridge: bridge)
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+        vm.isExpanded = true
+
+        await vm.chooseNextClipboardContext()
+        await vm.ignorePendingContextInput()
+
+        XCTAssertNil(vm.pendingContextProbe)
+        XCTAssertFalse(vm.isExpanded)
+        XCTAssertEqual(vm.contextInputMode, .choosing)
+    }
+
     func testClipboardContextSuccessfulSubmitClosesAndResetsNotch() async {
         let bridge = makeSubmitContextProbeResultBridge(
             requestId: "clipboard-1",
@@ -1218,6 +1250,40 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertFalse(vm.isExpanded)
         XCTAssertEqual(vm.contextInputMode, .submitted)
         XCTAssertEqual(vm.contextInputStatusText, "Contexte envoyé.")
+    }
+
+    func testClipboardContextSuccessfulSubmitDoesNotAbortExecutedRequest() async {
+        var calls: [String] = []
+        let bridge = makeSubmitContextProbeResultBridge(
+            requestId: "clipboard-1",
+            kind: "clipboard_sample",
+            source: "next_clipboard_text",
+            record: { method, path in calls.append("\(method) \(path)") }
+        )
+        let vm = PulseViewModel(bridge: bridge)
+        vm.pendingContextProbe = contextProbeRequest(kind: "clipboard_sample", status: "approved")
+        vm.contextInputMode = .clipboardArmed
+
+        await vm.submitContextTextProbeResult(
+            requestId: "clipboard-1",
+            capture: .nextClipboardText("fresh context")
+        )
+
+        XCTAssertEqual(calls, ["POST /context-probes/requests/clipboard-1/result"])
+    }
+
+    func testContextProbeInitialPendingCancelStillRefuses() async {
+        var calls: [String] = []
+        let bridge = makePendingContextProbeRefuseBridge { method, path in
+            calls.append("\(method) \(path)")
+        }
+        let vm = PulseViewModel(bridge: bridge)
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+
+        await vm.ignorePendingContextInput()
+
+        XCTAssertEqual(calls, ["POST /context-probes/requests/focused_element_text-pending/refuse"])
+        XCTAssertNil(vm.pendingContextProbe)
     }
 
     private func contextProbeRequest(kind: String, status: String) -> ContextProbeRequestPayload {
@@ -1456,10 +1522,105 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
     }
 
+    private func makeClipboardCancelBridge(
+        abortStatusCode: Int = 200,
+        record: @escaping (String, String) -> Void
+    ) -> DaemonBridge {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let createJSON = contextProbeActionJSON(
+            requestId: "clipboard-created",
+            kind: "clipboard_sample",
+            status: "pending"
+        )
+        let approveJSON = contextProbeActionJSON(
+            requestId: "clipboard-created",
+            kind: "clipboard_sample",
+            status: "approved"
+        )
+        let refuseOriginalJSON = contextProbeActionJSON(
+            requestId: "focused_element_text-pending",
+            kind: "focused_element_text",
+            status: "refused"
+        )
+        let abortClipboardJSON = contextProbeActionJSON(
+            requestId: "clipboard-created",
+            kind: "clipboard_sample",
+            status: "aborted"
+        )
+
+        MockURLProtocol.handler = { request in
+            let path = try XCTUnwrap(request.url?.path)
+            let method = request.httpMethod ?? "GET"
+            record(method, path)
+            let body: String
+            let statusCode: Int
+            switch (method, path) {
+            case ("POST", "/context-probes/requests"):
+                body = createJSON
+                statusCode = 200
+            case ("POST", "/context-probes/requests/clipboard-created/approve"):
+                body = approveJSON
+                statusCode = 200
+            case ("POST", "/context-probes/requests/focused_element_text-pending/refuse"):
+                body = refuseOriginalJSON
+                statusCode = 200
+            case ("POST", "/context-probes/requests/clipboard-created/abort"):
+                body = abortClipboardJSON
+                statusCode = abortStatusCode
+            default:
+                XCTFail("Unexpected \(method) \(path)")
+                body = "{}"
+                statusCode = 404
+            }
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: statusCode,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(body.utf8))
+        }
+
+        return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
+    private func makePendingContextProbeRefuseBridge(
+        record: @escaping (String, String) -> Void
+    ) -> DaemonBridge {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let refuseJSON = contextProbeActionJSON(
+            requestId: "focused_element_text-pending",
+            kind: "focused_element_text",
+            status: "refused"
+        )
+
+        MockURLProtocol.handler = { request in
+            let path = try XCTUnwrap(request.url?.path)
+            let method = request.httpMethod ?? "GET"
+            record(method, path)
+            XCTAssertEqual(method, "POST")
+            XCTAssertEqual(path, "/context-probes/requests/focused_element_text-pending/refuse")
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(refuseJSON.utf8))
+        }
+
+        return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
     private func makeSubmitContextProbeResultBridge(
         requestId: String,
         kind: String,
-        source: String
+        source: String,
+        record: ((String, String) -> Void)? = nil
     ) -> DaemonBridge {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
@@ -1473,8 +1634,11 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         )
 
         MockURLProtocol.handler = { request in
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.url?.path, "/context-probes/requests/\(requestId)/result")
+            let method = request.httpMethod ?? "GET"
+            let path = try XCTUnwrap(request.url?.path)
+            record?(method, path)
+            XCTAssertEqual(method, "POST")
+            XCTAssertEqual(path, "/context-probes/requests/\(requestId)/result")
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,

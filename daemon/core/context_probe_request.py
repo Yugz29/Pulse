@@ -30,6 +30,7 @@ class ContextProbeRequestStatus(str, Enum):
     EXPIRED = "expired"
     EXECUTED = "executed"
     CANCELLED = "cancelled"
+    ABORTED = "aborted"
 
 
 _TERMINAL_STATUSES = {
@@ -37,6 +38,7 @@ _TERMINAL_STATUSES = {
     ContextProbeRequestStatus.EXPIRED,
     ContextProbeRequestStatus.EXECUTED,
     ContextProbeRequestStatus.CANCELLED,
+    ContextProbeRequestStatus.ABORTED,
 }
 
 
@@ -174,6 +176,23 @@ def execute_context_probe_request(
         request,
         status=ContextProbeRequestStatus.EXECUTED,
         executed_at=executed_at or datetime.now(),
+    )
+
+
+def abort_context_probe_request(
+    request: ContextProbeRequest,
+    *,
+    decided_at: Optional[datetime] = None,
+    decision_reason: Optional[str] = None,
+) -> ContextProbeRequest:
+    """Return an aborted copy of an approved request that will not execute."""
+    if request.status is not ContextProbeRequestStatus.APPROVED:
+        raise ValueError("Only approved context probe requests can be aborted")
+    return replace(
+        request,
+        status=ContextProbeRequestStatus.ABORTED,
+        decided_at=decided_at or datetime.now(),
+        decision_reason=decision_reason or "aborted",
     )
 
 

@@ -5,6 +5,7 @@ import pytest
 from daemon.core.context_probe_policy import ContextProbeKind
 from daemon.core.context_probe_request import (
     ContextProbeRequestStatus,
+    abort_context_probe_request,
     approve_context_probe_request,
     create_context_probe_request,
     refuse_context_probe_request,
@@ -116,6 +117,35 @@ def test_store_list_orders_by_created_at_and_filters_status():
     assert [request.request_id for request in store.list(include_terminal=False)] == ["earlier", "later"]
 
 
+def test_approved_request_can_be_aborted_as_terminal():
+    approved = approve_context_probe_request(
+        _request("approved"),
+        decided_at=datetime(2026, 5, 1, 18, 1, 0),
+    )
+
+    aborted = abort_context_probe_request(
+        approved,
+        decided_at=datetime(2026, 5, 1, 18, 2, 0),
+        decision_reason="user cancelled clipboard capture",
+    )
+
+    assert aborted.status is ContextProbeRequestStatus.ABORTED
+    assert aborted.is_terminal is True
+    assert aborted.decided_at == datetime(2026, 5, 1, 18, 2, 0)
+    assert aborted.decision_reason == "user cancelled clipboard capture"
+    assert aborted.executed_at is None
+
+
+def test_abort_rejects_non_approved_requests():
+    with pytest.raises(ValueError):
+        abort_context_probe_request(_request("pending"))
+
+    approved = approve_context_probe_request(_request("approved"))
+    aborted = abort_context_probe_request(approved)
+    with pytest.raises(ValueError):
+        abort_context_probe_request(aborted)
+
+
 def test_store_remove_and_clear():
     store = ContextProbeRequestStore()
     first = _request("probe-1")
@@ -176,17 +206,28 @@ def test_store_remove_terminal_removes_only_terminal_requests_ordered_by_created
         _request("approved", created_at=datetime(2026, 5, 1, 18, 0, 0)),
         decided_at=datetime(2026, 5, 1, 18, 1, 0),
     )
+    aborted = abort_context_probe_request(
+        approve_context_probe_request(
+            _request("aborted", created_at=datetime(2026, 5, 1, 18, 2, 0)),
+            decided_at=datetime(2026, 5, 1, 18, 2, 30),
+        ),
+        decided_at=datetime(2026, 5, 1, 18, 3, 0),
+    )
     store.add(pending)
     store.add(refused)
     store.add(approved)
+    store.add(aborted)
     store.store_result("refused", {"data": {"redacted_value": "safe"}})
     store.store_result("approved", {"data": {"redacted_value": "kept"}})
+    store.store_result("aborted", {"data": {"redacted_value": "removed"}})
 
     removed = store.remove_terminal()
 
-    assert [request.request_id for request in removed] == ["refused"]
+    assert [request.request_id for request in removed] == ["refused", "aborted"]
     assert store.get("refused") is None
     assert store.get_result("refused") is None
+    assert store.get("aborted") is None
+    assert store.get_result("aborted") is None
     assert store.get("pending") is pending
     assert store.get("approved") is approved
     assert store.get_result("approved")["data"]["redacted_value"] == "kept"

@@ -275,6 +275,10 @@ extension DaemonBridge {
         await sendContextProbeDecision(requestId: requestId, action: "refuse", reason: reason)
     }
 
+    func abortContextProbeRequest(_ requestId: String, reason: String? = nil) async -> ContextProbeActionResponse? {
+        await sendContextProbeDecision(requestId: requestId, action: "abort", reason: reason)
+    }
+
     func executeContextProbeRequest(_ requestId: String) async -> ContextProbeExecuteResponse? {
         guard let encodedId = requestId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
         let request: URLRequest

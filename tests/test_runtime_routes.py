@@ -1731,6 +1731,65 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(refused_payload["count"], 1)
         self.assertEqual(refused_payload["requests"][0]["request_id"], second["request_id"])
 
+    def test_context_probe_requests_list_respects_limit(self):
+        for index in range(3):
+            self.client.post(
+                "/context-probes/requests",
+                json={"kind": "app_context", "reason": f"Need app context {index}"},
+            )
+
+        response = self.client.get("/context-probes/requests?limit=2")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 2)
+        self.assertLessEqual(len(payload["requests"]), 2)
+        self.assertLessEqual(len(payload["debug"]), 2)
+
+    def test_context_probe_requests_list_invalid_limit_uses_safe_default(self):
+        for index in range(3):
+            self.client.post(
+                "/context-probes/requests",
+                json={"kind": "app_context", "reason": f"Need app context {index}"},
+            )
+
+        response = self.client.get("/context-probes/requests?limit=invalid")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 3)
+
+    def test_context_probe_requests_list_applies_filters_before_limit(self):
+        first = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "app_context", "reason": "Need app context"},
+        ).get_json()["request"]
+        second = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample"},
+        ).get_json()["request"]
+        third = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "manual_context_note", "reason": "Need manual note"},
+        ).get_json()["request"]
+
+        self.client.post(f"/context-probes/requests/{second['request_id']}/refuse")
+
+        active_response = self.client.get("/context-probes/requests?include_terminal=false&limit=1")
+        self.assertEqual(active_response.status_code, 200)
+        active_payload = active_response.get_json()
+        self.assertEqual(active_payload["count"], 1)
+        self.assertIn(
+            active_payload["requests"][0]["request_id"],
+            {first["request_id"], third["request_id"]},
+        )
+
+        refused_response = self.client.get("/context-probes/requests?status=refused&limit=1")
+        self.assertEqual(refused_response.status_code, 200)
+        refused_payload = refused_response.get_json()
+        self.assertEqual(refused_payload["count"], 1)
+        self.assertEqual(refused_payload["requests"][0]["request_id"], second["request_id"])
+
     def test_context_probe_requests_approve_and_refuse_update_stored_status(self):
         approve_candidate = self.client.post(
             "/context-probes/requests",
@@ -1770,15 +1829,109 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(statuses[approve_candidate["request_id"]], "approved")
         self.assertEqual(statuses[refuse_candidate["request_id"]], "refused")
 
+    def test_context_probe_requests_abort_approved_request(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need next clipboard text"},
+        ).get_json()["request"]
+        approve_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/approve",
+            json={"reason": "Approved"},
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        abort_response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/abort",
+            json={"reason": "User cancelled clipboard capture"},
+        )
+
+        self.assertEqual(abort_response.status_code, 200)
+        payload = abort_response.get_json()
+        self.assertEqual(payload["request"]["status"], "aborted")
+        self.assertTrue(payload["request"]["is_terminal"])
+        self.assertIsNone(payload["request"]["executed_at"])
+        self.assertEqual(payload["request"]["decision_reason"], "User cancelled clipboard capture")
+
+        detail_payload = self.client.get(f"/context-probes/requests/{created['request_id']}").get_json()
+        self.assertEqual(detail_payload["request"]["status"], "aborted")
+        self.assertIsNone(detail_payload["result"])
+
+    def test_context_probe_requests_abort_rejects_invalid_transitions(self):
+        pending = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample"},
+        ).get_json()["request"]
+        pending_abort = self.client.post(f"/context-probes/requests/{pending['request_id']}/abort")
+        self.assertEqual(pending_abort.status_code, 409)
+        self.assertEqual(pending_abort.get_json()["error"], "invalid_transition")
+
+        refused = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{refused['request_id']}/refuse")
+        refused_abort = self.client.post(f"/context-probes/requests/{refused['request_id']}/abort")
+        self.assertEqual(refused_abort.status_code, 409)
+
+        executed = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{executed['request_id']}/approve")
+        self.client.post(
+            f"/context-probes/requests/{executed['request_id']}/result",
+            json={"source": "next_clipboard_text", "text": "safe context", "char_count": 12},
+        )
+        executed_abort = self.client.post(f"/context-probes/requests/{executed['request_id']}/abort")
+        self.assertEqual(executed_abort.status_code, 409)
+
+        expired = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample", "ttl_sec": 0},
+        ).get_json()["request"]
+        self.client.get("/context-probes/requests")
+        expired_abort = self.client.post(f"/context-probes/requests/{expired['request_id']}/abort")
+        self.assertEqual(expired_abort.status_code, 409)
+
+        approved = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need clipboard sample"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{approved['request_id']}/approve")
+        self.client.post(f"/context-probes/requests/{approved['request_id']}/abort")
+        aborted_again = self.client.post(f"/context-probes/requests/{approved['request_id']}/abort")
+        self.assertEqual(aborted_again.status_code, 409)
+
+    def test_context_probe_requests_list_filters_aborted_status(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Need next clipboard text"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+        self.client.post(f"/context-probes/requests/{created['request_id']}/abort")
+
+        approved_response = self.client.get("/context-probes/requests?status=approved")
+        self.assertEqual(approved_response.status_code, 200)
+        self.assertEqual(approved_response.get_json()["count"], 0)
+
+        aborted_response = self.client.get("/context-probes/requests?status=aborted")
+        self.assertEqual(aborted_response.status_code, 200)
+        aborted_payload = aborted_response.get_json()
+        self.assertEqual(aborted_payload["count"], 1)
+        self.assertEqual(aborted_payload["requests"][0]["request_id"], created["request_id"])
+
     def test_context_probe_request_routes_return_not_found_for_unknown_request(self):
         approve_response = self.client.post("/context-probes/requests/missing/approve")
         refuse_response = self.client.post("/context-probes/requests/missing/refuse")
+        abort_response = self.client.post("/context-probes/requests/missing/abort")
         detail_response = self.client.get("/context-probes/requests/missing")
 
         self.assertEqual(approve_response.status_code, 404)
         self.assertEqual(approve_response.get_json(), {"error": "not_found"})
         self.assertEqual(refuse_response.status_code, 404)
         self.assertEqual(refuse_response.get_json(), {"error": "not_found"})
+        self.assertEqual(abort_response.status_code, 404)
+        self.assertEqual(abort_response.get_json(), {"error": "not_found"})
         self.assertEqual(detail_response.status_code, 404)
         self.assertEqual(detail_response.get_json(), {"error": "not_found"})
 

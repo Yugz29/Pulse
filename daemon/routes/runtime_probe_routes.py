@@ -13,6 +13,7 @@ from daemon.core.context_probe_policy import (
 )
 from daemon.core.context_probe_debug import describe_context_probe_request_for_debug
 from daemon.core.context_probe_request import (
+    abort_context_probe_request,
     approve_context_probe_request,
     create_context_probe_request,
     execute_context_probe_request,
@@ -111,12 +112,18 @@ def register_probe_routes(
         status = request.args.get("status")
         include_terminal = request.args.get("include_terminal", "true").lower() not in {"0", "false", "no"}
         try:
+            limit = int(request.args.get("limit", 100))
+        except (TypeError, ValueError):
+            limit = 100
+        limit = min(max(limit, 1), 100)
+        try:
             requests_list = probe_store.list(
                 status=status,
                 include_terminal=include_terminal,
             )
         except ValueError:
             return jsonify({"error": "invalid_status"}), 400
+        requests_list = requests_list[:limit]
         return jsonify({
             "requests": requests_to_dicts(requests_list),
             "debug": [describe_context_probe_request_for_debug(item) for item in requests_list],
@@ -174,6 +181,26 @@ def register_probe_routes(
         return jsonify({
             "request": refused.to_dict(),
             "debug": describe_context_probe_request_for_debug(refused),
+        })
+
+    @app.route("/context-probes/requests/<request_id>/abort", methods=["POST"])
+    def abort_context_probe_request_route(request_id: str):
+        """Abort an approved context probe request before execution."""
+        data = request.get_json(silent=True) or {}
+        probe_request = probe_store.get(request_id)
+        if probe_request is None:
+            return jsonify({"error": "not_found"}), 404
+        try:
+            aborted = abort_context_probe_request(
+                probe_request,
+                decision_reason=data.get("reason"),
+            )
+        except ValueError as exc:
+            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        probe_store.update(aborted)
+        return jsonify({
+            "request": aborted.to_dict(),
+            "debug": describe_context_probe_request_for_debug(aborted),
         })
 
     @app.route("/context-probes/requests/<request_id>/execute", methods=["POST"])
