@@ -1182,6 +1182,61 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertFalse((vm.contextInputStatusText ?? "").localizedCaseInsensitiveContains("délai"))
     }
 
+    func testClipboardContextCreateIncludesActiveProjectMetadata() async {
+        var createBody: [String: Any] = [:]
+        let bridge = makeClipboardChoiceBridge { request in
+            if request.httpMethod == "POST", request.url?.path == "/context-probes/requests" {
+                createBody = Self.jsonBody(from: request)
+            }
+        }
+        let vm = PulseViewModel(bridge: bridge)
+        vm.activeProject = "Pulse"
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+
+        await vm.chooseNextClipboardContext()
+
+        let metadata = try? XCTUnwrap(createBody["metadata"] as? [String: Any])
+        XCTAssertEqual(metadata?["source"] as? String, "notch_next_clipboard")
+        XCTAssertEqual(metadata?["project"] as? String, "Pulse")
+    }
+
+    func testManualContextCreateIncludesActiveProjectMetadata() async {
+        var createBody: [String: Any] = [:]
+        let bridge = makeManualNoteSubmitBridge { request in
+            if request.httpMethod == "POST", request.url?.path == "/context-probes/requests" {
+                createBody = Self.jsonBody(from: request)
+            }
+        }
+        let vm = PulseViewModel(bridge: bridge)
+        vm.activeProject = "Pulse"
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+        vm.contextManualNoteText = "objectif de travail"
+
+        await vm.submitManualContextNote()
+
+        let metadata = try? XCTUnwrap(createBody["metadata"] as? [String: Any])
+        XCTAssertEqual(metadata?["source"] as? String, "notch_manual_note")
+        XCTAssertEqual(metadata?["project"] as? String, "Pulse")
+    }
+
+    func testContextProbeCreateOmitsBlankProjectMetadata() async {
+        var createBody: [String: Any] = [:]
+        let bridge = makeClipboardChoiceBridge { request in
+            if request.httpMethod == "POST", request.url?.path == "/context-probes/requests" {
+                createBody = Self.jsonBody(from: request)
+            }
+        }
+        let vm = PulseViewModel(bridge: bridge)
+        vm.activeProject = "   "
+        vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
+
+        await vm.chooseNextClipboardContext()
+
+        let metadata = try? XCTUnwrap(createBody["metadata"] as? [String: Any])
+        XCTAssertEqual(metadata?["source"] as? String, "notch_next_clipboard")
+        XCTAssertNil(metadata?["project"])
+    }
+
     func testClipboardContextCancelClosesAndResetsState() async {
         let vm = PulseViewModel()
         vm.pendingContextProbe = contextProbeRequest(kind: "clipboard_sample", status: "approved")
@@ -1475,7 +1530,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         """
     }
 
-    private func makeClipboardChoiceBridge() -> DaemonBridge {
+    private func makeClipboardChoiceBridge(
+        record: ((URLRequest) -> Void)? = nil
+    ) -> DaemonBridge {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
         let session = URLSession(configuration: config)
@@ -1496,6 +1553,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         )
 
         MockURLProtocol.handler = { request in
+            record?(request)
             let path = try XCTUnwrap(request.url?.path)
             let method = request.httpMethod ?? "GET"
             let body: String
@@ -1506,6 +1564,65 @@ final class PulseViewModelInteractionsTests: XCTestCase {
                 body = approveJSON
             case ("POST", "/context-probes/requests/focused_element_text-pending/refuse"):
                 body = refuseJSON
+            default:
+                XCTFail("Unexpected \(method) \(path)")
+                body = "{}"
+            }
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(body.utf8))
+        }
+
+        return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
+    private func makeManualNoteSubmitBridge(
+        record: ((URLRequest) -> Void)? = nil
+    ) -> DaemonBridge {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let createJSON = contextProbeActionJSON(
+            requestId: "manual-created",
+            kind: "manual_context_note",
+            status: "pending"
+        )
+        let approveJSON = contextProbeActionJSON(
+            requestId: "manual-created",
+            kind: "manual_context_note",
+            status: "approved"
+        )
+        let refuseJSON = contextProbeActionJSON(
+            requestId: "focused_element_text-pending",
+            kind: "focused_element_text",
+            status: "refused"
+        )
+        let resultJSON = contextProbeDetailJSON(
+            requestId: "manual-created",
+            kind: "manual_context_note",
+            source: "manual_context_note",
+            redactedValue: "objectif de travail",
+            charCount: 19
+        )
+
+        MockURLProtocol.handler = { request in
+            record?(request)
+            let path = try XCTUnwrap(request.url?.path)
+            let method = request.httpMethod ?? "GET"
+            let body: String
+            switch (method, path) {
+            case ("POST", "/context-probes/requests"):
+                body = createJSON
+            case ("POST", "/context-probes/requests/manual-created/approve"):
+                body = approveJSON
+            case ("POST", "/context-probes/requests/focused_element_text-pending/refuse"):
+                body = refuseJSON
+            case ("POST", "/context-probes/requests/manual-created/result"):
+                body = resultJSON
             default:
                 XCTFail("Unexpected \(method) \(path)")
                 body = "{}"
@@ -1711,5 +1828,29 @@ final class PulseViewModelInteractionsTests: XCTestCase {
           }
         }
         """
+    }
+
+    private static func jsonBody(from request: URLRequest) -> [String: Any] {
+        let data = request.httpBody ?? data(from: request.httpBodyStream)
+        guard let data,
+              let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        return body
+    }
+
+    private static func data(from stream: InputStream?) -> Data? {
+        guard let stream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { return nil }
+            if count == 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
     }
 }

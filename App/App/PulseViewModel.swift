@@ -234,11 +234,17 @@ final class PulseViewModel: ObservableObject {
             return approved.request
         }
 
+        var metadata = ["source": sourceMetadata]
+        if let project = activeProject?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !project.isEmpty {
+            metadata["project"] = project
+        }
+
         guard let created = await bridge.createContextProbeRequest(
             kind: kind,
             reason: reason,
             ttlSec: kind == "clipboard_sample" ? 3_600 : 60,
-            metadata: ["source": sourceMetadata]
+            metadata: metadata
         ) else {
             contextInputMode = .failed("Impossible de créer la demande.")
             return nil

@@ -2346,6 +2346,48 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertNotIn("redacted_value", str(list_payload))
         self.assertNotIn("clipboard draft", str(list_payload))
 
+    def test_clipboard_context_probe_creates_work_intent_candidate_only(self):
+        self.runtime_state.update_present(
+            signals=Signals(
+                active_project="Pulse",
+                active_file=None,
+                probable_task="coding",
+                friction_score=0.0,
+                focus_level="normal",
+                session_duration_min=12,
+                recent_apps=[],
+                clipboard_context=None,
+            ),
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "clipboard_sample", "reason": "Use next copied text"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "next_clipboard_text",
+                "content_kind": "text",
+                "text": "réduire les coûts cachés du modèle local sk-abcdefghijklmnopqrstuvwxyz123456",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(self.runtime_state.get_present().work_intent)
+        candidates_payload = self.client.get("/work-intent/candidates").get_json()
+        self.assertEqual(candidates_payload["count"], 1)
+        candidate = candidates_payload["candidates"][0]
+        self.assertEqual(candidate["source"], "clipboard_sample")
+        self.assertEqual(candidate["confidence"], 0.65)
+        self.assertEqual(candidate["project"], "Pulse")
+        self.assertEqual(candidate["evidence_refs"], [f"context_probe:{created['request_id']}"])
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", str(candidate))
+
     def test_context_probe_result_route_accepts_approved_manual_context_note(self):
         created = self.client.post(
             "/context-probes/requests",
@@ -2385,6 +2427,154 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(detail_payload["result"]["data"]["source"], "manual_context_note")
         self.assertEqual(detail_payload["result"]["data"]["char_count"], 55)
         self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", str(detail_payload))
+
+    def test_manual_context_probe_candidate_accept_sets_work_intent_and_work_context(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="coding",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=[],
+            clipboard_context=None,
+            activity_level="editing",
+            task_confidence=0.8,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "manual_context_note", "reason": "Write quick note"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "manual_context_note",
+                "text": "réduire les coûts cachés du modèle local",
+            },
+        )
+        candidate_id = self.client.get("/work-intent/candidates").get_json()["candidates"][0]["candidate_id"]
+
+        accept_response = self.client.post(f"/work-intent/candidates/{candidate_id}/accept")
+
+        self.assertEqual(accept_response.status_code, 200)
+        active_intent = self.runtime_state.get_present().work_intent
+        self.assertIsNotNone(active_intent)
+        self.assertEqual(active_intent.summary, "réduire les coûts cachés du modèle local")
+        self.assertEqual(active_intent.source, "manual_context_note")
+        self.assertEqual(active_intent.project, "Pulse")
+        work_context = self.client.get("/work-context").get_json()["card"]
+        self.assertEqual(work_context["work_intent"]["summary"], "réduire les coûts cachés du modèle local")
+        self.assertEqual(work_context["work_intent"]["project"], "Pulse")
+
+    def test_manual_context_probe_candidate_uses_request_metadata_project_fallback(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={
+                "kind": "manual_context_note",
+                "reason": "Write quick note",
+                "metadata": {"project": "Pulse"},
+            },
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "manual_context_note",
+                "text": "réduire les coûts cachés du modèle local",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        candidate = self.client.get("/work-intent/candidates").get_json()["candidates"][0]
+        self.assertEqual(candidate["project"], "Pulse")
+
+    def test_manual_context_probe_candidate_project_stays_null_without_project_context(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "manual_context_note", "reason": "Write quick note"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "source": "manual_context_note",
+                "text": "réduire les coûts cachés du modèle local",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        candidate = self.client.get("/work-intent/candidates").get_json()["candidates"][0]
+        self.assertIsNone(candidate["project"])
+
+    def test_focused_element_context_probe_does_not_create_work_intent_candidate(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "focused_element_text", "reason": "Read focused text"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={
+                "app_name": "Code",
+                "bundle_id": "com.example.code",
+                "role": "AXTextArea",
+                "source": "focused_element_text",
+                "text": "réduire les coûts cachés du modèle local",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get("/work-intent/candidates").get_json()["count"], 0)
+
+    def test_refused_work_intent_candidate_cannot_be_accepted(self):
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "manual_context_note", "reason": "Write quick note"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+        self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={"source": "manual_context_note", "text": "stabiliser le journal"},
+        )
+        candidate_id = self.client.get("/work-intent/candidates").get_json()["candidates"][0]["candidate_id"]
+
+        refuse_response = self.client.post(f"/work-intent/candidates/{candidate_id}/refuse")
+        accept_response = self.client.post(f"/work-intent/candidates/{candidate_id}/accept")
+
+        self.assertEqual(refuse_response.status_code, 200)
+        self.assertEqual(accept_response.status_code, 409)
+        self.assertIsNone(self.runtime_state.get_present().work_intent)
+
+    def test_active_work_intent_prevents_new_probe_candidate(self):
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="objectif déjà validé",
+            source="manual",
+            project="Pulse",
+        ))
+        created = self.client.post(
+            "/context-probes/requests",
+            json={"kind": "manual_context_note", "reason": "Write quick note"},
+        ).get_json()["request"]
+        self.client.post(f"/context-probes/requests/{created['request_id']}/approve")
+
+        response = self.client.post(
+            f"/context-probes/requests/{created['request_id']}/result",
+            json={"source": "manual_context_note", "text": "nouvel objectif"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get("/work-intent/candidates").get_json()["count"], 0)
 
     def test_context_probe_result_route_rejects_source_mismatch(self):
         created = self.client.post(

@@ -7,6 +7,7 @@ from flask import Flask
 
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.context_probe_store import ContextProbeRequestStore
+from daemon.core.work_intent_candidate import WorkIntentCandidateStore
 from daemon.routes.debug_memory import register_debug_memory_routes
 from daemon.routes.runtime_debug_routes import register_debug_routes
 from daemon.routes.runtime_feed_routes import register_feed_routes
@@ -16,6 +17,7 @@ from daemon.routes.runtime_daemon_routes import register_daemon_routes
 from daemon.routes.runtime_resume_card_routes import register_resume_card_routes
 from daemon.routes.runtime_status_routes import register_status_routes
 from daemon.routes.lightweight_llm import register_lightweight_llm_routes
+from daemon.routes.work_intent_routes import register_work_intent_routes
 
 
 
@@ -44,6 +46,7 @@ def register_runtime_routes(
     apply_lightweight_llm_result: Callable[..., dict[str, Any]] | None = None,
 ) -> Any:
     probe_store = context_probe_store or ContextProbeRequestStore()
+    work_intent_candidate_store = WorkIntentCandidateStore()
 
     current_context_builder = CurrentContextBuilder()
 
@@ -77,7 +80,14 @@ def register_runtime_routes(
         bus=bus,
         runtime_state=runtime_state,
         probe_store=probe_store,
+        work_intent_candidate_store=work_intent_candidate_store,
         current_context_builder=current_context_builder,
+    )
+
+    register_work_intent_routes(
+        app,
+        runtime_state=runtime_state,
+        candidate_store=work_intent_candidate_store,
     )
 
     register_daemon_routes(

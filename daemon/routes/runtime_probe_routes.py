@@ -36,6 +36,7 @@ def register_probe_routes(
     bus: Any,
     runtime_state: Any,
     probe_store: ContextProbeRequestStore,
+    work_intent_candidate_store: Any | None = None,
     current_context_builder: CurrentContextBuilder,
 ) -> None:
     """Register context probe lifecycle routes onto *app*."""
@@ -257,6 +258,12 @@ def register_probe_routes(
             return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
         probe_store.update(executed)
         probe_store.store_result(executed.request_id, result.to_dict())
+        _maybe_create_work_intent_candidate(
+            runtime_state=runtime_state,
+            candidate_store=work_intent_candidate_store,
+            probe_request=executed,
+            result=result.to_dict(),
+        )
         bus.publish("context_probe_executed", {
             "request_id": executed.request_id,
             "kind": result.kind,
@@ -297,6 +304,12 @@ def register_probe_routes(
             return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
         probe_store.update(executed)
         probe_store.store_result(executed.request_id, result.to_dict())
+        _maybe_create_work_intent_candidate(
+            runtime_state=runtime_state,
+            candidate_store=work_intent_candidate_store,
+            probe_request=executed,
+            result=result.to_dict(),
+        )
         bus.publish("context_probe_executed", {
             "request_id": executed.request_id,
             "kind": result.kind,
@@ -310,3 +323,21 @@ def register_probe_routes(
             "request": executed.to_dict(),
             "debug": describe_context_probe_request_for_debug(executed),
         })
+
+
+def _maybe_create_work_intent_candidate(
+    *,
+    runtime_state: Any,
+    candidate_store: Any | None,
+    probe_request: Any,
+    result: dict[str, Any],
+) -> None:
+    if candidate_store is None:
+        return
+    present = runtime_state.get_present()
+    candidate_store.maybe_create_from_probe_result(
+        probe_request=probe_request,
+        result=result,
+        project=present.active_project,
+        active_work_intent=present.work_intent,
+    )
