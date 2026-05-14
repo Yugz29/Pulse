@@ -23,7 +23,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var dashboardWindow: DashboardWindow?
     private var dashboardVM: DashboardViewModel?
     private var appleFoundationWorker: AppleFoundationWorker?
-    private var hotKeyRef: EventHotKeyRef?
+    private let accessibilityDiagnosticStore = AccessibilityContextProbeDiagnosticStore()
+    private var contextHotKeyRef: EventHotKeyRef?
+    private var focusedTextProbeHotKeyRef: EventHotKeyRef?
+    private var accessibilityDiagnosticHotKeyRef: EventHotKeyRef?
     private var hotKeyHandlerRef: EventHandlerRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -182,10 +185,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
             guard status == noErr else { return noErr }
             guard hotKeyID.signature == AppDelegate.hotKeySignature else { return noErr }
-            guard hotKeyID.id == AppDelegate.hotKeyID else { return noErr }
 
             let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-            delegate.copyContextSnapshot()
+            switch hotKeyID.id {
+            case AppDelegate.contextHotKeyID:
+                delegate.copyContextSnapshot()
+            case AppDelegate.focusedTextProbeHotKeyID:
+                delegate.captureFocusedTextProbeFromShortcut()
+            case AppDelegate.accessibilityDiagnosticHotKeyID:
+                delegate.diagnoseFocusedElementFromShortcut()
+            default:
+                break
+            }
             return noErr
         }
 
@@ -198,18 +209,46 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             &hotKeyHandlerRef
         )
 
-        let hotKeyID = EventHotKeyID(
+        let contextHotKeyID = EventHotKeyID(
             signature: AppDelegate.hotKeySignature,
-            id: AppDelegate.hotKeyID
+            id: AppDelegate.contextHotKeyID
         )
 
         RegisterEventHotKey(
             UInt32(kVK_ANSI_C),
             UInt32(cmdKey | optionKey | shiftKey),
-            hotKeyID,
+            contextHotKeyID,
             GetApplicationEventTarget(),
             0,
-            &hotKeyRef
+            &contextHotKeyRef
+        )
+
+        let focusedTextProbeHotKeyID = EventHotKeyID(
+            signature: AppDelegate.hotKeySignature,
+            id: AppDelegate.focusedTextProbeHotKeyID
+        )
+
+        RegisterEventHotKey(
+            UInt32(kVK_ANSI_P),
+            UInt32(cmdKey | optionKey),
+            focusedTextProbeHotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &focusedTextProbeHotKeyRef
+        )
+
+        let accessibilityDiagnosticHotKeyID = EventHotKeyID(
+            signature: AppDelegate.hotKeySignature,
+            id: AppDelegate.accessibilityDiagnosticHotKeyID
+        )
+
+        RegisterEventHotKey(
+            UInt32(kVK_ANSI_D),
+            UInt32(cmdKey | optionKey),
+            accessibilityDiagnosticHotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &accessibilityDiagnosticHotKeyRef
         )
     }
 
@@ -226,11 +265,83 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    private func captureFocusedTextProbeFromShortcut() {
+        Task {
+            guard let payload = await bridge.getContextProbeRequests(status: "approved", includeTerminal: false) else {
+                print("[Pulse] Focused text probe shortcut ignored: daemon unavailable")
+                return
+            }
+            guard let request = AccessibilityContextProbeShortcutHandler.approvedFocusedElementTextRequest(
+                from: payload.requests
+            ) else {
+                print("[Pulse] Focused text probe shortcut ignored: no approved request")
+                return
+            }
+
+            let capture: AccessibilityTextProbeCapture
+            do {
+                capture = try AccessibilityContextProbeService().captureFocusedText()
+            } catch {
+                print("[Pulse] Focused text probe shortcut failed: \(error)")
+                return
+            }
+
+            guard let response = await bridge.submitContextProbeResult(request.requestId, capture: capture) else {
+                print("[Pulse] Focused text probe shortcut submit failed")
+                return
+            }
+
+            await MainActor.run {
+                self.dashboardVM?.contextProbeResults[request.requestId] = response.result
+            }
+            await dashboardVM?.refreshContextProbeRequests()
+            print("[Pulse] Focused text probe captured for request \(request.requestId)")
+        }
+    }
+
+    private func diagnoseFocusedElementFromShortcut() {
+        Task {
+            let diagnostic: AccessibilityTextProbeDiagnostic
+            do {
+                diagnostic = try AccessibilityContextProbeService().diagnoseFocusedElement()
+            } catch {
+                diagnostic = AccessibilityTextProbeDiagnostic(
+                    appName: "unknown",
+                    bundleId: "unknown",
+                    pid: 0,
+                    axTrusted: AXIsProcessTrusted(),
+                    focusedElementStatus: "error",
+                    focusedRole: nil,
+                    focusedSubrole: nil,
+                    focusedRoleDescription: nil,
+                    canReadSelectedText: false,
+                    selectedTextLength: nil,
+                    canReadValue: false,
+                    valueLength: nil,
+                    focusedWindowStatus: "error",
+                    focusedWindowRole: nil,
+                    focusedWindowTitleAvailable: false,
+                    rejectionReason: "diagnostic_failed:\(error)",
+                    isSecureField: false,
+                    isWebArea: false,
+                    treeSummary: nil
+                )
+            }
+            await MainActor.run {
+                self.accessibilityDiagnosticStore.record(diagnostic)
+                self.dashboardVM?.setAccessibilityProbeDiagnostic(diagnostic)
+            }
+            print("[Pulse] AX diagnostic updated from shortcut")
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         appleFoundationWorker?.stop()
         observer?.stopObserving()
         dashboardVM?.stopPolling()
-        if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        if let contextHotKeyRef { UnregisterEventHotKey(contextHotKeyRef) }
+        if let focusedTextProbeHotKeyRef { UnregisterEventHotKey(focusedTextProbeHotKeyRef) }
+        if let accessibilityDiagnosticHotKeyRef { UnregisterEventHotKey(accessibilityDiagnosticHotKeyRef) }
         if let hotKeyHandlerRef { RemoveEventHandler(hotKeyHandlerRef) }
         cancellables.removeAll()
         notchWindow = nil
@@ -250,6 +361,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     await self?.appleFoundationWorker?.status()
                 }
             )
+            vm.setAccessibilityProbeDiagnostic(accessibilityDiagnosticStore.latestDiagnostic)
             dashboardVM = vm
 
             let window = DashboardWindow()
@@ -280,5 +392,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private static let hotKeySignature: OSType = 0x50554C53 // 'PULS'
-    private static let hotKeyID: UInt32 = 1
+    private static let contextHotKeyID: UInt32 = 1
+    private static let focusedTextProbeHotKeyID: UInt32 = 2
+    private static let accessibilityDiagnosticHotKeyID: UInt32 = 3
 }
