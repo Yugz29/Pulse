@@ -589,7 +589,11 @@ struct DashboardRootView: View {
         let context = vm.state?.currentContext
         let present = vm.state?.present
         let liveSignals = vm.state?.signals
+        let workContextCard = vm.workContextCard
         let weakContext = isWeakProductTask(context, present)
+        let evidenceLabel = workContextCard?.hasStrongProjectContext == true
+            ? workContextCard?.projectContextLabel ?? "Projet corroboré"
+            : liveSignals?.taskEvidenceLabel ?? "Faible"
         let accent = context?.taskAccentHex ?? present?.taskAccentHex ?? gGray
 
         return GlassCard(accent: context?.boundaryColor ?? gBlue) {
@@ -602,7 +606,7 @@ struct DashboardRootView: View {
                             .font(.system(size: weakContext ? 18 : 22, weight: weakContext ? .semibold : .bold, design: .rounded))
                             .foregroundStyle(weakContext ? .secondary : Color(hex: accent))
                         HStack(spacing: 8) {
-                            evidenceBadge(liveSignals?.taskEvidenceLabel ?? "Faible", weak: weakContext)
+                            evidenceBadge(evidenceLabel, weak: weakContext && workContextCard?.hasStrongProjectContext != true)
                             Text(dashboardRelativeTimestamp(present?.updatedAt))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.secondary)
@@ -647,7 +651,7 @@ struct DashboardRootView: View {
 
                     if let liveSignals {
                         Divider()
-                        Text(liveSignals.taskEvidenceSummary)
+                        Text(workContextCard?.hasStrongProjectContext == true ? workContextCard?.projectContextSummary ?? liveSignals.taskEvidenceSummary : liveSignals.taskEvidenceSummary)
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -763,6 +767,7 @@ struct DashboardRootView: View {
         let context = vm.state?.currentContext
         let present = vm.state?.present
         let signals = vm.state?.signals
+        let workContextCard = vm.workContextCard
         let confidence = context?.taskConfidence ?? signals?.taskConfidence ?? 0
         let weakTask = isWeakProductTask(context, present)
         let accent = context?.taskAccentHex ?? present?.taskAccentHex ?? gGray
@@ -777,8 +782,11 @@ struct DashboardRootView: View {
 
                 if let signals {
                     VStack(alignment: .leading, spacing: 6) {
-                        evidenceBadge(signals.taskEvidenceLabel, weak: weakTask)
-                        Text(signals.taskEvidenceSummary)
+                        evidenceBadge(
+                            workContextCard?.hasStrongProjectContext == true ? workContextCard?.projectContextLabel ?? signals.taskEvidenceLabel : signals.taskEvidenceLabel,
+                            weak: weakTask && workContextCard?.hasStrongProjectContext != true
+                        )
+                        Text(workContextCard?.hasStrongProjectContext == true ? workContextCard?.projectContextSummary ?? signals.taskEvidenceSummary : signals.taskEvidenceSummary)
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

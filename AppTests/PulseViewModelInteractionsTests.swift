@@ -708,6 +708,86 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertNil(signals.fileActivitySummary)
     }
 
+    func testWorkContextCardDecodeLesNouveauxChampsEvidenceProjet() throws {
+        let payload = """
+        {
+          "card": {
+            "project": "Pulse",
+            "project_hint": null,
+            "project_hint_confidence": 0.0,
+            "project_hint_source": null,
+            "project_confidence": 0.9,
+            "project_source": "active_project",
+            "project_evidence": ["Projet explicite détecté", "Apps IA utilisées comme support"],
+            "project_warnings": ["Tâche précise encore prudente"],
+            "support_apps": ["ChatGPT"],
+            "activity_level": "executing",
+            "probable_task": "general",
+            "confidence": 0.48,
+            "evidence": ["activité terminale récente"],
+            "missing_context": [],
+            "safe_next_probes": []
+          }
+        }
+        """
+
+        let response = try JSONDecoder().decode(WorkContextCardResponse.self, from: Data(payload.utf8))
+        let card = response.card
+
+        XCTAssertEqual(card.projectConfidence, 0.9)
+        XCTAssertEqual(card.projectSource, "active_project")
+        XCTAssertEqual(card.projectEvidence, ["Projet explicite détecté", "Apps IA utilisées comme support"])
+        XCTAssertEqual(card.projectWarnings, ["Tâche précise encore prudente"])
+        XCTAssertEqual(card.supportApps, ["ChatGPT"])
+    }
+
+    func testWorkContextCardNuanceProjetFortEtTacheGenerale() throws {
+        let payload = """
+        {
+          "card": {
+            "project": "Pulse",
+            "project_confidence": 0.9,
+            "support_apps": ["ChatGPT"],
+            "activity_level": "executing",
+            "probable_task": "general",
+            "confidence": 0.48
+          }
+        }
+        """
+
+        let card = try JSONDecoder()
+            .decode(WorkContextCardResponse.self, from: Data(payload.utf8))
+            .card
+
+        XCTAssertEqual(card.projectContextLabel, "Projet corroboré")
+        XCTAssertTrue(card.projectContextSummary.contains("Projet corroboré, tâche précise encore prudente."))
+        XCTAssertTrue(card.projectContextSummary.contains("Apps support détectées"))
+        XCTAssertTrue(card.projectContextSummary.contains("non utilisées comme preuve projet principale"))
+    }
+
+    func testWorkContextCardGardeUnWordingPrudentQuandProjetFaible() throws {
+        let payload = """
+        {
+          "card": {
+            "project": null,
+            "project_confidence": 0.2,
+            "support_apps": ["ChatGPT"],
+            "activity_level": "reading",
+            "probable_task": "general",
+            "confidence": 0.3
+          }
+        }
+        """
+
+        let card = try JSONDecoder()
+            .decode(WorkContextCardResponse.self, from: Data(payload.utf8))
+            .card
+
+        XCTAssertEqual(card.projectContextLabel, "Contexte faible")
+        XCTAssertTrue(card.projectContextSummary.contains("Contexte projet encore faible."))
+        XCTAssertFalse(card.projectContextSummary.contains("Projet corroboré, tâche précise encore prudente."))
+    }
+
     func testSignalsDataNExposePasOtherCommeLectureUtileQuandUnTypeConcretExiste() {
         let signals = SignalsData(
             activeProject: "Pulse",

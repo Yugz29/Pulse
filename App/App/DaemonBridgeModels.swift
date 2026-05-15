@@ -1607,6 +1607,11 @@ struct WorkContextCardPayload: Decodable {
     let projectHint: String?
     let projectHintConfidence: Double
     let projectHintSource: String?
+    let projectConfidence: Double
+    let projectSource: String?
+    let projectEvidence: [String]
+    let projectWarnings: [String]
+    let supportApps: [String]
     let activityLevel: String
     let probableTask: String
     let confidence: Double
@@ -1619,6 +1624,11 @@ struct WorkContextCardPayload: Decodable {
         case projectHint = "project_hint"
         case projectHintConfidence = "project_hint_confidence"
         case projectHintSource = "project_hint_source"
+        case projectConfidence = "project_confidence"
+        case projectSource = "project_source"
+        case projectEvidence = "project_evidence"
+        case projectWarnings = "project_warnings"
+        case supportApps = "support_apps"
         case activityLevel = "activity_level"
         case probableTask = "probable_task"
         case confidence
@@ -1627,8 +1637,59 @@ struct WorkContextCardPayload: Decodable {
         case safeNextProbes = "safe_next_probes"
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        project = try container.decodeIfPresent(String.self, forKey: .project)
+        projectHint = try container.decodeIfPresent(String.self, forKey: .projectHint)
+        projectHintConfidence = try container.decodeIfPresent(Double.self, forKey: .projectHintConfidence) ?? 0
+        projectHintSource = try container.decodeIfPresent(String.self, forKey: .projectHintSource)
+        projectConfidence = try container.decodeIfPresent(Double.self, forKey: .projectConfidence) ?? 0
+        projectSource = try container.decodeIfPresent(String.self, forKey: .projectSource)
+        projectEvidence = try container.decodeIfPresent([String].self, forKey: .projectEvidence) ?? []
+        projectWarnings = try container.decodeIfPresent([String].self, forKey: .projectWarnings) ?? []
+        supportApps = try container.decodeIfPresent([String].self, forKey: .supportApps) ?? []
+        activityLevel = try container.decodeIfPresent(String.self, forKey: .activityLevel) ?? "unknown"
+        probableTask = try container.decodeIfPresent(String.self, forKey: .probableTask) ?? "general"
+        confidence = try container.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
+        evidence = try container.decodeIfPresent([String].self, forKey: .evidence) ?? []
+        missingContext = try container.decodeIfPresent([String].self, forKey: .missingContext) ?? []
+        safeNextProbes = try container.decodeIfPresent([String].self, forKey: .safeNextProbes) ?? []
+    }
+
     var projectLabel: String {
         project?.isEmpty == false ? project! : "Projet inconnu"
+    }
+
+    var hasStrongProjectContext: Bool {
+        projectConfidence >= 0.75
+    }
+
+    var hasCautiousTaskContext: Bool {
+        probableTask == "general" || confidence < 0.45
+    }
+
+    var projectContextLabel: String {
+        if hasStrongProjectContext {
+            return "Projet corroboré"
+        }
+        return "Contexte faible"
+    }
+
+    var projectContextSummary: String {
+        var parts: [String] = []
+        if hasStrongProjectContext && hasCautiousTaskContext {
+            parts.append("Projet corroboré, tâche précise encore prudente.")
+        } else if hasStrongProjectContext {
+            parts.append("Projet corroboré par les signaux disponibles.")
+        } else {
+            parts.append("Contexte projet encore faible.")
+        }
+
+        if !supportApps.isEmpty {
+            parts.append("Apps support détectées, non utilisées comme preuve projet principale : \(supportApps.joined(separator: ", ")).")
+        }
+
+        return parts.joined(separator: " ")
     }
 
     var projectHintLabel: String? {
