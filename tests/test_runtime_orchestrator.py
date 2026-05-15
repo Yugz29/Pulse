@@ -14,7 +14,7 @@ from daemon.llm.lightweight_queue import LightweightLLMQueue
 from daemon.memory.extractor import update_memories_from_session
 from daemon.memory import extractor as extractor_module
 from daemon.runtime_orchestrator import RuntimeOrchestrator
-from daemon.runtime_state import RuntimeState
+from daemon.runtime_state import RuntimeState, WorkIntent
 
 
 class _LifecycleThread:
@@ -1152,6 +1152,47 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         # La valeur DB doit être conservée, pas écrasée par PresentState
         self.assertEqual(payload["activity_level"], "editing")
+
+    def test_export_memory_payload_exclut_work_intent_expire(self):
+        signals = self._signals(activity_level="editing")
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+        }
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="Note de test pour voir si le projet est bien présent.",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() - timedelta(minutes=1),
+        ))
+
+        payload = self.orchestrator._export_memory_payload()
+
+        self.assertNotIn("work_intent", payload)
+
+    def test_export_memory_payload_conserve_work_intent_actif(self):
+        signals = self._signals(activity_level="editing")
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+        }
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() + timedelta(hours=1),
+        ))
+
+        payload = self.orchestrator._export_memory_payload()
+
+        self.assertEqual(
+            payload["work_intent"]["summary"],
+            "réduire les coûts cachés du modèle local",
+        )
 
 
 if __name__ == "__main__":

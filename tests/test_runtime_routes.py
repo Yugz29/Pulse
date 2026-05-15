@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
@@ -1377,6 +1377,105 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["safe_next_probes"], [])
         self.assertNotIn("active_file", card)
         self.assertNotIn("/tmp/Pulse/daemon/work_context_card.py", str(card))
+
+    def test_expired_work_intent_is_cleared_from_runtime_state(self):
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="Note de test pour voir si le projet est bien présent.",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() - timedelta(minutes=1),
+        ))
+
+        present = self.runtime_state.get_present()
+
+        self.assertIsNone(present.work_intent)
+        self.assertIsNone(self.runtime_state.get_present_snapshot()["work_intent"])
+
+    def test_non_expired_work_intent_remains_active(self):
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() + timedelta(hours=1),
+        ))
+
+        present = self.runtime_state.get_present()
+
+        self.assertIsNotNone(present.work_intent)
+        self.assertEqual(present.work_intent.summary, "réduire les coûts cachés du modèle local")
+
+    def test_state_route_does_not_expose_expired_work_intent(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="coding",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=[],
+            clipboard_context=None,
+            activity_level="editing",
+            task_confidence=0.8,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="Note de test pour voir si le projet est bien présent.",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() - timedelta(minutes=1),
+        ))
+        self.store.to_dict.return_value = {}
+
+        response = self.client.get("/state")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertIsNone(payload["present"]["work_intent"])
+        self.assertNotIn("work_intent", payload["signals"])
+
+    def test_work_context_route_does_not_expose_expired_work_intent(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="coding",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=[],
+            clipboard_context=None,
+            activity_level="editing",
+            task_confidence=0.8,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="Note de test pour voir si le projet est bien présent.",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() - timedelta(minutes=1),
+        ))
+
+        response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        self.assertIsNone(card["work_intent"])
+        self.assertNotIn("Objectif de travail :", " ".join(card["evidence"]))
 
     def test_work_context_route_falls_back_to_present_without_signals(self):
         signals = Signals(

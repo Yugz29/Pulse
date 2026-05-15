@@ -16,6 +16,15 @@ class WorkIntent:
     expires_at: datetime | None = None
     evidence_refs: tuple[str, ...] = ()
 
+    def is_expired(self, *, now: datetime | None = None) -> bool:
+        if self.expires_at is None:
+            return False
+        current_time = _now_for(self.expires_at, now=now)
+        return current_time >= self.expires_at
+
+    def is_active(self, *, now: datetime | None = None) -> bool:
+        return bool(self.summary) and not self.is_expired(now=now)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "summary": self.summary,
@@ -175,6 +184,7 @@ class RuntimeState:
         updated_at: datetime | None = None,
     ) -> PresentState:
         with self._lock:
+            self._clear_expired_work_intent_locked()
             stored_presence_state = self._user_presence_state
             stored_idle_seconds = self._user_idle_seconds
             stored_presence_source = self._user_presence_source
@@ -212,14 +222,17 @@ class RuntimeState:
 
     def get_present(self) -> PresentState:
         with self._lock:
+            self._clear_expired_work_intent_locked()
             return self._present
 
     def get_present_snapshot(self) -> dict[str, Any]:
         with self._lock:
+            self._clear_expired_work_intent_locked()
             return self._present.to_dict()
 
     def get_runtime_snapshot(self) -> RuntimeSnapshot:
         with self._lock:
+            self._clear_expired_work_intent_locked()
             return RuntimeSnapshot(
                 present=self._present,
                 signals=self._last_signals,
@@ -264,11 +277,17 @@ class RuntimeState:
             if intent is None:
                 self._work_intent = None
             elif isinstance(intent, WorkIntent):
-                self._work_intent = intent
+                self._work_intent = intent if intent.is_active() else None
             else:
                 parsed = WorkIntent.from_dict(intent)
-                self._work_intent = parsed if parsed.summary else None
+                self._work_intent = parsed if parsed.is_active() else None
             self._present = replace(self._present, work_intent=self._work_intent)
+
+    def _clear_expired_work_intent_locked(self, *, now: datetime | None = None) -> None:
+        if self._work_intent is None or not self._work_intent.is_expired(now=now):
+            return
+        self._work_intent = None
+        self._present = replace(self._present, work_intent=None)
 
     def mark_screen_locked(self, when: datetime | None = None) -> None:
         with self._lock:
@@ -366,6 +385,14 @@ def _parse_datetime(value: Any) -> datetime | None:
         return datetime.fromisoformat(str(value))
     except Exception:
         return None
+
+
+def _now_for(reference: datetime, *, now: datetime | None = None) -> datetime:
+    if now is not None:
+        return now
+    if reference.tzinfo is not None and reference.utcoffset() is not None:
+        return datetime.now(reference.tzinfo)
+    return datetime.now()
 
 
 def _clamp_float(value: Any, *, default: float) -> float:
