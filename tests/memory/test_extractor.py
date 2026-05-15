@@ -675,7 +675,7 @@ class TestExtractor(unittest.TestCase):
         self.assertNotIn("<final>", llm.prompt)
         self.assertEqual(llm.kwargs.get("think"), True)
 
-    def test_lightweight_prompt_inclut_digest_sans_code_brut(self):
+    def test_lightweight_prompt_reste_base_sur_commit_diff_et_fichiers_sans_digest(self):
         prompt = build_lightweight_journal_summary_prompt(
             "Pulse",
             45,
@@ -687,15 +687,18 @@ class TestExtractor(unittest.TestCase):
             1,
             "feat: expose lightweight status",
             "Diff en cours : runtime.py (+10 -2)",
-            change_digest="- ajoute une route GET /llm/lightweight/status\n- return jsonify(lightweight_queue.status())",
             scope_source="commit_diff",
         )
 
         self.assertIn("Tu rédiges une note de journal de développement à partir de faits observés.", prompt)
         self.assertIn("Projet : Pulse", prompt)
-        self.assertIn("Changements détectés", prompt)
-        self.assertIn("ajoute une route GET /llm/lightweight/status", prompt)
+        self.assertIn("Commit :", prompt)
+        self.assertIn("feat: expose lightweight status", prompt)
+        self.assertIn("Diff compact :", prompt)
+        self.assertIn("Diff en cours : runtime.py (+10 -2)", prompt)
         self.assertNotIn("<final>", prompt)
+        self.assertNotIn("Changements détectés", prompt)
+        self.assertNotIn("ajoute une route GET /llm/lightweight/status", prompt)
         self.assertNotIn("return jsonify", prompt)
 
     def test_lightweight_prompt_ne_hardcode_pas_pulse_hors_faits(self):
@@ -710,7 +713,6 @@ class TestExtractor(unittest.TestCase):
             0,
             "fix: status endpoint",
             "",
-            change_digest="",
         )
 
         self.assertIn("Projet : ClientApp", prompt)
@@ -730,7 +732,6 @@ class TestExtractor(unittest.TestCase):
             2,
             "fix(llm): avoid heavy model warmup for lightweight flows",
             "Diff en cours : lifecycle_policy.py (+20 -0), runtime_orchestrator.py (+8 -12)",
-            change_digest="- évite le warmup du modèle lourd sur les flux lightweight\n- ajoute des tests de régression ou de garde-fous",
             scope_source="commit_diff",
         )
 
@@ -755,7 +756,6 @@ class TestExtractor(unittest.TestCase):
             0,
             "fix(memory): disable embeddings by default",
             "",
-            change_digest="",
             work_intent={
                 "summary": "réduire les coûts cachés du modèle local en évitant les embeddings implicites",
                 "source": "manual",
@@ -802,7 +802,6 @@ class TestExtractor(unittest.TestCase):
                     0,
                     commit_message,
                     "",
-                    change_digest="",
                 )
                 self.assertIn(expected, prompt)
                 self.assertNotIn("a ajouté trois nouveaux modèles", prompt)

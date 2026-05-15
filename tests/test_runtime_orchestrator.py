@@ -846,7 +846,6 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 commit_message="fix: lightweight queue",
                 trigger="commit",
                 diff_summary="diff --git a/runtime.py b/runtime.py",
-                change_digest="- ajoute une route GET /llm/lightweight/status",
             )
 
         pending = queue.claim_next()
@@ -855,8 +854,10 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(pending.metadata["report_ref"], ("journal.md", "entry-1"))
         self.assertIn("fix: lightweight queue", pending.prompt)
         self.assertIn("Tu rédiges une note de journal de développement", pending.prompt)
-        self.assertIn("Changements détectés", pending.prompt)
-        self.assertIn("ajoute une route GET /llm/lightweight/status", pending.prompt)
+        self.assertIn("Diff compact", pending.prompt)
+        self.assertIn("diff --git a/runtime.py b/runtime.py", pending.prompt)
+        self.assertNotIn("Changements détectés", pending.prompt)
+        self.assertNotIn("ajoute une route GET /llm/lightweight/status", pending.prompt)
         self.assertNotIn("<final>", pending.prompt)
         self.summary_llm.complete.assert_not_called()
         start_worker.assert_not_called()

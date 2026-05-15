@@ -993,14 +993,12 @@ Contraintes :
 
 def build_lightweight_journal_summary_prompt(
     project, duration, task, focus, friction, apps, top_files, files_count,
-    commit_message, diff_summary, *, change_digest: Optional[str] = None,
-    work_intent=None,
+    commit_message, diff_summary, *, work_intent=None,
     scope_source="snapshot",
 ) -> str:
     facts_block = _lightweight_journal_facts_block(
         project, duration, task, focus, friction, apps,
         top_files, files_count, commit_message, diff_summary,
-        change_digest=change_digest,
         work_intent=work_intent,
         scope_source=scope_source,
     )
@@ -1049,13 +1047,11 @@ def _journal_summary_facts_block(
 
 def _lightweight_journal_facts_block(
     project, duration, task, focus, friction, apps, top_files, files_count,
-    commit_message, diff_summary, *, change_digest: Optional[str] = None,
-    work_intent=None,
+    commit_message, diff_summary, *, work_intent=None,
     scope_source="snapshot",
 ) -> str:
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
-    change_digest = _redact_memory_text(change_digest)
     facts: List[str] = [f"- Projet : {project}", f"- Durée : {duration} minutes"]
     intent = _safe_work_intent(work_intent)
     if intent:
@@ -1070,11 +1066,6 @@ def _lightweight_journal_facts_block(
         delivery_hint = _commit_delivery_hint(full_msg)
         if delivery_hint:
             facts.append(f"- Intention du commit : {delivery_hint}")
-    if change_digest:
-        digest_lines = _safe_change_digest_lines(change_digest)
-        if digest_lines:
-            facts.append("- Changements détectés :")
-            facts.extend(digest_lines)
     if diff_summary:
         facts.append("- Diff compact :")
         for line in diff_summary.splitlines():
@@ -1105,25 +1096,6 @@ def _safe_work_intent(work_intent) -> Optional[str]:
     if not summary:
         return None
     return summary[:240]
-
-
-def _safe_change_digest_lines(change_digest: str) -> List[str]:
-    lines: List[str] = []
-    code_markers = ("return ", "def ", "class ", "struct ", "func ", "@app.", "jsonify", "{", "}", ";")
-    for raw_line in str(change_digest or "").splitlines():
-        line = raw_line.strip()
-        if not line.startswith("- "):
-            continue
-        lowered = line.lower()
-        if any(marker in lowered for marker in code_markers):
-            continue
-        line = re.sub(r"\s+", " ", line).strip()
-        if len(line) > 122:
-            line = line[:122].rstrip()
-        lines.append(line)
-        if len(lines) >= 6:
-            break
-    return lines
 
 
 def _commit_type_from_message(commit_message: str) -> Optional[str]:

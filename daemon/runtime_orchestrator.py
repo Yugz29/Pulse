@@ -37,7 +37,6 @@ from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.contracts import CurrentContext, ProposalCandidate, SessionContext
 from daemon.core.event_bus import DEFAULT_EVENT_BUS_SIZE
 from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary, extract_file_names_from_diff_summary
-from daemon.core.git_change_digest import read_commit_change_digest
 from daemon.core.proposal_candidate_adapter import proposal_candidate_to_proposal
 from daemon.core.proposals import proposal_store
 from daemon.core.resume_card import (
@@ -205,11 +204,10 @@ class RuntimeOrchestrator:
         commit_message=None,
         trigger="screen_lock",
         diff_summary=None,
-        change_digest=None,
     ) -> threading.Thread | None:
         return self._start_critical_worker(
             target=self._sync_memory_background,
-            args=(snapshot, llm, commit_message, trigger, diff_summary, change_digest),
+            args=(snapshot, llm, commit_message, trigger, diff_summary),
             name="pulse-memory-sync",
         )
 
@@ -1103,13 +1101,8 @@ class RuntimeOrchestrator:
         self._refresh_runtime_signals_for_closure(drain_pending=True)
 
         diff_summary: str | None = None
-        change_digest: str | None = None
         try:
             diff_summary = read_commit_diff_summary(git_root) or None
-        except Exception:
-            pass
-        try:
-            change_digest = read_commit_change_digest(git_root) or None
         except Exception:
             pass
 
@@ -1139,7 +1132,7 @@ class RuntimeOrchestrator:
             commit_scope_files=commit_scope_files,
             git_root=git_root,
         )
-        self._schedule_memory_sync(snapshot, self.summary_llm, commit_msg, "commit", diff_summary, change_digest)
+        self._schedule_memory_sync(snapshot, self.summary_llm, commit_msg, "commit", diff_summary)
 
     @staticmethod
     def _append_uncertainty_flag(snapshot: dict, flag: str) -> None:
@@ -1443,7 +1436,7 @@ class RuntimeOrchestrator:
             },
         )
 
-    def _sync_memory_background(self, snapshot, llm, commit_message=None, trigger="screen_lock", diff_summary=None, change_digest=None):
+    def _sync_memory_background(self, snapshot, llm, commit_message=None, trigger="screen_lock", diff_summary=None):
         try:
             if diff_summary is None:
                 diff_summary = self.runtime_state.get_diff_summary() or None
@@ -1482,7 +1475,6 @@ class RuntimeOrchestrator:
                         snapshot=snapshot,
                         commit_message=commit_message,
                         diff_summary=diff_summary,
-                        change_digest=change_digest,
                     )
                 else:
                     self._start_critical_worker(
@@ -1493,7 +1485,7 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("memory sync échouée : %s", exc)
 
-    def _enqueue_lightweight_commit_summary(self, *, report_ref, snapshot, commit_message, diff_summary, change_digest=None) -> None:
+    def _enqueue_lightweight_commit_summary(self, *, report_ref, snapshot, commit_message, diff_summary) -> None:
         try:
             project = snapshot.get("active_project") or "inconnu"
             duration = int(snapshot.get("duration_min") or 0)
@@ -1514,7 +1506,6 @@ class RuntimeOrchestrator:
                 files_count,
                 commit_message,
                 diff_summary,
-                change_digest=change_digest,
                 work_intent=snapshot.get("work_intent"),
                 scope_source="commit_diff" if diff_summary else "commit_files",
             )
