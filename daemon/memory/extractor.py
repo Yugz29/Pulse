@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 from daemon.core.command_redaction import redact_sensitive_command
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
-from daemon.core.workspace_context import extract_project_name
+from daemon.core.work_evidence_resolver import WorkEvidenceInput, resolve_work_evidence
 from daemon.memory.facts import FactEngine
 from daemon.memory.embedding_policy import embeddings_enabled
 from daemon.memory.vector_store import VectorStore
@@ -1378,27 +1378,47 @@ def _clean_file_paths(files: List[Any]) -> List[str]:
 
 
 def _infer_project_from_session_evidence(session_data: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
-    for key, source in (
-        ("project_root", "project_root"),
-        ("repo_root", "repo_root"),
-        ("terminal_cwd", "terminal_cwd"),
-        ("active_file", "active_file"),
-    ):
-        project = extract_project_name(str(session_data.get(key) or ""))
-        if project:
-            return project, source
-
     paths = _clean_file_paths(session_data.get("top_file_paths") or session_data.get("top_files", []))
-    path_projects = [extract_project_name(path) for path in paths]
-    path_projects = [project for project in path_projects if project]
-    if path_projects:
-        counts: Dict[str, int] = {}
-        for project in path_projects:
-            counts[project] = counts.get(project, 0) + 1
-        project, count = max(counts.items(), key=lambda item: item[1])
-        if count > len(path_projects) / 2:
-            return project, "top_file_paths"
+    active_file = str(session_data.get("active_file") or "").strip()
+    if active_file:
+        paths = _clean_file_paths([active_file, *paths])
+
+    resolution = resolve_work_evidence(
+        WorkEvidenceInput(
+            active_project=_normalize_project_name(session_data.get("active_project")),
+            project_hint=_normalize_project_name(session_data.get("project_hint")),
+            file_paths=tuple(paths),
+            repo_roots=tuple(
+                str(value)
+                for value in (session_data.get("project_root"), session_data.get("repo_root"))
+                if str(value or "").strip()
+            ),
+            terminal_cwd=session_data.get("terminal_cwd"),
+            terminal_project=_normalize_project_name(session_data.get("terminal_project")),
+            terminal_command_category=session_data.get("terminal_command_category"),
+            active_app=session_data.get("active_app"),
+            window_title=session_data.get("active_window_title") or session_data.get("window_title"),
+            recent_apps=tuple(_compact_strings(session_data.get("recent_apps", []))),
+            work_intent_project=_work_intent_project(session_data),
+            commit_repo_root=session_data.get("commit_repo_root"),
+            commit_files=tuple(_clean_file_paths(session_data.get("commit_files", []))),
+        )
+    )
+    if resolution.project and resolution.project_confidence >= 0.75:
+        return resolution.project, resolution.project_source
     return None, None
+
+
+def _work_intent_project(session_data: Dict[str, Any]) -> Optional[str]:
+    explicit = _normalize_project_name(session_data.get("work_intent_project"))
+    if explicit:
+        return explicit
+    intent = session_data.get("work_intent")
+    if hasattr(intent, "to_dict"):
+        intent = intent.to_dict()
+    if isinstance(intent, dict):
+        return _normalize_project_name(intent.get("project"))
+    return None
 
 
 def _infer_journal_project(entry: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:

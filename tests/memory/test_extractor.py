@@ -2009,7 +2009,84 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("service.py", visible)
         self.assertNotIn(str(alpha), visible)
         self.assertEqual(hidden[0]["active_project"], "AlphaApp")
-        self.assertEqual(hidden[0]["project_source"], "top_file_paths")
+        self.assertEqual(hidden[0]["project_source"], "file_paths")
+
+    def test_journal_attribue_un_projet_depuis_active_project_generique(self):
+        update_memories_from_session(
+            {
+                "active_project": "AlphaApp",
+                "duration_min": 25,
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "recent_apps": ["Code"],
+                "top_files": ["service.py"],
+                "files_changed": 1,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## AlphaApp", journal)
+
+    def test_journal_attribue_un_projet_depuis_project_root_generique(self):
+        alpha = self.memory_dir / "workspaces" / "AlphaApp"
+        alpha.mkdir(parents=True)
+
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "project_root": str(alpha),
+                "duration_min": 25,
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "recent_apps": ["Code"],
+                "top_files": ["service.py"],
+                "files_changed": 1,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## AlphaApp", journal)
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        self.assertEqual(hidden[0]["project_source"], "repo_root")
+
+    def test_journal_attribue_un_projet_depuis_terminal_cwd_generique(self):
+        alpha = self.memory_dir / "Projects" / "AlphaApp"
+        terminal_cwd = alpha / "tools"
+        terminal_cwd.mkdir(parents=True)
+
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "terminal_cwd": str(terminal_cwd),
+                "duration_min": 25,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Terminal"],
+                "top_files": ["service.py"],
+                "files_changed": 1,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## AlphaApp", journal)
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        self.assertEqual(hidden[0]["project_source"], "terminal_cwd")
 
     def test_journal_ne_devine_pas_le_projet_depuis_des_basenames_ambigus(self):
         update_memories_from_session(
@@ -2038,6 +2115,67 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("## Hors projet", visible)
         self.assertEqual(hidden[0]["active_project"], None)
         self.assertEqual(hidden[0]["project_source"], "project_attribution_insufficient")
+
+    def test_journal_ne_devine_pas_le_projet_depuis_apps_ia_seules(self):
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "duration_min": 25,
+                "probable_task": "general",
+                "activity_level": "reading",
+                "recent_apps": ["ChatGPT", "Code"],
+                "files_changed": 0,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        self.assertIn("## Hors projet", visible)
+        self.assertNotIn("## AlphaApp", visible)
+
+    def test_journal_ne_devine_pas_le_projet_depuis_work_intent_seul(self):
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "work_intent": {"summary": "Stabiliser AlphaApp", "project": "AlphaApp"},
+                "duration_min": 25,
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "recent_apps": ["Code"],
+                "files_changed": 0,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        self.assertIn("## Hors projet", visible)
+        self.assertNotIn("## AlphaApp", visible)
+
+    def test_journal_attribue_work_intent_si_corrobore_par_terminal_cwd(self):
+        terminal_cwd = self.memory_dir / "Projects" / "AlphaApp"
+        terminal_cwd.mkdir(parents=True)
+
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "terminal_cwd": str(terminal_cwd),
+                "work_intent": {"summary": "Stabiliser AlphaApp", "project": "AlphaApp"},
+                "duration_min": 25,
+                "probable_task": "coding",
+                "activity_level": "executing",
+                "recent_apps": ["Code", "ChatGPT"],
+                "files_changed": 0,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## AlphaApp", journal)
 
     def test_journal_conserve_un_episode_projet_fort_avec_commit(self):
         update_memories_from_session(
