@@ -1372,6 +1372,12 @@ struct DashboardRootView: View {
                     }
                 }
 
+                if !activeWorkIntentCandidates.isEmpty {
+                    GlassCard(accent: gPurple) {
+                        workIntentCandidatesSection
+                    }
+                }
+
                 if vm.contextProbeRequests.isEmpty {
                     GlassCard {
                         VStack(spacing: 12) {
@@ -1401,6 +1407,12 @@ struct DashboardRootView: View {
         }
     }
 
+    private var activeWorkIntentCandidates: [WorkIntentCandidatePayload] {
+        vm.workIntentCandidates
+            .filter { $0.status == "candidate" && $0.isActive }
+            .sorted { $0.createdAt ?? "" > $1.createdAt ?? "" }
+    }
+
     private var sortedContextProbeRequests: [ContextProbeRequestPayload] {
         vm.contextProbeRequests.sorted { left, right in
             if left.status == "pending" && right.status != "pending" { return true }
@@ -1409,6 +1421,82 @@ struct DashboardRootView: View {
             if left.status != "approved" && right.status == "approved" { return false }
             return left.createdAt > right.createdAt
         }
+    }
+
+    private var workIntentCandidatesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                cardTitle("Intentions proposées", icon: "target")
+                Spacer()
+                statBadge("À valider", "\(activeWorkIntentCandidates.count)", gPurple)
+            }
+            Text("Candidates issues des context probes validées. Le texte affiché est déjà borné et redigé côté daemon.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(activeWorkIntentCandidates) { candidate in
+                workIntentCandidateRow(candidate)
+            }
+        }
+    }
+
+    private func workIntentCandidateRow(_ candidate: WorkIntentCandidatePayload) -> some View {
+        let statusColor = Color(hex: candidate.statusAccentHex)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text(candidate.sourceLabel)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(candidate.statusLabel)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(statusColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(statusColor.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    Text(candidate.summary)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 6) {
+                contextProbeMetaPill("Projet", candidate.project?.isEmpty == false ? candidate.project! : "n/a")
+                contextProbeMetaPill("Confiance", candidate.confidenceLabel)
+                contextProbeMetaPill("Expire", candidate.expiresAt ?? "n/a")
+                contextProbeMetaPill("Evidence", candidate.evidenceRefs.isEmpty ? "n/a" : candidate.evidenceRefs.joined(separator: " · "))
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    Task { await vm.acceptWorkIntentCandidate(candidate) }
+                } label: {
+                    Label("Utiliser comme intention", systemImage: "checkmark.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(hex: gGreen))
+
+                Button(role: .destructive) {
+                    Task { await vm.refuseWorkIntentCandidate(candidate) }
+                } label: {
+                    Label("Ignorer", systemImage: "xmark.circle")
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+            }
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 
     private func accessibilityDiagnosticBlock(_ diagnostic: AccessibilityTextProbeDiagnostic) -> some View {

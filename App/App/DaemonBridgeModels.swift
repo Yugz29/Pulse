@@ -207,6 +207,91 @@ struct WorkIntentData: Decodable {
     }
 }
 
+struct WorkIntentCandidateListResponse: Decodable {
+    let candidates: [WorkIntentCandidatePayload]
+    let count: Int
+}
+
+struct WorkIntentCandidateActionResponse: Decodable {
+    let candidate: WorkIntentCandidatePayload
+}
+
+struct WorkIntentCandidateAcceptResponse: Decodable {
+    let candidate: WorkIntentCandidatePayload
+    let workIntent: WorkIntentData
+
+    enum CodingKeys: String, CodingKey {
+        case candidate
+        case workIntent = "work_intent"
+    }
+}
+
+struct WorkIntentCandidatePayload: Decodable, Identifiable {
+    let candidateId: String
+    let summary: String
+    let source: String
+    let confidence: Double
+    let project: String?
+    let createdAt: String?
+    let expiresAt: String?
+    let evidenceRefs: [String]
+    let status: String
+    let isActive: Bool
+
+    var id: String { candidateId }
+
+    enum CodingKeys: String, CodingKey {
+        case candidateId = "candidate_id"
+        case summary
+        case source
+        case confidence
+        case project
+        case createdAt = "created_at"
+        case expiresAt = "expires_at"
+        case evidenceRefs = "evidence_refs"
+        case status
+        case isActive = "is_active"
+    }
+
+    var sourceLabel: String {
+        switch source {
+        case "manual_context_note": return "Note rapide"
+        case "clipboard_sample": return "Prochain copier"
+        case "focused_element_text": return "Champ texte actif"
+        case "inferred": return "Inféré"
+        default: return source.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    var statusLabel: String {
+        switch status {
+        case "candidate": return "À valider"
+        case "accepted": return "Utilisée"
+        case "refused": return "Ignorée"
+        case "expired": return "Expirée"
+        default: return status
+        }
+    }
+
+    var statusAccentHex: String {
+        switch status {
+        case "candidate": return "#5E9EFF"
+        case "accepted": return "#5DCAA5"
+        case "refused": return "#7c7c80"
+        case "expired": return "#7c7c80"
+        default: return "#7c7c80"
+        }
+    }
+
+    var canAcceptOrRefuse: Bool {
+        status == "candidate" && isActive
+    }
+
+    var confidenceLabel: String {
+        "\(Int((confidence * 100).rounded())) %"
+    }
+}
+
 struct SessionContextData: Decodable, Identifiable {
     private let rawId: String?
     let sessionId: String?

@@ -208,6 +208,29 @@ extension DaemonBridge {
         return try? decode(WorkContextCardResponse.self, from: data)
     }
 
+    func getWorkIntentCandidates() async -> WorkIntentCandidateListResponse? {
+        guard let url = URL(string: "\(base)/work-intent/candidates") else { return nil }
+        guard let (data, response) = try? await data(from: url) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(WorkIntentCandidateListResponse.self, from: data)
+    }
+
+    func acceptWorkIntentCandidate(_ candidateId: String) async -> WorkIntentCandidateAcceptResponse? {
+        guard let encodedId = candidateId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        guard let request = try? jsonObjectRequest(path: "/work-intent/candidates/\(encodedId)/accept", body: [:], timeout: 10) else { return nil }
+        guard let (data, response) = try? await data(for: request) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(WorkIntentCandidateAcceptResponse.self, from: data)
+    }
+
+    func refuseWorkIntentCandidate(_ candidateId: String) async -> WorkIntentCandidateActionResponse? {
+        guard let encodedId = candidateId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        guard let request = try? jsonObjectRequest(path: "/work-intent/candidates/\(encodedId)/refuse", body: [:], timeout: 10) else { return nil }
+        guard let (data, response) = try? await data(for: request) else { return nil }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? decode(WorkIntentCandidateActionResponse.self, from: data)
+    }
+
     func getContextProbeRequests(status: String? = nil, includeTerminal: Bool = true) async -> ContextProbeListResponse? {
         var queryItems: [String] = []
         if let status, !status.isEmpty {

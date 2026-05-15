@@ -48,6 +48,24 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         }
     }
 
+    private final class RequestCallRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var calls: [String] = []
+
+        func record(_ request: URLRequest) {
+            lock.lock()
+            calls.append("\(request.httpMethod ?? "GET") \(request.url?.path ?? "")")
+            lock.unlock()
+        }
+
+        var snapshot: [String] {
+            lock.lock()
+            let value = calls
+            lock.unlock()
+            return value
+        }
+    }
+
     override func tearDown() {
         MockURLProtocol.handler = nil
         super.tearDown()
@@ -754,6 +772,15 @@ final class PulseViewModelInteractionsTests: XCTestCase {
                 )!
                 return (response, Data("[]".utf8))
             }
+            if request.url?.path == "/context-probes/requests" {
+                let response = HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data(#"{"requests":[],"debug":[],"count":0}"#.utf8))
+            }
             XCTAssertEqual(request.url?.path, "/llm/model")
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
@@ -1158,6 +1185,82 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(vm.contextProbeResults["clipboard-1"]?.data["redacted_value"]?.displayValue, "latest clipboard [REDACTED_TOKEN]")
     }
 
+    func testWorkIntentCandidateModelDecodesDashboardFields() throws {
+        let payload = try JSONDecoder().decode(
+            WorkIntentCandidateListResponse.self,
+            from: Data(workIntentCandidatesJSON(status: "candidate").utf8)
+        )
+
+        let candidate = try XCTUnwrap(payload.candidates.first)
+        XCTAssertEqual(payload.count, 1)
+        XCTAssertEqual(candidate.candidateId, "candidate-1")
+        XCTAssertEqual(candidate.summary, "Réduire les coûts cachés du modèle local")
+        XCTAssertEqual(candidate.source, "manual_context_note")
+        XCTAssertEqual(candidate.sourceLabel, "Note rapide")
+        XCTAssertEqual(candidate.project, "Pulse")
+        XCTAssertEqual(candidate.confidence, 0.9)
+        XCTAssertEqual(candidate.confidenceLabel, "90 %")
+        XCTAssertEqual(candidate.evidenceRefs, ["context_probe:manual-1"])
+        XCTAssertEqual(candidate.status, "candidate")
+        XCTAssertTrue(candidate.canAcceptOrRefuse)
+    }
+
+    func testDashboardRefreshLoadsWorkIntentCandidates() async {
+        let bridge = makeWorkIntentCandidateBridge()
+        let vm = DashboardViewModel(bridge: bridge)
+
+        await vm.refreshWorkIntentCandidates()
+
+        XCTAssertEqual(vm.workIntentCandidates.count, 1)
+        XCTAssertEqual(vm.workIntentCandidates.first?.summary, "Réduire les coûts cachés du modèle local")
+        XCTAssertEqual(vm.workIntentCandidates.first?.project, "Pulse")
+    }
+
+    func testDashboardAcceptsWorkIntentCandidateAndRefreshesContext() async throws {
+        let recorder = RequestCallRecorder()
+        let bridge = makeWorkIntentCandidateBridge { request in
+            recorder.record(request)
+        }
+        let vm = DashboardViewModel(bridge: bridge)
+        let candidate = try XCTUnwrap(
+            try JSONDecoder()
+                .decode(WorkIntentCandidateListResponse.self, from: Data(workIntentCandidatesJSON(status: "candidate").utf8))
+                .candidates
+                .first
+        )
+
+        await vm.acceptWorkIntentCandidate(candidate)
+
+        let recordedCalls = recorder.snapshot
+        XCTAssertTrue(recordedCalls.contains("POST /work-intent/candidates/candidate-1/accept"))
+        XCTAssertTrue(recordedCalls.contains("GET /work-intent/candidates"))
+        XCTAssertTrue(recordedCalls.contains("GET /work-context"))
+        XCTAssertTrue(recordedCalls.contains("GET /state"))
+        XCTAssertEqual(vm.workContextCard?.project, "Pulse")
+        XCTAssertEqual(vm.state?.present?.workIntent?.summary, "Réduire les coûts cachés du modèle local")
+    }
+
+    func testDashboardRefusesWorkIntentCandidateAndRefreshesCandidates() async throws {
+        let recorder = RequestCallRecorder()
+        let bridge = makeWorkIntentCandidateBridge { request in
+            recorder.record(request)
+        }
+        let vm = DashboardViewModel(bridge: bridge)
+        let candidate = try XCTUnwrap(
+            try JSONDecoder()
+                .decode(WorkIntentCandidateListResponse.self, from: Data(workIntentCandidatesJSON(status: "candidate").utf8))
+                .candidates
+                .first
+        )
+
+        await vm.refuseWorkIntentCandidate(candidate)
+
+        let recordedCalls = recorder.snapshot
+        XCTAssertTrue(recordedCalls.contains("POST /work-intent/candidates/candidate-1/refuse"))
+        XCTAssertTrue(recordedCalls.contains("GET /work-intent/candidates"))
+        XCTAssertFalse(recordedCalls.contains("POST /work-intent/candidates/candidate-1/accept"))
+    }
+
     func testContextProbeQuickNoteChoiceSwitchesNotchStateWithoutCapture() {
         let vm = PulseViewModel()
         vm.pendingContextProbe = contextProbeRequest(kind: "focused_element_text", status: "pending")
@@ -1494,6 +1597,149 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         }
 
         return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
+    private func makeWorkIntentCandidateBridge(
+        record: ((URLRequest) -> Void)? = nil
+    ) -> DaemonBridge {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        MockURLProtocol.handler = { request in
+            record?(request)
+            let path = try XCTUnwrap(request.url?.path)
+            let method = request.httpMethod ?? "GET"
+            let body: String
+            switch (method, path) {
+            case ("GET", "/work-intent/candidates"):
+                body = self.workIntentCandidatesJSON(status: "candidate")
+            case ("POST", "/work-intent/candidates/candidate-1/accept"):
+                body = self.workIntentCandidateAcceptJSON()
+            case ("POST", "/work-intent/candidates/candidate-1/refuse"):
+                body = self.workIntentCandidateActionJSON(status: "refused")
+            case ("GET", "/work-context"):
+                body = self.workContextJSON()
+            case ("GET", "/state"):
+                body = self.stateWithWorkIntentJSON()
+            default:
+                XCTFail("Unexpected \(method) \(path)")
+                body = "{}"
+            }
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(body.utf8))
+        }
+
+        return DaemonBridge(base: "http://127.0.0.1:8765", session: session)
+    }
+
+    private func workIntentCandidatesJSON(status: String) -> String {
+        """
+        {
+          "candidates": [
+            \(workIntentCandidateJSON(status: status))
+          ],
+          "count": 1
+        }
+        """
+    }
+
+    private func workIntentCandidateActionJSON(status: String) -> String {
+        """
+        {
+          "candidate": \(workIntentCandidateJSON(status: status))
+        }
+        """
+    }
+
+    private func workIntentCandidateAcceptJSON() -> String {
+        """
+        {
+          "candidate": \(workIntentCandidateJSON(status: "accepted")),
+          "work_intent": \(workIntentJSON())
+        }
+        """
+    }
+
+    private func workIntentCandidateJSON(status: String) -> String {
+        let isActive = status == "candidate" ? "true" : "false"
+        return """
+        {
+          "candidate_id": "candidate-1",
+          "summary": "Réduire les coûts cachés du modèle local",
+          "source": "manual_context_note",
+          "confidence": 0.9,
+          "project": "Pulse",
+          "created_at": "2026-05-15T10:00:00",
+          "expires_at": "2026-05-15T12:00:00",
+          "evidence_refs": ["context_probe:manual-1"],
+          "status": "\(status)",
+          "is_active": \(isActive)
+        }
+        """
+    }
+
+    private func workIntentJSON() -> String {
+        """
+        {
+          "summary": "Réduire les coûts cachés du modèle local",
+          "source": "manual_context_note",
+          "confidence": 0.9,
+          "project": "Pulse",
+          "created_at": "2026-05-15T10:00:00",
+          "expires_at": "2026-05-15T12:00:00",
+          "evidence_refs": ["context_probe:manual-1"]
+        }
+        """
+    }
+
+    private func workContextJSON() -> String {
+        """
+        {
+          "card": {
+            "project": "Pulse",
+            "project_hint": null,
+            "project_hint_confidence": 0.0,
+            "project_hint_source": null,
+            "activity_level": "editing",
+            "probable_task": "coding",
+            "confidence": 0.8,
+            "evidence": ["active_project"],
+            "missing_context": [],
+            "safe_next_probes": []
+          }
+        }
+        """
+    }
+
+    private func stateWithWorkIntentJSON() -> String {
+        """
+        {
+          "active_app": "Xcode",
+          "active_project": "Pulse",
+          "session_duration_min": 12,
+          "present": {
+            "session_status": "active",
+            "awake": true,
+            "locked": false,
+            "active_file": null,
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "activity_level": "editing",
+            "focus_level": "normal",
+            "friction_score": 0.1,
+            "clipboard_context": null,
+            "session_duration_min": 12,
+            "work_intent": \(workIntentJSON()),
+            "updated_at": "2026-05-15T10:00:00"
+          }
+        }
+        """
     }
 
     private func contextProbeListJSON(requestId: String, kind: String) -> String {

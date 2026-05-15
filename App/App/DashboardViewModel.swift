@@ -24,6 +24,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var contextProbeResults: [String: ContextProbeResultPayload] = [:]
     @Published var accessibilityProbeDiagnostic: AccessibilityTextProbeDiagnostic?
     @Published var workContextCard: WorkContextCardPayload?
+    @Published var workIntentCandidates: [WorkIntentCandidatePayload] = []
     @Published var feedHistory: [FeedEvent] = []
     @Published var observation: ObservationData? = nil
     @Published var daydreams: [DaydreamEntry] = []
@@ -131,6 +132,7 @@ final class DashboardViewModel: ObservableObject {
             async let proposalsTask = bridge.getRecentProposals(limit: 20)
             async let contextProbesTask = bridge.getContextProbeRequests(includeTerminal: true)
             async let workContextTask = bridge.getWorkContextCard()
+            async let workIntentCandidatesTask = bridge.getWorkIntentCandidates()
             async let daydreamTask = bridge.getDaydreamData()
             async let llmTask: LLMModelsResponse? = try? await bridge.getLLMModels()
             async let lightweightTask: LightweightLLMStatusResponse? = try? await bridge.getLightweightLLMStatus()
@@ -153,6 +155,9 @@ final class DashboardViewModel: ObservableObject {
             }
             if let workContext = await workContextTask {
                 workContextCard = workContext.card
+            }
+            if let workIntentCandidatesPayload = await workIntentCandidatesTask {
+                workIntentCandidates = workIntentCandidatesPayload.candidates
             }
             let daydreamData = await daydreamTask
             daydreams = daydreamData.0
@@ -178,6 +183,29 @@ final class DashboardViewModel: ObservableObject {
             await refreshExecutedContextProbeResults(for: payload.requests)
         }
         lastRefreshedAt = Date()
+    }
+
+    func refreshWorkIntentCandidates() async {
+        guard let payload = await bridge.getWorkIntentCandidates() else { return }
+        workIntentCandidates = payload.candidates
+        lastRefreshedAt = Date()
+    }
+
+    func acceptWorkIntentCandidate(_ candidate: WorkIntentCandidatePayload) async {
+        guard candidate.canAcceptOrRefuse else { return }
+        guard await bridge.acceptWorkIntentCandidate(candidate.candidateId) != nil else { return }
+        await refreshWorkIntentCandidates()
+        if let workContext = await bridge.getWorkContextCard() {
+            workContextCard = workContext.card
+        }
+        state = try? await bridge.getState()
+        lastRefreshedAt = Date()
+    }
+
+    func refuseWorkIntentCandidate(_ candidate: WorkIntentCandidatePayload) async {
+        guard candidate.canAcceptOrRefuse else { return }
+        guard await bridge.refuseWorkIntentCandidate(candidate.candidateId) != nil else { return }
+        await refreshWorkIntentCandidates()
     }
 
     @discardableResult
