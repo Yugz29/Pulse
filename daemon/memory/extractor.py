@@ -38,6 +38,7 @@ from typing import Any, Dict, List, Optional
 from daemon.core.command_redaction import redact_sensitive_command
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
+from daemon.core.workspace_context import extract_project_name
 from daemon.memory.facts import FactEngine
 from daemon.memory.embedding_policy import embeddings_enabled
 from daemon.memory.vector_store import VectorStore
@@ -844,6 +845,7 @@ def _write_session_report(
     friction    = float(session.get("max_friction", 0.0))
     apps        = session.get("recent_apps", [])
     files_count = session.get("files_changed", 0)
+    top_file_paths = _clean_file_paths(session.get("top_file_paths") or session.get("top_files", []))
     top_files   = _clean_files(session.get("top_files", []))
     scope_source = "snapshot"
 
@@ -905,6 +907,9 @@ def _write_session_report(
         summary_source=summary_source,
         summary_status=summary_status,
         summary_error=summary_error,
+        top_file_paths=top_file_paths,
+        project_root=session.get("project_root") or session.get("repo_root"),
+        project_source=consolidation.get("project_source"),
     )
 
     with _memory_write_lock:
@@ -1354,6 +1359,52 @@ def _clean_files(files: List[str]) -> List[str]:
     return result
 
 
+def _clean_file_paths(files: List[Any]) -> List[str]:
+    result: List[str] = []
+    for raw in files or []:
+        text = str(raw or "").strip()
+        if not text or "/" not in text:
+            continue
+        name = Path(text).name
+        if name in _NOISE_PATTERNS:
+            continue
+        if any(name.endswith(s) for s in _NOISE_SUFFIXES):
+            continue
+        if any(s in text for s in _NOISE_SUBSTRINGS):
+            continue
+        if text not in result:
+            result.append(text)
+    return result
+
+
+def _infer_project_from_session_evidence(session_data: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    for key, source in (
+        ("project_root", "project_root"),
+        ("repo_root", "repo_root"),
+        ("terminal_cwd", "terminal_cwd"),
+        ("active_file", "active_file"),
+    ):
+        project = extract_project_name(str(session_data.get(key) or ""))
+        if project:
+            return project, source
+
+    paths = _clean_file_paths(session_data.get("top_file_paths") or session_data.get("top_files", []))
+    path_projects = [extract_project_name(path) for path in paths]
+    path_projects = [project for project in path_projects if project]
+    if path_projects:
+        counts: Dict[str, int] = {}
+        for project in path_projects:
+            counts[project] = counts.get(project, 0) + 1
+        project, count = max(counts.items(), key=lambda item: item[1])
+        if count > len(path_projects) / 2:
+            return project, "top_file_paths"
+    return None, None
+
+
+def _infer_journal_project(entry: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    return _infer_project_from_session_evidence(entry)
+
+
 def _replace_journal_entry(
     journal_file: Path,
     entry_id: str,
@@ -1454,7 +1505,8 @@ def _journal_task_confidence(value: Any) -> Optional[float]:
 def _build_journal_entry(*, entry_id, active_project, probable_task, activity_level, task_confidence,
     duration_min, body, commit_message, recent_apps, top_files, files_count, started_at, ended_at, boundary_reason,
     scope_source="snapshot", uncertainty_flags=None, delivered_at=None,
-    summary_source="deterministic_fallback", summary_status="llm_unavailable", summary_error=None) -> Dict[str, Any]:
+    summary_source="deterministic_fallback", summary_status="llm_unavailable", summary_error=None,
+    top_file_paths=None, project_root=None, project_source=None) -> Dict[str, Any]:
     body = _redact_memory_text(body)
     commit_message = _redact_memory_text(commit_message)
     normalized_confidence = _journal_task_confidence(task_confidence)
@@ -1479,7 +1531,13 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
         "summary_source": summary_source or "deterministic_fallback",
         "summary_status": summary_status or "unknown",
         "summary_error": summary_error,
+        "project_source": project_source,
     }
+    cleaned_paths = _clean_file_paths(top_file_paths or [])
+    if cleaned_paths:
+        entry["top_file_paths"] = cleaned_paths[:5]
+    if project_root:
+        entry["project_root"] = str(project_root)
     if (commit_message or "").strip():
         entry["commit_items"] = [
             {
@@ -1618,9 +1676,17 @@ def _merge_journal_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]
 def _normalize_journal_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized = dict(entry)
     normalized["active_project"] = _normalize_project_name(normalized.get("active_project"))
+    if normalized["active_project"] is None:
+        inferred_project, project_source = _infer_journal_project(normalized)
+        if inferred_project:
+            normalized["active_project"] = inferred_project
+            normalized["project_source"] = normalized.get("project_source") or project_source
+        else:
+            normalized["project_source"] = normalized.get("project_source") or "project_attribution_insufficient"
     normalized["probable_task"] = normalized.get("probable_task") or "general"
     normalized["activity_level"] = normalized.get("activity_level") or "unknown"
     normalized["top_files"] = [str(item) for item in normalized.get("top_files", []) if isinstance(item, str) and item.strip()]
+    normalized["top_file_paths"] = _clean_file_paths(normalized.get("top_file_paths", []))
     normalized["recent_apps"] = _compact_strings(normalized.get("recent_apps", []))
     normalized["duration_min"] = int(max(normalized.get("duration_min") or 0, 0))
     normalized["body"] = _redact_memory_text(normalized.get("body"))
@@ -1762,6 +1828,9 @@ def _merge_journal_pair(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str
     merged["commit_messages"] = _merge_unique_strings(left.get("commit_messages", []), right.get("commit_messages", []))
     merged["commit_items"] = _merge_commit_items(left.get("commit_items", []), right.get("commit_items", []))
     merged["recent_apps"] = _merge_unique_strings(left.get("recent_apps", []), right.get("recent_apps", []))
+    merged["top_file_paths"] = _merge_unique_strings(left.get("top_file_paths", []), right.get("top_file_paths", []))
+    merged["project_root"] = left.get("project_root") or right.get("project_root")
+    merged["project_source"] = left.get("project_source") or right.get("project_source")
     merged["commit_message"] = merged["commit_messages"][0] if merged["commit_messages"] else ""
     merged["scope_source"] = _stronger_scope_source(left.get("scope_source"), right.get("scope_source"))
     # Durée réelle : diff entre started_at et ended_at fusionnés.
@@ -2443,6 +2512,9 @@ def _build_consolidation_frame(
 ) -> Dict[str, Any]:
     session_record = _latest_recent_session(_session_records(session_data))
     active_project = (session_record or {}).get("active_project") or session_data.get("active_project")
+    project_source = "active_project" if active_project else None
+    if not active_project:
+        active_project, project_source = _infer_project_from_session_evidence(session_data)
     probable_task = (session_record or {}).get("probable_task") or session_data.get("probable_task") or "general"
     task_confidence = (
         (session_record or {}).get("task_confidence")
@@ -2462,6 +2534,7 @@ def _build_consolidation_frame(
         return {
             "session_record": session_record,
             "active_project": active_project,
+            "project_source": project_source,
             "probable_task": probable_task,
             "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
             "task_confidence": task_confidence,
@@ -2475,6 +2548,7 @@ def _build_consolidation_frame(
         return _commit_only_consolidation_frame(
             session_data,
             active_project=session_data.get("active_project") or active_project,
+            project_source="active_project" if session_data.get("active_project") else project_source,
             probable_task=probable_task,
             fallback_session_record=session_record,
             task_confidence=task_confidence,
@@ -2500,6 +2574,7 @@ def _build_consolidation_frame(
     return {
         "session_record": session_record,
         "active_project": active_project,
+        "project_source": project_source,
         "probable_task": probable_task,
         "activity_level": (session_record or {}).get("activity_level") or session_data.get("activity_level"),
         "task_confidence": task_confidence,
@@ -2515,6 +2590,7 @@ def _commit_only_consolidation_frame(
     *,
     active_project: Optional[str],
     probable_task: str,
+    project_source: Optional[str] = None,
     fallback_session_record: Optional[Dict[str, Any]] = None,
     task_confidence: Any = None,
     uncertainty_flags: Any = None,
@@ -2530,6 +2606,7 @@ def _commit_only_consolidation_frame(
     return {
         "session_record": None,
         "active_project": active_project,
+        "project_source": project_source,
         "probable_task": probable_task,
         "activity_level": session_data.get("activity_level"),
         "task_confidence": task_confidence,

@@ -560,6 +560,8 @@ class SessionMemory:
         duration_min = int(session.get("session_duration_min") or 0) or self._duration_min()
 
         recent_sessions = self.get_recent_sessions(limit=3)
+        git_roots = self._git_roots_from_events(recent_events, limit=1)
+        project_root = str(git_roots[0]) if git_roots else None
         payload = {
             "started_at": started_at,
             "ended_at": session.get("ended_at"),
@@ -572,6 +574,8 @@ class SessionMemory:
             "focus_level": session.get("focus_level") or "normal",
             "friction_score": float(session.get("friction_score") or 0.0),
             "top_files": file_paths[:10],
+            "top_file_paths": file_paths[:10],
+            "project_root": project_root,
             "files_changed": len(seen_paths),
             "recent_apps": app_names[:10],
             "commit_count": commit_count,

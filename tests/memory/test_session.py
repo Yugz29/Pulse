@@ -388,12 +388,28 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(payload["probable_task"], "coding")
         self.assertEqual(payload["duration_min"], 20)
         self.assertEqual(payload["files_changed"], 1)
+        self.assertEqual(payload["top_file_paths"], ["/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"])
         self.assertIn("Cursor", payload["recent_apps"])
         self.assertIn("work_block_started_at", payload)
         self.assertIn("work_block_commit_count", payload)
         self.assertIn("recent_sessions", payload)
         self.assertEqual(payload["work_block_started_at"], payload["started_at"])
         self.assertEqual(payload["work_block_commit_count"], payload["commit_count"])
+
+    def test_export_memory_payload_expose_project_root_depuis_git_root_local(self):
+        start = datetime(2026, 4, 28, 11, 0, 0)
+        repo = Path(self.tmpdir.name) / "AlphaApp"
+        (repo / ".git").mkdir(parents=True)
+        source = repo / "src" / "main.py"
+        source.parent.mkdir(parents=True)
+        source.touch()
+
+        self.memory.record_event(Event("file_modified", {"path": str(source)}, timestamp=start))
+
+        payload = self.memory.export_memory_payload()
+
+        self.assertEqual(payload["top_file_paths"], [str(source)])
+        self.assertEqual(payload["project_root"], str(repo))
 
     def test_export_memory_payload_expose_les_alias_legacy_temporairement(self):
         start = datetime(2026, 4, 28, 11, 0, 0)

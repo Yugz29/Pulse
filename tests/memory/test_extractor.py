@@ -1971,6 +1971,74 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("## Hors projet", journal)
         self.assertNotIn("## Pulse", journal)
 
+    def test_journal_attribue_un_projet_depuis_les_chemins_fichiers_sans_hardcode(self):
+        alpha = self.memory_dir / "workspaces" / "AlphaApp"
+        beta = self.memory_dir / "workspaces" / "BetaTool"
+        (alpha / ".git").mkdir(parents=True)
+        (beta / ".git").mkdir(parents=True)
+        alpha_file = alpha / "src" / "service.py"
+        alpha_test = alpha / "tests" / "test_service.py"
+        beta_file = beta / "src" / "other.py"
+
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "duration_min": 25,
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "recent_apps": ["Code", "ChatGPT"],
+                "top_files": [str(alpha_file), str(alpha_test), str(beta_file)],
+                "top_file_paths": [str(alpha_file), str(alpha_test), str(beta_file)],
+                "files_changed": 3,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+
+        self.assertIn("## AlphaApp", visible)
+        self.assertNotIn("## Hors projet", visible)
+        self.assertIn("service.py", visible)
+        self.assertNotIn(str(alpha), visible)
+        self.assertEqual(hidden[0]["active_project"], "AlphaApp")
+        self.assertEqual(hidden[0]["project_source"], "top_file_paths")
+
+    def test_journal_ne_devine_pas_le_projet_depuis_des_basenames_ambigus(self):
+        update_memories_from_session(
+            {
+                "active_project": None,
+                "duration_min": 25,
+                "probable_task": "coding",
+                "activity_level": "editing",
+                "recent_apps": ["Code", "ChatGPT"],
+                "top_files": ["service.py", "test_service.py"],
+                "files_changed": 2,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+
+        self.assertIn("## Hors projet", visible)
+        self.assertEqual(hidden[0]["active_project"], None)
+        self.assertEqual(hidden[0]["project_source"], "project_attribution_insufficient")
+
     def test_journal_conserve_un_episode_projet_fort_avec_commit(self):
         update_memories_from_session(
             {

@@ -1122,6 +1122,8 @@ class RuntimeOrchestrator:
         if base_payload.get("activity_level"):
             snapshot["activity_level"] = base_payload.get("activity_level")
         snapshot["active_project"] = git_root.name or snapshot.get("active_project")
+        snapshot["repo_root"] = str(git_root)
+        snapshot["project_root"] = str(git_root)
         diff_files = extract_file_names_from_diff_summary(diff_summary or "")
         raw_commit_scope_files = diff_files or read_commit_file_names(git_root)
         commit_scope_files = list(dict.fromkeys(raw_commit_scope_files))
