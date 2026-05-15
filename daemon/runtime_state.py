@@ -283,6 +283,11 @@ class RuntimeState:
                 self._work_intent = parsed if parsed.is_active() else None
             self._present = replace(self._present, work_intent=self._work_intent)
 
+    def clear_work_intent(self, reason: str | None = None) -> None:
+        with self._lock:
+            self._work_intent = None
+            self._present = replace(self._present, work_intent=None)
+
     def _clear_expired_work_intent_locked(self, *, now: datetime | None = None) -> None:
         if self._work_intent is None or not self._work_intent.is_expired(now=now):
             return

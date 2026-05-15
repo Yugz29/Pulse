@@ -1194,6 +1194,112 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "réduire les coûts cachés du modèle local",
         )
 
+    def test_work_intent_lifecycle_conserve_meme_projet_coding(self):
+        signals = self._signals(active_project="Pulse", probable_task="coding", activity_level="editing")
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() + timedelta(hours=1),
+        ))
+        event = Event("app_activated", {"app_name": "Xcode"})
+        event.timestamp = datetime(2026, 5, 15, 10, 0, 0)
+        self.scorer.bus.recent.return_value = [event]
+
+        self.orchestrator._process_signals(event)
+
+        self.assertIsNotNone(self.runtime_state.get_present().work_intent)
+
+    def test_work_intent_lifecycle_conserve_meme_projet_debug_executing(self):
+        signals = self._signals(active_project="Pulse", probable_task="debug", activity_level="executing")
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="diagnostiquer les probes de contexte",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() + timedelta(hours=1),
+        ))
+        event = Event("terminal_command_finished", {"terminal_action_category": "testing"})
+        event.timestamp = datetime(2026, 5, 15, 10, 0, 0)
+        self.scorer.bus.recent.return_value = [event]
+
+        self.orchestrator._process_signals(event)
+
+        self.assertIsNotNone(self.runtime_state.get_present().work_intent)
+
+    def test_work_intent_lifecycle_clear_sur_changement_projet(self):
+        signals = self._signals(active_project="OtherProject", activity_level="editing")
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() + timedelta(hours=1),
+        ))
+        event = Event("app_activated", {"app_name": "Xcode"})
+        event.timestamp = datetime(2026, 5, 15, 10, 0, 0)
+        self.scorer.bus.recent.return_value = [event]
+
+        self.orchestrator._process_signals(event)
+
+        self.assertIsNone(self.runtime_state.get_present().work_intent)
+        self.session_memory.new_session.assert_not_called()
+
+    def test_work_intent_lifecycle_clear_sur_idle_prolonge(self):
+        signals = self._signals(
+            active_project="Pulse",
+            activity_level="idle",
+            user_presence_state="idle",
+            user_idle_seconds=31 * 60,
+        )
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() + timedelta(hours=1),
+        ))
+        event = Event("user_idle", {"seconds": 31 * 60})
+        event.timestamp = datetime(2026, 5, 15, 10, 31, 0)
+        self.scorer.bus.recent.return_value = [event]
+
+        self.orchestrator._process_signals(event)
+
+        self.assertIsNone(self.runtime_state.get_present().work_intent)
+
+    def test_export_memory_payload_exclut_work_intent_apres_lifecycle_clear(self):
+        signals = self._signals(active_project="OtherProject", activity_level="editing")
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "OtherProject",
+            "duration_min": 30,
+        }
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="réduire les coûts cachés du modèle local",
+            source="manual_context_note",
+            confidence=0.9,
+            project="Pulse",
+            expires_at=datetime.now() + timedelta(hours=1),
+        ))
+        event = Event("app_activated", {"app_name": "Xcode"})
+        event.timestamp = datetime(2026, 5, 15, 10, 0, 0)
+        self.scorer.bus.recent.return_value = [event]
+
+        self.orchestrator._process_signals(event)
+        payload = self.orchestrator._export_memory_payload()
+
+        self.assertNotIn("work_intent", payload)
+
 
 if __name__ == "__main__":
     unittest.main()

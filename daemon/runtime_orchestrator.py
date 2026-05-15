@@ -48,6 +48,7 @@ from daemon.core.resume_card import (
 from daemon.core.session_fsm import SessionFSM
 from daemon.core.uid import new_uid
 from daemon.core.restart_manager import RestartManager
+from daemon.core.work_intent_lifecycle import evaluate_work_intent_lifecycle
 from daemon.core.workspace_context import find_workspace_root
 from daemon.llm.lifecycle_policy import is_heavy_llm_autowarm_enabled
 
@@ -1315,6 +1316,16 @@ class RuntimeOrchestrator:
             locked=lifecycle_transition.state == SessionFSM.LOCKED,
             updated_at=observed_now,
         )
+        intent_decision = evaluate_work_intent_lifecycle(
+            present=present,
+            signals=signals,
+            session_state=lifecycle_transition,
+            now=observed_now,
+        )
+        if intent_decision.action == "clear":
+            self.runtime_state.clear_work_intent(reason=intent_decision.reason)
+            present = self.runtime_state.get_present()
+            self.log.info("work_intent cleared reason=%s", intent_decision.reason)
         previous_decision = self.runtime_state.get_runtime_snapshot().decision
         decision = self.decision_engine.evaluate(present, trigger_event=trigger_event)
         decision = self._attach_context_proposal_if_needed(
