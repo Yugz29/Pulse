@@ -68,9 +68,18 @@ class DebugMemoryViews:
         target_date = (date or now).date()
         candidates_payload = self.get_journal_candidates(date=date)
         journal_entries = self._load_journal_entries_for_date(target_date.isoformat())
+        candidates = [
+            *candidates_payload.get("candidates", []),
+            *(
+                candidate
+                for candidate in candidates_payload.get("ignored", [])
+                if candidate.get("ignore_reason") == "open_episode_end_of_events"
+            ),
+        ]
         links = link_commits_to_episodes(
             journal_entries,
-            candidates_payload.get("candidates", []),
+            candidates,
+            now=now,
         )
         return {
             "date": target_date.isoformat(),

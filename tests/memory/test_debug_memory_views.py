@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -111,3 +112,44 @@ class TestDebugMemoryViews(unittest.TestCase):
         self.assertEqual(payload["unlinked_count"], 0)
         self.assertEqual(payload["links"], [])
         self.assertEqual(payload["unlinked_commits"], [])
+
+    def test_commit_episode_links_include_open_end_of_events_episode(self):
+        observed_at = datetime.now().replace(hour=7, minute=52, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
+        sessions_dir = Path(self.tmpdir.name) / "memory" / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_entries = [
+            {
+                "entry_id": "journal-1",
+                "active_project": "Pulse",
+                "commit_message": "fix(context): expire stale work intents",
+                "delivered_at": observed_at.replace(hour=8, minute=16).isoformat(),
+                "started_at": observed_at.replace(hour=7, minute=59).isoformat(),
+                "ended_at": observed_at.replace(hour=8, minute=0).isoformat(),
+            }
+        ]
+        (sessions_dir / f"{observed_at.date().isoformat()}.md").write_text(
+            "# Journal\n\n"
+            "<!-- pulse-journal-data:start\n"
+            f"{json.dumps(journal_entries)}\n"
+            "pulse-journal-data:end -->",
+            encoding="utf-8",
+        )
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/runtime_state.py"},
+            timestamp=observed_at,
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/runtime_state.py"},
+            timestamp=observed_at.replace(hour=8, minute=17),
+        ))
+
+        payload = self.views.get_commit_episode_links(date=observed_at)
+
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["unlinked_count"], 0)
+        self.assertEqual(payload["links"][0]["link_reason"], "linked_to_open_episode")
+        self.assertIn("linked_to_open_episode", payload["links"][0]["flags"])

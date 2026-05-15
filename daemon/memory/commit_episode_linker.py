@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Mapping
 
 _STRONG_DELIVERY_PROXIMITY_MIN = 30
@@ -11,6 +11,8 @@ _ACCEPTABLE_DELIVERY_PROXIMITY_MIN = 90
 _WINDOW_PROXIMITY_MIN = 20
 _MAX_WINDOW_DISTANCE_MIN = 60
 _AMBIGUOUS_SCORE_DELTA = 0.10
+_MAX_OPEN_EPISODE_DURATION_MIN = 8 * 60
+_FUTURE_COMMIT_GRACE_MIN = 5
 
 
 @dataclass(frozen=True)
@@ -41,19 +43,21 @@ class CommitEpisodeLink:
 def link_commits_to_episodes(
     journal_entries: list[Any],
     candidates: list[Any],
+    *,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Link persisted journal commit units to closed dry-run candidates."""
+    """Link persisted journal commit units to closed or currently open dry-run candidates."""
     commits = _extract_commits(journal_entries)
     candidate_items = [
         _entry_dict(candidate)
         for candidate in candidates
-        if not _truthy(_entry_dict(candidate).get("ignored"))
+        if not _truthy(_entry_dict(candidate).get("ignored")) or _is_open_candidate(_entry_dict(candidate))
     ]
 
     links: list[CommitEpisodeLink] = []
     unlinked: list[CommitEpisodeLink] = []
     for commit in commits:
-        link = _link_one_commit(commit, candidate_items)
+        link = _link_one_commit(commit, candidate_items, now=now)
         if link.status == "linked":
             links.append(link)
         else:
@@ -68,10 +72,15 @@ def link_commits_to_episodes(
     }
 
 
-def _link_one_commit(commit: Mapping[str, Any], candidates: list[Mapping[str, Any]]) -> CommitEpisodeLink:
+def _link_one_commit(
+    commit: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> CommitEpisodeLink:
     scored = [
         item
-        for item in (_score_candidate(commit, candidate) for candidate in candidates)
+        for item in (_score_candidate(commit, candidate, now=now) for candidate in candidates)
         if item is not None
     ]
     if not scored:
@@ -109,9 +118,17 @@ def _link_one_commit(commit: Mapping[str, Any], candidates: list[Mapping[str, An
     )
 
 
-def _score_candidate(commit: Mapping[str, Any], candidate: Mapping[str, Any]) -> dict[str, Any] | None:
+def _score_candidate(
+    commit: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
     if not _projects_compatible(commit, candidate):
         return None
+
+    if _is_open_candidate(candidate):
+        return _score_open_candidate(commit, candidate, now=now)
 
     window_distance = _window_distance_min(commit, candidate)
     overlap = _overlap_min(commit, candidate)
@@ -168,6 +185,53 @@ def _score_candidate(commit: Mapping[str, Any], candidate: Mapping[str, Any]) ->
             "delivery_delta_min": delivery_delta,
             "window_distance_min": window_distance,
             "overlap_min": overlap if overlap > 0 else 0,
+        },
+    }
+
+
+def _score_open_candidate(
+    commit: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
+    current_time = now or datetime.now()
+    started = _parse_dt(candidate.get("started_at"))
+    commit_time = _commit_time(commit)
+    if started is None or commit_time is None:
+        return None
+    if commit_time < started:
+        return None
+    if commit_time > current_time + timedelta(minutes=_FUTURE_COMMIT_GRACE_MIN):
+        return None
+
+    open_duration = int((current_time - started).total_seconds() / 60)
+    if open_duration < 0 or open_duration > _MAX_OPEN_EPISODE_DURATION_MIN:
+        return None
+
+    minutes_after_start = int((commit_time - started).total_seconds() / 60)
+    flags = [flag for flag in _commit_base_flags(commit) if flag != "commit_only_journal_entry"]
+    flags.extend([
+        "linked_to_open_episode",
+        "linked_by_open_episode_window",
+        "candidate_no_commit_context",
+        "no_file_scope_match",
+        "temporal_only_link",
+    ])
+    score = 0.64
+    return {
+        "candidate": candidate,
+        "score": score,
+        "reason": "linked_to_open_episode",
+        "flags": tuple(dict.fromkeys(flags)),
+        "rank_delta": 0,
+        "score_breakdown": {
+            "base_score": score,
+            "delivery_delta_min": None,
+            "window_distance_min": 0,
+            "overlap_min": 0,
+            "open_episode_age_min": open_duration,
+            "commit_after_open_start_min": minutes_after_start,
         },
     }
 
@@ -376,6 +440,24 @@ def _projects_compatible(left: Mapping[str, Any], right: Mapping[str, Any]) -> b
 
 def _project(entry: Mapping[str, Any]) -> str | None:
     return _optional_text(entry.get("project") or entry.get("active_project"))
+
+
+def _is_open_candidate(candidate: Mapping[str, Any]) -> bool:
+    return (
+        _parse_dt(candidate.get("started_at")) is not None
+        and (
+            _parse_dt(candidate.get("ended_at")) is None
+            or str(candidate.get("boundary_reason") or "") == "end_of_events"
+        )
+    )
+
+
+def _commit_time(commit: Mapping[str, Any]) -> datetime | None:
+    return (
+        _parse_dt(commit.get("delivered_at"))
+        or _parse_dt(commit.get("ended_at"))
+        or _parse_dt(commit.get("started_at"))
+    )
 
 
 def _window_distance_min(left: Mapping[str, Any], right: Mapping[str, Any]) -> int | None:

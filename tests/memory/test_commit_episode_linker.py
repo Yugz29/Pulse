@@ -1,9 +1,197 @@
 import unittest
+from datetime import datetime
 
 from daemon.memory.commit_episode_linker import link_commits_to_episodes
 
 
 class TestCommitEpisodeLinker(unittest.TestCase):
+
+    def test_commit_during_open_episode_links_to_active_episode(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat(context): add work intent candidate dashboard",
+                    "delivered_at": "2026-05-15T08:03:00",
+                    "started_at": "2026-05-15T08:03:00",
+                    "ended_at": "2026-05-15T08:03:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-open-1",
+                    "episode_id": "episode-open-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-15T07:52:00",
+                    "ended_at": None,
+                    "ignored": False,
+                }
+            ],
+            now=datetime(2026, 5, 15, 8, 17, 0),
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["unlinked_count"], 0)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "episode-open-1")
+        self.assertEqual(link["link_reason"], "linked_to_open_episode")
+        self.assertIn("linked_to_open_episode", link["flags"])
+        self.assertNotIn("commit_only_journal_entry", link["flags"])
+        self.assertEqual(link["episode_ended_at"], None)
+        self.assertEqual(link["score_breakdown"]["open_episode_age_min"], 25)
+
+    def test_commit_during_end_of_events_candidate_links_as_open_episode(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(context): expire stale work intents",
+                    "delivered_at": "2026-05-15T08:16:00",
+                    "started_at": "2026-05-15T07:59:00",
+                    "ended_at": "2026-05-15T08:00:00",
+                }
+            ],
+            [
+                {
+                    "id": "journal-candidate-open-1",
+                    "episode_id": "work-episode-open-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-15T07:52:00",
+                    "ended_at": "2026-05-15T08:17:00",
+                    "boundary_reason": "end_of_events",
+                    "ignored": True,
+                    "ignore_reason": "open_episode_end_of_events",
+                }
+            ],
+            now=datetime(2026, 5, 15, 8, 17, 0),
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["unlinked_count"], 0)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "work-episode-open-1")
+        self.assertEqual(link["link_reason"], "linked_to_open_episode")
+        self.assertIn("linked_to_open_episode", link["flags"])
+        self.assertNotIn("commit_only_journal_entry", link["flags"])
+        self.assertEqual(link["score_breakdown"]["open_episode_age_min"], 25)
+
+    def test_commit_during_closed_episode_still_links_as_before(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(context): expire stale work intents",
+                    "delivered_at": "2026-05-15T08:12:00",
+                    "started_at": "2026-05-15T08:12:00",
+                    "ended_at": "2026-05-15T08:12:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-closed-1",
+                    "episode_id": "episode-closed-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-15T07:52:00",
+                    "ended_at": "2026-05-15T08:17:00",
+                    "ignored": False,
+                }
+            ],
+            now=datetime(2026, 5, 15, 8, 17, 0),
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "episode-closed-1")
+        self.assertIn("delivery_inside_episode", link["flags"])
+        self.assertNotIn("linked_to_open_episode", link["flags"])
+
+    def test_commit_with_no_plausible_open_or_closed_episode_remains_unlinked(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: outside open episode",
+                    "delivered_at": "2026-05-15T07:30:00",
+                    "started_at": "2026-05-15T07:30:00",
+                    "ended_at": "2026-05-15T07:30:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-open-1",
+                    "episode_id": "episode-open-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-15T07:52:00",
+                    "ended_at": None,
+                    "ignored": False,
+                }
+            ],
+            now=datetime(2026, 5, 15, 8, 17, 0),
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 1)
+        self.assertIn("no_plausible_episode", payload["unlinked_commits"][0]["flags"])
+
+    def test_project_mismatch_prevents_open_episode_link(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: wrong project",
+                    "delivered_at": "2026-05-15T08:03:00",
+                    "started_at": "2026-05-15T08:03:00",
+                    "ended_at": "2026-05-15T08:03:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-open-1",
+                    "episode_id": "episode-open-1",
+                    "project": "OtherProject",
+                    "started_at": "2026-05-15T07:52:00",
+                    "ended_at": None,
+                    "ignored": False,
+                }
+            ],
+            now=datetime(2026, 5, 15, 8, 17, 0),
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 1)
+
+    def test_stale_open_episode_is_not_linked(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "feat: stale open episode",
+                    "delivered_at": "2026-05-15T08:03:00",
+                    "started_at": "2026-05-15T08:03:00",
+                    "ended_at": "2026-05-15T08:03:00",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-open-1",
+                    "episode_id": "episode-open-1",
+                    "project": "Pulse",
+                    "started_at": "2026-05-14T22:00:00",
+                    "ended_at": None,
+                    "ignored": False,
+                }
+            ],
+            now=datetime(2026, 5, 15, 8, 17, 0),
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 1)
 
     def test_commit_avec_journal_window_chevauchant_candidate_linked_by_overlap(self):
         payload = link_commits_to_episodes(
