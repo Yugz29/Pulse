@@ -255,10 +255,46 @@ def test_work_context_card_to_dict_is_json_ready():
         "probable_task": "debug",
         "work_intent": None,
         "confidence": 0.8,
+        "project_confidence": 0.0,
+        "project_source": None,
+        "project_evidence": [],
+        "project_warnings": [],
+        "support_apps": [],
         "evidence": ["Projet actif détecté : Pulse"],
         "missing_context": ["Objectif utilisateur non explicite"],
         "safe_next_probes": ["app_context", "window_title"],
     }
+
+
+def test_build_work_context_card_exposes_project_confidence_separately_from_task_confidence():
+    current_context = SimpleNamespace(
+        active_project=None,
+        project_root="/tmp/workspace/AlphaApp",
+        activity_level="executing",
+        probable_task="general",
+        task_confidence=0.32,
+        active_app="ChatGPT",
+        terminal_cwd="/tmp/workspace/AlphaApp",
+        terminal_action_category="testing",
+        work_intent={
+            "summary": "stabiliser les tests locaux",
+            "source": "manual_context_note",
+            "confidence": 0.9,
+            "project": "AlphaApp",
+        },
+    )
+    signals = SimpleNamespace(recent_apps=["Codex", "Code"], window_title=None)
+
+    card = build_work_context_card(current_context, signals=signals)
+
+    assert card.project == "AlphaApp"
+    assert card.probable_task == "general"
+    assert card.confidence == 0.32
+    assert card.project_confidence >= 0.8
+    assert card.project_source == "repo_root"
+    assert card.support_apps == ("Codex", "ChatGPT")
+    assert "Apps IA utilisées comme support" in card.project_evidence
+    assert str(card.to_dict()).find("/tmp/workspace/AlphaApp") == -1
 
 
 # Additional tests for project_hint logic

@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
+from daemon.core.work_evidence_resolver import WorkEvidenceInput, resolve_work_evidence
+
 
 @dataclass(frozen=True)
 class WorkContextCard:
@@ -22,6 +24,11 @@ class WorkContextCard:
     activity_level: str
     probable_task: str
     confidence: float
+    project_confidence: float = 0.0
+    project_source: Optional[str] = None
+    project_evidence: tuple[str, ...] = field(default_factory=tuple)
+    project_warnings: tuple[str, ...] = field(default_factory=tuple)
+    support_apps: tuple[str, ...] = field(default_factory=tuple)
     work_intent: Optional[dict[str, Any]] = None
     evidence: tuple[str, ...] = field(default_factory=tuple)
     missing_context: tuple[str, ...] = field(default_factory=tuple)
@@ -38,6 +45,11 @@ class WorkContextCard:
             "probable_task": self.probable_task,
             "work_intent": dict(self.work_intent) if self.work_intent else None,
             "confidence": self.confidence,
+            "project_confidence": self.project_confidence,
+            "project_source": self.project_source,
+            "project_evidence": list(self.project_evidence),
+            "project_warnings": list(self.project_warnings),
+            "support_apps": list(self.support_apps),
             "evidence": list(self.evidence),
             "missing_context": list(self.missing_context),
             "safe_next_probes": list(self.safe_next_probes),
@@ -67,6 +79,49 @@ def build_work_context_card(
         signals=signals,
         current_context=current_context,
     )
+    work_intent = _normalized_work_intent(
+        _first_present(
+            getattr(current_context, "work_intent", None),
+            getattr(present, "work_intent", None),
+        )
+    )
+    evidence_resolution = resolve_work_evidence(
+        WorkEvidenceInput(
+            active_project=project,
+            project_hint=project_hint,
+            file_paths=_tuple_values(
+                getattr(current_context, "active_file", None),
+                getattr(present, "active_file", None),
+                getattr(signals, "active_file", None),
+            ),
+            repo_roots=_tuple_values(getattr(current_context, "project_root", None)),
+            terminal_cwd=_first_non_empty(
+                getattr(current_context, "terminal_cwd", None),
+                getattr(signals, "terminal_cwd", None),
+            ),
+            terminal_project=_first_non_empty(
+                getattr(current_context, "terminal_project", None),
+                getattr(signals, "terminal_project", None),
+            ),
+            terminal_command_category=_first_non_empty(
+                getattr(current_context, "terminal_action_category", None),
+                getattr(signals, "terminal_action_category", None),
+            ),
+            active_app=_first_non_empty(
+                getattr(current_context, "active_app", None),
+                getattr(present, "active_app", None),
+                getattr(signals, "active_app", None),
+            ),
+            window_title=_first_non_empty(
+                getattr(signals, "window_title", None),
+                getattr(current_context, "window_title", None),
+            ),
+            recent_apps=tuple(str(app) for app in getattr(signals, "recent_apps", []) or [] if str(app).strip()),
+            work_intent_project=(work_intent or {}).get("project") if work_intent else None,
+        )
+    )
+    if not project and evidence_resolution.project:
+        project = evidence_resolution.project
     activity_level = _first_non_empty(
         getattr(current_context, "activity_level", None),
         getattr(present, "activity_level", None),
@@ -77,13 +132,6 @@ def build_work_context_card(
         getattr(present, "probable_task", None),
         "general",
     ) or "general"
-    work_intent = _normalized_work_intent(
-        _first_present(
-            getattr(current_context, "work_intent", None),
-            getattr(present, "work_intent", None),
-        )
-    )
-
     confidence = _clamp_confidence(
         _first_number(
             getattr(current_context, "task_confidence", None),
@@ -126,6 +174,11 @@ def build_work_context_card(
         probable_task=probable_task,
         work_intent=work_intent,
         confidence=confidence,
+        project_confidence=evidence_resolution.project_confidence,
+        project_source=evidence_resolution.project_source,
+        project_evidence=evidence_resolution.evidence,
+        project_warnings=evidence_resolution.warnings,
+        support_apps=evidence_resolution.support_apps,
         evidence=tuple(evidence),
         missing_context=tuple(missing_context),
         safe_next_probes=tuple(safe_next_probes),
@@ -458,6 +511,15 @@ def _first_number(*values: Any) -> Optional[float]:
         except (TypeError, ValueError):
             continue
     return None
+
+
+def _tuple_values(*values: Any) -> tuple[str, ...]:
+    result: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return tuple(result)
 
 
 def _clamp_confidence(value: Optional[float]) -> float:

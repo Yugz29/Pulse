@@ -1520,6 +1520,52 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["safe_next_probes"], ["app_context", "window_title"])
 
 
+    def test_work_context_route_exposes_strong_project_context_with_cautious_task(self):
+        signals = Signals(
+            active_project="AlphaApp",
+            active_file=None,
+            probable_task="general",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Codex", "ChatGPT", "Code"],
+            clipboard_context=None,
+            activity_level="executing",
+            task_confidence=0.32,
+            terminal_cwd="/tmp/workspace/AlphaApp",
+            terminal_action_category="testing",
+            terminal_project="AlphaApp",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_work_intent(WorkIntent(
+            summary="stabiliser les tests locaux",
+            source="manual_context_note",
+            confidence=0.9,
+            project="AlphaApp",
+        ))
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("ChatGPT")
+
+        response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        self.assertEqual(card["project"], "AlphaApp")
+        self.assertEqual(card["probable_task"], "general")
+        self.assertEqual(card["confidence"], 0.32)
+        self.assertGreaterEqual(card["project_confidence"], 0.8)
+        self.assertEqual(card["project_source"], "active_project")
+        self.assertIn("Codex", card["support_apps"])
+        self.assertIn("ChatGPT", card["support_apps"])
+        self.assertIn("Projet explicite détecté", card["project_evidence"])
+        self.assertNotIn("/tmp/workspace/AlphaApp", str(card))
+
+
     def test_work_context_route_exposes_weak_project_hint_without_promoting_project(self):
         signals = Signals(
             active_project=None,
