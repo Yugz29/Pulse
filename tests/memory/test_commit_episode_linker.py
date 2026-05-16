@@ -156,7 +156,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertEqual(payload["linked_count"], 1)
         link = payload["links"][0]
         self.assertEqual(link["episode_id"], "episode-code")
-        self.assertEqual(link["link_reason"], "linked_by_file_overlap")
+        self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
         self.assertEqual(link["evidence_level"], "file_scope")
         self.assertIn("linked_by_file_overlap", link["flags"])
         self.assertIn("delayed_delivery", link["flags"])
@@ -343,6 +343,60 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertIn("delayed_delivery", link["flags"])
         self.assertNotIn("stale_journal_window_ignored", link["flags"])
         self.assertEqual(link["score_breakdown"]["file_overlap_count"], 3)
+
+    def test_journal_file_window_uses_matching_visible_episode_id(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(memory): link delayed commits by file overlap",
+                    "delivered_at": "2026-05-16T14:34:00",
+                    "started_at": "2026-05-16T14:26:00",
+                    "ended_at": "2026-05-16T14:29:00",
+                    "top_files": [
+                        "commit_episode_linker.py",
+                        "journal_candidate_builder.py",
+                        "work_episode_builder.py",
+                    ],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-work",
+                    "episode_id": "work-episode-2026-05-16T14:26:08",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T14:26:08",
+                    "ended_at": "2026-05-16T14:29:39",
+                    "dominant_scope": "memory",
+                    "top_files": [
+                        "commit_episode_linker.py",
+                        "journal_candidate_builder.py",
+                        "work_episode_builder.py",
+                    ],
+                    "ignored": False,
+                },
+                {
+                    "id": "candidate-git",
+                    "episode_id": "episode-git",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T14:03:00",
+                    "ended_at": "2026-05-16T14:11:00",
+                    "dominant_scope": "git",
+                    "probable_task": "terminal_execution",
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "work-episode-2026-05-16T14:26:08")
+        self.assertEqual(link["candidate_id"], "journal-file-window-entry-1")
+        self.assertEqual(link["episode_started_at"], "2026-05-16T14:26:00")
+        self.assertEqual(link["episode_ended_at"], "2026-05-16T14:29:00")
+        self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
+        self.assertEqual(link["evidence_level"], "file_scope")
 
     def test_journal_window_without_files_keeps_temporal_fallback(self):
         payload = link_commits_to_episodes(

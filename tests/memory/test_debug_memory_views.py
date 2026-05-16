@@ -127,12 +127,13 @@ class TestDebugMemoryViews(unittest.TestCase):
         self.assertEqual(payload["linked_count"], 1)
         link = payload["links"][0]
         self.assertEqual(link["episode_started_at"], observed_at.isoformat())
-        self.assertEqual(link["link_reason"], "linked_by_file_overlap")
+        self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
         self.assertIn("work_episode_link", link["flags"])
-        self.assertEqual(link["score_breakdown"]["file_overlap_count"], 2)
+        self.assertEqual(link["score_breakdown"]["file_overlap_count"], 3)
 
     def test_commit_episode_links_utilisent_la_fenetre_fichier_du_journal(self):
         observed_at = datetime.now().replace(hour=14, minute=3, second=0, microsecond=0)
+        repo = "/Users/yugz/Projets/Pulse/Pulse"
         sessions_dir = Path(self.tmpdir.name) / "memory" / "sessions"
         sessions_dir.mkdir(parents=True)
         journal_entries = [
@@ -177,12 +178,29 @@ class TestDebugMemoryViews(unittest.TestCase):
             },
             timestamp=observed_at + timedelta(minutes=8),
         ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/commit_episode_linker.py"},
+            timestamp=observed_at.replace(hour=14, minute=26, second=8),
+        ))
+        self.memory.record_event(Event(
+            "file_modified",
+            {"path": f"{repo}/daemon/memory/journal_candidate_builder.py"},
+            timestamp=observed_at.replace(hour=14, minute=29, second=39),
+        ))
 
         payload = self.views.get_commit_episode_links(date=observed_at)
 
         self.assertEqual(payload["commit_count"], 1)
         self.assertEqual(payload["linked_count"], 1)
         link = payload["links"][0]
+        matching_episode = next(
+            episode
+            for episode in self.views.get_work_episodes(date=observed_at)["episodes"]
+            if episode["started_at"] == observed_at.replace(hour=14, minute=26, second=8).isoformat()
+        )
+        self.assertEqual(link["episode_id"], matching_episode["id"])
+        self.assertEqual(link["candidate_id"], "journal-file-window-journal-1")
         self.assertEqual(link["episode_started_at"], observed_at.replace(hour=14, minute=26).isoformat())
         self.assertEqual(link["episode_ended_at"], observed_at.replace(hour=14, minute=29).isoformat())
         self.assertEqual(link["link_reason"], "linked_by_journal_file_window")

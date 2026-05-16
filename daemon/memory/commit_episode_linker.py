@@ -80,7 +80,7 @@ def _link_one_commit(
     now: datetime | None = None,
 ) -> CommitEpisodeLink:
     candidate_items = [*candidates]
-    journal_candidate = _journal_file_window_candidate(commit)
+    journal_candidate = _journal_file_window_candidate(commit, candidate_items)
     if journal_candidate is not None:
         candidate_items.append(journal_candidate)
 
@@ -110,7 +110,11 @@ def _link_one_commit(
     flags = list(best["flags"])
     if len(scored) > 1 and (best["score"] - scored[1]["score"]) <= _AMBIGUOUS_SCORE_DELTA:
         flags.append("ambiguous_candidates")
-    if _has_stale_journal_overlap_ignored(commit, candidate_items, best["candidate"]):
+    if not _truthy(best["candidate"].get("journal_file_window")) and _has_stale_journal_overlap_ignored(
+        commit,
+        candidate_items,
+        best["candidate"],
+    ):
         flags.append("stale_journal_window_ignored")
     confidence, flags = _calibrated_confidence(best["score"], flags, best["score_breakdown"])
     return _build_link(
@@ -147,8 +151,10 @@ def _score_candidate(
     reason = None
 
     if _is_delayed_file_scope_match(commit, candidate, delivery_delta, file_overlap):
-        score = 0.88 if delivery_delta is not None and delivery_delta > 0 else 0.90
         reason = "linked_by_journal_file_window" if _truthy(candidate.get("journal_file_window")) else "linked_by_file_overlap"
+        score = 0.93 if reason == "linked_by_journal_file_window" else (
+            0.88 if delivery_delta is not None and delivery_delta > 0 else 0.90
+        )
         flags.extend([
             reason,
             "linked_by_file_overlap",
@@ -319,7 +325,10 @@ def _extract_commits(journal_entries: list[Any]) -> list[dict[str, Any]]:
     return commits
 
 
-def _journal_file_window_candidate(commit: Mapping[str, Any]) -> dict[str, Any] | None:
+def _journal_file_window_candidate(
+    commit: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+) -> dict[str, Any] | None:
     project = _project(commit)
     files = _entry_files(commit)
     started_at = _optional_text(commit.get("started_at"))
@@ -331,9 +340,19 @@ def _journal_file_window_candidate(commit: Mapping[str, Any]) -> dict[str, Any] 
     if _parse_dt(ended_at) <= _parse_dt(started_at):
         return None
     entry_id = str(commit.get("entry_id") or commit.get("id") or "unknown")
+    evidence_id = f"journal-file-window-{entry_id}"
+    visible_episode_id = _matching_visible_episode_id(
+        {
+            "project": project,
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "top_files": files,
+        },
+        candidates,
+    )
     return {
-        "id": f"journal-file-window-{entry_id}",
-        "episode_id": f"journal-file-window-{entry_id}",
+        "id": evidence_id,
+        "episode_id": visible_episode_id or evidence_id,
         "project": project,
         "started_at": started_at,
         "ended_at": ended_at,
@@ -343,6 +362,34 @@ def _journal_file_window_candidate(commit: Mapping[str, Any]) -> dict[str, Any] 
         "ignored": False,
         "journal_file_window": True,
     }
+
+
+def _matching_visible_episode_id(
+    journal_window: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+) -> str | None:
+    matches: list[tuple[int, int, str]] = []
+    for candidate in candidates:
+        if _truthy(candidate.get("journal_file_window")) or _is_git_only_candidate(candidate):
+            continue
+        if not _projects_match_explicitly(journal_window, candidate):
+            continue
+        file_overlap = _file_overlap_count(journal_window, candidate)
+        if file_overlap <= 0:
+            continue
+        overlap = _overlap_min(journal_window, candidate)
+        window_distance = _window_distance_min(journal_window, candidate)
+        if overlap <= 0 and (window_distance is None or window_distance > _WINDOW_PROXIMITY_MIN):
+            continue
+        episode_id = _optional_text(candidate.get("episode_id"))
+        if not episode_id:
+            continue
+        distance = window_distance if window_distance is not None else 999999
+        matches.append((file_overlap, -distance, episode_id))
+    if not matches:
+        return None
+    matches.sort(reverse=True)
+    return matches[0][2]
 
 
 def _is_delayed_file_scope_match(
