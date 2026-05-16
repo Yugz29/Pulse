@@ -391,8 +391,13 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         link = payload["links"][0]
         self.assertEqual(link["episode_id"], "work-episode-2026-05-16T14:26:08")
         self.assertEqual(link["candidate_id"], "journal-file-window-entry-1")
-        self.assertEqual(link["episode_started_at"], "2026-05-16T14:26:00")
-        self.assertEqual(link["episode_ended_at"], "2026-05-16T14:29:00")
+        self.assertEqual(link["episode_started_at"], "2026-05-16T14:26:08")
+        self.assertEqual(link["episode_ended_at"], "2026-05-16T14:29:39")
+        self.assertEqual(link["evidence_candidate_id"], "journal-file-window-entry-1")
+        self.assertEqual(link["evidence_episode_id"], "journal-file-window-entry-1")
+        self.assertEqual(link["evidence_started_at"], "2026-05-16T14:26:00")
+        self.assertEqual(link["evidence_ended_at"], "2026-05-16T14:29:00")
+        self.assertEqual(link["evidence_source"], "journal_file_window")
         self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
         self.assertEqual(link["evidence_level"], "file_scope")
 
@@ -430,6 +435,10 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         link = payload["links"][0]
         self.assertEqual(link["episode_started_at"], "2026-05-16T15:50:11")
         self.assertEqual(link["episode_ended_at"], "2026-05-16T16:25:23")
+        self.assertEqual(link["evidence_candidate_id"], "journal-file-window-entry-late")
+        self.assertEqual(link["evidence_started_at"], "2026-05-16T15:50:11")
+        self.assertEqual(link["evidence_ended_at"], "2026-05-16T16:25:23")
+        self.assertEqual(link["evidence_source"], "journal_file_window")
         self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
         self.assertEqual(link["evidence_level"], "file_scope")
         self.assertIn("delayed_delivery", link["flags"])

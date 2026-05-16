@@ -40,6 +40,11 @@ class CommitEpisodeLink:
     overlap_min: int | None = None
     score_breakdown: dict[str, Any] | None = None
     evidence_level: str | None = None
+    evidence_candidate_id: str | None = None
+    evidence_episode_id: str | None = None
+    evidence_started_at: str | None = None
+    evidence_ended_at: str | None = None
+    evidence_source: str | None = None
 
 
 def link_commits_to_episodes(
@@ -278,6 +283,11 @@ def _build_link(
     delivery_delta = _delivery_delta_min(commit.get("delivered_at"), candidate.get("ended_at")) if candidate is not None else None
     window_distance = _window_distance_min(commit, candidate) if candidate is not None else None
     overlap = _overlap_min(commit, candidate) if candidate is not None else 0
+    episode_started_at = None
+    episode_ended_at = None
+    if candidate is not None:
+        episode_started_at = _optional_text(candidate.get("display_started_at")) or _optional_text(candidate.get("started_at"))
+        episode_ended_at = _optional_text(candidate.get("display_ended_at")) or _optional_text(candidate.get("ended_at"))
     return CommitEpisodeLink(
         id=str(commit.get("id") or ""),
         entry_id=str(commit.get("entry_id") or ""),
@@ -288,8 +298,13 @@ def _build_link(
         journal_ended_at=_optional_text(commit.get("ended_at")),
         episode_id=_optional_text(candidate.get("episode_id")) if candidate is not None else None,
         candidate_id=_optional_text(candidate.get("id")) if candidate is not None else None,
-        episode_started_at=_optional_text(candidate.get("started_at")) if candidate is not None else None,
-        episode_ended_at=_optional_text(candidate.get("ended_at")) if candidate is not None else None,
+        episode_started_at=episode_started_at,
+        episode_ended_at=episode_ended_at,
+        evidence_candidate_id=_optional_text(candidate.get("id")) if candidate is not None else None,
+        evidence_episode_id=_evidence_episode_id(candidate) if candidate is not None else None,
+        evidence_started_at=_optional_text(candidate.get("started_at")) if candidate is not None else None,
+        evidence_ended_at=_optional_text(candidate.get("ended_at")) if candidate is not None else None,
+        evidence_source=_evidence_source(candidate, flags) if candidate is not None else None,
         project=_project(candidate) if candidate is not None else _project(commit),
         confidence=confidence,
         status=status,
@@ -303,6 +318,22 @@ def _build_link(
             "temporal_only" if "temporal_only_link" in flags else None
         ),
     )
+
+
+def _evidence_episode_id(candidate: Mapping[str, Any]) -> str | None:
+    if _truthy(candidate.get("journal_file_window")):
+        return _optional_text(candidate.get("id"))
+    return _optional_text(candidate.get("episode_id")) or _optional_text(candidate.get("id"))
+
+
+def _evidence_source(candidate: Mapping[str, Any], flags: tuple[str, ...]) -> str:
+    if _truthy(candidate.get("journal_file_window")):
+        return "journal_file_window"
+    if "temporal_only_link" in flags:
+        return "temporal_candidate"
+    if _is_open_candidate(candidate):
+        return "open_episode"
+    return "work_episode"
 
 
 def _extract_commits(journal_entries: list[Any]) -> list[dict[str, Any]]:
@@ -342,7 +373,7 @@ def _journal_file_window_candidate(
         return None
     entry_id = str(commit.get("entry_id") or commit.get("id") or "unknown")
     evidence_id = f"journal-file-window-{entry_id}"
-    visible_episode_id = _matching_visible_episode_id(
+    visible_episode = _matching_visible_episode(
         {
             "project": project,
             "started_at": started_at,
@@ -353,10 +384,12 @@ def _journal_file_window_candidate(
     )
     return {
         "id": evidence_id,
-        "episode_id": visible_episode_id or evidence_id,
+        "episode_id": (visible_episode or {}).get("episode_id") or evidence_id,
         "project": project,
         "started_at": started_at,
         "ended_at": ended_at,
+        "display_started_at": (visible_episode or {}).get("started_at"),
+        "display_ended_at": (visible_episode or {}).get("ended_at"),
         "top_files": files,
         "dominant_scope": "journal_file_window",
         "probable_task": "coding",
@@ -365,11 +398,11 @@ def _journal_file_window_candidate(
     }
 
 
-def _matching_visible_episode_id(
+def _matching_visible_episode(
     journal_window: Mapping[str, Any],
     candidates: list[Mapping[str, Any]],
-) -> str | None:
-    matches: list[tuple[int, int, str]] = []
+) -> dict[str, str] | None:
+    matches: list[tuple[int, int, dict[str, str]]] = []
     for candidate in candidates:
         if _truthy(candidate.get("journal_file_window")) or _is_git_only_candidate(candidate):
             continue
@@ -386,10 +419,18 @@ def _matching_visible_episode_id(
         if not episode_id:
             continue
         distance = window_distance if window_distance is not None else 999999
-        matches.append((file_overlap, -distance, episode_id))
+        matches.append((
+            file_overlap,
+            -distance,
+            {
+                "episode_id": episode_id,
+                "started_at": _optional_text(candidate.get("started_at")) or "",
+                "ended_at": _optional_text(candidate.get("ended_at")) or "",
+            },
+        ))
     if not matches:
         return None
-    matches.sort(reverse=True)
+    matches.sort(key=lambda item: (item[0], item[1]), reverse=True)
     return matches[0][2]
 
 
