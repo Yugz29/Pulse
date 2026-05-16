@@ -108,6 +108,200 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertIn("delivery_inside_episode", link["flags"])
         self.assertNotIn("linked_to_open_episode", link["flags"])
 
+    def test_delayed_commit_prefers_file_scoped_work_episode_over_git_delivery_episode(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(memory): tighten lightweight commit summary prompt",
+                    "delivered_at": "2026-05-16T14:03:00",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "top_files": [
+                        "extractor.py",
+                        "test_extractor.py",
+                        "test_runtime_orchestrator.py",
+                    ],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-code",
+                    "episode_id": "episode-code",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "dominant_scope": "extractor",
+                    "top_files": [
+                        "extractor.py",
+                        "test_extractor.py",
+                        "test_runtime_orchestrator.py",
+                    ],
+                    "ignored": False,
+                },
+                {
+                    "id": "candidate-git",
+                    "episode_id": "episode-git",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T14:03:00",
+                    "ended_at": "2026-05-16T14:10:00",
+                    "dominant_scope": "git",
+                    "probable_task": "terminal_execution",
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "episode-code")
+        self.assertEqual(link["link_reason"], "linked_by_file_overlap")
+        self.assertEqual(link["evidence_level"], "file_scope")
+        self.assertIn("linked_by_file_overlap", link["flags"])
+        self.assertIn("delayed_delivery", link["flags"])
+        self.assertIn("work_episode_link", link["flags"])
+        self.assertNotIn("temporal_only_link", link["flags"])
+        self.assertEqual(link["score_breakdown"]["file_overlap_count"], 3)
+
+    def test_no_file_overlap_keeps_temporal_delivery_behavior(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(memory): tighten lightweight commit summary prompt",
+                    "delivered_at": "2026-05-16T14:03:00",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "top_files": ["extractor.py"],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-code",
+                    "episode_id": "episode-code",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "dominant_scope": "extractor",
+                    "top_files": ["runtime_state.py"],
+                    "ignored": False,
+                },
+                {
+                    "id": "candidate-git",
+                    "episode_id": "episode-git",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T14:03:00",
+                    "ended_at": "2026-05-16T14:10:00",
+                    "dominant_scope": "git",
+                    "probable_task": "terminal_execution",
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "episode-git")
+        self.assertIn("linked_by_delivery_proximity", link["flags"])
+        self.assertIn("temporal_only_link", link["flags"])
+        self.assertNotIn("linked_by_file_overlap", link["flags"])
+
+    def test_project_mismatch_prevents_delayed_file_overlap_link(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Alpha",
+                    "commit_message": "fix: update service",
+                    "delivered_at": "2026-05-16T14:03:00",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "top_files": ["service.py"],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-beta",
+                    "episode_id": "episode-beta",
+                    "project": "Beta",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "dominant_scope": "daemon_python",
+                    "top_files": ["service.py"],
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 1)
+
+    def test_delayed_file_overlap_too_old_does_not_link(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "fix: update extractor",
+                    "delivered_at": "2026-05-16T15:00:00",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "top_files": ["extractor.py"],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-code",
+                    "episode_id": "episode-code",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T13:12:00",
+                    "ended_at": "2026-05-16T13:13:00",
+                    "dominant_scope": "extractor",
+                    "top_files": ["extractor.py"],
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 1)
+
+    def test_git_only_candidate_cannot_win_by_file_overlap(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-1",
+                    "active_project": "Pulse",
+                    "commit_message": "fix: update extractor",
+                    "delivered_at": "2026-05-16T14:03:00",
+                    "started_at": "2026-05-16T14:03:00",
+                    "ended_at": "2026-05-16T14:03:00",
+                    "top_files": ["extractor.py"],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-git",
+                    "episode_id": "episode-git",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T14:03:00",
+                    "ended_at": "2026-05-16T14:10:00",
+                    "dominant_scope": "git",
+                    "probable_task": "terminal_execution",
+                    "top_files": ["extractor.py"],
+                    "ignored": False,
+                }
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "episode-git")
+        self.assertNotIn("linked_by_file_overlap", link["flags"])
+        self.assertIn("linked_by_delivery_proximity", link["flags"])
+
     def test_commit_with_no_plausible_open_or_closed_episode_remains_unlinked(self):
         payload = link_commits_to_episodes(
             [

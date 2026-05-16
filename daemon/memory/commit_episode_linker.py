@@ -13,6 +13,7 @@ _MAX_WINDOW_DISTANCE_MIN = 60
 _AMBIGUOUS_SCORE_DELTA = 0.10
 _MAX_OPEN_EPISODE_DURATION_MIN = 8 * 60
 _FUTURE_COMMIT_GRACE_MIN = 5
+_DELAYED_FILE_OVERLAP_MIN = 90
 
 
 @dataclass(frozen=True)
@@ -134,12 +135,23 @@ def _score_candidate(
     overlap = _overlap_min(commit, candidate)
     delivery_delta = _delivery_delta_min(commit.get("delivered_at"), candidate.get("ended_at"))
     delivery_score = _delivery_score(commit.get("delivered_at"), candidate)
+    file_overlap = _file_overlap_count(commit, candidate)
 
     flags = list(_commit_base_flags(commit))
     score = 0.0
     reason = None
 
-    if _optional_text(commit.get("delivered_at")):
+    if _is_delayed_file_scope_match(commit, candidate, delivery_delta, file_overlap):
+        score = 0.88 if delivery_delta is not None and delivery_delta > 0 else 0.90
+        reason = "linked_by_file_overlap"
+        flags.extend([
+            "linked_by_file_overlap",
+            "work_episode_link",
+        ])
+        if delivery_delta is not None and delivery_delta > 0:
+            flags.append("delayed_delivery")
+            flags.append("delivery_after_episode")
+    elif _optional_text(commit.get("delivered_at")):
         if delivery_score is None:
             return None
         if _is_stale_short_episode_delivery(delivery_delta, overlap, candidate):
@@ -171,9 +183,12 @@ def _score_candidate(
         return None
 
     flags.extend(_window_length_flags(commit, candidate))
-    flags.append("candidate_no_commit_context")
-    flags.append("no_file_scope_match")
-    flags.append("temporal_only_link")
+    if file_overlap > 0:
+        flags.append("candidate_file_scope_match")
+    else:
+        flags.append("candidate_no_commit_context")
+        flags.append("no_file_scope_match")
+        flags.append("temporal_only_link")
     return {
         "candidate": candidate,
         "score": score,
@@ -185,6 +200,7 @@ def _score_candidate(
             "delivery_delta_min": delivery_delta,
             "window_distance_min": window_distance,
             "overlap_min": overlap if overlap > 0 else 0,
+            "file_overlap_count": file_overlap,
         },
     }
 
@@ -270,7 +286,9 @@ def _build_link(
         window_distance_min=window_distance,
         overlap_min=overlap if overlap > 0 else 0,
         score_breakdown=score_breakdown,
-        evidence_level="temporal_only" if "temporal_only_link" in flags else None,
+        evidence_level="file_scope" if "linked_by_file_overlap" in flags else (
+            "temporal_only" if "temporal_only_link" in flags else None
+        ),
     )
 
 
@@ -290,9 +308,72 @@ def _extract_commits(journal_entries: list[Any]) -> list[dict[str, Any]]:
                 "started_at": _optional_text(item.get("started_at")),
                 "ended_at": _optional_text(item.get("ended_at")),
                 "project": _project(item),
-                "top_files": item.get("top_files") or [],
+                "top_files": _entry_files(item),
             })
     return commits
+
+
+def _is_delayed_file_scope_match(
+    commit: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    delivery_delta: int | None,
+    file_overlap: int,
+) -> bool:
+    if file_overlap <= 0:
+        return False
+    if not _projects_match_explicitly(commit, candidate):
+        return False
+    if _is_git_only_candidate(candidate):
+        return False
+    if _optional_text(commit.get("delivered_at")) and delivery_delta is None:
+        return False
+    if delivery_delta is not None and delivery_delta > _DELAYED_FILE_OVERLAP_MIN:
+        return False
+    return True
+
+
+def _projects_match_explicitly(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    left_project = _project(left)
+    right_project = _project(right)
+    return bool(left_project and right_project and left_project == right_project)
+
+
+def _is_git_only_candidate(candidate: Mapping[str, Any]) -> bool:
+    scope = str(candidate.get("dominant_scope") or "").strip().lower()
+    task = str(candidate.get("probable_task") or "").strip().lower()
+    return scope == "git" or task in {"version_control", "terminal_execution"}
+
+
+def _file_overlap_count(left: Mapping[str, Any], right: Mapping[str, Any]) -> int:
+    left_files = set(_entry_files(left))
+    right_files = set(_entry_files(right))
+    if not left_files or not right_files:
+        return 0
+    return len(left_files & right_files)
+
+
+def _entry_files(entry: Mapping[str, Any]) -> list[str]:
+    values: list[Any] = []
+    for key in ("top_files", "commit_scope_files", "files", "changed_files"):
+        raw = entry.get(key)
+        if isinstance(raw, (list, tuple)):
+            values.extend(raw)
+    files: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        name = _file_name(value)
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        files.append(name)
+    return files
+
+
+def _file_name(value: Any) -> str:
+    text = str(value or "").replace("\\", "/").strip()
+    if not text:
+        return ""
+    return text.rsplit("/", 1)[-1]
 
 
 def _commit_messages(entry: Mapping[str, Any]) -> list[str]:

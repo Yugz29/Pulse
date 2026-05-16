@@ -25,6 +25,7 @@ class JournalCandidate:
     ignore_reason: str | None
     debug_reason: str | None
     uncertainty_flags: tuple[str, ...] = ()
+    top_files: tuple[str, ...] = ()
 
 
 def build_journal_candidates(episodes: list[Any]) -> list[JournalCandidate]:
@@ -65,6 +66,7 @@ def _candidate_from_episode(episode: Mapping[str, Any]) -> JournalCandidate:
         ignore_reason="open_episode_end_of_events" if ignored else None,
         debug_reason=_optional_text(episode.get("debug_reason")),
         uncertainty_flags=tuple(str(flag) for flag in episode.get("uncertainty_flags") or ()),
+        top_files=tuple(_file_name(file) for file in episode.get("top_files") or () if _file_name(file)),
     )
 
 
@@ -79,6 +81,13 @@ def _optional_text(value: Any) -> str | None:
         return None
     text = str(value)
     return text if text else None
+
+
+def _file_name(value: Any) -> str:
+    text = str(value or "").replace("\\", "/").strip()
+    if not text:
+        return ""
+    return text.rsplit("/", 1)[-1]
 
 
 def _int_value(value: Any) -> int:

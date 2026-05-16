@@ -710,6 +710,7 @@ class TestSessionMemory(unittest.TestCase):
                 "boundary_event_type",
                 "boundary_event_at",
                 "debug_reason",
+                "top_files",
             },
         )
         self.assertEqual(episode["project"], "Pulse")

@@ -45,6 +45,7 @@ class WorkBlock:
     project: str | None
     probable_task: str
     activity_level: str
+    top_files: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,7 @@ class WorkEpisode:
     boundary_event_type: str | None = None
     boundary_event_at: str | None = None
     debug_reason: str | None = None
+    top_files: tuple[str, ...] = ()
 
 
 def build_work_blocks(
@@ -251,6 +253,7 @@ def _block_from_cluster(cluster: list[dict[str, Any]], index: int) -> WorkBlock:
         project=_project_from_events(cluster),
         probable_task=_probable_task_from_events(cluster),
         activity_level=_activity_level_from_events(cluster),
+        top_files=_top_files_from_events(cluster),
     )
 
 
@@ -323,6 +326,7 @@ def _episode_from_event_group(
             boundary_event=boundary_event,
             events=events,
         ),
+        top_files=block.top_files,
     )
 
 
@@ -439,6 +443,26 @@ def _scope_from_event(event: Mapping[str, Any]) -> str:
         if base == "git" or command.startswith("git "):
             return "git"
     return "unknown"
+
+
+def _top_files_from_events(events: list[dict[str, Any]], *, limit: int = 8) -> tuple[str, ...]:
+    files: list[str] = []
+    seen: set[str] = set()
+    for event in events:
+        if event.get("type") not in _FILE_EVENT_TYPES:
+            continue
+        payload = event.get("payload") or {}
+        path = payload.get("path") or payload.get("file_path")
+        if not path:
+            continue
+        name = Path(str(path)).name
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        files.append(name)
+        if len(files) >= limit:
+            break
+    return tuple(files)
 
 
 def _scope_from_path(path: str) -> str:
