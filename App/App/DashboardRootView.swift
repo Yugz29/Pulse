@@ -330,9 +330,9 @@ struct DashboardRootView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Timeline de travail")
+                        Text("Épisodes de travail")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
-                        Text("Debug Phase 2a · \(vm.debugWorkEpisodes?.date ?? vm.debugCommitEpisodeLinks?.date ?? "aujourd’hui")")
+                        Text(vm.debugWorkEpisodes?.date ?? vm.debugCommitEpisodeLinks?.date ?? "aujourd’hui")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -2401,6 +2401,9 @@ private struct WorkEpisodeCard: View {
     let linkedCommits: [DebugCommitEpisodeLink]
 
     private var status: EpisodeStatus {
+        if isDeliveryPhase {
+            return .delivery
+        }
         if episode.boundaryReason == "end_of_events" {
             return .ongoing
         }
@@ -2416,6 +2419,10 @@ private struct WorkEpisodeCard: View {
             return .solid
         }
         return .probable
+    }
+
+    private var isDeliveryPhase: Bool {
+        isGitDeliveryEpisode(scope: episode.dominantScope, task: episode.probableTask)
     }
 
     var body: some View {
@@ -2434,7 +2441,7 @@ private struct WorkEpisodeCard: View {
 
                 HStack(spacing: 6) {
                     timelinePill(episode.project ?? "Projet inconnu", color: gBlue)
-                    timelinePill(scopeLabel(episode.dominantScope), color: gOrange)
+                    timelinePill(episodeScopeLabel(scope: episode.dominantScope, task: episode.probableTask), color: isDeliveryPhase ? gGray : gOrange)
                     timelinePill(taskLabel(episode.probableTask), color: gGray)
                 }
 
@@ -2461,6 +2468,9 @@ private struct WorkEpisodeCard: View {
     private var episodeSummary: String {
         let scope = episode.dominantScope ?? "unknown"
         let task = episode.probableTask ?? "general"
+        if isDeliveryPhase {
+            return "Phase de livraison ou de contrôle Git, distincte du travail qui a produit le commit."
+        }
         if episode.boundaryReason == "end_of_events" {
             return "Pulse observe encore cette séquence de travail."
         }
@@ -2522,9 +2532,11 @@ private struct EpisodeLinkedCommitsView: View {
                                 .foregroundStyle(.primary)
                                 .lineLimit(2)
                             Spacer()
-                            Text(dashboardScore(commit.confidence))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color(hex: gBlue))
+                            if let delivered = deliveredAtLabel(commit.deliveredAt) {
+                                Text(delivered)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         HStack(spacing: 6) {
                             if let evidence = commit.evidenceLevel, !evidence.isEmpty {
@@ -2601,6 +2613,9 @@ private struct DebugDetailsView: View {
                 debugLine("flags", episode.uncertaintyFlags?.joined(separator: ", "))
                 if !commits.isEmpty {
                     debugLine("commit_flags", commits.flatMap { $0.flags ?? [] }.joined(separator: ", "))
+                    debugLine("commit_link_reason", commits.map { $0.linkReason ?? "—" }.joined(separator: ", "))
+                    debugLine("commit_evidence", commits.map { $0.evidenceLevel ?? "—" }.joined(separator: ", "))
+                    debugLine("candidate_id", commits.map { $0.candidateId ?? "—" }.joined(separator: ", "))
                 }
             }
             .padding(.top, 6)
@@ -2632,6 +2647,7 @@ private enum EpisodeStatus {
     case probable
     case needsReview
     case ongoing
+    case delivery
 
     var label: String {
         switch self {
@@ -2639,6 +2655,7 @@ private enum EpisodeStatus {
         case .probable: return "Probable"
         case .needsReview: return "À vérifier"
         case .ongoing: return "En cours"
+        case .delivery: return "Livraison"
         }
     }
 
@@ -2648,6 +2665,7 @@ private enum EpisodeStatus {
         case .probable: return gBlue
         case .needsReview: return gOrange
         case .ongoing: return gPurple
+        case .delivery: return gGray
         }
     }
 }
@@ -2673,7 +2691,7 @@ private func dashboardTime(_ raw: String?) -> String {
     return formatter.string(from: date)
 }
 
-private func scopeLabel(_ scope: String?) -> String {
+func scopeLabel(_ scope: String?) -> String {
     switch scope {
     case "app_swift": return "App Swift"
     case "routes": return "Routes"
@@ -2687,6 +2705,17 @@ private func scopeLabel(_ scope: String?) -> String {
     case "unknown", nil: return "Contexte incertain"
     default: return scope ?? "Contexte incertain"
     }
+}
+
+func isGitDeliveryEpisode(scope: String?, task: String?) -> Bool {
+    scope == "git" || task == "terminal_execution"
+}
+
+func episodeScopeLabel(scope: String?, task: String?) -> String {
+    if isGitDeliveryEpisode(scope: scope, task: task) {
+        return "Phase Git / livraison"
+    }
+    return scopeLabel(scope)
 }
 
 private func taskLabel(_ task: String?) -> String {
@@ -2714,42 +2743,55 @@ private func boundaryLabel(_ boundary: String?) -> String {
     }
 }
 
-private func evidenceLabel(_ evidence: String) -> String {
+func evidenceLabel(_ evidence: String) -> String {
     switch evidence {
-    case "temporal_only": return "Temporel seul"
+    case "file_scope": return "Rattaché par fichiers"
+    case "temporal_only": return "Lien temporel à vérifier"
     default: return evidence
     }
 }
 
-private func importantFlags(_ flags: [String]?) -> [String] {
+func importantFlags(_ flags: [String]?) -> [String] {
     let priority = [
+        "linked_by_journal_file_window",
+        "work_episode_link",
+        "delayed_delivery",
         "temporal_only_link",
-        "no_file_scope_match",
         "ambiguous_candidates",
         "commit_only_journal_entry",
-        "delivery_after_episode",
     ]
     let present = Set(flags ?? [])
     return priority.filter { present.contains($0) }
 }
 
-private func flagLabel(_ flag: String) -> String {
+func flagLabel(_ flag: String) -> String {
     switch flag {
-    case "temporal_only_link": return "Temporel"
+    case "linked_by_journal_file_window": return "Fenêtre confirmée par le journal"
+    case "work_episode_link": return "Commit rattaché au travail"
+    case "delayed_delivery": return "Livré après le travail"
+    case "temporal_only_link": return "Lien temporel à vérifier"
     case "no_file_scope_match": return "Sans fichiers"
     case "ambiguous_candidates": return "Ambigu"
     case "commit_only_journal_entry": return "Commit seul"
     case "delivery_after_episode": return "Livré après"
+    case "delivery_near_candidate_end": return "Livraison proche de cet épisode"
     default: return flag
     }
 }
 
-private func flagColor(_ flag: String) -> String {
+func flagColor(_ flag: String) -> String {
     switch flag {
+    case "linked_by_journal_file_window", "work_episode_link": return gGreen
+    case "delayed_delivery": return gBlue
     case "ambiguous_candidates", "commit_only_journal_entry", "delivery_after_episode": return gOrange
     case "no_file_scope_match", "temporal_only_link": return gGray
     default: return gBlue
     }
+}
+
+func deliveredAtLabel(_ raw: String?) -> String? {
+    let time = dashboardTime(raw)
+    return time == "—" ? nil : "Livré à \(time)"
 }
 
 private func dashboardPercent(_ value: Double?) -> String {

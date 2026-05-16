@@ -1524,6 +1524,47 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertNil(vm.pendingContextProbe)
     }
 
+    func testTimelineLabelsExposeGitDeliveryAsPhase() {
+        XCTAssertEqual(
+            episodeScopeLabel(scope: "git", task: "terminal_execution"),
+            "Phase Git / livraison"
+        )
+        XCTAssertEqual(
+            episodeScopeLabel(scope: "memory", task: "coding"),
+            "Mémoire"
+        )
+    }
+
+    func testTimelineCommitEvidenceLabelsAreUserFacing() {
+        XCTAssertEqual(evidenceLabel("file_scope"), "Rattaché par fichiers")
+        XCTAssertEqual(evidenceLabel("temporal_only"), "Lien temporel à vérifier")
+        XCTAssertEqual(flagLabel("linked_by_journal_file_window"), "Fenêtre confirmée par le journal")
+        XCTAssertEqual(flagLabel("work_episode_link"), "Commit rattaché au travail")
+        XCTAssertEqual(flagLabel("delayed_delivery"), "Livré après le travail")
+    }
+
+    func testTimelineImportantFlagsHideRawNoFileDebugFlag() {
+        let flags = importantFlags([
+            "no_file_scope_match",
+            "linked_by_journal_file_window",
+            "work_episode_link",
+            "delayed_delivery",
+            "temporal_only_link",
+        ])
+
+        XCTAssertEqual(flags, [
+            "linked_by_journal_file_window",
+            "work_episode_link",
+            "delayed_delivery",
+            "temporal_only_link",
+        ])
+    }
+
+    func testTimelineDeliveredAtLabelUsesDeliveryWording() {
+        XCTAssertEqual(deliveredAtLabel("2026-05-16T14:34:24"), "Livré à 14:34")
+        XCTAssertNil(deliveredAtLabel(nil))
+    }
+
     private func contextProbeRequest(kind: String, status: String) -> ContextProbeRequestPayload {
         ContextProbeRequestPayload(
             requestId: "\(kind)-\(status)",
