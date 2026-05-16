@@ -690,7 +690,8 @@ class TestExtractor(unittest.TestCase):
             scope_source="commit_diff",
         )
 
-        self.assertIn("Tu rédiges une note de journal de développement à partir de faits observés.", prompt)
+        self.assertIn("Tu rédiges une note courte de journal de développement pour un commit.", prompt)
+        self.assertIn("Sources primaires : commit_message, diff_summary, fichiers du commit", prompt)
         self.assertIn("Projet : Pulse", prompt)
         self.assertIn("Commit :", prompt)
         self.assertIn("feat: expose lightweight status", prompt)
@@ -737,7 +738,7 @@ class TestExtractor(unittest.TestCase):
 
         self.assertIn("Intention du commit : corrige un problème côté LLM local", prompt)
         self.assertIn("évite le warmup du modèle lourd sur les flux lightweight", prompt)
-        self.assertIn("Préférer l'effet livré", prompt)
+        self.assertIn("Le commit_message est la source principale", prompt)
         self.assertIn("Ne liste pas de noms de classes de test", prompt)
         self.assertNotIn("TestEmbeddingPolicy", prompt)
         self.assertNotIn("DummyThread", prompt)
@@ -766,13 +767,58 @@ class TestExtractor(unittest.TestCase):
         )
 
         self.assertIn(
-            "Objectif de travail : réduire les coûts cachés du modèle local en évitant les embeddings implicites",
+            "Contexte secondaire — objectif de travail : réduire les coûts cachés du modèle local en évitant les embeddings implicites",
             prompt,
         )
         self.assertIn("Type : fix", prompt)
         self.assertNotIn("window_title", prompt)
         self.assertNotIn("clipboard", prompt)
         self.assertNotIn("conversation", prompt)
+
+    def test_lightweight_prompt_ordonne_commit_avant_work_intent_secondaire(self):
+        prompt = build_lightweight_journal_summary_prompt(
+            "Pulse",
+            20,
+            "coding",
+            "normal",
+            0.0,
+            ["ChatGPT", "Codex"],
+            ["runtime.py"],
+            1,
+            "fix(context): abort approved clipboard probes on cancel",
+            "Diff en cours : runtime.py (+10 -2)",
+            work_intent={
+                "summary": "explorer Apple Foundation pour les résumés",
+                "project": "Pulse",
+            },
+        )
+
+        self.assertLess(prompt.index("Commit :"), prompt.index("Contexte secondaire — objectif de travail"))
+        self.assertIn("Contexte secondaire : projet et objectif de travail", prompt)
+        self.assertIn("il ne doit jamais remplacer, dominer ou contredire le commit", prompt)
+        self.assertIn("N'introduis aucun sujet absent du commit_message, du diff_summary ou des fichiers", prompt)
+        self.assertNotIn("ChatGPT", prompt)
+        self.assertNotIn("Codex", prompt)
+        self.assertNotIn("project_evidence", prompt)
+        self.assertNotIn("support_apps", prompt)
+
+    def test_lightweight_prompt_demande_un_resume_sobre_si_preuves_faibles(self):
+        prompt = build_lightweight_journal_summary_prompt(
+            "Pulse",
+            5,
+            "general",
+            "normal",
+            0.0,
+            [],
+            [],
+            0,
+            "fix: handle cancel",
+            "",
+        )
+
+        self.assertIn("Si les preuves sont faibles, écris une phrase factuelle sobre basée sur le commit.", prompt)
+        self.assertIn("Commit :", prompt)
+        self.assertNotIn("Diff compact :", prompt)
 
     def test_lightweight_prompt_real_commits_formulent_intention_metier(self):
         cases = [

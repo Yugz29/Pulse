@@ -1003,14 +1003,18 @@ def build_lightweight_journal_summary_prompt(
         scope_source=scope_source,
     )
     return f"""\
-Tu rédiges une note de journal de développement à partir de faits observés.
-Objectif : aider à comprendre ce qui a réellement changé, pas seulement reformuler le titre du commit.
-Utilise d'abord l'intention du commit et les changements détectés.
-Préférer l'effet livré : comportement changé, bug corrigé, capacité ajoutée, sécurité, performance ou effet local-first.
-Ignore les détails de fichiers, routes, fonctions, classes et tests sauf s'ils expliquent directement le comportement.
-Ne liste pas de noms de classes de test, fonctions internes ou fichiers.
-N'invente pas d'intention, de bénéfice ou de comportement qui n'apparaît pas dans les faits.
-Réponds en français, en 1 à 2 phrases courtes.
+Tu rédiges une note courte de journal de développement pour un commit.
+Sources primaires : commit_message, diff_summary, fichiers du commit et nombre de fichiers.
+Contexte secondaire : projet et objectif de travail, seulement s'ils confirment les sources primaires.
+Règles :
+- Le commit_message est la source principale.
+- Le diff_summary et les fichiers définissent la portée.
+- L'objectif de travail est un contexte secondaire : il ne doit jamais remplacer, dominer ou contredire le commit.
+- N'introduis aucun sujet absent du commit_message, du diff_summary ou des fichiers.
+- Si les preuves sont faibles, écris une phrase factuelle sobre basée sur le commit.
+- Ignore les détails de fichiers, routes, fonctions, classes et tests sauf s'ils expliquent directement le comportement.
+- Ne liste pas de noms de classes de test, fonctions internes ou fichiers.
+- Réponds en français, en 1 à 2 phrases maximum.
 
 Faits observés :
 {facts_block}"""
@@ -1052,10 +1056,7 @@ def _lightweight_journal_facts_block(
 ) -> str:
     commit_message = _redact_memory_text(commit_message)
     diff_summary = _redact_memory_text(diff_summary)
-    facts: List[str] = [f"- Projet : {project}", f"- Durée : {duration} minutes"]
-    intent = _safe_work_intent(work_intent)
-    if intent:
-        facts.append(f"- Objectif de travail : {intent}")
+    facts: List[str] = []
     if commit_message:
         lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
         full_msg = "\n".join(lines).strip()[:400]
@@ -1077,6 +1078,11 @@ def _lightweight_journal_facts_block(
         facts.append(f"- {prefix} : {cluster_files_for_display(top_files)}")
     elif files_count:
         facts.append(f"- Fichiers modifiés : {files_count}")
+    facts.append(f"- Projet : {project}")
+    facts.append(f"- Durée : {duration} minutes")
+    intent = _safe_work_intent(work_intent)
+    if intent:
+        facts.append(f"- Contexte secondaire — objectif de travail : {intent}")
     if friction >= 0.7:
         facts.append("- Friction : élevée")
     return _limit_text("\n".join(facts), 1500)
