@@ -489,9 +489,19 @@ struct DashboardRootView: View {
                     .foregroundStyle(linked ? Color(hex: gGreen) : Color(hex: gRed))
             }
 
-            Text("\(dashboardAbsoluteTimestamp(link.episodeStartedAt)) → \(dashboardAbsoluteTimestamp(link.episodeEndedAt))")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                if let displayWindow = commitLinkDisplayEpisodeWindowLabel(link) {
+                    Text(displayWindow)
+                }
+                if let evidenceWindow = commitLinkEvidenceWindowLabel(link) {
+                    Text(evidenceWindow)
+                }
+                if let journalWindow = commitLinkJournalWindowLabel(link) {
+                    Text(journalWindow)
+                }
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
                 Text(link.linkReason ?? (linked ? "linked" : "unlinked"))
@@ -2649,6 +2659,10 @@ private struct DebugDetailsView: View {
                     debugLine("commit_link_reason", commits.map { $0.linkReason ?? "—" }.joined(separator: ", "))
                     debugLine("commit_evidence", commits.map { $0.evidenceLevel ?? "—" }.joined(separator: ", "))
                     debugLine("candidate_id", commits.map { $0.candidateId ?? "—" }.joined(separator: ", "))
+                    debugLine("evidence_candidate_id", commits.map { $0.evidenceCandidateId ?? "—" }.joined(separator: ", "))
+                    debugLine("display_episode_window", commits.compactMap(commitLinkDisplayEpisodeWindowLabel).joined(separator: " · "))
+                    debugLine("evidence_window", commits.compactMap(commitLinkEvidenceWindowLabel).joined(separator: " · "))
+                    debugLine("journal_window", commits.compactMap(commitLinkJournalWindowLabel).joined(separator: " · "))
                 }
             }
             .padding(.top, 6)
@@ -2825,6 +2839,22 @@ func flagColor(_ flag: String) -> String {
 func deliveredAtLabel(_ raw: String?) -> String? {
     let time = dashboardTime(raw)
     return time == "—" ? nil : "Livré à \(time)"
+}
+
+func commitLinkDisplayEpisodeWindowLabel(_ link: DebugCommitEpisodeLink) -> String? {
+    guard link.episodeStartedAt != nil || link.episodeEndedAt != nil else { return nil }
+    return "Épisode affiché : \(dashboardAbsoluteTimestamp(link.episodeStartedAt)) → \(dashboardAbsoluteTimestamp(link.episodeEndedAt))"
+}
+
+func commitLinkEvidenceWindowLabel(_ link: DebugCommitEpisodeLink) -> String? {
+    guard link.evidenceStartedAt != nil || link.evidenceEndedAt != nil else { return nil }
+    let source = link.evidenceSource.map { " (\($0))" } ?? ""
+    return "Preuve de rattachement\(source) : \(dashboardAbsoluteTimestamp(link.evidenceStartedAt)) → \(dashboardAbsoluteTimestamp(link.evidenceEndedAt))"
+}
+
+func commitLinkJournalWindowLabel(_ link: DebugCommitEpisodeLink) -> String? {
+    guard link.journalStartedAt != nil || link.journalEndedAt != nil else { return nil }
+    return "Fenêtre journal : \(dashboardAbsoluteTimestamp(link.journalStartedAt)) → \(dashboardAbsoluteTimestamp(link.journalEndedAt))"
 }
 
 private func dashboardPercent(_ value: Double?) -> String {

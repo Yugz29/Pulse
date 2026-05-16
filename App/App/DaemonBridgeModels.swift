@@ -967,6 +967,11 @@ struct DebugCommitEpisodeLink: Decodable, Identifiable {
     let candidateId: String?
     let episodeStartedAt: String?
     let episodeEndedAt: String?
+    let evidenceCandidateId: String?
+    let evidenceEpisodeId: String?
+    let evidenceStartedAt: String?
+    let evidenceEndedAt: String?
+    let evidenceSource: String?
     let project: String?
     let confidence: Double?
     let status: String?
@@ -989,6 +994,11 @@ struct DebugCommitEpisodeLink: Decodable, Identifiable {
         case candidateId = "candidate_id"
         case episodeStartedAt = "episode_started_at"
         case episodeEndedAt = "episode_ended_at"
+        case evidenceCandidateId = "evidence_candidate_id"
+        case evidenceEpisodeId = "evidence_episode_id"
+        case evidenceStartedAt = "evidence_started_at"
+        case evidenceEndedAt = "evidence_ended_at"
+        case evidenceSource = "evidence_source"
         case project
         case confidence
         case status

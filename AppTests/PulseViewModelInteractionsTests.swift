@@ -1549,6 +1549,85 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(flagLabel("delayed_delivery"), "Livré après le travail")
     }
 
+    func testDebugCommitEpisodeLinkDecodesEvidenceFields() throws {
+        let json = """
+        {
+          "id": "commit-link-1",
+          "entry_id": "entry-1",
+          "commit_subject": "fix(dashboard): simplify dashboard navigation",
+          "delivered_at": "2026-05-16T18:57:57",
+          "journal_started_at": "2026-05-16T15:50:11",
+          "journal_ended_at": "2026-05-16T16:25:23",
+          "episode_id": "work-episode-2026-05-16T16:24:29",
+          "candidate_id": "journal-file-window-entry-1",
+          "episode_started_at": "2026-05-16T16:24:29",
+          "episode_ended_at": "2026-05-16T16:58:00",
+          "evidence_candidate_id": "journal-file-window-entry-1",
+          "evidence_episode_id": "journal-file-window-entry-1",
+          "evidence_started_at": "2026-05-16T15:50:11",
+          "evidence_ended_at": "2026-05-16T16:25:23",
+          "evidence_source": "journal_file_window",
+          "confidence": 0.93,
+          "status": "linked",
+          "link_reason": "linked_by_journal_file_window",
+          "flags": ["work_episode_link"],
+          "evidence_level": "file_scope"
+        }
+        """
+
+        let link = try JSONDecoder().decode(DebugCommitEpisodeLink.self, from: Data(json.utf8))
+
+        XCTAssertEqual(link.episodeId, "work-episode-2026-05-16T16:24:29")
+        XCTAssertEqual(link.evidenceCandidateId, "journal-file-window-entry-1")
+        XCTAssertEqual(link.evidenceEpisodeId, "journal-file-window-entry-1")
+        XCTAssertEqual(link.evidenceStartedAt, "2026-05-16T15:50:11")
+        XCTAssertEqual(link.evidenceEndedAt, "2026-05-16T16:25:23")
+        XCTAssertEqual(link.evidenceSource, "journal_file_window")
+    }
+
+    func testDebugCommitEpisodeLinkDecodesWithoutEvidenceFields() throws {
+        let json = """
+        {
+          "id": "commit-link-1",
+          "entry_id": "entry-1",
+          "episode_id": "work-episode-1",
+          "episode_started_at": "2026-05-16T16:24:29",
+          "episode_ended_at": "2026-05-16T16:58:00",
+          "status": "linked"
+        }
+        """
+
+        let link = try JSONDecoder().decode(DebugCommitEpisodeLink.self, from: Data(json.utf8))
+
+        XCTAssertEqual(link.episodeId, "work-episode-1")
+        XCTAssertNil(link.evidenceCandidateId)
+        XCTAssertNil(link.evidenceStartedAt)
+        XCTAssertNil(link.evidenceSource)
+    }
+
+    func testCommitLinkWindowLabelsSeparateDisplayEvidenceAndJournal() throws {
+        let json = """
+        {
+          "id": "commit-link-1",
+          "entry_id": "entry-1",
+          "journal_started_at": "2026-05-16T15:50:11",
+          "journal_ended_at": "2026-05-16T16:25:23",
+          "episode_id": "work-episode-1",
+          "episode_started_at": "2026-05-16T16:24:29",
+          "episode_ended_at": "2026-05-16T16:58:00",
+          "evidence_started_at": "2026-05-16T15:50:11",
+          "evidence_ended_at": "2026-05-16T16:25:23",
+          "evidence_source": "journal_file_window",
+          "status": "linked"
+        }
+        """
+        let link = try JSONDecoder().decode(DebugCommitEpisodeLink.self, from: Data(json.utf8))
+
+        XCTAssertTrue(commitLinkDisplayEpisodeWindowLabel(link)?.contains("Épisode affiché") == true)
+        XCTAssertTrue(commitLinkEvidenceWindowLabel(link)?.contains("Preuve de rattachement (journal_file_window)") == true)
+        XCTAssertTrue(commitLinkJournalWindowLabel(link)?.contains("Fenêtre journal") == true)
+    }
+
     func testTimelineImportantFlagsHideRawNoFileDebugFlag() {
         let flags = importantFlags([
             "no_file_scope_match",
