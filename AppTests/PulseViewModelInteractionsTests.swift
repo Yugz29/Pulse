@@ -1535,6 +1535,12 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         )
     }
 
+    func testDashboardSectionLabelsUseProductNavigation() {
+        XCTAssertEqual(DashboardSection.session.rawValue, "Aujourd’hui")
+        XCTAssertEqual(DashboardSection.episodes.rawValue, "Travail")
+        XCTAssertEqual(DashboardSection.contextProbes.rawValue, "Contexte")
+    }
+
     func testTimelineCommitEvidenceLabelsAreUserFacing() {
         XCTAssertEqual(evidenceLabel("file_scope"), "Rattaché par fichiers")
         XCTAssertEqual(evidenceLabel("temporal_only"), "Lien temporel à vérifier")

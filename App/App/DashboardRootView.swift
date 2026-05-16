@@ -8,14 +8,14 @@ private let gGray = "#7c7c80"
 private let gPurple = "#8B5CF6"
 
 enum DashboardSection: String, CaseIterable, Identifiable {
-    case session = "Session"
-    case episodes = "Épisodes"
+    case session = "Aujourd’hui"
+    case episodes = "Travail"
     case observation = "Observation"
     case memory = "Mémoire"
     case daydream = "DayDream"
     case events = "Événements"
     case notifications = "Notifications"
-    case contextProbes = "Context Probes"
+    case contextProbes = "Contexte"
     case mcp = "MCP"
     case system = "Système"
 
@@ -204,19 +204,33 @@ struct DashboardRootView: View {
                     todayProjectsCard
                 }
 
-                HStack(alignment: .top, spacing: 16) {
-                    currentContextCard
-                    recentSessionsCard
+                currentContextCard
+
+                if !activeWorkIntentCandidates.isEmpty {
+                    GlassCard(accent: gPurple) {
+                        workIntentCandidatesSection
+                    }
                 }
 
-                HStack(alignment: .top, spacing: 16) {
-                    taskCard
-                    signalsCard
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top, spacing: 16) {
+                            recentSessionsCard
+                            taskCard
+                        }
+                        HStack(alignment: .top, spacing: 16) {
+                            signalsCard
+                            contextCard
+                        }
+                        appsCard
+                        fileMixCard
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    Label("Détails runtime", systemImage: "slider.horizontal.3")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
                 }
-
-                contextCard
-                appsCard
-                fileMixCard
             }
             .padding(24)
         }
@@ -350,6 +364,18 @@ struct DashboardRootView: View {
                     commitLinks: vm.debugCommitEpisodeLinks?.links ?? [],
                     unlinkedCommits: vm.debugCommitEpisodeLinks?.unlinkedCommits ?? []
                 )
+
+                DisclosureGroup {
+                    HStack(alignment: .top, spacing: 16) {
+                        debugWorkEpisodesCard
+                        debugCommitLinksCard
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    Label("Debug reconstruction", systemImage: "wrench.and.screwdriver")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(24)
         }
@@ -1351,10 +1377,16 @@ struct DashboardRootView: View {
     private var contextProbesView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if !activeWorkIntentCandidates.isEmpty {
+                    GlassCard(accent: gPurple) {
+                        workIntentCandidatesSection
+                    }
+                }
+
                 GlassCard(accent: gBlue) {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            cardTitle("Context Probes", icon: "shield.lefthalf.filled")
+                            cardTitle("Demandes de contexte", icon: "shield.lefthalf.filled")
                             Spacer()
                             Button {
                                 Task { await vm.createFocusedElementTextProbeRequest() }
@@ -1375,14 +1407,15 @@ struct DashboardRootView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         if let diagnostic = vm.accessibilityProbeDiagnostic {
-                            accessibilityDiagnosticBlock(diagnostic)
+                            DisclosureGroup {
+                                accessibilityDiagnosticBlock(diagnostic)
+                                    .padding(.top, 8)
+                            } label: {
+                                Label("Diagnostic AX", systemImage: "stethoscope")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    }
-                }
-
-                if !activeWorkIntentCandidates.isEmpty {
-                    GlassCard(accent: gPurple) {
-                        workIntentCandidatesSection
                     }
                 }
 
