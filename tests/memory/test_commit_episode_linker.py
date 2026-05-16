@@ -246,8 +246,6 @@ class TestCommitEpisodeLinker(unittest.TestCase):
                     "active_project": "Pulse",
                     "commit_message": "fix: update extractor",
                     "delivered_at": "2026-05-16T15:00:00",
-                    "started_at": "2026-05-16T13:12:00",
-                    "ended_at": "2026-05-16T13:13:00",
                     "top_files": ["extractor.py"],
                 }
             ],
@@ -397,6 +395,108 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertEqual(link["episode_ended_at"], "2026-05-16T14:29:00")
         self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
         self.assertEqual(link["evidence_level"], "file_scope")
+
+    def test_journal_file_window_allows_late_same_day_delivery_when_file_scoped(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-late",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(dashboard): simplify dashboard navigation",
+                    "delivered_at": "2026-05-16T18:57:57",
+                    "started_at": "2026-05-16T15:50:11",
+                    "ended_at": "2026-05-16T16:25:23",
+                    "top_files": [
+                        "DashboardRootView.swift",
+                        "PulseViewModelInteractionsTests.swift",
+                    ],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-git",
+                    "episode_id": "episode-git",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T18:57:00",
+                    "ended_at": "2026-05-16T19:02:00",
+                    "dominant_scope": "git",
+                    "probable_task": "terminal_execution",
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_started_at"], "2026-05-16T15:50:11")
+        self.assertEqual(link["episode_ended_at"], "2026-05-16T16:25:23")
+        self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
+        self.assertEqual(link["evidence_level"], "file_scope")
+        self.assertIn("delayed_delivery", link["flags"])
+        self.assertIn("delivery_after_episode", link["flags"])
+        self.assertEqual(link["score_breakdown"]["file_overlap_count"], 2)
+
+    def test_late_journal_window_without_files_or_project_does_not_force_link(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-late",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(dashboard): simplify dashboard navigation",
+                    "delivered_at": "2026-05-16T18:57:57",
+                    "started_at": "2026-05-16T15:50:11",
+                    "ended_at": "2026-05-16T16:25:23",
+                },
+                {
+                    "entry_id": "entry-no-project",
+                    "commit_message": "fix(dashboard): simplify dashboard navigation",
+                    "delivered_at": "2026-05-16T18:57:57",
+                    "started_at": "2026-05-16T15:50:11",
+                    "ended_at": "2026-05-16T16:25:23",
+                    "top_files": ["DashboardRootView.swift"],
+                },
+            ],
+            [
+                {
+                    "id": "candidate-old",
+                    "episode_id": "episode-old",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T15:50:11",
+                    "ended_at": "2026-05-16T16:25:23",
+                    "dominant_scope": "coding",
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 2)
+
+    def test_late_temporal_only_candidate_remains_unlinked(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-late",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(dashboard): simplify dashboard navigation",
+                    "delivered_at": "2026-05-16T18:57:57",
+                }
+            ],
+            [
+                {
+                    "id": "candidate-old",
+                    "episode_id": "episode-old",
+                    "project": "Pulse",
+                    "started_at": "2026-05-16T15:50:11",
+                    "ended_at": "2026-05-16T16:25:23",
+                    "dominant_scope": "coding",
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 0)
+        self.assertEqual(payload["unlinked_count"], 1)
 
     def test_journal_window_without_files_keeps_temporal_fallback(self):
         payload = link_commits_to_episodes(

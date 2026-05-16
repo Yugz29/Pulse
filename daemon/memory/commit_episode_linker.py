@@ -14,6 +14,7 @@ _AMBIGUOUS_SCORE_DELTA = 0.10
 _MAX_OPEN_EPISODE_DURATION_MIN = 8 * 60
 _FUTURE_COMMIT_GRACE_MIN = 5
 _DELAYED_FILE_OVERLAP_MIN = 90
+_JOURNAL_FILE_WINDOW_DELAY_MIN = 6 * 60
 
 
 @dataclass(frozen=True)
@@ -406,9 +407,27 @@ def _is_delayed_file_scope_match(
         return False
     if _optional_text(commit.get("delivered_at")) and delivery_delta is None:
         return False
-    if delivery_delta is not None and delivery_delta > _DELAYED_FILE_OVERLAP_MIN:
+    delay_limit = (
+        _JOURNAL_FILE_WINDOW_DELAY_MIN
+        if _truthy(candidate.get("journal_file_window"))
+        else _DELAYED_FILE_OVERLAP_MIN
+    )
+    if _truthy(candidate.get("journal_file_window")) and not _same_calendar_day(
+        commit.get("delivered_at"),
+        candidate.get("ended_at"),
+    ):
+        return False
+    if delivery_delta is not None and delivery_delta > delay_limit:
         return False
     return True
+
+
+def _same_calendar_day(left: Any, right: Any) -> bool:
+    left_dt = _parse_dt(left)
+    right_dt = _parse_dt(right)
+    if left_dt is None or right_dt is None:
+        return False
+    return left_dt.date() == right_dt.date()
 
 
 def _projects_match_explicitly(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:

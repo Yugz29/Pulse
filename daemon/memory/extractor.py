@@ -1399,6 +1399,71 @@ def _work_intent_project(session_data: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _has_project_work_evidence(
+    session_data: Dict[str, Any],
+    session_record: Optional[Dict[str, Any]],
+    active_project: Optional[str],
+    commit_message: Optional[str],
+) -> bool:
+    if str(commit_message or "").strip():
+        return True
+
+    sources = [session_data]
+    if session_record:
+        sources.append(session_record)
+
+    for source in sources:
+        if _compact_strings(source.get("commit_messages", [])):
+            return True
+        if _compact_strings(source.get("top_files", [])):
+            return True
+        if _clean_file_paths(source.get("top_file_paths", [])):
+            return True
+        if _clean_file_paths(source.get("commit_files", [])):
+            return True
+        if _clean_file_paths(source.get("commit_scope_files", [])):
+            return True
+        if str(source.get("active_file") or "").strip():
+            return True
+        if int(source.get("files_changed") or source.get("files_count") or 0) > 0:
+            return True
+        if any(str(source.get(key) or "").strip() for key in (
+            "project_root",
+            "repo_root",
+            "commit_repo_root",
+            "terminal_cwd",
+            "terminal_project",
+        )):
+            return True
+        intent_project = _work_intent_project(source)
+        if intent_project and active_project and intent_project == _normalize_project_name(active_project):
+            return True
+    return False
+
+
+def _should_discard_stale_active_project(
+    session_data: Dict[str, Any],
+    session_record: Optional[Dict[str, Any]],
+    active_project: Optional[str],
+    commit_message: Optional[str],
+) -> bool:
+    if not _normalize_project_name(active_project):
+        return False
+    activity = str(
+        (session_record or {}).get("activity_level")
+        or session_data.get("activity_level")
+        or ""
+    ).strip().lower()
+    if activity != "idle":
+        return False
+    return not _has_project_work_evidence(
+        session_data,
+        session_record,
+        active_project,
+        commit_message,
+    )
+
+
 def _infer_journal_project(entry: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
     return _infer_project_from_session_evidence(entry)
 
@@ -2510,9 +2575,13 @@ def _build_consolidation_frame(
 ) -> Dict[str, Any]:
     session_record = _latest_recent_session(_session_records(session_data))
     active_project = (session_record or {}).get("active_project") or session_data.get("active_project")
+    inference_data = session_data
+    if _should_discard_stale_active_project(session_data, session_record, active_project, commit_message):
+        active_project = None
+        inference_data = {**session_data, "active_project": None}
     project_source = "active_project" if active_project else None
     if not active_project:
-        active_project, project_source = _infer_project_from_session_evidence(session_data)
+        active_project, project_source = _infer_project_from_session_evidence(inference_data)
     probable_task = (session_record or {}).get("probable_task") or session_data.get("probable_task") or "general"
     task_confidence = (
         (session_record or {}).get("task_confidence")
@@ -2545,8 +2614,8 @@ def _build_consolidation_frame(
     if trigger == "commit" and commit_message and (session_data.get("delivered_at") or session_record is not None):
         return _commit_only_consolidation_frame(
             session_data,
-            active_project=session_data.get("active_project") or active_project,
-            project_source="active_project" if session_data.get("active_project") else project_source,
+            active_project=active_project,
+            project_source=project_source,
             probable_task=probable_task,
             fallback_session_record=session_record,
             task_confidence=task_confidence,

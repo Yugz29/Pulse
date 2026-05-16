@@ -2074,6 +2074,78 @@ class TestExtractor(unittest.TestCase):
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
         self.assertIn("## AlphaApp", journal)
 
+    def test_journal_ne_fait_pas_confiance_a_active_project_idle_sans_preuve(self):
+        update_memories_from_session(
+            {
+                "active_project": "AlphaApp",
+                "duration_min": 32,
+                "probable_task": "coding",
+                "activity_level": "idle",
+                "recent_apps": ["Xcode", "ChatGPT", "Code"],
+                "top_files": [],
+                "files_changed": 0,
+                "commit_message": "",
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        visible = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        hidden = json.loads(
+            journal.split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        self.assertNotIn("## AlphaApp", visible)
+        self.assertIn("## Hors projet", visible)
+        self.assertEqual(hidden[0]["active_project"], None)
+        self.assertEqual(hidden[0]["project_source"], "project_attribution_insufficient")
+
+    def test_journal_conserve_active_project_idle_avec_preuve_fichier(self):
+        alpha = self.memory_dir / "Projects" / "AlphaApp"
+        alpha_file = alpha / "App" / "Feature.swift"
+        alpha_file.parent.mkdir(parents=True)
+
+        update_memories_from_session(
+            {
+                "active_project": "AlphaApp",
+                "duration_min": 32,
+                "probable_task": "coding",
+                "activity_level": "idle",
+                "recent_apps": ["Xcode", "ChatGPT", "Code"],
+                "top_files": ["Feature.swift"],
+                "top_file_paths": [str(alpha_file)],
+                "files_changed": 1,
+                "commit_message": "",
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## AlphaApp", journal)
+
+    def test_journal_conserve_active_project_idle_avec_commit(self):
+        update_memories_from_session(
+            {
+                "active_project": "AlphaApp",
+                "duration_min": 32,
+                "probable_task": "coding",
+                "activity_level": "idle",
+                "recent_apps": ["Xcode", "ChatGPT", "Code"],
+                "top_files": ["Feature.swift"],
+                "files_changed": 1,
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(alpha): stabilize feature",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        self.assertIn("## AlphaApp", journal)
+
     def test_journal_attribue_un_projet_depuis_project_root_generique(self):
         alpha = self.memory_dir / "workspaces" / "AlphaApp"
         alpha.mkdir(parents=True)
