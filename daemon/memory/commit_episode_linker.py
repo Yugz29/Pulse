@@ -79,15 +79,20 @@ def _link_one_commit(
     *,
     now: datetime | None = None,
 ) -> CommitEpisodeLink:
+    candidate_items = [*candidates]
+    journal_candidate = _journal_file_window_candidate(commit)
+    if journal_candidate is not None:
+        candidate_items.append(journal_candidate)
+
     scored = [
         item
-        for item in (_score_candidate(commit, candidate, now=now) for candidate in candidates)
+        for item in (_score_candidate(commit, candidate, now=now) for candidate in candidate_items)
         if item is not None
     ]
     if not scored:
         flags = [*_commit_base_flags(commit), "no_plausible_episode"]
         if _optional_text(commit.get("delivered_at")):
-            if _has_stale_short_episode_candidate(commit, candidates):
+            if _has_stale_short_episode_candidate(commit, candidate_items):
                 flags.append("stale_short_episode_candidate")
             flags.append("no_delivery_near_episode")
             flags.append("delivery_far_from_episode")
@@ -105,7 +110,7 @@ def _link_one_commit(
     flags = list(best["flags"])
     if len(scored) > 1 and (best["score"] - scored[1]["score"]) <= _AMBIGUOUS_SCORE_DELTA:
         flags.append("ambiguous_candidates")
-    if _has_stale_journal_overlap_ignored(commit, candidates, best["candidate"]):
+    if _has_stale_journal_overlap_ignored(commit, candidate_items, best["candidate"]):
         flags.append("stale_journal_window_ignored")
     confidence, flags = _calibrated_confidence(best["score"], flags, best["score_breakdown"])
     return _build_link(
@@ -143,8 +148,9 @@ def _score_candidate(
 
     if _is_delayed_file_scope_match(commit, candidate, delivery_delta, file_overlap):
         score = 0.88 if delivery_delta is not None and delivery_delta > 0 else 0.90
-        reason = "linked_by_file_overlap"
+        reason = "linked_by_journal_file_window" if _truthy(candidate.get("journal_file_window")) else "linked_by_file_overlap"
         flags.extend([
+            reason,
             "linked_by_file_overlap",
             "work_episode_link",
         ])
@@ -311,6 +317,32 @@ def _extract_commits(journal_entries: list[Any]) -> list[dict[str, Any]]:
                 "top_files": _entry_files(item),
             })
     return commits
+
+
+def _journal_file_window_candidate(commit: Mapping[str, Any]) -> dict[str, Any] | None:
+    project = _project(commit)
+    files = _entry_files(commit)
+    started_at = _optional_text(commit.get("started_at"))
+    ended_at = _optional_text(commit.get("ended_at"))
+    if not project or not files or not started_at or not ended_at:
+        return None
+    if _parse_dt(started_at) is None or _parse_dt(ended_at) is None:
+        return None
+    if _parse_dt(ended_at) <= _parse_dt(started_at):
+        return None
+    entry_id = str(commit.get("entry_id") or commit.get("id") or "unknown")
+    return {
+        "id": f"journal-file-window-{entry_id}",
+        "episode_id": f"journal-file-window-{entry_id}",
+        "project": project,
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "top_files": files,
+        "dominant_scope": "journal_file_window",
+        "probable_task": "coding",
+        "ignored": False,
+        "journal_file_window": True,
+    }
 
 
 def _is_delayed_file_scope_match(

@@ -131,6 +131,64 @@ class TestDebugMemoryViews(unittest.TestCase):
         self.assertIn("work_episode_link", link["flags"])
         self.assertEqual(link["score_breakdown"]["file_overlap_count"], 2)
 
+    def test_commit_episode_links_utilisent_la_fenetre_fichier_du_journal(self):
+        observed_at = datetime.now().replace(hour=14, minute=3, second=0, microsecond=0)
+        sessions_dir = Path(self.tmpdir.name) / "memory" / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_entries = [
+            {
+                "entry_id": "journal-1",
+                "active_project": "Pulse",
+                "commit_message": "fix(memory): link delayed commits by file overlap",
+                "delivered_at": observed_at.replace(hour=14, minute=34).isoformat(),
+                "started_at": observed_at.replace(hour=14, minute=26).isoformat(),
+                "ended_at": observed_at.replace(hour=14, minute=29).isoformat(),
+                "top_files": [
+                    "commit_episode_linker.py",
+                    "journal_candidate_builder.py",
+                    "work_episode_builder.py",
+                ],
+            }
+        ]
+        (sessions_dir / f"{observed_at.date().isoformat()}.md").write_text(
+            "# Journal\n\n"
+            "<!-- pulse-journal-data:start\n"
+            f"{json.dumps(journal_entries)}\n"
+            "pulse-journal-data:end -->",
+            encoding="utf-8",
+        )
+        self.memory.record_event(Event(
+            "terminal_command_finished",
+            {
+                "terminal_command": "git commit -m 'previous commit'",
+                "terminal_command_base": "git",
+                "terminal_action_category": "git",
+                "terminal_project": "Pulse",
+            },
+            timestamp=observed_at,
+        ))
+        self.memory.record_event(Event(
+            "terminal_command_finished",
+            {
+                "terminal_command": "git status",
+                "terminal_command_base": "git",
+                "terminal_action_category": "git",
+                "terminal_project": "Pulse",
+            },
+            timestamp=observed_at + timedelta(minutes=8),
+        ))
+
+        payload = self.views.get_commit_episode_links(date=observed_at)
+
+        self.assertEqual(payload["commit_count"], 1)
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_started_at"], observed_at.replace(hour=14, minute=26).isoformat())
+        self.assertEqual(link["episode_ended_at"], observed_at.replace(hour=14, minute=29).isoformat())
+        self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
+        self.assertEqual(link["evidence_level"], "file_scope")
+        self.assertNotIn("stale_journal_window_ignored", link["flags"])
+
     def test_journal_comparison_without_journal_file_returns_candidates(self):
         observed_at = datetime.now().replace(hour=10, minute=30, second=0, microsecond=0)
         repo = "/Users/yugz/Projets/Pulse/Pulse"
