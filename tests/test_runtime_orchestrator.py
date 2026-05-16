@@ -838,7 +838,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "top_files": ["runtime.py", "extractor.py"],
         }
 
-        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")), \
+        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1", "commit-item-1")), \
              patch.object(self.orchestrator, "_start_critical_worker") as start_worker:
             self.orchestrator._sync_memory_background(
                 snapshot,
@@ -851,7 +851,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         pending = queue.claim_next()
         self.assertIsNotNone(pending)
         self.assertEqual(pending.kind, "journal_commit_summary")
-        self.assertEqual(pending.metadata["report_ref"], ("journal.md", "entry-1"))
+        self.assertEqual(pending.metadata["report_ref"], ("journal.md", "entry-1", "commit-item-1"))
+        self.assertEqual(pending.metadata["commit_item_id"], "commit-item-1")
         self.assertIn("fix: lightweight queue", pending.prompt)
         self.assertIn("Tu rédiges une note courte de journal de développement pour un commit", pending.prompt)
         self.assertIn("Sources primaires : commit_message, diff_summary", pending.prompt)

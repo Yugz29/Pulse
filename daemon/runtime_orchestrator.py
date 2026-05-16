@@ -1515,6 +1515,7 @@ class RuntimeOrchestrator:
                 max_tokens=160,
                 metadata={
                     "report_ref": report_ref,
+                    "commit_item_id": report_ref[2] if isinstance(report_ref, (tuple, list)) and len(report_ref) >= 3 else None,
                     "project": project,
                 },
             )

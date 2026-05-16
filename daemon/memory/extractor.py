@@ -30,6 +30,7 @@ import logging
 import re
 import subprocess
 import threading
+import hashlib
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -389,7 +390,7 @@ def update_memories_from_session(
     )
 
     if trigger == "commit" and llm is not None and report_ref is not None and not defer_llm_enrichment:
-        _, current_entry_id = report_ref
+        _, current_entry_id, _ = _report_ref_parts(report_ref)
 
         def _enrich_pending():
             try:
@@ -448,7 +449,7 @@ def enrich_session_report(
     session_data = _redact_session_free_text(session_data)
     commit_message = _redact_optional_memory_text(commit_message)
     diff_summary = _redact_optional_memory_text(diff_summary)
-    journal_file, entry_id = report_ref
+    journal_file, entry_id, commit_item_id = _report_ref_parts(report_ref)
     project     = session_data.get("active_project") or "inconnu"
     duration    = session_data.get("duration_min", 0)
     task        = session_data.get("probable_task", "general")
@@ -462,6 +463,7 @@ def enrich_session_report(
         journal_file,
         entry_id,
         body,
+        commit_item_id=commit_item_id,
         summary_source="llm",
         summary_status="generated",
         summary_error=None,
@@ -917,7 +919,10 @@ def _write_session_report(
         entries.append(entry)
         _write_journal_document(journal_file, today, entries)
 
-    return (journal_file, entry_id)
+    commit_item_id = None
+    if (commit_message or "").strip():
+        commit_item_id = _commit_item_id(commit_message, entry.get("delivered_at"))
+    return _resolve_commit_report_ref(journal_file, entry_id, commit_item_id)
 
 
 _JOURNAL_SYSTEM = (
@@ -1170,12 +1175,13 @@ def apply_validated_journal_summary(
     summary_source: str,
     stage: str,
 ) -> bool:
-    journal_file, entry_id = report_ref
+    journal_file, entry_id, commit_item_id = _report_ref_parts(report_ref)
     body = _finalize_journal_summary(text, allow_plain_text=True, stage=stage)
     return _replace_journal_entry(
         journal_file,
         str(entry_id),
         body,
+        commit_item_id=commit_item_id,
         summary_source=summary_source,
         summary_status="generated",
         summary_error=None,
@@ -1183,10 +1189,11 @@ def apply_validated_journal_summary(
 
 
 def mark_journal_summary_failed(report_ref, error: Any) -> bool:
-    journal_file, entry_id = report_ref
+    journal_file, entry_id, commit_item_id = _report_ref_parts(report_ref)
     return _update_journal_entry_summary_metadata(
         journal_file,
         str(entry_id),
+        commit_item_id=commit_item_id,
         summary_status="failed",
         summary_error=str(error or "unknown_error"),
     )
@@ -1473,6 +1480,7 @@ def _replace_journal_entry(
     entry_id: str,
     body: str,
     *,
+    commit_item_id: Optional[str] = None,
     summary_source: Optional[str] = None,
     summary_status: Optional[str] = None,
     summary_error: Optional[str] = None,
@@ -1484,11 +1492,48 @@ def _replace_journal_entry(
         entries = _load_journal_entries(journal_file)
         updated = False
         for entry in entries:
-            if entry.get("entry_id") == entry_id:
+            if commit_item_id and not (
+                entry.get("entry_id") == entry_id or _entry_has_commit_item_id(entry, commit_item_id)
+            ):
+                continue
+            if not commit_item_id and entry.get("entry_id") != entry_id:
+                continue
+            if commit_item_id:
+                commit_items = _ensure_commit_item_ids(entry.get("commit_items", []))
+                replaced_item = False
+                for item in commit_items:
+                    if item.get("commit_item_id") != commit_item_id:
+                        continue
+                    item["body"] = body.strip()
+                    if summary_source is not None:
+                        item["summary_source"] = summary_source
+                    if summary_status is not None:
+                        item["summary_status"] = summary_status
+                    item["summary_error"] = summary_error
+                    replaced_item = True
+                    break
+                if not replaced_item:
+                    continue
+                entry["commit_items"] = commit_items
+                entry["body"] = _body_from_commit_items(commit_items)
+                if len(commit_items) == 1 or not _entry_has_unresolved_commit_item_summaries(entry):
+                    if summary_source is not None:
+                        entry["summary_source"] = summary_source
+                    if summary_status is not None:
+                        entry["summary_status"] = summary_status
+                    entry["summary_error"] = summary_error
+                updated = True
+                break
+            else:
                 entry["body"] = body.strip()
                 commit_items = entry.get("commit_items")
                 if isinstance(commit_items, list) and len(commit_items) == 1 and isinstance(commit_items[0], dict):
                     commit_items[0]["body"] = body.strip()
+                    if summary_source is not None:
+                        commit_items[0]["summary_source"] = summary_source
+                    if summary_status is not None:
+                        commit_items[0]["summary_status"] = summary_status
+                    commit_items[0]["summary_error"] = summary_error
                 elif isinstance(commit_items, list) and _entry_has_unresolved_commit_item_summaries(entry):
                     replacement_bodies = _commit_item_replacement_bodies(body, commit_items)
                     for index, item in enumerate(commit_items):
@@ -1517,6 +1562,7 @@ def _update_journal_entry_summary_metadata(
     journal_file: Path,
     entry_id: str,
     *,
+    commit_item_id: Optional[str] = None,
     summary_status: Optional[str] = None,
     summary_error: Optional[str] = None,
     summary_source: Optional[str] = None,
@@ -1527,7 +1573,37 @@ def _update_journal_entry_summary_metadata(
         entries = _load_journal_entries(journal_file)
         updated = False
         for entry in entries:
-            if entry.get("entry_id") == entry_id:
+            if commit_item_id and not (
+                entry.get("entry_id") == entry_id or _entry_has_commit_item_id(entry, commit_item_id)
+            ):
+                continue
+            if not commit_item_id and entry.get("entry_id") != entry_id:
+                continue
+            if commit_item_id:
+                commit_items = _ensure_commit_item_ids(entry.get("commit_items", []))
+                updated_item = False
+                for item in commit_items:
+                    if item.get("commit_item_id") != commit_item_id:
+                        continue
+                    if summary_source is not None:
+                        item["summary_source"] = summary_source
+                    if summary_status is not None:
+                        item["summary_status"] = summary_status
+                    item["summary_error"] = summary_error
+                    updated_item = True
+                    break
+                if not updated_item:
+                    continue
+                entry["commit_items"] = commit_items
+                if len(commit_items) == 1:
+                    if summary_source is not None:
+                        entry["summary_source"] = summary_source
+                    if summary_status is not None:
+                        entry["summary_status"] = summary_status
+                    entry["summary_error"] = summary_error
+                updated = True
+                break
+            else:
                 if summary_source is not None:
                     entry["summary_source"] = summary_source
                 if summary_status is not None:
@@ -1550,6 +1626,68 @@ def _commit_item_replacement_bodies(body: str, commit_items: List[Dict[str, Any]
     if len(body_parts) == len(commit_items):
         return body_parts
     return [clean_body] * len(commit_items)
+
+
+def _commit_item_id(message: Any, delivered_at: Any = None) -> str:
+    message_text = _redact_memory_text(message).strip()
+    delivered_text = str(delivered_at or "").strip()
+    digest = hashlib.sha1(f"{message_text}\0{delivered_text}".encode("utf-8")).hexdigest()[:16]
+    return f"commit-item-{digest}"
+
+
+def _commit_item_id_for_item(item: Dict[str, Any]) -> str:
+    existing = str(item.get("commit_item_id") or "").strip()
+    if existing:
+        return existing
+    return _commit_item_id(item.get("message"), item.get("delivered_at"))
+
+
+def _ensure_commit_item_ids(items: Any) -> List[Dict[str, Any]]:
+    result: List[Dict[str, Any]] = []
+    if not isinstance(items, list):
+        return result
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        normalized = dict(item)
+        normalized["commit_item_id"] = _commit_item_id_for_item(normalized)
+        result.append(normalized)
+    return result
+
+
+def _entry_has_commit_item_id(entry: Dict[str, Any], commit_item_id: str) -> bool:
+    return any(
+        item.get("commit_item_id") == commit_item_id
+        for item in _ensure_commit_item_ids(entry.get("commit_items", []))
+    )
+
+
+def _body_from_commit_items(commit_items: List[Dict[str, Any]]) -> str:
+    return "\n".join(
+        _compact_strings([item.get("body") for item in commit_items if isinstance(item, dict)])
+    )
+
+
+def _report_ref_parts(report_ref: Any) -> tuple[Path, str, Optional[str]]:
+    if not isinstance(report_ref, (tuple, list)) or len(report_ref) < 2:
+        raise ValueError("invalid_report_ref")
+    journal_file = Path(report_ref[0])
+    entry_id = str(report_ref[1])
+    commit_item_id = str(report_ref[2]).strip() if len(report_ref) >= 3 and report_ref[2] else None
+    return journal_file, entry_id, commit_item_id
+
+
+def _resolve_commit_report_ref(
+    journal_file: Path,
+    entry_id: str,
+    commit_item_id: Optional[str],
+):
+    if not commit_item_id:
+        return (journal_file, entry_id)
+    for entry in _load_journal_entries(journal_file):
+        if _entry_has_commit_item_id(entry, commit_item_id):
+            return (journal_file, str(entry.get("entry_id") or entry_id), commit_item_id)
+    return (journal_file, entry_id, commit_item_id)
 
 
 def _new_entry_id(now: datetime) -> str:
@@ -1604,10 +1742,14 @@ def _build_journal_entry(*, entry_id, active_project, probable_task, activity_le
     if (commit_message or "").strip():
         entry["commit_items"] = [
             {
+                "commit_item_id": _commit_item_id(commit_message, delivered_at),
                 "message": (commit_message or "").strip(),
                 "body": body.strip(),
                 "delivered_at": delivered_at,
                 "top_files": list(top_files[:5]),
+                "summary_source": summary_source or "deterministic_fallback",
+                "summary_status": summary_status or "unknown",
+                "summary_error": summary_error,
             }
         ]
     return entry
@@ -1781,12 +1923,17 @@ def _normalize_commit_items(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
             message = _redact_memory_text(item.get("message")).strip()
             if not message:
                 continue
+            commit_item_id = str(item.get("commit_item_id") or "").strip() or _commit_item_id(message, item.get("delivered_at"))
             items.append(
                 {
+                    "commit_item_id": commit_item_id,
                     "message": message,
                     "body": _redact_memory_text(item.get("body")).strip(),
                     "delivered_at": item.get("delivered_at"),
                     "top_files": _compact_strings(item.get("top_files", [])),
+                    "summary_source": item.get("summary_source"),
+                    "summary_status": item.get("summary_status"),
+                    "summary_error": item.get("summary_error"),
                 }
             )
         if items:
@@ -1809,6 +1956,7 @@ def _normalize_commit_items(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
     delivered_at = entry.get("delivered_at")
     return [
         {
+            "commit_item_id": _commit_item_id(message, delivered_at),
             "message": message,
             "body": bodies[index] if index < len(bodies) else "",
             "delivered_at": delivered_at,
@@ -1946,15 +2094,20 @@ def _merge_commit_items(left_items: Any, right_items: Any) -> List[Dict[str, Any
         if not isinstance(item, dict):
             continue
         message = str(item.get("message") or "").strip()
-        if not message or message in seen:
+        item_id = _commit_item_id_for_item(item)
+        if not message or item_id in seen:
             continue
-        seen.add(message)
+        seen.add(item_id)
         result.append(
             {
+                "commit_item_id": item_id,
                 "message": message,
                 "body": str(item.get("body") or "").strip(),
                 "delivered_at": item.get("delivered_at"),
                 "top_files": _compact_strings(item.get("top_files", [])),
+                "summary_source": item.get("summary_source"),
+                "summary_status": item.get("summary_status"),
+                "summary_error": item.get("summary_error"),
             }
         )
     return result

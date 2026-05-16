@@ -2546,6 +2546,127 @@ class TestExtractor(unittest.TestCase):
         self.assertEqual(hidden[0]["summary_status"], "generated")
         self.assertIn("clarifie le résumé journal", hidden[0]["body"])
 
+    def test_apple_summary_cible_un_commit_item_apres_fusion(self):
+        base_session = {
+            "active_project": "Pulse",
+            "duration_min": 18,
+            "probable_task": "debug",
+            "activity_level": "editing",
+            "recent_apps": ["Codex"],
+            "files_changed": 3,
+        }
+        first_ref = update_memories_from_session(
+            {
+                **base_session,
+                "top_files": ["extractor.py"],
+                "started_at": "2026-05-16T19:12:00",
+                "ended_at": "2026-05-16T19:23:00",
+                "delivered_at": "2026-05-16T19:24:00",
+            },
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): harden delayed commit and idle project attribution",
+            defer_llm_enrichment=True,
+        )
+        self.assertEqual(len(first_ref), 3)
+        self.assertTrue(apply_validated_journal_summary(
+            first_ref,
+            "Le premier correctif durcit l’attribution mémoire.",
+            summary_source="apple_foundation",
+            stage="apple_foundation",
+        ))
+
+        second_ref = update_memories_from_session(
+            {
+                **base_session,
+                "top_files": ["commit_episode_linker.py"],
+                "started_at": "2026-05-16T19:12:30",
+                "ended_at": "2026-05-16T19:23:30",
+                "delivered_at": "2026-05-16T19:25:00",
+            },
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): clarify commit link evidence contract",
+            defer_llm_enrichment=True,
+        )
+
+        journal_file = second_ref[0]
+        hidden = json.loads(
+            journal_file.read_text().split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        self.assertEqual(len(hidden), 1)
+        self.assertEqual(second_ref[1], hidden[0]["entry_id"])
+        self.assertEqual(len(hidden[0]["commit_items"]), 2)
+        self.assertTrue(all(item.get("commit_item_id") for item in hidden[0]["commit_items"]))
+        self.assertEqual(second_ref[2], hidden[0]["commit_items"][1]["commit_item_id"])
+
+        stale_ref = (journal_file, "stale-entry-id", second_ref[2])
+        ok = apply_validated_journal_summary(
+            stale_ref,
+            "Le second correctif clarifie le contrat de preuve des liens commit.",
+            summary_source="apple_foundation",
+            stage="apple_foundation",
+        )
+
+        self.assertTrue(ok)
+        updated = json.loads(
+            journal_file.read_text().split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )[0]
+        bodies = [item["body"] for item in updated["commit_items"]]
+        self.assertEqual(bodies[0], "Le premier correctif durcit l’attribution mémoire.")
+        self.assertEqual(bodies[1], "Le second correctif clarifie le contrat de preuve des liens commit.")
+        self.assertEqual(updated["body"], "\n".join(bodies))
+
+    def test_old_commit_items_sans_id_restent_lisibles_et_sont_normalises(self):
+        journal_date = "2026-05-05"
+        journal_file = self.memory_dir / "sessions" / f"{journal_date}.md"
+        journal_file.parent.mkdir(parents=True)
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "legacy",
+                    "active_project": "Pulse",
+                    "probable_task": "debug",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Livraison : « fix: legacy ».",
+                    "commit_message": "fix: legacy",
+                    "commit_items": [
+                        {
+                            "message": "fix: legacy",
+                            "body": "Livraison : « fix: legacy ».",
+                            "delivered_at": "2026-05-05T10:18:00",
+                            "top_files": ["extractor.py"],
+                        }
+                    ],
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "llm_unavailable",
+                }
+            ],
+        )
+
+        hidden = extractor_module._load_journal_entries(journal_file)
+
+        self.assertEqual(len(hidden), 1)
+        self.assertTrue(hidden[0]["commit_items"][0].get("commit_item_id"))
+
     def test_enrich_pending_journal_summaries_enrichit_failed_et_ignore_current_ou_sans_commit(self):
         journal_date = "2026-05-05"
         sessions_dir = self.memory_dir / "sessions"
