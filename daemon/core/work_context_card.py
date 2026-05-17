@@ -25,6 +25,8 @@ class WorkContextCard:
     probable_task: str
     confidence: float
     project_confidence: float = 0.0
+    project_status: str = "unknown"
+    task_status: str = "unknown"
     project_source: Optional[str] = None
     project_evidence: tuple[str, ...] = field(default_factory=tuple)
     project_warnings: tuple[str, ...] = field(default_factory=tuple)
@@ -46,6 +48,8 @@ class WorkContextCard:
             "work_intent": dict(self.work_intent) if self.work_intent else None,
             "confidence": self.confidence,
             "project_confidence": self.project_confidence,
+            "project_status": self.project_status,
+            "task_status": self.task_status,
             "project_source": self.project_source,
             "project_evidence": list(self.project_evidence),
             "project_warnings": list(self.project_warnings),
@@ -142,8 +146,12 @@ def build_work_context_card(
 
     evidence = _build_evidence(
         project=project,
+        project_confidence=evidence_resolution.project_confidence,
+        project_source=evidence_resolution.project_source,
+        project_warnings=evidence_resolution.warnings,
         activity_level=activity_level,
         probable_task=probable_task,
+        task_confidence=confidence,
         current_context=current_context,
         present=present,
         signals=signals,
@@ -175,6 +183,13 @@ def build_work_context_card(
         work_intent=work_intent,
         confidence=confidence,
         project_confidence=evidence_resolution.project_confidence,
+        project_status=_project_status(
+            project=project,
+            confidence=evidence_resolution.project_confidence,
+            source=evidence_resolution.project_source,
+            warnings=evidence_resolution.warnings,
+        ),
+        task_status=_task_status(probable_task=probable_task, confidence=confidence),
         project_source=evidence_resolution.project_source,
         project_evidence=evidence_resolution.evidence,
         project_warnings=evidence_resolution.warnings,
@@ -188,8 +203,12 @@ def build_work_context_card(
 def _build_evidence(
     *,
     project: Optional[str],
+    project_confidence: float,
+    project_source: Optional[str],
+    project_warnings: tuple[str, ...],
     activity_level: str,
     probable_task: str,
+    task_confidence: float,
     current_context: Any,
     present: Any,
     signals: Any,
@@ -198,11 +217,18 @@ def _build_evidence(
     evidence: list[str] = []
 
     if project:
-        evidence.append(f"Projet actif détecté : {project}")
+        evidence.append(
+            _format_project_evidence(
+                project=project,
+                confidence=project_confidence,
+                source=project_source,
+                warnings=project_warnings,
+            )
+        )
     if activity_level and activity_level != "unknown":
         evidence.append(f"Niveau d'activité : {activity_level}")
     if probable_task and probable_task != "general":
-        evidence.append(f"Tâche probable : {probable_task}")
+        evidence.append(_format_task_evidence(probable_task, task_confidence))
     work_intent = _normalized_work_intent(
         _first_present(
             getattr(current_context, "work_intent", None),
@@ -390,6 +416,56 @@ def _has_window_title(*, signals: Any, current_context: Any) -> bool:
             getattr(current_context, "window_title", None),
         )
     )
+
+
+def _project_status(
+    *,
+    project: Optional[str],
+    confidence: float,
+    source: Optional[str],
+    warnings: tuple[str, ...],
+) -> str:
+    if not project:
+        return "unknown"
+    if confidence >= 0.75 and source in {"active_project", "repo_root", "commit_repo_root"} and not warnings:
+        return "observed"
+    if confidence >= 0.45:
+        return "probable"
+    return "weak"
+
+
+def _task_status(*, probable_task: str, confidence: float) -> str:
+    if not probable_task or probable_task == "general":
+        return "unknown"
+    if confidence >= 0.75:
+        return "probable"
+    if confidence >= 0.45:
+        return "inferred"
+    return "weak"
+
+
+def _format_project_evidence(
+    *,
+    project: str,
+    confidence: float,
+    source: Optional[str],
+    warnings: tuple[str, ...],
+) -> str:
+    status = _project_status(project=project, confidence=confidence, source=source, warnings=warnings)
+    if status == "observed":
+        return f"Projet actif observé : {project}"
+    if status == "probable":
+        return f"Projet probable : {project}"
+    return f"Projet possible : {project}"
+
+
+def _format_task_evidence(probable_task: str, confidence: float) -> str:
+    status = _task_status(probable_task=probable_task, confidence=confidence)
+    if status == "probable":
+        return f"Tâche probable : {probable_task}"
+    if status == "inferred":
+        return f"Tâche inférée : {probable_task}"
+    return f"Tâche possible : {probable_task}"
 
 
 def _normalized_work_intent(value: Any) -> Optional[dict[str, Any]]:

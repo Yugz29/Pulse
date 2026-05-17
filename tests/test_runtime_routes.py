@@ -1470,7 +1470,9 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["probable_task"], "debug")
         self.assertEqual(card["work_intent"]["summary"], "réduire les coûts cachés du modèle local")
         self.assertEqual(card["confidence"], 0.78)
-        self.assertIn("Projet actif détecté : Pulse", card["evidence"])
+        self.assertEqual(card["project_status"], "observed")
+        self.assertEqual(card["task_status"], "probable")
+        self.assertIn("Projet actif observé : Pulse", card["evidence"])
         self.assertIn("Niveau d'activité : editing", card["evidence"])
         self.assertIn("Tâche probable : debug", card["evidence"])
         self.assertIn("Application active : Code", card["evidence"])
@@ -1615,6 +1617,8 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["activity_level"], "unknown")
         self.assertEqual(card["probable_task"], "general")
         self.assertEqual(card["confidence"], 0.0)
+        self.assertEqual(card["project_status"], "unknown")
+        self.assertEqual(card["task_status"], "unknown")
         self.assertEqual(card["evidence"], [])
         self.assertEqual(card["missing_context"], [
             "Projet actif non identifié",
@@ -1664,6 +1668,8 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["probable_task"], "general")
         self.assertEqual(card["confidence"], 0.32)
         self.assertGreaterEqual(card["project_confidence"], 0.8)
+        self.assertEqual(card["project_status"], "observed")
+        self.assertEqual(card["task_status"], "unknown")
         self.assertEqual(card["project_source"], "active_project")
         self.assertIn("Codex", card["support_apps"])
         self.assertIn("ChatGPT", card["support_apps"])
@@ -1705,6 +1711,8 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(card["project_hint_confidence"], 0.35)
         self.assertEqual(card["project_hint_source"], "window_title")
         self.assertNotIn("Projet actif détecté : Pulse", card["evidence"])
+        self.assertEqual(card["project_status"], "unknown")
+        self.assertIn("project_hint_uncorroborated", card["project_warnings"])
         self.assertIn("Projet actif non identifié", card["missing_context"])
 
     def test_work_context_route_does_not_expose_raw_paths_commands_or_window_title(self):
