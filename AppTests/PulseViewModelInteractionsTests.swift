@@ -1650,6 +1650,118 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertNil(deliveredAtLabel(nil))
     }
 
+    func testWorkTimelineCreatesSyntheticJournalWindowItem() throws {
+        let link = try decodeCommitEpisodeLink("""
+        {
+          "id": "commit-link-1",
+          "entry_id": "entry-1",
+          "commit_subject": "fix(memory): simplify Apple commit summary prompt",
+          "episode_id": "journal-file-window-entry-1",
+          "episode_started_at": "2026-05-17T14:13:44",
+          "episode_ended_at": "2026-05-17T14:48:41",
+          "project": "Pulse",
+          "status": "linked",
+          "flags": ["display_uses_journal_window", "visible_episode_coverage_low", "linked_by_journal_file_window"],
+          "evidence_level": "file_scope"
+        }
+        """)
+
+        let items = buildWorkTimelineItems(episodes: [], commitLinks: [link])
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertTrue(items[0].isSyntheticJournalWindow)
+        XCTAssertEqual(items[0].id, "journal-file-window-entry-1")
+        XCTAssertEqual(items[0].episode.startedAt, "2026-05-17T14:13:44")
+        XCTAssertEqual(items[0].episode.endedAt, "2026-05-17T14:48:41")
+        XCTAssertEqual(items[0].episode.project, "Pulse")
+        XCTAssertEqual(items[0].linkedCommits.map(\.id), ["commit-link-1"])
+    }
+
+    func testWorkTimelineCreatesSyntheticItemFromDisplayFlag() throws {
+        let link = try decodeCommitEpisodeLink("""
+        {
+          "id": "commit-link-1",
+          "entry_id": "entry-1",
+          "commit_subject": "fix(memory): simplify Apple commit summary prompt",
+          "episode_id": "journal-window-custom",
+          "episode_started_at": "2026-05-17T14:13:44",
+          "episode_ended_at": "2026-05-17T14:48:41",
+          "project": "Pulse",
+          "status": "linked",
+          "flags": ["display_uses_journal_window"]
+        }
+        """)
+
+        let items = buildWorkTimelineItems(episodes: [], commitLinks: [link])
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertTrue(items[0].isSyntheticJournalWindow)
+        XCTAssertEqual(items[0].id, "journal-window-custom")
+    }
+
+    func testWorkTimelineKeepsRealEpisodesAndDoesNotDuplicateSyntheticCommit() throws {
+        let realEpisode = debugWorkEpisode(
+            id: "work-episode-1",
+            startedAt: "2026-05-17T14:10:35",
+            endedAt: "2026-05-17T14:24:26"
+        )
+        let realLink = try decodeCommitEpisodeLink("""
+        {
+          "id": "commit-link-real",
+          "entry_id": "entry-real",
+          "commit_subject": "fix(memory): real work episode",
+          "episode_id": "work-episode-1",
+          "status": "linked"
+        }
+        """)
+        let syntheticLink = try decodeCommitEpisodeLink("""
+        {
+          "id": "commit-link-synthetic",
+          "entry_id": "entry-synthetic",
+          "commit_subject": "fix(memory): journal window",
+          "episode_id": "journal-file-window-entry-synthetic",
+          "episode_started_at": "2026-05-17T14:13:44",
+          "episode_ended_at": "2026-05-17T14:48:41",
+          "status": "linked",
+          "flags": ["display_uses_journal_window"]
+        }
+        """)
+
+        let items = buildWorkTimelineItems(episodes: [realEpisode], commitLinks: [realLink, syntheticLink])
+
+        XCTAssertEqual(items.count, 2)
+        let realItem = try XCTUnwrap(items.first { $0.id == "work-episode-1" })
+        let syntheticItem = try XCTUnwrap(items.first { $0.id == "journal-file-window-entry-synthetic" })
+        XCTAssertFalse(realItem.isSyntheticJournalWindow)
+        XCTAssertTrue(syntheticItem.isSyntheticJournalWindow)
+        XCTAssertEqual(realItem.linkedCommits.map(\.id), ["commit-link-real"])
+        XCTAssertEqual(syntheticItem.linkedCommits.map(\.id), ["commit-link-synthetic"])
+    }
+
+    func testWorkTimelineSortsRealAndSyntheticItemsByStartDescending() throws {
+        let morningEpisode = debugWorkEpisode(
+            id: "work-episode-morning",
+            startedAt: "2026-05-17T13:32:00",
+            endedAt: "2026-05-17T13:55:00"
+        )
+        let syntheticLink = try decodeCommitEpisodeLink("""
+        {
+          "id": "commit-link-synthetic",
+          "entry_id": "entry-synthetic",
+          "commit_subject": "fix(memory): journal window",
+          "episode_id": "journal-file-window-entry-synthetic",
+          "episode_started_at": "2026-05-17T14:13:44",
+          "episode_ended_at": "2026-05-17T14:48:41",
+          "status": "linked",
+          "flags": ["display_uses_journal_window"]
+        }
+        """)
+
+        let items = buildWorkTimelineItems(episodes: [morningEpisode], commitLinks: [syntheticLink])
+
+        XCTAssertEqual(items.map(\.id), ["journal-file-window-entry-synthetic", "work-episode-morning"])
+    }
+
     private func contextProbeRequest(kind: String, status: String) -> ContextProbeRequestPayload {
         ContextProbeRequestPayload(
             requestId: "\(kind)-\(status)",
@@ -1673,6 +1785,34 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             decisionReason: nil,
             metadataKeys: [],
             isTerminal: false
+        )
+    }
+
+    private func decodeCommitEpisodeLink(_ json: String) throws -> DebugCommitEpisodeLink {
+        try JSONDecoder().decode(DebugCommitEpisodeLink.self, from: Data(json.utf8))
+    }
+
+    private func debugWorkEpisode(id: String, startedAt: String, endedAt: String) -> DebugWorkEpisode {
+        DebugWorkEpisode(
+            id: id,
+            project: "Pulse",
+            probableTask: "coding",
+            activityLevel: "editing",
+            startedAt: startedAt,
+            endedAt: endedAt,
+            durationMin: 10,
+            evidenceCount: 2,
+            confidence: 0.8,
+            boundaryReason: "end_of_events",
+            uncertaintyFlags: [],
+            dominantScope: "memory",
+            previousScope: nil,
+            nextScope: nil,
+            strongEventCount: 2,
+            weakEventCount: 0,
+            boundaryEventType: nil,
+            boundaryEventAt: nil,
+            debugReason: nil
         )
     }
 

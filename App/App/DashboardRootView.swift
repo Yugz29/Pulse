@@ -2376,7 +2376,7 @@ private struct WorkTimelineSection: View {
     let unlinkedCommits: [DebugCommitEpisodeLink]
 
     private var linksByEpisode: [String: [DebugCommitEpisodeLink]] {
-        Dictionary(grouping: commitLinks.filter { ($0.status ?? "linked") == "linked" && $0.episodeId != nil }) {
+        Dictionary(grouping: commitLinks.filter { ($0.status ?? "linked") == "linked" && $0.episodeId != nil && !isSyntheticJournalWindowLink($0) }) {
             $0.episodeId ?? ""
         }
     }
@@ -2389,12 +2389,12 @@ private struct WorkTimelineSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
-                timelineStat("Épisodes", "\(episodes.count)", gOrange)
+                timelineStat("Épisodes", "\(timelineItems.count)", gOrange)
                 timelineStat("Commits liés", "\(commitLinks.filter { ($0.status ?? "linked") == "linked" && $0.episodeId != nil }.count)", gGreen)
                 timelineStat("Non reliés", "\(unlinked.count)", gGray)
             }
 
-            if episodes.isEmpty {
+            if timelineItems.isEmpty {
                 GlassCard(accent: gOrange) {
                     HStack {
                         Spacer()
@@ -2407,10 +2407,11 @@ private struct WorkTimelineSection: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(sortedEpisodes) { episode in
+                    ForEach(timelineItems) { item in
                         WorkEpisodeCard(
-                            episode: episode,
-                            linkedCommits: linksByEpisode[episode.id] ?? []
+                            episode: item.episode,
+                            linkedCommits: item.linkedCommits,
+                            isSyntheticJournalWindow: item.isSyntheticJournalWindow
                         )
                     }
                 }
@@ -2420,10 +2421,8 @@ private struct WorkTimelineSection: View {
         }
     }
 
-    private var sortedEpisodes: [DebugWorkEpisode] {
-        episodes.sorted {
-            (dashboardDate(from: $0.startedAt) ?? .distantPast) > (dashboardDate(from: $1.startedAt) ?? .distantPast)
-        }
+    private var timelineItems: [WorkTimelineItem] {
+        buildWorkTimelineItems(episodes: episodes, commitLinks: commitLinks)
     }
 
     private func timelineStat(_ label: String, _ value: String, _ colorHex: String) -> some View {
@@ -2439,11 +2438,115 @@ private struct WorkTimelineSection: View {
     }
 }
 
+struct WorkTimelineItem: Identifiable {
+    let id: String
+    let episode: DebugWorkEpisode
+    let linkedCommits: [DebugCommitEpisodeLink]
+    let isSyntheticJournalWindow: Bool
+}
+
+func buildWorkTimelineItems(
+    episodes: [DebugWorkEpisode],
+    commitLinks: [DebugCommitEpisodeLink]
+) -> [WorkTimelineItem] {
+    let syntheticLinks = commitLinks.filter { ($0.status ?? "linked") == "linked" && isSyntheticJournalWindowLink($0) }
+    let syntheticByEpisode = Dictionary(grouping: syntheticLinks) { $0.episodeId ?? $0.id }
+    let syntheticEpisodeIds = Set(syntheticByEpisode.keys)
+    let realLinksByEpisode = Dictionary(
+        grouping: commitLinks.filter {
+            ($0.status ?? "linked") == "linked"
+            && $0.episodeId != nil
+            && !syntheticEpisodeIds.contains($0.episodeId ?? "")
+            && !isSyntheticJournalWindowLink($0)
+        }
+    ) { $0.episodeId ?? "" }
+
+    var items = episodes.map { episode in
+        WorkTimelineItem(
+            id: episode.id,
+            episode: episode,
+            linkedCommits: realLinksByEpisode[episode.id] ?? [],
+            isSyntheticJournalWindow: false
+        )
+    }
+
+    for (episodeId, links) in syntheticByEpisode {
+        guard let synthetic = syntheticJournalWindowEpisode(id: episodeId, links: links) else {
+            continue
+        }
+        items.append(WorkTimelineItem(
+            id: synthetic.id,
+            episode: synthetic,
+            linkedCommits: links.sorted(by: commitLinkSortDescending),
+            isSyntheticJournalWindow: true
+        ))
+    }
+
+    return items.sorted {
+        (dashboardDate(from: $0.episode.startedAt) ?? .distantPast) > (dashboardDate(from: $1.episode.startedAt) ?? .distantPast)
+    }
+}
+
+func isSyntheticJournalWindowLink(_ link: DebugCommitEpisodeLink) -> Bool {
+    let flags = Set(link.flags ?? [])
+    return (link.episodeId ?? "").hasPrefix("journal-file-window-")
+        || flags.contains("display_uses_journal_window")
+}
+
+private func syntheticJournalWindowEpisode(id: String, links: [DebugCommitEpisodeLink]) -> DebugWorkEpisode? {
+    guard let first = links.sorted(by: commitLinkSortAscending).first else {
+        return nil
+    }
+    let startedAt = first.episodeStartedAt ?? first.evidenceStartedAt ?? first.journalStartedAt
+    let endedAt = first.episodeEndedAt ?? first.evidenceEndedAt ?? first.journalEndedAt
+    return DebugWorkEpisode(
+        id: id,
+        project: first.project,
+        probableTask: "coding",
+        activityLevel: "editing",
+        startedAt: startedAt,
+        endedAt: endedAt,
+        durationMin: dashboardDurationMinutes(startedAt: startedAt, endedAt: endedAt),
+        evidenceCount: links.count,
+        confidence: first.confidence,
+        boundaryReason: "journal_file_window",
+        uncertaintyFlags: ["display_uses_journal_window"],
+        dominantScope: "journal_file_window",
+        previousScope: nil,
+        nextScope: nil,
+        strongEventCount: nil,
+        weakEventCount: nil,
+        boundaryEventType: nil,
+        boundaryEventAt: nil,
+        debugReason: "synthetic timeline card from journal-backed commit link"
+    )
+}
+
+private func commitLinkSortAscending(_ left: DebugCommitEpisodeLink, _ right: DebugCommitEpisodeLink) -> Bool {
+    (dashboardDate(from: left.episodeStartedAt ?? left.evidenceStartedAt ?? left.journalStartedAt) ?? .distantPast)
+        < (dashboardDate(from: right.episodeStartedAt ?? right.evidenceStartedAt ?? right.journalStartedAt) ?? .distantPast)
+}
+
+private func commitLinkSortDescending(_ left: DebugCommitEpisodeLink, _ right: DebugCommitEpisodeLink) -> Bool {
+    !commitLinkSortAscending(left, right)
+}
+
+private func dashboardDurationMinutes(startedAt: String?, endedAt: String?) -> Int? {
+    guard let start = dashboardDate(from: startedAt), let end = dashboardDate(from: endedAt), end >= start else {
+        return nil
+    }
+    return max(Int(end.timeIntervalSince(start) / 60), 1)
+}
+
 private struct WorkEpisodeCard: View {
     let episode: DebugWorkEpisode
     let linkedCommits: [DebugCommitEpisodeLink]
+    var isSyntheticJournalWindow: Bool = false
 
     private var status: EpisodeStatus {
+        if isSyntheticJournalWindow {
+            return .solid
+        }
         if isDeliveryPhase {
             return .delivery
         }
@@ -2484,7 +2587,10 @@ private struct WorkEpisodeCard: View {
 
                 HStack(spacing: 6) {
                     timelinePill(episode.project ?? "Projet inconnu", color: gBlue)
-                    timelinePill(episodeScopeLabel(scope: episode.dominantScope, task: episode.probableTask), color: isDeliveryPhase ? gGray : gOrange)
+                    timelinePill(
+                        isSyntheticJournalWindow ? "Fenêtre confirmée par le journal" : episodeScopeLabel(scope: episode.dominantScope, task: episode.probableTask),
+                        color: isDeliveryPhase ? gGray : gOrange
+                    )
                     timelinePill(taskLabel(episode.probableTask), color: gGray)
                 }
 
@@ -2511,6 +2617,9 @@ private struct WorkEpisodeCard: View {
     private var episodeSummary: String {
         let scope = episode.dominantScope ?? "unknown"
         let task = episode.probableTask ?? "general"
+        if isSyntheticJournalWindow {
+            return "Travail confirmé par le journal et rattaché par les fichiers du commit."
+        }
         if isDeliveryPhase {
             return "Phase de livraison ou de contrôle Git, distincte du travail qui a produit le commit."
         }
