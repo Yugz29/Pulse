@@ -6,7 +6,7 @@ def episode(**overrides):
         "id": "work-episode-2026-05-05T10:00:00",
         "project": "Pulse",
         "probable_task": "coding",
-        "dominant_scope": "work_episode",
+        "dominant_scope": "source",
         "started_at": "2026-05-05T10:00:00",
         "ended_at": "2026-05-05T10:12:00",
         "duration_min": 12,
@@ -30,7 +30,7 @@ def test_closed_episode_becomes_active_journal_candidate():
     assert candidate.status == "candidate"
     assert candidate.ignore_reason is None
     assert candidate.episode_id == "work-episode-2026-05-05T10:00:00"
-    assert candidate.dominant_scope == "work_episode"
+    assert candidate.dominant_scope == "source"
 
 
 def test_end_of_events_episode_is_ignored_as_open_episode():

@@ -35,7 +35,7 @@ class TestDebugMemoryViews(unittest.TestCase):
         self.assertEqual(payload["date"], observed_at.date().isoformat())
         self.assertEqual(payload["episode_count"], 1)
         self.assertEqual(payload["episodes"][0]["project"], "Pulse")
-        self.assertEqual(payload["episodes"][0]["dominant_scope"], "work_episode")
+        self.assertEqual(payload["episodes"][0]["dominant_scope"], "source")
         self.assertEqual(payload["episodes"][0]["top_files"], ("work_episode_builder.py",))
         self.assertEqual(payload["episodes"][0]["boundary_reason"], "end_of_events")
 

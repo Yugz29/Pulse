@@ -24,15 +24,92 @@ DEFAULT_SCOPE_SHIFT_GAP_MIN = 12
 _FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed", "file_deleted", "file_change"}
 _APP_EVENT_TYPES = {"app_activated", "app_switch", "window_title_poll"}
 _BUSINESS_SCOPES = {
-    "work_episode",
-    "extractor",
-    "docs",
+    "source",
     "tests",
-    "app_swift",
-    "memory",
-    "routes",
-    "daemon_python",
+    "docs",
+    "config",
+    "assets",
+    "git",
+    "unknown",
 }
+
+_TEST_SUFFIXES = (
+    "_test.py",
+    "_spec.py",
+    ".test.ts",
+    ".test.tsx",
+    ".test.js",
+    ".test.jsx",
+    ".spec.ts",
+    ".spec.tsx",
+    ".spec.js",
+    ".spec.jsx",
+    "test.swift",
+)
+_CONFIG_FILENAMES = {
+    ".env",
+    ".env.example",
+    ".editorconfig",
+    "dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "pyproject.toml",
+    "requirements.txt",
+    "poetry.lock",
+    "pipfile",
+    "pipfile.lock",
+    "cargo.toml",
+    "cargo.lock",
+    "go.mod",
+    "go.sum",
+    "package.swift",
+    "tsconfig.json",
+    "tsconfig.base.json",
+}
+_CONFIG_SUFFIXES = (
+    ".config.js",
+    ".config.ts",
+    ".config.mjs",
+    ".config.cjs",
+    ".config.mts",
+    ".config.cts",
+)
+_CONFIG_EXTENSIONS = (".yml", ".yaml", ".toml", ".ini", ".env.example")
+_ASSET_EXTENSIONS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".webp",
+    ".ico",
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+)
+_SOURCE_EXTENSIONS = (
+    ".py",
+    ".swift",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".php",
+    ".rb",
+    ".c",
+    ".cpp",
+    ".h",
+    ".cs",
+)
 
 
 @dataclass(frozen=True)
@@ -363,7 +440,7 @@ def _dominant_scope(events: list[dict[str, Any]]) -> str | None:
         for event in events
         if classify_work_heartbeat(event).strength == "strong"
     ]
-    business_scope = _dominant_value(scope for scope in scopes if scope in _BUSINESS_SCOPES)
+    business_scope = _dominant_value(scope for scope in scopes if scope in _BUSINESS_SCOPES and scope != "git")
     if business_scope:
         return business_scope
     return _dominant_value(scope for scope in scopes if scope != "unknown") or (scopes[-1] if scopes else None)
@@ -467,26 +544,52 @@ def _top_files_from_events(events: list[dict[str, Any]], *, limit: int = 8) -> t
 
 def _scope_from_path(path: str) -> str:
     normalized = path.replace("\\", "/")
+    lowered = normalized.lower()
     name = Path(normalized).name
-    if "/docs/" in normalized:
-        return "docs"
-    if name in {"work_episode_builder.py", "test_work_episode_builder.py"}:
-        return "work_episode"
-    if name in {"extractor.py", "test_extractor.py"}:
-        return "extractor"
-    if "/daemon/routes/" in normalized:
-        return "routes"
-    if "/daemon/memory/" in normalized:
-        return "memory"
-    if "/daemon/" in normalized and name.endswith(".py"):
-        return "daemon_python"
-    if "/App/App/" in normalized and name.endswith(".swift"):
-        return "app_swift"
-    if "/AppTests/" in normalized and name.endswith(".swift"):
-        return "app_swift"
-    if "/tests/" in normalized:
+    lower_name = name.lower()
+
+    if (
+        "/tests/" in lowered
+        or "/test/" in lowered
+        or lower_name.startswith(("test_", "spec_"))
+        or lower_name.endswith(_TEST_SUFFIXES)
+    ):
         return "tests"
+    if "/docs/" in lowered or "/doc/" in lowered:
+        return "docs"
+    if _is_config_path(lowered, lower_name):
+        return "config"
+    if (
+        "/assets/" in lowered
+        or "/static/" in lowered
+        or "/public/" in lowered
+        or lower_name.endswith(_ASSET_EXTENSIONS)
+    ):
+        return "assets"
+    if lower_name.endswith(_SOURCE_EXTENSIONS):
+        return "source"
     return "unknown"
+
+
+def _is_config_path(lowered_path: str, lower_name: str) -> bool:
+    if "/.github/" in lowered_path or "/config/" in lowered_path or "/configs/" in lowered_path:
+        return True
+    if lower_name in _CONFIG_FILENAMES:
+        return True
+    if lower_name.startswith("vite.config."):
+        return True
+    if lower_name.startswith("docker-compose."):
+        return True
+    if lower_name.endswith(_CONFIG_SUFFIXES):
+        return True
+    if any(lower_name.endswith(extension) for extension in _CONFIG_EXTENSIONS):
+        return (
+            "/.github/" in lowered_path
+            or "/config/" in lowered_path
+            or "/configs/" in lowered_path
+            or lower_name in _CONFIG_FILENAMES
+        )
+    return False
 
 
 def _scopes_compatible(left: str | None, right: str | None) -> bool:
@@ -497,9 +600,8 @@ def _scopes_compatible(left: str | None, right: str | None) -> bool:
     if left_scope == right_scope:
         return True
     compatible_pairs = {
-        frozenset({"work_episode", "tests"}),
-        frozenset({"extractor", "tests"}),
-        frozenset({"app_swift", "tests"}),
+        frozenset({"source", "tests"}),
+        frozenset({"source", "config"}),
     }
     return frozenset({left_scope, right_scope}) in compatible_pairs
 

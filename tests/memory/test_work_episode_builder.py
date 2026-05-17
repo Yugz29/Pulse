@@ -175,7 +175,7 @@ def test_system_file_event_does_not_pollute_user_episode_scope_or_confidence():
     episodes = build_work_episodes(events)
 
     assert len(episodes) == 1
-    assert episodes[0].dominant_scope == "work_episode"
+    assert episodes[0].dominant_scope == "source"
     assert episodes[0].evidence_count == 1
     assert episodes[0].strong_event_count == 1
     assert episodes[0].confidence == baseline[0].confidence
@@ -192,7 +192,7 @@ def test_source_and_matching_test_close_stay_in_same_episode():
     assert len(episodes) == 1
     assert episodes[0].evidence_count == 2
     assert episodes[0].probable_task == "coding"
-    assert episodes[0].dominant_scope in {"daemon_python", "tests"}
+    assert episodes[0].dominant_scope in {"source", "tests"}
 
 
 def test_source_and_docs_close_stay_in_same_episode_without_hard_boundary():
@@ -206,7 +206,7 @@ def test_source_and_docs_close_stay_in_same_episode_without_hard_boundary():
     assert len(episodes) == 1
     assert episodes[0].evidence_count == 2
     assert episodes[0].probable_task == "writing"
-    assert episodes[0].dominant_scope in {"daemon_python", "docs"}
+    assert episodes[0].dominant_scope in {"source", "docs"}
 
 
 def test_source_tests_docs_and_pytest_close_stay_in_same_episode():
@@ -226,18 +226,18 @@ def test_source_tests_docs_and_pytest_close_stay_in_same_episode():
     assert episodes[0].activity_level == "executing"
 
 
-def test_real_subject_change_after_notable_gap_cuts_episode():
+def test_source_to_docs_after_notable_gap_cuts_episode():
     events = [
         strong_path("daemon/memory/session.py", 0),
-        strong_path("App/App/DashboardView.swift", 18),
+        strong_path("docs/FR/work-episodes-model.md", 18),
     ]
 
     episodes = build_work_episodes(events)
 
     assert len(episodes) == 2
     assert episodes[0].boundary_reason == "scope_change"
-    assert episodes[0].dominant_scope == "memory"
-    assert episodes[1].dominant_scope == "app_swift"
+    assert episodes[0].dominant_scope == "source"
+    assert episodes[1].dominant_scope == "docs"
 
 
 def test_docs_only_episode_is_writing_not_coding():
@@ -397,12 +397,12 @@ def test_scope_change_exposes_scope_debug_fields():
     assert episodes[0].boundary_reason == "scope_change"
     assert episodes[0].dominant_scope == "docs"
     assert episodes[0].previous_scope is None
-    assert episodes[0].next_scope == "work_episode"
+    assert episodes[0].next_scope == "source"
     assert episodes[0].boundary_event_type == "file_modified"
     assert episodes[0].boundary_event_at == (BASE + timedelta(minutes=18)).isoformat()
-    assert episodes[0].debug_reason == "split after 18 min gap and scope change docs -> work_episode"
+    assert episodes[0].debug_reason == "split after 18 min gap and scope change docs -> source"
     assert episodes[1].previous_scope == "docs"
-    assert episodes[1].dominant_scope == "work_episode"
+    assert episodes[1].dominant_scope == "source"
 
 
 def test_screen_locked_boundary_exposes_boundary_event_debug_fields():
@@ -445,7 +445,7 @@ def test_end_of_events_has_stable_debug_reason():
     assert episodes[0].debug_reason == "episode open until end of observed events"
 
 
-def test_docs_then_daemon_python_after_notable_gap_create_two_episodes():
+def test_docs_then_source_after_notable_gap_create_two_episodes():
     events = [
         strong_path("docs/FR/work-episodes-model.md", 0),
         strong_path("docs/EN/work-episodes-model.md", 4),
@@ -524,7 +524,7 @@ def test_same_scope_with_weak_support_and_short_gap_stays_one_episode():
     assert episodes[0].evidence_count == 3
 
 
-def test_work_episode_scope_dominates_git_support_commands():
+def test_source_scope_dominates_git_support_commands():
     events = [
         strong_path("daemon/memory/work_episode_builder.py", 0),
         git_event("git add daemon/memory/work_episode_builder.py", 4),
@@ -534,7 +534,7 @@ def test_work_episode_scope_dominates_git_support_commands():
     episodes = build_work_episodes(events)
 
     assert len(episodes) == 1
-    assert episodes[0].dominant_scope == "work_episode"
+    assert episodes[0].dominant_scope == "source"
 
 
 def test_scope_change_debug_prefers_next_business_scope_over_git_support():
@@ -550,9 +550,9 @@ def test_scope_change_debug_prefers_next_business_scope_over_git_support():
     assert len(episodes) == 2
     assert episodes[0].boundary_reason == "scope_change"
     assert episodes[0].dominant_scope == "docs"
-    assert episodes[0].next_scope == "work_episode"
-    assert episodes[0].debug_reason == "split after 18 min gap and scope change docs -> work_episode"
-    assert episodes[1].dominant_scope == "work_episode"
+    assert episodes[0].next_scope == "source"
+    assert episodes[0].debug_reason == "split after 18 min gap and scope change docs -> source"
+    assert episodes[1].dominant_scope == "source"
     assert episodes[1].previous_scope == "docs"
 
 
@@ -569,7 +569,7 @@ def test_git_only_episode_can_keep_git_as_dominant_scope():
     assert episodes[0].probable_task == "version_control"
 
 
-def test_extractor_scope_dominates_tests_and_git_support_commands():
+def test_source_scope_dominates_tests_and_git_support_commands():
     events = [
         strong_path("daemon/memory/extractor.py", 0),
         strong_path("tests/memory/test_extractor.py", 6),
@@ -580,7 +580,7 @@ def test_extractor_scope_dominates_tests_and_git_support_commands():
     episodes = build_work_episodes(events)
 
     assert len(episodes) == 1
-    assert episodes[0].dominant_scope == "extractor"
+    assert episodes[0].dominant_scope == "source"
 
 
 def test_scope_reclassification_does_not_change_strong_or_weak_counts():
@@ -593,7 +593,7 @@ def test_scope_reclassification_does_not_change_strong_or_weak_counts():
     episodes = build_work_episodes(events)
 
     assert len(episodes) == 1
-    assert episodes[0].dominant_scope == "work_episode"
+    assert episodes[0].dominant_scope == "source"
     assert episodes[0].strong_event_count == 2
     assert episodes[0].weak_event_count == 1
 
@@ -632,4 +632,4 @@ def test_xcode_xcresult_artifacts_do_not_inflate_work_episode_evidence():
     assert episodes[0].evidence_count == 1
     assert episodes[0].strong_event_count == 1
     assert episodes[0].weak_event_count == 0
-    assert episodes[0].dominant_scope == "work_episode"
+    assert episodes[0].dominant_scope == "source"
