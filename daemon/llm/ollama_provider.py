@@ -13,6 +13,7 @@ Format /api/chat streaming :
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -21,10 +22,21 @@ from urllib import request, error
 log = logging.getLogger("pulse")
 _DEBUG_CHUNK_PREVIEW = 280
 _INVALID_FINAL_CODE = "invalid_final_response"
+DEFAULT_KEEP_ALIVE = "5m"
 
 
 def _invalid_final_response(reason: str) -> RuntimeError:
     return RuntimeError(f"{_INVALID_FINAL_CODE}: {reason}")
+
+
+def _resolve_keep_alive(value: str | None) -> str:
+    explicit = str(value or "").strip()
+    if explicit:
+        return explicit
+    env_value = os.getenv("PULSE_HEAVY_LLM_KEEP_ALIVE", "").strip()
+    if env_value:
+        return env_value
+    return DEFAULT_KEEP_ALIVE
 
 
 class OllamaProvider:
@@ -33,12 +45,12 @@ class OllamaProvider:
         url: str = "http://localhost:11434",
         model: str = "mistral",
         num_ctx: int = 8192,
-        keep_alive: str = "30m",
+        keep_alive: str | None = None,
     ):
         self.url        = url.rstrip("/")
         self.model      = model
         self.num_ctx    = num_ctx    # Taille du contexte — réduit la RAM (KV cache)
-        self.keep_alive = keep_alive # Durée avant déchargement du modèle
+        self.keep_alive = _resolve_keep_alive(keep_alive) # Durée avant déchargement du modèle
         self._models_lock = threading.Lock()
         self._models_cache = None
         self._models_cache_at = 0.0

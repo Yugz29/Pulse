@@ -20,6 +20,7 @@ from unittest.mock import patch, MagicMock
 from urllib.error import URLError
 
 from daemon.llm.ollama_provider import OllamaProvider
+from daemon.llm.router import LLMRouter
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -212,6 +213,15 @@ class TestStream(unittest.TestCase):
         body = json.loads(urlopen.call_args[0][0].data.decode())
         self.assertEqual(body["options"]["num_ctx"], 4096)
 
+    def test_stream_envoie_keep_alive_configure(self):
+        chunks = [_chat_chunk("ok", done=True)]
+        provider = OllamaProvider(keep_alive="45s")
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   return_value=_ndjson_response(*chunks)) as urlopen:
+            list(provider.stream("test"))
+        body = json.loads(urlopen.call_args[0][0].data.decode())
+        self.assertEqual(body["keep_alive"], "45s")
+
 
 # ── Tests complete() ──────────────────────────────────────────────────────────
 
@@ -246,6 +256,15 @@ class TestComplete(unittest.TestCase):
                 provider.complete("test")
         self.assertIn("xyz", str(ctx.exception))
 
+    def test_complete_envoie_keep_alive_configure(self):
+        chunks = [_chat_chunk("ok", done=True)]
+        provider = OllamaProvider(keep_alive="90s")
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   return_value=_ndjson_response(*chunks)) as urlopen:
+            provider.complete("test")
+        body = json.loads(urlopen.call_args[0][0].data.decode())
+        self.assertEqual(body["keep_alive"], "90s")
+
 
 class TestChatWithTools(unittest.TestCase):
 
@@ -258,10 +277,32 @@ class TestChatWithTools(unittest.TestCase):
                     provider.chat_with_tools(messages=[], tools=[])
         self.assertTrue(any("chat_with_tools indisponible" in line for line in captured.output))
 
+    def test_chat_with_tools_envoie_keep_alive_configure(self):
+        provider = OllamaProvider(keep_alive="2m")
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   return_value=_json_response({"message": {"content": "ok"}})) as urlopen:
+            provider.chat_with_tools(messages=[], tools=[])
+        body = json.loads(urlopen.call_args[0][0].data.decode())
+        self.assertEqual(body["keep_alive"], "2m")
+
 
 # ── Tests warmup() / unload() ─────────────────────────────────────────────────
 
 class TestKeepAlive(unittest.TestCase):
+
+    def test_keep_alive_par_defaut_est_5m(self):
+        with patch.dict("os.environ", {}, clear=True):
+            provider = OllamaProvider()
+        self.assertEqual(provider.keep_alive, "5m")
+
+    def test_keep_alive_env_override(self):
+        with patch.dict("os.environ", {"PULSE_HEAVY_LLM_KEEP_ALIVE": "75s"}):
+            provider = OllamaProvider()
+        self.assertEqual(provider.keep_alive, "75s")
+
+    def test_router_keep_alive_config_override(self):
+        router = LLMRouter(config={"llm": {"keep_alive": "15s"}})
+        self.assertEqual(router.default.keep_alive, "15s")
 
     def test_warmup_retourne_true_si_ok(self):
         provider = OllamaProvider()
@@ -293,9 +334,10 @@ class TestKeepAlive(unittest.TestCase):
                    side_effect=URLError("timeout")):
             self.assertFalse(provider.unload())
 
-    def test_warmup_envoie_keep_alive_30m_via_api_generate(self):
-        """warmup() doit rester sur /api/generate avec keep_alive='30m'."""
-        provider = OllamaProvider()
+    def test_warmup_envoie_keep_alive_5m_via_api_generate(self):
+        """warmup() doit rester sur /api/generate avec keep_alive='5m' par défaut."""
+        with patch.dict("os.environ", {}, clear=True):
+            provider = OllamaProvider()
         mock_resp = MagicMock()
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
@@ -306,7 +348,18 @@ class TestKeepAlive(unittest.TestCase):
         # Doit appeler /api/generate, pas /api/chat
         self.assertIn("/api/generate", req_obj.full_url)
         body = json.loads(req_obj.data.decode())
-        self.assertEqual(body["keep_alive"], "30m")
+        self.assertEqual(body["keep_alive"], "5m")
+
+    def test_warmup_envoie_keep_alive_configure_via_api_generate(self):
+        provider = OllamaProvider(keep_alive="20s")
+        mock_resp = MagicMock()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch("daemon.llm.ollama_provider.request.urlopen",
+                   return_value=mock_resp) as urlopen:
+            provider.warmup()
+        body = json.loads(urlopen.call_args[0][0].data.decode())
+        self.assertEqual(body["keep_alive"], "20s")
 
     def test_unload_envoie_keep_alive_0_via_api_generate(self):
         """unload() doit rester sur /api/generate avec keep_alive='0'."""

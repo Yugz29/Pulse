@@ -18,6 +18,7 @@ class LLMRouter:
         self.default = OllamaProvider(
             url=llm_cfg.get("ollama_url", "http://localhost:11434"),
             model=llm_cfg.get("model", "mistral"),
+            keep_alive=llm_cfg.get("keep_alive") or llm_cfg.get("ollama_keep_alive"),
         )
 
     def complete(
