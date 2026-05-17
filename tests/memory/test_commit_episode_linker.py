@@ -401,6 +401,84 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
         self.assertEqual(link["evidence_level"], "file_scope")
 
+    def test_journal_file_window_ne_mappe_pas_un_episode_visible_trop_partiel(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-partial",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(memory): simplify Apple commit summary prompt",
+                    "delivered_at": "2026-05-17T14:53:56",
+                    "started_at": "2026-05-17T14:13:44",
+                    "ended_at": "2026-05-17T14:48:41",
+                    "top_files": ["extractor.py", "test_extractor.py"],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-short",
+                    "episode_id": "work-episode-2026-05-17T14:10:35",
+                    "project": "Pulse",
+                    "started_at": "2026-05-17T14:10:35",
+                    "ended_at": "2026-05-17T14:24:26",
+                    "dominant_scope": "memory",
+                    "top_files": ["extractor.py", "test_extractor.py"],
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "journal-file-window-entry-partial")
+        self.assertEqual(link["candidate_id"], "journal-file-window-entry-partial")
+        self.assertEqual(link["episode_started_at"], "2026-05-17T14:13:44")
+        self.assertEqual(link["episode_ended_at"], "2026-05-17T14:48:41")
+        self.assertEqual(link["evidence_started_at"], "2026-05-17T14:13:44")
+        self.assertEqual(link["evidence_ended_at"], "2026-05-17T14:48:41")
+        self.assertEqual(link["evidence_source"], "journal_file_window")
+        self.assertIn("visible_episode_coverage_low", link["flags"])
+        self.assertIn("display_uses_journal_window", link["flags"])
+        self.assertIn("work_episode_link", link["flags"])
+
+    def test_journal_file_window_mappe_un_episode_visible_qui_couvre_la_fenetre(self):
+        payload = link_commits_to_episodes(
+            [
+                {
+                    "entry_id": "entry-covered",
+                    "active_project": "Pulse",
+                    "commit_message": "fix(memory): simplify Apple commit summary prompt",
+                    "delivered_at": "2026-05-17T14:53:56",
+                    "started_at": "2026-05-17T14:13:44",
+                    "ended_at": "2026-05-17T14:48:41",
+                    "top_files": ["extractor.py", "test_extractor.py"],
+                }
+            ],
+            [
+                {
+                    "id": "candidate-covered",
+                    "episode_id": "work-episode-2026-05-17T14:10:35",
+                    "project": "Pulse",
+                    "started_at": "2026-05-17T14:10:35",
+                    "ended_at": "2026-05-17T14:50:00",
+                    "dominant_scope": "memory",
+                    "top_files": ["extractor.py", "test_extractor.py"],
+                    "ignored": False,
+                },
+            ],
+        )
+
+        self.assertEqual(payload["linked_count"], 1)
+        link = payload["links"][0]
+        self.assertEqual(link["episode_id"], "work-episode-2026-05-17T14:10:35")
+        self.assertEqual(link["candidate_id"], "journal-file-window-entry-covered")
+        self.assertEqual(link["episode_started_at"], "2026-05-17T14:10:35")
+        self.assertEqual(link["episode_ended_at"], "2026-05-17T14:50:00")
+        self.assertEqual(link["evidence_started_at"], "2026-05-17T14:13:44")
+        self.assertEqual(link["evidence_ended_at"], "2026-05-17T14:48:41")
+        self.assertNotIn("visible_episode_coverage_low", link["flags"])
+        self.assertNotIn("display_uses_journal_window", link["flags"])
+
     def test_journal_file_window_allows_late_same_day_delivery_when_file_scoped(self):
         payload = link_commits_to_episodes(
             [

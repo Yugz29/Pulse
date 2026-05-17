@@ -15,6 +15,7 @@ _MAX_OPEN_EPISODE_DURATION_MIN = 8 * 60
 _FUTURE_COMMIT_GRACE_MIN = 5
 _DELAYED_FILE_OVERLAP_MIN = 90
 _JOURNAL_FILE_WINDOW_DELAY_MIN = 6 * 60
+_MIN_JOURNAL_WINDOW_VISIBLE_COVERAGE = 0.60
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,9 @@ def _score_candidate(
     file_overlap = _file_overlap_count(commit, candidate)
 
     flags = list(_commit_base_flags(commit))
+    candidate_flags = candidate.get("link_flags")
+    if isinstance(candidate_flags, (list, tuple)):
+        flags.extend(str(flag) for flag in candidate_flags if str(flag or "").strip())
     score = 0.0
     reason = None
 
@@ -373,7 +377,7 @@ def _journal_file_window_candidate(
         return None
     entry_id = str(commit.get("entry_id") or commit.get("id") or "unknown")
     evidence_id = f"journal-file-window-{entry_id}"
-    visible_episode = _matching_visible_episode(
+    visible_episode, display_flags = _matching_visible_episode(
         {
             "project": project,
             "started_at": started_at,
@@ -391,6 +395,7 @@ def _journal_file_window_candidate(
         "display_started_at": (visible_episode or {}).get("started_at"),
         "display_ended_at": (visible_episode or {}).get("ended_at"),
         "top_files": files,
+        "link_flags": display_flags,
         "dominant_scope": "journal_file_window",
         "probable_task": "coding",
         "ignored": False,
@@ -401,8 +406,9 @@ def _journal_file_window_candidate(
 def _matching_visible_episode(
     journal_window: Mapping[str, Any],
     candidates: list[Mapping[str, Any]],
-) -> dict[str, str] | None:
+) -> tuple[dict[str, str] | None, tuple[str, ...]]:
     matches: list[tuple[int, int, dict[str, str]]] = []
+    coverage_low = False
     for candidate in candidates:
         if _truthy(candidate.get("journal_file_window")) or _is_git_only_candidate(candidate):
             continue
@@ -414,6 +420,10 @@ def _matching_visible_episode(
         overlap = _overlap_min(journal_window, candidate)
         window_distance = _window_distance_min(journal_window, candidate)
         if overlap <= 0 and (window_distance is None or window_distance > _WINDOW_PROXIMITY_MIN):
+            continue
+        coverage = _window_coverage_ratio(journal_window, candidate)
+        if coverage < _MIN_JOURNAL_WINDOW_VISIBLE_COVERAGE:
+            coverage_low = True
             continue
         episode_id = _optional_text(candidate.get("episode_id"))
         if not episode_id:
@@ -429,9 +439,22 @@ def _matching_visible_episode(
             },
         ))
     if not matches:
-        return None
+        flags = ["display_uses_journal_window"]
+        if coverage_low:
+            flags.append("visible_episode_coverage_low")
+        return None, tuple(flags)
     matches.sort(key=lambda item: (item[0], item[1]), reverse=True)
-    return matches[0][2]
+    return matches[0][2], ()
+
+
+def _window_coverage_ratio(evidence_window: Mapping[str, Any], candidate: Mapping[str, Any]) -> float:
+    started = _parse_dt(evidence_window.get("started_at"))
+    ended = _parse_dt(evidence_window.get("ended_at"))
+    if started is None or ended is None or ended <= started:
+        return 0.0
+    duration_seconds = (ended - started).total_seconds()
+    overlap_minutes = _overlap_min(evidence_window, candidate)
+    return max(float(overlap_minutes * 60) / duration_seconds, 0.0)
 
 
 def _is_delayed_file_scope_match(
