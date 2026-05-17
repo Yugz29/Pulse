@@ -3,7 +3,7 @@ extractor.py — Génération des rapports de session Pulse.
 
 Déclencheurs
 ────────────
-  1. Commit git (signal principal — LLM activé)
+  1. Commit git (signal principal — résumé lightweight côté app, fallback déterministe)
   2. screen_lock / user_idle (fallback déterministe uniquement)
   3. Manuel (fallback déterministe uniquement)
 
@@ -40,6 +40,7 @@ from daemon.core.command_redaction import redact_sensitive_command
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
 from daemon.core.work_evidence_resolver import WorkEvidenceInput, resolve_work_evidence
+from daemon.llm.lifecycle_policy import is_legacy_journal_repair_enabled
 from daemon.memory.facts import FactEngine
 from daemon.memory.embedding_policy import embeddings_enabled
 from daemon.memory.vector_store import VectorStore
@@ -381,6 +382,7 @@ def update_memories_from_session(
         if trigger == "commit" and substantive_commit
         and should_use_llm_for_commit(diff_summary=diff_summary, top_files=top_files, files_count=files_count, commit_message=commit_message)
         and not defer_llm_enrichment
+        and is_legacy_journal_repair_enabled()
         else None
     )
 
@@ -389,7 +391,13 @@ def update_memories_from_session(
         llm=effective_llm, commit_message=commit_message, trigger=trigger, diff_summary=diff_summary,
     )
 
-    if trigger == "commit" and llm is not None and report_ref is not None and not defer_llm_enrichment:
+    if (
+        trigger == "commit"
+        and llm is not None
+        and report_ref is not None
+        and not defer_llm_enrichment
+        and is_legacy_journal_repair_enabled()
+    ):
         _, current_entry_id, _ = _report_ref_parts(report_ref)
 
         def _enrich_pending():
@@ -485,6 +493,18 @@ def enrich_pending_journal_summaries(
     This is intentionally bounded and opportunistic: it repairs older fallback
     commit summaries without blocking the main commit/report path.
     """
+    if not is_legacy_journal_repair_enabled():
+        log.info("Memory : réparation legacy LLM du journal désactivée par policy")
+        return {
+            "journal_date": journal_date or datetime.now().strftime("%Y-%m-%d"),
+            "scanned": 0,
+            "eligible": 0,
+            "enriched": 0,
+            "failed": 0,
+            "skipped": 0,
+            "reason": "legacy_journal_repair_disabled",
+        }
+
     if llm is None:
         return {
             "journal_date": journal_date,

@@ -169,7 +169,7 @@ class TestExtractor(unittest.TestCase):
             created_threads.append(thread)
             return thread
 
-        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1"}), \
+        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1", "PULSE_LEGACY_JOURNAL_REPAIR": "1"}), \
              patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
             update_memories_from_session(
                 {
@@ -207,7 +207,7 @@ class TestExtractor(unittest.TestCase):
             created_threads.append(thread)
             return thread
 
-        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1"}), \
+        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1", "PULSE_LEGACY_JOURNAL_REPAIR": "1"}), \
              patch("daemon.memory.extractor.threading.Thread", side_effect=fake_thread):
             update_memories_from_session(
                 {
@@ -651,21 +651,22 @@ class TestExtractor(unittest.TestCase):
                 )
 
         llm = ReasoningLLM()
-        update_memories_from_session(
-            {
-                "active_project": "Pulse",
-                "duration_min": 45,
-                "probable_task": "coding",
-                "recent_apps": ["Cursor"],
-                "files_changed": 3,
-                "top_files": ["extractor.py"],
-            },
-            llm=llm,
-            memory_dir=self.memory_dir,
-            trigger="commit",
-            commit_message="fix(memory): validate journal final block",
-            diff_summary="Diff en cours : extractor.py (+12 -3)",
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "recent_apps": ["Cursor"],
+                    "files_changed": 3,
+                    "top_files": ["extractor.py"],
+                },
+                llm=llm,
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message="fix(memory): validate journal final block",
+                diff_summary="Diff en cours : extractor.py (+12 -3)",
+            )
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
         self.assertIn("La génération des journaux est sécurisée", journal)
@@ -857,21 +858,22 @@ class TestExtractor(unittest.TestCase):
             def complete(self, prompt, max_tokens=200, **kwargs):
                 return "Okay, let's tackle this query. The user wants a concise French journal note."
 
-        update_memories_from_session(
-            {
-                "active_project": "Pulse",
-                "duration_min": 45,
-                "probable_task": "coding",
-                "recent_apps": ["Cursor"],
-                "files_changed": 3,
-                "top_files": ["extractor.py"],
-            },
-            llm=ReasoningOnlyLLM(),
-            memory_dir=self.memory_dir,
-            trigger="commit",
-            commit_message="fix(memory): fallback missing final block",
-            diff_summary="Diff en cours : extractor.py (+12 -3)",
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "recent_apps": ["Cursor"],
+                    "files_changed": 3,
+                    "top_files": ["extractor.py"],
+                },
+                llm=ReasoningOnlyLLM(),
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message="fix(memory): fallback missing final block",
+                diff_summary="Diff en cours : extractor.py (+12 -3)",
+            )
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
         hidden = json.loads(
@@ -896,21 +898,22 @@ class TestExtractor(unittest.TestCase):
                 return "Les résumés de journaux sont retentés en mode final-only avant fallback."
 
         llm = RetryPlainTextLLM()
-        update_memories_from_session(
-            {
-                "active_project": "Pulse",
-                "duration_min": 45,
-                "probable_task": "coding",
-                "recent_apps": ["Cursor"],
-                "files_changed": 3,
-                "top_files": ["extractor.py"],
-            },
-            llm=llm,
-            memory_dir=self.memory_dir,
-            trigger="commit",
-            commit_message="fix(memory): allow plain final-only journal retry",
-            diff_summary="Diff en cours : extractor.py (+12 -3)",
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "recent_apps": ["Cursor"],
+                    "files_changed": 3,
+                    "top_files": ["extractor.py"],
+                },
+                llm=llm,
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message="fix(memory): allow plain final-only journal retry",
+                diff_summary="Diff en cours : extractor.py (+12 -3)",
+            )
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
         hidden = json.loads(
@@ -927,21 +930,22 @@ class TestExtractor(unittest.TestCase):
             def complete(self, prompt, max_tokens=200, **kwargs):
                 return "<final>Okay, let's tackle this query. La note devrait être courte.</final>"
 
-        update_memories_from_session(
-            {
-                "active_project": "Pulse",
-                "duration_min": 45,
-                "probable_task": "coding",
-                "recent_apps": ["Cursor"],
-                "files_changed": 3,
-                "top_files": ["extractor.py"],
-            },
-            llm=ContaminatedFinalLLM(),
-            memory_dir=self.memory_dir,
-            trigger="commit",
-            commit_message="fix(memory): reject contaminated final block",
-            diff_summary="Diff en cours : extractor.py (+12 -3)",
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "recent_apps": ["Cursor"],
+                    "files_changed": 3,
+                    "top_files": ["extractor.py"],
+                },
+                llm=ContaminatedFinalLLM(),
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message="fix(memory): reject contaminated final block",
+                diff_summary="Diff en cours : extractor.py (+12 -3)",
+            )
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
         hidden = json.loads(
@@ -956,19 +960,20 @@ class TestExtractor(unittest.TestCase):
 
     def test_resume_llm_ecrit_une_session_si_duree_suffisante(self):
         # trigger='commit' pour que le LLM soit effectivement appelé
-        update_memories_from_session(
-            {
-                "active_project": "Pulse",
-                "duration_min": 45,
-                "probable_task": "coding",
-                "recent_apps": ["Cursor"],
-                "files_changed": 5,
-                "max_friction": 0.7,
-            },
-            llm=FakeLLM(),
-            memory_dir=self.memory_dir,
-            trigger="commit",
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "recent_apps": ["Cursor"],
+                    "files_changed": 5,
+                    "max_friction": 0.7,
+                },
+                llm=FakeLLM(),
+                memory_dir=self.memory_dir,
+                trigger="commit",
+            )
 
         session_files = list((self.memory_dir / "sessions").glob("*.md"))
         self.assertEqual(len(session_files), 1)
@@ -977,6 +982,42 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("## Pulse", content)
         self.assertIn("### ", content)
         self.assertIn("développement (45 min)", content)
+
+    def test_commit_summary_par_defaut_garde_fallback_sans_appeler_llm(self):
+        class CountingLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def complete(self, *args, **kwargs):
+                self.calls += 1
+                return "Ne doit pas être appelé."
+
+        llm = CountingLLM()
+        with patch.dict("os.environ", {}, clear=True):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "recent_apps": ["Cursor"],
+                    "files_changed": 5,
+                    "max_friction": 0.7,
+                },
+                llm=llm,
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message="fix: deterministic commit summary",
+            )
+
+        session_file = next((self.memory_dir / "sessions").glob("*.md"))
+        hidden = json.loads(
+            session_file.read_text().split("<!-- pulse-journal-data:start\n", 1)[1].split(
+                "\npulse-journal-data:end -->",
+                1,
+            )[0]
+        )
+        self.assertEqual(llm.calls, 0)
+        self.assertEqual(hidden[0]["summary_source"], "deterministic_fallback")
 
     def test_commit_leger_et_court_ne_genere_pas_de_journal(self):
         update_memories_from_session(
@@ -1039,21 +1080,22 @@ class TestExtractor(unittest.TestCase):
                 captured["kwargs"] = kwargs
                 return f"<final>\nRésumé sans secret pour TOKEN={diff_secret}.\n</final>"
 
-        update_memories_from_session(
-            {
-                "active_project": "Pulse",
-                "duration_min": 45,
-                "probable_task": "coding",
-                "recent_apps": ["Codex"],
-                "files_changed": 3,
-                "top_files": ["extractor.py"],
-            },
-            llm=CapturingLLM(),
-            memory_dir=self.memory_dir,
-            trigger="commit",
-            commit_message=f"feat: redact commit --token {secret}",
-            diff_summary=f"Diff en cours : extractor.py (+3 -1)\nAPI_KEY={diff_secret}",
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "recent_apps": ["Codex"],
+                    "files_changed": 3,
+                    "top_files": ["extractor.py"],
+                },
+                llm=CapturingLLM(),
+                memory_dir=self.memory_dir,
+                trigger="commit",
+                commit_message=f"feat: redact commit --token {secret}",
+                diff_summary=f"Diff en cours : extractor.py (+3 -1)\nAPI_KEY={diff_secret}",
+            )
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
         hidden = json.loads(
@@ -2736,12 +2778,13 @@ class TestExtractor(unittest.TestCase):
             ],
         )
 
-        result = extractor_module.enrich_pending_journal_summaries(
-            memory_dir=self.memory_dir,
-            llm=FakeLLM(),
-            journal_date=journal_date,
-            exclude_entry_ids={"current-entry"},
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            result = extractor_module.enrich_pending_journal_summaries(
+                memory_dir=self.memory_dir,
+                llm=FakeLLM(),
+                journal_date=journal_date,
+                exclude_entry_ids={"current-entry"},
+            )
         entries = {
             entry["entry_id"]: entry
             for entry in extractor_module._load_journal_entries(journal_file)
@@ -2757,6 +2800,58 @@ class TestExtractor(unittest.TestCase):
         self.assertEqual(entries["current-entry"]["body"], "Current fallback.")
         self.assertEqual(entries["no-commit"]["summary_status"], "failed")
         self.assertEqual(entries["no-commit"]["body"], "No commit fallback.")
+
+    def test_enrich_pending_journal_summaries_desactive_par_defaut_ne_call_pas_llm(self):
+        journal_date = "2026-05-05"
+        sessions_dir = self.memory_dir / "sessions"
+        sessions_dir.mkdir(parents=True)
+        journal_file = sessions_dir / f"{journal_date}.md"
+        extractor_module._write_journal_document(
+            journal_file,
+            journal_date,
+            [
+                {
+                    "entry_id": "failed-commit",
+                    "active_project": "Pulse",
+                    "probable_task": "coding",
+                    "activity_level": "editing",
+                    "duration_min": 18,
+                    "body": "Fallback failed.",
+                    "commit_message": "fix: enrich later",
+                    "recent_apps": ["Codex"],
+                    "top_files": ["extractor.py"],
+                    "files_count": 1,
+                    "started_at": "2026-05-05T10:00:00",
+                    "ended_at": "2026-05-05T10:18:00",
+                    "boundary_reason": "commit",
+                    "scope_source": "commit_diff",
+                    "summary_source": "deterministic_fallback",
+                    "summary_status": "failed",
+                    "summary_error": "offline",
+                },
+            ],
+        )
+
+        class CountingLLM:
+            calls = 0
+
+            def complete(self, *args, **kwargs):
+                self.calls += 1
+                return "Ne doit pas être appelé."
+
+        llm = CountingLLM()
+        with patch.dict("os.environ", {}, clear=True):
+            result = extractor_module.enrich_pending_journal_summaries(
+                memory_dir=self.memory_dir,
+                llm=llm,
+                journal_date=journal_date,
+            )
+
+        entry = extractor_module._load_journal_entries(journal_file)[0]
+        self.assertEqual(result["reason"], "legacy_journal_repair_disabled")
+        self.assertEqual(result["enriched"], 0)
+        self.assertEqual(llm.calls, 0)
+        self.assertEqual(entry["body"], "Fallback failed.")
 
     def test_enrich_pending_journal_summaries_ignore_generated_commit_items_resolus(self):
         journal_date = "2026-05-05"
@@ -2798,11 +2893,12 @@ class TestExtractor(unittest.TestCase):
             ],
         )
 
-        result = extractor_module.enrich_pending_journal_summaries(
-            memory_dir=self.memory_dir,
-            llm=FakeLLM(),
-            journal_date=journal_date,
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            result = extractor_module.enrich_pending_journal_summaries(
+                memory_dir=self.memory_dir,
+                llm=FakeLLM(),
+                journal_date=journal_date,
+            )
         entry = extractor_module._load_journal_entries(journal_file)[0]
 
         self.assertEqual(result["eligible"], 0)
@@ -2856,11 +2952,12 @@ class TestExtractor(unittest.TestCase):
             ],
         )
 
-        result = extractor_module.enrich_pending_journal_summaries(
-            memory_dir=self.memory_dir,
-            llm=FakeLLM(),
-            journal_date=journal_date,
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            result = extractor_module.enrich_pending_journal_summaries(
+                memory_dir=self.memory_dir,
+                llm=FakeLLM(),
+                journal_date=journal_date,
+            )
         entry = extractor_module._load_journal_entries(journal_file)[0]
 
         self.assertEqual(result["eligible"], 1)
@@ -2919,11 +3016,12 @@ class TestExtractor(unittest.TestCase):
             ],
         )
 
-        result = extractor_module.enrich_pending_journal_summaries(
-            memory_dir=self.memory_dir,
-            llm=FakeLLM(),
-            journal_date=journal_date,
-        )
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}):
+            result = extractor_module.enrich_pending_journal_summaries(
+                memory_dir=self.memory_dir,
+                llm=FakeLLM(),
+                journal_date=journal_date,
+            )
         entry = extractor_module._load_journal_entries(journal_file)[0]
 
         self.assertEqual(result["eligible"], 1)

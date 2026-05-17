@@ -49,7 +49,10 @@ from daemon.core.uid import new_uid
 from daemon.core.restart_manager import RestartManager
 from daemon.core.work_intent_lifecycle import evaluate_work_intent_lifecycle
 from daemon.core.workspace_context import find_workspace_root
-from daemon.llm.lifecycle_policy import is_heavy_llm_autowarm_enabled
+from daemon.llm.lifecycle_policy import (
+    is_heavy_llm_autowarm_enabled,
+    is_legacy_journal_repair_enabled,
+)
 
 
 class RuntimeOrchestrator:
@@ -1477,10 +1480,9 @@ class RuntimeOrchestrator:
                         diff_summary=diff_summary,
                     )
                 else:
-                    self._start_critical_worker(
-                        target=self._enrich_commit_summary_background,
-                        args=(report_ref, snapshot, llm, commit_message, diff_summary),
-                        name="pulse-commit-enrich",
+                    self.log.info(
+                        "commit summary lightweight queue unavailable; deterministic fallback kept project=%s",
+                        snapshot.get("active_project"),
                     )
         except Exception as exc:
             self.log.warning("memory sync échouée : %s", exc)
@@ -1576,6 +1578,12 @@ class RuntimeOrchestrator:
             return {"ok": True, "applied": False, "metadata_updated": applied, "status": "failed", "error": str(exc)}
 
     def _enrich_commit_summary_background(self, report_ref, snapshot, llm, commit_message, diff_summary):
+        if not is_legacy_journal_repair_enabled():
+            self.log.info(
+                "legacy commit summary repair disabled; deterministic fallback kept project=%s",
+                snapshot.get("active_project"),
+            )
+            return
         started_at = time.monotonic()
         model = getattr(llm, "get_model", lambda: "unknown")() if llm is not None else "unknown"
         try:

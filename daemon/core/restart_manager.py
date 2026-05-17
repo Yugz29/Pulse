@@ -168,7 +168,7 @@ class RestartManager:
             }
             update_memories_from_session(
                 snapshot,
-                llm=summary_llm,
+                llm=None,
                 commit_message=commit_message,
                 trigger="commit",
                 diff_summary=diff_summary,

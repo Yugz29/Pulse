@@ -23,6 +23,10 @@ def is_heavy_llm_autowarm_enabled() -> bool:
     return os.getenv("PULSE_HEAVY_LLM_AUTOWARM", "").strip().lower() in _TRUE_VALUES
 
 
+def is_legacy_journal_repair_enabled() -> bool:
+    return os.getenv("PULSE_LEGACY_JOURNAL_REPAIR", "").strip().lower() in _TRUE_VALUES
+
+
 def classify_llm_path(path: str) -> str:
     normalized = str(path or "").strip()
     if normalized in HEAVY_LLM_PATHS:

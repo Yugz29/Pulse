@@ -96,6 +96,30 @@ class TestRestartManager(unittest.TestCase):
         session_fsm.restore_session_start.assert_not_called()
         session_memory.resume_session.assert_not_called()
 
+    def test_recover_missed_commits_utilise_fallback_deterministe_par_defaut(self):
+        summary_llm = MagicMock()
+        state = {
+            "last_head_sha": "old",
+            "last_sha_project": "AlphaApp",
+            "active_project": "AlphaApp",
+            "probable_task": "coding",
+            "shutdown_at": "2026-05-17T10:00:00",
+            "started_at": "2026-05-17T09:55:00",
+        }
+
+        with patch("daemon.core.workspace_context.find_workspace_root", return_value="/tmp/AlphaApp"), \
+             patch("daemon.memory.extractor.find_git_root", return_value="/tmp/AlphaApp"), \
+             patch("daemon.memory.extractor.read_head_sha", return_value="new"), \
+             patch("daemon.memory.extractor.read_commit_message", return_value="fix: missed commit"), \
+             patch("daemon.core.git_diff.read_commit_diff_summary", return_value="Diff en cours : app.py (+1 -0)"), \
+             patch("daemon.memory.extractor.read_commit_file_names", return_value=["app.py"]), \
+             patch("daemon.memory.extractor.update_memories_from_session") as update:
+            self.manager.recover_missed_commits(state, summary_llm=summary_llm)
+
+        update.assert_called_once()
+        self.assertIsNone(update.call_args.kwargs["llm"])
+        summary_llm.complete.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

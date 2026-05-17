@@ -788,7 +788,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIsNone(self.orchestrator._summary_llm_for("screen_locked", signals))
 
     def test_commit_summary_logs_success_terminal_status(self):
-        with patch("daemon.runtime_orchestrator.enrich_session_report", return_value=True):
+        with patch.dict("os.environ", {"PULSE_LEGACY_JOURNAL_REPAIR": "1"}), \
+             patch("daemon.runtime_orchestrator.enrich_session_report", return_value=True):
             self.orchestrator._enrich_commit_summary_background(
                 report_ref=("journal.md", "entry-1"), snapshot={"active_project": "Pulse"},
                 llm=self.summary_llm, commit_message="fix: bug", diff_summary="diff",
@@ -864,7 +865,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.summary_llm.complete.assert_not_called()
         start_worker.assert_not_called()
 
-    def test_sync_memory_background_garde_fallback_ollama_si_queue_absente(self):
+    def test_sync_memory_background_garde_fallback_deterministe_si_queue_absente(self):
         snapshot = {
             "active_project": "Pulse",
             "duration_min": 45,
@@ -883,8 +884,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 diff_summary="diff --git a/runtime.py b/runtime.py",
             )
 
-        start_worker.assert_called_once()
-        self.assertEqual(start_worker.call_args.kwargs["target"], self.orchestrator._enrich_commit_summary_background)
+        start_worker.assert_not_called()
+        self.summary_llm.complete.assert_not_called()
 
     def test_process_signals_cree_une_proposition_executee_pour_context_ready(self):
         signals = Signals(
