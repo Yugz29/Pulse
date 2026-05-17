@@ -865,6 +865,91 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.summary_llm.complete.assert_not_called()
         start_worker.assert_not_called()
 
+    def test_apply_lightweight_journal_commit_summary_dispatch_applique_resume(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        report_ref = ("journal.md", "entry-1", "commit-item-1")
+        item = queue.enqueue(
+            kind="journal_commit_summary",
+            prompt="Résumé",
+            metadata={"report_ref": report_ref, "commit_item_id": "commit-item-1", "project": "Pulse"},
+        )
+
+        with patch("daemon.runtime_orchestrator.apply_validated_journal_summary", return_value=True) as apply_summary, \
+             patch.object(self.orchestrator, "freeze_memory") as freeze_memory:
+            result = self.orchestrator.apply_lightweight_llm_result(
+                request_id=item.id,
+                status="generated",
+                text="Résumé Apple.",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["applied"])
+        self.assertEqual(result["status"], "generated")
+        apply_summary.assert_called_once_with(
+            report_ref,
+            "Résumé Apple.",
+            summary_source="apple_foundation",
+            stage="apple_foundation",
+        )
+        freeze_memory.assert_called_once()
+        self.summary_llm.complete.assert_not_called()
+
+    def test_apply_lightweight_journal_commit_summary_failed_marque_journal(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        report_ref = ("journal.md", "entry-1", "commit-item-1")
+        item = queue.enqueue(
+            kind="journal_commit_summary",
+            prompt="Résumé",
+            metadata={"report_ref": report_ref, "commit_item_id": "commit-item-1", "project": "Pulse"},
+        )
+
+        with patch("daemon.runtime_orchestrator.mark_journal_summary_failed", return_value=True) as mark_failed:
+            result = self.orchestrator.apply_lightweight_llm_result(
+                request_id=item.id,
+                status="failed",
+                error="apple_foundation_unavailable",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["applied"])
+        self.assertEqual(result["status"], "failed")
+        mark_failed.assert_called_once_with(report_ref, "apple_foundation_unavailable")
+        self.summary_llm.complete.assert_not_called()
+
+    def test_apply_lightweight_unknown_kind_echoue_sans_mutation_journal(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        item = queue.enqueue(
+            kind="resume_card_summary",
+            prompt="Polis cette reprise.",
+            metadata={"resume_card_id": "card-1"},
+        )
+
+        with patch("daemon.runtime_orchestrator.apply_validated_journal_summary") as apply_summary, \
+             patch("daemon.runtime_orchestrator.mark_journal_summary_failed") as mark_failed:
+            result = self.orchestrator.apply_lightweight_llm_result(
+                request_id=item.id,
+                status="generated",
+                text="Résumé non supporté.",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["applied"])
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"], "unsupported_lightweight_kind")
+        self.assertEqual(result["kind"], "resume_card_summary")
+        status = queue.status()
+        self.assertEqual(status["queue"]["failed"], 1)
+        self.assertEqual(status["last_result"]["kind"], "resume_card_summary")
+        self.assertEqual(status["last_result"]["status"], "failed")
+        self.assertEqual(status["last_result"]["error"], "unsupported_lightweight_kind")
+        self.assertEqual(queue.snapshot()[0].metadata["resume_card_id"], "card-1")
+        apply_summary.assert_not_called()
+        mark_failed.assert_not_called()
+        self.summary_llm.complete.assert_not_called()
+
     def test_sync_memory_background_garde_fallback_deterministe_si_queue_absente(self):
         snapshot = {
             "active_project": "Pulse",

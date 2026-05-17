@@ -1530,9 +1530,35 @@ class RuntimeOrchestrator:
         except ValueError as exc:
             return {"ok": False, "error": str(exc), "http_status": 400}
 
-        if item.kind != "journal_commit_summary":
-            return {"ok": False, "error": "unsupported_kind", "http_status": 400}
+        handlers = {
+            "journal_commit_summary": self._apply_lightweight_journal_commit_summary,
+        }
+        handler = handlers.get(item.kind)
+        if handler is None:
+            try:
+                self.lightweight_queue.complete(
+                    request_id,
+                    status="failed",
+                    error="unsupported_lightweight_kind",
+                )
+            except Exception:
+                pass
+            self.log.warning(
+                "lightweight LLM result ignored: unsupported kind=%s request_id=%s",
+                item.kind,
+                request_id,
+            )
+            return {
+                "ok": True,
+                "applied": False,
+                "status": "failed",
+                "error": "unsupported_lightweight_kind",
+                "kind": item.kind,
+            }
 
+        return handler(item=item, status=status, text=text, error=error)
+
+    def _apply_lightweight_journal_commit_summary(self, *, item, status: str, text: str = "", error=None) -> dict:
         report_ref = item.metadata.get("report_ref")
         if not report_ref:
             return {"ok": False, "error": "missing_report_ref", "http_status": 400}
