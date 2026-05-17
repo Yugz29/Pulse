@@ -1039,10 +1039,15 @@ Règles :
 - Si les preuves sont faibles, écris une phrase factuelle sobre basée sur le commit.
 - Ignore les détails de fichiers, routes, fonctions, classes et tests sauf s'ils expliquent directement le comportement.
 - Ne liste pas de noms de classes de test, fonctions internes ou fichiers.
-- Réponds en français, en 1 à 2 phrases maximum.
 
-Faits observés :
-{facts_block}"""
+Données compactes
+{facts_block}
+
+Écris uniquement la note finale.
+Une seule phrase française.
+Pas de liste.
+Pas de markdown.
+Ne recopie aucun champ ni libellé."""
 
 
 def _journal_summary_facts_block(
@@ -1085,32 +1090,43 @@ def _lightweight_journal_facts_block(
     if commit_message:
         lines = [l for l in commit_message.splitlines() if not l.startswith("#")]
         full_msg = "\n".join(lines).strip()[:400]
-        facts.append(f"- Commit :\n{full_msg}")
+        facts.append(f"commit_subject = {full_msg}")
         commit_type = _commit_type_from_message(full_msg)
         if commit_type:
-            facts.append(f"- Type : {commit_type}")
+            facts.append(f"commit_type = {commit_type}")
         delivery_hint = _commit_delivery_hint(full_msg)
         if delivery_hint:
-            facts.append(f"- Intention du commit : {delivery_hint}")
+            facts.append(f"commit_intent = {delivery_hint}")
     if diff_summary:
-        facts.append("- Diff compact :")
-        for line in diff_summary.splitlines():
-            facts.append(f"  {line}")
+        facts.append(f"changed_scope = {_compact_lightweight_diff_summary(diff_summary)}")
     elif top_files:
-        prefix = "Portée affichée séparément"
+        prefix = "changed_scope"
         if scope_source == "fallback_snapshot":
-            prefix = "Portée estimée depuis l'observation de session"
-        facts.append(f"- {prefix} : {cluster_files_for_display(top_files)}")
+            prefix = "estimated_scope"
+        facts.append(f"{prefix} = {cluster_files_for_display(top_files)}")
     elif files_count:
-        facts.append(f"- Fichiers modifiés : {files_count}")
-    facts.append(f"- Projet : {project}")
-    facts.append(f"- Durée : {duration} minutes")
+        facts.append(f"changed_files_count = {files_count}")
+    facts.append(f"project = {project}")
+    facts.append(f"duration_min = {duration}")
     intent = _safe_work_intent(work_intent)
     if intent:
-        facts.append(f"- Contexte secondaire — objectif de travail : {intent}")
+        facts.append(f"secondary_work_intent = {intent}")
     if friction >= 0.7:
-        facts.append("- Friction : élevée")
+        facts.append("friction = élevée")
     return _limit_text("\n".join(facts), 1500)
+
+
+def _compact_lightweight_diff_summary(diff_summary: str) -> str:
+    lines = []
+    for raw_line in str(diff_summary or "").splitlines():
+        line = re.sub(r"\s+", " ", raw_line).strip()
+        if not line:
+            continue
+        line = re.sub(r"^diff compact\s*:\s*", "", line, flags=re.IGNORECASE)
+        line = re.sub(r"^diff en cours\s*:\s*", "", line, flags=re.IGNORECASE)
+        line = re.sub(r"^fonctions touchées\s*:\s*", "symboles ", line, flags=re.IGNORECASE)
+        lines.append(line)
+    return _limit_text(" ; ".join(lines), 700)
 
 
 def _safe_work_intent(work_intent) -> Optional[str]:
@@ -1285,6 +1301,35 @@ def _validate_journal_summary(value: Any, *, stage: str = "unknown") -> None:
             raise ValueError(
                 f"reasoning_leak_in_journal_summary:marker={marker_key}:stage={stage}:len={len(text)}"
             )
+    fact_label_markers = {
+        r"\bcommit\s*:": "commit",
+        r"\btype\s*:": "type",
+        r"\bintention du commit\s*:": "commit_intent",
+        r"\bdiff compact\b\s*:": "diff_compact",
+        r"\bfonctions touchées\b\s*:": "touched_functions",
+        r"\bprojet\s*:": "project",
+        r"\bdurée\s*:": "duration",
+        r"\bsources primaires\b\s*:": "primary_sources",
+        r"\bcontexte secondaire\b\s*:": "secondary_context",
+        r"\bsummary\s*:": "summary_label",
+        r"\bnext_action\s*:": "next_action_label",
+        r"\blast_objective\s*:": "last_objective_label",
+    }
+    matched_fact_labels = [
+        marker_key
+        for marker_pattern, marker_key in fact_label_markers.items()
+        if re.search(marker_pattern, lowered)
+    ]
+    if matched_fact_labels:
+        reason = "facts_block_echo" if len(matched_fact_labels) >= 2 else "prompt_echo"
+        raise ValueError(
+            f"{reason}:marker={matched_fact_labels[0]}:stage={stage}:len={len(text)}"
+        )
+    colon_label_count = len(re.findall(r"\b[A-Za-zÀ-ÖØ-öø-ÿ_ ]{3,32}\s*:", text))
+    if colon_label_count >= 3:
+        raise ValueError(
+            f"facts_block_echo:marker=label_sequence:stage={stage}:len={len(text)}"
+        )
 
 
 def _sanitize_journal_summary(value: Any) -> str:

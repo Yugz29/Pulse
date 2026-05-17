@@ -693,11 +693,20 @@ class TestExtractor(unittest.TestCase):
 
         self.assertIn("Tu rédiges une note courte de journal de développement pour un commit.", prompt)
         self.assertIn("Sources primaires : commit_message, diff_summary, fichiers du commit", prompt)
-        self.assertIn("Projet : Pulse", prompt)
-        self.assertIn("Commit :", prompt)
+        self.assertIn("project = Pulse", prompt)
+        self.assertIn("commit_subject = feat: expose lightweight status", prompt)
         self.assertIn("feat: expose lightweight status", prompt)
-        self.assertIn("Diff compact :", prompt)
-        self.assertIn("Diff en cours : runtime.py (+10 -2)", prompt)
+        self.assertIn("changed_scope = runtime.py (+10 -2)", prompt)
+        self.assertIn("Écris uniquement la note finale", prompt)
+        self.assertIn("Une seule phrase française", prompt)
+        self.assertIn("Ne recopie aucun champ ni libellé", prompt)
+        self.assertNotIn("Faits observés :", prompt)
+        self.assertNotIn("Commit :", prompt)
+        self.assertNotIn("Type :", prompt)
+        self.assertNotIn("Intention du commit :", prompt)
+        self.assertNotIn("Diff compact :", prompt)
+        self.assertNotIn("Projet :", prompt)
+        self.assertNotIn("Durée :", prompt)
         self.assertNotIn("<final>", prompt)
         self.assertNotIn("Changements détectés", prompt)
         self.assertNotIn("ajoute une route GET /llm/lightweight/status", prompt)
@@ -717,7 +726,7 @@ class TestExtractor(unittest.TestCase):
             "",
         )
 
-        self.assertIn("Projet : ClientApp", prompt)
+        self.assertIn("project = ClientApp", prompt)
         self.assertNotIn("Pulse", prompt)
         self.assertNotIn("<final>", prompt)
         self.assertNotIn("Objectif de travail", prompt)
@@ -737,7 +746,7 @@ class TestExtractor(unittest.TestCase):
             scope_source="commit_diff",
         )
 
-        self.assertIn("Intention du commit : corrige un problème côté LLM local", prompt)
+        self.assertIn("commit_intent = corrige un problème côté LLM local", prompt)
         self.assertIn("évite le warmup du modèle lourd sur les flux lightweight", prompt)
         self.assertIn("Le commit_message est la source principale", prompt)
         self.assertIn("Ne liste pas de noms de classes de test", prompt)
@@ -768,10 +777,10 @@ class TestExtractor(unittest.TestCase):
         )
 
         self.assertIn(
-            "Contexte secondaire — objectif de travail : réduire les coûts cachés du modèle local en évitant les embeddings implicites",
+            "secondary_work_intent = réduire les coûts cachés du modèle local en évitant les embeddings implicites",
             prompt,
         )
-        self.assertIn("Type : fix", prompt)
+        self.assertIn("commit_type = fix", prompt)
         self.assertNotIn("window_title", prompt)
         self.assertNotIn("clipboard", prompt)
         self.assertNotIn("conversation", prompt)
@@ -794,7 +803,7 @@ class TestExtractor(unittest.TestCase):
             },
         )
 
-        self.assertLess(prompt.index("Commit :"), prompt.index("Contexte secondaire — objectif de travail"))
+        self.assertLess(prompt.index("commit_subject ="), prompt.index("secondary_work_intent ="))
         self.assertIn("Contexte secondaire : projet et objectif de travail", prompt)
         self.assertIn("il ne doit jamais remplacer, dominer ou contredire le commit", prompt)
         self.assertIn("N'introduis aucun sujet absent du commit_message, du diff_summary ou des fichiers", prompt)
@@ -818,7 +827,7 @@ class TestExtractor(unittest.TestCase):
         )
 
         self.assertIn("Si les preuves sont faibles, écris une phrase factuelle sobre basée sur le commit.", prompt)
-        self.assertIn("Commit :", prompt)
+        self.assertIn("commit_subject = fix: handle cancel", prompt)
         self.assertNotIn("Diff compact :", prompt)
 
     def test_lightweight_prompt_real_commits_formulent_intention_metier(self):
@@ -2553,6 +2562,49 @@ class TestExtractor(unittest.TestCase):
         self.assertEqual(after_hidden[0]["summary_status"], "failed")
         self.assertEqual(after_hidden[0]["summary_error"], "apple_foundation_unavailable")
 
+    def test_apple_summary_rejette_echo_facts_block_et_preserve_fallback(self):
+        session = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "recent_apps": ["Cursor"],
+            "files_changed": 5,
+        }
+        report_ref = update_memories_from_session(
+            session,
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix: echo facts block",
+            defer_llm_enrichment=True,
+        )
+        journal_file = report_ref[0]
+        before_hidden = extractor_module._load_journal_entries(journal_file)
+        fallback_body = before_hidden[0]["body"]
+
+        with self.assertRaises(ValueError) as raised:
+            apply_validated_journal_summary(
+                report_ref,
+                (
+                    "Commit : fix: echo facts block Type : fix "
+                    "Intention du commit : echo facts block "
+                    "Diff compact : extractor.py (+4 -1) Projet : Pulse"
+                ),
+                summary_source="apple_foundation",
+                stage="apple_foundation",
+            )
+        self.assertIn("facts_block_echo", str(raised.exception))
+
+        ok = mark_journal_summary_failed(report_ref, raised.exception)
+
+        self.assertTrue(ok)
+        after_hidden = extractor_module._load_journal_entries(journal_file)
+        self.assertEqual(after_hidden[0]["body"], fallback_body)
+        self.assertEqual(after_hidden[0]["commit_items"][0]["body"], fallback_body)
+        self.assertNotEqual(after_hidden[0].get("summary_source"), "apple_foundation")
+        self.assertEqual(after_hidden[0]["summary_status"], "failed")
+        self.assertIn("facts_block_echo", after_hidden[0]["summary_error"])
+
     def test_apple_summary_validated_remplace_le_body(self):
         session = {
             "active_project": "Pulse",
@@ -2666,6 +2718,83 @@ class TestExtractor(unittest.TestCase):
         self.assertEqual(bodies[0], "Le premier correctif durcit l’attribution mémoire.")
         self.assertEqual(bodies[1], "Le second correctif clarifie le contrat de preuve des liens commit.")
         self.assertEqual(updated["body"], "\n".join(bodies))
+
+    def test_apple_summary_rejette_echo_facts_block_sur_commit_item_cible(self):
+        base_session = {
+            "active_project": "Pulse",
+            "duration_min": 18,
+            "probable_task": "debug",
+            "activity_level": "editing",
+            "recent_apps": ["Codex"],
+            "files_changed": 3,
+        }
+        first_ref = update_memories_from_session(
+            {
+                **base_session,
+                "top_files": ["extractor.py"],
+                "started_at": "2026-05-16T19:12:00",
+                "ended_at": "2026-05-16T19:23:00",
+                "delivered_at": "2026-05-16T19:24:00",
+            },
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): harden delayed commit and idle project attribution",
+            defer_llm_enrichment=True,
+        )
+        self.assertTrue(apply_validated_journal_summary(
+            first_ref,
+            "Le premier correctif durcit l’attribution mémoire.",
+            summary_source="apple_foundation",
+            stage="apple_foundation",
+        ))
+
+        second_ref = update_memories_from_session(
+            {
+                **base_session,
+                "top_files": ["commit_episode_linker.py"],
+                "started_at": "2026-05-16T19:12:30",
+                "ended_at": "2026-05-16T19:23:30",
+                "delivered_at": "2026-05-16T19:25:00",
+            },
+            llm=FakeLLM(),
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): clarify commit link evidence contract",
+            defer_llm_enrichment=True,
+        )
+
+        journal_file = second_ref[0]
+        hidden = extractor_module._load_journal_entries(journal_file)[0]
+        first_body = hidden["commit_items"][0]["body"]
+        second_fallback = hidden["commit_items"][1]["body"]
+
+        stale_ref = (journal_file, "stale-entry-id", second_ref[2])
+        with self.assertRaises(ValueError) as raised:
+            apply_validated_journal_summary(
+                stale_ref,
+                (
+                    "Commit: fix(memory): clarify commit link evidence contract\n"
+                    "Type: fix\n"
+                    "Diff compact: commit_episode_linker.py (+20 -3)\n"
+                    "Fonctions touchées: link_commit_to_episode\n"
+                    "Projet: Pulse"
+                ),
+                summary_source="apple_foundation",
+                stage="apple_foundation",
+            )
+        self.assertIn("facts_block_echo", str(raised.exception))
+
+        self.assertTrue(mark_journal_summary_failed(stale_ref, raised.exception))
+        updated = extractor_module._load_journal_entries(journal_file)[0]
+        items = updated["commit_items"]
+
+        self.assertEqual(items[0]["body"], first_body)
+        self.assertEqual(items[1]["body"], second_fallback)
+        self.assertEqual(items[1]["summary_status"], "failed")
+        self.assertIn("facts_block_echo", items[1]["summary_error"])
+        self.assertNotEqual(items[1].get("summary_source"), "apple_foundation")
+        self.assertEqual(updated["body"], "\n".join([first_body, second_fallback]))
 
     def test_old_commit_items_sans_id_restent_lisibles_et_sont_normalises(self):
         journal_date = "2026-05-05"
