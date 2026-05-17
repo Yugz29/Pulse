@@ -21,6 +21,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Literal
 
+from daemon.core.bootstrap_heuristics import (
+    BOOTSTRAP_AI_APPS,
+    BOOTSTRAP_NON_WORK_TITLE_HINTS,
+    BOOTSTRAP_WORK_APPS,
+)
+
 
 HeartbeatStrength = Literal["strong", "weak", "none"]
 
@@ -67,30 +73,9 @@ MUTATING_GIT_COMMANDS = {
     "tag",
 }
 
-WORK_APPS = {
-    "Code",
-    "Visual Studio Code",
-    "Xcode",
-    "Cursor",
-    "Terminal",
-    "iTerm2",
-}
-
-AI_APPS = {
-    "ChatGPT",
-    "Claude",
-    "Claude Desktop",
-    "Codex",
-}
-
-NON_WORK_TITLE_HINTS = {
-    "youtube",
-    "netflix",
-    "prime video",
-    "disney+",
-    "twitch",
-    "spotify",
-}
+WORK_APPS = BOOTSTRAP_WORK_APPS
+AI_APPS = BOOTSTRAP_AI_APPS
+NON_WORK_TITLE_HINTS = BOOTSTRAP_NON_WORK_TITLE_HINTS
 
 
 @dataclass(frozen=True)

@@ -4,6 +4,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from daemon.core.bootstrap_heuristics import (
+    BOOTSTRAP_AI_APPS,
+    BOOTSTRAP_BROWSER_APPS,
+    BOOTSTRAP_DEV_APPS,
+    BOOTSTRAP_SELF_APPS,
+    BOOTSTRAP_TERMINAL_APPS,
+    BOOTSTRAP_WRITING_APPS,
+)
+
 from .event_bus import DEFAULT_EVENT_BUS_SIZE, EventBus
 from .file_classifier import classify_file_type, is_pulse_internal_path
 from .git_diff import extract_file_names_from_diff_summary
@@ -64,15 +73,12 @@ class SignalScorer:
     # Apps IA — neutres pour le focus score.
     # Utiliser Claude/ChatGPT en parallèle du développement est un mode de travail
     # normal, pas un signe de dispersion.
-    AI_APPS = {"Claude", "ChatGPT", "Perplexity", "Copilot"}
-
-    DEV_APPS = {
-        "Xcode", "VSCode", "Visual Studio Code", "Code", "Cursor", "WebStorm",
-        "PyCharm", "Terminal", "iTerm2", "Warp",
-    }
-    BROWSER_APPS = {"Safari", "Google Chrome", "Chrome", "Firefox", "Arc"}
-    WRITING_APPS = {"Notion", "Obsidian", "Bear", "Notes", "Pages"}
-    TERMINAL_APPS = {"Terminal", "iTerm2", "Warp"}
+    AI_APPS = BOOTSTRAP_AI_APPS
+    DEV_APPS = BOOTSTRAP_DEV_APPS
+    BROWSER_APPS = BOOTSTRAP_BROWSER_APPS
+    WRITING_APPS = BOOTSTRAP_WRITING_APPS
+    TERMINAL_APPS = BOOTSTRAP_TERMINAL_APPS
+    SELF_APPS = BOOTSTRAP_SELF_APPS
 
     def __init__(self, bus: EventBus):
         self.bus = bus
@@ -343,14 +349,13 @@ class SignalScorer:
     def _recent_apps(self, app_events: list, now: datetime) -> List[str]:
         # Apps à exclure du scoring — l'app UI de Pulse elle-même ne doit pas
         # influencer la détection de patterns de workflow.
-        _IGNORED_APPS = {"Pulse", "PulseApp"}
         window_start = now - timedelta(minutes=30)
         last_seen: dict[str, tuple[datetime, int]] = {}
         for index, event in enumerate(app_events):
             if event.timestamp < window_start:
                 continue
             app_name = event.payload.get("app_name")
-            if not app_name or app_name in _IGNORED_APPS:
+            if not app_name or app_name in self.SELF_APPS:
                 continue
             seen = last_seen.get(app_name)
             candidate = (event.timestamp, index)
@@ -1072,9 +1077,7 @@ class SignalScorer:
         if not recent_apps or len(recent_apps) < 2:
             return None
 
-        AI_APPS = {"Claude", "ChatGPT", "Gemini", "Copilot", "Codex"}
-
-        has_ai   = any(app in AI_APPS for app in recent_apps)
+        has_ai   = any(app in self.AI_APPS for app in recent_apps)
         has_dev  = any(app in self.DEV_APPS for app in recent_apps)
         has_browser = any(app in self.BROWSER_APPS for app in recent_apps)
         has_terminal = any(app in self.TERMINAL_APPS for app in recent_apps)
@@ -1216,7 +1219,7 @@ class SignalScorer:
             for event in app_events
             if event.timestamp >= cutoff
             and event.payload.get("app_name")
-            and event.payload.get("app_name") not in {"Pulse", "PulseApp"}
+            and event.payload.get("app_name") not in self.SELF_APPS
         )
 
     def _ai_app_switch_count_10m(self, app_events: list, now: datetime) -> int:

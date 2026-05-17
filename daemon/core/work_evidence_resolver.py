@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from daemon.core.bootstrap_heuristics import BOOTSTRAP_AI_APPS
 from daemon.core.workspace_context import extract_project_name
 
 
-_AI_APPS = {"ChatGPT", "Claude", "Claude Desktop", "Codex", "Gemini", "Copilot", "Perplexity"}
+_AI_APPS = BOOTSTRAP_AI_APPS
 
 
 @dataclass(frozen=True)
