@@ -4,20 +4,21 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from daemon.core.bootstrap_heuristics import (
+    BOOTSTRAP_BROWSER_APPS,
+    BOOTSTRAP_DEV_APPS,
+    BOOTSTRAP_WRITING_APPS,
+)
+
 from .file_classifier import file_signal_significance
 
 SESSION_TIMEOUT_MIN = 30
 
 _MEANINGFUL_FILE_EVENT_TYPES = {"file_created", "file_modified", "file_renamed"}
 _MEANINGFUL_TERMINAL_EVENT_TYPES = {"terminal_command_started", "terminal_command_finished"}
-_DEV_APPS = {
-    "Xcode", "VSCode", "Visual Studio Code", "Cursor", "WebStorm",
-    "PyCharm", "Terminal", "iTerm2", "Warp",
-}
-_SUPPORTIVE_APPS = {
-    "Safari", "Google Chrome", "Chrome", "Firefox", "Arc",
-    "Notion", "Obsidian", "Bear", "Notes", "Pages",
-}
+# SessionFSM historically treats Code as non-strong here; keep behavior stable.
+_DEV_APPS = BOOTSTRAP_DEV_APPS - {"Code"}
+_SUPPORTIVE_APPS = BOOTSTRAP_BROWSER_APPS | BOOTSTRAP_WRITING_APPS
 _SUPPORTIVE_EVENT_TYPES = {"local_exploration", "mcp_command_received", "mcp_decision"}
 
 

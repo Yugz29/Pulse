@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 
+from daemon.core.bootstrap_heuristics import BOOTSTRAP_AI_APPS, BOOTSTRAP_DEV_APPS
+
 # ── Types publics ─────────────────────────────────────────────────────────────
 
 class EventActor(str, Enum):
@@ -84,14 +86,11 @@ _DEPENDENCY_ARTIFACTS = frozenset({
 
 # Apps dont les modifications fichiers sont souvent outil-assistées.
 # Signal FAIBLE (0.8) : insuffisant seul pour dépasser le baseline user (1.0).
-_TOOL_ASSISTED_APPS = frozenset({
-    "Cursor",
-    "Windsurf",
-    "Copilot",
-    "Codex",
-    "Claude",
-    "GitHub Copilot",
-})
+_TOOL_ASSISTED_APPS = frozenset(
+    {"Windsurf", "GitHub Copilot"}
+    | (BOOTSTRAP_AI_APPS & {"Claude", "Codex", "Copilot"})
+    | (BOOTSTRAP_DEV_APPS & {"Cursor"})
+)
 
 _BURST_FILE_COUNT  = 4    # fichiers distincts dans la fenêtre burst
 _BURST_WINDOW_MS   = 600  # millisecondes

@@ -79,6 +79,18 @@ class TestEventActorClassifier(unittest.TestCase):
         self.assertEqual(result.actor, EventActor.SYSTEM)
         self.assertEqual(result.noise_policy, NoisePolicy.IGNORE)
 
+    def test_tool_assisted_app_remains_tool_assisted_after_catalog_centralization(self):
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": "/Users/yugz/Projets/Alpha/src/main.py"},
+            latest_app="Cursor",
+            recent_events=[],
+            now=self.now,
+        )
+
+        self.assertEqual(result.actor, EventActor.TOOL_ASSISTED)
+        self.assertGreater(result.automation_score, 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

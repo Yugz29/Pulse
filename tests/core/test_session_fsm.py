@@ -247,6 +247,18 @@ class TestSessionFSM(unittest.TestCase):
 
         self.assertEqual(self.fsm.session_started_at, t_first)
 
+    def test_code_app_ne_devient_pas_une_activite_strong_par_centralisation(self):
+        t_first = self._at(0)
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[_app_event("Code", t_first)],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertEqual(self.fsm.state, SessionFSM.IDLE)
+        self.assertIsNone(self.fsm.last_meaningful_activity_at)
+
     def test_evenement_terminal_est_une_activite_significative(self):
         t_first = self._at(0)
 

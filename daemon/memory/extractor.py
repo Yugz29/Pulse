@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from daemon.core.command_redaction import redact_sensitive_command
+from daemon.core.bootstrap_heuristics import BOOTSTRAP_BROWSER_APPS
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
 from daemon.core.work_evidence_resolver import WorkEvidenceInput, resolve_work_evidence
@@ -137,7 +138,7 @@ _SCOPE_SOURCE_PRIORITY = {
     "unknown": -1,
 }
 _UNKNOWN_PROJECT_NAMES = {"", "inconnu", "unknown", "autre", "none", "null"}
-_BROWSER_APPS = {"Safari", "Google Chrome", "Chrome", "Arc", "Firefox", "Brave Browser", "Brave"}
+_BROWSER_APPS = BOOTSTRAP_BROWSER_APPS | {"Brave Browser", "Brave"}
 _ADMIN_APPS = {
     "Mail", "Gmail", "Outlook", "Calendar", "Calendrier",
     "zoom.us", "Zoom", "Microsoft Teams", "Teams", "Meet", "Slack",
