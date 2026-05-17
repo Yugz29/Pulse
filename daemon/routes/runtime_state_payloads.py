@@ -132,39 +132,78 @@ def build_state_payload(
         "present": present.to_dict(),
     }
 
+    debug = build_debug_state_payload(
+        store_state=store_state,
+        runtime_snapshot=runtime_snapshot,
+        state=state,
+        get_session_fsm=get_session_fsm,
+        get_current_context=get_current_context,
+        get_recent_sessions=get_recent_sessions,
+        current_context_builder=current_context_builder,
+        last_session_context_fn=last_session_context_fn,
+    )
+    state["debug"] = debug
+    return state
+
+
+def build_debug_state_payload(
+    *,
+    store_state: dict[str, Any],
+    runtime_snapshot: Any,
+    state: dict[str, Any] | None = None,
+    get_session_fsm: Callable[[], Any] | None = None,
+    get_current_context: Callable[[], Any] | None = None,
+    get_recent_sessions: Callable[[int], Any] | None = None,
+    current_context_builder: Any | None = None,
+    last_session_context_fn: Callable[[str], str | None] = last_session_context,
+) -> dict[str, Any]:
+    present = runtime_snapshot.present
+    product_state = state
+    if product_state is None:
+        product_state = {
+            "active_app": runtime_snapshot.latest_active_app,
+            "active_file": present.active_file,
+            "active_project": present.active_project,
+            "session_duration_min": present.session_duration_min,
+            "last_event_type": store_state.get("last_event_type"),
+            "runtime_paused": runtime_snapshot.paused,
+            "present": present.to_dict(),
+        }
+
     debug: dict[str, Any] = {
+        "surface": "debug_state",
+        "legacy_in_state": state is not None,
         "store": store_state,
         "runtime": serialize_runtime_debug(runtime_snapshot),
     }
 
     if runtime_snapshot.decision:
         decision_payload = serialize_decision(runtime_snapshot.decision)
-        state["decision"] = decision_payload
+        product_state["decision"] = decision_payload
         debug["decision"] = decision_payload
     if get_session_fsm is not None:
         session_fsm_payload = serialize_session_fsm(get_session_fsm())
-        state["session_fsm"] = session_fsm_payload
+        product_state["session_fsm"] = session_fsm_payload
         debug["session_fsm"] = session_fsm_payload
     if get_current_context is not None:
         current_context = get_current_context()
         if current_context is not None:
             context_payload = serialize_current_context(current_context)
-            state["current_context"] = context_payload
+            product_state["current_context"] = context_payload
             debug["current_context"] = context_payload
     if runtime_snapshot.signals:
         legacy_signals = build_legacy_signals_payload(
             present=present,
-            active_app=state.get("active_app"),
+            active_app=product_state.get("active_app"),
             signals=runtime_snapshot.signals,
             current_context_builder=current_context_builder,
             last_session_context_fn=last_session_context_fn,
         )
-        state["signals"] = legacy_signals
+        product_state["signals"] = legacy_signals
         debug["signals"] = legacy_signals
     if get_recent_sessions is not None:
         sessions = get_recent_sessions(8)
         if sessions:
-            state["recent_sessions"] = sessions
+            product_state["recent_sessions"] = sessions
             debug["recent_sessions"] = sessions
-    state["debug"] = debug
-    return state
+    return debug

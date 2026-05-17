@@ -4,6 +4,7 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from daemon.routes.runtime_state_payloads import (
+    build_debug_state_payload,
     build_state_payload,
     serialize_current_context,
 )
@@ -249,9 +250,45 @@ def test_build_state_payload_debug_contains_expected_fields():
     )
 
     assert payload["debug"]["store"]["last_event_type"] == "file_modified"
+    assert payload["debug"]["surface"] == "debug_state"
+    assert payload["debug"]["legacy_in_state"] is True
     assert payload["debug"]["runtime"]["latest_active_app"] == "Xcode"
     assert payload["debug"]["runtime"]["memory_synced_at"] == "2026-05-06T10:00:00"
     assert payload["debug"]["signals"]["active_project"] == "Pulse"
+
+
+def test_build_debug_state_payload_returns_debug_surface_without_legacy_marker():
+    payload = build_debug_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_signals()),
+        current_context_builder=CurrentContextBuilderStub(),
+        get_session_fsm=lambda: SimpleNamespace(
+            state="active",
+            session_started_at=datetime(2026, 5, 6, 9, 0, 0),
+            last_meaningful_activity_at=datetime(2026, 5, 6, 9, 30, 0),
+            last_screen_locked_at=None,
+        ),
+        get_current_context=lambda: SimpleNamespace(
+            id="ctx-1",
+            session_id="session-1",
+            active_project="Pulse",
+            active_file="/tmp/pulse.py",
+            probable_task="coding",
+            activity_level="editing",
+            task_confidence=0.8,
+        ),
+        get_recent_sessions=lambda limit: [{"id": "session-1", "active_project": "Pulse"}],
+        last_session_context_fn=lambda project: None,
+    )
+
+    assert payload["surface"] == "debug_state"
+    assert payload["legacy_in_state"] is False
+    assert payload["store"]["last_event_type"] == "file_modified"
+    assert payload["runtime"]["latest_active_app"] == "Xcode"
+    assert payload["session_fsm"]["state"] == "active"
+    assert payload["current_context"]["active_project"] == "Pulse"
+    assert payload["signals"]["active_project"] == "Pulse"
+    assert payload["recent_sessions"][0]["id"] == "session-1"
 
 
 def test_build_state_payload_missing_optional_fields_uses_safe_defaults():

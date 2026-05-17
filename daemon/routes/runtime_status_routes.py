@@ -33,6 +33,28 @@ def _build_state_payload(
     )
 
 
+def _build_debug_state_payload(
+    *,
+    store_state: dict[str, Any],
+    runtime_snapshot: Any,
+    current_context_builder: CurrentContextBuilder,
+    get_session_fsm: Callable[[], Any] | None = None,
+    get_current_context: Callable[[], Any] | None = None,
+    get_recent_sessions: Callable[[int], Any] | None = None,
+) -> dict[str, Any]:
+    from daemon.routes.runtime_state_payloads import build_debug_state_payload
+
+    return build_debug_state_payload(
+        store_state=store_state,
+        runtime_snapshot=runtime_snapshot,
+        get_session_fsm=get_session_fsm,
+        get_current_context=get_current_context,
+        get_recent_sessions=get_recent_sessions,
+        current_context_builder=current_context_builder,
+        last_session_context_fn=last_session_context,
+    )
+
+
 
 def register_status_routes(
     app: Flask,
@@ -61,6 +83,18 @@ def register_status_routes(
             get_recent_sessions=get_recent_sessions,
         )
         return jsonify(state)
+
+    @app.route("/debug/state", methods=["GET"])
+    def get_debug_state():
+        debug_state = _build_debug_state_payload(
+            store_state=store.to_dict(),
+            runtime_snapshot=runtime_state.get_runtime_snapshot(),
+            current_context_builder=current_context_builder,
+            get_session_fsm=get_session_fsm,
+            get_current_context=get_current_context,
+            get_recent_sessions=get_recent_sessions,
+        )
+        return jsonify(debug_state)
 
     @app.route("/insights", methods=["GET"])
     def get_insights():

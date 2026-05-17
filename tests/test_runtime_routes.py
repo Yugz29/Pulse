@@ -727,6 +727,45 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertIn("runtime", debug)
         self.assertIn("signals", debug)
         self.assertIn("decision", debug)
+        self.assertEqual(debug["surface"], "debug_state")
+        self.assertTrue(debug["legacy_in_state"])
+
+    def test_debug_state_route_exposes_debug_payload_explicitly(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/current.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=24,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+        )
+        decision = Decision("silent", 0, "nothing_relevant")
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=decision)
+        self.runtime_state.set_latest_active_app("Xcode")
+        self.store.to_dict.return_value = {
+            "active_app": "Xcode",
+            "last_event_type": "file_modified",
+        }
+
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
+            response = self.client.get("/debug/state")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["surface"], "debug_state")
+        self.assertFalse(payload["legacy_in_state"])
+        self.assertEqual(payload["store"]["last_event_type"], "file_modified")
+        self.assertEqual(payload["runtime"]["latest_active_app"], "Xcode")
+        self.assertEqual(payload["signals"]["active_project"], "Pulse")
+        self.assertEqual(payload["decision"]["action"], "silent")
 
     def test_state_fallbacks_to_builder_when_current_context_absent(self):
         signals = Signals(
@@ -892,6 +931,14 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["recent_sessions"][0]["activity_level"], "editing")
         self.assertNotIn("current_episode", payload)
         self.assertNotIn("recent_episodes", payload)
+
+        debug_response = client.get("/debug/state")
+        self.assertEqual(debug_response.status_code, 200)
+        debug_payload = debug_response.get_json()
+        self.assertEqual(debug_payload["surface"], "debug_state")
+        self.assertFalse(debug_payload["legacy_in_state"])
+        self.assertEqual(debug_payload["current_context"]["id"], "ep-1")
+        self.assertEqual(debug_payload["recent_sessions"][0]["id"], "ep-1")
 
     def test_state_keeps_product_hierarchy_with_present_context_and_signals(self):
         signals = Signals(
