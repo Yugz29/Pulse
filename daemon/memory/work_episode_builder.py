@@ -353,7 +353,14 @@ def _episode_from_blocks(blocks: list[WorkBlock], boundary_reason: str) -> WorkE
         duration_min=duration_min,
         work_block_ids=tuple(block.id for block in blocks),
         evidence_count=evidence_count,
-        confidence=_confidence(evidence_count, project, flags),
+        confidence=_confidence(
+            evidence_count,
+            project,
+            flags,
+            strong_event_count=evidence_count,
+            weak_event_count=0,
+            duration_min=duration_min,
+        ),
         boundary_reason=boundary_reason,
         uncertainty_flags=flags,
     )
@@ -387,7 +394,14 @@ def _episode_from_event_group(
         duration_min=block.duration_min,
         work_block_ids=(block.id,),
         evidence_count=evidence_count,
-        confidence=_confidence(evidence_count, project, flags),
+        confidence=_confidence(
+            evidence_count,
+            project,
+            flags,
+            strong_event_count=strong_count,
+            weak_event_count=weak_count,
+            duration_min=block.duration_min,
+        ),
         boundary_reason=boundary_reason,
         uncertainty_flags=flags,
         dominant_scope=dominant_scope,
@@ -717,17 +731,56 @@ def _actor_uncertainty_flags(events: list[dict[str, Any]]) -> tuple[str, ...]:
     return ()
 
 
-def _confidence(evidence_count: int, project: str | None, flags: tuple[str, ...]) -> float:
-    confidence = 0.65
-    if evidence_count >= 3:
-        confidence += 0.15
+def _confidence(
+    evidence_count: int,
+    project: str | None,
+    flags: tuple[str, ...],
+    *,
+    strong_event_count: int,
+    weak_event_count: int,
+    duration_min: int,
+) -> float:
+    confidence = 0.38
+
+    if evidence_count >= 2:
+        confidence += 0.08
+    if evidence_count >= 4:
+        confidence += 0.08
+    if strong_event_count >= 2:
+        confidence += 0.12
+    if strong_event_count >= 4:
+        confidence += 0.06
     if project:
         confidence += 0.1
+    if duration_min >= 5:
+        confidence += 0.05
+    if duration_min >= 15:
+        confidence += 0.05
+
     if "low_evidence" in flags:
-        confidence -= 0.1
+        confidence -= 0.08
     if "unknown_project" in flags:
         confidence -= 0.1
-    return max(0.0, min(confidence, 0.95))
+    if "short_episode" in flags:
+        confidence -= 0.06
+    if "single_block" in flags:
+        confidence -= 0.03
+    if "tool_assisted" in flags and strong_event_count <= 1:
+        confidence -= 0.05
+
+    total_heartbeat_count = strong_event_count + weak_event_count
+    if total_heartbeat_count > 0 and weak_event_count > strong_event_count:
+        confidence -= 0.12
+    if strong_event_count == 0:
+        confidence = min(confidence, 0.35)
+    if evidence_count <= 1:
+        confidence = min(confidence, 0.55)
+    if not project:
+        confidence = min(confidence, 0.68)
+    if total_heartbeat_count > 0 and weak_event_count >= strong_event_count:
+        confidence = min(confidence, 0.6)
+
+    return round(max(0.0, min(confidence, 0.9)), 2)
 
 
 def _dominant_value(values: Any) -> str | None:

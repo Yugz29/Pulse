@@ -105,3 +105,24 @@ def test_explicit_project_payload_still_has_priority():
 
     assert len(episodes) == 1
     assert episodes[0].project == "ExplicitProject"
+
+
+def test_unknown_project_penalizes_confidence():
+    known_project = build_work_episodes(
+        [
+            event("/tmp/acme-api/src/handler.py", 0),
+            event("/tmp/acme-api/tests/test_handler.py", 4),
+        ]
+    )
+    unknown_project = build_work_episodes(
+        [
+            event("/tmp/handler.py", 0),
+            event("/tmp/test_handler.py", 4),
+        ]
+    )
+
+    assert len(known_project) == 1
+    assert len(unknown_project) == 1
+    assert known_project[0].project == "acme-api"
+    assert unknown_project[0].project is None
+    assert unknown_project[0].confidence < known_project[0].confidence

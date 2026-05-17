@@ -100,6 +100,18 @@ def terminal_test(command, minute=0, success=True):
     )
 
 
+def terminal_project_context(command, minute=0):
+    return event(
+        "terminal_command_finished",
+        minute,
+        {
+            "terminal_command": command,
+            "terminal_command_base": command.split()[0],
+            "terminal_project": "Pulse",
+        },
+    )
+
+
 def test_user_presence_alone_creates_no_work_episode():
     events = [event("user_presence", 0, {"active": True})]
 
@@ -124,6 +136,58 @@ def test_file_event_strong_creates_short_work_episode():
     assert episodes[0].duration_min == 1
     assert episodes[0].evidence_count == 1
     assert episodes[0].probable_task == "coding"
+
+
+def test_single_low_evidence_episode_has_low_confidence():
+    episodes = build_work_episodes([strong_file()])
+
+    assert len(episodes) == 1
+    assert episodes[0].confidence <= 0.55
+    assert "single_block" in episodes[0].uncertainty_flags
+    assert "low_evidence" in episodes[0].uncertainty_flags
+    assert "short_episode" in episodes[0].uncertainty_flags
+
+
+def test_multi_strong_evidence_known_project_has_higher_confidence():
+    single = build_work_episodes([strong_file()])
+    episodes = build_work_episodes(
+        [
+            strong_path("daemon/core/signal_scorer.py", 0),
+            strong_path("tests/core/test_signal_scorer.py", 4),
+            terminal_test("pytest tests/core/test_signal_scorer.py", 8),
+            strong_path("daemon/core/workspace_context.py", 12),
+        ]
+    )
+
+    assert len(episodes) == 1
+    assert episodes[0].confidence > single[0].confidence
+    assert episodes[0].confidence < 0.9
+    assert episodes[0].strong_event_count >= 4
+
+
+def test_weak_only_episode_does_not_get_high_confidence():
+    episodes = build_work_episodes(
+        [
+            terminal_project_context("ls", 0),
+            terminal_project_context("pwd", 4),
+        ]
+    )
+
+    assert episodes == []
+
+
+def test_majority_weak_episode_does_not_get_high_confidence():
+    episodes = build_work_episodes(
+        [
+            strong_file(0),
+            weak_app("ChatGPT", 3),
+            weak_app("Cursor", 6),
+        ]
+    )
+
+    assert len(episodes) == 1
+    assert episodes[0].weak_event_count > episodes[0].strong_event_count
+    assert episodes[0].confidence <= 0.6
 
 
 def test_system_file_event_alone_creates_no_work_episode():
