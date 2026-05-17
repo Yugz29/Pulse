@@ -40,7 +40,7 @@ from daemon.core.command_redaction import redact_sensitive_command
 from daemon.core.file_cluster import cluster_files_for_display
 from daemon.core.git_diff import extract_file_names_from_diff_summary
 from daemon.core.work_evidence_resolver import WorkEvidenceInput, resolve_work_evidence
-from daemon.llm.lifecycle_policy import is_legacy_journal_repair_enabled
+from daemon.llm.lifecycle_policy import is_legacy_journal_repair_enabled, require_heavy_llm
 from daemon.memory.facts import FactEngine
 from daemon.memory.embedding_policy import embeddings_enabled
 from daemon.memory.vector_store import VectorStore
@@ -493,7 +493,7 @@ def enrich_pending_journal_summaries(
     This is intentionally bounded and opportunistic: it repairs older fallback
     commit summaries without blocking the main commit/report path.
     """
-    if not is_legacy_journal_repair_enabled():
+    if not require_heavy_llm("legacy_journal_repair", reason="pending_journal_repair"):
         log.info("Memory : réparation legacy LLM du journal désactivée par policy")
         return {
             "journal_date": journal_date or datetime.now().strftime("%Y-%m-%d"),

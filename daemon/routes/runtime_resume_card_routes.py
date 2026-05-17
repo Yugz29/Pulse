@@ -10,6 +10,7 @@ from daemon.core.resume_card import (
     generate_resume_card,
     generate_resume_card_with_debug,
 )
+from daemon.llm.lifecycle_policy import require_heavy_llm
 from daemon.memory.extractor import get_recent_journal_entries
 
 
@@ -122,13 +123,20 @@ def register_resume_card_routes(
         """Force a resume card event using the configured LLM when available."""
         data = request.get_json(silent=True) or {}
         context = _build_debug_resume_card_context(data)
-        card, debug = generate_resume_card_with_debug(context, llm=resume_card_llm)
+        heavy_allowed = require_heavy_llm(
+            "debug_resume_card_llm",
+            reason="explicit_debug_resume_card_llm",
+        )
+        card, debug = generate_resume_card_with_debug(
+            context,
+            llm=resume_card_llm if heavy_allowed else None,
+        )
         payload = card.to_event_payload()
         bus.publish("resume_card", payload)
         return jsonify({
             "ok": True,
-            "mode": "llm" if resume_card_llm is not None else "deterministic_fallback",
-            "llm_available": resume_card_llm is not None,
+            "mode": "llm" if heavy_allowed and resume_card_llm is not None else "deterministic_fallback",
+            "llm_available": heavy_allowed and resume_card_llm is not None,
             "card": payload,
             "debug": debug,
         })

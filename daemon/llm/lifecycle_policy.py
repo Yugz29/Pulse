@@ -6,6 +6,8 @@ import os
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
 HEAVY_LLM_PATHS = {
+    "ask",
+    "ask_stream",
     "chat",
     "chat_tools",
     "daydream",
@@ -16,6 +18,7 @@ HEAVY_LLM_PATHS = {
 
 LIGHTWEIGHT_LLM_PATHS = {
     "journal_commit_summary",
+    "resume_card_summary",
 }
 
 
@@ -34,3 +37,16 @@ def classify_llm_path(path: str) -> str:
     if normalized in LIGHTWEIGHT_LLM_PATHS:
         return "apple_lightweight"
     return "no_llm"
+
+
+def require_heavy_llm(path: str, reason: str | None = None) -> bool:
+    normalized = str(path or "").strip()
+    if not normalized:
+        return False
+    if normalized == "legacy_journal_repair" and not is_legacy_journal_repair_enabled():
+        return False
+    if normalized not in HEAVY_LLM_PATHS:
+        return False
+    if not str(reason or "").strip():
+        return False
+    return True

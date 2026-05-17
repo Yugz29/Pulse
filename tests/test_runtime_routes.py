@@ -218,7 +218,8 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         client = app.test_client()
 
-        response = client.post("/debug/resume-card/llm", json={"sleep_minutes": 35})
+        with patch("daemon.routes.runtime_resume_card_routes.require_heavy_llm", return_value=True):
+            response = client.post("/debug/resume-card/llm", json={"sleep_minutes": 35})
 
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
@@ -226,6 +227,41 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertTrue(payload["debug"]["llm_called"])
         self.assertEqual(payload["card"]["generated_by"], "llm")
         self.assertEqual(llm.calls, 1)
+
+    def test_debug_resume_card_llm_refuse_si_policy_refuse(self):
+        class CountingLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def complete(self, *args, **kwargs):
+                self.calls += 1
+                return "{}"
+
+        llm = CountingLLM()
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=MagicMock(),
+            store=self.store,
+            runtime_state=self.runtime_state,
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+            resume_card_llm=llm,
+        )
+        client = app.test_client()
+
+        with patch("daemon.routes.runtime_resume_card_routes.require_heavy_llm", return_value=False):
+            response = client.post("/debug/resume-card/llm", json={"sleep_minutes": 35})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["mode"], "deterministic_fallback")
+        self.assertFalse(payload["llm_available"])
+        self.assertFalse(payload["debug"]["llm_called"])
+        self.assertEqual(payload["card"]["generated_by"], "deterministic")
+        self.assertEqual(llm.calls, 0)
 
     def test_debug_work_episodes_expose_les_episodes_du_jour(self):
         app = Flask(__name__)
