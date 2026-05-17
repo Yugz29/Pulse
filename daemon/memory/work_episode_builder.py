@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping
 
+from daemon.core.workspace_context import extract_project_name
 from daemon.memory.work_heartbeat import NON_WORK_TITLE_HINTS, classify_work_heartbeat
 
 
@@ -110,6 +111,7 @@ _SOURCE_EXTENSIONS = (
     ".h",
     ".cs",
 )
+_PROJECT_CHILD_DIRS = {"src", "tests", "test", "docs", "doc", "config", "app", "lib", "packages"}
 
 
 @dataclass(frozen=True)
@@ -677,12 +679,22 @@ def _project_from_events(events: list[dict[str, Any]]) -> str | None:
                 return str(value)
         path = payload.get("path") or payload.get("file_path")
         if path:
-            parts = Path(str(path)).parts
-            for marker in ("Projets", "Projects"):
-                if marker in parts:
-                    idx = parts.index(marker)
-                    if idx + 1 < len(parts):
-                        return parts[idx + 1]
+            project = _project_from_standard_child_dir(str(path)) or extract_project_name(str(path))
+            if project:
+                return project
+    return None
+
+
+def _project_from_standard_child_dir(path: str) -> str | None:
+    parts = Path(path).parts
+    if len(parts) < 3:
+        return None
+    for index, part in enumerate(parts):
+        if part.lower() not in _PROJECT_CHILD_DIRS or index == 0:
+            continue
+        parent = parts[index - 1].strip()
+        if parent and parent not in {"/", ".", ".."}:
+            return parent
     return None
 
 

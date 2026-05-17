@@ -25,6 +25,12 @@ def event(path: str, minute: int = 0):
     }
 
 
+def event_with_payload(path: str, payload: dict, minute: int = 0):
+    event_item = event(path, minute)
+    event_item["payload"].update(payload)
+    return event_item
+
+
 def test_unknown_repo_does_not_emit_pulse_specific_scopes():
     episodes = build_work_episodes(
         [
@@ -65,3 +71,37 @@ def test_docs_create_scope_shift_from_source_when_gap_is_significant():
     assert episodes[0].dominant_scope == "source"
     assert episodes[0].next_scope == "docs"
     assert episodes[1].dominant_scope == "docs"
+
+
+def test_project_detection_does_not_require_projects_folder():
+    episodes = build_work_episodes([event("/tmp/acme-api/src/handler.py")])
+
+    assert len(episodes) == 1
+    assert episodes[0].project == "acme-api"
+
+
+def test_project_detection_uses_git_or_workspace_root_when_available(tmp_path):
+    repo = tmp_path / "client-api"
+    (repo / ".git").mkdir(parents=True)
+    source = repo / "src" / "handler.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("print('ok')\n")
+
+    episodes = build_work_episodes([event(str(source))])
+
+    assert len(episodes) == 1
+    assert episodes[0].project == "client-api"
+
+
+def test_explicit_project_payload_still_has_priority():
+    episodes = build_work_episodes(
+        [
+            event_with_payload(
+                "/tmp/acme-api/src/handler.py",
+                {"project": "ExplicitProject"},
+            )
+        ]
+    )
+
+    assert len(episodes) == 1
+    assert episodes[0].project == "ExplicitProject"
