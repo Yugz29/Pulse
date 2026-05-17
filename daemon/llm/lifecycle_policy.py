@@ -10,7 +10,7 @@ HEAVY_LLM_PATHS = {
     "chat_tools",
     "daydream",
     "mcp_translation",
-    "resume_card",
+    "debug_resume_card_llm",
     "legacy_journal_repair",
 }
 

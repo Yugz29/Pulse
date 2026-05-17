@@ -571,7 +571,7 @@ class RuntimeOrchestrator:
             )
             context["prepared_reason"] = reason
             context["prepared_at"] = event_timestamp.isoformat()
-            card = generate_resume_card(context, llm=self.summary_llm)
+            card = generate_resume_card(context, llm=None)
             card_payload = card.to_event_payload()
             card_payload["prepared"] = True
             card_payload["prepared_at"] = event_timestamp.isoformat()
@@ -594,8 +594,6 @@ class RuntimeOrchestrator:
             )
         except Exception as exc:
             self.log.warning("prepared_resume_card skipped: %s", exc)
-        finally:
-            threading.Thread(target=self.llm_unload_background, daemon=True).start()
 
     def _should_prepare_resume_card(self, *, snapshot, memory_payload: dict) -> bool:
         active_project = snapshot.present.active_project or memory_payload.get("active_project")
@@ -680,13 +678,7 @@ class RuntimeOrchestrator:
                 sleep_minutes=sleep_minutes,
                 diff_summary=snapshot.last_diff_summary,
             )
-            should_wait_for_llm = (
-                self._resume_card_can_use_llm()
-                and (
-                    event_type in {None, "screen_unlocked", "resume_after_pause"}
-                    or event.type == "screen_unlocked"
-                )
-            )
+            should_wait_for_llm = False
             self._last_resume_card_at = event.timestamp
             if should_wait_for_llm:
                 self._schedule_resume_card_emit(
@@ -705,8 +697,7 @@ class RuntimeOrchestrator:
     def _emit_resume_card_now(self, *, context: dict, emitted_at: datetime, force_fallback: bool = False) -> None:
         if self._is_shutdown_requested():
             return
-        llm = None if force_fallback else self.summary_llm
-        card = generate_resume_card(context, llm=llm)
+        card = generate_resume_card(context, llm=None)
         self.scorer.bus.publish("resume_card", card.to_event_payload(), emitted_at)
         self.log.info(
             "resume_card emitted project=%s generated_by=%s confidence=%.2f fallback=%s",
@@ -724,9 +715,6 @@ class RuntimeOrchestrator:
                 self.log.debug("resume_card already pending — skip duplicate schedule")
                 return
             self._pending_resume_card = True
-
-        if wait_for_llm and not is_heavy_llm_autowarm_enabled():
-            self._schedule_heavy_llm_warmup(reason="resume_card")
 
         worker = self._start_critical_worker(
             target=self._emit_resume_card_background,

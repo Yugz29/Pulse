@@ -1043,7 +1043,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.llm_runtime.provider.assert_not_called()
         self.llm_runtime.warmup_background.assert_not_called()
 
-    def test_resume_card_planifiee_warm_ollama_meme_sans_autowarm(self):
+    def test_resume_card_planifiee_ne_warm_pas_ollama_par_defaut(self):
         with patch.dict("os.environ", {}, clear=True), \
              patch.object(self.orchestrator, "_start_critical_worker") as start_worker, \
              patch.object(self.orchestrator, "_schedule_heavy_llm_warmup") as warmup:
@@ -1053,7 +1053,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 wait_for_llm=True,
             )
 
-        warmup.assert_called_once_with(reason="resume_card")
+        warmup.assert_not_called()
         start_worker.assert_called_once()
 
     # ── Resume card ──────────────────────────────────────────────────────────
@@ -1072,12 +1072,13 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         with patch.object(self.orchestrator, "_schedule_resume_card_emit") as schedule:
             self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
 
-        schedule.assert_called_once()
-        kwargs = schedule.call_args.kwargs
-        self.assertEqual(kwargs["event_timestamp"], event.timestamp)
-        self.assertTrue(kwargs["wait_for_llm"])
-        self.assertEqual(kwargs["context"]["project"], "Pulse")
-        self.scorer.bus.publish.assert_not_called()
+        schedule.assert_not_called()
+        self.scorer.bus.publish.assert_called_once()
+        args = self.scorer.bus.publish.call_args.args
+        self.assertEqual(args[0], "resume_card")
+        self.assertEqual(args[1]["project"], "Pulse")
+        self.assertEqual(args[1]["generated_by"], "deterministic")
+        self.summary_llm.complete.assert_not_called()
 
     def test_resume_card_est_publiee_immediatement_sans_llm_utilisable(self):
         self.orchestrator.summary_llm = None

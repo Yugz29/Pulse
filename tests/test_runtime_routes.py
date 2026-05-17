@@ -158,6 +158,75 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["projects"][0]["name"], "Pulse")
         self.assertEqual(payload["current_window"]["id"], "ww-1")
 
+    def test_debug_resume_card_reste_deterministe_meme_si_llm_configure(self):
+        class CountingLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def complete(self, *args, **kwargs):
+                self.calls += 1
+                return "{}"
+
+        llm = CountingLLM()
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=MagicMock(),
+            store=self.store,
+            runtime_state=self.runtime_state,
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+            resume_card_llm=llm,
+        )
+        client = app.test_client()
+
+        response = client.post("/debug/resume-card", json={"sleep_minutes": 35})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["mode"], "deterministic")
+        self.assertEqual(payload["card"]["generated_by"], "deterministic")
+        self.assertEqual(llm.calls, 0)
+
+    def test_debug_resume_card_llm_appelle_llm_explicitement(self):
+        class CountingLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def complete(self, *args, **kwargs):
+                self.calls += 1
+                return (
+                    '{"title":"Reprise","summary":"Résumé LLM.",'
+                    '"last_objective":"Reprendre le contexte.",'
+                    '"next_action":"Continuer prudemment.","confidence":0.8}'
+                )
+
+        llm = CountingLLM()
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=MagicMock(),
+            store=self.store,
+            runtime_state=self.runtime_state,
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+            resume_card_llm=llm,
+        )
+        client = app.test_client()
+
+        response = client.post("/debug/resume-card/llm", json={"sleep_minutes": 35})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["mode"], "llm")
+        self.assertTrue(payload["debug"]["llm_called"])
+        self.assertEqual(payload["card"]["generated_by"], "llm")
+        self.assertEqual(llm.calls, 1)
+
     def test_debug_work_episodes_expose_les_episodes_du_jour(self):
         app = Flask(__name__)
         register_runtime_routes(
