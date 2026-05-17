@@ -922,9 +922,9 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         queue = LightweightLLMQueue()
         self.orchestrator.lightweight_queue = queue
         item = queue.enqueue(
-            kind="resume_card_summary",
+            kind="unknown_lightweight_kind",
             prompt="Polis cette reprise.",
-            metadata={"resume_card_id": "card-1"},
+            metadata={"item_id": "item-1"},
         )
 
         with patch("daemon.runtime_orchestrator.apply_validated_journal_summary") as apply_summary, \
@@ -939,13 +939,13 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertFalse(result["applied"])
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["error"], "unsupported_lightweight_kind")
-        self.assertEqual(result["kind"], "resume_card_summary")
+        self.assertEqual(result["kind"], "unknown_lightweight_kind")
         status = queue.status()
         self.assertEqual(status["queue"]["failed"], 1)
-        self.assertEqual(status["last_result"]["kind"], "resume_card_summary")
+        self.assertEqual(status["last_result"]["kind"], "unknown_lightweight_kind")
         self.assertEqual(status["last_result"]["status"], "failed")
         self.assertEqual(status["last_result"]["error"], "unsupported_lightweight_kind")
-        self.assertEqual(queue.snapshot()[0].metadata["resume_card_id"], "card-1")
+        self.assertEqual(queue.snapshot()[0].metadata["item_id"], "item-1")
         apply_summary.assert_not_called()
         mark_failed.assert_not_called()
         self.summary_llm.complete.assert_not_called()
@@ -1163,6 +1163,120 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(args[0], "resume_card")
         self.assertEqual(args[1]["project"], "Pulse")
         self.assertEqual(args[1]["generated_by"], "deterministic")
+        self.summary_llm.complete.assert_not_called()
+
+    def test_resume_card_enqueued_lightweight_summary_si_queue_presente(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+
+        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+
+        pending = queue.claim_next()
+        self.assertIsNotNone(pending)
+        self.assertEqual(pending.kind, "resume_card_summary")
+        self.assertEqual(pending.max_tokens, 220)
+        self.assertEqual(pending.metadata["project"], "Pulse")
+        self.assertTrue(pending.metadata["resume_card_id"])
+        self.assertIn("Réponds uniquement en JSON valide", pending.prompt)
+        self.assertIn("Fallback déterministe", pending.prompt)
+        self.summary_llm.complete.assert_not_called()
+
+    def test_resume_card_sans_queue_garde_fallback_deterministe(self):
+        self.orchestrator.lightweight_queue = None
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+
+        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+
+        self.scorer.bus.publish.assert_called_once()
+        payload = self.scorer.bus.publish.call_args.args[1]
+        self.assertEqual(payload["generated_by"], "deterministic")
+        self.summary_llm.complete.assert_not_called()
+
+    def test_resume_card_lightweight_result_publie_update_apple(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+        item = queue.claim_next()
+        first_payload = self.scorer.bus.publish.call_args_list[0].args[1]
+
+        result = self.orchestrator.apply_lightweight_llm_result(
+            request_id=item.id,
+            status="generated",
+            text=json.dumps({
+                "title": "Reprise de contexte",
+                "summary": "Tu reprenais l'orchestration runtime de Pulse.",
+                "last_objective": "Stabiliser la génération locale des cartes de reprise.",
+                "next_action": "Relancer les tests runtime ciblés.",
+                "confidence": 0.82,
+            }),
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["applied"])
+        self.assertEqual(self.scorer.bus.publish.call_count, 2)
+        updated_payload = self.scorer.bus.publish.call_args_list[1].args[1]
+        self.assertEqual(updated_payload["id"], first_payload["id"])
+        self.assertEqual(updated_payload["generated_by"], "apple_foundation")
+        self.assertEqual(updated_payload["summary"], "Tu reprenais l'orchestration runtime de Pulse.")
+        self.assertEqual(updated_payload["updated_from"], "apple_foundation")
+        self.summary_llm.complete.assert_not_called()
+
+    def test_resume_card_lightweight_result_invalide_est_ignore(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+        item = queue.claim_next()
+
+        result = self.orchestrator.apply_lightweight_llm_result(
+            request_id=item.id,
+            status="generated",
+            text="Pas du JSON",
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["applied"])
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"], "invalid_resume_card_summary")
+        self.scorer.bus.publish.assert_called_once()
         self.summary_llm.complete.assert_not_called()
 
     def test_resume_card_est_publiee_immediatement_sans_llm_utilisable(self):

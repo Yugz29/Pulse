@@ -4,7 +4,9 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from daemon.core.resume_card import (
+    apply_lightweight_resume_card_result,
     build_resume_card_context,
+    build_lightweight_resume_card_prompt,
     generate_resume_card,
     should_offer_resume_card,
 )
@@ -120,6 +122,61 @@ class TestResumeCard(unittest.TestCase):
         self.assertEqual(card.generated_by, "llm")
         self.assertEqual(card.next_action, "Relancer les tests ciblés.")
         self.assertEqual(card.confidence, 0.81)
+
+    def test_lightweight_resume_card_prompt_est_borne_et_json_only(self):
+        context = {
+            "project": "Pulse",
+            "probable_task": "coding",
+            "source_refs": ["present_state", "session_memory"],
+            "recent_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+        }
+        fallback = generate_resume_card(context)
+
+        prompt = build_lightweight_resume_card_prompt(context, fallback)
+
+        self.assertIn("Réponds uniquement en JSON valide", prompt)
+        self.assertIn("Fallback déterministe", prompt)
+        self.assertIn("runtime_orchestrator.py", prompt)
+        self.assertNotIn("/tmp/Pulse/daemon/runtime_orchestrator.py", prompt)
+
+    def test_lightweight_resume_card_result_valide_devient_apple_foundation(self):
+        context = {"project": "Pulse", "probable_task": "coding", "source_refs": ["present_state"]}
+        fallback = generate_resume_card(context)
+
+        card = apply_lightweight_resume_card_result(
+            context,
+            fallback,
+            json.dumps({
+                "title": "Reprise de contexte",
+                "summary": "Tu reprenais Pulse.",
+                "last_objective": "Stabiliser les cartes de reprise locales.",
+                "next_action": "Relancer les tests ciblés.",
+                "confidence": 0.84,
+            }),
+        )
+
+        self.assertIsNotNone(card)
+        self.assertEqual(card.id, fallback.id)
+        self.assertEqual(card.generated_by, "apple_foundation")
+        self.assertEqual(card.summary, "Tu reprenais Pulse.")
+
+    def test_lightweight_resume_card_result_rejette_echo_prompt(self):
+        context = {"project": "Pulse", "probable_task": "coding", "source_refs": ["present_state"]}
+        fallback = generate_resume_card(context)
+
+        card = apply_lightweight_resume_card_result(
+            context,
+            fallback,
+            json.dumps({
+                "title": "Reprise de contexte",
+                "summary": "Fallback déterministe: Tu étais sur Pulse.",
+                "last_objective": "Stabiliser les cartes de reprise locales.",
+                "next_action": "Relancer les tests ciblés.",
+                "confidence": 0.84,
+            }),
+        )
+
+        self.assertIsNone(card)
 
 
 if __name__ == "__main__":

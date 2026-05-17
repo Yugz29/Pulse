@@ -40,7 +40,9 @@ from daemon.core.git_diff import read_diff_summary, read_commit_diff_summary, ex
 from daemon.core.proposal_candidate_adapter import proposal_candidate_to_proposal
 from daemon.core.proposals import proposal_store
 from daemon.core.resume_card import (
+    apply_lightweight_resume_card_result,
     build_resume_card_context,
+    build_lightweight_resume_card_prompt,
     generate_resume_card,
     should_offer_resume_card,
 )
@@ -118,6 +120,7 @@ class RuntimeOrchestrator:
         self._pending_resume_card = False
         self._resume_card_wait_timeout_sec: float = 90.0
         self._resume_card_wait_poll_sec: float = 0.5
+        self._pending_resume_card_summaries: dict[str, dict] = {}
         self._periodic_sync_interval_sec: float = 30 * 60
         self._periodic_sync_stopped: bool = False
         self._periodic_sync_worker: threading.Thread | None = None
@@ -698,7 +701,9 @@ class RuntimeOrchestrator:
         if self._is_shutdown_requested():
             return
         card = generate_resume_card(context, llm=None)
-        self.scorer.bus.publish("resume_card", card.to_event_payload(), emitted_at)
+        payload = card.to_event_payload()
+        self.scorer.bus.publish("resume_card", payload, emitted_at)
+        self._enqueue_lightweight_resume_card_summary(card=card, context=context)
         self.log.info(
             "resume_card emitted project=%s generated_by=%s confidence=%.2f fallback=%s",
             card.project,
@@ -1532,6 +1537,7 @@ class RuntimeOrchestrator:
 
         handlers = {
             "journal_commit_summary": self._apply_lightweight_journal_commit_summary,
+            "resume_card_summary": self._apply_lightweight_resume_card_summary,
         }
         handler = handlers.get(item.kind)
         if handler is None:
@@ -1557,6 +1563,58 @@ class RuntimeOrchestrator:
             }
 
         return handler(item=item, status=status, text=text, error=error)
+
+    def _enqueue_lightweight_resume_card_summary(self, *, card, context: dict) -> None:
+        if self.lightweight_queue is None:
+            return
+        try:
+            prompt = build_lightweight_resume_card_prompt(context, card)
+            item = self.lightweight_queue.enqueue(
+                kind="resume_card_summary",
+                prompt=prompt,
+                max_tokens=220,
+                metadata={
+                    "resume_card_id": card.id,
+                    "project": card.project,
+                },
+            )
+            self._pending_resume_card_summaries[card.id] = {
+                "card": card,
+                "context": dict(context),
+            }
+            self.log.info(
+                "llm_request_terminal request_kind=resume_card_summary status=queued provider=apple_foundation request_id=%s project=%s",
+                item.id,
+                card.project,
+            )
+        except Exception as exc:
+            self.log.warning("lightweight resume card summary enqueue skipped: %s", exc)
+
+    def _apply_lightweight_resume_card_summary(self, *, item, status: str, text: str = "", error=None) -> dict:
+        resume_card_id = item.metadata.get("resume_card_id")
+        pending = self._pending_resume_card_summaries.get(resume_card_id)
+        if status != "generated":
+            self._pending_resume_card_summaries.pop(resume_card_id, None)
+            return {"ok": True, "applied": False, "status": "failed", "error": error}
+        if not pending:
+            return {"ok": True, "applied": False, "status": "failed", "error": "resume_card_not_found"}
+        updated = apply_lightweight_resume_card_result(
+            pending["context"],
+            pending["card"],
+            text,
+        )
+        if updated is None:
+            self._pending_resume_card_summaries.pop(resume_card_id, None)
+            return {"ok": True, "applied": False, "status": "failed", "error": "invalid_resume_card_summary"}
+        payload = updated.to_event_payload()
+        payload["updated_from"] = "apple_foundation"
+        self.scorer.bus.publish("resume_card", payload)
+        self._pending_resume_card_summaries.pop(resume_card_id, None)
+        self.log.info(
+            "llm_request_terminal request_kind=resume_card_summary status=success provider=apple_foundation project=%s",
+            updated.project,
+        )
+        return {"ok": True, "applied": True, "status": "generated"}
 
     def _apply_lightweight_journal_commit_summary(self, *, item, status: str, text: str = "", error=None) -> dict:
         report_ref = item.metadata.get("report_ref")

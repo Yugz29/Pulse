@@ -13,7 +13,7 @@ RESUME_PAUSE_THRESHOLD_MIN = 20
 RESUME_CARD_COOLDOWN_MIN = 120
 
 DisplaySize = Literal["compact", "standard", "expanded"]
-GeneratedBy = Literal["deterministic", "llm"]
+GeneratedBy = Literal["deterministic", "llm", "apple_foundation"]
 
 
 @dataclass(frozen=True)
@@ -124,6 +124,21 @@ def generate_resume_card(context: dict[str, Any], llm: Any = None) -> ResumeCard
         return _card_from_llm(context, deterministic, parsed)
     except Exception:
         return deterministic
+
+
+def build_lightweight_resume_card_prompt(context: dict[str, Any], fallback: ResumeCard) -> str:
+    return _llm_prompt(context, fallback)
+
+
+def apply_lightweight_resume_card_result(
+    context: dict[str, Any],
+    fallback: ResumeCard,
+    raw: str,
+) -> ResumeCard | None:
+    parsed, reason = _parse_lightweight_resume_card_with_reason(raw)
+    if parsed is None:
+        return None
+    return _card_from_llm(context, fallback, parsed, generated_by="apple_foundation")
 
 
 # --- Debug version for local routes ---
@@ -372,6 +387,8 @@ def _card_from_llm(
     context: dict[str, Any],
     fallback: ResumeCard,
     parsed: dict[str, Any],
+    *,
+    generated_by: GeneratedBy = "llm",
 ) -> ResumeCard:
     summary = _normalize_resume_card_terms(_clean(parsed.get("summary")) or fallback.summary)
     last_objective = _normalize_resume_card_terms(_clean(parsed.get("last_objective")) or fallback.last_objective)
@@ -387,7 +404,7 @@ def _card_from_llm(
         next_action=_limit_line(next_action, action_limit),
         confidence=max(0.0, min(float(parsed.get("confidence") or fallback.confidence), 0.95)),
         source_refs=list(context.get("source_refs") or fallback.source_refs),
-        generated_by="llm",
+        generated_by=generated_by,
         display_size=display_size,
         created_at=fallback.created_at,
     )
@@ -552,6 +569,32 @@ def _parse_llm_card_with_reason(raw: Any) -> tuple[dict[str, Any] | None, str | 
         value = _clean(parsed.get(key))
         if value and _is_low_value_llm_resume_line(value):
             return None, f"low_value_line:{key}"
+    return parsed, None
+
+
+def _parse_lightweight_resume_card_with_reason(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
+    parsed, reason = _parse_llm_card_with_reason(raw)
+    if parsed is None:
+        return None, reason
+    allowed = {"title", "summary", "last_objective", "next_action", "confidence"}
+    extra = set(parsed.keys()) - allowed
+    if extra:
+        return None, "unexpected_keys"
+    for key in ("title", "summary", "last_objective", "next_action"):
+        value = _clean(parsed.get(key))
+        if not value:
+            continue
+        lowered = value.lower()
+        if any(marker in lowered for marker in (
+            "contexte de reprise priorisé",
+            "fallback déterministe",
+            "fallback deterministe",
+            "title:",
+            "summary:",
+            "last_objective:",
+            "next_action:",
+        )):
+            return None, f"prompt_echo:{key}"
     return parsed, None
 
 
