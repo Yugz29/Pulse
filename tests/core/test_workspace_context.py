@@ -58,6 +58,18 @@ class TestWorkspaceContext(unittest.TestCase):
         self.assertEqual(find_workspace_root(cwd), Path("/tmp/work/client-api"))
         self.assertEqual(extract_project_name(cwd), "client-api")
 
+    def test_terminal_cwd_inside_tools_uses_parent_project(self):
+        cwd = "/tmp/work/AlphaApp/tools"
+
+        self.assertEqual(find_workspace_root(cwd), Path("/tmp/work/AlphaApp"))
+        self.assertEqual(extract_project_name(cwd), "AlphaApp")
+
+    def test_terminal_cwd_inside_scripts_or_bin_uses_parent_project(self):
+        for cwd in ("/tmp/work/AlphaApp/scripts", "/tmp/work/AlphaApp/bin"):
+            with self.subTest(cwd=cwd):
+                self.assertEqual(find_workspace_root(cwd), Path("/tmp/work/AlphaApp"))
+                self.assertEqual(extract_project_name(cwd), "AlphaApp")
+
     def test_ambiguous_short_path_returns_none(self):
         for file_path in ("handler.py", "/tmp/handler.py", "/src/handler.py"):
             with self.subTest(file_path=file_path):

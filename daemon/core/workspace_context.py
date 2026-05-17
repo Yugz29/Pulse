@@ -16,6 +16,20 @@ _STANDARD_PROJECT_CHILD_DIRS = {
     "packages",
 }
 
+_TECHNICAL_CWD_DIRS = {
+    ".venv",
+    "bin",
+    "build",
+    "dist",
+    "node_modules",
+    "scripts",
+    "temp",
+    "tmp",
+    "tools",
+    "venv",
+    * _STANDARD_PROJECT_CHILD_DIRS,
+}
+
 _PROJECT_ROOT_FILENAMES = {
     "package.json",
     "pyproject.toml",
@@ -100,6 +114,9 @@ def _directory_like_workspace_root(path: Path) -> Optional[Path]:
         return None
     if len(path.parts) < 3:
         return None
+    if path.name.lower() in _TECHNICAL_CWD_DIRS:
+        parent = path.parent
+        return parent if _is_plausible_project_root(parent) else None
     return path if _is_plausible_project_root(path) else None
 
 
