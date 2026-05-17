@@ -195,19 +195,52 @@ def test_terminal_testing_command_is_strong_work_heartbeat():
     assert work_heartbeat_strength(event) == "strong"
 
 
-def test_terminal_project_command_without_category_is_strong_work_heartbeat():
+def test_terminal_project_without_strong_category_is_weak():
     event = {
         "type": "terminal_command_finished",
         "payload": {
-            "terminal_command": "curl -s http://127.0.0.1:8765/state",
-            "terminal_project": "Pulse",
+            "terminal_command": "ls",
+            "terminal_command_base": "ls",
+            "terminal_project": "acme-api",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "weak"
+    assert heartbeat.reason == "terminal_project_context"
+
+
+def test_testing_category_remains_strong():
+    event = {
+        "type": "terminal_command_finished",
+        "payload": {
+            "terminal_action_category": "testing",
+            "terminal_command": "pytest",
+            "terminal_command_base": "pytest",
         },
     }
 
     heartbeat = classify_work_heartbeat(event)
 
     assert heartbeat.strength == "strong"
-    assert heartbeat.reason == "terminal_project_command"
+    assert heartbeat.reason == "terminal_testing"
+
+
+def test_build_category_remains_strong():
+    event = {
+        "type": "terminal_command_finished",
+        "payload": {
+            "terminal_action_category": "build",
+            "terminal_command": "npm run build",
+            "terminal_command_base": "npm",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "strong"
+    assert heartbeat.reason == "terminal_build"
 
 
 def test_git_status_is_weak_work_heartbeat():
@@ -217,6 +250,22 @@ def test_git_status_is_weak_work_heartbeat():
             "terminal_command": "git status",
             "terminal_command_base": "git",
             "terminal_project": "Pulse",
+        },
+    }
+
+    heartbeat = classify_work_heartbeat(event)
+
+    assert heartbeat.strength == "weak"
+    assert heartbeat.reason == "terminal_git_status"
+
+
+def test_passive_git_command_is_weak_even_with_project():
+    event = {
+        "type": "terminal_command_finished",
+        "payload": {
+            "terminal_command": "git status",
+            "terminal_command_base": "git",
+            "terminal_project": "acme-api",
         },
     }
 
@@ -246,7 +295,7 @@ def test_read_only_git_variants_are_weak_work_heartbeats():
         assert heartbeat.strength == "weak"
 
 
-def test_git_commit_is_strong_work_heartbeat():
+def test_mutating_git_command_is_strong():
     event = {
         "type": "terminal_command_finished",
         "payload": {

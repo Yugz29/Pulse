@@ -160,7 +160,7 @@ def _classify_terminal_finished(payload: Mapping[str, Any]) -> WorkHeartbeat:
     if category in STRONG_TERMINAL_CATEGORIES:
         return WorkHeartbeat("strong", f"terminal_{category}")
     if project:
-        return WorkHeartbeat("strong", "terminal_project_command")
+        return WorkHeartbeat("weak", "terminal_project_context")
     if cwd and _looks_like_project_path(cwd):
         return WorkHeartbeat("weak", "terminal_project_cwd")
     return WorkHeartbeat("weak", "terminal_command")
