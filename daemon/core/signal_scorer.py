@@ -13,6 +13,7 @@ from daemon.core.bootstrap_heuristics import (
     BOOTSTRAP_WRITING_APPS,
 )
 
+from .app_classifier import classify_app
 from .event_bus import DEFAULT_EVENT_BUS_SIZE, EventBus
 from .file_classifier import classify_file_type, is_pulse_internal_path
 from .git_diff import extract_file_names_from_diff_summary
@@ -172,6 +173,13 @@ class SignalScorer:
             if file_from_title:
                 active_file = file_from_title
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
+        latest_scoring_app = recent_apps[-1] if recent_apps else None
+        latest_scoring_app_bundle_id = self._latest_app_bundle_id(
+            app_events,
+            app_name=latest_scoring_app,
+            now=now,
+            minutes=30,
+        )
         active_app_duration_sec = self._active_app_duration_sec(app_events, now)
         active_window_title_duration_sec = self._active_window_title_duration_sec(recent, now)
         app_switch_count_10m = self._app_switch_count_10m(app_events, now)
@@ -215,6 +223,7 @@ class SignalScorer:
             active_project=active_project,
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
+            latest_app_bundle_id=latest_scoring_app_bundle_id,
             clipboard_context=clipboard_context,
             mcp_signal=mcp_signal,
             terminal_signal=terminal_signal,
@@ -380,6 +389,26 @@ class SignalScorer:
         if event is None:
             return None
         return event.payload.get("app_name")
+
+    def _latest_app_bundle_id(
+        self,
+        app_events: list,
+        *,
+        app_name: Optional[str],
+        now: datetime,
+        minutes: int,
+    ) -> Optional[str]:
+        if not app_name:
+            return None
+        cutoff = now - timedelta(minutes=minutes)
+        event = self._latest_event(
+            app_events,
+            predicate=lambda item: item.payload.get("app_name") == app_name,
+            cutoff=cutoff,
+        )
+        if event is None:
+            return None
+        return event.payload.get("bundle_id")
 
     def _should_keep_project_hint(
         self,
@@ -584,6 +613,7 @@ class SignalScorer:
         active_project: Optional[str],
         recent_apps: List[str],
         latest_active_app: Optional[str],
+        latest_app_bundle_id: Optional[str],
         clipboard_context: Optional[str],
         mcp_signal: Optional[dict],
         terminal_signal: Optional[dict],
@@ -600,7 +630,8 @@ class SignalScorer:
         docs_count   = file_type_mix.get("docs", 0)
         config_count = file_type_mix.get("config", 0)
 
-        if latest_app in self.DEV_APPS and edited_file_count >= 1:
+        latest_app_classification = classify_app(latest_app, bundle_id=latest_app_bundle_id)
+        if latest_app_classification.role == "dev_tool" and edited_file_count >= 1:
             active.add("dev_app_with_edit")
 
         # source_files_2plus : 2+ fichiers source/test DISTINCTS modifiés.
@@ -727,6 +758,7 @@ class SignalScorer:
         active_project: Optional[str],
         recent_apps: List[str],
         latest_active_app: Optional[str],
+        latest_app_bundle_id: Optional[str],
         clipboard_context: Optional[str],
         mcp_signal: Optional[dict],
         terminal_signal: Optional[dict],
@@ -741,6 +773,7 @@ class SignalScorer:
             active_project=active_project,
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
+            latest_app_bundle_id=latest_app_bundle_id,
             clipboard_context=clipboard_context,
             mcp_signal=mcp_signal,
             terminal_signal=terminal_signal,

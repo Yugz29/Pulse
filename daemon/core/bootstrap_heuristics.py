@@ -61,6 +61,15 @@ BOOTSTRAP_TERMINAL_APPS = frozenset({
     "iTerm2",
 })
 
+BOOTSTRAP_APP_BUNDLE_ROLES: dict[str, str] = {
+    "com.apple.Safari": "browser",
+    "com.apple.Terminal": "terminal",
+    "com.apple.dt.Xcode": "dev_tool",
+    "com.google.Chrome": "browser",
+    "com.microsoft.VSCode": "dev_tool",
+    "dev.pulse.test.UnknownIDE": "dev_tool",
+}
+
 BOOTSTRAP_SELF_APPS = frozenset({
     "Pulse",
     "PulseApp",

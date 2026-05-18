@@ -348,6 +348,61 @@ class TestSignalScorer(unittest.TestCase):
         self.assertIsNone(signals.active_project)
         self.assertIsNone(signals.active_file)
 
+    def test_unknown_app_name_with_known_dev_bundle_triggers_dev_app_with_edit(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomIDE",
+                "bundle_id": "dev.pulse.test.UnknownIDE",
+            },
+        )
+        self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
+
+        signals = self.scorer.compute()
+        active = self.scorer._collect_active_signals(
+            active_project=signals.active_project,
+            recent_apps=signals.recent_apps,
+            latest_active_app="RandomIDE",
+            latest_app_bundle_id="dev.pulse.test.UnknownIDE",
+            clipboard_context=None,
+            mcp_signal=None,
+            terminal_signal=None,
+            friction_score=signals.friction_score,
+            edited_file_count=signals.edited_file_count_10m,
+            file_type_mix=signals.file_type_mix_10m,
+            work_pattern_candidate=signals.work_pattern_candidate,
+        )
+
+        self.assertIn("dev_app_with_edit", active)
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_unknown_app_name_without_known_bundle_does_not_trigger_dev_app_with_edit_by_app(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomIDE",
+                "bundle_id": "com.example.unknown",
+            },
+        )
+        self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
+
+        signals = self.scorer.compute()
+        active = self.scorer._collect_active_signals(
+            active_project=signals.active_project,
+            recent_apps=signals.recent_apps,
+            latest_active_app="RandomIDE",
+            latest_app_bundle_id="com.example.unknown",
+            clipboard_context=None,
+            mcp_signal=None,
+            terminal_signal=None,
+            friction_score=signals.friction_score,
+            edited_file_count=signals.edited_file_count_10m,
+            file_type_mix=signals.file_type_mix_10m,
+            work_pattern_candidate=signals.work_pattern_candidate,
+        )
+
+        self.assertNotIn("dev_app_with_edit", active)
+
     def test_general_reste_fallback_si_activite_est_trop_faible(self):
         self._push("app_activated", {"app_name": "Notes"})
 

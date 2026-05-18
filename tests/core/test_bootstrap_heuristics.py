@@ -1,5 +1,6 @@
 from daemon.core.bootstrap_heuristics import (
     BOOTSTRAP_AI_APPS,
+    BOOTSTRAP_APP_BUNDLE_ROLES,
     BOOTSTRAP_DEV_APPS,
     BOOTSTRAP_NON_WORK_TITLE_HINTS,
     BOOTSTRAP_SELF_APPS,
@@ -40,6 +41,15 @@ def test_bootstrap_work_dev_and_writing_apps_are_available_to_scorer_and_heartbe
 def test_bootstrap_self_apps_are_centralized_for_signal_scorer():
     assert {"Pulse", "PulseApp"}.issubset(BOOTSTRAP_SELF_APPS)
     assert SignalScorer.SELF_APPS is BOOTSTRAP_SELF_APPS
+
+
+def test_bootstrap_app_bundle_roles_are_available_for_classifier():
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["com.microsoft.VSCode"] == "dev_tool"
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["com.apple.dt.Xcode"] == "dev_tool"
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["com.apple.Terminal"] == "terminal"
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["com.google.Chrome"] == "browser"
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["com.apple.Safari"] == "browser"
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.UnknownIDE"] == "dev_tool"
 
 
 def test_bootstrap_non_work_title_hints_are_shared_with_work_heartbeat():
