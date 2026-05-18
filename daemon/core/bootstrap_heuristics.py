@@ -72,6 +72,10 @@ BOOTSTRAP_APP_BUNDLE_ROLES: dict[str, str] = {
     "dev.pulse.test.ToolAssistant": "ai_assistant",
 }
 
+BOOTSTRAP_SYSTEM_CATEGORY_ROLES: dict[str, str] = {
+    "public.app-category.developer-tools": "dev_tool",
+}
+
 BOOTSTRAP_SELF_APPS = frozenset({
     "Pulse",
     "PulseApp",

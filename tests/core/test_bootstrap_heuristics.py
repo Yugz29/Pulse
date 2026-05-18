@@ -4,6 +4,7 @@ from daemon.core.bootstrap_heuristics import (
     BOOTSTRAP_DEV_APPS,
     BOOTSTRAP_NON_WORK_TITLE_HINTS,
     BOOTSTRAP_SELF_APPS,
+    BOOTSTRAP_SYSTEM_CATEGORY_ROLES,
     BOOTSTRAP_WORK_APPS,
     BOOTSTRAP_WRITING_APPS,
 )
@@ -48,6 +49,12 @@ def test_bootstrap_app_bundle_roles_are_available_for_classifier():
     assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.UnknownAI"] == "ai_assistant"
     assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.UnknownIDE"] == "dev_tool"
     assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.ToolAssistant"] == "ai_assistant"
+
+
+def test_bootstrap_system_category_roles_are_minimal_and_prudent():
+    assert BOOTSTRAP_SYSTEM_CATEGORY_ROLES == {
+        "public.app-category.developer-tools": "dev_tool",
+    }
 
 
 def test_bootstrap_non_work_title_hints_are_shared_with_work_heartbeat():
