@@ -49,6 +49,7 @@ def test_bootstrap_app_bundle_roles_are_available_for_classifier():
     assert BOOTSTRAP_APP_BUNDLE_ROLES["com.apple.Terminal"] == "terminal"
     assert BOOTSTRAP_APP_BUNDLE_ROLES["com.google.Chrome"] == "browser"
     assert BOOTSTRAP_APP_BUNDLE_ROLES["com.apple.Safari"] == "browser"
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.UnknownAI"] == "ai_assistant"
     assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.UnknownIDE"] == "dev_tool"
 
 

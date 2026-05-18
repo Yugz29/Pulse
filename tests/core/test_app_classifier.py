@@ -28,6 +28,16 @@ def test_classify_app_unknown_when_no_match():
     assert classification.confidence == 0.0
 
 
+def test_classify_app_supports_ai_assistant_bundle_fixture():
+    classification = classify_app(
+        "RandomAssistant",
+        bundle_id="dev.pulse.test.UnknownAI",
+    )
+
+    assert classification.role == "ai_assistant"
+    assert classification.role_source == "bootstrap_bundle"
+
+
 def test_bundle_id_has_priority_over_app_name():
     classification = classify_app(
         "Safari",

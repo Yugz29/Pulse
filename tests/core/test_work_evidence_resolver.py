@@ -35,6 +35,37 @@ def test_resolver_ai_app_alone_does_not_attribute_project():
     assert "ai_app_only" in resolution.warnings
 
 
+def test_ai_support_app_recognized_by_bootstrap_name():
+    resolution = resolve_work_evidence(WorkEvidenceInput(active_app="ChatGPT"))
+
+    assert resolution.support_apps == ("ChatGPT",)
+    assert "ai_app_only" in resolution.warnings
+
+
+def test_ai_support_app_recognized_by_bundle_id():
+    resolution = resolve_work_evidence(
+        WorkEvidenceInput(
+            active_app="RandomAssistant",
+            active_app_bundle_id="dev.pulse.test.UnknownAI",
+        )
+    )
+
+    assert resolution.support_apps == ("RandomAssistant",)
+    assert "ai_app_only" in resolution.warnings
+
+
+def test_unknown_app_without_ai_bundle_is_not_support_app():
+    resolution = resolve_work_evidence(
+        WorkEvidenceInput(
+            active_app="RandomAssistant",
+            active_app_bundle_id="com.example.random",
+        )
+    )
+
+    assert resolution.support_apps == ()
+    assert "ai_app_only" not in resolution.warnings
+
+
 def test_resolver_ai_apps_are_support_when_terminal_and_intent_correlate():
     resolution = resolve_work_evidence(
         WorkEvidenceInput(

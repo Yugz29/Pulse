@@ -67,6 +67,7 @@ BOOTSTRAP_APP_BUNDLE_ROLES: dict[str, str] = {
     "com.apple.dt.Xcode": "dev_tool",
     "com.google.Chrome": "browser",
     "com.microsoft.VSCode": "dev_tool",
+    "dev.pulse.test.UnknownAI": "ai_assistant",
     "dev.pulse.test.UnknownIDE": "dev_tool",
 }
 

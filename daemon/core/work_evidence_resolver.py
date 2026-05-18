@@ -4,11 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from daemon.core.bootstrap_heuristics import BOOTSTRAP_AI_APPS
+from daemon.core.app_classifier import classify_app
 from daemon.core.workspace_context import extract_project_name
-
-
-_AI_APPS = BOOTSTRAP_AI_APPS
 
 
 @dataclass(frozen=True)
@@ -21,8 +18,10 @@ class WorkEvidenceInput:
     terminal_project: str | None = None
     terminal_command_category: str | None = None
     active_app: str | None = None
+    active_app_bundle_id: str | None = None
     window_title: str | None = None
     recent_apps: tuple[str, ...] = ()
+    recent_app_bundle_ids: tuple[str | None, ...] = ()
     work_intent_project: str | None = None
     commit_repo_root: str | None = None
     commit_files: tuple[str, ...] = ()
@@ -42,7 +41,12 @@ class WorkEvidenceResolution:
 def resolve_work_evidence(input: WorkEvidenceInput) -> WorkEvidenceResolution:
     evidence: list[str] = []
     warnings: list[str] = []
-    support_apps = _support_apps(input.recent_apps, input.active_app)
+    support_apps = _support_apps(
+        input.recent_apps,
+        input.active_app,
+        recent_app_bundle_ids=input.recent_app_bundle_ids,
+        active_app_bundle_id=input.active_app_bundle_id,
+    )
 
     active_project = _clean(input.active_project)
     if active_project:
@@ -163,11 +167,26 @@ def _majority(values: Any) -> str | None:
     return project if count > len(items) / 2 else None
 
 
-def _support_apps(recent_apps: tuple[str, ...], active_app: str | None) -> tuple[str, ...]:
-    apps = [*recent_apps]
+def _support_apps(
+    recent_apps: tuple[str, ...],
+    active_app: str | None,
+    *,
+    recent_app_bundle_ids: tuple[str | None, ...] = (),
+    active_app_bundle_id: str | None = None,
+) -> tuple[str, ...]:
+    apps: list[tuple[str, str | None]] = [
+        (app, recent_app_bundle_ids[index] if index < len(recent_app_bundle_ids) else None)
+        for index, app in enumerate(recent_apps)
+    ]
     if active_app:
-        apps.append(active_app)
-    return tuple(_dedupe(app for app in apps if app in _AI_APPS))
+        apps.append((active_app, active_app_bundle_id))
+    return tuple(
+        _dedupe(
+            app
+            for app, bundle_id in apps
+            if classify_app(app, bundle_id=bundle_id).role == "ai_assistant"
+        )
+    )
 
 
 def _work_intent_matches(work_intent_project: str | None, project: str | None) -> bool:
