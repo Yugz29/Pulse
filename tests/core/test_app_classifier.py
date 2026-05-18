@@ -38,6 +38,16 @@ def test_classify_app_supports_ai_assistant_bundle_fixture():
     assert classification.role_source == "bootstrap_bundle"
 
 
+def test_classify_app_supports_tool_assistant_bundle_fixture_as_ai_role():
+    classification = classify_app(
+        "RandomToolAssistant",
+        bundle_id="dev.pulse.test.ToolAssistant",
+    )
+
+    assert classification.role == "ai_assistant"
+    assert classification.role_source == "bootstrap_bundle"
+
+
 def test_bundle_id_has_priority_over_app_name():
     classification = classify_app(
         "Safari",

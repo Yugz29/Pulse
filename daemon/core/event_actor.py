@@ -17,6 +17,7 @@ from enum import Enum
 from typing import Optional
 
 from daemon.core.bootstrap_heuristics import BOOTSTRAP_AI_APPS, BOOTSTRAP_DEV_APPS
+from daemon.core.app_classifier import classify_app
 
 # ── Types publics ─────────────────────────────────────────────────────────────
 
@@ -91,6 +92,9 @@ _TOOL_ASSISTED_APPS = frozenset(
     | (BOOTSTRAP_AI_APPS & {"Claude", "Codex", "Copilot"})
     | (BOOTSTRAP_DEV_APPS & {"Cursor"})
 )
+_TOOL_ASSISTED_APP_BUNDLES = frozenset({
+    "dev.pulse.test.ToolAssistant",
+})
 
 _BURST_FILE_COUNT  = 4    # fichiers distincts dans la fenêtre burst
 _BURST_WINDOW_MS   = 600  # millisecondes
@@ -165,6 +169,7 @@ class EventActorClassifier:
         payload: dict,
         *,
         latest_app: Optional[str],
+        latest_app_bundle_id: Optional[str] = None,
         recent_events: list,
         now: Optional[datetime] = None,
     ) -> ActorAttribution:
@@ -199,7 +204,7 @@ class EventActorClassifier:
         # +2.5 quand l'app est clairement un outil LLM (Codex, Cursor...)
         # assez fort pour depasser le baseline user (1.0) et tagger
         # les fichiers comme tool_assisted, evitant la pollution du projet actif.
-        if latest_app in _TOOL_ASSISTED_APPS:
+        if self._is_tool_assisted_app(latest_app, latest_app_bundle_id):
             scores.tool_assisted += 2.5
 
         actor, confidence, automation_score = scores.resolve()
@@ -209,6 +214,20 @@ class EventActorClassifier:
 
     def _is_system_path(self, path: str) -> bool:
         return any(seg in path for seg in _SYSTEM_PATH_SEGMENTS)
+
+    def _is_tool_assisted_app(
+        self,
+        app_name: Optional[str],
+        bundle_id: Optional[str],
+    ) -> bool:
+        if app_name in _TOOL_ASSISTED_APPS:
+            return True
+        classification = classify_app(app_name, bundle_id=bundle_id)
+        return (
+            bool(bundle_id)
+            and bundle_id in _TOOL_ASSISTED_APP_BUNDLES
+            and classification.role in {"ai_assistant", "dev_tool"}
+        )
 
     def _is_rapid_repeat(self, path: str, now: datetime, recent_events: list) -> bool:
         if not path:

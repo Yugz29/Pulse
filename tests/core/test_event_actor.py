@@ -91,6 +91,57 @@ class TestEventActorClassifier(unittest.TestCase):
         self.assertEqual(result.actor, EventActor.TOOL_ASSISTED)
         self.assertGreater(result.automation_score, 0.5)
 
+    def test_tool_assisted_app_recognized_by_existing_name(self):
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": "/tmp/acme-api/src/main.py"},
+            latest_app="Codex",
+            recent_events=[],
+            now=self.now,
+        )
+
+        self.assertEqual(result.actor, EventActor.TOOL_ASSISTED)
+        self.assertGreater(result.automation_score, 0.5)
+
+    def test_ai_support_app_is_not_automatically_tool_assisted(self):
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": "/tmp/acme-api/src/main.py"},
+            latest_app="RandomAssistant",
+            latest_app_bundle_id="dev.pulse.test.UnknownAI",
+            recent_events=[],
+            now=self.now,
+        )
+
+        self.assertNotEqual(result.actor, EventActor.TOOL_ASSISTED)
+        self.assertLessEqual(result.automation_score, 0.5)
+
+    def test_tool_assisted_bundle_can_mark_tool_assisted_if_supported(self):
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": "/tmp/acme-api/src/main.py"},
+            latest_app="RandomToolAssistant",
+            latest_app_bundle_id="dev.pulse.test.ToolAssistant",
+            recent_events=[],
+            now=self.now,
+        )
+
+        self.assertEqual(result.actor, EventActor.TOOL_ASSISTED)
+        self.assertGreater(result.automation_score, 0.5)
+
+    def test_user_file_event_stays_user_when_only_regular_dev_tool(self):
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": "/tmp/acme-api/src/main.py"},
+            latest_app="RandomIDE",
+            latest_app_bundle_id="dev.pulse.test.UnknownIDE",
+            recent_events=[],
+            now=self.now,
+        )
+
+        self.assertNotEqual(result.actor, EventActor.TOOL_ASSISTED)
+        self.assertLessEqual(result.automation_score, 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

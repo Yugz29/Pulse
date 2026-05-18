@@ -47,6 +47,7 @@ def test_bootstrap_app_bundle_roles_are_available_for_classifier():
     assert BOOTSTRAP_APP_BUNDLE_ROLES["com.apple.Safari"] == "browser"
     assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.UnknownAI"] == "ai_assistant"
     assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.UnknownIDE"] == "dev_tool"
+    assert BOOTSTRAP_APP_BUNDLE_ROLES["dev.pulse.test.ToolAssistant"] == "ai_assistant"
 
 
 def test_bootstrap_non_work_title_hints_are_shared_with_work_heartbeat():

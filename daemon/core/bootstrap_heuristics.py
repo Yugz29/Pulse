@@ -69,6 +69,7 @@ BOOTSTRAP_APP_BUNDLE_ROLES: dict[str, str] = {
     "com.microsoft.VSCode": "dev_tool",
     "dev.pulse.test.UnknownAI": "ai_assistant",
     "dev.pulse.test.UnknownIDE": "dev_tool",
+    "dev.pulse.test.ToolAssistant": "ai_assistant",
 }
 
 BOOTSTRAP_SELF_APPS = frozenset({
