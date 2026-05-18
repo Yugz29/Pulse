@@ -116,11 +116,17 @@ def build_work_context_card(
                 getattr(present, "active_app", None),
                 getattr(signals, "active_app", None),
             ),
+            active_app_bundle_id=_first_non_empty(
+                getattr(current_context, "active_app_bundle_id", None),
+                getattr(present, "active_app_bundle_id", None),
+                getattr(signals, "active_app_bundle_id", None),
+            ),
             window_title=_first_non_empty(
                 getattr(signals, "window_title", None),
                 getattr(current_context, "window_title", None),
             ),
             recent_apps=tuple(str(app) for app in getattr(signals, "recent_apps", []) or [] if str(app).strip()),
+            recent_app_bundle_ids=_recent_app_bundle_ids(current_context=current_context, signals=signals),
             work_intent_project=(work_intent or {}).get("project") if work_intent else None,
         )
     )
@@ -596,6 +602,16 @@ def _tuple_values(*values: Any) -> tuple[str, ...]:
         if text and text not in result:
             result.append(text)
     return tuple(result)
+
+
+def _recent_app_bundle_ids(*, current_context: Any, signals: Any) -> tuple[str | None, ...]:
+    values = getattr(signals, "recent_app_bundle_ids", None)
+    if values is None:
+        signal_summary = getattr(current_context, "signal_summary", None)
+        values = getattr(signal_summary, "recent_app_bundle_ids", None)
+    if not isinstance(values, Iterable) or isinstance(values, (str, bytes)):
+        return ()
+    return tuple(str(value).strip() if str(value or "").strip() else None for value in values)
 
 
 def _clamp_confidence(value: Optional[float]) -> float:

@@ -60,6 +60,8 @@ class Signals:
     terminal_success: Optional[bool] = None
     window_title: Optional[str] = None
     window_title_app: Optional[str] = None
+    active_app_bundle_id: Optional[str] = None
+    recent_app_bundle_ids: List[Optional[str]] = field(default_factory=list)
     active_app_duration_sec: Optional[int] = None
     active_window_title_duration_sec: Optional[int] = None
     app_switch_count_10m: int = 0
@@ -155,6 +157,7 @@ class SignalScorer:
 
         app_events = [e for e in recent if e.type in {"app_activated", "app_switch"}]
         recent_apps = self._recent_apps(app_events, now)
+        recent_app_bundle_ids = self._recent_app_bundle_ids(app_events, recent_apps, now)
 
         clipboard_events = [
             e for e in recent if e.type in {"clipboard_updated", "clipboard_update"}
@@ -173,6 +176,12 @@ class SignalScorer:
             if file_from_title:
                 active_file = file_from_title
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
+        latest_active_app_bundle_id = self._latest_app_bundle_id(
+            app_events,
+            app_name=latest_active_app,
+            now=now,
+            minutes=5,
+        )
         latest_scoring_app = recent_apps[-1] if recent_apps else None
         latest_scoring_app_bundle_id = self._latest_app_bundle_id(
             app_events,
@@ -282,6 +291,8 @@ class SignalScorer:
             terminal_success=(terminal_signal or {}).get("terminal_success"),
             window_title=(window_title_signal or {}).get("title"),
             window_title_app=(window_title_signal or {}).get("app_name"),
+            active_app_bundle_id=latest_active_app_bundle_id,
+            recent_app_bundle_ids=recent_app_bundle_ids,
             active_app_duration_sec=active_app_duration_sec,
             active_window_title_duration_sec=active_window_title_duration_sec,
             app_switch_count_10m=app_switch_count_10m,
@@ -409,6 +420,22 @@ class SignalScorer:
         if event is None:
             return None
         return event.payload.get("bundle_id")
+
+    def _recent_app_bundle_ids(
+        self,
+        app_events: list,
+        recent_apps: List[str],
+        now: datetime,
+    ) -> List[Optional[str]]:
+        return [
+            self._latest_app_bundle_id(
+                app_events,
+                app_name=app_name,
+                now=now,
+                minutes=30,
+            )
+            for app_name in recent_apps
+        ]
 
     def _should_keep_project_hint(
         self,

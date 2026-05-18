@@ -308,6 +308,55 @@ def test_build_work_context_card_exposes_project_confidence_separately_from_task
     assert str(card.to_dict()).find("/tmp/workspace/AlphaApp") == -1
 
 
+def test_work_context_card_recognizes_ai_support_from_active_app_bundle_id():
+    current_context = SimpleNamespace(
+        active_project="AlphaApp",
+        activity_level="editing",
+        probable_task="coding",
+        task_confidence=0.7,
+        active_app="RandomAssistant",
+        active_app_bundle_id="dev.pulse.test.UnknownAI",
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.support_apps == ("RandomAssistant",)
+    assert "Apps IA utilisées comme support" in card.project_evidence
+
+
+def test_work_context_card_aligns_recent_apps_with_recent_app_bundle_ids():
+    current_context = SimpleNamespace(
+        active_project="AlphaApp",
+        activity_level="editing",
+        probable_task="coding",
+        task_confidence=0.7,
+        active_app="Code",
+    )
+    signals = SimpleNamespace(
+        recent_apps=["RandomAssistant", "Code"],
+        recent_app_bundle_ids=["dev.pulse.test.UnknownAI", None],
+        window_title=None,
+    )
+
+    card = build_work_context_card(current_context, signals=signals)
+
+    assert card.support_apps == ("RandomAssistant",)
+
+
+def test_work_context_card_preserves_ai_support_without_bundle_id_by_name():
+    current_context = SimpleNamespace(
+        active_project="AlphaApp",
+        activity_level="editing",
+        probable_task="coding",
+        task_confidence=0.7,
+        active_app="ChatGPT",
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.support_apps == ("ChatGPT",)
+
+
 # Additional tests for project_hint logic
 
 def test_build_work_context_card_adds_weak_project_hint_from_window_title_when_project_unknown():

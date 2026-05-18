@@ -1448,8 +1448,13 @@ def _infer_project_from_session_evidence(session_data: Dict[str, Any]) -> tuple[
             terminal_project=_normalize_project_name(session_data.get("terminal_project")),
             terminal_command_category=session_data.get("terminal_command_category"),
             active_app=session_data.get("active_app"),
+            active_app_bundle_id=session_data.get("active_app_bundle_id"),
             window_title=session_data.get("active_window_title") or session_data.get("window_title"),
             recent_apps=tuple(_compact_strings(session_data.get("recent_apps", []))),
+            recent_app_bundle_ids=tuple(
+                str(value).strip() or None
+                for value in (session_data.get("recent_app_bundle_ids") or [])
+            ),
             work_intent_project=_work_intent_project(session_data),
             commit_repo_root=session_data.get("commit_repo_root"),
             commit_files=tuple(_clean_file_paths(session_data.get("commit_files", []))),

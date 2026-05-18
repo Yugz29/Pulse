@@ -66,6 +66,18 @@ def test_unknown_app_without_ai_bundle_is_not_support_app():
     assert "ai_app_only" not in resolution.warnings
 
 
+def test_recent_apps_and_bundle_ids_stay_aligned_for_support_apps():
+    resolution = resolve_work_evidence(
+        WorkEvidenceInput(
+            recent_apps=("RandomAssistant", "Code"),
+            recent_app_bundle_ids=("dev.pulse.test.UnknownAI", None),
+        )
+    )
+
+    assert resolution.support_apps == ("RandomAssistant",)
+    assert "ai_app_only" in resolution.warnings
+
+
 def test_resolver_ai_apps_are_support_when_terminal_and_intent_correlate():
     resolution = resolve_work_evidence(
         WorkEvidenceInput(
