@@ -63,10 +63,10 @@ def register_ingestion_routes(
         if runtime_state.is_paused():
             return jsonify({"ok": True, "paused": True, "ignored": True})
 
-        if event_type in {"app_activated", "app_switch"}:
+        if event_type in {"app_activated", "app_switch", "window_title_poll"}:
             app_name = payload.get("app_name")
             if app_name:
-                runtime_state.set_latest_active_app(app_name)
+                runtime_state.set_latest_active_app(app_name, payload.get("bundle_id"))
 
         if event_type in _TERMINAL_EVENT_TYPES:
             payload = _normalize_terminal_event_payload(event_type, payload)
@@ -80,6 +80,7 @@ def register_ingestion_routes(
                 event_type,
                 payload,
                 latest_app=runtime_state.get_latest_active_app(),
+                latest_app_bundle_id=runtime_state.get_latest_active_app_bundle_id(),
                 recent_events=recent,
             )
             payload["_actor"]            = attribution.actor

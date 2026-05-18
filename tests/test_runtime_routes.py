@@ -1189,6 +1189,68 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload, {"app_name": "Cursor"})
         self.assertEqual(observed_at.isoformat(), "2026-04-23T10:15:30")
 
+    def test_event_actor_uses_latest_active_app_bundle_id_for_tool_assisted(self):
+        self.bus.recent.return_value = []
+
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "app_activated",
+                "app_name": "RandomTool",
+                "bundle_id": "dev.pulse.test.ToolAssistant",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.bus.publish.assert_called_once()
+        self.bus.publish.reset_mock()
+
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "file_modified",
+                "path": "/tmp/acme-api/src/handler.py",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.coalescer.close()
+
+        self.bus.publish.assert_called_once()
+        event_type, payload = self.bus.publish.call_args.args[:2]
+        self.assertEqual(event_type, "file_modified")
+        self.assertEqual(payload["_actor"], "tool_assisted")
+        self.assertGreater(payload["_automation_score"], 0.5)
+
+    def test_event_actor_does_not_treat_ai_support_bundle_as_tool_assisted(self):
+        self.bus.recent.return_value = []
+
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "app_activated",
+                "app_name": "RandomAssistant",
+                "bundle_id": "dev.pulse.test.UnknownAI",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.bus.publish.assert_called_once()
+        self.bus.publish.reset_mock()
+
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "file_modified",
+                "path": "/tmp/acme-api/src/handler.py",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.coalescer.close()
+
+        self.bus.publish.assert_called_once()
+        event_type, payload = self.bus.publish.call_args.args[:2]
+        self.assertEqual(event_type, "file_modified")
+        self.assertNotEqual(payload["_actor"], "tool_assisted")
+        self.assertLessEqual(payload["_automation_score"], 0.5)
+
     def test_event_file_pending_dans_coalescer_est_publie_au_close(self):
         response = self.client.post(
             "/event",
