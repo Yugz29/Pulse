@@ -9,6 +9,7 @@ from daemon.core.bootstrap_heuristics import (
     BOOTSTRAP_DEV_APPS,
     BOOTSTRAP_WRITING_APPS,
 )
+from daemon.core.app_classifier import classify_app
 
 from .file_classifier import file_signal_significance
 
@@ -213,12 +214,14 @@ class SessionFSM:
                         latest_strong = event.timestamp
                     continue
             if event.type in {"app_activated", "app_switch"}:
-                if event.payload.get("app_name") in _DEV_APPS:
+                app_name = event.payload.get("app_name")
+                classification = classify_app(app_name, bundle_id=event.payload.get("bundle_id"))
+                if classification.role == "dev_tool" and app_name != "Code":
                     if latest_strong is None or event.timestamp > latest_strong:
                         latest_strong = event.timestamp
                     continue
                 if (
-                    event.payload.get("app_name") in _SUPPORTIVE_APPS
+                    classification.role in {"browser", "writing"}
                     and (
                         latest_supportive is None
                         or event.timestamp > latest_supportive

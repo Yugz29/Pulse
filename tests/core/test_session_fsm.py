@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timedelta
+from typing import Optional
 
 from daemon.core.event_bus import Event
 from daemon.core.session_fsm import SessionFSM
@@ -11,8 +12,11 @@ def _file_event(path: str, ts: datetime, kind: str = "file_modified") -> Event:
     return event
 
 
-def _app_event(app: str, ts: datetime) -> Event:
-    event = Event("app_activated", {"app_name": app})
+def _app_event(app: str, ts: datetime, bundle_id: Optional[str] = None) -> Event:
+    payload = {"app_name": app}
+    if bundle_id:
+        payload["bundle_id"] = bundle_id
+    event = Event("app_activated", payload)
     event.timestamp = ts
     return event
 
@@ -252,6 +256,70 @@ class TestSessionFSM(unittest.TestCase):
 
         transition = self.fsm.observe_recent_events(
             recent_events=[_app_event("Code", t_first)],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertEqual(self.fsm.state, SessionFSM.IDLE)
+        self.assertIsNone(self.fsm.last_meaningful_activity_at)
+
+    def test_unknown_dev_bundle_becomes_meaningful_activity(self):
+        t_first = self._at(0)
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _app_event("RandomIDE", t_first, bundle_id="dev.pulse.test.UnknownIDE"),
+            ],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertEqual(self.fsm.session_started_at, t_first)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_first)
+        self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
+
+    def test_unknown_ai_bundle_does_not_become_strong_dev_activity(self):
+        t_first = self._at(0)
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _app_event("RandomAssistant", t_first, bundle_id="dev.pulse.test.UnknownAI"),
+            ],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertEqual(self.fsm.state, SessionFSM.IDLE)
+        self.assertIsNone(self.fsm.last_meaningful_activity_at)
+
+    def test_browser_bundle_becomes_supportive_activity(self):
+        t_code = self._at(8)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", t_code)],
+            now=t_code,
+        )
+
+        t_browser = self._at(0)
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _file_event("/proj/main.py", t_code),
+                _app_event("RandomBrowser", t_browser, bundle_id="com.apple.Safari"),
+            ],
+            now=self.base,
+        )
+
+        self.assertFalse(transition.boundary_detected)
+        self.assertEqual(self.fsm.session_started_at, t_code)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_browser)
+        self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
+
+    def test_code_app_behavior_preserved_with_classification(self):
+        t_first = self._at(0)
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[
+                _app_event("Code", t_first, bundle_id="com.microsoft.VSCode"),
+            ],
             now=self.base,
         )
 
