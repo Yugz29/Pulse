@@ -242,6 +242,11 @@ class SignalScorer:
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
             latest_app_bundle_id=latest_scoring_app_bundle_id,
+            latest_app_system_category=(
+                recent_app_system_categories[-1]
+                if recent_app_system_categories
+                else None
+            ),
             clipboard_context=clipboard_context,
             mcp_signal=mcp_signal,
             terminal_signal=terminal_signal,
@@ -696,6 +701,7 @@ class SignalScorer:
         file_type_mix: Dict[str, int],
         work_pattern_candidate: Optional[str],
         diff_summary: Optional[str] = None,
+        latest_app_system_category: Optional[str] = None,
     ) -> frozenset:
         active = set()
         latest_app = recent_apps[-1] if recent_apps else None
@@ -704,7 +710,11 @@ class SignalScorer:
         docs_count   = file_type_mix.get("docs", 0)
         config_count = file_type_mix.get("config", 0)
 
-        latest_app_classification = classify_app(latest_app, bundle_id=latest_app_bundle_id)
+        latest_app_classification = classify_app(
+            latest_app,
+            bundle_id=latest_app_bundle_id,
+            system_category=latest_app_system_category,
+        )
         if latest_app_classification.role == "dev_tool" and edited_file_count >= 1:
             active.add("dev_app_with_edit")
 
@@ -833,6 +843,7 @@ class SignalScorer:
         recent_apps: List[str],
         latest_active_app: Optional[str],
         latest_app_bundle_id: Optional[str],
+        latest_app_system_category: Optional[str],
         clipboard_context: Optional[str],
         mcp_signal: Optional[dict],
         terminal_signal: Optional[dict],
@@ -848,6 +859,7 @@ class SignalScorer:
             recent_apps=recent_apps,
             latest_active_app=latest_active_app,
             latest_app_bundle_id=latest_app_bundle_id,
+            latest_app_system_category=latest_app_system_category,
             clipboard_context=clipboard_context,
             mcp_signal=mcp_signal,
             terminal_signal=terminal_signal,

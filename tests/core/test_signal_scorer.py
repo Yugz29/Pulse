@@ -459,6 +459,123 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertNotIn("dev_app_with_edit", active)
 
+    def test_unknown_app_with_developer_tools_system_category_triggers_dev_app_with_edit(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomIDE",
+                "bundle_id": "com.example.unknown",
+                "system_category": "public.app-category.developer-tools",
+            },
+        )
+        self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
+
+        signals = self.scorer.compute()
+        active = self.scorer._collect_active_signals(
+            active_project=signals.active_project,
+            recent_apps=signals.recent_apps,
+            latest_active_app="RandomIDE",
+            latest_app_bundle_id="com.example.unknown",
+            latest_app_system_category="public.app-category.developer-tools",
+            clipboard_context=None,
+            mcp_signal=None,
+            terminal_signal=None,
+            friction_score=signals.friction_score,
+            edited_file_count=signals.edited_file_count_10m,
+            file_type_mix=signals.file_type_mix_10m,
+            work_pattern_candidate=signals.work_pattern_candidate,
+        )
+
+        self.assertIn("dev_app_with_edit", active)
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_unknown_app_with_productivity_system_category_does_not_trigger_dev_app_with_edit(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomProductivity",
+                "bundle_id": "com.example.unknown",
+                "system_category": "public.app-category.productivity",
+            },
+        )
+        self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
+
+        signals = self.scorer.compute()
+        active = self.scorer._collect_active_signals(
+            active_project=signals.active_project,
+            recent_apps=signals.recent_apps,
+            latest_active_app="RandomProductivity",
+            latest_app_bundle_id="com.example.unknown",
+            latest_app_system_category="public.app-category.productivity",
+            clipboard_context=None,
+            mcp_signal=None,
+            terminal_signal=None,
+            friction_score=signals.friction_score,
+            edited_file_count=signals.edited_file_count_10m,
+            file_type_mix=signals.file_type_mix_10m,
+            work_pattern_candidate=signals.work_pattern_candidate,
+        )
+
+        self.assertNotIn("dev_app_with_edit", active)
+
+    def test_known_app_name_still_beats_system_category_for_dev_app_with_edit(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "Safari",
+                "bundle_id": "com.example.unknown",
+                "system_category": "public.app-category.developer-tools",
+            },
+        )
+        self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
+
+        signals = self.scorer.compute()
+        active = self.scorer._collect_active_signals(
+            active_project=signals.active_project,
+            recent_apps=signals.recent_apps,
+            latest_active_app="Safari",
+            latest_app_bundle_id="com.example.unknown",
+            latest_app_system_category="public.app-category.developer-tools",
+            clipboard_context=None,
+            mcp_signal=None,
+            terminal_signal=None,
+            friction_score=signals.friction_score,
+            edited_file_count=signals.edited_file_count_10m,
+            file_type_mix=signals.file_type_mix_10m,
+            work_pattern_candidate=signals.work_pattern_candidate,
+        )
+
+        self.assertNotIn("dev_app_with_edit", active)
+
+    def test_developer_tools_system_category_without_file_edit_does_not_invent_coding(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomIDE",
+                "bundle_id": "com.example.unknown",
+                "system_category": "public.app-category.developer-tools",
+            },
+        )
+
+        signals = self.scorer.compute()
+        active = self.scorer._collect_active_signals(
+            active_project=signals.active_project,
+            recent_apps=signals.recent_apps,
+            latest_active_app="RandomIDE",
+            latest_app_bundle_id="com.example.unknown",
+            latest_app_system_category="public.app-category.developer-tools",
+            clipboard_context=None,
+            mcp_signal=None,
+            terminal_signal=None,
+            friction_score=signals.friction_score,
+            edited_file_count=signals.edited_file_count_10m,
+            file_type_mix=signals.file_type_mix_10m,
+            work_pattern_candidate=signals.work_pattern_candidate,
+        )
+
+        self.assertNotIn("dev_app_with_edit", active)
+        self.assertNotEqual(signals.probable_task, "coding")
+
     def test_general_reste_fallback_si_activite_est_trop_faible(self):
         self._push("app_activated", {"app_name": "Notes"})
 
