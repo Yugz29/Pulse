@@ -40,7 +40,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {yesterday.strftime('%Y-%m-%d')} (45 min, coding)
-- Type de travail détecté : coding
+- Type de travail estimé : coding
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
@@ -55,7 +55,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {self.today.strftime('%Y-%m-%d')} (30 min, debug)
-- Type de travail détecté : debug
+- Type de travail estimé : debug
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
@@ -70,7 +70,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {three_days_ago.strftime('%Y-%m-%d')} (20 min, writing)
-- Type de travail détecté : writing
+- Type de travail estimé : writing
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
@@ -85,7 +85,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {eight_days_ago.strftime('%Y-%m-%d')} (60 min, coding)
-- Type de travail détecté : coding
+- Type de travail estimé : coding
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
@@ -99,7 +99,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {three_weeks_ago.strftime('%Y-%m-%d')} (15 min, general)
-- Type de travail détecté : general
+- Type de travail estimé : general
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
@@ -113,7 +113,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {yesterday.strftime('%Y-%m-%d')} (10 min, refactor)
-- Type de travail détecté : refactor
+- Type de travail estimé : refactor
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
@@ -127,7 +127,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {yesterday.strftime('%Y-%m-%d')} (25 min, browsing)
-- Type de travail détecté : browsing
+- Type de travail estimé : browsing
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
@@ -141,7 +141,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {yesterday.strftime('%Y-%m-%d')} (25 min, browsing)
-- Type de travail détecté : debug
+- Type de travail estimé : debug
 - Épisodes récents :
   - 2026-04-17 10:45 | debug | executing | 25 min | commit | ep-2
   - 2026-04-16 09:20 | coding | editing | 20 min | idle_timeout | ep-1
@@ -172,7 +172,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : {future.strftime('%Y-%m-%d')} (30 min, coding)
-- Type de travail détecté : coding
+- Type de travail estimé : coding
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNone(result)
@@ -184,7 +184,7 @@ class TestLastSessionContext(unittest.TestCase):
 
 - Première session : 2026-01-01
 - Dernière session : pas-une-date (30 min, coding)
-- Type de travail détecté : coding
+- Type de travail estimé : coding
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNone(result)

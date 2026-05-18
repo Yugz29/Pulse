@@ -2248,7 +2248,7 @@ def _journal_entry_description(entry: Dict[str, Any]) -> str:
 
     if not lines:
         duration = int(entry.get("duration_min") or 0)
-        lines.append(f"Travail observ\u00e9 sur {_journal_entry_title(entry)} pendant {duration} min.")
+        lines.append(f"Activité estimée sur {_journal_entry_title(entry)} pendant {duration} min.")
     return "\n".join(lines)
 
 
@@ -2257,9 +2257,9 @@ def _journal_uncertainty_lines(entry: Dict[str, Any]) -> List[str]:
     confidence = _journal_task_confidence(entry.get("task_confidence"))
     lines: List[str] = []
     if "tool_assisted" in flags:
-        lines.append("Assistance outil détectée.")
+        lines.append("Assistance outil probable.")
     if "async_commit" in flags:
-        lines.append("Livraison asynchrone détectée.")
+        lines.append("Livraison possiblement asynchrone.")
     if confidence is not None and confidence < 0.5:
         lines.append("Signaux de travail incertains.")
     elif flags.intersection({"low_evidence", "short_episode", "single_block"}):
@@ -2613,7 +2613,7 @@ def _has_useful_journal_body(body: str) -> bool:
     if not body:
         return False
     normalized = body.strip()
-    return len(normalized) >= 20 and not normalized.startswith(("Session de ", "Travail observé sur "))
+    return len(normalized) >= 20 and not normalized.startswith(("Session de ", "Activité estimée sur ", "Travail observé sur "))
 
 
 def _all_files_technical(files: List[str]) -> bool:
@@ -2730,7 +2730,7 @@ def _update_projects(base_dir: Path, session: Dict[str, Any], *, consolidation: 
             lines.extend(["", f"## {name}", "",
                 f"- Première session : {item['first_session']}",
                 f"- Dernière session : {item['last_session']} ({item['last_duration']} min, {item.get('last_task', item['task'])})",
-                f"- Type de travail détecté : {item['task']}",
+                f"- Type de travail estimé : {item['task']}",
             ])
             recent_sessions = item.get("recent_sessions", [])
             if recent_sessions:
@@ -2776,7 +2776,10 @@ def _parse_project_sections(projects_file: Path) -> Dict[str, Dict[str, Any]]:
             result[current_name]["last_duration"] = details["duration"]
             result[current_name]["last_task"] = details["task"]
             in_recent_sessions = False
-        elif current_name and line.startswith("- Type de travail détecté : "):
+        elif current_name and (
+            line.startswith("- Type de travail estimé : ")
+            or line.startswith("- Type de travail " + "détecté : ")
+        ):
             result[current_name]["task"] = line.split(": ", 1)[1]
             in_recent_sessions = False
         elif current_name and line in {"- Sessions récentes :", "- Épisodes récents :"}:

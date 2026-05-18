@@ -83,7 +83,7 @@ class TestExtractor(unittest.TestCase):
         index = (self.memory_dir / "MEMORY.md").read_text()
 
         self.assertIn("## Pulse", projects)
-        self.assertIn("Type de travail détecté : coding", projects)
+        self.assertIn("Type de travail estimé : coding", projects)
         self.assertIn("[projects](projects.md)", index)
         # habits.md n'est plus écrit — remplacé par facts.md
         self.assertFalse((self.memory_dir / "habits.md").exists())
@@ -307,7 +307,7 @@ class TestExtractor(unittest.TestCase):
         projects = (self.memory_dir / "projects.md").read_text()
 
         self.assertEqual(projects.count("## Pulse"), 1)
-        self.assertIn("Type de travail détecté : debug", projects)
+        self.assertIn("Type de travail estimé : debug", projects)
         self.assertIn("(40 min, debug)", projects)
 
     def test_update_memories_prefers_latest_recent_session_for_consolidation(self):
@@ -354,7 +354,7 @@ class TestExtractor(unittest.TestCase):
         projects = (self.memory_dir / "projects.md").read_text()
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
 
-        self.assertIn("Type de travail détecté : debug", projects)
+        self.assertIn("Type de travail estimé : debug", projects)
         self.assertIn("(15 min, debug)", projects)
         self.assertIn("## Pulse", journal)
         self.assertIn("débogage (15 min)", journal)
@@ -380,7 +380,7 @@ class TestExtractor(unittest.TestCase):
         projects = (self.memory_dir / "projects.md").read_text()
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
 
-        self.assertIn("Type de travail détecté : coding", projects)
+        self.assertIn("Type de travail estimé : coding", projects)
         self.assertIn("(22 min, coding)", projects)
         self.assertIn("## Pulse", journal)
         self.assertIn("développement (22 min)", journal)
@@ -598,7 +598,7 @@ class TestExtractor(unittest.TestCase):
 
         self.assertIn("2026-04-24 10:18 | debug | executing | 18 min | commit | ep-2", projects)
         self.assertIn("2026-04-23 09:20 | coding | editing | 20 min | idle_timeout | ep-1", projects)
-        self.assertIn("Type de travail détecté : debug", projects)
+        self.assertIn("Type de travail estimé : debug", projects)
 
     def test_parse_project_sections_lit_l_ancien_titre_episodes_recents(self):
         projects_file = self.memory_dir / "projects.md"
@@ -607,7 +607,7 @@ class TestExtractor(unittest.TestCase):
             "## Pulse\n\n"
             "- Première session : 2026-04-23\n"
             "- Dernière session : 2026-04-23 (15 min, debug)\n"
-            "- Type de travail détecté : debug\n"
+            "- Type de travail estimé : debug\n"
             "- Épisodes récents :\n"
             "  - 2026-04-23 10:36 | debug | executing | 15 min | commit | ep-latest\n",
             encoding="utf-8",
@@ -1198,7 +1198,7 @@ class TestExtractor(unittest.TestCase):
             journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
         )
 
-        self.assertIn("Assistance outil détectée.", journal)
+        self.assertIn("Assistance outil probable.", journal)
         self.assertEqual(hidden[0]["uncertainty_flags"], ["tool_assisted"])
         self.assertEqual(hidden[0]["task_confidence"], 0.82)
 
@@ -1225,8 +1225,8 @@ class TestExtractor(unittest.TestCase):
             journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
         )
 
-        self.assertIn("Livraison asynchrone détectée.", journal)
-        self.assertIn("Assistance outil détectée.", journal)
+        self.assertIn("Livraison possiblement asynchrone.", journal)
+        self.assertIn("Assistance outil probable.", journal)
         self.assertEqual(hidden[0]["activity_level"], "idle")
         self.assertEqual(hidden[0]["uncertainty_flags"], ["tool_assisted", "async_commit"])
 
@@ -1250,7 +1250,7 @@ class TestExtractor(unittest.TestCase):
             journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
         )
 
-        self.assertNotIn("Livraison asynchrone détectée.", journal)
+        self.assertNotIn("Livraison possiblement asynchrone.", journal)
         self.assertEqual(hidden[0]["activity_level"], "idle")
         self.assertNotIn("async_commit", hidden[0]["uncertainty_flags"])
 
@@ -1295,7 +1295,7 @@ class TestExtractor(unittest.TestCase):
 
         journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
 
-        self.assertNotIn("Assistance outil détectée.", journal)
+        self.assertNotIn("Assistance outil probable.", journal)
         self.assertNotIn("Signaux de travail incertains.", journal)
 
     def test_journal_hidden_json_conserve_scope_source_fallback_snapshot(self):

@@ -665,7 +665,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "DashboardRootView.swift",
             "DashboardContentView.swift",
         ])
-        self.assertIn("Livraison asynchrone détectée.", journal)
+        self.assertIn("Livraison possiblement asynchrone.", journal)
 
     def test_process_confirmed_commit_utilise_les_fichiers_git_si_diff_non_parseable(self):
         git_root = Path("/tmp/Pulse")
