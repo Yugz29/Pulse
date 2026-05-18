@@ -10,16 +10,13 @@ from daemon.core.bootstrap_heuristics import (
 from daemon.core.signal_scorer import SignalScorer
 from daemon.core.work_evidence_resolver import WorkEvidenceInput, resolve_work_evidence
 from daemon.memory.work_heartbeat import (
-    AI_APPS,
     NON_WORK_TITLE_HINTS,
-    WORK_APPS,
     classify_work_heartbeat,
 )
 
 
 def test_bootstrap_ai_apps_are_shared_by_consumers():
     assert {"ChatGPT", "Claude", "Claude Desktop", "Codex"}.issubset(BOOTSTRAP_AI_APPS)
-    assert AI_APPS is BOOTSTRAP_AI_APPS
     assert SignalScorer.AI_APPS is BOOTSTRAP_AI_APPS
 
     resolution = resolve_work_evidence(WorkEvidenceInput(active_app="Claude Desktop", recent_apps=("Codex",)))
@@ -33,7 +30,6 @@ def test_bootstrap_work_dev_and_writing_apps_are_available_to_scorer_and_heartbe
     )
     assert {"Xcode", "VSCode", "WebStorm", "PyCharm", "Warp"}.issubset(BOOTSTRAP_DEV_APPS)
     assert {"Notion", "Obsidian", "Bear", "Notes", "Pages"}.issubset(BOOTSTRAP_WRITING_APPS)
-    assert WORK_APPS is BOOTSTRAP_WORK_APPS
     assert SignalScorer.DEV_APPS is BOOTSTRAP_DEV_APPS
     assert SignalScorer.WRITING_APPS is BOOTSTRAP_WRITING_APPS
 

@@ -22,9 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Literal
 
 from daemon.core.bootstrap_heuristics import (
-    BOOTSTRAP_AI_APPS,
     BOOTSTRAP_NON_WORK_TITLE_HINTS,
-    BOOTSTRAP_WORK_APPS,
 )
 from daemon.core.app_classifier import classify_app
 
@@ -74,8 +72,6 @@ MUTATING_GIT_COMMANDS = {
     "tag",
 }
 
-WORK_APPS = BOOTSTRAP_WORK_APPS
-AI_APPS = BOOTSTRAP_AI_APPS
 NON_WORK_TITLE_HINTS = BOOTSTRAP_NON_WORK_TITLE_HINTS
 
 
