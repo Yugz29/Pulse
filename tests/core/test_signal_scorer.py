@@ -24,13 +24,13 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_compute_retourne_signaux_de_base(self):
         self._push("app_activated", {"app_name": "Cursor"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
         self._push("clipboard_updated", {"content_kind": "code"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_project, "Pulse")
-        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.active_project, "acme-api")
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
         self.assertEqual(signals.probable_task, "coding")
         self.assertEqual(signals.clipboard_context, "code")
         self.assertEqual(signals.edited_file_count_10m, 1)
@@ -59,8 +59,8 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_focus_deep_si_peu_de_switchs_et_plusieurs_edits(self):
         self._push("app_activated", {"app_name": "Cursor"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/a.py"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/b.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/a.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/b.py"})
 
         signals = self.scorer.compute()
 
@@ -77,12 +77,12 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_compat_anciens_noms_devents(self):
         self._push("app_switch", {"app_name": "Xcode"})
-        self._push("file_change", {"path": "/Users/yugz/Developer/MonApp/src/main.py"})
+        self._push("file_change", {"path": "/home/dev/monolith-api/src/main.py"})
         self._push("clipboard_update", {"content_type": "text"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_project, "MonApp")
+        self.assertEqual(signals.active_project, "monolith-api")
         self.assertIn("Xcode", signals.recent_apps)
         self.assertEqual(signals.clipboard_context, "text")
 
@@ -96,9 +96,9 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_forte_activite_fichiers_empeche_idle_et_retombe_a_normal(self):
         self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/a.py"}, minutes_ago=1)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/b.py"}, minutes_ago=1)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/c.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/a.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/b.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/c.py"}, minutes_ago=1)
         self._push("user_idle", {"seconds": 420})
 
         signals = self.scorer.compute()
@@ -107,7 +107,7 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_idle_reste_possible_si_activite_fichiers_est_trop_faible(self):
         self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/a.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/a.py"}, minutes_ago=1)
         self._push("user_idle", {"seconds": 420})
 
         signals = self.scorer.compute()
@@ -116,22 +116,22 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_ignore_fichiers_bruites_xcode(self):
         self._push("file_modified", {
-            "path": "/Users/yugz/Projets/Pulse/Pulse/App/App.xcodeproj/project.xcworkspace/xcuserdata/yugz.xcuserdatad/UserInterfaceState.xcuserstate"
+            "path": "/tmp/frontend-app/App.xcodeproj/project.xcworkspace/xcuserdata/yugz.xcuserdatad/UserInterfaceState.xcuserstate"
         })
         self._push("file_modified", {
-            "path": "/Users/yugz/Projets/Pulse/Pulse/App/App/SystemObserver.swift"
+            "path": "/tmp/frontend-app/src/SystemObserver.swift"
         })
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/App/App/SystemObserver.swift")
+        self.assertEqual(signals.active_file, "/tmp/frontend-app/src/SystemObserver.swift")
 
     def test_sequence_dev_et_terminal_test_failed_garde_ancrage_present_state(self):
         self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
         self._push(
             "file_modified",
             {
-                "path": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+                "path": "/tmp/acme-api/src/runtime_orchestrator.py",
                 "_actor": "user",
             },
             minutes_ago=1,
@@ -141,7 +141,7 @@ class TestSignalScorer(unittest.TestCase):
             {
                 "terminal_action_category": "testing",
                 "terminal_success": False,
-                "terminal_project": "Pulse",
+                "terminal_project": "acme-api",
                 "terminal_command": "pytest tests/test_runtime_orchestrator.py",
             },
         )
@@ -154,10 +154,10 @@ class TestSignalScorer(unittest.TestCase):
             locked=False,
         )
 
-        self.assertEqual(present.active_project, "Pulse")
+        self.assertEqual(present.active_project, "acme-api")
         self.assertEqual(
             present.active_file,
-            "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+            "/tmp/acme-api/src/runtime_orchestrator.py",
         )
         self.assertEqual(present.activity_level, "executing")
         self.assertEqual(present.probable_task, "coding")
@@ -169,7 +169,7 @@ class TestSignalScorer(unittest.TestCase):
         self._push(
             "file_modified",
             {
-                "path": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+                "path": "/tmp/acme-api/src/runtime_orchestrator.py",
                 "_actor": "tool_assisted",
                 "_automation_score": 0.8,
             },
@@ -177,10 +177,10 @@ class TestSignalScorer(unittest.TestCase):
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.active_project, "acme-api")
         self.assertEqual(
             signals.active_file,
-            "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py",
+            "/tmp/acme-api/src/runtime_orchestrator.py",
         )
         self.assertEqual(signals.edited_file_count_10m, 0)
         self.assertEqual(signals.file_type_mix_10m, {})
@@ -190,7 +190,7 @@ class TestSignalScorer(unittest.TestCase):
     def test_project_hint_stale_ne_survit_pas_sans_signal_de_continuite(self):
         self._push("app_activated", {"app_name": "Slack"})
 
-        signals = self.scorer.compute(project_hint="Pulse")
+        signals = self.scorer.compute(project_hint="acme-api")
 
         self.assertIsNone(signals.active_project)
         self.assertIsNone(signals.active_file)
@@ -199,7 +199,7 @@ class TestSignalScorer(unittest.TestCase):
     def test_fichier_ancien_n_ancre_pas_le_projet_sans_confirmation_recente(self):
         self._push(
             "file_modified",
-            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_orchestrator.py"},
+            {"path": "/tmp/acme-api/src/runtime_orchestrator.py"},
             minutes_ago=30,
         )
         self._push("app_activated", {"app_name": "Slack"})
@@ -230,9 +230,9 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.activity_level, "reading")
 
     def test_derive_file_type_mix_and_feature_candidate(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/tests/test_main.py"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/README.md"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/tests/test_main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/docs/README.md"})
 
         signals = self.scorer.compute()
 
@@ -244,10 +244,10 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.work_pattern_candidate, "feature_candidate")
 
     def test_detecte_refactor_candidate_avec_renommages(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/a.py"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/b.py"})
-        self._push("file_renamed", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/c.py"})
-        self._push("file_deleted", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/d.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/a.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/b.py"})
+        self._push("file_renamed", {"path": "/tmp/acme-api/src/c.py"})
+        self._push("file_deleted", {"path": "/tmp/acme-api/src/d.py"})
 
         signals = self.scorer.compute()
 
@@ -257,9 +257,9 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.work_pattern_candidate, "refactor_candidate")
 
     def test_detecte_setup_candidate_sur_fichiers_config(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/package.json"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/pyproject.toml"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/.env"})
+        self._push("file_modified", {"path": "/tmp/acme-api/package.json"})
+        self._push("file_modified", {"path": "/tmp/acme-api/pyproject.toml"})
+        self._push("file_modified", {"path": "/tmp/acme-api/.env"})
 
         signals = self.scorer.compute()
 
@@ -280,20 +280,20 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.probable_task, "general")
 
     def test_setup_candidate_avec_ancrage_projet_reste_coding(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/package.json"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/pyproject.toml"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/.env"})
+        self._push("file_modified", {"path": "/tmp/acme-api/package.json"})
+        self._push("file_modified", {"path": "/tmp/acme-api/pyproject.toml"})
+        self._push("file_modified", {"path": "/tmp/acme-api/.env"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.active_project, "acme-api")
         self.assertEqual(signals.work_pattern_candidate, "setup_candidate")
         self.assertEqual(signals.probable_task, "coding")
 
     def test_reduit_other_avec_extensions_config_et_source_courantes(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/config/settings.yaml"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tsconfig.base.json"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/db/migrate.sql"})
+        self._push("file_modified", {"path": "/tmp/acme-api/config/settings.yaml"})
+        self._push("file_modified", {"path": "/tmp/acme-api/tsconfig.base.json"})
+        self._push("file_modified", {"path": "/tmp/acme-api/db/migrate.sql"})
 
         signals = self.scorer.compute()
 
@@ -303,9 +303,9 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_notes_transitoire_ne_force_pas_writing_si_activite_code_forte(self):
         self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=2)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/a.py"}, minutes_ago=1)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/b.py"}, minutes_ago=1)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/tests/test_a.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/a.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/b.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/tests/test_a.py"}, minutes_ago=1)
         self._push("app_activated", {"app_name": "Notes"})
 
         signals = self.scorer.compute()
@@ -317,7 +317,7 @@ class TestSignalScorer(unittest.TestCase):
         for index in range(8):
             self._push(
                 "file_modified",
-                {"path": f"/Users/yugz/Projets/Pulse/Pulse/daemon/module_{index}.py"},
+                {"path": f"/tmp/acme-api/src/module_{index}.py"},
                 minutes_ago=1,
             )
 
@@ -325,6 +325,28 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(signals.edited_file_count_10m, 8)
         self.assertEqual(signals.probable_task, "coding")
+
+    def test_unknown_app_with_source_file_activity_still_detects_coding(self):
+        self._push("app_activated", {"app_name": "Zed"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/router.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/tests/test_handler.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_project, "acme-api")
+        self.assertEqual(signals.edited_file_count_10m, 3)
+        self.assertEqual(signals.probable_task, "coding")
+
+    def test_unknown_app_without_file_activity_does_not_invent_coding(self):
+        self._push("app_activated", {"app_name": "Zed"})
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "coding")
+        self.assertIn(signals.probable_task, {"general", "unknown"})
+        self.assertIsNone(signals.active_project)
+        self.assertIsNone(signals.active_file)
 
     def test_general_reste_fallback_si_activite_est_trop_faible(self):
         self._push("app_activated", {"app_name": "Notes"})
@@ -334,7 +356,7 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.probable_task, "writing")
         self.bus._queue.clear()
 
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/misc/data.json"})
+        self._push("file_modified", {"path": "/tmp/acme-api/misc/data.json"})
         signals = self.scorer.compute()
 
         self.assertEqual(signals.probable_task, "general")
@@ -408,7 +430,7 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_active_project_utilise_les_fichiers_tool_assisted_comme_ancre(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            repo = Path(tmpdir) / "Pulse"
+            repo = Path(tmpdir) / "acme-api"
             (repo / ".git").mkdir(parents=True)
             file_path = repo / "daemon" / "runtime_orchestrator.py"
             file_path.parent.mkdir(parents=True)
@@ -422,13 +444,13 @@ class TestSignalScorer(unittest.TestCase):
 
             signals = self.scorer.compute()
 
-            self.assertEqual(signals.active_project, "Pulse")
+            self.assertEqual(signals.active_project, "acme-api")
             self.assertEqual(signals.active_file, str(file_path))
             self.assertEqual(signals.edited_file_count_10m, 0)
 
     def test_active_project_ignore_les_fichiers_system_comme_ancre(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            repo = Path(tmpdir) / "Pulse"
+            repo = Path(tmpdir) / "acme-api"
             (repo / ".git").mkdir(parents=True)
             file_path = repo / "daemon" / "runtime_orchestrator.py"
             file_path.parent.mkdir(parents=True)
@@ -448,14 +470,14 @@ class TestSignalScorer(unittest.TestCase):
     def test_project_hint_stabilise_le_projet_pendant_une_phase_browser_utile(self):
         self._push("app_activated", {"app_name": "Chrome"})
 
-        signals = self.scorer.compute(project_hint="Pulse")
+        signals = self.scorer.compute(project_hint="acme-api")
 
-        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.active_project, "acme-api")
         self.assertIsNone(signals.active_file)
         self.assertEqual(signals.activity_level, "navigating")
 
     def test_project_hint_necree_pas_de_projet_sans_signal_de_continuite(self):
-        signals = self.scorer.compute(project_hint="Pulse")
+        signals = self.scorer.compute(project_hint="acme-api")
 
         self.assertIsNone(signals.active_project)
 
@@ -463,12 +485,12 @@ class TestSignalScorer(unittest.TestCase):
         now = datetime(2026, 4, 23, 18, 0, 0)
         newer = Event(
             "file_modified",
-            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/new.py"},
+            {"path": "/tmp/acme-api/src/new.py"},
             timestamp=now,
         )
         older = Event(
             "file_modified",
-            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/old.py"},
+            {"path": "/tmp/acme-api/src/old.py"},
             timestamp=now - timedelta(minutes=2),
         )
         self.bus._queue.append(newer)
@@ -478,7 +500,7 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(
             signals.active_file,
-            "/Users/yugz/Projets/Pulse/Pulse/daemon/new.py",
+            "/tmp/acme-api/src/new.py",
         )
 
     def test_recent_apps_reflète_le_plus_recent_par_timestamp_meme_hors_ordre(self):
@@ -506,7 +528,7 @@ class TestSignalScorer(unittest.TestCase):
             "terminal_command_finished",
             {
                 "terminal_action_category": "testing",
-                "terminal_project": "Pulse",
+                "terminal_project": "acme-api",
             },
             timestamp=now,
         )
@@ -524,16 +546,16 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute(observed_now=now)
 
         self.assertEqual(signals.terminal_action_category, "testing")
-        self.assertEqual(signals.terminal_project, "Pulse")
+        self.assertEqual(signals.terminal_project, "acme-api")
 
     def test_file_deleted_ne_devient_pas_le_fichier_actif(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
-        self._push("file_deleted", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/obsolete.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
+        self._push("file_deleted", {"path": "/tmp/acme-api/src/obsolete.py"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
-        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
+        self.assertEqual(signals.active_project, "acme-api")
 
     def test_ignore_les_fichiers_internes_pulse_dans_les_signaux(self):
         pulse_db = str(Path.home() / ".pulse" / "session.db")
@@ -541,41 +563,41 @@ class TestSignalScorer(unittest.TestCase):
 
         self._push("file_modified", {"path": pulse_db})
         self._push("file_modified", {"path": pulse_journal})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
-        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
+        self.assertEqual(signals.active_project, "acme-api")
         self.assertEqual(signals.edited_file_count_10m, 1)
 
     def test_ignore_les_fichiers_techniques_pour_les_signaux_de_session(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/build.log"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/dev.sqlite"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/cache.db"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/tmp/session.db-journal"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/tmp/build.log"})
+        self._push("file_modified", {"path": "/tmp/acme-api/tmp/dev.sqlite"})
+        self._push("file_modified", {"path": "/tmp/acme-api/tmp/cache.db"})
+        self._push("file_modified", {"path": "/tmp/acme-api/tmp/session.db-journal"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
         self.assertEqual(signals.edited_file_count_10m, 1)
         self.assertEqual(signals.file_type_mix_10m, {"source": 1})
 
     def test_ignore_models_cache_json_dans_les_signaux(self):
         self._push("app_activated", {"app_name": "Cursor"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/build/models_cache.json"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/build/models_cache.json"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
         self.assertEqual(signals.edited_file_count_10m, 1)
         self.assertEqual(signals.file_type_mix_10m, {"source": 1})
         self.assertEqual(signals.probable_task, "coding")
 
     def test_cache_json_seul_ne_pese_pas_sur_la_tache_probable(self):
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/build/models_cache.json"})
+        self._push("file_modified", {"path": "/tmp/acme-api/build/models_cache.json"})
 
         signals = self.scorer.compute()
 
@@ -585,7 +607,7 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.probable_task, "general")
 
     def test_capture_ecran_seule_ne_pese_pas_sur_la_tache_probable(self):
-        self._push("file_created", {"path": "/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"})
+        self._push("file_created", {"path": "/tmp/desktop/Capture d’écran 2026-04-21 à 10.32.18.png"})
 
         signals = self.scorer.compute()
 
@@ -596,18 +618,18 @@ class TestSignalScorer(unittest.TestCase):
 
     def test_capture_ecran_n_ecrase_pas_un_vrai_fichier_de_travail(self):
         self._push("app_activated", {"app_name": "Cursor"})
-        self._push("file_created", {"path": "/Users/yugz/Desktop/Screenshot 2026-04-21 at 10.32.18.png"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_created", {"path": "/tmp/desktop/Screenshot 2026-04-21 at 10.32.18.png"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.active_file, "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py")
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
         self.assertEqual(signals.edited_file_count_10m, 1)
         self.assertEqual(signals.file_type_mix_10m, {"source": 1})
         self.assertEqual(signals.probable_task, "coding")
 
     def test_trash_seul_ne_pese_pas_sur_la_tache_probable(self):
-        self._push("file_modified", {"path": "/Users/yugz/.Trash/logo-final.png"})
+        self._push("file_modified", {"path": "/home/dev/.Trash/logo-final.png"})
 
         signals = self.scorer.compute()
 
@@ -625,7 +647,7 @@ class TestSignalScorer(unittest.TestCase):
         for index in range(220):
             bus._queue.append(Event(
                 type="file_modified",
-                payload={"path": f"/Users/yugz/Projets/Pulse/Pulse/daemon/module_{index}.py"},
+                payload={"path": f"/tmp/acme-api/src/module_{index}.py"},
                 timestamp=timestamp,
             ))
 
@@ -639,26 +661,26 @@ class TestSignalScorer(unittest.TestCase):
     def test_window_title_poll_alimente_window_title_signal(self):
         self._push("window_title_poll", {
             "app": "Code",
-            "title": "Pulse — signal_scorer.py — Visual Studio Code",
+            "title": "Acme API — handler.py — Visual Studio Code",
         })
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.window_title, "Pulse — signal_scorer.py — Visual Studio Code")
+        self.assertEqual(signals.window_title, "Acme API — handler.py — Visual Studio Code")
         self.assertEqual(signals.window_title_app, "Code")
 
     def test_window_title_poll_peut_alimenter_active_file_fallback(self):
         self._push("app_activated", {"app_name": "Code"})
         self._push("window_title_poll", {
             "app": "Code",
-            "title": "signal_scorer.py — Pulse — Visual Studio Code",
+            "title": "handler.py — Acme API — Visual Studio Code",
         })
 
         signals = self.scorer.compute()
 
-        self.assertEqual(signals.window_title, "signal_scorer.py — Pulse — Visual Studio Code")
+        self.assertEqual(signals.window_title, "handler.py — Acme API — Visual Studio Code")
         self.assertEqual(signals.window_title_app, "Code")
-        self.assertEqual(signals.active_file, "signal_scorer.py")
+        self.assertEqual(signals.active_file, "handler.py")
 
 
     # ── I1 : recent_apps — dernière occurrence gagne ────────────────────────────
@@ -672,7 +694,7 @@ class TestSignalScorer(unittest.TestCase):
         self._push("app_activated", {"app_name": "Xcode"})
         self._push("app_activated", {"app_name": "Chrome"})
         self._push("app_activated", {"app_name": "Xcode"})  # retour dans l'IDE
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
 
         signals = self.scorer.compute()
 
@@ -714,7 +736,7 @@ class TestSignalScorer(unittest.TestCase):
         """
         self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=5)
         self._push("file_modified",
-            {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, minutes_ago=4)
+            {"path": "/tmp/acme-api/src/main.py"}, minutes_ago=4)
         self._push("app_activated", {"app_name": "Chrome"}, minutes_ago=2)
         self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=1)  # retour
 
@@ -744,8 +766,8 @@ class TestSignalScorer(unittest.TestCase):
         """
         self._push("clipboard_updated", {"content_kind": "stacktrace"}, minutes_ago=10)
         self._push("app_activated", {"app_name": "Cursor"}, minutes_ago=5)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, minutes_ago=1)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/session.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"}, minutes_ago=1)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/session.py"}, minutes_ago=1)
 
         signals = self.scorer.compute()
 
@@ -766,7 +788,7 @@ class TestSignalScorer(unittest.TestCase):
         et la tâche ne doit pas être writing.
         """
         for _ in range(4):
-            self._push("file_modified", {"path": "/Users/yugz/Downloads/Untitled document.md"})
+            self._push("file_modified", {"path": "/home/dev/Downloads/Untitled document.md"})
         self._push("app_activated", {"app_name": "Google Chrome"})
 
         signals = self.scorer.compute()
@@ -782,7 +804,7 @@ class TestSignalScorer(unittest.TestCase):
         plusieurs events sur un .md de projet ne doivent pas produire writing.
         """
         for _ in range(4):
-            self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/NOTES.md"})
+            self._push("file_modified", {"path": "/tmp/acme-api/docs/NOTES.md"})
         self._push("app_activated", {"app_name": "Google Chrome"})
 
         signals = self.scorer.compute()
@@ -866,10 +888,10 @@ class TestSignalScorer(unittest.TestCase):
         A t+6 min, le Chrome est hors fenetre 5 min. Pulse doit dire 'coding'.
         """
         self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=15)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, minutes_ago=12)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"}, minutes_ago=12)
         self._push("app_activated", {"app_name": "Chrome"}, minutes_ago=10)
         self._push("app_activated", {"app_name": "Xcode"}, minutes_ago=8)
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/scorer.py"}, minutes_ago=7)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/scorer.py"}, minutes_ago=7)
         # Maintenant : aucune app active dans les 5 derniere min (Xcode actif il y a 8 min)
 
         signals = self.scorer.compute()
@@ -916,9 +938,9 @@ class TestSignalScorer(unittest.TestCase):
         apps = ["Xcode", "Terminal", "Chrome", "Xcode", "Terminal", "Xcode"]
         for app in apps:
             self._push("app_activated", {"app_name": app})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/scorer.py"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/session.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/scorer.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/session.py"})
 
         signals = self.scorer.compute()
 
@@ -935,13 +957,13 @@ class TestSignalScorer(unittest.TestCase):
         for app in apps:
             self._push("app_activated", {"app_name": app})
         self._push("user_presence", {"presence_state": "active", "idle_seconds": "3"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
 
         signals = self.scorer.compute()
 
         self.assertEqual(signals.app_switch_count_10m, 6)
         self.assertEqual(signals.ai_app_switch_count_10m, 3)
-        self.assertEqual(signals.active_project, "Pulse")
+        self.assertEqual(signals.active_project, "acme-api")
         self.assertEqual(signals.focus_level, "normal")
 
     def test_4c_seuil_2_fichiers_insuffisant_pour_annuler_scattered(self):
@@ -949,8 +971,8 @@ class TestSignalScorer(unittest.TestCase):
         apps = ["Xcode", "Terminal", "Chrome", "Xcode", "Terminal", "Xcode"]
         for app in apps:
             self._push("app_activated", {"app_name": app})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"})
-        self._push("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/scorer.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/scorer.py"})
         # 2 fichiers < seuil de 3
 
         signals = self.scorer.compute()
