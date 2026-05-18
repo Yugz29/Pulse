@@ -155,6 +155,7 @@ class SystemObserver {
         guard shouldTrackApp(bundleId: bundleId) else { return }
 
         let pid = app.processIdentifier
+        let systemCategory = applicationSystemCategory(app)
 
         // Lecture du titre de fenêtre en arrière-plan, puis envoi d'un seul
         // event app_activated enrichi. Si Accessibility n'est pas accordée
@@ -168,6 +169,9 @@ class SystemObserver {
                 "bundle_id": bundleId,
                 "timestamp": ISO8601DateFormatter().string(from: Date())
             ]
+            if let systemCategory {
+                payload["system_category"] = systemCategory
+            }
             if let title {
                 payload["window_title"] = title
             }
@@ -256,13 +260,17 @@ class SystemObserver {
         guard finalTitle != lastObservedTitle else { return }
         lastObservedTitle = finalTitle
 
-        sendEvent([
+        var payload: [String: String] = [
             "type": "window_title_poll",
             "app_name": appName,
             "bundle_id": bundleId,
             "title": finalTitle,
             "timestamp": ISO8601DateFormatter().string(from: Date())
-        ])
+        ]
+        if let systemCategory = applicationSystemCategory(app) {
+            payload["system_category"] = systemCategory
+        }
+        sendEvent(payload)
     }
 
     // Enregistre l'observateur AX sur l'app frontale.
@@ -337,6 +345,7 @@ class SystemObserver {
         else { return }
 
         let pid = app.processIdentifier
+        let systemCategory = applicationSystemCategory(app)
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             guard let title = self.readWindowTitle(pid: pid, appName: appName) else { return }
@@ -344,13 +353,17 @@ class SystemObserver {
             self.lastPolledWindowTitle = title
             // Si AXObserver est actif sur cette app, le poll ne fait que confirmer
             // Sinon c'est le fallback utile
-            self.sendEvent([
+            var payload: [String: String] = [
                 "type": "window_title_poll",
                 "app_name": appName,
                 "bundle_id": bundleId,
                 "title": title,
                 "timestamp": ISO8601DateFormatter().string(from: Date())
-            ])
+            ]
+            if let systemCategory {
+                payload["system_category"] = systemCategory
+            }
+            self.sendEvent(payload)
         }
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -771,6 +784,7 @@ class SystemObserver {
                 sendLocalExplorationEvent(appName: name, bundleId: bundleId)
             } else if shouldTrackApp(bundleId: bundleId) {
                 let pid = app.processIdentifier
+                let systemCategory = applicationSystemCategory(app)
                 DispatchQueue.global(qos: .utility).async { [weak self] in
                     guard let self else { return }
                     let title = self.readWindowTitle(pid: pid, appName: name)
@@ -780,6 +794,9 @@ class SystemObserver {
                         "bundle_id": bundleId,
                         "timestamp": ISO8601DateFormatter().string(from: Date())
                     ]
+                    if let systemCategory {
+                        payload["system_category"] = systemCategory
+                    }
                     if let title { payload["window_title"] = title }
                     self.sendEvent(payload)
                 }
@@ -805,5 +822,16 @@ class SystemObserver {
     private func shouldTrackApp(bundleId: String) -> Bool {
         let blockedBundleIds: Set<String> = ["com.apple.finder", "com.apple.loginwindow"]
         return !blockedBundleIds.contains(bundleId) && !bundleId.contains("pulse")
+    }
+
+    private func applicationSystemCategory(_ app: NSRunningApplication) -> String? {
+        guard let bundleURL = app.bundleURL,
+              let bundle = Bundle(url: bundleURL),
+              let category = bundle.object(forInfoDictionaryKey: "LSApplicationCategoryType") as? String,
+              !category.isEmpty
+        else {
+            return nil
+        }
+        return category
     }
 }
