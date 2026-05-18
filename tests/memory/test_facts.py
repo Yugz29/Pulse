@@ -118,6 +118,94 @@ class TestFactEnginePromotion(unittest.TestCase):
         facts = self.engine.get_facts(category="cognitive")
         self.assertGreater(len(facts), 0)
 
+    def test_probable_task_fact_is_marked_inferred(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="coding"))
+
+        facts = self.engine.get_facts(limit=20)
+        fact = next(fact for fact in facts if fact["key"].startswith("slot:") and fact["key"].endswith(":task:coding"))
+        self.assertEqual(fact["source_type"], "inferred")
+
+    def test_duration_fact_is_marked_derived(self):
+        for _ in range(FACT_THRESHOLD):
+            self.engine.observe_session(_session(task="general", duration=60))
+
+        facts = self.engine.get_facts(category="cognitive")
+        duration_fact = next(fact for fact in facts if fact["key"].startswith("session:long:"))
+        self.assertEqual(duration_fact["source_type"], "derived")
+
+    def test_legacy_fact_without_source_type_still_loads(self):
+        now = datetime.now().isoformat()
+        with self.engine._connect() as conn:
+            conn.execute(
+                """INSERT INTO facts
+                   (id, key, category, description, context_json, confidence,
+                    observations, confirmations, contradictions, autonomy_level,
+                    created_at, updated_at, last_seen, archived)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                (
+                    "legacy-source-id",
+                    "slot:soir:task:debug",
+                    "workflow",
+                    "Legacy source type",
+                    "{}",
+                    0.5,
+                    5,
+                    0,
+                    0,
+                    0,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+
+        fact = self.engine.get_facts()[0]
+        self.assertEqual(fact["source_type"], "legacy")
+
+    def test_llm_compressed_fact_is_marked_llm_compressed(self):
+        class FakeLLM:
+            def complete(self, prompt, max_tokens=100):
+                return "Synthèse prudente de faits récurrents."
+
+        now = datetime.now().isoformat()
+        with self.engine._connect() as conn:
+            for index in range(6):
+                conn.execute(
+                    """INSERT INTO facts
+                       (id, key, category, description, context_json, source_type, confidence,
+                        observations, confirmations, contradictions, autonomy_level,
+                        created_at, updated_at, last_seen, archived)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                    (
+                        f"source-{index}",
+                        f"slot:soir:task:task-{index}",
+                        "workflow",
+                        f"Fait source {index}",
+                        "{}",
+                        "inferred",
+                        0.6,
+                        5,
+                        0,
+                        0,
+                        0,
+                        now,
+                        now,
+                        now,
+                    ),
+                )
+            conn.commit()
+
+        compressed_id = self.engine.compress(FakeLLM(), "workflow")
+
+        self.assertIsNotNone(compressed_id)
+        compressed = next(
+            fact for fact in self.engine.get_facts(include_archived=True, limit=20)
+            if fact["id"] == compressed_id
+        )
+        self.assertEqual(compressed["source_type"], "llm_compressed")
+
 
 class TestFactEngineReinforceContradict(unittest.TestCase):
 

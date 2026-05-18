@@ -64,6 +64,14 @@ class TestFactsRoutes(unittest.TestCase):
         data = resp.get_json()
         self.assertGreater(data["count"], 0)
 
+    def test_get_facts_expose_source_type(self):
+        _promote_facts(self.engine)
+        resp = self.client.get("/facts")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertGreater(data["count"], 0)
+        self.assertTrue(all("source_type" in fact for fact in data["facts"]))
+
     def test_get_facts_filtre_category(self):
         _promote_facts(self.engine)
         resp = self.client.get("/facts?category=workflow")

@@ -51,6 +51,7 @@ CONFIDENCE_CONFIRM = 0.08
 CONFIDENCE_CONTRA  = 0.12
 
 VALID_CATEGORIES = {"environment", "workflow", "cognitive", "preference"}
+VALID_SOURCE_TYPES = {"observed", "derived", "inferred", "llm_compressed", "legacy"}
 
 DEFAULT_DB_PATH = Path.home() / ".pulse" / "facts.db"
 DEFAULT_MD_PATH = Path.home() / ".pulse" / "memory" / "facts.md"
@@ -157,7 +158,8 @@ class FactEngine:
         with self._lock:
             with self._connect() as conn:
                 for key, category, obs_desc, fact_desc, context in observations:
-                    self._upsert_observation(conn, key, category, obs_desc, fact_desc, context, now)
+                    source_type = _source_type_from_context(context)
+                    self._upsert_observation(conn, key, category, obs_desc, fact_desc, context, source_type, now)
 
                 newly_promoted = self._promote_pending(conn, now)
                 conn.commit()
@@ -359,7 +361,12 @@ class FactEngine:
                 params,
             ).fetchall()
 
-        return [dict(r) for r in rows]
+        facts = []
+        for row in rows:
+            fact = dict(row)
+            fact["source_type"] = _normalize_source_type(fact.get("source_type"))
+            facts.append(fact)
+        return facts
 
     def render_for_context(self, limit: int = 8) -> str:
         """
@@ -436,17 +443,18 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                 new_id = _new_uid()
                 conn.execute(
                     """INSERT INTO facts
-                       (id, key, category, description, context_json, confidence,
+                       (id, key, category, description, context_json, source_type, confidence,
                         observations, confirmations, contradictions, autonomy_level,
                         created_at, updated_at, last_seen, archived)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
                     (
                         new_id,
                         f"compressed:{category}:{now[:10]}",
                         category,
                         summary.strip(),
                         json.dumps({"source": "llm_compression", "facts_count": len(facts)}),
-                        0.75,          # confiance initiale élevée — synthèse validée
+                        "llm_compressed",
+                        0.75,          # comportement existant ; source_type marque la synthèse LLM
                         len(facts),    # hérite du total d'observations
                         0, 0, 1,       # autonomy_level=1 : déjà validé par compression
                         now, now, now,
@@ -496,6 +504,7 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                 lines.append(
                     f"- {f['description']}  "
                     f"`{bar}` conf={f['confidence']:.2f} "
+                    f"src={f.get('source_type', 'legacy')} "
                     f"obs={obs} autonomie={level}"
                 )
             lines.append("")
@@ -532,6 +541,7 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                     category    TEXT NOT NULL,
                     description TEXT NOT NULL,
                     context_json TEXT,
+                    source_type TEXT DEFAULT 'legacy',
                     count       INTEGER DEFAULT 1,
                     first_seen  TEXT NOT NULL,
                     last_seen   TEXT NOT NULL
@@ -544,6 +554,7 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                     category        TEXT NOT NULL,
                     description     TEXT NOT NULL,
                     context_json    TEXT,
+                    source_type     TEXT DEFAULT 'legacy',
                     confidence      REAL DEFAULT 0.50,
                     observations    INTEGER DEFAULT 0,
                     confirmations   INTEGER DEFAULT 0,
@@ -555,7 +566,15 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
                     archived        INTEGER DEFAULT 0
                 )
             """)
+            self._ensure_column(conn, "observations", "source_type", "TEXT DEFAULT 'legacy'")
+            self._ensure_column(conn, "facts", "source_type", "TEXT DEFAULT 'legacy'")
             conn.commit()
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str, column_type: str) -> None:
+        columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+        if column_name not in columns:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
     def _upsert_observation(
         self,
@@ -565,6 +584,7 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
         obs_description: str,
         fact_description: str,
         context: Dict[str, Any],
+        source_type: str,
         now: str,
     ) -> None:
         existing = conn.execute(
@@ -573,8 +593,15 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
 
         if existing:
             conn.execute(
-                "UPDATE observations SET count = count + 1, last_seen = ? WHERE key = ?",
-                (now, key),
+                """UPDATE observations
+                   SET count = count + 1,
+                       last_seen = ?,
+                       source_type = CASE
+                           WHEN source_type IS NULL OR source_type = 'legacy' THEN ?
+                           ELSE source_type
+                       END
+                   WHERE key = ?""",
+                (now, source_type, key),
             )
             # Si le fait correspondant existe déjà, renforcer sa confiance
             fact = conn.execute(
@@ -594,10 +621,11 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
             # fact_description est rangée dans context_json sous _fact_description
             # pour être utilisée par _promote_pending() à la création du fait.
             context_with_fact = {**context, "_fact_description": fact_description}
+            context_with_fact.pop("source_type", None)
             conn.execute(
-                """INSERT INTO observations (key, category, description, context_json, count, first_seen, last_seen)
-                   VALUES (?, ?, ?, ?, 1, ?, ?)""",
-                (key, category, obs_description, json.dumps(context_with_fact), now, now),
+                """INSERT INTO observations (key, category, description, context_json, source_type, count, first_seen, last_seen)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                (key, category, obs_description, json.dumps(context_with_fact), source_type, now, now),
             )
 
     def _promote_pending(self, conn: sqlite3.Connection, now: str) -> List[str]:
@@ -619,18 +647,20 @@ Ne mentionne pas de pourcentages ni de chiffres qui ne sont pas dans les donnée
             # fallback sur description (observation brute) pour les entrées legacy.
             ctx = json.loads(obs["context_json"] or "{}")
             fact_description = ctx.pop("_fact_description", obs["description"])
+            source_type = _normalize_source_type(obs["source_type"])
             conn.execute(
                 """INSERT INTO facts
-                   (id, key, category, description, context_json, confidence,
+                   (id, key, category, description, context_json, source_type, confidence,
                     observations, confirmations, contradictions, autonomy_level,
                     created_at, updated_at, last_seen, archived)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, 0)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, 0)""",
                 (
                     fact_id,
                     obs["key"],
                     obs["category"],
                     fact_description,
                     json.dumps(ctx),
+                    source_type,
                     CONFIDENCE_INIT,
                     obs["count"],
                     now, now, now,
@@ -698,7 +728,7 @@ def _extract_observations(
             "workflow",
             f"Session {_slot_label(slot)} — mode {_task_label(task)}",
             f"Tendance à travailler {_slot_label(slot)} en mode {_task_label(task)}",
-            {"time_slot": slot, "task": task},
+            {"time_slot": slot, "task": task, "source_type": "inferred"},
         ))
 
     # 2. Focus profond par créneau ────────────────────────────────────────────
@@ -708,7 +738,7 @@ def _extract_observations(
             "cognitive",
             f"Focus soutenu observé — session {_slot_label(slot)}",
             f"Focus soutenu fréquent {_slot_label(slot)}",
-            {"time_slot": slot, "focus": "deep"},
+            {"time_slot": slot, "focus": "deep", "source_type": "inferred"},
         ))
 
     # 3. Sessions longues ─────────────────────────────────────────────────────
@@ -718,7 +748,7 @@ def _extract_observations(
             "cognitive",
             f"Session longue (1h+) — {_slot_label(slot)}",
             f"Sessions souvent longues (1h+) {_slot_label(slot)}",
-            {"time_slot": slot, "duration_min": duration},
+            {"time_slot": slot, "duration_min": duration, "source_type": "derived"},
         ))
 
     # 4. Friction élevée récurrente ───────────────────────────────────────────
@@ -728,7 +758,7 @@ def _extract_observations(
             "cognitive",
             f"Friction élevée observée — projet {project}",
             f"Friction récurrente sur le projet {project}",
-            {"project": project, "friction": friction},
+            {"project": project, "friction": friction, "source_type": "inferred"},
         ))
 
     return obs
@@ -755,6 +785,15 @@ def _task_label(task: str) -> str:
         "browsing": "exploration",
         "general":  "général",
     }.get(task, task)
+
+
+def _source_type_from_context(context: Dict[str, Any]) -> str:
+    return _normalize_source_type(context.get("source_type"))
+
+
+def _normalize_source_type(value: Any) -> str:
+    text = str(value or "").strip()
+    return text if text in VALID_SOURCE_TYPES else "legacy"
 
 
 def _confidence_bar(confidence: float, width: int = 8) -> str:
