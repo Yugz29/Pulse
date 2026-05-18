@@ -26,6 +26,7 @@ from daemon.core.bootstrap_heuristics import (
     BOOTSTRAP_NON_WORK_TITLE_HINTS,
     BOOTSTRAP_WORK_APPS,
 )
+from daemon.core.app_classifier import classify_app
 
 
 HeartbeatStrength = Literal["strong", "weak", "none"]
@@ -173,15 +174,17 @@ def _git_subcommand(command: str) -> str:
 
 def _classify_app_or_window(payload: Mapping[str, Any]) -> WorkHeartbeat:
     app_name = _text(payload.get("app_name"))
+    bundle_id = _text(payload.get("bundle_id")) or None
     title = _text(payload.get("window_title") or payload.get("title"))
     title_lower = title.lower()
 
     if title_lower and any(hint in title_lower for hint in NON_WORK_TITLE_HINTS):
         return NONE_HEARTBEAT
 
-    if app_name in WORK_APPS:
+    classification = classify_app(app_name, bundle_id=bundle_id)
+    if classification.role in {"dev_tool", "terminal"}:
         return WorkHeartbeat("weak", "work_app_active")
-    if app_name in AI_APPS:
+    if classification.role == "ai_assistant":
         return WorkHeartbeat("weak", "ai_app_active")
     if _looks_like_code_title(title):
         return WorkHeartbeat("weak", "code_like_window_title")

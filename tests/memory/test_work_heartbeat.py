@@ -340,6 +340,69 @@ def test_ai_app_activation_is_weak_work_heartbeat():
     assert heartbeat.reason == "ai_app_active"
 
 
+def test_ai_app_active_recognized_by_bootstrap_name():
+    heartbeat = classify_work_heartbeat({
+        "type": "app_activated",
+        "payload": {"app_name": "Claude"},
+    })
+
+    assert heartbeat.strength == "weak"
+    assert heartbeat.reason == "ai_app_active"
+
+
+def test_ai_app_active_recognized_by_bundle_id():
+    heartbeat = classify_work_heartbeat({
+        "type": "app_activated",
+        "payload": {
+            "app_name": "RandomAssistant",
+            "bundle_id": "dev.pulse.test.UnknownAI",
+        },
+    })
+
+    assert heartbeat.strength == "weak"
+    assert heartbeat.reason == "ai_app_active"
+
+
+def test_work_app_active_recognized_by_bundle_id():
+    heartbeat = classify_work_heartbeat({
+        "type": "app_activated",
+        "payload": {
+            "app_name": "RandomIDE",
+            "bundle_id": "dev.pulse.test.UnknownIDE",
+        },
+    })
+
+    assert heartbeat.strength == "weak"
+    assert heartbeat.reason == "work_app_active"
+
+
+def test_unknown_app_with_unknown_bundle_is_not_work_heartbeat():
+    heartbeat = classify_work_heartbeat({
+        "type": "app_activated",
+        "payload": {
+            "app_name": "RandomAssistant",
+            "bundle_id": "com.example.random",
+        },
+    })
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
+
+
+def test_non_work_title_hint_has_priority_over_bundle_classification():
+    heartbeat = classify_work_heartbeat({
+        "type": "window_title_poll",
+        "payload": {
+            "app_name": "RandomIDE",
+            "bundle_id": "dev.pulse.test.UnknownIDE",
+            "title": "Some Video - YouTube",
+        },
+    })
+
+    assert heartbeat.strength == "none"
+    assert heartbeat.reason == "no_work_evidence"
+
+
 def test_recent_user_presence_is_not_work_heartbeat_by_itself():
     event = {
         "type": "user_presence",
