@@ -121,12 +121,21 @@ def build_work_context_card(
                 getattr(present, "active_app_bundle_id", None),
                 getattr(signals, "active_app_bundle_id", None),
             ),
+            active_app_system_category=_first_non_empty(
+                getattr(current_context, "active_app_system_category", None),
+                getattr(present, "active_app_system_category", None),
+                getattr(signals, "active_app_system_category", None),
+            ),
             window_title=_first_non_empty(
                 getattr(signals, "window_title", None),
                 getattr(current_context, "window_title", None),
             ),
             recent_apps=tuple(str(app) for app in getattr(signals, "recent_apps", []) or [] if str(app).strip()),
             recent_app_bundle_ids=_recent_app_bundle_ids(current_context=current_context, signals=signals),
+            recent_app_system_categories=_recent_app_system_categories(
+                current_context=current_context,
+                signals=signals,
+            ),
             work_intent_project=(work_intent or {}).get("project") if work_intent else None,
         )
     )
@@ -609,6 +618,16 @@ def _recent_app_bundle_ids(*, current_context: Any, signals: Any) -> tuple[str |
     if values is None:
         signal_summary = getattr(current_context, "signal_summary", None)
         values = getattr(signal_summary, "recent_app_bundle_ids", None)
+    if not isinstance(values, Iterable) or isinstance(values, (str, bytes)):
+        return ()
+    return tuple(str(value).strip() if str(value or "").strip() else None for value in values)
+
+
+def _recent_app_system_categories(*, current_context: Any, signals: Any) -> tuple[str | None, ...]:
+    values = getattr(signals, "recent_app_system_categories", None)
+    if values is None:
+        signal_summary = getattr(current_context, "signal_summary", None)
+        values = getattr(signal_summary, "recent_app_system_categories", None)
     if not isinstance(values, Iterable) or isinstance(values, (str, bytes)):
         return ()
     return tuple(str(value).strip() if str(value or "").strip() else None for value in values)

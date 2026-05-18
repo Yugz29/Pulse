@@ -64,6 +64,8 @@ def _snapshot(*, signals=None, decision=None, present=None):
         paused=False,
         memory_synced_at=datetime(2026, 5, 6, 10, 0, 0),
         latest_active_app="Xcode",
+        latest_active_app_bundle_id="com.apple.dt.Xcode",
+        latest_active_app_system_category="public.app-category.developer-tools",
         lock_marker_active=False,
         last_screen_locked_at=None,
     )
@@ -266,6 +268,11 @@ def test_build_state_payload_can_include_legacy_debug_when_requested():
     assert payload["debug"]["surface"] == "debug_state"
     assert payload["debug"]["legacy_in_state"] is True
     assert payload["debug"]["runtime"]["latest_active_app"] == "Xcode"
+    assert payload["debug"]["runtime"]["latest_active_app_bundle_id"] == "com.apple.dt.Xcode"
+    assert (
+        payload["debug"]["runtime"]["latest_active_app_system_category"]
+        == "public.app-category.developer-tools"
+    )
     assert payload["debug"]["runtime"]["memory_synced_at"] == "2026-05-06T10:00:00"
     assert payload["debug"]["signals"]["active_project"] == "Pulse"
 

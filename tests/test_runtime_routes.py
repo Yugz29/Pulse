@@ -1220,6 +1220,25 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["_actor"], "tool_assisted")
         self.assertGreater(payload["_automation_score"], 0.5)
 
+    def test_event_endpoint_stores_latest_active_app_system_category(self):
+        response = self.client.post(
+            "/event",
+            json={
+                "type": "app_activated",
+                "app_name": "RandomIDE",
+                "bundle_id": "dev.pulse.test.UnknownIDE",
+                "system_category": "public.app-category.developer-tools",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.runtime_state.get_latest_active_app(), "RandomIDE")
+        self.assertEqual(self.runtime_state.get_latest_active_app_bundle_id(), "dev.pulse.test.UnknownIDE")
+        self.assertEqual(
+            self.runtime_state.get_latest_active_app_system_category(),
+            "public.app-category.developer-tools",
+        )
+
     def test_event_actor_does_not_treat_ai_support_bundle_as_tool_assisted(self):
         self.bus.recent.return_value = []
 

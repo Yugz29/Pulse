@@ -14,6 +14,7 @@ class SignalSummary:
 
     recent_apps: list[str] = field(default_factory=list)
     recent_app_bundle_ids: list[str | None] = field(default_factory=list)
+    recent_app_system_categories: list[str | None] = field(default_factory=list)
     edited_file_count_10m: int = 0
     file_type_mix_10m: dict[str, int] = field(default_factory=dict)
     rename_delete_ratio_10m: float = 0.0
@@ -39,6 +40,7 @@ class CurrentContext:
     active_file: Optional[str]
     active_app: Optional[str]
     active_app_bundle_id: Optional[str]
+    active_app_system_category: Optional[str]
     session_duration_min: int
     activity_level: str
     probable_task: str

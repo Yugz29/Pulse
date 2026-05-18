@@ -19,9 +19,11 @@ class WorkEvidenceInput:
     terminal_command_category: str | None = None
     active_app: str | None = None
     active_app_bundle_id: str | None = None
+    active_app_system_category: str | None = None
     window_title: str | None = None
     recent_apps: tuple[str, ...] = ()
     recent_app_bundle_ids: tuple[str | None, ...] = ()
+    recent_app_system_categories: tuple[str | None, ...] = ()
     work_intent_project: str | None = None
     commit_repo_root: str | None = None
     commit_files: tuple[str, ...] = ()

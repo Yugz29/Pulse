@@ -66,7 +66,11 @@ def register_ingestion_routes(
         if event_type in {"app_activated", "app_switch", "window_title_poll"}:
             app_name = payload.get("app_name")
             if app_name:
-                runtime_state.set_latest_active_app(app_name, payload.get("bundle_id"))
+                runtime_state.set_latest_active_app(
+                    app_name,
+                    payload.get("bundle_id"),
+                    payload.get("system_category"),
+                )
 
         if event_type in _TERMINAL_EVENT_TYPES:
             payload = _normalize_terminal_event_payload(event_type, payload)

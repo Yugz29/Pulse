@@ -109,8 +109,13 @@ def test_empty_work_context_card_uses_unknown_statuses():
 def test_current_context_builder_propagates_app_bundle_ids():
     signals = SimpleNamespace(
         active_app_bundle_id="dev.pulse.test.UnknownIDE",
+        active_app_system_category="public.app-category.developer-tools",
         recent_apps=["RandomIDE", "RandomAssistant"],
         recent_app_bundle_ids=["dev.pulse.test.UnknownIDE", "dev.pulse.test.UnknownAI"],
+        recent_app_system_categories=[
+            "public.app-category.developer-tools",
+            "public.app-category.productivity",
+        ],
     )
 
     context = CurrentContextBuilder().build(
@@ -122,10 +127,15 @@ def test_current_context_builder_propagates_app_bundle_ids():
     )
 
     assert context.active_app_bundle_id == "dev.pulse.test.UnknownIDE"
+    assert context.active_app_system_category == "public.app-category.developer-tools"
     assert context.signal_summary.recent_apps == ["RandomIDE", "RandomAssistant"]
     assert context.signal_summary.recent_app_bundle_ids == [
         "dev.pulse.test.UnknownIDE",
         "dev.pulse.test.UnknownAI",
+    ]
+    assert context.signal_summary.recent_app_system_categories == [
+        "public.app-category.developer-tools",
+        "public.app-category.productivity",
     ]
 
 

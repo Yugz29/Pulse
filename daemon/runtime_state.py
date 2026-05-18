@@ -111,6 +111,7 @@ class RuntimeSnapshot:
     last_diff_summary: str | None = None
     latest_active_app: str | None = None
     latest_active_app_bundle_id: str | None = None
+    latest_active_app_system_category: str | None = None
     lock_marker_active: bool = False
     last_screen_locked_at: datetime | None = None
 
@@ -131,6 +132,7 @@ class RuntimeState:
         self._screen_is_locked: bool = False
         self._latest_active_app: str | None = None
         self._latest_active_app_bundle_id: str | None = None
+        self._latest_active_app_system_category: str | None = None
         self._user_presence_state: str | None = None
         self._user_idle_seconds: int | None = None
         self._user_presence_source: str | None = None
@@ -244,6 +246,7 @@ class RuntimeState:
                 last_diff_summary=self._last_diff_summary,
                 latest_active_app=self._latest_active_app,
                 latest_active_app_bundle_id=self._latest_active_app_bundle_id,
+                latest_active_app_system_category=self._latest_active_app_system_category,
                 lock_marker_active=self._screen_is_locked,
                 last_screen_locked_at=self._last_screen_locked_at,
             )
@@ -355,10 +358,16 @@ class RuntimeState:
             dedupe_window=dedupe_window,
         )
 
-    def set_latest_active_app(self, app_name: str, bundle_id: str | None = None) -> None:
+    def set_latest_active_app(
+        self,
+        app_name: str,
+        bundle_id: str | None = None,
+        system_category: str | None = None,
+    ) -> None:
         with self._lock:
             self._latest_active_app = app_name
             self._latest_active_app_bundle_id = bundle_id
+            self._latest_active_app_system_category = system_category
 
     def get_latest_active_app(self) -> str | None:
         with self._lock:
@@ -367,6 +376,10 @@ class RuntimeState:
     def get_latest_active_app_bundle_id(self) -> str | None:
         with self._lock:
             return self._latest_active_app_bundle_id
+
+    def get_latest_active_app_system_category(self) -> str | None:
+        with self._lock:
+            return self._latest_active_app_system_category
 
     def reset_for_tests(self) -> None:
         with self._lock:
@@ -383,6 +396,7 @@ class RuntimeState:
             self._recent_file_events = {}
             self._latest_active_app = None
             self._latest_active_app_bundle_id = None
+            self._latest_active_app_system_category = None
             self._user_presence_state = None
             self._user_idle_seconds = None
             self._user_presence_source = None

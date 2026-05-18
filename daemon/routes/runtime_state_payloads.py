@@ -22,6 +22,9 @@ def serialize_current_context(current_context: Any) -> dict[str, Any]:
         "duration_sec": getattr(current_context, "duration_sec", None),
         "active_project": getattr(current_context, "active_project", None),
         "active_file": getattr(current_context, "active_file", None),
+        "active_app": getattr(current_context, "active_app", None),
+        "active_app_bundle_id": getattr(current_context, "active_app_bundle_id", None),
+        "active_app_system_category": getattr(current_context, "active_app_system_category", None),
         "probable_task": getattr(current_context, "probable_task", None),
         "activity_level": getattr(current_context, "activity_level", None),
         "focus_level": getattr(current_context, "focus_level", None),
@@ -40,6 +43,9 @@ def serialize_current_context(current_context: Any) -> dict[str, Any]:
         "work_intent": getattr(current_context, "work_intent", None),
         "active_app_duration_sec": getattr(signal_summary, "active_app_duration_sec", None),
         "active_window_title_duration_sec": getattr(signal_summary, "active_window_title_duration_sec", None),
+        "recent_apps": getattr(signal_summary, "recent_apps", []),
+        "recent_app_bundle_ids": getattr(signal_summary, "recent_app_bundle_ids", []),
+        "recent_app_system_categories": getattr(signal_summary, "recent_app_system_categories", []),
         "app_switch_count_10m": getattr(signal_summary, "app_switch_count_10m", 0),
         "ai_app_switch_count_10m": getattr(signal_summary, "ai_app_switch_count_10m", 0),
     }
@@ -48,6 +54,8 @@ def serialize_current_context(current_context: Any) -> dict[str, Any]:
 def serialize_runtime_debug(runtime_snapshot: Any) -> dict[str, Any]:
     return {
         "latest_active_app": runtime_snapshot.latest_active_app,
+        "latest_active_app_bundle_id": getattr(runtime_snapshot, "latest_active_app_bundle_id", None),
+        "latest_active_app_system_category": getattr(runtime_snapshot, "latest_active_app_system_category", None),
         "lock_marker_active": runtime_snapshot.lock_marker_active,
         "last_screen_locked_at": (
             runtime_snapshot.last_screen_locked_at.isoformat()

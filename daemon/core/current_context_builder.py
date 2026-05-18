@@ -39,6 +39,7 @@ class CurrentContextBuilder:
             active_file=present.active_file,
             active_app=active_app,
             active_app_bundle_id=self._signal_attr(signals, "active_app_bundle_id"),
+            active_app_system_category=self._signal_attr(signals, "active_app_system_category"),
             session_duration_min=present.session_duration_min,
             activity_level=present.activity_level,
             probable_task=present.probable_task,
@@ -80,6 +81,9 @@ class CurrentContextBuilder:
         return SignalSummary(
             recent_apps=list(self._signal_attr(signals, "recent_apps", []) or []),
             recent_app_bundle_ids=list(self._signal_attr(signals, "recent_app_bundle_ids", []) or []),
+            recent_app_system_categories=list(
+                self._signal_attr(signals, "recent_app_system_categories", []) or []
+            ),
             edited_file_count_10m=self._signal_attr(signals, "edited_file_count_10m", 0),
             file_type_mix_10m=dict(self._signal_attr(signals, "file_type_mix_10m", {}) or {}),
             rename_delete_ratio_10m=self._signal_attr(signals, "rename_delete_ratio_10m", 0.0),

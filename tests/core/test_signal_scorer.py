@@ -382,6 +382,7 @@ class TestSignalScorer(unittest.TestCase):
             {
                 "app_name": "RandomIDE",
                 "bundle_id": "dev.pulse.test.UnknownIDE",
+                "system_category": "public.app-category.developer-tools",
             },
         )
         self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
@@ -389,13 +390,15 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertEqual(signals.active_app_bundle_id, "dev.pulse.test.UnknownIDE")
+        self.assertEqual(signals.active_app_system_category, "public.app-category.developer-tools")
 
-    def test_signal_scorer_preserves_recent_app_bundle_ids(self):
+    def test_signal_scorer_preserves_recent_app_metadata_alignment(self):
         self._push(
             "app_activated",
             {
                 "app_name": "RandomIDE",
                 "bundle_id": "dev.pulse.test.UnknownIDE",
+                "system_category": "public.app-category.developer-tools",
             },
             minutes_ago=2,
         )
@@ -404,6 +407,7 @@ class TestSignalScorer(unittest.TestCase):
             {
                 "app_name": "RandomAssistant",
                 "bundle_id": "dev.pulse.test.UnknownAI",
+                "system_category": "public.app-category.productivity",
             },
             minutes_ago=1,
         )
@@ -416,8 +420,16 @@ class TestSignalScorer(unittest.TestCase):
             ["dev.pulse.test.UnknownIDE", "dev.pulse.test.UnknownAI"],
         )
         self.assertEqual(
+            signals.recent_app_system_categories,
+            ["public.app-category.developer-tools", "public.app-category.productivity"],
+        )
+        self.assertEqual(
             signals.recent_app_bundle_ids[signals.recent_apps.index("RandomAssistant")],
             "dev.pulse.test.UnknownAI",
+        )
+        self.assertEqual(
+            signals.recent_app_system_categories[signals.recent_apps.index("RandomAssistant")],
+            "public.app-category.productivity",
         )
 
     def test_unknown_app_name_without_known_bundle_does_not_trigger_dev_app_with_edit_by_app(self):
