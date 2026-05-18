@@ -719,6 +719,45 @@ class TestRuntimeRoutes(unittest.TestCase):
             {"file": "PanelView.swift"},
         )
 
+        self.assertNotIn("debug", payload)
+
+    def test_state_include_debug_query_exposes_legacy_debug_block(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
+            probable_task="coding",
+            friction_score=0.42,
+            focus_level="deep",
+            session_duration_min=96,
+            recent_apps=["Xcode", "Codex", "Safari"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.81,
+        )
+        decision = Decision(
+            action="notify",
+            level=2,
+            reason="high_friction",
+            payload={"file": "PanelView.swift"},
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=decision)
+        self.runtime_state.set_latest_active_app("Xcode")
+        self.store.to_dict.return_value = {
+            "active_app": "Xcode",
+            "session_duration_min": 96,
+        }
+
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
+            response = self.client.get("/state?include_debug=true")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
         self.assertIn("debug", payload)
 
         debug = payload["debug"]
@@ -803,7 +842,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["signals"]["active_file"], "/tmp/main.py")
         self.assertEqual(payload["signals"]["session_duration_min"], 24)
-        self.assertEqual(payload["debug"]["store"]["active_project"], None)
+        self.assertNotIn("debug", payload)
 
     def test_state_builder_ignores_store_active_file_and_project(self):
         signals = Signals(
@@ -832,7 +871,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         }
 
         with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
-            response = self.client.get("/state")
+            response = self.client.get("/state?include_debug=1")
 
         payload = response.get_json()
         self.assertEqual(payload["active_project"], "Pulse")

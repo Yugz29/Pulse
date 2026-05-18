@@ -19,6 +19,7 @@ def _build_state_payload(
     get_session_fsm: Callable[[], Any] | None = None,
     get_current_context: Callable[[], Any] | None = None,
     get_recent_sessions: Callable[[int], Any] | None = None,
+    include_debug: bool = False,
 ) -> dict[str, Any]:
     from daemon.routes.runtime_state_payloads import build_state_payload
 
@@ -30,6 +31,7 @@ def _build_state_payload(
         get_recent_sessions=get_recent_sessions,
         current_context_builder=current_context_builder,
         last_session_context_fn=last_session_context,
+        include_debug=include_debug,
     )
 
 
@@ -67,6 +69,10 @@ def register_status_routes(
     get_current_context: Callable[[], Any] | None = None,
     get_recent_sessions: Callable[[int], Any] | None = None,
 ) -> None:
+    def _include_debug_in_state() -> bool:
+        raw = str(request.args.get("include_debug") or "").strip().lower()
+        return raw in {"1", "true", "yes", "on"}
+
     @app.route("/ping", methods=["GET"])
     def ping():
         paused = runtime_state.touch_ping()
@@ -81,6 +87,7 @@ def register_status_routes(
             get_session_fsm=get_session_fsm,
             get_current_context=get_current_context,
             get_recent_sessions=get_recent_sessions,
+            include_debug=_include_debug_in_state(),
         )
         return jsonify(state)
 

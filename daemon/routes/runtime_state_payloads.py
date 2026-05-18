@@ -120,6 +120,7 @@ def build_state_payload(
     get_recent_sessions: Callable[[int], Any] | None = None,
     current_context_builder: Any | None = None,
     last_session_context_fn: Callable[[str], str | None] = last_session_context,
+    include_debug: bool = False,
 ) -> dict[str, Any]:
     present = runtime_snapshot.present
     state = {
@@ -142,7 +143,8 @@ def build_state_payload(
         current_context_builder=current_context_builder,
         last_session_context_fn=last_session_context_fn,
     )
-    state["debug"] = debug
+    if include_debug:
+        state["debug"] = debug
     return state
 
 

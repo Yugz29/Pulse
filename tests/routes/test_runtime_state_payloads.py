@@ -241,12 +241,25 @@ def test_build_state_payload_keeps_present_minimal_when_state_signals_are_enrich
     assert "SECRET stdout" not in serialized
 
 
-def test_build_state_payload_debug_contains_expected_fields():
+def test_build_state_payload_omits_debug_by_default_but_keeps_product_fields():
     payload = build_state_payload(
         store_state=StoreStub().to_dict(),
         runtime_snapshot=_snapshot(signals=_signals()),
         current_context_builder=CurrentContextBuilderStub(),
         last_session_context_fn=lambda project: None,
+    )
+
+    assert "debug" not in payload
+    assert payload["signals"]["active_project"] == "Pulse"
+
+
+def test_build_state_payload_can_include_legacy_debug_when_requested():
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_signals()),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+        include_debug=True,
     )
 
     assert payload["debug"]["store"]["last_event_type"] == "file_modified"
@@ -309,4 +322,4 @@ def test_build_state_payload_missing_optional_fields_uses_safe_defaults():
     assert payload["last_event_type"] is None
     assert payload["runtime_paused"] is False
     assert payload["present"] == {}
-    assert payload["debug"]["store"] == {}
+    assert "debug" not in payload
