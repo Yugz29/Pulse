@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.event_bus import Event, EventBus
 from daemon.core.signal_scorer import SignalScorer
 from daemon.core.work_context_card import build_work_context_card
 from daemon.core.workspace_context import extract_project_name
 from daemon.memory.work_episode_builder import build_work_episodes
+from daemon.runtime_state import PresentState
 
 
 BASE = datetime(2026, 5, 18, 10, 0, 0)
@@ -102,6 +104,65 @@ def test_empty_work_context_card_uses_unknown_statuses():
     assert all("détecté" not in text.lower() for text in card.evidence)
     assert "Projet actif non identifié" in card.missing_context
     assert "Tâche utilisateur encore générale" in card.missing_context
+
+
+def test_current_context_builder_propagates_app_bundle_ids():
+    signals = SimpleNamespace(
+        active_app_bundle_id="dev.pulse.test.UnknownIDE",
+        recent_apps=["RandomIDE", "RandomAssistant"],
+        recent_app_bundle_ids=["dev.pulse.test.UnknownIDE", "dev.pulse.test.UnknownAI"],
+    )
+
+    context = CurrentContextBuilder().build(
+        present=PresentState(active_project="acme-api", active_file="/tmp/acme-api/src/handler.py"),
+        active_app="RandomIDE",
+        signals=signals,
+        find_git_root_fn=lambda path: None,
+        find_workspace_root_fn=lambda path: None,
+    )
+
+    assert context.active_app_bundle_id == "dev.pulse.test.UnknownIDE"
+    assert context.signal_summary.recent_apps == ["RandomIDE", "RandomAssistant"]
+    assert context.signal_summary.recent_app_bundle_ids == [
+        "dev.pulse.test.UnknownIDE",
+        "dev.pulse.test.UnknownAI",
+    ]
+
+
+def test_bundle_id_flows_from_scorer_to_context_card_for_unknown_ai_support_app():
+    signals = _score_events(
+        [
+            _event(
+                "app_activated",
+                {
+                    "app_name": "RandomAssistant",
+                    "bundle_id": "dev.pulse.test.UnknownAI",
+                },
+            ),
+            _event("file_modified", {"path": "/tmp/acme-api/src/handler.py"}),
+        ]
+    )
+    present = PresentState(
+        active_project=signals.active_project,
+        active_file=signals.active_file,
+        probable_task=signals.probable_task,
+        activity_level=signals.activity_level,
+        focus_level=signals.focus_level,
+        clipboard_context=signals.clipboard_context,
+    )
+    context = CurrentContextBuilder().build(
+        present=present,
+        active_app="RandomAssistant",
+        signals=signals,
+        find_git_root_fn=lambda path: None,
+        find_workspace_root_fn=lambda path: None,
+    )
+
+    card = build_work_context_card(context, signals=signals)
+
+    assert signals.active_app_bundle_id == "dev.pulse.test.UnknownAI"
+    assert context.active_app_bundle_id == "dev.pulse.test.UnknownAI"
+    assert card.support_apps == ("RandomAssistant",)
 
 
 def test_work_episode_on_unknown_repo_uses_generic_scopes():

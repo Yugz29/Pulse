@@ -376,6 +376,50 @@ class TestSignalScorer(unittest.TestCase):
         self.assertIn("dev_app_with_edit", active)
         self.assertEqual(signals.probable_task, "coding")
 
+    def test_signal_scorer_preserves_active_app_bundle_id(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomIDE",
+                "bundle_id": "dev.pulse.test.UnknownIDE",
+            },
+        )
+        self._push("file_modified", {"path": "/tmp/acme-api/src/handler.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_app_bundle_id, "dev.pulse.test.UnknownIDE")
+
+    def test_signal_scorer_preserves_recent_app_bundle_ids(self):
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomIDE",
+                "bundle_id": "dev.pulse.test.UnknownIDE",
+            },
+            minutes_ago=2,
+        )
+        self._push(
+            "app_activated",
+            {
+                "app_name": "RandomAssistant",
+                "bundle_id": "dev.pulse.test.UnknownAI",
+            },
+            minutes_ago=1,
+        )
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.recent_apps, ["RandomIDE", "RandomAssistant"])
+        self.assertEqual(
+            signals.recent_app_bundle_ids,
+            ["dev.pulse.test.UnknownIDE", "dev.pulse.test.UnknownAI"],
+        )
+        self.assertEqual(
+            signals.recent_app_bundle_ids[signals.recent_apps.index("RandomAssistant")],
+            "dev.pulse.test.UnknownAI",
+        )
+
     def test_unknown_app_name_without_known_bundle_does_not_trigger_dev_app_with_edit_by_app(self):
         self._push(
             "app_activated",
