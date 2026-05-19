@@ -34,6 +34,8 @@ class CommitEpisodeLink:
     project: str | None
     confidence: float
     status: str
+    relation_status: str
+    commit_status: str
     link_reason: str | None
     flags: tuple[str, ...]
     delivery_delta_min: int | None = None
@@ -312,6 +314,8 @@ def _build_link(
         project=_project(candidate) if candidate is not None else _project(commit),
         confidence=confidence,
         status=status,
+        relation_status=_relation_status(status, flags),
+        commit_status="observed_commit",
         link_reason=link_reason,
         flags=flags,
         delivery_delta_min=delivery_delta,
@@ -322,6 +326,14 @@ def _build_link(
             "temporal_only" if "temporal_only_link" in flags else None
         ),
     )
+
+
+def _relation_status(status: str, flags: tuple[str, ...]) -> str:
+    if status != "linked":
+        return "unrelated_or_unknown"
+    if "temporal_only_link" in flags:
+        return "weak_temporal_candidate"
+    return "likely_related"
 
 
 def _evidence_episode_id(candidate: Mapping[str, Any]) -> str | None:

@@ -163,6 +163,8 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertIn("work_episode_link", link["flags"])
         self.assertNotIn("temporal_only_link", link["flags"])
         self.assertEqual(link["score_breakdown"]["file_overlap_count"], 3)
+        self.assertEqual(link["relation_status"], "likely_related")
+        self.assertEqual(link["commit_status"], "observed_commit")
 
     def test_no_file_overlap_keeps_temporal_delivery_behavior(self):
         payload = link_commits_to_episodes(
@@ -207,6 +209,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertIn("linked_by_delivery_proximity", link["flags"])
         self.assertIn("temporal_only_link", link["flags"])
         self.assertNotIn("linked_by_file_overlap", link["flags"])
+        self.assertEqual(link["relation_status"], "weak_temporal_candidate")
 
     def test_project_mismatch_prevents_candidate_file_overlap_link(self):
         payload = link_commits_to_episodes(
@@ -237,6 +240,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
 
         self.assertEqual(payload["linked_count"], 0)
         self.assertEqual(payload["unlinked_count"], 1)
+        self.assertEqual(payload["unlinked_commits"][0]["relation_status"], "unrelated_or_unknown")
 
     def test_delayed_file_overlap_too_old_does_not_link(self):
         payload = link_commits_to_episodes(
@@ -341,6 +345,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertIn("delayed_delivery", link["flags"])
         self.assertNotIn("stale_journal_window_ignored", link["flags"])
         self.assertEqual(link["score_breakdown"]["file_overlap_count"], 3)
+        self.assertEqual(link["relation_status"], "likely_related")
 
     def test_journal_file_window_uses_matching_visible_episode_id(self):
         payload = link_commits_to_episodes(
@@ -400,6 +405,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertEqual(link["evidence_source"], "journal_file_window")
         self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
         self.assertEqual(link["evidence_level"], "file_scope")
+        self.assertEqual(link["relation_status"], "likely_related")
 
     def test_journal_file_window_ne_mappe_pas_un_episode_visible_trop_partiel(self):
         payload = link_commits_to_episodes(
@@ -933,6 +939,7 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         self.assertIn("temporal_only_link", payload["links"][0]["flags"])
         self.assertIn("confidence_capped_no_commit_context", payload["links"][0]["flags"])
         self.assertEqual(payload["links"][0]["evidence_level"], "temporal_only")
+        self.assertEqual(payload["links"][0]["relation_status"], "weak_temporal_candidate")
         self.assertEqual(payload["links"][0]["delivery_delta_min"], -2)
         self.assertLessEqual(payload["links"][0]["confidence"], 0.65)
 
