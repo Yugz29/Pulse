@@ -392,12 +392,44 @@ class FactEngine:
             "cognitive":   "cognitif",
             "preference":  "préf",
         }
-        for f in facts:
-            label = category_labels.get(f["category"], f["category"])
-            conf  = f["confidence"]
-            lines.append(f"• [{label}] {f['description']}  (conf {conf:.2f})")
 
-        return "\n".join(lines)
+        sections = [
+            (
+                "Faits observés / dérivés",
+                [fact for fact in facts if fact.get("source_type") in {"observed", "derived"}],
+            ),
+            (
+                "Hypothèses / tendances estimées",
+                [fact for fact in facts if fact.get("source_type") == "inferred"],
+            ),
+            (
+                "Synthèses compressées à confirmer",
+                [fact for fact in facts if fact.get("source_type") == "llm_compressed"],
+            ),
+            (
+                "Provenance inconnue / legacy",
+                [fact for fact in facts if fact.get("source_type") == "legacy"],
+            ),
+        ]
+        rendered_any = False
+        for title, section_facts in sections:
+            if not section_facts:
+                continue
+            if rendered_any:
+                lines.append("")
+            lines.append(f"{title} :")
+            for f in section_facts:
+                lines.append(self._profile_fact_line(f, category_labels))
+            rendered_any = True
+
+        return "\n".join(lines) if rendered_any else ""
+
+    @staticmethod
+    def _profile_fact_line(fact: Dict[str, Any], category_labels: Dict[str, str]) -> str:
+        label = category_labels.get(fact["category"], fact["category"])
+        conf = fact["confidence"]
+        source_type = fact.get("source_type", "legacy")
+        return f"• [{label}] {fact['description']}  (conf {conf:.2f}; source {source_type})"
 
     def compress(self, llm: Any, category: str) -> Optional[str]:
         """

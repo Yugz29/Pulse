@@ -104,6 +104,20 @@ class TestFactsRoutes(unittest.TestCase):
         self.assertIn("profile", data)
         self.assertIsInstance(data["profile"], str)
 
+    def test_profile_expose_sections_de_provenance(self):
+        _promote_facts(self.engine)
+        with self.engine._connect() as conn:
+            conn.execute("UPDATE facts SET confidence = 0.60")
+            conn.commit()
+
+        resp = self.client.get("/facts/profile")
+
+        self.assertEqual(resp.status_code, 200)
+        profile = resp.get_json()["profile"]
+        self.assertIn("Hypothèses / tendances estimées :", profile)
+        self.assertIn("Faits observés / dérivés :", profile)
+        self.assertIn("source inferred", profile)
+
     def test_reinforce(self):
         _promote_facts(self.engine)
         fact_id = self.engine.get_facts()[0]["id"]

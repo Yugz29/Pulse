@@ -414,6 +414,34 @@ class TestFactEngineRender(unittest.TestCase):
     def tearDown(self):
         self.tmpdir.cleanup()
 
+    def _insert_profile_fact(self, *, fact_id: str, description: str, source_type: str, category: str = "workflow") -> None:
+        now = datetime.now().isoformat()
+        with self.engine._connect() as conn:
+            conn.execute(
+                """INSERT INTO facts
+                   (id, key, category, description, context_json, source_type, confidence,
+                    observations, confirmations, contradictions, autonomy_level,
+                    created_at, updated_at, last_seen, archived)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                (
+                    fact_id,
+                    f"{fact_id}:key",
+                    category,
+                    description,
+                    "{}",
+                    source_type,
+                    0.7,
+                    6,
+                    0,
+                    0,
+                    0,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+
     def test_render_vide_si_pas_de_faits(self):
         result = self.engine.render_for_context()
         self.assertEqual(result, "")
@@ -456,6 +484,57 @@ class TestFactEngineRender(unittest.TestCase):
             conn.commit()
         result = self.engine.render_for_context()
         self.assertEqual(result, "")
+
+    def test_render_derived_fact_in_main_section(self):
+        self._insert_profile_fact(
+            fact_id="derived-fact",
+            description="Durée longue calculée depuis la session",
+            source_type="derived",
+        )
+
+        result = self.engine.render_for_context()
+
+        self.assertIn("Faits observés / dérivés :", result)
+        self.assertIn("source derived", result)
+        self.assertNotIn("Hypothèses / tendances estimées :", result)
+
+    def test_render_inferred_fact_in_estimated_hypotheses_section(self):
+        self._insert_profile_fact(
+            fact_id="inferred-fact",
+            description="Tendance estimée à coder le soir",
+            source_type="inferred",
+        )
+
+        result = self.engine.render_for_context()
+
+        self.assertIn("Hypothèses / tendances estimées :", result)
+        self.assertIn("source inferred", result)
+        self.assertNotIn("Faits observés / dérivés :", result)
+
+    def test_render_llm_compressed_fact_is_not_presented_as_observation(self):
+        self._insert_profile_fact(
+            fact_id="llm-compressed-fact",
+            description="Synthèse LLM de tendances récurrentes",
+            source_type="llm_compressed",
+        )
+
+        result = self.engine.render_for_context()
+
+        self.assertIn("Synthèses compressées à confirmer :", result)
+        self.assertIn("source llm_compressed", result)
+        self.assertNotIn("Faits observés / dérivés :", result)
+
+    def test_render_legacy_fact_is_marked_as_unknown_provenance(self):
+        self._insert_profile_fact(
+            fact_id="legacy-fact",
+            description="Ancien fait sans provenance fiable",
+            source_type="legacy",
+        )
+
+        result = self.engine.render_for_context()
+
+        self.assertIn("Provenance inconnue / legacy :", result)
+        self.assertIn("source legacy", result)
 
     def test_stats_coherentes(self):
         for _ in range(FACT_THRESHOLD):
