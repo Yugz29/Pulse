@@ -73,13 +73,26 @@ def link_commits_to_episodes(
         else:
             unlinked.append(link)
 
+    all_results = [*links, *unlinked]
     return {
         "commit_count": len(commits),
         "linked_count": len(links),
         "unlinked_count": len(unlinked),
+        "observed_commit_count": _commit_status_count(all_results, "observed_commit"),
+        "likely_related_count": _relation_status_count(all_results, "likely_related"),
+        "weak_temporal_candidate_count": _relation_status_count(all_results, "weak_temporal_candidate"),
+        "unrelated_or_unknown_count": _relation_status_count(all_results, "unrelated_or_unknown"),
         "links": [asdict(link) for link in links],
         "unlinked_commits": [asdict(link) for link in unlinked],
     }
+
+
+def _relation_status_count(links: list[CommitEpisodeLink], relation_status: str) -> int:
+    return sum(1 for link in links if link.relation_status == relation_status)
+
+
+def _commit_status_count(links: list[CommitEpisodeLink], commit_status: str) -> int:
+    return sum(1 for link in links if link.commit_status == commit_status)
 
 
 def _link_one_commit(

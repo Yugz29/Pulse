@@ -154,6 +154,10 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         )
 
         self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["observed_commit_count"], 1)
+        self.assertEqual(payload["likely_related_count"], 1)
+        self.assertEqual(payload["weak_temporal_candidate_count"], 0)
+        self.assertEqual(payload["unrelated_or_unknown_count"], 0)
         link = payload["links"][0]
         self.assertEqual(link["episode_id"], "episode-code")
         self.assertEqual(link["link_reason"], "linked_by_journal_file_window")
@@ -204,6 +208,10 @@ class TestCommitEpisodeLinker(unittest.TestCase):
         )
 
         self.assertEqual(payload["linked_count"], 1)
+        self.assertEqual(payload["observed_commit_count"], 1)
+        self.assertEqual(payload["likely_related_count"], 0)
+        self.assertEqual(payload["weak_temporal_candidate_count"], 1)
+        self.assertEqual(payload["unrelated_or_unknown_count"], 0)
         link = payload["links"][0]
         self.assertEqual(link["episode_id"], "episode-git")
         self.assertIn("linked_by_delivery_proximity", link["flags"])
@@ -240,6 +248,10 @@ class TestCommitEpisodeLinker(unittest.TestCase):
 
         self.assertEqual(payload["linked_count"], 0)
         self.assertEqual(payload["unlinked_count"], 1)
+        self.assertEqual(payload["observed_commit_count"], 1)
+        self.assertEqual(payload["likely_related_count"], 0)
+        self.assertEqual(payload["weak_temporal_candidate_count"], 0)
+        self.assertEqual(payload["unrelated_or_unknown_count"], 1)
         self.assertEqual(payload["unlinked_commits"][0]["relation_status"], "unrelated_or_unknown")
 
     def test_delayed_file_overlap_too_old_does_not_link(self):
