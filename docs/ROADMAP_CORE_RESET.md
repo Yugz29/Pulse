@@ -338,8 +338,8 @@ Validation :
 Découpage recommandé :
 
 - [x] R2a — Contrat d’inventaire observation (`docs/OBSERVATION_CONTRACT.md`) ;
-- R2b — Fixtures golden ;
-- R2c — Tests pipeline ingestion ;
+- [x] R2b — Fixtures golden ;
+- [x] R2c — Tests pipeline ingestion ;
 - [x] R2d — Bruit et actor baseline ;
 - R2e — Terminal baseline ;
 - R2f — Feed readability baseline.
