@@ -1864,12 +1864,128 @@ def _journal_entries_for_hidden_payload(entries: List[Dict[str, Any]]) -> List[D
     normalized_entries = [_normalize_journal_entry(raw_entry) for raw_entry in entries]
     merged_entries = _merge_journal_entries(normalized_entries)
     resolved_entries = _resolve_journal_entry_overlaps(merged_entries)
-    return [
+    payload_entries = [
         entry
         for entry in resolved_entries
         if not entry.get("overlap_demoted")
         and not _is_suppressed_journal_entry(entry)
     ]
+    return [_with_journal_truth_layers(entry) for entry in payload_entries]
+
+
+def _with_journal_truth_layers(entry: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = dict(entry)
+    enriched["truth_layers"] = _journal_truth_layers(enriched)
+    return enriched
+
+
+def _journal_truth_layers(entry: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    observed: List[Dict[str, Any]] = []
+    derived: List[Dict[str, Any]] = []
+    inferred: List[Dict[str, Any]] = []
+    narrative: List[Dict[str, Any]] = []
+
+    for key in ("started_at", "ended_at", "delivered_at"):
+        value = entry.get(key)
+        if value:
+            observed.append({"kind": key, "value": value})
+
+    commit_message = str(entry.get("commit_message") or "").strip()
+    if commit_message:
+        observed.append({"kind": "commit_message", "value": commit_message})
+
+    recent_apps = _compact_strings(entry.get("recent_apps", []))
+    if recent_apps:
+        observed.append({"kind": "recent_apps", "value": recent_apps})
+
+    top_file_paths = _clean_file_paths(entry.get("top_file_paths", []))
+    if top_file_paths:
+        observed.append({"kind": "top_file_paths", "value": top_file_paths})
+
+    derived.append({"kind": "duration_min", "value": int(entry.get("duration_min") or 0)})
+    derived.append({"kind": "files_count", "value": int(entry.get("files_count") or 0)})
+    top_files = _compact_strings(entry.get("top_files", []))
+    if top_files:
+        derived.append({"kind": "top_files", "value": top_files, "source": str(entry.get("scope_source") or "unknown")})
+
+    task_item: Dict[str, Any] = {
+        "kind": "probable_task",
+        "value": str(entry.get("probable_task") or "general"),
+    }
+    confidence = _journal_task_confidence(entry.get("task_confidence"))
+    if confidence is not None:
+        task_item["confidence"] = confidence
+    inferred.append(task_item)
+
+    project_item: Dict[str, Any] = {
+        "kind": "active_project",
+        "value": entry.get("active_project"),
+    }
+    if entry.get("project_source"):
+        project_item["source"] = entry.get("project_source")
+    inferred.append(project_item)
+
+    inferred.append({"kind": "activity_level", "value": str(entry.get("activity_level") or "unknown")})
+    inferred.append({"kind": "boundary_reason", "value": str(entry.get("boundary_reason") or "unknown")})
+    inferred.append({"kind": "scope", "value": top_files, "source": str(entry.get("scope_source") or "unknown")})
+
+    uncertainty_flags = _compact_strings(entry.get("uncertainty_flags", []))
+    if uncertainty_flags:
+        inferred.append({"kind": "uncertainty_flags", "value": uncertainty_flags})
+
+    body = str(entry.get("body") or "").strip()
+    if body:
+        narrative.append(
+            _journal_narrative_item(
+                kind="body",
+                value=body,
+                summary_source=entry.get("summary_source"),
+                summary_status=entry.get("summary_status"),
+                summary_error=entry.get("summary_error"),
+            )
+        )
+
+    for item in entry.get("commit_items") or []:
+        if not isinstance(item, dict):
+            continue
+        item_body = str(item.get("body") or "").strip()
+        if not item_body:
+            continue
+        narrative_item = _journal_narrative_item(
+            kind="commit_item_body",
+            value=item_body,
+            summary_source=item.get("summary_source"),
+            summary_status=item.get("summary_status"),
+            summary_error=item.get("summary_error"),
+        )
+        if item.get("commit_item_id"):
+            narrative_item["commit_item_id"] = item.get("commit_item_id")
+        narrative.append(narrative_item)
+
+    return {
+        "observed": observed,
+        "derived": derived,
+        "inferred": inferred,
+        "narrative": narrative,
+    }
+
+
+def _journal_narrative_item(
+    *,
+    kind: str,
+    value: str,
+    summary_source: Any = None,
+    summary_status: Any = None,
+    summary_error: Any = None,
+) -> Dict[str, Any]:
+    item: Dict[str, Any] = {"kind": kind, "value": value}
+    if summary_source:
+        item["source"] = str(summary_source)
+    if summary_status:
+        item["status"] = str(summary_status)
+    if summary_error:
+        item["error"] = str(summary_error)
+    return item
 
 
 def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -> str:

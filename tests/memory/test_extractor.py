@@ -40,6 +40,24 @@ class MarkdownLLM:
         return "*   **Analyse :**\n6.  **\n<final>Résumé *court* avec **markdown** parasite.</final>"
 
 
+def _hidden_journal_entries(journal: str):
+    return json.loads(
+        journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
+    )
+
+
+def _truth_kinds(entry, layer: str) -> set[str]:
+    return {item.get("kind") for item in entry.get("truth_layers", {}).get(layer, [])}
+
+
+def _truth_item(entry, layer: str, kind: str):
+    return next(
+        item
+        for item in entry.get("truth_layers", {}).get(layer, [])
+        if item.get("kind") == kind
+    )
+
+
 class TestExtractor(unittest.TestCase):
 
     def setUp(self):
@@ -1201,6 +1219,135 @@ class TestExtractor(unittest.TestCase):
         self.assertIn("Assistance outil probable.", journal)
         self.assertEqual(hidden[0]["uncertainty_flags"], ["tool_assisted"])
         self.assertEqual(hidden[0]["task_confidence"], 0.82)
+
+    def test_journal_hidden_payload_includes_truth_layers(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 2,
+                "top_files": ["extractor.py", "session.py"],
+                "top_file_paths": ["/tmp/acme-api/src/extractor.py"],
+                "task_confidence": 0.74,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        hidden = _hidden_journal_entries(journal)
+
+        self.assertIn("truth_layers", hidden[0])
+        self.assertEqual(set(hidden[0]["truth_layers"]), {"observed", "derived", "inferred", "narrative"})
+
+    def test_journal_truth_layers_classify_probable_task_as_inferred(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 1,
+                "top_files": ["extractor.py"],
+                "task_confidence": 0.61,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        entry = _hidden_journal_entries(journal)[0]
+
+        self.assertIn("probable_task", _truth_kinds(entry, "inferred"))
+        self.assertNotIn("probable_task", _truth_kinds(entry, "observed"))
+        task = _truth_item(entry, "inferred", "probable_task")
+        self.assertEqual(task["value"], "coding")
+        self.assertEqual(task["confidence"], 0.61)
+
+    def test_journal_truth_layers_classify_duration_as_derived(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 24,
+                "probable_task": "debug",
+                "recent_apps": ["Terminal"],
+                "files_changed": 0,
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        entry = _hidden_journal_entries(journal)[0]
+
+        self.assertEqual(_truth_item(entry, "derived", "duration_min")["value"], 24)
+        self.assertNotIn("duration_min", _truth_kinds(entry, "observed"))
+
+    def test_journal_truth_layers_classify_commit_message_as_observed(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 1,
+                "top_files": ["extractor.py"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="commit",
+            commit_message="fix(memory): preserve journal provenance",
+            diff_summary="Diff en cours : extractor.py (+2 -1)",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        entry = _hidden_journal_entries(journal)[0]
+
+        self.assertEqual(
+            _truth_item(entry, "observed", "commit_message")["value"],
+            "fix(memory): preserve journal provenance",
+        )
+        self.assertNotIn("commit_message", _truth_kinds(entry, "inferred"))
+
+    def test_journal_truth_layers_classify_body_as_narrative(self):
+        update_memories_from_session(
+            {
+                "active_project": "Pulse",
+                "duration_min": 20,
+                "probable_task": "coding",
+                "recent_apps": ["Cursor"],
+                "files_changed": 1,
+                "top_files": ["extractor.py"],
+            },
+            memory_dir=self.memory_dir,
+            trigger="screen_lock",
+        )
+
+        journal = next((self.memory_dir / "sessions").glob("*.md")).read_text()
+        entry = _hidden_journal_entries(journal)[0]
+
+        body = _truth_item(entry, "narrative", "body")
+        self.assertEqual(body["value"], entry["body"])
+        self.assertEqual(body["source"], "deterministic_fallback")
+        self.assertEqual(body["status"], "llm_unavailable")
+        self.assertNotIn("body", _truth_kinds(entry, "observed"))
+
+    def test_old_journal_without_truth_layers_still_loads(self):
+        journal_file = self.memory_dir / "sessions" / "2026-05-05.md"
+        journal_file.parent.mkdir(parents=True)
+        journal_file.write_text(
+            "# Journal\n\n"
+            "<!-- pulse-journal-data:start\n"
+            f"{json.dumps([{'entry_id': 'legacy-1', 'active_project': 'Pulse', 'duration_min': 20}])}\n"
+            "pulse-journal-data:end -->",
+            encoding="utf-8",
+        )
+
+        entries = extractor_module._load_journal_entries(journal_file)
+
+        self.assertEqual(entries[0]["entry_id"], "legacy-1")
+        self.assertNotIn("truth_layers", entries[0])
 
     def test_journal_affiche_livraison_asynchrone_pour_commit_idle(self):
         update_memories_from_session(
