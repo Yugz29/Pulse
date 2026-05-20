@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 _TEST_HOME = tempfile.mkdtemp(prefix="pulse-tests-home-")
@@ -15,6 +16,23 @@ class TestMainMemoryRoutes(unittest.TestCase):
         daemon_main.runtime_state.reset_for_tests()
         daemon_main.runtime_orchestrator.reset_for_tests()
         self.client = daemon_main.app.test_client()
+        self.sessions_dir = Path(_TEST_HOME) / ".pulse" / "memory" / "sessions"
+        if self.sessions_dir.exists():
+            for file in self.sessions_dir.glob("*.md"):
+                file.unlink()
+
+    def _write_session_journal(self, name: str = "2026-05-20", *, hidden: bool = True) -> Path:
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        content = "# Journal Pulse\n\n## Acme\n\nVisible session.\n"
+        if hidden:
+            content += (
+                "\n<!-- pulse-journal-data:start\n"
+                "[{\"entry_id\":\"journal-1\",\"truth_layers\":{\"inferred\":[]}}]\n"
+                "pulse-journal-data:end -->\n"
+            )
+        path = self.sessions_dir / f"{name}.md"
+        path.write_text(content, encoding="utf-8")
+        return path
 
     def test_memory_list_includes_usage_and_frozen_timestamp(self):
         frozen_at = datetime(2026, 4, 12, 20, 0, 0)
@@ -51,7 +69,47 @@ class TestMainMemoryRoutes(unittest.TestCase):
             content="Projet Pulse",
             tier="persistent",
             topic="product",
+            source="manual",
+            old_text=None,
+        )
+
+    def test_memory_write_preserves_explicit_llm_source(self):
+        with patch.object(
+            daemon_main.memory_store,
+            "write",
+            return_value={"ok": True, "content": "Résumé proposé"},
+        ) as write:
+            response = self.client.post(
+                "/memory/write",
+                json={"content": "Résumé proposé", "source": "llm"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        write.assert_called_once_with(
+            content="Résumé proposé",
+            tier="session",
+            topic="general",
             source="llm",
+            old_text=None,
+        )
+
+    def test_memory_write_preserves_explicit_user_source(self):
+        with patch.object(
+            daemon_main.memory_store,
+            "write",
+            return_value={"ok": True, "content": "Préférence utilisateur"},
+        ) as write:
+            response = self.client.post(
+                "/memory/write",
+                json={"content": "Préférence utilisateur", "source": "user"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        write.assert_called_once_with(
+            content="Préférence utilisateur",
+            tier="session",
+            topic="general",
+            source="user",
             old_text=None,
         )
 
@@ -59,6 +117,56 @@ class TestMainMemoryRoutes(unittest.TestCase):
         response = self.client.post("/memory/remove", json={"old_text": ""})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["error"], "old_text manquant")
+
+    def test_memory_sessions_strips_hidden_payload_by_default(self):
+        self._write_session_journal()
+
+        response = self.client.get("/memory/sessions")
+
+        self.assertEqual(response.status_code, 200)
+        session = response.get_json()["sessions"][0]
+        self.assertIn("Visible session.", session["content"])
+        self.assertNotIn("pulse-journal-data", session["content"])
+        self.assertNotIn("truth_layers", session["content"])
+        self.assertTrue(session["has_hidden_payload"])
+        self.assertFalse(session["include_hidden"])
+        self.assertEqual(session["surface"], "product_memory_sessions")
+
+    def test_memory_sessions_include_hidden_true_preserves_raw_payload(self):
+        self._write_session_journal()
+
+        response = self.client.get("/memory/sessions?include_hidden=true")
+
+        self.assertEqual(response.status_code, 200)
+        session = response.get_json()["sessions"][0]
+        self.assertIn("Visible session.", session["content"])
+        self.assertIn("pulse-journal-data", session["content"])
+        self.assertIn("truth_layers", session["content"])
+        self.assertTrue(session["has_hidden_payload"])
+        self.assertTrue(session["include_hidden"])
+        self.assertEqual(session["surface"], "product_memory_sessions_raw")
+
+    def test_memory_sessions_marks_absent_hidden_payload(self):
+        self._write_session_journal(hidden=False)
+
+        response = self.client.get("/memory/sessions")
+
+        self.assertEqual(response.status_code, 200)
+        session = response.get_json()["sessions"][0]
+        self.assertIn("Visible session.", session["content"])
+        self.assertFalse(session["has_hidden_payload"])
+        self.assertFalse(session["include_hidden"])
+
+    def test_memory_sessions_absent_directory_still_returns_empty_list(self):
+        if self.sessions_dir.exists():
+            for file in self.sessions_dir.glob("*.md"):
+                file.unlink()
+            self.sessions_dir.rmdir()
+
+        response = self.client.get("/memory/sessions")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"sessions": []})
 
     def test_search_requires_query(self):
         response = self.client.get("/search")

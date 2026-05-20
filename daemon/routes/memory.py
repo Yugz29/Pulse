@@ -4,6 +4,9 @@ from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
+_JOURNAL_DATA_START = "<!-- pulse-journal-data:start"
+_JOURNAL_DATA_END = "pulse-journal-data:end -->"
+
 
 def register_memory_routes(
     app: Flask,
@@ -33,7 +36,7 @@ def register_memory_routes(
             content=content,
             tier=data.get("tier", "session"),
             topic=data.get("topic", "general"),
-            source=data.get("source", "llm"),
+            source=data.get("source", "manual"),
             old_text=data.get("old_text"),
         )
         return jsonify(result), (200 if result["ok"] else 422)
@@ -60,21 +63,25 @@ def register_memory_routes(
 
     @app.route("/memory/sessions")
     def memory_sessions():
-        import os
         from pathlib import Path
 
         sessions_dir = Path.home() / ".pulse" / "memory" / "sessions"
         limit = min(int(request.args.get("limit", 7)), 30)
+        include_hidden = str(request.args.get("include_hidden") or "").strip().lower() in {"1", "true", "yes", "on"}
         if not sessions_dir.exists():
             return jsonify({"sessions": []})
         files = sorted(sessions_dir.glob("*.md"), reverse=True)[:limit]
         sessions = []
         for f in files:
             try:
-                content = f.read_text(encoding="utf-8")
+                raw_content = f.read_text(encoding="utf-8")
+                visible_content, has_hidden_payload = _strip_hidden_journal_payload(raw_content)
                 sessions.append({
                     "date": f.stem,
-                    "content": content,
+                    "content": raw_content if include_hidden else visible_content,
+                    "has_hidden_payload": has_hidden_payload,
+                    "include_hidden": include_hidden,
+                    "surface": "product_memory_sessions_raw" if include_hidden else "product_memory_sessions",
                 })
             except Exception:
                 pass
@@ -89,3 +96,17 @@ def register_memory_routes(
             return jsonify({"error": "missing_query", "hint": "?q=<query>"}), 400
         results = session_memory.search_events(q, limit=limit, session_id=session)
         return jsonify({"query": q, "count": len(results), "results": results})
+
+
+def _strip_hidden_journal_payload(markdown: str) -> tuple[str, bool]:
+    start_index = markdown.find(_JOURNAL_DATA_START)
+    if start_index < 0:
+        return markdown, False
+    end_index = markdown.find(_JOURNAL_DATA_END, start_index)
+    if end_index < 0:
+        return markdown, False
+    block_end = end_index + len(_JOURNAL_DATA_END)
+    if block_end < len(markdown) and markdown[block_end:block_end + 1] == "\n":
+        block_end += 1
+    cleaned = (markdown[:start_index] + markdown[block_end:]).rstrip() + "\n"
+    return cleaned, True
