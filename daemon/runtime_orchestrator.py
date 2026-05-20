@@ -55,6 +55,7 @@ from daemon.llm.lifecycle_policy import (
     is_heavy_llm_autowarm_enabled,
     is_legacy_journal_repair_enabled,
 )
+from daemon.runtime_mode import is_lab_enabled
 
 
 class RuntimeOrchestrator:
@@ -437,10 +438,12 @@ class RuntimeOrchestrator:
         if event.type == "screen_locked":
             self._session_fsm.on_screen_locked(when=event.timestamp)
             self.runtime_state.mark_screen_locked(when=event.timestamp)
-            self._run_daydream_if_pending()
+            if is_lab_enabled():
+                self._run_daydream_if_pending()
 
         elif event.type == "screen_unlocked":
-            self._run_daydream_if_pending()
+            if is_lab_enabled():
+                self._run_daydream_if_pending()
             if (
                 self._session_fsm.last_screen_locked_at is None
                 and self.runtime_state.get_last_screen_locked_at() is not None
@@ -803,6 +806,8 @@ class RuntimeOrchestrator:
             self.log.warning("shutdown sync failed: %s", exc)
 
     def _daydream_scheduler(self) -> None:
+        if not is_lab_enabled():
+            return
         import time as _time
         from datetime import timedelta
         while True:
@@ -818,6 +823,8 @@ class RuntimeOrchestrator:
                 self._run_daydream_if_pending()
 
     def _run_daydream_if_pending(self) -> None:
+        if not is_lab_enabled():
+            return
         if self._is_shutdown_requested():
             return
         from daemon.memory.daydream import claim_daydream_run, trigger_daydream
@@ -914,14 +921,16 @@ class RuntimeOrchestrator:
             else:
                 self.log.warning("LLM warmup échoué au démarrage (Ollama indisponible ?)")
             self.scorer.bus.publish("llm_ready", {"model": provider.model, "load_time_sec": load_time_sec})
-        self._mark_missed_daydream_pending()
+        if is_lab_enabled():
+            self._mark_missed_daydream_pending()
         self.log.info("\u2713 Init différé terminé")
 
-        threading.Thread(
-            target=self._daydream_scheduler,
-            daemon=True,
-            name="pulse-daydream-scheduler",
-        ).start()
+        if is_lab_enabled():
+            threading.Thread(
+                target=self._daydream_scheduler,
+                daemon=True,
+                name="pulse-daydream-scheduler",
+            ).start()
 
     def _recover_missed_daydream(self) -> None:
         try:
@@ -933,6 +942,8 @@ class RuntimeOrchestrator:
             self.log.warning("DayDream catch-up échoué : %s", exc)
 
     def _mark_missed_daydream_pending(self) -> None:
+        if not is_lab_enabled():
+            return
         try:
             from daemon.memory.daydream import mark_daydream_pending
             yesterday = (datetime.now() - timedelta(days=1)).date()

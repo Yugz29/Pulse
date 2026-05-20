@@ -547,6 +547,38 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.llm_runtime.provider.assert_not_called()
         provider.warmup.assert_not_called()
 
+    def test_deferred_startup_core_ne_planifie_pas_daydream(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "core", "PULSE_HEAVY_LLM_AUTOWARM": ""}), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None), \
+             patch.object(self.orchestrator, "_mark_missed_daydream_pending") as mark_daydream, \
+             patch("daemon.runtime_orchestrator.threading.Thread") as thread_cls:
+            self.orchestrator.deferred_startup()
+
+        mark_daydream.assert_not_called()
+        thread_cls.assert_not_called()
+
+    def test_deferred_startup_lab_garde_daydream_actif(self):
+        created_threads = []
+
+        def fake_thread(*args, **kwargs):
+            thread = _LifecycleThread(*args, **kwargs)
+            created_threads.append(thread)
+            return thread
+
+        with patch.dict("os.environ", {"PULSE_MODE": "lab", "PULSE_HEAVY_LLM_AUTOWARM": ""}), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None), \
+             patch.object(self.orchestrator, "_mark_missed_daydream_pending") as mark_daydream, \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=fake_thread):
+            self.orchestrator.deferred_startup()
+
+        mark_daydream.assert_called_once()
+        daydream_threads = [
+            thread for thread in created_threads
+            if thread.name == "pulse-daydream-scheduler"
+        ]
+        self.assertEqual(len(daydream_threads), 1)
+        self.assertTrue(daydream_threads[0].started)
+
     def test_deferred_startup_warms_provider_si_autowarm_active(self):
         provider = MagicMock()
         provider.model = "qwen3:4b"
@@ -1094,6 +1126,24 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         mock_new_session.assert_not_called()
         self.assertEqual(self.orchestrator.session_fsm.session_started_at, original_start)
+
+    def test_handle_event_core_ne_declenche_pas_daydream_sur_lock_unlock(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream, \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(Event("screen_locked", {}))
+            self.orchestrator.handle_event(Event("screen_unlocked", {}))
+
+        run_daydream.assert_not_called()
+
+    def test_handle_event_lab_declenche_daydream_sur_lock_unlock(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream, \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(Event("screen_locked", {}))
+            self.orchestrator.handle_event(Event("screen_unlocked", {}))
+
+        self.assertEqual(run_daydream.call_count, 2)
 
     def test_verrou_long_reset_scorer_et_nouvelle_session(self):
         t_lock = datetime.now() - timedelta(minutes=35)
