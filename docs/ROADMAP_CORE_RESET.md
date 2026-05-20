@@ -456,6 +456,7 @@ Le Core Reset est terminé uniquement quand :
 - Pulse démarre en mode Core par défaut ;
 - le mode Core ne démarre pas les services Lab ;
 - `/ping`, `/state`, `/feed` et les health checks fonctionnent sans services Lab ;
+- R1 valide une santé Core sobre via `/health/core` ;
 - le mode runtime est visible depuis l’API et le dashboard ;
 - des fixtures d’observation existent ;
 - des scénarios de scoring existent ;
@@ -681,17 +682,35 @@ Validation R1e :
 
 Objectif : prouver que le Core fonctionne réellement.
 
-- [ ] Ajouter `/health/core` ou une surface équivalente.
-- [ ] Vérifier que `/ping` fonctionne en mode Core.
-- [ ] Vérifier que `/state` fonctionne en mode Core.
-- [ ] Vérifier que `/feed` fonctionne en mode Core.
-- [ ] Ajouter des tests prouvant que le mode Core démarre sans services Lab actifs.
-- [ ] Ajouter des tests prouvant que les effets de bord Lab sont absents en mode Core.
-- [ ] Ajouter au moins un test prouvant que le mode `lab` ou `dev` peut réactiver les chemins Lab ciblés.
+- [x] Ajouter `/health/core` ou une surface équivalente.
+- [x] Vérifier que `/ping` fonctionne en mode Core.
+- [x] Vérifier que `/state` fonctionne en mode Core.
+- [x] Vérifier que `/feed` fonctionne en mode Core.
+- [x] Ajouter des tests prouvant que le mode Core démarre sans services Lab actifs.
+- [x] Ajouter des tests prouvant que les effets de bord Lab sont absents en mode Core.
+- [x] Ajouter au moins un test prouvant que le mode `lab` ou `dev` peut réactiver les chemins Lab ciblés.
 
 Sortie attendue de R1f :
 
 > Pulse peut démarrer dans un mode minimal, explicite, testable, sans dépendre de ses fonctionnalités expérimentales.
+
+Validation R1f :
+
+- `/health/core` a été ajouté dans les routes de statut runtime ;
+- payload Core sobre : `status`, `pulse_mode`, `experimental_enabled`, `checks`, `failed` ;
+- `/health/core` ne dépend pas d’un provider LLM, DayDream, facts, vector store, embeddings, mémoire avancée ou routes Lab ;
+- en mode Core, `checks.lab_services` vaut `not_required` ;
+- en mode Lab / Dev, `experimental_enabled` passe à `true` et `checks.lab_services` vaut `enabled` ;
+- `/ping`, `/state` et `/feed` ont été vérifiés en mode Core ;
+- tests ciblés passés : `tests/test_runtime_routes.py`, `tests/test_main_runtime_state.py`, `tests/test_main_mcp_routes.py`, `tests/test_lightweight_llm_routes.py`.
+
+Validation globale R1 :
+
+- suite ciblée R1 passée : 286 tests OK ;
+- suite complète `./scripts/test_all.sh` passée : 1162 tests OK ;
+- fragilité test identifiée et corrigée séparément : `tests/test_main_memory_routes.py` isolait mal `HOME` en suite complète ;
+- correction test sans changement produit : `HOME` est maintenant patché dans `setUp()` et nettoyé via `addCleanup` ;
+- R1 — Baseline Runtime est considéré comme validé côté Python.
 
 ## 13. Notes de vérification R1
 
@@ -725,3 +744,5 @@ Le premier patch technique doit seulement introduire le mode runtime, l’expose
 Les gates DayDream, facts, mémoire avancée, LLM léger, routes Lab et santé Core doivent être faits dans des patchs séparés.
 
 Note R1e : toutes les surfaces Lab n’ont pas vocation à être bloquées immédiatement. Les routes à risque faible peuvent être marquées comme Lab via métadonnées. Les routes avec effets de bord critiques doivent être bloquées en Core. Les surfaces complexes comme MCP, probes, work intent et debug resume card doivent être traitées dans des patchs séparés si leur blocage risque de casser des workflows existants.
+
+Validation finale R1 : le reset runtime est validé lorsque les tests ciblés R1 passent et que la suite complète Python passe sans erreur. Une correction de test isolée peut être acceptée si elle stabilise l’environnement de test sans modifier le comportement produit. État actuel : R1 validé côté Python avec 286 tests ciblés OK et `./scripts/test_all.sh` OK sur 1162 tests.
