@@ -25,7 +25,7 @@ import struct
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from daemon.memory.embedding_policy import (
     apply_embedding_offline_env,
@@ -284,28 +284,9 @@ class VectorStore:
         Indexe une entrée de journal de session.
         Construit un texte descriptif depuis les champs de l'entrée.
         """
-        parts = []
-        if entry.get("commit_message"):
-            parts.append(f"Commit : {entry['commit_message']}")
-        if entry.get("body"):
-            parts.append(entry["body"])
-        if entry.get("top_files"):
-            parts.append(f"Fichiers : {', '.join(entry['top_files'][:5])}")
-        if entry.get("probable_task"):
-            parts.append(f"Tâche : {entry['probable_task']}")
-
-        if not parts:
+        text, metadata = _journal_entry_vector_text(entry)
+        if not text:
             return None
-
-        text = " | ".join(parts)
-        metadata = {
-            "duration_min": entry.get("duration_min"),
-            "activity_level": entry.get("activity_level"),
-            "started_at": entry.get("started_at"),
-            "ended_at": entry.get("ended_at"),
-            "top_files": entry.get("top_files", []),
-            "recent_apps": entry.get("recent_apps", []),
-        }
 
         return self.index_text(
             text=text,
@@ -336,3 +317,127 @@ class VectorStore:
     def close(self) -> None:
         """Rien à fermer — connexions ouvertes/fermées par opération."""
         pass
+
+
+def _journal_entry_vector_text(entry: dict) -> tuple[str, dict]:
+    truth_layers = entry.get("truth_layers")
+    if not isinstance(truth_layers, dict):
+        return _legacy_journal_entry_vector_text(entry)
+
+    sections: list[str] = []
+    section_specs = (
+        ("observed", "Observations"),
+        ("derived", "Données dérivées"),
+        ("inferred", "Hypothèses estimées"),
+        ("narrative", "Résumé narratif"),
+    )
+    for layer, label in section_specs:
+        items = truth_layers.get(layer)
+        if not isinstance(items, list) or not items:
+            continue
+        lines = [_format_truth_layer_item(layer, item) for item in items if isinstance(item, dict)]
+        lines = [line for line in lines if line]
+        if lines:
+            sections.append(f"{label} :\n" + "\n".join(f"- {line}" for line in lines))
+
+    metadata = _base_journal_metadata(entry)
+    metadata.update(
+        {
+            "truth_schema": "truth_layers_v1",
+            "has_truth_layers": True,
+            "source_layers": [
+                layer
+                for layer, _ in section_specs
+                if isinstance(truth_layers.get(layer), list) and truth_layers.get(layer)
+            ],
+        }
+    )
+    if entry.get("summary_source"):
+        metadata["summary_source"] = entry.get("summary_source")
+    if entry.get("summary_status"):
+        metadata["summary_status"] = entry.get("summary_status")
+    if entry.get("task_confidence") is not None:
+        metadata["task_confidence"] = entry.get("task_confidence")
+
+    return "\n".join(sections), metadata
+
+
+def _legacy_journal_entry_vector_text(entry: dict) -> tuple[str, dict]:
+    parts = []
+    if entry.get("commit_message"):
+        parts.append(f"Commit : {entry['commit_message']}")
+    if entry.get("body"):
+        parts.append(entry["body"])
+    if entry.get("top_files"):
+        parts.append(f"Fichiers : {', '.join(entry['top_files'][:5])}")
+    if entry.get("probable_task"):
+        parts.append(f"Tâche : {entry['probable_task']}")
+
+    metadata = _base_journal_metadata(entry)
+    metadata.update(
+        {
+            "truth_schema": "legacy_flat",
+            "has_truth_layers": False,
+            "source_layers": [],
+        }
+    )
+    return " | ".join(parts), metadata
+
+
+def _base_journal_metadata(entry: dict) -> dict:
+    return {
+        "duration_min": entry.get("duration_min"),
+        "activity_level": entry.get("activity_level"),
+        "started_at": entry.get("started_at"),
+        "ended_at": entry.get("ended_at"),
+        "top_files": entry.get("top_files", []),
+        "recent_apps": entry.get("recent_apps", []),
+    }
+
+
+def _format_truth_layer_item(layer: str, item: dict) -> str:
+    kind = str(item.get("kind") or "").strip()
+    value = item.get("value")
+    if kind == "commit_message":
+        return f"Commit observé : {_truth_value_text(value)}"
+    if kind == "recent_apps":
+        return f"Applications récentes observées : {_truth_value_text(value)}"
+    if kind == "top_file_paths":
+        return f"Fichiers observés : {_truth_value_text(value)}"
+    if kind == "duration_min":
+        return f"Durée calculée : {_truth_value_text(value)} min"
+    if kind == "files_count":
+        return f"Nombre de fichiers calculé : {_truth_value_text(value)}"
+    if kind == "top_files":
+        source = str(item.get("source") or "unknown")
+        return f"Fichiers dérivés ({source}) : {_truth_value_text(value)}"
+    if kind == "probable_task":
+        confidence = item.get("confidence")
+        suffix = f" (confidence: {confidence})" if confidence is not None else ""
+        return f"Tâche probable : {_truth_value_text(value)}{suffix}"
+    if kind == "active_project":
+        source = str(item.get("source") or "unknown")
+        return f"Projet estimé ({source}) : {_truth_value_text(value)}"
+    if kind == "activity_level":
+        return f"Activité estimée : {_truth_value_text(value)}"
+    if kind == "boundary_reason":
+        return f"Frontière de session estimée : {_truth_value_text(value)}"
+    if kind == "scope":
+        source = str(item.get("source") or "unknown")
+        return f"Portée estimée ({source}) : {_truth_value_text(value)}"
+    if kind == "uncertainty_flags":
+        return f"Incertitudes : {_truth_value_text(value)}"
+    if layer == "narrative":
+        source = str(item.get("source") or "unknown")
+        status = str(item.get("status") or "unknown")
+        return f"Synthèse narrative ({source}, {status}) : {_truth_value_text(value)}"
+    label = kind.replace("_", " ") if kind else "élément"
+    return f"{label} : {_truth_value_text(value)}"
+
+
+def _truth_value_text(value: Any) -> str:
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value if str(item or "").strip())
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value or "").strip()
