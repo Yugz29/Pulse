@@ -13,6 +13,9 @@ import daemon.main as daemon_main
 
 class TestMainMemoryRoutes(unittest.TestCase):
     def setUp(self):
+        self._home_patch = patch.dict(os.environ, {"HOME": _TEST_HOME})
+        self._home_patch.start()
+        self.addCleanup(self._home_patch.stop)
         daemon_main.runtime_state.reset_for_tests()
         daemon_main.runtime_orchestrator.reset_for_tests()
         self.client = daemon_main.app.test_client()
