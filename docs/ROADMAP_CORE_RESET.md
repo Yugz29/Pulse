@@ -341,7 +341,7 @@ Découpage recommandé :
 - [x] R2b — Fixtures golden ;
 - [x] R2c — Tests pipeline ingestion ;
 - [x] R2d — Bruit et actor baseline ;
-- R2e — Terminal baseline ;
+- [x] R2e — Terminal baseline ;
 - R2f — Feed readability baseline.
 
 
@@ -897,18 +897,37 @@ Validation R2d :
 
 Objectif : stabiliser la normalisation terminal sans LLM.
 
-- [ ] Couvrir `pytest`.
-- [ ] Couvrir `git`.
-- [ ] Couvrir build.
-- [ ] Couvrir setup / install.
-- [ ] Couvrir read-only inspection.
-- [ ] Couvrir timestamp invalide.
-- [ ] Couvrir extraction de projet depuis `cwd`.
-- [ ] Vérifier qu’aucun LLM n’est appelé.
+- [x] Couvrir `pytest`.
+- [x] Couvrir `git`.
+- [x] Couvrir build.
+- [x] Couvrir setup / install.
+- [x] Couvrir read-only inspection.
+- [x] Couvrir timestamp invalide.
+- [x] Couvrir extraction de projet depuis `cwd`.
+- [x] Vérifier qu’aucun LLM n’est appelé.
 
 Sortie attendue de R2e :
 
 > Les événements terminal sont normalisés de manière stable, lisible et sans dépendance LLM.
+
+Validation R2e :
+
+- fixtures terminal golden ajoutées dans `tests/fixtures/observation/core_events.json` pour `git status`, `make build`, `npm install` et `rg runtime_mode` ;
+- tests de normalisation terminal ajoutés via l’ingestion réelle `/event` dans `tests/test_observation_ingestion_golden.py` ;
+- tests unitaires ajoutés dans `tests/core/test_terminal_event_normalizer.py` pour timestamp invalide, read-only inspection, summaries connues et fallback déterministe sans LLM ;
+- `pytest` produit `testing` et `test_result` ;
+- `git status` produit `vcs`, read-only, succès et projet dérivé depuis `cwd` ;
+- `make build` produit `build` ;
+- `npm install` produit `setup` ;
+- `rg runtime_mode` produit `inspection` et read-only ;
+- `terminal_workspace_root` est exposé quand `find_workspace_root()` retourne une racine ;
+- timestamp invalide retourne `None` ;
+- une commande inconnue marquée `needs_llm=True` utilise un résumé déterministe de catégorie, sans appel LLM ;
+- ambiguïté documentée : `make build` expose actuellement `terminal_affects: ["système"]` via `CommandInterpreter`, comportement conservé ;
+- ambiguïté documentée : le test sans LLM passe par un faux `interpret()` avec `needs_llm=True` pour verrouiller le fallback déterministe sans introduire de dépendance LLM ;
+- tests ciblés passés : `tests/core/test_terminal_event_normalizer.py`, `tests/test_observation_ingestion_golden.py`, `tests/test_runtime_routes.py` ;
+- suite complète et tests Swift non lancés à cette étape ;
+- aucun changement produit.
 
 ### R2f — Feed readability baseline
 

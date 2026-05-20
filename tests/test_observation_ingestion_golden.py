@@ -115,6 +115,34 @@ class TestObservationIngestionGolden(unittest.TestCase):
         self.assertIn("terminal_summary", event.payload)
         self.assertIn("test_result", event.payload)
 
+    def test_terminal_baseline_variants_are_normalized_without_llm(self):
+        cases = [
+            ("terminal_git_status", "git", "vcs", True, ["lecture seule"], True),
+            ("terminal_build", "make", "build", False, ["système"], True),
+            ("terminal_setup_install", "npm", "setup", False, ["dépendances"], True),
+            ("terminal_read_only_inspection", "rg", "inspection", True, ["lecture seule"], True),
+        ]
+
+        with patch("daemon.routes.runtime_ingestion.find_workspace_root", return_value=Path("/Users/tester/workspace/acme")), \
+             patch("daemon.core.git_context.read_git_context", return_value=None):
+            for fixture_key, base_cmd, category, read_only, affects, success in cases:
+                response = self._post_event(fixture_key)
+
+                self.assertEqual(response.status_code, 200)
+                event = self.bus.recent(1)[0]
+                payload = event.payload
+                self.assertEqual(event.type, "terminal_command_finished")
+                self.assertEqual(payload["terminal_command_base"], base_cmd)
+                self.assertEqual(payload["terminal_action_category"], category)
+                self.assertEqual(payload["terminal_is_read_only"], read_only)
+                self.assertEqual(payload["terminal_affects"], affects)
+                self.assertEqual(payload["terminal_project"], "acme")
+                self.assertEqual(payload["terminal_workspace_root"], "/Users/tester/workspace/acme")
+                self.assertEqual(payload["terminal_exit_code"], 0)
+                self.assertEqual(payload["terminal_success"], success)
+                self.assertIsInstance(payload["terminal_duration_ms"], int)
+                self.assertTrue(payload["terminal_summary"].startswith("✓ "))
+
     def test_screen_lock_and_unlock_remain_publishable(self):
         locked = self._post_event("screen_locked")
         unlocked = self._post_event("screen_unlocked")
