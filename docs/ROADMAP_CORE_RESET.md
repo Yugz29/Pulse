@@ -303,13 +303,17 @@ Validation :
 
 Objectif : Pulse observe proprement avant d’interpréter profondément.
 
+R2 n’est pas une phase de scoring, de mémoire, de LLM, de propositions ou d’apprentissage.
+
 Travail cible :
 
-- définir des fixtures golden d’événements ;
-- vérifier les événements app, fichier, terminal, idle, lock / unlock ;
-- vérifier le filtrage du bruit technique ;
-- supprimer autant que possible les hypothèses locales hardcodées ;
-- séparer les données observées des données inférées.
+- définir un contrat d’observation ;
+- créer des fixtures golden d’événements ;
+- tester le pipeline `/event` -> `EventBus` ;
+- vérifier le filtrage du bruit ;
+- vérifier l’actor classification ;
+- stabiliser les événements terminal ;
+- vérifier la lisibilité de `/feed`.
 
 Validation :
 
@@ -317,13 +321,29 @@ Validation :
 - le bruit technique / système est ignoré ou déclassé ;
 - la classification de l’acteur est explicable ;
 - le feed d’événements est lisible et utile ;
-- les tests couvrent des scénarios réalistes.
+- les tests couvrent des scénarios réalistes ;
+- les fixtures golden n’utilisent pas de chemins locaux `/Users/yugz`.
 
 À ne pas faire :
 
 - inférer des habitudes long terme ;
 - créer des facts ;
-- inférer l’identité d’un projet au-delà d’un contexte courant prudent.
+- utiliser un LLM ;
+- améliorer le scoring ;
+- modifier DayDream ;
+- modifier la mémoire avancée ;
+- refactorer le Swift observer ;
+- brancher globalement `event_envelope.py` dans le runtime.
+
+Découpage recommandé :
+
+- R2a — Contrat d’inventaire observation ;
+- R2b — Fixtures golden ;
+- R2c — Tests pipeline ingestion ;
+- R2d — Bruit et actor baseline ;
+- R2e — Terminal baseline ;
+- R2f — Feed readability baseline.
+
 
 ### R3 — Baseline Interprétation
 
@@ -746,3 +766,114 @@ Les gates DayDream, facts, mémoire avancée, LLM léger, routes Lab et santé C
 Note R1e : toutes les surfaces Lab n’ont pas vocation à être bloquées immédiatement. Les routes à risque faible peuvent être marquées comme Lab via métadonnées. Les routes avec effets de bord critiques doivent être bloquées en Core. Les surfaces complexes comme MCP, probes, work intent et debug resume card doivent être traitées dans des patchs séparés si leur blocage risque de casser des workflows existants.
 
 Validation finale R1 : le reset runtime est validé lorsque les tests ciblés R1 passent et que la suite complète Python passe sans erreur. Une correction de test isolée peut être acceptée si elle stabilise l’environnement de test sans modifier le comportement produit. État actuel : R1 validé côté Python avec 286 tests ciblés OK et `./scripts/test_all.sh` OK sur 1162 tests.
+
+## 14. Checklist R2 — Baseline Observation
+
+Objectif : prouver que Pulse observe proprement avant de continuer vers l’interprétation, les sessions et la mémoire minimale.
+
+R2 doit verrouiller ce que Pulse reçoit, garde, ignore, normalise et publie.
+
+R2 ne doit pas chercher à prouver ce que Pulse comprend.
+
+### R2a — Contrat d’inventaire observation
+
+Objectif : figer la liste des événements acceptés et leurs familles.
+
+- [ ] Lister les types d’événements acceptés.
+- [ ] Classer les événements par famille : app, file, terminal, idle, lock, system.
+- [ ] Définir pour chaque type : source, bucket, relevance, publishable ou non.
+- [ ] Identifier ce qui est observé, normalisé, dérivé ou inféré.
+- [ ] Relier ce contrat au code réel : `runtime_ingestion.py`, `event_meaning.py`, `observation_qualification.py`.
+
+Sortie attendue de R2a :
+
+> Pulse possède un inventaire clair des événements qu’il accepte et de ce qu’ils signifient au niveau observation.
+
+### R2b — Fixtures golden
+
+Objectif : créer des scénarios d’observation réalistes et portables.
+
+- [ ] Créer `tests/fixtures/observation/core_events.json`.
+- [ ] Ajouter un événement `app_activated`.
+- [ ] Ajouter un événement fichier source meaningful.
+- [ ] Ajouter un événement fichier bruité / cache.
+- [ ] Ajouter un événement `terminal_command_finished`.
+- [ ] Ajouter un événement `screen_locked`.
+- [ ] Ajouter un événement `screen_unlocked`.
+- [ ] Éviter les chemins locaux `/Users/yugz`.
+- [ ] Utiliser des chemins portables comme `/Users/tester/...` ou `/tmp/workspaces/...`.
+
+Sortie attendue de R2b :
+
+> Les premiers événements golden existent et ne dépendent pas de la machine de développement.
+
+### R2c — Tests pipeline ingestion
+
+Objectif : tester un flux minimal `/event` -> `EventBus` en mode Core.
+
+- [ ] Ajouter un test golden `/event` -> `EventBus`.
+- [ ] Vérifier `app_activated`.
+- [ ] Vérifier qu’un fichier source meaningful passe dans le bus.
+- [ ] Vérifier qu’un fichier bruité est filtré ou déclassé selon le comportement réel.
+- [ ] Vérifier `terminal_command_finished` après normalisation.
+- [ ] Vérifier `screen_locked` / `screen_unlocked`.
+- [ ] Vérifier le payload final publié, pas seulement le status HTTP.
+- [ ] Documenter les comportements ambigus dans les noms ou commentaires de tests.
+
+Sortie attendue de R2c :
+
+> Un premier flux réaliste d’observation est verrouillé par test golden, sans toucher au scoring.
+
+### R2d — Bruit et actor baseline
+
+Objectif : prouver que le bruit est ignoré / déclassé et que l’acteur est explicable.
+
+- [ ] Couvrir les chemins `.pulse`.
+- [ ] Couvrir les caches.
+- [ ] Couvrir `site-packages`.
+- [ ] Couvrir les screenshots.
+- [ ] Couvrir les dependency locks.
+- [ ] Couvrir les bursts rapides.
+- [ ] Couvrir les événements tool-assisted.
+- [ ] Vérifier que `_actor` est explicable.
+
+Sortie attendue de R2d :
+
+> Pulse sait distinguer les événements utilisateur significatifs, le bruit technique et les événements probablement assistés par outil.
+
+### R2e — Terminal baseline
+
+Objectif : stabiliser la normalisation terminal sans LLM.
+
+- [ ] Couvrir `pytest`.
+- [ ] Couvrir `git`.
+- [ ] Couvrir build.
+- [ ] Couvrir setup / install.
+- [ ] Couvrir read-only inspection.
+- [ ] Couvrir timestamp invalide.
+- [ ] Couvrir extraction de projet depuis `cwd`.
+- [ ] Vérifier qu’aucun LLM n’est appelé.
+
+Sortie attendue de R2e :
+
+> Les événements terminal sont normalisés de manière stable, lisible et sans dépendance LLM.
+
+### R2f — Feed readability baseline
+
+Objectif : vérifier que `/feed` reste lisible sur un bus réaliste.
+
+- [ ] Tester `/feed` sur un bus réaliste.
+- [ ] Vérifier que les labels ne sont pas génériques.
+- [ ] Vérifier que le bruit est absent ou déclassé.
+- [ ] Vérifier que les événements terminal restent lisibles.
+- [ ] Vérifier que les événements Lab ne dominent pas le feed Core.
+
+Sortie attendue de R2f :
+
+> Le feed expose une observation lisible et utile sans vendre une compréhension avancée.
+
+Notes R2 :
+
+- `observation_qualification.py` et `event_envelope.py` sont utiles comme contrats passifs, mais ne doivent pas être branchés globalement dans le runtime pendant R2 sans fixtures golden préalables.
+- R2 doit rester centré sur l’observation : événements, filtrage, normalisation, acteur, feed.
+- R3 seulement pourra renforcer l’interprétation et les signaux.
