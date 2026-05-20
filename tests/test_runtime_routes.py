@@ -1079,6 +1079,72 @@ class TestRuntimeRoutes(unittest.TestCase):
             {"status": "ok", "version": "0.1.0", "paused": True},
         )
 
+    def test_health_core_returns_minimal_core_status(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            response = self.client.get("/health/core")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["pulse_mode"], "core")
+        self.assertFalse(payload["experimental_enabled"])
+        self.assertEqual(payload["checks"]["runtime"], "ok")
+        self.assertEqual(payload["checks"]["ping"], "ok")
+        self.assertEqual(payload["checks"]["runtime_state"], "ok")
+        self.assertEqual(payload["checks"]["event_bus"], "ok")
+        self.assertEqual(payload["checks"]["feed_source"], "ok")
+        self.assertEqual(payload["checks"]["scoring"], "available")
+        self.assertEqual(payload["checks"]["session_fsm"], "not_checked")
+        self.assertEqual(payload["checks"]["lab_services"], "not_required")
+        self.assertEqual(payload["failed"], {})
+
+    def test_health_core_lab_mode_marks_lab_services_enabled(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            response = self.client.get("/health/core")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["pulse_mode"], "lab")
+        self.assertTrue(payload["experimental_enabled"])
+        self.assertEqual(payload["checks"]["lab_services"], "enabled")
+
+    def test_core_routes_ping_state_and_feed_work_in_core_mode(self):
+        self.store.to_dict.return_value = {}
+        self.bus.recent.return_value = []
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            ping_response = self.client.get("/ping")
+            state_response = self.client.get("/state")
+            feed_response = self.client.get("/feed")
+
+        self.assertEqual(ping_response.status_code, 200)
+        self.assertEqual(ping_response.get_json()["status"], "ok")
+
+        self.assertEqual(state_response.status_code, 200)
+        state_payload = state_response.get_json()
+        self.assertEqual(state_payload["pulse_mode"], "core")
+        self.assertFalse(state_payload["experimental_enabled"])
+
+        self.assertEqual(feed_response.status_code, 200)
+        self.assertEqual(feed_response.get_json(), [])
+        self.bus.recent.assert_called_with(200)
+
+    def test_health_core_ne_depend_pas_des_services_lab(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch("daemon.memory.daydream.get_daydream_status") as daydream_status, \
+             patch("daemon.memory.extractor.get_fact_engine") as get_fact_engine, \
+             patch("daemon.memory.extractor.embeddings_enabled") as embeddings_enabled, \
+             patch("daemon.memory.vector_store.VectorStore") as vector_store:
+            response = self.client.get("/health/core")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["checks"]["lab_services"], "not_required")
+        daydream_status.assert_not_called()
+        get_fact_engine.assert_not_called()
+        embeddings_enabled.assert_not_called()
+        vector_store.assert_not_called()
+
     def test_event_endpoint_ignores_events_while_runtime_is_paused(self):
         self.runtime_state.set_paused(True)
         response = self.client.post("/event", json={"type": "file_modified", "path": "/tmp/test.py"})
