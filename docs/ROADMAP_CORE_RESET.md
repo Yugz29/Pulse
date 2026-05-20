@@ -793,36 +793,59 @@ Sortie attendue de R2a :
 
 Objectif : créer des scénarios d’observation réalistes et portables.
 
-- [ ] Créer `tests/fixtures/observation/core_events.json`.
-- [ ] Ajouter un événement `app_activated`.
-- [ ] Ajouter un événement fichier source meaningful.
-- [ ] Ajouter un événement fichier bruité / cache.
-- [ ] Ajouter un événement `terminal_command_finished`.
-- [ ] Ajouter un événement `screen_locked`.
-- [ ] Ajouter un événement `screen_unlocked`.
-- [ ] Éviter les chemins locaux `/Users/yugz`.
-- [ ] Utiliser des chemins portables comme `/Users/tester/...` ou `/tmp/workspaces/...`.
+- [x] Créer `tests/fixtures/observation/core_events.json`.
+- [x] Ajouter un événement `app_activated`.
+- [x] Ajouter un événement fichier source meaningful.
+- [x] Ajouter un événement fichier bruité / cache.
+- [x] Ajouter un événement `terminal_command_finished`.
+- [x] Ajouter un événement `screen_locked`.
+- [x] Ajouter un événement `screen_unlocked`.
+- [x] Éviter les chemins locaux `/Users/yugz`.
+- [x] Utiliser des chemins portables comme `/Users/tester/...` ou `/tmp/workspaces/...`.
 
 Sortie attendue de R2b :
 
 > Les premiers événements golden existent et ne dépendent pas de la machine de développement.
 
+Validation R2b :
+
+- fixture ajoutée : `tests/fixtures/observation/core_events.json` ;
+- la fixture couvre `app_activated`, fichier source meaningful, fichier bruité / cache, `terminal_command_finished`, `screen_locked` et `screen_unlocked` ;
+- la fixture est portable et n’utilise pas de chemin local `/Users/yugz` ;
+- aucun changement produit.
+
 ### R2c — Tests pipeline ingestion
 
 Objectif : tester un flux minimal `/event` -> `EventBus` en mode Core.
 
-- [ ] Ajouter un test golden `/event` -> `EventBus`.
-- [ ] Vérifier `app_activated`.
-- [ ] Vérifier qu’un fichier source meaningful passe dans le bus.
-- [ ] Vérifier qu’un fichier bruité est filtré ou déclassé selon le comportement réel.
-- [ ] Vérifier `terminal_command_finished` après normalisation.
-- [ ] Vérifier `screen_locked` / `screen_unlocked`.
-- [ ] Vérifier le payload final publié, pas seulement le status HTTP.
-- [ ] Documenter les comportements ambigus dans les noms ou commentaires de tests.
+- [x] Ajouter un test golden `/event` -> `EventBus`.
+- [x] Vérifier `app_activated`.
+- [x] Vérifier qu’un fichier source meaningful passe dans le bus.
+- [x] Vérifier qu’un fichier bruité est filtré ou déclassé selon le comportement réel.
+- [x] Vérifier `terminal_command_finished` après normalisation.
+- [x] Vérifier `screen_locked` / `screen_unlocked`.
+- [x] Vérifier le payload final publié, pas seulement le status HTTP.
+- [x] Documenter les comportements ambigus dans les noms ou commentaires de tests.
 
 Sortie attendue de R2c :
 
 > Un premier flux réaliste d’observation est verrouillé par test golden, sans toucher au scoring.
+
+Validation R2c :
+
+- test ajouté : `tests/test_observation_ingestion_golden.py` ;
+- le test verrouille un flux minimal `/event` -> `EventBus` -> `/feed` en mode Core ;
+- `app_activated` est accepté, publié et met à jour l’application active ;
+- un `file_modified` meaningful passe dans l’EventBus avec attribution `_actor` ;
+- un fichier cache `.cache/models_cache.json` est filtré selon la policy actuelle ;
+- `terminal_command_finished` est normalisé : commande, base command, catégorie, projet, exit code, succès, résumé et `test_result` ;
+- `screen_locked` et `screen_unlocked` restent publiables ;
+- `/feed` reste lisible après les événements golden et expose un item terminal utile ;
+- ambiguïté documentée : le cache est actuellement filtré, pas simplement déclassé ;
+- ambiguïté documentée : le fichier source est coalescé, le test ferme donc le coalescer pour forcer l’émission sans `sleep` ;
+- tests ciblés passés : `tests/test_observation_ingestion_golden.py`, `tests/core/test_event_meaning.py`, `tests/core/test_event_actor.py`, `tests/core/test_terminal_event_normalizer.py` ;
+- suite complète et tests Swift non lancés à cette étape ;
+- aucun changement produit.
 
 ### R2d — Bruit et actor baseline
 
