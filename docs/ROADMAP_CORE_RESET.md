@@ -337,7 +337,7 @@ Validation :
 
 Découpage recommandé :
 
-- R2a — Contrat d’inventaire observation ;
+- [x] R2a — Contrat d’inventaire observation (`docs/OBSERVATION_CONTRACT.md`) ;
 - R2b — Fixtures golden ;
 - R2c — Tests pipeline ingestion ;
 - R2d — Bruit et actor baseline ;
@@ -779,15 +779,28 @@ R2 ne doit pas chercher à prouver ce que Pulse comprend.
 
 Objectif : figer la liste des événements acceptés et leurs familles.
 
-- [ ] Lister les types d’événements acceptés.
-- [ ] Classer les événements par famille : app, file, terminal, idle, lock, system.
-- [ ] Définir pour chaque type : source, bucket, relevance, publishable ou non.
-- [ ] Identifier ce qui est observé, normalisé, dérivé ou inféré.
-- [ ] Relier ce contrat au code réel : `runtime_ingestion.py`, `event_meaning.py`, `observation_qualification.py`.
+- [x] Lister les types d’événements acceptés.
+- [x] Classer les événements par famille : app, file, terminal, idle, lock, system.
+- [x] Définir pour chaque type : source, bucket, relevance, publishable ou non.
+- [x] Identifier ce qui est observé, normalisé, dérivé ou inféré.
+- [x] Relier ce contrat au code réel : `runtime_ingestion.py`, `event_meaning.py`, `observation_qualification.py`.
 
 Sortie attendue de R2a :
 
 > Pulse possède un inventaire clair des événements qu’il accepte et de ce qu’ils signifient au niveau observation.
+
+Validation R2a :
+
+- contrat ajouté : `docs/OBSERVATION_CONTRACT.md` ;
+- le contrat décrit le comportement observation actuel, sans prescrire un futur idéal ;
+- familles d’événements inventoriées : app, file, terminal, idle / presence, lock, clipboard, MCP, internal system / debug, unknown ;
+- distinction explicite entre champs observés, normalisés, dérivés et inférés ;
+- le contrat référence les fixtures golden R2b / R2c existantes ;
+- le contrat couvre l’entrée `/event`, `EventMeaningPolicy`, l’attribution `_actor`, la normalisation terminal, le comportement lock / pause, les limites actuelles de `/feed`, et le statut passif de `observation_qualification.py` / `event_envelope.py` ;
+- ambiguïtés documentées : `observation_qualification.py` n’est pas encore source de vérité runtime, `event_envelope.py` reste non branché, les events inconnus restent publishable aujourd’hui hors pause / lock, et `scoring_relevant` ne prouve pas encore l’impact réel sur `SignalScorer` ;
+- tests ciblés passés : `tests/test_observation_ingestion_golden.py`, `tests/core/test_observation_qualification.py`, `tests/core/test_observation_qualification_consistency.py`, `tests/core/test_event_meaning.py`, `tests/core/test_event_actor.py`, `tests/core/test_file_classifier.py`, `tests/core/test_app_classifier.py`, `tests/core/test_terminal_event_normalizer.py` ;
+- suite complète et tests Swift non lancés à cette étape ;
+- aucun changement produit.
 
 ### R2b — Fixtures golden
 
