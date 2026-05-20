@@ -13,6 +13,9 @@ from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
+from daemon.runtime_mode import is_lab_enabled
+from daemon.routes.lab_surface import lab_surface_disabled_response, lab_surface_metadata
+
 
 def register_facts_routes(
     app: Flask,
@@ -50,6 +53,7 @@ def register_facts_routes(
             "status": health.get("status", "ok"),
             "count": len(facts),
             "facts": facts,
+            **lab_surface_metadata(),
         }
         if health.get("status") == "degraded" and health.get("reason"):
             payload["reason"] = health["reason"]
@@ -58,24 +62,37 @@ def register_facts_routes(
     @app.route("/facts/stats")
     def facts_stats():
         engine = get_fact_engine()
-        return jsonify(engine.stats())
+        return jsonify({
+            **engine.stats(),
+            **lab_surface_metadata(),
+        })
 
     @app.route("/facts/profile")
     def facts_profile():
         """Retourne le profil utilisateur formaté tel qu'injecté dans le prompt."""
+        if not is_lab_enabled():
+            return jsonify({
+                "profile": "",
+                **lab_surface_metadata(),
+            })
         engine = get_fact_engine()
         return jsonify({
             "profile": engine.render_for_context(limit=8),
+            **lab_surface_metadata(),
         })
 
     @app.route("/facts/<fact_id>/reinforce", methods=["POST"])
     def facts_reinforce(fact_id: str):
+        if not is_lab_enabled():
+            return lab_surface_disabled_response("facts_reinforce")
         engine = get_fact_engine()
         result = engine.reinforce(fact_id)
         return jsonify(result), (200 if result["ok"] else 404)
 
     @app.route("/facts/<fact_id>/contradict", methods=["POST"])
     def facts_contradict(fact_id: str):
+        if not is_lab_enabled():
+            return lab_surface_disabled_response("facts_contradict")
         engine = get_fact_engine()
         result = engine.contradict(fact_id)
         return jsonify(result), (200 if result["ok"] else 404)
@@ -83,6 +100,8 @@ def register_facts_routes(
     @app.route("/facts/<fact_id>/archive", methods=["POST"])
     def facts_archive(fact_id: str):
         """Archive un fait directement — utile pour corriger des faits erronés."""
+        if not is_lab_enabled():
+            return lab_surface_disabled_response("facts_archive")
         engine = get_fact_engine()
         result = engine.archive(fact_id)
         return jsonify(result), (200 if result["ok"] else 404)

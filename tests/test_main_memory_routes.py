@@ -58,7 +58,8 @@ class TestMainMemoryRoutes(unittest.TestCase):
             daemon_main.memory_store,
             "write",
             return_value={"ok": True, "content": "Projet Pulse"},
-        ) as write:
+        ) as write, \
+             patch.dict("os.environ", {"PULSE_MODE": "lab"}):
             response = self.client.post(
                 "/memory/write",
                 json={"content": "Projet Pulse", "tier": "persistent", "topic": "product"},
@@ -78,7 +79,8 @@ class TestMainMemoryRoutes(unittest.TestCase):
             daemon_main.memory_store,
             "write",
             return_value={"ok": True, "content": "Résumé proposé"},
-        ) as write:
+        ) as write, \
+             patch.dict("os.environ", {"PULSE_MODE": "lab"}):
             response = self.client.post(
                 "/memory/write",
                 json={"content": "Résumé proposé", "source": "llm"},
@@ -98,7 +100,8 @@ class TestMainMemoryRoutes(unittest.TestCase):
             daemon_main.memory_store,
             "write",
             return_value={"ok": True, "content": "Préférence utilisateur"},
-        ) as write:
+        ) as write, \
+             patch.dict("os.environ", {"PULSE_MODE": "lab"}):
             response = self.client.post(
                 "/memory/write",
                 json={"content": "Préférence utilisateur", "source": "user"},
@@ -113,10 +116,37 @@ class TestMainMemoryRoutes(unittest.TestCase):
             old_text=None,
         )
 
+    def test_memory_write_core_marks_lab_surface_without_writing(self):
+        with patch.object(daemon_main.memory_store, "write") as write, \
+             patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            response = self.client.post(
+                "/memory/write",
+                json={"content": "Projet Pulse", "tier": "persistent", "topic": "product"},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "lab_surface_disabled")
+        self.assertEqual(payload["surface"], "memory_write")
+        self.assertEqual(payload["pulse_mode"], "core")
+        self.assertTrue(payload["disabled_in_core"])
+        write.assert_not_called()
+
     def test_memory_remove_requires_old_text(self):
         response = self.client.post("/memory/remove", json={"old_text": ""})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["error"], "old_text manquant")
+
+    def test_memory_remove_core_marks_lab_surface_without_removing(self):
+        with patch.object(daemon_main.memory_store, "remove") as remove, \
+             patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            response = self.client.post("/memory/remove", json={"old_text": "Projet Pulse"})
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "lab_surface_disabled")
+        self.assertEqual(payload["surface"], "memory_remove")
+        remove.assert_not_called()
 
     def test_memory_sessions_strips_hidden_payload_by_default(self):
         self._write_session_journal()

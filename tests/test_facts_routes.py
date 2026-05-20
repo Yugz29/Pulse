@@ -98,11 +98,27 @@ class TestFactsRoutes(unittest.TestCase):
 
     def test_profile(self):
         _promote_facts(self.engine)
-        resp = self.client.get("/facts/profile")
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            resp = self.client.get("/facts/profile")
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertIn("profile", data)
         self.assertIsInstance(data["profile"], str)
+
+    def test_profile_core_marks_lab_surface_without_rendering_profile(self):
+        _promote_facts(self.engine)
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.engine, "render_for_context") as render_for_context:
+            resp = self.client.get("/facts/profile")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data["profile"], "")
+        self.assertEqual(data["pulse_mode"], "core")
+        self.assertTrue(data["lab_only"])
+        self.assertTrue(data["disabled_in_core"])
+        render_for_context.assert_not_called()
 
     def test_profile_expose_sections_de_provenance(self):
         _promote_facts(self.engine)
@@ -110,7 +126,8 @@ class TestFactsRoutes(unittest.TestCase):
             conn.execute("UPDATE facts SET confidence = 0.60")
             conn.commit()
 
-        resp = self.client.get("/facts/profile")
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            resp = self.client.get("/facts/profile")
 
         self.assertEqual(resp.status_code, 200)
         profile = resp.get_json()["profile"]
@@ -123,7 +140,8 @@ class TestFactsRoutes(unittest.TestCase):
         fact_id = self.engine.get_facts()[0]["id"]
         conf_before = self.engine.get_facts()[0]["confidence"]
 
-        resp = self.client.post(f"/facts/{fact_id}/reinforce")
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            resp = self.client.post(f"/facts/{fact_id}/reinforce")
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -134,17 +152,33 @@ class TestFactsRoutes(unittest.TestCase):
         fact_id = self.engine.get_facts()[0]["id"]
         conf_before = self.engine.get_facts()[0]["confidence"]
 
-        resp = self.client.post(f"/facts/{fact_id}/contradict")
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            resp = self.client.post(f"/facts/{fact_id}/contradict")
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertTrue(data["ok"])
         self.assertLess(data["confidence"], conf_before)
 
     def test_reinforce_id_inconnu(self):
-        resp = self.client.post("/facts/inexistant/reinforce")
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            resp = self.client.post("/facts/inexistant/reinforce")
         self.assertEqual(resp.status_code, 404)
         data = resp.get_json()
         self.assertFalse(data["ok"])
+
+    def test_reinforce_core_marks_lab_surface_without_mutation(self):
+        _promote_facts(self.engine)
+        fact = self.engine.get_facts()[0]
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            resp = self.client.post(f"/facts/{fact['id']}/reinforce")
+
+        self.assertEqual(resp.status_code, 403)
+        payload = resp.get_json()
+        self.assertEqual(payload["error"], "lab_surface_disabled")
+        self.assertEqual(payload["surface"], "facts_reinforce")
+        after = next(item for item in self.engine.get_facts() if item["id"] == fact["id"])
+        self.assertEqual(after["confidence"], fact["confidence"])
 
     def test_stats_observations_somme_faits(self):
         """stats() doit retourner la somme des observations des faits, pas le COUNT des lignes brutes."""
@@ -166,12 +200,14 @@ class TestFactsRoutes(unittest.TestCase):
     def test_archive_route(self):
         _promote_facts(self.engine)
         fact_id = self.engine.get_facts()[0]["id"]
-        resp = self.client.post(f"/facts/{fact_id}/archive")
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            resp = self.client.post(f"/facts/{fact_id}/archive")
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.get_json()["ok"])
 
     def test_archive_id_inconnu(self):
-        resp = self.client.post("/facts/inexistant/archive")
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            resp = self.client.post("/facts/inexistant/archive")
         self.assertEqual(resp.status_code, 404)
 
 

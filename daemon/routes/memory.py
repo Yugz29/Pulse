@@ -4,6 +4,9 @@ from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
+from daemon.runtime_mode import is_lab_enabled
+from daemon.routes.lab_surface import lab_surface_disabled_response, lab_surface_metadata
+
 _JOURNAL_DATA_START = "<!-- pulse-journal-data:start"
 _JOURNAL_DATA_END = "pulse-journal-data:end -->"
 
@@ -24,6 +27,7 @@ def register_memory_routes(
             "entries": entries,
             "usage": memory_store.usage(),
             "frozen_at": frozen_at.isoformat() if frozen_at else None,
+            **lab_surface_metadata(),
         })
 
     @app.route("/memory/write", methods=["POST"])
@@ -32,6 +36,8 @@ def register_memory_routes(
         content = (data.get("content") or "").strip()
         if not content:
             return jsonify({"ok": False, "error": "content manquant"}), 400
+        if not is_lab_enabled():
+            return lab_surface_disabled_response("memory_write")
         result = memory_store.write(
             content=content,
             tier=data.get("tier", "session"),
@@ -47,6 +53,8 @@ def register_memory_routes(
         old_text = (data.get("old_text") or "").strip()
         if not old_text:
             return jsonify({"ok": False, "error": "old_text manquant"}), 400
+        if not is_lab_enabled():
+            return lab_surface_disabled_response("memory_remove")
         result = memory_store.remove(
             tier=data.get("tier", "session"),
             old_text=old_text,
@@ -59,6 +67,7 @@ def register_memory_routes(
         return jsonify({
             "usage": memory_store.usage(),
             "frozen_at": frozen_at.isoformat() if frozen_at else None,
+            **lab_surface_metadata(),
         })
 
     @app.route("/memory/sessions")
