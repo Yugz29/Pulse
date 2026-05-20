@@ -496,7 +496,7 @@ class RuntimeOrchestrator:
                     self.log.info("Longue veille (%.0f min) → nouvelle session", sleep_min)
                     try:
                         snapshot = self._export_memory_payload()
-                        if snapshot.get("duration_min", 0) > 0:
+                        if is_lab_enabled() and snapshot.get("duration_min", 0) > 0:
                             update_memories_from_session(snapshot, llm=self.summary_llm)
                     except Exception as exc:
                         self.log.warning("sync mémoire pré-reset échouée : %s", exc)
@@ -828,7 +828,7 @@ class RuntimeOrchestrator:
                     self._file_flush_condition.notify_all()
             self._refresh_runtime_signals_for_closure(drain_pending=True)
             snapshot = self._export_memory_payload()
-            if snapshot.get("duration_min", 0) > 0:
+            if is_lab_enabled() and snapshot.get("duration_min", 0) > 0:
                 update_memories_from_session(snapshot)
             self._restart_manager.save(snapshot, session_fsm=self._session_fsm)
             self._join_critical_workers()
@@ -1478,6 +1478,12 @@ class RuntimeOrchestrator:
 
     def _sync_memory_background(self, snapshot, llm, commit_message=None, trigger="screen_lock", diff_summary=None):
         try:
+            if not is_lab_enabled():
+                self.log.debug(
+                    "advanced memory sync skipped in core mode project=%s duration=%smin trigger=%s",
+                    snapshot.get("active_project"), snapshot.get("duration_min"), trigger,
+                )
+                return
             if diff_summary is None:
                 diff_summary = self.runtime_state.get_diff_summary() or None
             top_files = snapshot.get("top_files", []) or []
@@ -1525,6 +1531,8 @@ class RuntimeOrchestrator:
             self.log.warning("memory sync échouée : %s", exc)
 
     def _enqueue_lightweight_commit_summary(self, *, report_ref, snapshot, commit_message, diff_summary) -> None:
+        if not is_lab_enabled():
+            return
         try:
             project = snapshot.get("active_project") or "inconnu"
             duration = int(snapshot.get("duration_min") or 0)
@@ -1609,6 +1617,8 @@ class RuntimeOrchestrator:
         return handler(item=item, status=status, text=text, error=error)
 
     def _enqueue_lightweight_resume_card_summary(self, *, card, context: dict) -> None:
+        if not is_lab_enabled():
+            return
         if self.lightweight_queue is None:
             return
         try:

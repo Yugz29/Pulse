@@ -341,6 +341,46 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         extractor_thread.assert_not_called()
         self.session_memory.close.assert_called_once_with(close_reason="session_end")
 
+    def test_shutdown_runtime_core_skip_advanced_memory_sync(self):
+        snapshot = {
+            "active_project": "Pulse",
+            "duration_min": 25,
+            "probable_task": "coding",
+            "files_changed": 2,
+        }
+        self.session_memory.export_memory_payload.return_value = snapshot
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure"), \
+             patch.object(self.orchestrator._restart_manager, "save"), \
+             patch("daemon.runtime_orchestrator.request_background_writer_shutdown"), \
+             patch("daemon.runtime_orchestrator.join_background_writers"), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory:
+            self.orchestrator.shutdown_runtime()
+
+        sync_memory.assert_not_called()
+        self.session_memory.close.assert_called_once_with(close_reason="session_end")
+
+    def test_shutdown_runtime_lab_garde_memory_sync(self):
+        snapshot = {
+            "active_project": "Pulse",
+            "duration_min": 25,
+            "probable_task": "coding",
+            "files_changed": 2,
+        }
+        self.session_memory.export_memory_payload.return_value = snapshot
+
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure"), \
+             patch.object(self.orchestrator._restart_manager, "save"), \
+             patch("daemon.runtime_orchestrator.request_background_writer_shutdown"), \
+             patch("daemon.runtime_orchestrator.join_background_writers"), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory:
+            self.orchestrator.shutdown_runtime()
+
+        sync_memory.assert_called_once_with(snapshot)
+        self.session_memory.close.assert_called_once_with(close_reason="session_end")
+
     def test_resume_card_pending_ne_publie_pas_apres_shutdown(self):
         with self.orchestrator._critical_worker_lock:
             self.orchestrator._shutdown_requested = True
@@ -890,14 +930,21 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertIsNone(self.runtime_state.get_last_memory_sync_at())
 
     def test_sync_memory_background_skipped_ne_freeze_pas(self):
-        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None):
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=None) as sync_memory, \
+             patch("daemon.memory.extractor.embeddings_enabled") as embeddings_enabled, \
+             patch("daemon.memory.extractor.VectorStore") as vector_store:
             with patch.object(self.orchestrator, "freeze_memory") as freeze_memory:
                 self.orchestrator._sync_memory_background({"active_project": "Pulse", "duration_min": 45}, llm=None)
         self.assertIsNone(self.runtime_state.get_last_memory_sync_at())
+        sync_memory.assert_not_called()
+        embeddings_enabled.assert_not_called()
+        vector_store.assert_not_called()
         freeze_memory.assert_not_called()
 
     def test_sync_memory_background_ok_met_a_jour_sync_at_et_freeze(self):
-        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")):
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")):
             with patch.object(self.orchestrator, "freeze_memory") as freeze_memory:
                 self.orchestrator._sync_memory_background({"active_project": "Pulse", "duration_min": 45}, llm=None)
         self.assertIsNotNone(self.runtime_state.get_last_memory_sync_at())
@@ -914,7 +961,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "top_files": ["runtime.py", "extractor.py"],
         }
 
-        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1", "commit-item-1")), \
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1", "commit-item-1")), \
              patch.object(self.orchestrator, "_start_critical_worker") as start_worker:
             self.orchestrator._sync_memory_background(
                 snapshot,
@@ -941,6 +989,27 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertNotIn("<final>", pending.prompt)
         self.summary_llm.complete.assert_not_called()
         start_worker.assert_not_called()
+
+    def test_core_skip_lightweight_commit_summary_enqueue(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            self.orchestrator._enqueue_lightweight_commit_summary(
+                report_ref=("journal.md", "entry-1", "commit-item-1"),
+                snapshot={
+                    "active_project": "Pulse",
+                    "duration_min": 45,
+                    "probable_task": "coding",
+                    "files_changed": 3,
+                    "top_files": ["runtime.py"],
+                },
+                commit_message="fix: core gate",
+                diff_summary="diff --git a/runtime.py b/runtime.py",
+            )
+
+        self.assertIsNone(queue.claim_next())
+        self.summary_llm.complete.assert_not_called()
 
     def test_apply_lightweight_journal_commit_summary_dispatch_applique_resume(self):
         queue = LightweightLLMQueue()
@@ -1036,7 +1105,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "top_files": ["runtime.py", "extractor.py"],
         }
 
-        with patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")), \
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")), \
              patch.object(self.orchestrator, "_start_critical_worker") as start_worker:
             self.orchestrator._sync_memory_background(
                 snapshot,
@@ -1201,6 +1271,41 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         mock_new_session.assert_called_once()
 
+    def test_verrou_long_core_skip_advanced_memory_sync_pre_reset(self):
+        t_lock = datetime.now() - timedelta(minutes=35)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+        unlock_event = Event("screen_unlocked", {})
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
+             patch.object(
+                 self.orchestrator.session_memory,
+                 "export_memory_payload",
+                 return_value={"active_project": "Pulse", "duration_min": 25},
+             ), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory, \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(unlock_event)
+
+        sync_memory.assert_not_called()
+        mock_new_session.assert_called_once()
+
+    def test_verrou_long_lab_garde_memory_sync_pre_reset(self):
+        t_lock = datetime.now() - timedelta(minutes=35)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+        unlock_event = Event("screen_unlocked", {})
+
+        snapshot = {"active_project": "Pulse", "duration_min": 25}
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch.object(self.orchestrator.session_memory, "new_session") as mock_new_session, \
+             patch.object(self.orchestrator.session_memory, "export_memory_payload", return_value=snapshot), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory, \
+             patch.object(self.orchestrator, "_process_signals"):
+            self.orchestrator.handle_event(unlock_event)
+
+        sync_memory.assert_called_once_with(snapshot, llm=self.summary_llm)
+        mock_new_session.assert_called_once()
+
     def test_verrou_court_clear_sleep_markers_apres_unlock(self):
         t_lock = datetime.now() - timedelta(minutes=5)
         self.runtime_state.mark_screen_locked(when=t_lock)
@@ -1274,7 +1379,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "work_block_started_at": "2026-04-29T09:00:00",
         }
 
-        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
 
         pending = queue.claim_next()
         self.assertIsNotNone(pending)
@@ -1284,6 +1390,27 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertTrue(pending.metadata["resume_card_id"])
         self.assertIn("Réponds uniquement en JSON valide", pending.prompt)
         self.assertIn("Fallback déterministe", pending.prompt)
+        self.summary_llm.complete.assert_not_called()
+
+    def test_resume_card_core_skip_lightweight_summary_enqueue(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        event = Event("screen_unlocked", {})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+
+        self.assertIsNone(queue.claim_next())
+        self.scorer.bus.publish.assert_called_once()
         self.summary_llm.complete.assert_not_called()
 
     def test_resume_card_sans_queue_garde_fallback_deterministe(self):
@@ -1319,7 +1446,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
             "work_block_started_at": "2026-04-29T09:00:00",
         }
-        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
         item = queue.claim_next()
         first_payload = self.scorer.bus.publish.call_args_list[0].args[1]
 
@@ -1358,7 +1486,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
             "work_block_started_at": "2026-04-29T09:00:00",
         }
-        self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            self.orchestrator._maybe_emit_resume_card(event=event, sleep_minutes=35)
         item = queue.claim_next()
 
         result = self.orchestrator.apply_lightweight_llm_result(
