@@ -588,17 +588,31 @@ Validation R1b :
 
 Objectif : empêcher facts / profil / mémoire avancée de contaminer le Core.
 
-- [ ] Empêcher `archive_legacy_facts()` de tourner en mode Core.
-- [ ] Empêcher `decay_all()` de tourner en mode Core.
-- [ ] Vérifier si `get_fact_engine()` est encore instancié au boot Core ; si oui, ne pas le rendre lazy dans le premier patch sauf si c’est trivial. Gater d’abord ses effets de bord et son rendu.
-- [ ] Empêcher le rendu facts / profil dans `freeze_memory()` en mode Core.
-- [ ] Éviter `load_memory_context()` en mode Core si ce legacy context peut contenir des mémoires Lab non qualifiées.
-- [ ] Garder `freeze_memory()` disponible en Core uniquement pour une snapshot minimale observée / dérivée.
-- [ ] Ajouter des tests prouvant que `freeze_memory()` exclut facts / profil / mémoire narrative en mode Core.
+- [x] Empêcher `archive_legacy_facts()` de tourner en mode Core.
+- [x] Empêcher `decay_all()` de tourner en mode Core.
+- [x] Vérifier si `get_fact_engine()` est encore instancié au boot Core ; si oui, ne pas le rendre lazy dans le premier patch sauf si c’est trivial. Gater d’abord ses effets de bord et son rendu.
+- [x] Empêcher le rendu facts / profil dans `freeze_memory()` en mode Core.
+- [x] Éviter `load_memory_context()` en mode Core si ce legacy context peut contenir des mémoires Lab non qualifiées.
+- [x] Garder `freeze_memory()` disponible en Core uniquement pour une snapshot minimale observée / dérivée.
+- [x] Ajouter des tests prouvant que `freeze_memory()` exclut facts / profil / mémoire narrative en mode Core.
 
 Sortie attendue de R1c :
 
 > `freeze_memory()` reste utile en Core, mais ne rend plus de mémoire intelligente ou expérimentale.
+
+Validation R1c :
+
+- en mode Core, `deferred_startup()` ne lance plus `archive_legacy_facts()` ;
+- en mode Core, `deferred_startup()` ne lance plus `decay_all()` ;
+- en mode Core, `freeze_memory()` n’appelle plus `render_project_memory()` ;
+- en mode Core, `freeze_memory()` n’appelle plus `memory_store.render()` ;
+- en mode Core, `freeze_memory()` n’appelle plus `load_memory_context()` ;
+- en mode Core, `freeze_memory()` n’appelle plus `fact_engine.render_for_context()` ;
+- en mode Core, `freeze_memory()` reste disponible et produit une snapshot minimale depuis `PresentState` ;
+- en mode Lab, les chemins facts et mémoire avancée existants restent actifs ;
+- `get_fact_engine()` reste volontairement instancié dans `RuntimeOrchestrator.__init__`, mais ses effets de bord et son rendu sont gatés en Core ;
+- aucun changement DayDream / vector store / routes Lab / dashboard Swift / boot global ;
+- tests ciblés passés : `tests/test_runtime_orchestrator.py`.
 
 ### R1d — LLM léger, vector store et sync mémoire
 
