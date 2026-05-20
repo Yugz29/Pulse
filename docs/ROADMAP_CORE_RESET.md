@@ -564,15 +564,25 @@ Validation R1a :
 
 Objectif : sortir DayDream du chemin Core sans supprimer le module.
 
-- [ ] Empêcher `_mark_missed_daydream_pending()` de tourner en mode Core.
-- [ ] Empêcher le thread `_daydream_scheduler` de démarrer en mode Core.
-- [ ] Empêcher `_run_daydream_if_pending()` d’être appelé depuis `handle_event()` en mode Core.
-- [ ] Ajouter des tests prouvant que DayDream n’est ni planifié, ni démarré, ni déclenché par événement en mode Core.
-- [ ] Vérifier que DayDream reste disponible en mode `lab` ou `dev` si nécessaire.
+- [x] Empêcher `_mark_missed_daydream_pending()` de tourner en mode Core.
+- [x] Empêcher le thread `_daydream_scheduler` de démarrer en mode Core.
+- [x] Empêcher `_run_daydream_if_pending()` d’être appelé depuis `handle_event()` en mode Core.
+- [x] Ajouter des tests prouvant que DayDream n’est ni planifié, ni démarré, ni déclenché par événement en mode Core.
+- [x] Vérifier que DayDream reste disponible en mode `lab` ou `dev` si nécessaire.
 
 Sortie attendue de R1b :
 
 > DayDream n’est plus câblé dans le boot ou la boucle événementielle du Core.
+
+Validation R1b :
+
+- DayDream est maintenant derrière `is_lab_enabled()` ;
+- en mode Core, `deferred_startup()` ne planifie plus DayDream ;
+- en mode Core, le thread scheduler DayDream ne démarre plus ;
+- en mode Core, `handle_event()` ne déclenche plus DayDream sur `screen_locked` / `screen_unlocked` ;
+- en mode Lab, les chemins DayDream existants restent activables ;
+- aucun changement facts / profil / `freeze_memory()` / vector store / routes Lab / dashboard Swift / boot global ;
+- tests ciblés passés : `tests/test_runtime_orchestrator.py`.
 
 ### R1c — Gate facts et mémoire avancée
 
