@@ -1,20 +1,27 @@
 # Pulse
 
-Pulse est une couche locale d'observation, de structuration de contexte, de mémoire et de contrôle autour des outils IA sur macOS.
+> **Statut actuel : Core Reset**
+>
+> Pulse est en phase de recadrage. Tant que le Core Reset n'est pas terminé, [`docs/ROADMAP_CORE_RESET.md`](./docs/ROADMAP_CORE_RESET.md) est le document maître prioritaire sur les anciennes roadmaps, notes d'architecture, documents mémoire, agent, apprentissage, DayDream, facts, propositions et extensions dashboard.
+>
+> **Pulse Core** désigne le chemin à stabiliser : runtime daemon, observation locale, événements filtrés, signaux explicables, sessions, journal minimal et dashboard de diagnostic.
+>
+> **Pulse Lab** désigne les capacités expérimentales ou prématurées : DayDream, facts/profile, vector store, résumés LLM, work intent, context probes, propositions avancées, apprentissage et adaptation.
+
+Pulse est aujourd'hui recentré comme runtime local de diagnostic du contexte de travail sur macOS.
 
 Aujourd'hui, Pulse sait :
 - observer l'activité locale utile
 - maintenir un présent runtime canonique
-- consolider une mémoire sessionnelle, des blocs de travail et des faits utilisateur
-- aider à reprendre le contexte après une pause via des Resume Cards
-- demander ponctuellement du contexte supplémentaire via des Context Probes validées
-- intercepter certaines commandes agents via MCP
-- produire des propositions explicables
+- structurer des sessions et des blocs de travail dérivés
+- produire un journal minimal et des surfaces de diagnostic
+- exposer, en Pulse Lab, des capacités expérimentales de mémoire, Resume Cards, Context Probes, MCP, LLM et propositions
 
 Pulse n'est pas :
 - un agent autonome
 - un système qui comprend parfaitement le travail utilisateur
 - un système qui structure déjà parfaitement toute sa mémoire et ses propositions autour de la continuité de travail
+- une mémoire intelligente ou un système d'apprentissage utilisateur fiable
 
 La fondation du runtime est en place. Pulse est maintenant recentré autour d'un présent canonique, de `current_context`, de `recent_sessions` et de `work_blocks` dérivés des événements significatifs. Les anciens champs d'épisodes et `work_window_*` restent lisibles comme alias de compatibilité, mais ils ne sont plus le modèle produit.
 
@@ -24,8 +31,8 @@ La fondation du runtime est en place. Pulse est maintenant recentré autour d'un
 
 Pulse combine :
 - une app Swift macOS centrée sur l'encoche et l'observation système
-- un daemon Python local qui qualifie les événements, gère le cycle de session, calcule les signaux, met à jour le présent canonique, décide et alimente la mémoire
-- une couche LLM optionnelle pour les cas où l'approche déterministe ne suffit plus
+- un daemon Python local qui qualifie les événements, gère le cycle de session, calcule les signaux, met à jour le présent canonique et alimente un historique minimal
+- des couches Lab optionnelles pour mémoire avancée, LLM, propositions, probes et expérimentations
 
 Principe fondamental :
 
@@ -42,19 +49,20 @@ Principe fondamental :
 - **Contexte rendu** : `CurrentContextBuilder` rend un `CurrentContext` depuis `present`, avec quelques détails secondaires encore lus depuis `signals`
 - **Blocs de travail** : `SessionMemory` groupe les événements significatifs en `work_blocks` pour produire le bilan de journée et les blocs récents
 - **Sessions récentes** : les sessions fermées sont exposées comme `recent_sessions` pour l'historique, avec alias legacy temporaire
-- **Resume Cards** : cartes de reprise déterministes ou LLM pour aider l'utilisateur à revenir dans le fil après une pause
-- **Resume Card préparée** : préparation à chaud au `screen_locked`, puis consommation immédiate au prochain `screen_unlocked` si valide
-- **Context Probes** : demandes ponctuelles de contexte supplémentaire, validées et masquées avant exposition quand nécessaire
-- **Mémoire locale** : extraction rétrospective de résumés de session et consolidation de faits utilisateur
-- **Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
-- **Interception MCP** : traduction et arbitrage de certaines commandes risquées avant exécution
-- **Chat contextuel** : injection du contexte local et de la mémoire consolidée dans les échanges assistant
-- **Dashboard technique** : fenêtre macOS indépendante pour visualiser en temps réel session, mémoire, événements, MCP et état système
+- **Journal minimal** : historique sessionnel local issu d'observations et de signaux dérivés
+- **Lab - Resume Cards** : cartes de reprise déterministes ou LLM, encore expérimentales pendant le Core Reset
+- **Lab - Context Probes** : demandes ponctuelles de contexte supplémentaire, validées et masquées avant exposition quand nécessaire
+- **Lab - Mémoire avancée** : extraction rétrospective de résumés, facts utilisateur, profil et vector store
+- **Lab - Proposals locales** : production de `ProposalCandidate`, puis conversion vers le transport legacy `Proposal`
+- **Lab - Interception MCP** : traduction et arbitrage de certaines commandes risquées avant exécution
+- **Lab - Chat contextuel** : injection du contexte local et de mémoire consolidée dans les échanges assistant
+- **Dashboard diagnostic** : fenêtre macOS indépendante pour visualiser en temps réel session, événements, signaux et état système ; les onglets avancés restent Lab
 
 Ce que Pulse ne fait pas encore :
 - modéliser parfaitement les blocs de travail et la continuité inter-session
 - corréler systématiquement sessions, commits, journal et reprises de contexte
 - contextualiser finement les propositions par continuité de travail
+- apprendre des habitudes utilisateur fiables
 - agir de manière autonome
 
 ---
@@ -106,8 +114,8 @@ Lire ces champs séparément est incorrect.
 - `RuntimeState` / `PresentState` : vérité live du présent runtime
 - `session.db` et les événements significatifs : vérité temporelle persistée
 - `work_blocks` / `work_block_*` : projections temporelles dérivées, utilisées par la mémoire, les commits et les Resume Cards
-- `sessions/*.md`, `facts.md`, `projects.md` : projections lisibles et dérivées, jamais source primaire
-- `MemoryStore` et `DayDream` : couches de support hors chemin critique tant qu'elles n'apportent pas une valeur observable stable
+- `sessions/*.md` : projection lisible et dérivée, jamais source primaire
+- `facts.md`, `projects.md`, `MemoryStore`, vector store et `DayDream` : couches Lab hors chemin critique tant qu'elles n'apportent pas une valeur observable stable
 
 Règle runtime importante :
 
@@ -205,11 +213,11 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 | POST | `/event` | Entrée d’événements depuis l’app Swift |
 | POST | `/ask` | Question assistant avec contexte local |
 | POST | `/ask/stream` | Streaming assistant |
-| GET | `/facts` | Faits utilisateur consolidés |
-| GET | `/facts/profile` | Bloc mémoire injecté dans le prompt |
-| GET | `/memory` | Entrées du `MemoryStore` |
+| GET | `/facts` | Lab : faits utilisateur consolidés |
+| GET | `/facts/profile` | Lab : bloc mémoire injecté dans le prompt |
+| GET | `/memory` | Lab : entrées du `MemoryStore` |
 | GET | `/memory/sessions` | Journaux de session exposés pour le dashboard |
-| GET/POST | `/context-probes/requests` | Demandes ponctuelles de contexte supplémentaire avec validation |
+| GET/POST | `/context-probes/requests` | Lab : demandes ponctuelles de contexte supplémentaire avec validation |
 | GET | `/mcp/pending` | Commande agent en attente |
 | POST | `/mcp/decision` | Autoriser ou refuser une commande |
 
@@ -234,18 +242,18 @@ Le daemon écoute sur `http://127.0.0.1:8765`.
 ### Ce que mémorise Pulse aujourd’hui
 
 - sessions de travail rétrospectives
-- faits utilisateur dérivés d’observations répétées
-- projets connus
-- résumés de commit quand un commit confirmé sert de frontière fiable
+- Lab : faits utilisateur dérivés d’observations répétées
+- Lab : projets connus
+- Lab : résumés de commit quand un commit confirmé sert de frontière fiable
 - blocs de travail dérivés pour le bilan de journée et les reprises de contexte
-- entrées de journal utilisées comme contexte court pour les Resume Cards
+- Lab : entrées de journal utilisées comme contexte court pour les Resume Cards
 
-La mémoire actuelle reste principalement :
+La mémoire Core actuelle doit rester principalement :
 - session-centrique
 - heuristique
 - locale
 
-Elle n’est pas encore une mémoire riche de continuité. Les `work_blocks` et `recent_sessions` servent de base actuelle, plus simple et plus stable que l'ancien modèle d'épisodes.
+Elle n’est pas encore une mémoire riche de continuité, ni un système d'apprentissage utilisateur. Les `work_blocks` et `recent_sessions` servent de base actuelle, plus simple et plus stable que l'ancien modèle d'épisodes.
 
 ---
 
@@ -341,7 +349,7 @@ L’app :
 - envoie les événements utiles au daemon
 - affiche le contexte courant
 - expose les contrôles runtime
-- sert de point d’entrée UX pour le chat et les décisions MCP
+- sert aussi de point d’entrée UX Lab pour le chat et les décisions MCP
 
 ---
 
@@ -357,14 +365,16 @@ L’app :
 ## Niveau de maturité
 
 Le projet est aujourd’hui dans une phase où :
-- la fondation runtime est stabilisée
+- le Core Reset est prioritaire
+- la fondation runtime existe mais doit être vérifiée en mode Core
 - la compat legacy est verrouillée
-- la phase `Observation terrain` est clôturée
-- le système expose désormais un dashboard technique et une observabilité plus explicite
+- le système expose un dashboard technique et une observabilité plus explicite
+- les capacités avancées doivent être traitées comme Pulse Lab tant que le Core n'est pas stabilisé
 
 Le premier périmètre Episode a été retiré du runtime produit.
 Les chantiers encore ouverts concernent surtout :
-- la validation terrain des Resume Cards préparées ;
-- la corrélation longue entre session, commits, journal et reprises de contexte ;
-- l’exploitation des blocs de travail par la mémoire et les proposals ;
-- la lisibilité de l’historique utile.
+- la baseline runtime Core ;
+- la baseline observation et scoring ;
+- la fiabilité des sessions ;
+- le journal minimal vérifiable ;
+- la séparation explicite des surfaces Lab.
