@@ -618,17 +618,31 @@ Validation R1c :
 
 Objectif : clarifier les dépendances avancées sans casser les surfaces existantes.
 
-- [ ] Ne pas chercher à supprimer l’objet LLM au premier patch.
-- [ ] Vérifier que `/ping`, `/state` et `/feed` ne dépendent pas d’un provider LLM disponible.
-- [ ] Vérifier que le warmup LLM reste désactivé par défaut ou déjà gate par policy existante.
-- [ ] Empêcher les enqueues lightweight LLM d’être actifs en mode Core, ou les marquer explicitement Lab / debug.
-- [ ] Ne pas supprimer `LightweightLLMQueue` au premier patch.
-- [ ] Prouver qu’aucun chemin Core n’instancie `VectorStore` ni ne déclenche d’embeddings.
-- [ ] Vérifier `_sync_memory_background()` et `update_memories_from_session()` pour éviter facts, journal intelligent, summaries LLM ou vectorisation dans le flux Core.
+- [x] Ne pas chercher à supprimer l’objet LLM au premier patch.
+- [x] Vérifier que `/ping`, `/state` et `/feed` ne dépendent pas d’un provider LLM disponible.
+- [x] Vérifier que le warmup LLM reste désactivé par défaut ou déjà gate par policy existante.
+- [x] Empêcher les enqueues lightweight LLM d’être actifs en mode Core, ou les marquer explicitement Lab / debug.
+- [x] Ne pas supprimer `LightweightLLMQueue` au premier patch.
+- [x] Prouver qu’aucun chemin Core n’instancie `VectorStore` ni ne déclenche d’embeddings.
+- [x] Vérifier `_sync_memory_background()` et `update_memories_from_session()` pour éviter facts, journal intelligent, summaries LLM ou vectorisation dans le flux Core.
 
 Sortie attendue de R1d :
 
 > Le Core ne dépend pas des LLM, embeddings ou sync mémoire avancée pour fonctionner.
+
+Validation R1d :
+
+- l’objet LLM global reste volontairement créé ;
+- `LightweightLLMQueue` reste présent ;
+- `VectorStore` reste présent ;
+- les routes `/llm/lightweight/*` restent exposées pour traitement ultérieur en R1e ;
+- en mode Core, les sync mémoire avancées automatiques ne lancent plus `update_memories_from_session()` ;
+- en mode Core, les chemins pré-reset après longue veille, shutdown runtime et `_sync_memory_background()` ne déclenchent plus de sync mémoire avancée ;
+- en mode Core, les enqueues LLM légères automatiques sont bloquées pour les résumés de commit journal et resume card ;
+- en mode Lab, les chemins existants restent activables ;
+- `/feed` a été vérifié comme route read-only sur l’event bus, sans provider LLM ;
+- aucun changement DayDream / gates facts existants / routes / dashboard Swift / boot global ;
+- tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/llm/test_lifecycle_policy.py`, `tests/llm/test_lightweight_queue.py`, `tests/memory/test_embedding_policy.py`, `tests/test_main_runtime_state.py`.
 
 ### R1e — Routes et surfaces Lab
 
