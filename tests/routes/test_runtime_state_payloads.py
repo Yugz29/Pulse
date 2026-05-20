@@ -243,7 +243,9 @@ def test_build_state_payload_keeps_present_minimal_when_state_signals_are_enrich
     assert "SECRET stdout" not in serialized
 
 
-def test_build_state_payload_omits_debug_by_default_but_keeps_product_fields():
+def test_build_state_payload_omits_debug_by_default_but_keeps_product_fields(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+
     payload = build_state_payload(
         store_state=StoreStub().to_dict(),
         runtime_snapshot=_snapshot(signals=_signals()),
@@ -253,9 +255,25 @@ def test_build_state_payload_omits_debug_by_default_but_keeps_product_fields():
 
     assert "debug" not in payload
     assert payload["signals"]["active_project"] == "Pulse"
+    assert payload["pulse_mode"] == "core"
+    assert payload["experimental_enabled"] is False
 
 
-def test_build_state_payload_can_include_legacy_debug_when_requested():
+def test_build_state_payload_exposes_lab_mode(monkeypatch):
+    monkeypatch.setenv("PULSE_MODE", "lab")
+
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(),
+    )
+
+    assert payload["pulse_mode"] == "lab"
+    assert payload["experimental_enabled"] is True
+
+
+def test_build_state_payload_can_include_legacy_debug_when_requested(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+
     payload = build_state_payload(
         store_state=StoreStub().to_dict(),
         runtime_snapshot=_snapshot(signals=_signals()),
@@ -267,6 +285,8 @@ def test_build_state_payload_can_include_legacy_debug_when_requested():
     assert payload["debug"]["store"]["last_event_type"] == "file_modified"
     assert payload["debug"]["surface"] == "debug_state"
     assert payload["debug"]["legacy_in_state"] is True
+    assert payload["debug"]["pulse_mode"] == "core"
+    assert payload["debug"]["experimental_enabled"] is False
     assert payload["debug"]["runtime"]["latest_active_app"] == "Xcode"
     assert payload["debug"]["runtime"]["latest_active_app_bundle_id"] == "com.apple.dt.Xcode"
     assert (
@@ -277,7 +297,9 @@ def test_build_state_payload_can_include_legacy_debug_when_requested():
     assert payload["debug"]["signals"]["active_project"] == "Pulse"
 
 
-def test_build_debug_state_payload_returns_debug_surface_without_legacy_marker():
+def test_build_debug_state_payload_returns_debug_surface_without_legacy_marker(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+
     payload = build_debug_state_payload(
         store_state=StoreStub().to_dict(),
         runtime_snapshot=_snapshot(signals=_signals()),
@@ -303,6 +325,8 @@ def test_build_debug_state_payload_returns_debug_surface_without_legacy_marker()
 
     assert payload["surface"] == "debug_state"
     assert payload["legacy_in_state"] is False
+    assert payload["pulse_mode"] == "core"
+    assert payload["experimental_enabled"] is False
     assert payload["store"]["last_event_type"] == "file_modified"
     assert payload["runtime"]["latest_active_app"] == "Xcode"
     assert payload["session_fsm"]["state"] == "active"

@@ -8,6 +8,7 @@ from daemon.core.current_context_adapters import current_context_to_legacy_signa
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.core.workspace_context import find_workspace_root
 from daemon.memory.extractor import find_git_root, last_session_context
+from daemon.runtime_mode import get_pulse_mode, is_lab_enabled
 
 
 def serialize_current_context(current_context: Any) -> dict[str, Any]:
@@ -131,6 +132,8 @@ def build_state_payload(
     include_debug: bool = False,
 ) -> dict[str, Any]:
     present = runtime_snapshot.present
+    pulse_mode = get_pulse_mode()
+    experimental_enabled = is_lab_enabled()
     state = {
         "active_app": runtime_snapshot.latest_active_app,
         "active_file": present.active_file,
@@ -138,6 +141,8 @@ def build_state_payload(
         "session_duration_min": present.session_duration_min,
         "last_event_type": store_state.get("last_event_type"),
         "runtime_paused": runtime_snapshot.paused,
+        "pulse_mode": pulse_mode,
+        "experimental_enabled": experimental_enabled,
         "present": present.to_dict(),
     }
 
@@ -168,6 +173,8 @@ def build_debug_state_payload(
     last_session_context_fn: Callable[[str], str | None] = last_session_context,
 ) -> dict[str, Any]:
     present = runtime_snapshot.present
+    pulse_mode = get_pulse_mode()
+    experimental_enabled = is_lab_enabled()
     product_state = state
     if product_state is None:
         product_state = {
@@ -177,12 +184,19 @@ def build_debug_state_payload(
             "session_duration_min": present.session_duration_min,
             "last_event_type": store_state.get("last_event_type"),
             "runtime_paused": runtime_snapshot.paused,
+            "pulse_mode": pulse_mode,
+            "experimental_enabled": experimental_enabled,
             "present": present.to_dict(),
         }
+    else:
+        product_state.setdefault("pulse_mode", pulse_mode)
+        product_state.setdefault("experimental_enabled", experimental_enabled)
 
     debug: dict[str, Any] = {
         "surface": "debug_state",
         "legacy_in_state": state is not None,
+        "pulse_mode": product_state["pulse_mode"],
+        "experimental_enabled": product_state["experimental_enabled"],
         "store": store_state,
         "runtime": serialize_runtime_debug(runtime_snapshot),
     }

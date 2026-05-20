@@ -61,16 +61,19 @@ class TestMainRuntimeState(unittest.TestCase):
         daemon_main.runtime_state.set_analysis(signals=signals, decision=decision)
         daemon_main.runtime_state.set_latest_active_app("Xcode")
 
-        with patch.object(
-            daemon_main.store,
-            "to_dict",
-            return_value={"active_app": "Xcode", "session_duration_min": 96},
-        ):
-            response = self.client.get("/state")
+        with patch.dict(os.environ, {"PULSE_MODE": "core"}), \
+             patch.object(
+                 daemon_main.store,
+                 "to_dict",
+                 return_value={"active_app": "Xcode", "session_duration_min": 96},
+             ):
+            response = self.client.get("/state?include_debug=true")
 
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertTrue(payload["runtime_paused"])
+        self.assertEqual(payload["pulse_mode"], "core")
+        self.assertFalse(payload["experimental_enabled"])
         self.assertEqual(payload["active_app"], "Xcode")
         self.assertEqual(payload["active_project"], "Pulse")
         self.assertEqual(payload["present"]["session_status"], "active")
