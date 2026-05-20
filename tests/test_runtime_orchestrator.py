@@ -520,16 +520,38 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
     def test_freeze_memory_uses_project_memory_before_support_layers(self):
         self.memory_store.render.return_value = "Structured memory"
-        with patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse"):
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse"):
             self.orchestrator.freeze_memory()
         self.assertEqual(self.orchestrator.get_frozen_memory(), "# Projets\n\n## Pulse\n\nStructured memory")
 
     def test_freeze_memory_fallback_legacy_si_projet_et_support_absents(self):
         self.memory_store.render.return_value = ""
-        with patch("daemon.runtime_orchestrator.render_project_memory", return_value=""), \
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.render_project_memory", return_value=""), \
              patch("daemon.runtime_orchestrator.load_memory_context", return_value="Legacy memory"):
             self.orchestrator.freeze_memory()
         self.assertEqual(self.orchestrator.get_frozen_memory(), "Legacy memory")
+
+    def test_freeze_memory_core_exclut_facts_et_memoire_legacy(self):
+        self.memory_store.render.return_value = "Structured memory"
+        self._set_runtime_analysis(self._signals())
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch("daemon.runtime_orchestrator.render_project_memory", return_value="# Projets\n\n## Pulse") as render_projects, \
+             patch("daemon.runtime_orchestrator.load_memory_context", return_value="Legacy memory") as load_legacy:
+            self.orchestrator.freeze_memory()
+
+        render_projects.assert_not_called()
+        self.memory_store.render.assert_not_called()
+        load_legacy.assert_not_called()
+        self.mock_fact_engine.render_for_context.assert_not_called()
+        frozen = self.orchestrator.get_frozen_memory()
+        self.assertIn("# Pulse Core Snapshot", frozen)
+        self.assertIn("- Projet actif : Pulse", frozen)
+        self.assertNotIn("Structured memory", frozen)
+        self.assertNotIn("Legacy memory", frozen)
+        self.assertNotIn("# Projets", frozen)
 
     def test_deferred_startup_loads_models_purges_memory_without_warmup_by_default(self):
         provider = MagicMock()
@@ -546,6 +568,27 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.memory_store.purge_expired.assert_called_once()
         self.llm_runtime.provider.assert_not_called()
         provider.warmup.assert_not_called()
+
+    def test_deferred_startup_core_ne_lance_pas_maintenance_facts(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "core", "PULSE_HEAVY_LLM_AUTOWARM": ""}), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None):
+            self.orchestrator.deferred_startup()
+
+        self.mock_fact_engine.archive_legacy_facts.assert_not_called()
+        self.mock_fact_engine.decay_all.assert_not_called()
+
+    def test_deferred_startup_lab_lance_maintenance_facts(self):
+        self.mock_fact_engine.archive_legacy_facts.return_value = 1
+        self.mock_fact_engine.decay_all.return_value = 2
+
+        with patch.dict("os.environ", {"PULSE_MODE": "lab", "PULSE_HEAVY_LLM_AUTOWARM": ""}), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None), \
+             patch.object(self.orchestrator, "_mark_missed_daydream_pending"), \
+             patch("daemon.runtime_orchestrator.threading.Thread"):
+            self.orchestrator.deferred_startup()
+
+        self.mock_fact_engine.archive_legacy_facts.assert_called_once()
+        self.mock_fact_engine.decay_all.assert_called_once()
 
     def test_deferred_startup_core_ne_planifie_pas_daydream(self):
         with patch.dict("os.environ", {"PULSE_MODE": "core", "PULSE_HEAVY_LLM_AUTOWARM": ""}), \

@@ -319,6 +319,18 @@ class RuntimeOrchestrator:
 
     def freeze_memory(self) -> None:
         captured_at = datetime.now()
+        if not is_lab_enabled():
+            frozen = self._render_core_memory_snapshot(captured_at=captured_at)
+            with self._runtime_lock:
+                self._frozen_memory = frozen
+                self._frozen_memory_at = captured_at
+            self.log.info(
+                "Mémoire figée core : %d car. (%s)",
+                len(self._frozen_memory),
+                captured_at.strftime("%H:%M:%S"),
+            )
+            return
+
         project_memory = ""
         try:
             project_memory = render_project_memory()
@@ -358,6 +370,26 @@ class RuntimeOrchestrator:
             captured_at.strftime("%H:%M:%S"),
             f" — {len(facts_profile)} car. de profil utilisateur" if facts_profile else "",
         )
+
+    def _render_core_memory_snapshot(self, *, captured_at: datetime) -> str:
+        present = self.runtime_state.get_present()
+        lines = [
+            "# Pulse Core Snapshot",
+            "",
+            f"- Capturé à : {captured_at.isoformat()}",
+            f"- Statut session : {present.session_status}",
+            f"- Activité : {present.activity_level}",
+            f"- Tâche probable : {present.probable_task}",
+            f"- Focus : {present.focus_level}",
+            f"- Durée session : {present.session_duration_min} min",
+        ]
+        if present.active_project:
+            lines.append(f"- Projet actif : {present.active_project}")
+        if present.active_file:
+            lines.append(f"- Fichier actif : {present.active_file}")
+        if present.user_presence_state:
+            lines.append(f"- Présence utilisateur : {present.user_presence_state}")
+        return "\n".join(lines)
 
     def _export_memory_payload(self) -> dict:
         payload = self.session_memory.export_memory_payload()
@@ -894,19 +926,20 @@ class RuntimeOrchestrator:
         except Exception as exc:
             self.log.warning("purge session.db échouée : %s", exc)
 
-        try:
-            archived_legacy = self._fact_engine.archive_legacy_facts()
-            if archived_legacy:
-                self.log.info("Facts : %d fait(s) legacy archivé(s)", archived_legacy)
-        except Exception as exc:
-            self.log.warning("Facts : archivage legacy échoué : %s", exc)
+        if is_lab_enabled():
+            try:
+                archived_legacy = self._fact_engine.archive_legacy_facts()
+                if archived_legacy:
+                    self.log.info("Facts : %d fait(s) legacy archivé(s)", archived_legacy)
+            except Exception as exc:
+                self.log.warning("Facts : archivage legacy échoué : %s", exc)
 
-        try:
-            decayed = self._fact_engine.decay_all()
-            if decayed:
-                self.log.info("Facts : decay appliqué sur %d fait(s)", decayed)
-        except Exception as exc:
-            self.log.warning("Facts : decay échoué : %s", exc)
+            try:
+                decayed = self._fact_engine.decay_all()
+                if decayed:
+                    self.log.info("Facts : decay appliqué sur %d fait(s)", decayed)
+            except Exception as exc:
+                self.log.warning("Facts : decay échoué : %s", exc)
 
         self.freeze_memory()
         provider = self.llm_runtime.provider() if is_heavy_llm_autowarm_enabled() else None
