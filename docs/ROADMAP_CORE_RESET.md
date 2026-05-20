@@ -648,17 +648,34 @@ Validation R1d :
 
 Objectif : éviter une casse large de l’API et du dashboard.
 
-- [ ] Ne pas désenregistrer en bloc les routes Lab au premier patch.
-- [ ] Identifier les routes Lab enregistrées dans `main.create_app()`.
-- [ ] Identifier les routes Lab enregistrées dans `register_runtime_routes()`.
-- [ ] Marquer ou gater progressivement les effets de bord des routes Lab.
-- [ ] Garder `/state` sobre et produit.
-- [ ] Réserver les détails expérimentaux à `/debug/state` ou à des routes explicitement Lab / debug.
-- [ ] Vérifier que l’app Swift ne dépend pas d’une route brutalement supprimée.
+- [x] Ne pas désenregistrer en bloc les routes Lab au premier patch.
+- [x] Identifier les routes Lab enregistrées dans `main.create_app()`.
+- [x] Identifier les routes Lab enregistrées dans `register_runtime_routes()`.
+- [x] Marquer ou gater progressivement les effets de bord des routes Lab.
+- [x] Garder `/state` sobre et produit.
+- [x] Réserver les détails expérimentaux à `/debug/state` ou à des routes explicitement Lab / debug.
+- [x] Vérifier que l’app Swift ne dépend pas d’une route brutalement supprimée.
 
 Sortie attendue de R1e :
 
 > Les routes expérimentales ne sont pas traitées comme produit Core, sans casser brutalement l’existant.
+
+Validation R1e :
+
+- aucune route Lab n’a été désenregistrée brutalement ;
+- les routes Core confirmées restent : `/ping`, `/state`, `/debug/state`, `/event`, `/feed`, `/scoring/status`, `/daemon/pause`, `/daemon/resume` ;
+- les surfaces Lab identifiées incluent facts / profile, mémoire avancée, LLM léger, debug mémoire, probes, work intent, resume card debug, DayDream read surface et MCP proposals / intercept ;
+- `/llm/lightweight/status` expose maintenant `pulse_mode`, `experimental`, `lab_only`, `disabled_in_core` ;
+- `/llm/lightweight/pending` ne claim plus de requête en mode Core ;
+- `/llm/lightweight/result` retourne `403 lab_surface_disabled` en mode Core ;
+- `/memory/write` et `/memory/remove` retournent `403 lab_surface_disabled` en mode Core ;
+- `/facts/profile` ne rend plus le profil en mode Core ;
+- les mutations facts `reinforce`, `contradict`, `archive` retournent `403 lab_surface_disabled` en mode Core ;
+- `/facts`, `/facts/stats`, `/memory`, `/memory/usage` sont marquées Lab via métadonnées sans bloquer la lecture ;
+- `/context-probes/*`, `/work-intent/*`, `/debug/resume-card*` et `/mcp/*` restent volontairement non modifiés dans ce patch pour éviter une casse large ;
+- aucun changement DayDream / Swift / `create_app()` global / `register_runtime_routes()` global ;
+- tests ciblés passés : `tests/test_lightweight_llm_routes.py`, `tests/test_facts_routes.py`, `tests/test_main_memory_routes.py`, `tests/test_main_runtime_state.py`, `tests/test_runtime_routes.py`, `tests/test_main_mcp_routes.py` ;
+- fragilité existante notée : certains runs combinés exposent un problème d’ordre d’import autour de `HOME` / `daemon.main`, non corrigé ici car hors scope R1e.
 
 ### R1f — Santé Core et tests
 
@@ -706,3 +723,5 @@ Décision importante : R1 ne doit pas être un seul gros patch.
 Le premier patch technique doit seulement introduire le mode runtime, l’exposer dans les payloads d’état et ajouter les tests associés.
 
 Les gates DayDream, facts, mémoire avancée, LLM léger, routes Lab et santé Core doivent être faits dans des patchs séparés.
+
+Note R1e : toutes les surfaces Lab n’ont pas vocation à être bloquées immédiatement. Les routes à risque faible peuvent être marquées comme Lab via métadonnées. Les routes avec effets de bord critiques doivent être bloquées en Core. Les surfaces complexes comme MCP, probes, work intent et debug resume card doivent être traitées dans des patchs séparés si leur blocage risque de casser des workflows existants.
