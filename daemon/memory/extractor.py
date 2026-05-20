@@ -426,7 +426,7 @@ def update_memories_from_session(
         def _vectorize():
             try:
                 store = _get_vector_store()
-                entry = {
+                fallback_entry = {
                     "active_project": session_data.get("active_project"),
                     "probable_task":  session_data.get("probable_task"),
                     "body":           session_data.get("body", ""),
@@ -438,6 +438,7 @@ def update_memories_from_session(
                     "ended_at":       session_data.get("ended_at"),
                     "recent_apps":    session_data.get("recent_apps", []),
                 }
+                entry = _journal_entry_for_vector_store(report_ref, fallback_entry)
                 mid = store.index_journal_entry(entry)
                 if mid:
                     log.debug("Vectorisé en mémoire : id=%d projet=%s", mid, entry.get("active_project"))
@@ -1986,6 +1987,21 @@ def _journal_narrative_item(
     if summary_error:
         item["error"] = str(summary_error)
     return item
+
+
+def _journal_entry_for_vector_store(report_ref, fallback_entry: Dict[str, Any]) -> Dict[str, Any]:
+    journal_file, entry_id, _ = _report_ref_parts(report_ref)
+    try:
+        for entry in _load_journal_entries(journal_file):
+            if str(entry.get("entry_id") or "") == str(entry_id):
+                if isinstance(entry.get("truth_layers"), dict):
+                    return entry
+                return _with_journal_truth_layers(_normalize_journal_entry(entry))
+    except Exception:
+        pass
+
+    normalized = _normalize_journal_entry(dict(fallback_entry))
+    return _with_journal_truth_layers(normalized)
 
 
 def _render_journal_document(journal_date: str, entries: List[Dict[str, Any]]) -> str:

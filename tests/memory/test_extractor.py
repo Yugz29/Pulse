@@ -204,6 +204,51 @@ class TestExtractor(unittest.TestCase):
         self.assertTrue(created_threads[0].started)
         self.assertIn(created_threads[0], extractor_module._background_writer_threads)
 
+    def test_update_memories_from_session_indexes_truth_layers_when_available(self):
+        captured_entries = []
+
+        class FakeStore:
+            def index_journal_entry(self, entry):
+                captured_entries.append(entry)
+                return 42
+
+        class ImmediateThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.daemon = kwargs.get("daemon")
+                self.name = kwargs.get("name")
+                self.started = False
+
+            def start(self):
+                self.started = True
+                self.target()
+
+            def is_alive(self):
+                return False
+
+        with patch.dict("os.environ", {"PULSE_EMBEDDINGS_ENABLED": "1"}), \
+             patch("daemon.memory.extractor.threading.Thread", side_effect=lambda *args, **kwargs: ImmediateThread(*args, **kwargs)), \
+             patch("daemon.memory.extractor._get_vector_store", return_value=FakeStore()):
+            update_memories_from_session(
+                {
+                    "active_project": "Pulse",
+                    "duration_min": 25,
+                    "probable_task": "coding",
+                    "files_changed": 2,
+                    "top_files": ["extractor.py"],
+                    "task_confidence": 0.63,
+                },
+                memory_dir=self.memory_dir,
+                trigger="screen_lock",
+            )
+
+        self.assertEqual(len(captured_entries), 1)
+        entry = captured_entries[0]
+        self.assertIn("truth_layers", entry)
+        self.assertIn("probable_task", _truth_kinds(entry, "inferred"))
+        self.assertIn("body", _truth_kinds(entry, "narrative"))
+        self.assertEqual(_truth_item(entry, "inferred", "probable_task")["value"], "coding")
+
     def test_background_writer_journal_enrich_est_lance_via_registre(self):
         created_threads = []
 
