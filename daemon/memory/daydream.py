@@ -34,6 +34,20 @@ _daydream_last_completed_at: Optional[datetime] = None
 _daydream_last_output_path: Optional[str] = None
 
 
+def daydream_memory_metadata(*, summary_source: str | None = None) -> dict[str, Any]:
+    source_type = "llm_generated" if summary_source == "llm" else "narrative"
+    metadata: dict[str, Any] = {
+        "memory_role": "narrative_summary",
+        "canonical_memory": False,
+        "source_type": source_type,
+        "requires_confirmation": True,
+        "generated_from": "journals",
+    }
+    if summary_source:
+        metadata["summary_source"] = summary_source
+    return metadata
+
+
 def mark_daydream_pending(ref_date: Optional[date] = None) -> bool:
     global _daydream_pending, _daydream_target_date, _daydream_status, _daydream_last_reason
     with _daydream_lock:
@@ -222,18 +236,22 @@ def _generate_daydream(
     total_min = sum(int(e.get("duration_min") or 0) for e in entries)
     cleaned_titles = _filter_window_titles(window_titles)
 
+    summary_source = "deterministic"
     if llm is not None:
         try:
             narrative = _llm_narrative(llm, entries, commits, top_files, cleaned_titles, total_min)
+            summary_source = "llm"
         except Exception as exc:
             log.warning("DayDream : LLM echoue, fallback deterministe : %s", exc)
             narrative = _deterministic_narrative(entries, commits, total_min)
+            summary_source = "deterministic_fallback"
     else:
         narrative = _deterministic_narrative(entries, commits, total_min)
 
     return {
         "date": str(ref_date),
         "narrative": narrative,
+        **daydream_memory_metadata(summary_source=summary_source),
         "projects": projects,
         "tasks": tasks,
         "top_files": top_files,
@@ -320,6 +338,8 @@ def _write_daydream(content: dict, ref_date: date) -> Path:
     lines = [
         "# DayDream -- " + date_fr,
         "",
+        "_Résumé narratif à confirmer, non mémoire canonique._",
+        "",
         "## Synthese",
         content["narrative"],
         "",
@@ -385,6 +405,12 @@ def _vectorize_daydream(content: dict, ref_date: date) -> None:
                 "total_min": content["total_min"],
                 "projects": content["projects"],
                 "commits_count": len(content["commits"]),
+                "memory_role": content.get("memory_role", "narrative_summary"),
+                "canonical_memory": bool(content.get("canonical_memory", False)),
+                "source_type": content.get("source_type", "narrative"),
+                "requires_confirmation": bool(content.get("requires_confirmation", True)),
+                "generated_from": content.get("generated_from", "journals"),
+                "summary_source": content.get("summary_source"),
             },
         )
         if mid:

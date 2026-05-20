@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -102,6 +103,24 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["daydreams"], [])
         self.assertEqual(payload["status"]["status"], "skipped")
         self.assertEqual(payload["status"]["last_reason"], "no_journal_entries")
+
+    def test_daydreams_expose_narrative_non_canonical_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            daydream_dir = Path(temp_home) / ".pulse" / "memory" / "daydreams"
+            daydream_dir.mkdir(parents=True)
+            (daydream_dir / "2026-04-27.md").write_text("# DayDream\n\nSynthèse.", encoding="utf-8")
+
+            with patch("pathlib.Path.home", return_value=Path(temp_home)), \
+                 patch("daemon.memory.daydream.get_daydream_status", return_value={"status": "generated"}):
+                response = self.client.get("/daydreams")
+
+        self.assertEqual(response.status_code, 200)
+        entry = response.get_json()["daydreams"][0]
+        self.assertEqual(entry["memory_role"], "narrative_summary")
+        self.assertFalse(entry["canonical_memory"])
+        self.assertEqual(entry["source_type"], "narrative")
+        self.assertTrue(entry["requires_confirmation"])
+        self.assertEqual(entry["generated_from"], "journals")
 
     def test_today_summary_expose_un_aggregate_persiste(self):
         app = Flask(__name__)

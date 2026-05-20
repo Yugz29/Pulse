@@ -64,6 +64,7 @@ class TestDayDream(unittest.TestCase):
         content = output_path.read_text(encoding="utf-8")
         self.assertIn("27", content)
         self.assertIn("Pulse", content)
+        self.assertIn("Résumé narratif à confirmer", content)
         self.assertFalse(daydream.should_trigger_daydream())
         status = daydream.get_daydream_status()
         self.assertEqual(status["status"], "generated")
@@ -128,6 +129,52 @@ class TestDayDream(unittest.TestCase):
         self.assertEqual(status["done_for_date"], "2026-04-27")
         self.assertEqual(status["last_reason"], "no_journal_entries")
 
+    def test_generate_daydream_marks_summary_as_non_canonical_narrative(self):
+        content = daydream._generate_daydream(
+            entries=[
+                {
+                    "started_at": "2026-04-27T21:00:00",
+                    "duration_min": 42,
+                    "probable_task": "coding",
+                    "active_project": "Acme",
+                    "body": "Travail sur le scorer.",
+                }
+            ],
+            window_titles=[],
+            ref_date=date(2026, 4, 27),
+            llm=None,
+        )
+
+        self.assertEqual(content["memory_role"], "narrative_summary")
+        self.assertFalse(content["canonical_memory"])
+        self.assertEqual(content["source_type"], "narrative")
+        self.assertTrue(content["requires_confirmation"])
+        self.assertEqual(content["generated_from"], "journals")
+        self.assertEqual(content["summary_source"], "deterministic")
+
+    def test_generate_daydream_marks_llm_summary_source_when_used(self):
+        llm = MagicMock()
+        llm.complete.return_value = "Synthèse LLM."
+
+        content = daydream._generate_daydream(
+            entries=[
+                {
+                    "started_at": "2026-04-27T21:00:00",
+                    "duration_min": 42,
+                    "probable_task": "coding",
+                    "active_project": "Acme",
+                    "body": "Travail sur le scorer.",
+                }
+            ],
+            window_titles=[],
+            ref_date=date(2026, 4, 27),
+            llm=llm,
+        )
+
+        self.assertEqual(content["source_type"], "llm_generated")
+        self.assertEqual(content["summary_source"], "llm")
+        self.assertFalse(content["canonical_memory"])
+
     def test_vectorize_daydream_respecte_policy_desactivee(self):
         content = {
             "narrative": "Synthèse",
@@ -160,6 +207,11 @@ class TestDayDream(unittest.TestCase):
             daydream._vectorize_daydream(content, date(2026, 4, 27))
 
         fake_store.index_text.assert_called_once()
+        _, kwargs = fake_store.index_text.call_args
+        self.assertEqual(kwargs["metadata"]["memory_role"], "narrative_summary")
+        self.assertFalse(kwargs["metadata"]["canonical_memory"])
+        self.assertEqual(kwargs["metadata"]["source_type"], "narrative")
+        self.assertTrue(kwargs["metadata"]["requires_confirmation"])
 
 
 if __name__ == "__main__":

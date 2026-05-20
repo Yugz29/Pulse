@@ -70,7 +70,7 @@ def register_feed_routes(
     def get_daydreams():
         """Liste les fichiers DayDream disponibles."""
         from pathlib import Path
-        from daemon.memory.daydream import get_daydream_status
+        from daemon.memory.daydream import daydream_memory_metadata, get_daydream_status
         daydream_dir = Path.home() / ".pulse" / "memory" / "daydreams"
         if not daydream_dir.exists():
             return jsonify({"daydreams": [], "status": get_daydream_status()})
@@ -83,6 +83,7 @@ def register_feed_routes(
                 result.append({
                     "date": f.stem,
                     "content": content,
+                    **daydream_memory_metadata(),
                 })
             except Exception:
                 pass
