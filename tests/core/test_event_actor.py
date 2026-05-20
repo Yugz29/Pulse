@@ -142,6 +142,63 @@ class TestEventActorClassifier(unittest.TestCase):
         self.assertNotEqual(result.actor, EventActor.TOOL_ASSISTED)
         self.assertLessEqual(result.automation_score, 0.5)
 
+    def test_dependency_lock_is_explainable_tool_assisted_downrank(self):
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": "/Users/tester/workspace/acme/package-lock.json"},
+            latest_app="Terminal",
+            recent_events=[],
+            now=self.now,
+        )
+
+        self.assertEqual(result.actor, EventActor.TOOL_ASSISTED)
+        self.assertEqual(result.noise_policy, NoisePolicy.DOWNRANK)
+        self.assertGreater(result.automation_score, 0.5)
+        self.assertGreaterEqual(result.confidence, 0.5)
+
+    def test_rapid_repeat_same_file_is_explainable_system_activity(self):
+        path = "/Users/tester/workspace/acme/src/generated.py"
+        recent_events = [
+            _file_event(path, self.now - timedelta(seconds=idx))
+            for idx in (3, 2, 1)
+        ]
+
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": path},
+            latest_app="Code",
+            recent_events=recent_events,
+            now=self.now,
+        )
+
+        self.assertEqual(result.actor, EventActor.SYSTEM)
+        self.assertEqual(result.noise_policy, NoisePolicy.NORMAL)
+        self.assertGreater(result.automation_score, 0.3)
+        self.assertGreaterEqual(result.confidence, 0.6)
+
+    def test_fast_distinct_file_burst_is_explainable_tool_assisted(self):
+        base = self.now - timedelta(milliseconds=300)
+        recent_events = [
+            _file_event(
+                f"/Users/tester/workspace/acme/src/generated_{idx}.py",
+                base + timedelta(milliseconds=idx * 40),
+            )
+            for idx in range(4)
+        ]
+
+        result = self.classifier.classify(
+            "file_modified",
+            {"path": "/Users/tester/workspace/acme/src/generated_4.py"},
+            latest_app="Code",
+            recent_events=recent_events,
+            now=self.now,
+        )
+
+        self.assertEqual(result.actor, EventActor.TOOL_ASSISTED)
+        self.assertEqual(result.noise_policy, NoisePolicy.NORMAL)
+        self.assertGreater(result.automation_score, 0.5)
+        self.assertGreaterEqual(result.confidence, 0.7)
+
 
 if __name__ == "__main__":
     unittest.main()

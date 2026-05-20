@@ -261,6 +261,12 @@ class TestFileSignalSignificance(unittest.TestCase):
         path = str(Path.home() / ".pulse" / "facts.db")
         self.assertEqual(file_signal_significance(path), "technical_noise")
 
+    def test_pulse_interne_portable_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance(str(Path.home() / ".pulse" / "memory" / "sessions" / "2026-05-20.md")),
+            "technical_noise",
+        )
+
     def test_fichier_cache_sb(self):
         self.assertEqual(
             file_signal_significance("/Users/yugz/.Trash/archive.sb-deadbeef-xyz"),
@@ -336,6 +342,12 @@ class TestFileSignalSignificance(unittest.TestCase):
     def test_lockfile(self):
         self.assertEqual(
             file_signal_significance("/Users/yugz/Projets/MonApp/poetry.lock"),
+            "neutral",
+        )
+
+    def test_dependency_lock_portable_est_neutral(self):
+        self.assertEqual(
+            file_signal_significance("/Users/tester/workspace/acme/package-lock.json"),
             "neutral",
         )
 

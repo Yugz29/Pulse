@@ -71,6 +71,26 @@ class TestObservationIngestionGolden(unittest.TestCase):
         self.assertIn("_automation_score", event.payload)
         self.assertEqual(event.payload["_noise_policy"], "normal")
 
+    def test_tool_assisted_app_produces_explainable_actor_payload(self):
+        tool_app = {
+            **self.events["app_activated"],
+            "app_name": "Cursor",
+            "bundle_id": "com.todesktop.230313mzl4w4u92",
+        }
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            self.client.post("/event", json=tool_app)
+
+        response = self._post_event("file_source_meaningful")
+        self.coalescer.close()
+
+        self.assertEqual(response.status_code, 200)
+        event = self.bus.recent(1)[0]
+        self.assertEqual(event.type, "file_modified")
+        self.assertEqual(event.payload["_actor"], "tool_assisted")
+        self.assertGreater(event.payload["_actor_confidence"], 0.5)
+        self.assertGreater(event.payload["_automation_score"], 0.5)
+        self.assertEqual(event.payload["_noise_policy"], "normal")
+
     def test_cache_file_is_filtered_by_current_observation_policy(self):
         response = self._post_event("file_cache_noise")
 

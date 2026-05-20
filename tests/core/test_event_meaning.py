@@ -26,7 +26,7 @@ def test_commit_editmsg_event_is_not_filtered_as_noise():
 
 def test_screenshot_path_is_observe_only():
     decision = EventMeaningPolicy().classify_path(
-        "/Users/yugz/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"
+        "/Users/tester/Desktop/Capture d’écran 2026-04-21 à 10.32.18.png"
     )
 
     assert decision.file_significance == "observe_only"
@@ -36,16 +36,55 @@ def test_screenshot_path_is_observe_only():
 
 def test_uuid_named_file_is_technical_noise():
     decision = EventMeaningPolicy().classify_path(
-        "/Users/yugz/Library/Caches/events/1p_failed_events.bd63bb8f-c123-4dbe-8641-619c47b09fa0.json"
+        "/Users/tester/Library/Caches/events/1p_failed_events.bd63bb8f-c123-4dbe-8641-619c47b09fa0.json"
     )
 
     assert decision.file_significance == "technical_noise"
     assert decision.scoring_relevant is False
 
 
+def test_cache_file_event_is_filtered_as_technical_noise():
+    decision = EventMeaningPolicy().classify(
+        "file_modified",
+        {"path": "/Users/tester/workspace/acme/.cache/models_cache.json"},
+    )
+
+    assert decision.file_significance == "technical_noise"
+    assert decision.noise_policy == "ignore"
+    assert decision.publish_to_bus is False
+    assert decision.runtime_relevant is False
+    assert decision.scoring_relevant is False
+
+
+def test_site_packages_file_event_is_filtered_as_technical_noise():
+    decision = EventMeaningPolicy().classify(
+        "file_modified",
+        {"path": "/Users/tester/workspace/acme/.venv/lib/python3.11/site-packages/requests/__init__.py"},
+    )
+
+    assert decision.file_significance == "technical_noise"
+    assert decision.noise_policy == "ignore"
+    assert decision.publish_to_bus is False
+    assert decision.runtime_relevant is False
+    assert decision.scoring_relevant is False
+
+
+def test_dependency_lock_is_filtered_from_bus_but_kept_scoring_relevant():
+    decision = EventMeaningPolicy().classify(
+        "file_modified",
+        {"path": "/Users/tester/workspace/acme/package-lock.json"},
+    )
+
+    assert decision.file_significance == "neutral"
+    assert decision.noise_policy == "downrank"
+    assert decision.publish_to_bus is False
+    assert decision.runtime_relevant is False
+    assert decision.scoring_relevant is True
+
+
 def test_neutral_file_path_remains_scoring_relevant():
     decision = EventMeaningPolicy().classify_path(
-        "/Users/yugz/Projets/MonApp/poetry.lock"
+        "/Users/tester/workspace/acme/poetry.lock"
     )
 
     assert decision.file_significance == "neutral"

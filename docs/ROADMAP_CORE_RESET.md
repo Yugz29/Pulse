@@ -340,7 +340,7 @@ Découpage recommandé :
 - [x] R2a — Contrat d’inventaire observation (`docs/OBSERVATION_CONTRACT.md`) ;
 - R2b — Fixtures golden ;
 - R2c — Tests pipeline ingestion ;
-- R2d — Bruit et actor baseline ;
+- [x] R2d — Bruit et actor baseline ;
 - R2e — Terminal baseline ;
 - R2f — Feed readability baseline.
 
@@ -864,18 +864,34 @@ Validation R2c :
 
 Objectif : prouver que le bruit est ignoré / déclassé et que l’acteur est explicable.
 
-- [ ] Couvrir les chemins `.pulse`.
-- [ ] Couvrir les caches.
-- [ ] Couvrir `site-packages`.
-- [ ] Couvrir les screenshots.
-- [ ] Couvrir les dependency locks.
-- [ ] Couvrir les bursts rapides.
-- [ ] Couvrir les événements tool-assisted.
-- [ ] Vérifier que `_actor` est explicable.
+- [x] Couvrir les chemins `.pulse`.
+- [x] Couvrir les caches.
+- [x] Couvrir `site-packages`.
+- [x] Couvrir les screenshots.
+- [x] Couvrir les dependency locks.
+- [x] Couvrir les bursts rapides.
+- [x] Couvrir les événements tool-assisted.
+- [x] Vérifier que `_actor` est explicable.
 
 Sortie attendue de R2d :
 
 > Pulse sait distinguer les événements utilisateur significatifs, le bruit technique et les événements probablement assistés par outil.
+
+Validation R2d :
+
+- tests ciblés ajoutés dans `tests/core/test_event_actor.py`, `tests/core/test_event_meaning.py`, `tests/core/test_file_classifier.py` et `tests/test_observation_ingestion_golden.py` ;
+- `.pulse` reste classé `technical_noise` ;
+- caches et `site-packages` sont filtrés ;
+- screenshots restent `observe_only` ;
+- dependency locks sont `neutral`, `downrank`, filtrés du bus mais encore `scoring_relevant` dans la policy actuelle ;
+- répétition rapide d’un même fichier attribuée `system` ;
+- burst rapide de fichiers distincts attribué `tool_assisted` ;
+- app tool-assisted via `/event` produit un payload final avec `_actor`, `_actor_confidence`, `_automation_score` et `_noise_policy` ;
+- ambiguïté documentée : les dependency locks sont déclassés et filtrés du bus par `EventMeaningPolicy`, mais l’actor classifier les considère `tool_assisted` / `downrank` lorsqu’il est appelé directement ;
+- ambiguïté documentée : plusieurs anciens tests utilisent encore `/Users/yugz`, mais les nouveaux cas R2d ajoutés utilisent des chemins portables lorsque possible ;
+- tests ciblés passés : `tests/core/test_event_actor.py`, `tests/core/test_event_meaning.py`, `tests/core/test_file_classifier.py`, `tests/test_observation_ingestion_golden.py`, `tests/core/test_app_classifier.py`, `tests/core/test_terminal_event_normalizer.py`, `tests/core/test_observation_qualification.py`, `tests/core/test_observation_qualification_consistency.py` ;
+- suite complète et tests Swift non lancés à cette étape ;
+- aucun changement produit.
 
 ### R2e — Terminal baseline
 
