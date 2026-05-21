@@ -342,7 +342,7 @@ Découpage recommandé :
 - [x] R2c — Tests pipeline ingestion ;
 - [x] R2d — Bruit et actor baseline ;
 - [x] R2e — Terminal baseline ;
-- R2f — Feed readability baseline.
+- [x] R2f — Feed readability baseline.
 
 
 ### R3 — Baseline Interprétation
@@ -933,15 +933,31 @@ Validation R2e :
 
 Objectif : vérifier que `/feed` reste lisible sur un bus réaliste.
 
-- [ ] Tester `/feed` sur un bus réaliste.
-- [ ] Vérifier que les labels ne sont pas génériques.
-- [ ] Vérifier que le bruit est absent ou déclassé.
-- [ ] Vérifier que les événements terminal restent lisibles.
-- [ ] Vérifier que les événements Lab ne dominent pas le feed Core.
+- [x] Tester `/feed` sur un bus réaliste.
+- [x] Vérifier que les labels ne sont pas génériques.
+- [x] Vérifier que le bruit est absent ou déclassé.
+- [x] Vérifier que les événements terminal restent lisibles.
+- [x] Vérifier que les événements Lab ne dominent pas le feed Core.
+
 
 Sortie attendue de R2f :
 
 > Le feed expose une observation lisible et utile sans vendre une compréhension avancée.
+
+Validation R2f :
+
+- test `/feed` ajouté dans `tests/test_observation_ingestion_golden.py` sur un bus réaliste avec app, fichier meaningful, bruit filtré, plusieurs commandes terminal et événements internes / Lab ;
+- `/feed` retourne des labels terminaux non génériques : `pytest test_app`, `git status`, `Build make`, etc. ;
+- le bruit cache filtré n’apparaît pas dans le feed ;
+- les fichiers meaningful ne sont pas vendus comme item feed interprété ;
+- les événements terminal restent lisibles via `kind`, `success`, `label`, `command`, `timestamp` ;
+- des événements internes comme `llm_loading` et `resume_card` peuvent apparaître avec le comportement actuel, mais ne dominent pas un bus Core réaliste riche en événements terminal ;
+- le payload feed reste observationnel : pas de tâche probable, projet inféré, résumé mémoire ou prétention de compréhension avancée ;
+- ambiguïté documentée : `/feed` expose encore explicitement `llm_loading` et `resume_card` si ces événements sont dans le bus ;
+- ambiguïté documentée : `/feed` ne montre pas les fichiers meaningful, comportement actuel conservé ;
+- tests ciblés passés : `tests/test_observation_ingestion_golden.py`, `tests/test_runtime_routes.py`, `tests/core/test_event_meaning.py`, `tests/core/test_event_bus.py` ;
+- suite complète et tests Swift non lancés à cette étape ;
+- aucun changement produit.
 
 Notes R2 :
 

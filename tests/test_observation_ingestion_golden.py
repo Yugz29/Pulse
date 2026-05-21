@@ -169,6 +169,53 @@ class TestObservationIngestionGolden(unittest.TestCase):
         self.assertEqual(feed[0]["label"], "pytest test_app")
         self.assertEqual(feed[0]["command"], "pytest tests/test_app.py")
 
+    def test_feed_readability_baseline_on_realistic_core_bus(self):
+        self._post_event("app_activated")
+        self._post_event("file_source_meaningful")
+        self.coalescer.close()
+        cache_response = self._post_event("file_cache_noise")
+        self.assertEqual(cache_response.get_json(), {"ok": True, "filtered": True})
+
+        with patch("daemon.routes.runtime_ingestion.find_workspace_root", return_value=Path("/Users/tester/workspace/acme")), \
+             patch("daemon.core.git_context.read_git_context", return_value=None):
+            for fixture_key in (
+                "terminal_command_finished",
+                "terminal_git_status",
+                "terminal_build",
+                "terminal_setup_install",
+                "terminal_read_only_inspection",
+            ):
+                self._post_event(fixture_key)
+
+        self.bus.publish("llm_loading", {"model": "debug-lab"}, timestamp=self.bus.recent(1)[0].timestamp)
+        self.bus.publish(
+            "resume_card",
+            {
+                "title": "Debug resume card",
+                "summary": "Synthetic internal event.",
+            },
+            timestamp=self.bus.recent(1)[0].timestamp,
+        )
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            response = self.client.get("/feed")
+
+        self.assertEqual(response.status_code, 200)
+        feed = response.get_json()
+        labels = [item["label"] for item in feed]
+        terminal_items = [item for item in feed if item["kind"] == "terminal"]
+        internal_items = [item for item in feed if item["kind"] in {"llm_loading", "resume_card"}]
+
+        self.assertIn("pytest test_app", labels)
+        self.assertIn("git status", labels)
+        self.assertIn("Build make", labels)
+        self.assertTrue(any("npm install" in label or "dépendances" in label for label in labels))
+        self.assertTrue(any("runtime_mode" in item["command"] for item in terminal_items))
+        self.assertFalse(any(label in {"Commande terminal", "Inspection terminal", "Exécution de tests", "Commande de build"} for label in labels))
+        self.assertFalse(any(item["kind"] == "file" for item in feed))
+        self.assertGreater(len(terminal_items), len(internal_items))
+        self.assertTrue(all(set(item.keys()) <= {"kind", "success", "label", "command", "timestamp", "resume_card"} for item in feed))
+
 
 if __name__ == "__main__":
     unittest.main()
