@@ -964,3 +964,23 @@ Notes R2 :
 - `observation_qualification.py` et `event_envelope.py` sont utiles comme contrats passifs, mais ne doivent pas être branchés globalement dans le runtime pendant R2 sans fixtures golden préalables.
 - R2 doit rester centré sur l’observation : événements, filtrage, normalisation, acteur, feed.
 - R3 seulement pourra renforcer l’interprétation et les signaux.
+
+### Validation globale R2
+
+Statut : terminé côté Python.
+
+- R2a à R2f sont documentés et testés sans changement produit hors tests / documentation.
+- Contrat d’observation : `docs/OBSERVATION_CONTRACT.md`.
+- Fixtures golden portables : `tests/fixtures/observation/core_events.json`, sans chemin local `/Users/yugz`.
+- Pipeline golden : `tests/test_observation_ingestion_golden.py` couvre `/event` -> `EventBus` -> `/feed` en mode Core.
+- Tests ciblés R2 validés : `tests/test_observation_ingestion_golden.py`, `tests/core/test_event_meaning.py`, `tests/core/test_event_actor.py`, `tests/core/test_file_classifier.py`, `tests/core/test_app_classifier.py`, `tests/core/test_terminal_event_normalizer.py`, `tests/core/test_event_bus.py`, `tests/core/test_observation_qualification.py`, `tests/core/test_observation_qualification_consistency.py` : 155 tests OK.
+- Suite complète Python validée : `./scripts/test_all.sh` : 1176 tests OK.
+- Aucun passage à R3 dans cette validation.
+- Aucun ajout de scoring, mémoire, LLM, facts, DayDream, propositions, dashboard Swift ou branchement global de `event_envelope.py`.
+
+Fragilités acceptées en sortie de R2 :
+
+- `observation_qualification.py` et `event_envelope.py` restent des contrats passifs, pas la source de vérité runtime.
+- `/feed` peut encore exposer des événements internes comme `llm_loading` ou `resume_card` si ces événements sont présents dans le bus ; R2 vérifie seulement qu’ils ne dominent pas un bus Core réaliste.
+- Les fichiers meaningful ne sont pas encore projetés comme items feed dédiés ; comportement actuel conservé.
+- Certaines fixtures / anciens tests hors golden utilisent encore des chemins développeur historiques ; les fixtures R2 nouvelles restent portables.
