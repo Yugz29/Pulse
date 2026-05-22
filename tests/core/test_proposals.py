@@ -9,16 +9,19 @@ class TestProposalStore(unittest.TestCase):
     def setUp(self):
         self.store = ProposalStore()
 
-    def test_add_and_get_pending(self):
-        proposal = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Supprime des fichiers",
-            summary="Supprime des fichiers",
-            rationale="Commande destructive détectée",
-            proposed_action="allow_shell_command",
+    def _proposal(self, proposal_id="proposal-1", proposal_type="risky_command"):
+        return Proposal(
+            id=proposal_id,
+            type=proposal_type,
+            trigger="mcp_intercept" if proposal_type == "risky_command" else "file_modified",
+            title="Commande",
+            summary="Commande",
+            rationale="Test",
+            proposed_action="allow_shell_command" if proposal_type == "risky_command" else "inject_current_context",
         )
+
+    def test_add_and_get_pending(self):
+        proposal = self._proposal()
         self.store.add(proposal)
 
         pending = self.store.get_pending()
@@ -31,16 +34,15 @@ class TestProposalStore(unittest.TestCase):
             ["created", "pending"],
         )
 
+    def test_add_refuses_non_pending_proposal(self):
+        proposal = self._proposal()
+        proposal.set_status("accepted")
+
+        with self.assertRaises(ValueError):
+            self.store.add(proposal)
+
     def test_resolve_updates_status_and_timestamps(self):
-        proposal = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Supprime des fichiers",
-            summary="Supprime des fichiers",
-            rationale="Commande destructive détectée",
-            proposed_action="allow_shell_command",
-        )
+        proposal = self._proposal()
         self.store.add(proposal)
 
         resolved = self.store.resolve("proposal-1", "accepted")
@@ -54,16 +56,22 @@ class TestProposalStore(unittest.TestCase):
             ["created", "pending", "accepted"],
         )
 
-    def test_wait_for_resolution_returns_resolved_proposal(self):
-        proposal = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Supprime des fichiers",
-            summary="Supprime des fichiers",
-            rationale="Commande destructive détectée",
-            proposed_action="allow_shell_command",
+    def test_pending_to_refused_updates_lifecycle(self):
+        proposal = self._proposal()
+        self.store.add(proposal)
+
+        resolved = self.store.resolve("proposal-1", "refused")
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved.status, "refused")
+        self.assertIsNotNone(resolved.decided_at)
+        self.assertEqual(
+            [event["status"] for event in resolved.lifecycle],
+            ["created", "pending", "refused"],
         )
+
+    def test_wait_for_resolution_returns_resolved_proposal(self):
+        proposal = self._proposal()
         self.store.add(proposal)
 
         def resolve_later():
@@ -98,25 +106,40 @@ class TestProposalStore(unittest.TestCase):
             ["created", "pending", "expired"],
         )
 
+    def test_resolve_returns_none_for_unknown_or_already_terminal_proposal(self):
+        proposal = self._proposal()
+        self.store.add(proposal)
+
+        first = self.store.resolve("proposal-1", "accepted")
+        unknown = self.store.resolve("missing", "accepted")
+        second = self.store.resolve("proposal-1", "refused")
+
+        self.assertIsNotNone(first)
+        self.assertIsNone(unknown)
+        self.assertIsNone(second)
+        self.assertEqual(proposal.status, "accepted")
+        self.assertEqual(
+            [event["status"] for event in proposal.lifecycle],
+            ["created", "pending", "accepted"],
+        )
+
+    def test_pending_to_executed_is_possible_but_dangerous_outside_core_r6(self):
+        proposal = self._proposal(proposal_type="context_injection")
+        self.store.add(proposal)
+
+        resolved = self.store.resolve("proposal-1", "executed")
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved.status, "executed")
+        self.assertIsNotNone(resolved.decided_at)
+        self.assertEqual(
+            [event["status"] for event in resolved.lifecycle],
+            ["created", "pending", "executed"],
+        )
+
     def test_list_history_keeps_resolved_proposals_in_reverse_creation_order(self):
-        proposal_1 = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Commande 1",
-            summary="Commande 1",
-            rationale="Test",
-            proposed_action="allow_shell_command",
-        )
-        proposal_2 = Proposal(
-            id="proposal-2",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Commande 2",
-            summary="Commande 2",
-            rationale="Test",
-            proposed_action="allow_shell_command",
-        )
+        proposal_1 = self._proposal("proposal-1")
+        proposal_2 = self._proposal("proposal-2")
         self.store.add(proposal_1)
         self.store.add(proposal_2)
         self.store.resolve("proposal-1", "accepted")
@@ -165,45 +188,21 @@ class TestProposalStore(unittest.TestCase):
             )
 
     def test_add_rejects_duplicate_ids(self):
-        proposal = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Commande",
-            summary="Commande",
-            rationale="Test",
-            proposed_action="allow_shell_command",
-        )
+        proposal = self._proposal()
         self.store.add(proposal)
 
         with self.assertRaises(ValueError):
             self.store.add(proposal)
 
     def test_resolve_rejects_non_terminal_status(self):
-        proposal = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Commande",
-            summary="Commande",
-            rationale="Test",
-            proposed_action="allow_shell_command",
-        )
+        proposal = self._proposal()
         self.store.add(proposal)
 
         with self.assertRaises(ValueError):
             self.store.resolve("proposal-1", "pending")
 
     def test_set_status_rejects_terminal_to_terminal_transition(self):
-        proposal = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Commande",
-            summary="Commande",
-            rationale="Test",
-            proposed_action="allow_shell_command",
-        )
+        proposal = self._proposal()
 
         proposal.set_status("accepted")
 
@@ -211,30 +210,28 @@ class TestProposalStore(unittest.TestCase):
             proposal.set_status("refused")
 
     def test_list_pending_can_filter_by_type(self):
-        risky = Proposal(
-            id="proposal-1",
-            type="risky_command",
-            trigger="mcp_intercept",
-            title="Commande",
-            summary="Commande",
-            rationale="Test",
-            proposed_action="allow_shell_command",
-        )
-        context = Proposal(
-            id="proposal-2",
-            type="context_injection",
-            trigger="file_modified",
-            title="Contexte prêt",
-            summary="Contexte prêt",
-            rationale="Test",
-            proposed_action="inject_current_context",
-        )
+        risky = self._proposal("proposal-1")
+        context = self._proposal("proposal-2", proposal_type="context_injection")
         self.store.add(risky)
         self.store.add(context)
 
         pending = self.store.list_pending(proposal_type="risky_command")
 
         self.assertEqual([proposal.id for proposal in pending], ["proposal-1"])
+
+    def test_list_pending_without_filter_returns_only_pending_proposals(self):
+        accepted = self._proposal("proposal-1")
+        refused = self._proposal("proposal-2")
+        pending = self._proposal("proposal-3", proposal_type="context_injection")
+        self.store.add(accepted)
+        self.store.add(refused)
+        self.store.add(pending)
+        self.store.resolve("proposal-1", "accepted")
+        self.store.resolve("proposal-2", "refused")
+
+        pending_items = self.store.list_pending()
+
+        self.assertEqual([proposal.id for proposal in pending_items], ["proposal-3"])
 
 
 if __name__ == "__main__":

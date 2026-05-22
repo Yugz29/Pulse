@@ -825,7 +825,7 @@ Validation :
 Découpage recommandé :
 
 - [x] R6a — Contrat propositions actuel (`docs/PROPOSAL_CONTRACT.md`) ;
-- [ ] R6b — ProposalStore lifecycle golden ;
+- [x] R6b — ProposalStore lifecycle golden ;
 - [ ] R6c — MCP approval baseline ;
 - [ ] R6d — Anti auto-execution baseline ;
 - [ ] R6e — Debug/Lab boundaries ;
@@ -857,6 +857,33 @@ Validation R6a :
 - surfaces Core documentées : `Proposal`, `ProposalStore`, adaptateur `ProposalCandidate`, flux MCP risky command, `/mcp/pending`, `/mcp/decision`, `/mcp/proposals`, timeout, refus, acceptation et historique ;
 - limites explicites documentées : `pending -> executed` est possible dans `ProposalStore`, MCP n'utilise pas `executed` pour autoriser une commande, `context_injection` auto-`executed` est dangereux / hors Core R6 strict, `/mcp/decision` peut publier un événement même si `receive_decision()` retourne `False`, et les probes / work intent / resume cards / propositions intelligentes restent Lab ou debug ;
 - tests non lancés : documentation only ;
+- aucun changement produit.
+
+### R6b — ProposalStore lifecycle golden
+
+Objectif : verrouiller le lifecycle actuel de `Proposal` et `ProposalStore` avant de tester les routes MCP ou de corriger les auto-exécutions.
+
+- [x] Vérifier la création initiale `pending`.
+- [x] Vérifier que `add()` refuse les propositions non `pending`.
+- [x] Vérifier `pending -> accepted`.
+- [x] Vérifier `pending -> refused`.
+- [x] Vérifier `pending -> expired` via timeout.
+- [x] Vérifier `list_pending()` avec et sans filtre.
+- [x] Vérifier `list_history()`.
+- [x] Vérifier le lifecycle `created`, `pending`, statut terminal.
+- [x] Vérifier que `resolve()` retourne `None` pour une proposition inconnue ou déjà terminale.
+- [x] Documenter par test que `pending -> executed` est techniquement possible aujourd'hui mais dangereux / hors Core R6.
+
+Sortie attendue de R6b :
+
+> Le store de propositions possède un lifecycle de base traçable, et son ambiguïté `executed` est verrouillée comme comportement réel à corriger ou isoler plus tard.
+
+Validation R6b :
+
+- tests complétés dans `tests/core/test_proposals.py` ;
+- comportements verrouillés : création `pending`, refus d'ajout non pending, transitions `accepted`, `refused`, `expired`, lifecycle terminal, pending filtré, historique en ordre inverse, `resolve()` sans effet sur id inconnu ou proposition déjà terminale ;
+- ambiguïté conservée : `ProposalStore.resolve(..., "executed")` permet encore `pending -> executed` sans statut `accepted` préalable ; le test le documente explicitement comme dangereux / hors Core R6 strict ;
+- test ciblé passé : `tests/core/test_proposals.py` ;
 - aucun changement produit.
 
 ### R7 — Apprentissage plus tard
