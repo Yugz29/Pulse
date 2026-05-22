@@ -56,18 +56,26 @@ class CurrentContextBuilderStub:
         )
 
 
-def _snapshot(*, signals=None, decision=None, present=None):
+def _snapshot(
+    *,
+    signals=None,
+    decision=None,
+    present=None,
+    paused=False,
+    lock_marker_active=False,
+    last_screen_locked_at=None,
+):
     return SimpleNamespace(
         present=present or PresentStub(),
         signals=signals,
         decision=decision,
-        paused=False,
+        paused=paused,
         memory_synced_at=datetime(2026, 5, 6, 10, 0, 0),
         latest_active_app="Xcode",
         latest_active_app_bundle_id="com.apple.dt.Xcode",
         latest_active_app_system_category="public.app-category.developer-tools",
-        lock_marker_active=False,
-        last_screen_locked_at=None,
+        lock_marker_active=lock_marker_active,
+        last_screen_locked_at=last_screen_locked_at,
     )
 
 
@@ -89,6 +97,21 @@ def _signals():
         terminal_exit_code=0,
         terminal_duration_ms=1234,
         terminal_summary="✓ pytest",
+    )
+
+
+def _session_fsm(
+    *,
+    state="active",
+    session_started_at=datetime(2026, 5, 6, 9, 0, 0),
+    last_meaningful_activity_at=datetime(2026, 5, 6, 9, 30, 0),
+    last_screen_locked_at=None,
+):
+    return SimpleNamespace(
+        state=state,
+        session_started_at=session_started_at,
+        last_meaningful_activity_at=last_meaningful_activity_at,
+        last_screen_locked_at=last_screen_locked_at,
     )
 
 
@@ -357,12 +380,7 @@ def test_build_debug_state_payload_returns_debug_surface_without_legacy_marker(m
         store_state=StoreStub().to_dict(),
         runtime_snapshot=_snapshot(signals=_signals()),
         current_context_builder=CurrentContextBuilderStub(),
-        get_session_fsm=lambda: SimpleNamespace(
-            state="active",
-            session_started_at=datetime(2026, 5, 6, 9, 0, 0),
-            last_meaningful_activity_at=datetime(2026, 5, 6, 9, 30, 0),
-            last_screen_locked_at=None,
-        ),
+        get_session_fsm=lambda: _session_fsm(),
         get_current_context=lambda: SimpleNamespace(
             id="ctx-1",
             session_id="session-1",
@@ -386,6 +404,131 @@ def test_build_debug_state_payload_returns_debug_surface_without_legacy_marker(m
     assert payload["current_context"]["active_project"] == "Pulse"
     assert payload["signals"]["active_project"] == "Pulse"
     assert payload["recent_sessions"][0]["id"] == "session-1"
+
+
+def test_state_session_payload_keeps_runtime_pause_out_of_fsm_state(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+    present = PresentState(
+        session_status="active",
+        awake=True,
+        locked=False,
+        active_project="Pulse",
+        probable_task="coding",
+        activity_level="editing",
+        session_duration_min=18,
+    )
+
+    payload = build_state_payload(
+        store_state={"session_duration_min": 999},
+        runtime_snapshot=_snapshot(
+            signals=_signals(),
+            present=present,
+            paused=True,
+        ),
+        get_session_fsm=lambda: _session_fsm(state="active"),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+    )
+
+    assert payload["runtime_paused"] is True
+    assert payload["present"]["session_status"] == "active"
+    assert payload["present"]["locked"] is False
+    assert payload["session_fsm"]["state"] == "active"
+    assert payload["session_duration_min"] == 18
+    assert payload["present"]["session_duration_min"] == 18
+
+
+def test_debug_state_session_payload_distinguishes_locked_from_runtime_pause(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+    locked_at = datetime(2026, 5, 6, 9, 45, 0)
+    present = PresentState(
+        session_status="locked",
+        awake=False,
+        locked=True,
+        active_project="Pulse",
+        activity_level="idle",
+        session_duration_min=22,
+    )
+
+    payload = build_debug_state_payload(
+        store_state={},
+        runtime_snapshot=_snapshot(
+            present=present,
+            paused=False,
+            lock_marker_active=True,
+            last_screen_locked_at=locked_at,
+        ),
+        get_session_fsm=lambda: _session_fsm(
+            state="locked",
+            last_screen_locked_at=locked_at,
+        ),
+    )
+
+    assert payload["runtime"]["lock_marker_active"] is True
+    assert payload["runtime"]["last_screen_locked_at"] == "2026-05-06T09:45:00"
+    assert payload["session_fsm"]["state"] == "locked"
+    assert payload["session_fsm"]["last_screen_locked_at"] == "2026-05-06T09:45:00"
+
+
+def test_state_closed_persisted_session_does_not_override_idle_runtime_session(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+    present = PresentState(
+        session_status="idle",
+        awake=True,
+        locked=False,
+        active_project=None,
+        probable_task="general",
+        activity_level="idle",
+        session_duration_min=0,
+    )
+
+    payload = build_state_payload(
+        store_state={},
+        runtime_snapshot=_snapshot(present=present),
+        get_session_fsm=lambda: _session_fsm(
+            state="idle",
+            last_meaningful_activity_at=None,
+        ),
+        get_recent_sessions=lambda limit: [
+            {
+                "id": "closed-session",
+                "started_at": "2026-05-06T08:00:00",
+                "ended_at": "2026-05-06T08:45:00",
+                "active_project": "Pulse",
+                "activity_level": "editing",
+            }
+        ],
+    )
+
+    assert payload["present"]["session_status"] == "idle"
+    assert payload["session_fsm"]["state"] == "idle"
+    assert payload["session_duration_min"] == 0
+    assert payload["recent_sessions"][0]["ended_at"] == "2026-05-06T08:45:00"
+
+
+def test_state_session_boundary_does_not_require_markdown_session_context(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+    present = PresentState(
+        session_status="idle",
+        awake=True,
+        locked=False,
+        active_project="Pulse",
+        probable_task="general",
+        activity_level="idle",
+    )
+
+    payload = build_state_payload(
+        store_state={},
+        runtime_snapshot=_snapshot(present=present, signals=None),
+        get_session_fsm=lambda: _session_fsm(state="idle"),
+        last_session_context_fn=lambda project: (_ for _ in ()).throw(
+            AssertionError("Markdown session context must not be needed for session state")
+        ),
+    )
+
+    assert payload["present"]["session_status"] == "idle"
+    assert payload["session_fsm"]["state"] == "idle"
+    assert "signals" not in payload
 
 
 def test_build_state_payload_missing_optional_fields_uses_safe_defaults():

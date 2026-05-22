@@ -392,7 +392,7 @@ Découpage recommandé :
 - [x] R4c — Intégration runtime session ;
 - [x] R4d — Persistance session minimale ;
 - [x] R4e — Restart repair baseline ;
-- [ ] R4f — Payload boundaries session ;
+- [x] R4f — Payload boundaries session ;
 - [ ] R4g — Validation globale R4.
 
 Travail cible :
@@ -552,6 +552,31 @@ Validation R4e :
 - stale repair / orphan repair reste couvert par `tests/memory/test_session.py` depuis R4d ;
 - aucun LLM, DayDream, facts, vector store, sync mémoire avancée, proposition, resume card ou commit linking n'a été ajouté ou corrigé ;
 - tests ciblés passés : `tests/core/test_restart_manager.py`, `tests/test_runtime_orchestrator.py`, `tests/memory/test_session.py` ;
+- aucun changement produit.
+
+### R4f — Payload boundaries session
+
+Objectif : vérifier que `/state` et `/debug/state` exposent l'état session actuel sans confondre FSM runtime, pause runtime, lock écran, session SQLite persistée, journaux Markdown ou mémoire avancée.
+
+- [x] `/state` expose une session runtime compréhensible via `present` et, si le callback existe, `session_fsm`.
+- [x] `/debug/state` expose les détails FSM si `get_session_fsm` est fourni.
+- [x] `paused` reste `runtime_paused`, pas un état `SessionFSM`.
+- [x] `locked` reste distinct de la pause runtime et expose les marqueurs lock côté debug.
+- [x] Une session fermée côté persistance / `recent_sessions` ne remplace pas l'état runtime courant.
+- [x] Après restart ignoré, la couverture R4e vérifie que la FSM ne devient pas active trompeusement.
+- [x] La durée de session exposée vient de `PresentState` / signaux runtime actuels, pas du store legacy.
+- [x] Les journaux Markdown `/memory/sessions` ne sont pas nécessaires pour produire l'état session Core.
+
+Sortie attendue de R4f :
+
+> Les payloads session restent lisibles et honnêtes : runtime, debug FSM et sessions persistées sont visibles, mais ne sont pas traités comme la même vérité.
+
+Validation R4f :
+
+- tests complétés dans `tests/routes/test_runtime_state_payloads.py` et `tests/test_runtime_routes.py` ;
+- frontières verrouillées : pause runtime distincte de la FSM, lock distinct de pause, `recent_sessions` fermées distinctes de `present.session_status`, durée depuis `PresentState`, et session state disponible sans contexte Markdown ;
+- limite actuelle documentée par les tests : quand `get_session_fsm` est fourni, `/state` expose aussi `session_fsm`, même si ce champ est proche d'une surface debug ;
+- tests ciblés passés : `tests/routes/test_runtime_state_payloads.py`, `tests/test_main_runtime_state.py`, `tests/test_runtime_routes.py` ;
 - aucun changement produit.
 
 ### R5 — Baseline Mémoire minimale

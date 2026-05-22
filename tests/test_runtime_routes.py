@@ -3,6 +3,7 @@ import tempfile
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 from pathlib import Path
+from types import SimpleNamespace
 
 from flask import Flask
 
@@ -904,6 +905,74 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(debug_payload["store"]["last_event_type"], "file_modified")
         self.assertEqual(debug_payload["runtime"]["latest_active_app"], "Xcode")
         self.assertEqual(debug_payload["signals"]["task_confidence"], 0.81)
+
+    def test_state_and_debug_state_expose_session_boundaries_from_runtime_not_markdown(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/current.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=17,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+            activity_level="editing",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+            updated_at=datetime(2026, 5, 6, 10, 17, 0),
+        )
+        self.runtime_state.set_paused(True)
+        self.store.to_dict.return_value = {"session_duration_min": 999}
+
+        app = Flask(__name__)
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            get_session_fsm=lambda: SimpleNamespace(
+                state="active",
+                session_started_at=datetime(2026, 5, 6, 10, 0, 0),
+                last_meaningful_activity_at=datetime(2026, 5, 6, 10, 16, 0),
+                last_screen_locked_at=None,
+            ),
+            get_recent_sessions=lambda limit: [
+                {
+                    "id": "closed-session",
+                    "started_at": "2026-05-06T08:00:00",
+                    "ended_at": "2026-05-06T08:45:00",
+                    "active_project": "Pulse",
+                }
+            ],
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            log=self.log,
+        )
+        client = app.test_client()
+
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", side_effect=AssertionError("Markdown session context must not define session state")):
+            state_response = client.get("/state")
+            debug_response = client.get("/debug/state")
+
+        self.assertEqual(state_response.status_code, 200)
+        self.assertEqual(debug_response.status_code, 200)
+        state_payload = state_response.get_json()
+        debug_payload = debug_response.get_json()
+
+        self.assertTrue(state_payload["runtime_paused"])
+        self.assertEqual(state_payload["present"]["session_status"], "active")
+        self.assertEqual(state_payload["session_fsm"]["state"], "active")
+        self.assertEqual(state_payload["session_duration_min"], 17)
+        self.assertEqual(state_payload["present"]["session_duration_min"], 17)
+        self.assertEqual(state_payload["recent_sessions"][0]["ended_at"], "2026-05-06T08:45:00")
+        self.assertEqual(debug_payload["surface"], "debug_state")
+        self.assertEqual(debug_payload["session_fsm"]["session_started_at"], "2026-05-06T10:00:00")
+        self.assertEqual(debug_payload["recent_sessions"][0]["id"], "closed-session")
 
     def test_state_fallbacks_to_builder_when_current_context_absent(self):
         signals = Signals(
