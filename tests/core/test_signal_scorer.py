@@ -345,6 +345,7 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertNotEqual(signals.probable_task, "coding")
         self.assertIn(signals.probable_task, {"general", "unknown"})
+        self.assertLessEqual(signals.task_confidence, 0.5)
         self.assertIsNone(signals.active_project)
         self.assertIsNone(signals.active_file)
 
@@ -910,6 +911,19 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.window_title_app, "Code")
         self.assertEqual(signals.active_file, "handler.py")
 
+    def test_window_title_seul_ne_confirme_pas_projet(self):
+        self._push("app_activated", {
+            "app_name": "Code",
+            "window_title": "Acme API — handler.py — Visual Studio Code",
+        })
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.window_title, "Acme API — handler.py — Visual Studio Code")
+        self.assertEqual(signals.active_file, "handler.py")
+        self.assertIsNone(signals.active_project)
+        self.assertNotEqual(signals.probable_task, "coding")
+
 
     # ── I1 : recent_apps — dernière occurrence gagne ────────────────────────────
 
@@ -1006,6 +1020,16 @@ class TestSignalScorer(unittest.TestCase):
             "clipboard_context doit etre None si le dernier clipboard a > 5 min")
         self.assertEqual(signals.probable_task, "coding")
 
+    def test_4a_stacktrace_ancienne_isolee_reste_signal_faible(self):
+        self._push("clipboard_updated", {"content_kind": "stacktrace"}, minutes_ago=10)
+
+        signals = self.scorer.compute()
+
+        self.assertNotEqual(signals.probable_task, "debug")
+        self.assertEqual(signals.probable_task, "general")
+        self.assertLessEqual(signals.task_confidence, 0.5)
+        self.assertIsNone(signals.clipboard_context)
+
 
     # ── Faux positif "rédaction" sur téléchargements (Phase 1 terrain) ───────────
 
@@ -1094,6 +1118,8 @@ class TestSignalScorer(unittest.TestCase):
 
         # browsing n'est plus une tâche valide — remplacé par exploration
         self.assertEqual(signals.probable_task, "exploration")
+        self.assertNotEqual(signals.probable_task, "browsing")
+        self.assertEqual(signals.activity_level, "navigating")
 
     def test_4b_browsing_ancien_ne_force_pas_browsing(self):
         """
@@ -1109,6 +1135,7 @@ class TestSignalScorer(unittest.TestCase):
             "Un switch browser il y a 20 min ne doit plus forcer browsing. "
             f"probable_task obtenu : {signals.probable_task}")
         self.assertEqual(signals.probable_task, "general")
+        self.assertLessEqual(signals.task_confidence, 0.5)
 
     def test_4b_coding_stable_apres_browser_court(self):
         """

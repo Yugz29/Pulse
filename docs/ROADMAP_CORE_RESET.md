@@ -379,7 +379,7 @@ Découpage recommandé :
 - [x] R3c — Golden `SignalScorer` ;
 - [x] R3d — Evidence / uncertainty baseline ;
 - [x] R3e — Payload boundaries ;
-- R3f — Anti-overclaim tests.
+- [x] R3f — Anti-overclaim tests.
 
 ### R4 — Baseline Sessions
 
@@ -1148,16 +1148,29 @@ Validation R3e :
 
 Objectif : ajouter des tests négatifs contre les interprétations trop fortes.
 
-- [ ] Pas de projet confirmé depuis un titre de fenêtre seul.
-- [ ] Pas de `coding` fort depuis une app inconnue seule.
-- [ ] Pas de debug fort depuis une stacktrace ancienne isolée.
-- [ ] Pas de browsing fort depuis un navigateur ancien ou isolé.
-- [ ] Pas d’action ou proposition déclenchée par un signal faible.
-- [ ] Vérifier que `DecisionEngine` ne transforme pas un signal faible en action produit.
+- [x] Pas de projet confirmé depuis un titre de fenêtre seul.
+- [x] Pas de `coding` fort depuis une app inconnue seule.
+- [x] Pas de debug fort depuis une stacktrace ancienne isolée.
+- [x] Pas de browsing fort depuis un navigateur ancien ou isolé.
+- [x] Pas d’action ou proposition déclenchée par un signal faible.
+- [x] Vérifier que `DecisionEngine` ne transforme pas un signal faible en action produit.
 
 Sortie attendue de R3f :
 
 > Pulse évite les interprétations trop confiantes quand les preuves sont faibles.
+
+Validation R3f :
+
+- tests complétés dans `tests/core/test_signal_scorer.py` et `tests/core/test_decision_engine.py` ;
+- couverture existante conservée dans `tests/core/test_work_context_card.py` et `tests/core/test_work_evidence_resolver.py` pour les hints projet faibles ;
+- un titre de fenêtre seul peut alimenter un fichier basename-only, mais ne confirme pas un projet actif ;
+- une app inconnue seule reste `general` / faible et ne devient pas `coding` ;
+- une stacktrace ancienne isolée ne force pas `debug` et ne conserve pas de `clipboard_context` ;
+- un navigateur récent reste classé en exploration / navigation, pas en tâche `browsing`, et un navigateur ancien retombe en `general` faible ;
+- `DecisionEngine` reste silencieux quand le signal faible n'a pas d'ancrage projet/fichier suffisant ;
+- limite actuelle documentée : `DecisionEngine` ne reçoit pas `task_confidence` via `PresentState`, donc R3f verrouille les garde-fous disponibles sans refactor de contrat ;
+- tests ciblés passés : `tests/core/test_signal_scorer.py`, `tests/core/test_work_context_card.py`, `tests/core/test_work_evidence_resolver.py`, `tests/core/test_decision_engine.py` ;
+- aucun changement produit.
 
 Notes R3 :
 

@@ -133,6 +133,36 @@ class TestDecisionEngine(unittest.TestCase):
         self.assertEqual(decision.action, "silent")
         self.assertEqual(decision.reason, "nothing_relevant")
 
+    def test_context_ready_ne_declenche_pas_sans_projet_actif(self):
+        trigger = Event("file_modified", {"path": "/tmp/main.py"})
+        decision = self.engine.evaluate(
+            self._present(
+                active_project=None,
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                focus_level="normal",
+                session_duration_min=25,
+            ),
+            trigger_event=trigger,
+        )
+        self.assertEqual(decision.action, "silent")
+        self.assertEqual(decision.reason, "nothing_relevant")
+
+    def test_signal_faible_ne_devient_pas_proposition_context_ready(self):
+        trigger = Event("file_modified", {"path": "/tmp/main.py"})
+        decision = self.engine.evaluate(
+            self._present(
+                active_project=None,
+                active_file=None,
+                probable_task="general",
+                focus_level="normal",
+                session_duration_min=25,
+            ),
+            trigger_event=trigger,
+        )
+        self.assertEqual(decision.action, "silent")
+        self.assertEqual(decision.reason, "nothing_relevant")
+
     def test_defaut_silent(self):
         decision = self.engine.evaluate(self._present())
         self.assertEqual(decision.action, "silent")
