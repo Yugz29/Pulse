@@ -190,6 +190,22 @@ class TestMainMemoryRoutes(unittest.TestCase):
         self.assertFalse(session["has_hidden_payload"])
         self.assertFalse(session["include_hidden"])
 
+    def test_memory_sessions_is_historical_markdown_not_session_memory_canonical(self):
+        self._write_session_journal()
+
+        with patch.object(daemon_main.session_memory, "export_session_data") as export_session_data, \
+             patch.object(daemon_main.session_memory, "export_memory_payload") as export_memory_payload, \
+             patch.object(daemon_main.session_memory, "search_events") as search_events:
+            response = self.client.get("/memory/sessions")
+
+        self.assertEqual(response.status_code, 200)
+        session = response.get_json()["sessions"][0]
+        self.assertEqual(session["surface"], "product_memory_sessions")
+        self.assertIn("Visible session.", session["content"])
+        export_session_data.assert_not_called()
+        export_memory_payload.assert_not_called()
+        search_events.assert_not_called()
+
     def test_memory_sessions_absent_directory_still_returns_empty_list(self):
         if self.sessions_dir.exists():
             for file in self.sessions_dir.glob("*.md"):
@@ -219,6 +235,38 @@ class TestMainMemoryRoutes(unittest.TestCase):
         search.assert_called_once_with("panel", limit=7, session_id="abc")
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["results"][0]["type"], "file_modified")
+
+    def test_search_core_reads_session_events_without_lab_memory_services(self):
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(
+                 daemon_main.session_memory,
+                 "search_events",
+                 return_value=[{"type": "terminal_command_finished", "command": "pytest"}],
+             ) as search, \
+             patch.object(daemon_main.memory_store, "write") as memory_write, \
+             patch.object(daemon_main.memory_store, "remove") as memory_remove, \
+             patch.object(daemon_main.memory_store, "list_entries") as list_entries, \
+             patch.object(daemon_main.memory_store, "usage") as usage, \
+             patch.object(daemon_main.summary_llm, "complete", create=True) as llm_complete, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "observe_session") as observe_facts, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "render_for_context") as render_facts, \
+             patch("daemon.memory.vector_store.VectorStore") as vector_store:
+            response = self.client.get("/search?q=pytest&limit=5")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        search.assert_called_once_with("pytest", limit=5, session_id=None)
+        self.assertEqual(payload["query"], "pytest")
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["type"], "terminal_command_finished")
+        memory_write.assert_not_called()
+        memory_remove.assert_not_called()
+        list_entries.assert_not_called()
+        usage.assert_not_called()
+        llm_complete.assert_not_called()
+        observe_facts.assert_not_called()
+        render_facts.assert_not_called()
+        vector_store.assert_not_called()
 
 
 if __name__ == "__main__":

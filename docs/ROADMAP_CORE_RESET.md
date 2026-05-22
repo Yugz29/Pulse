@@ -633,7 +633,7 @@ Découpage recommandé :
 - [x] R5b — Snapshot/session history golden ;
 - [x] R5c — Journal minimal truth layers ;
 - [x] R5d — Core/Lab contamination guards ;
-- [ ] R5e — Memory routes boundaries ;
+- [x] R5e — Memory routes boundaries ;
 - [ ] R5f — Validation globale R5.
 
 ### R5a — Contrat mémoire minimale actuel
@@ -742,6 +742,31 @@ Validation R5d :
 - tests existants conservés : le mode Lab continue à appeler la sync mémoire avancée dans les chemins représentatifs ;
 - ambiguïté conservée : `update_memories_from_session()` reste une fonction mixte et non Core-safe isolément ; R5d prouve que le runtime Core ne l'appelle pas automatiquement ;
 - tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/memory/test_extractor.py`, `tests/memory/test_pipeline.py` ;
+- aucun changement produit.
+
+### R5e — Memory routes boundaries
+
+Objectif : verrouiller les frontières Core / Lab exposées par les routes mémoire.
+
+- [x] Vérifier que `/memory/sessions` est une lecture historique Markdown.
+- [x] Vérifier que le hidden payload est masqué par défaut.
+- [x] Vérifier que le hidden payload brut n'est visible qu'avec `include_hidden=true`.
+- [x] Vérifier que `/memory/sessions` ne consulte pas `SessionMemory` comme source canonique Core.
+- [x] Vérifier que `/memory/write` est bloqué en mode Core.
+- [x] Vérifier que `/memory/remove` est bloqué en mode Core.
+- [x] Vérifier que `/search` délègue à `SessionMemory.search_events()`.
+- [x] Vérifier que `/search` ne dépend pas de facts, LLM, vector store ou `MemoryStore`.
+
+Sortie attendue de R5e :
+
+> Les routes mémoire exposent clairement une lecture historique acceptable, des mutations Lab bloquées en Core, et une recherche d'events SQLite distincte de la mémoire intelligente.
+
+Validation R5e :
+
+- tests complétés dans `tests/test_main_memory_routes.py` ;
+- comportements verrouillés : `/memory/sessions` masque le hidden payload par défaut, expose le brut uniquement via `include_hidden=true`, marque sa surface comme lecture historique, et ne consulte pas `SessionMemory.export_session_data()`, `export_memory_payload()` ou `search_events()` ; `/memory/write` et `/memory/remove` retournent `lab_surface_disabled` en mode Core sans appeler `MemoryStore` ; `/search` appelle uniquement `SessionMemory.search_events()` et ne touche ni `MemoryStore`, ni facts, ni LLM, ni vector store ;
+- ambiguïté conservée : `/memory/sessions?include_hidden=true` expose encore le payload brut pour compatibilité / debug explicite ; cette route reste une lecture historique et non la source canonique de session Core ;
+- tests ciblés passés : `tests/test_main_memory_routes.py`, `tests/memory/test_session.py` ;
 - aucun changement produit.
 
 ### R6 — Baseline Propositions contrôlées
