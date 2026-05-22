@@ -12,25 +12,43 @@ class TestHandlersProposals(unittest.TestCase):
     def setUp(self):
         handlers.reset_proposals_for_tests()
 
-    def test_get_pending_command_exposes_legacy_fields_and_proposal_metadata(self):
-        interpretation = CommandInterpretation(
-            original="rm -rf build",
-            translated="Supprime le dossier build",
-            risk_level="critical",
-            risk_score=100,
-            is_read_only=False,
-            affects=["fichiers"],
-            warning="Supprime définitivement des fichiers.",
-            needs_llm=False,
+    def _interpretation(
+        self,
+        *,
+        original="rm -rf build",
+        translated="Supprime le dossier build",
+        risk_level="critical",
+        risk_score=100,
+        is_read_only=False,
+        affects=None,
+        warning="Supprime définitivement des fichiers.",
+        needs_llm=False,
+    ):
+        return CommandInterpretation(
+            original=original,
+            translated=translated,
+            risk_level=risk_level,
+            risk_score=risk_score,
+            is_read_only=is_read_only,
+            affects=list(affects or ["fichiers"]),
+            warning=warning,
+            needs_llm=needs_llm,
         )
+
+    def _add_risky_command_proposal(self, *, tool_use_id="tool-1", interpretation=None):
+        interpretation = interpretation or self._interpretation()
         candidate = handlers._build_risky_command_candidate(
-            tool_use_id="tool-1",
-            command="rm -rf build",
+            tool_use_id=tool_use_id,
+            command=interpretation.original,
             interpretation=interpretation,
-            translated="Supprime le dossier build",
+            translated=interpretation.translated,
         )
-        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-1")
+        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id=tool_use_id)
         handlers.proposal_store.add(proposal)
+        return proposal
+
+    def test_get_pending_command_exposes_legacy_fields_and_proposal_metadata(self):
+        self._add_risky_command_proposal()
 
         pending = handlers.get_pending_command()
 
@@ -43,24 +61,7 @@ class TestHandlersProposals(unittest.TestCase):
         self.assertIn("evidence", pending)
 
     def test_receive_decision_resolves_pending_proposal(self):
-        interpretation = CommandInterpretation(
-            original="rm -rf build",
-            translated="Supprime le dossier build",
-            risk_level="critical",
-            risk_score=100,
-            is_read_only=False,
-            affects=["fichiers"],
-            warning="Supprime définitivement des fichiers.",
-            needs_llm=False,
-        )
-        candidate = handlers._build_risky_command_candidate(
-            tool_use_id="tool-1",
-            command="rm -rf build",
-            interpretation=interpretation,
-            translated="Supprime le dossier build",
-        )
-        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-1")
-        handlers.proposal_store.add(proposal)
+        self._add_risky_command_proposal()
 
         ok = handlers.receive_decision("tool-1", "deny")
 
@@ -70,25 +71,22 @@ class TestHandlersProposals(unittest.TestCase):
         self.assertEqual(resolved.status, "refused")
         self.assertIsNone(handlers.get_pending_command())
 
+    def test_receive_decision_allow_resolves_to_accepted(self):
+        self._add_risky_command_proposal()
+
+        ok = handlers.receive_decision("tool-1", "allow")
+
+        self.assertTrue(ok)
+        resolved = handlers.proposal_store.get("tool-1")
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved.status, "accepted")
+        self.assertEqual(
+            [event["status"] for event in resolved.lifecycle],
+            ["created", "pending", "accepted"],
+        )
+
     def test_get_proposal_history_returns_resolved_proposals_with_lifecycle(self):
-        interpretation = CommandInterpretation(
-            original="rm -rf build",
-            translated="Supprime le dossier build",
-            risk_level="critical",
-            risk_score=100,
-            is_read_only=False,
-            affects=["fichiers"],
-            warning="Supprime définitivement des fichiers.",
-            needs_llm=False,
-        )
-        candidate = handlers._build_risky_command_candidate(
-            tool_use_id="tool-1",
-            command="rm -rf build",
-            interpretation=interpretation,
-            translated="Supprime le dossier build",
-        )
-        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-1")
-        handlers.proposal_store.add(proposal)
+        self._add_risky_command_proposal()
         handlers.receive_decision("tool-1", "allow")
 
         history = handlers.get_proposal_history(limit=10)
@@ -118,16 +116,7 @@ class TestHandlersProposals(unittest.TestCase):
         self.assertEqual(handlers.get_pending_count(), 0)
 
     def test_intercept_command_uses_proposal_pipeline_and_preserves_response_contract(self):
-        interpretation = CommandInterpretation(
-            original="rm -rf build",
-            translated="Supprime le dossier build",
-            risk_level="critical",
-            risk_score=100,
-            is_read_only=False,
-            affects=["fichiers"],
-            warning="Supprime définitivement des fichiers.",
-            needs_llm=False,
-        )
+        interpretation = self._interpretation()
         result_box = {}
 
         def run_intercept():
@@ -157,8 +146,50 @@ class TestHandlersProposals(unittest.TestCase):
         self.assertEqual(result["status"], "accepted")
         self.assertEqual(result["tool_use_id"], "tool-1")
 
+    def test_intercept_command_ne_retourne_allowed_true_que_si_status_accepted(self):
+        interpretation = self._interpretation()
+        statuses = ["refused", "expired", "executed"]
+
+        for status in statuses:
+            with self.subTest(status=status):
+                handlers.reset_proposals_for_tests()
+
+                def resolve_with_status(proposal_id, timeout):
+                    proposal = handlers.proposal_store.get(proposal_id)
+                    proposal.set_status(status)
+                    return proposal
+
+                with patch.object(handlers.interpreter, "interpret", return_value=interpretation), \
+                     patch.object(handlers.proposal_store, "wait_for_resolution", side_effect=resolve_with_status), \
+                     patch("daemon.mcp.handlers._log_interception"):
+                    result = handlers.intercept_command("rm -rf build", f"tool-{status}")
+
+                self.assertFalse(result["allowed"])
+                self.assertEqual(result["decision"], "deny")
+                self.assertEqual(result["status"], status)
+
+    def test_intercept_command_timeout_expire_refuse_par_defaut(self):
+        interpretation = self._interpretation()
+
+        def expire_immediately(proposal_id, timeout):
+            proposal = handlers.proposal_store.get(proposal_id)
+            proposal.set_status("expired")
+            return proposal
+
+        with patch.object(handlers.interpreter, "interpret", return_value=interpretation), \
+             patch.object(handlers.proposal_store, "wait_for_resolution", side_effect=expire_immediately), \
+             patch("daemon.mcp.handlers._log_interception"), \
+             patch("daemon.mcp.handlers.log") as log:
+            result = handlers.intercept_command("rm -rf build", "tool-timeout")
+
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["status"], "expired")
+        self.assertEqual(handlers.proposal_store.get("tool-timeout").status, "expired")
+        log.warning.assert_called_once()
+
     def test_intercept_command_deny_via_decision(self):
-        interpretation = CommandInterpretation(
+        interpretation = self._interpretation(
             original="rm -rf /",
             translated="Supprime tout le système",
             risk_level="critical",
@@ -166,7 +197,6 @@ class TestHandlersProposals(unittest.TestCase):
             is_read_only=False,
             affects=["système"],
             warning=None,
-            needs_llm=False,
         )
         result_box = {}
 
@@ -195,17 +225,16 @@ class TestHandlersProposals(unittest.TestCase):
         self.assertFalse(ok)
 
     def test_receive_decision_returns_false_for_invalid_decision_string(self):
-        interpretation = CommandInterpretation(
-            original="ls", translated="Liste les fichiers",
-            risk_level="safe", risk_score=0,
-            is_read_only=True, affects=[], warning=None, needs_llm=False,
+        interpretation = self._interpretation(
+            original="ls",
+            translated="Liste les fichiers",
+            risk_level="safe",
+            risk_score=0,
+            is_read_only=True,
+            affects=[],
+            warning=None,
         )
-        candidate = handlers._build_risky_command_candidate(
-            tool_use_id="tool-3", command="ls",
-            interpretation=interpretation, translated="Liste les fichiers",
-        )
-        proposal = handlers.proposal_candidate_to_proposal(candidate, proposal_id="tool-3")
-        handlers.proposal_store.add(proposal)
+        self._add_risky_command_proposal(tool_use_id="tool-3", interpretation=interpretation)
         ok = handlers.receive_decision("tool-3", "maybe")
         self.assertFalse(ok)
         self.assertEqual(handlers.proposal_store.get("tool-3").status, "pending")

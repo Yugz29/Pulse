@@ -7,6 +7,7 @@ _TEST_HOME = tempfile.mkdtemp(prefix="pulse-tests-home-")
 os.environ["HOME"] = _TEST_HOME
 
 import daemon.main as daemon_main
+from daemon.core.proposals import Proposal
 from daemon.mcp import handlers as mcp_handlers
 
 
@@ -43,6 +44,41 @@ class TestMainMcpRoutes(unittest.TestCase):
         self.assertEqual(payload["items"][0]["tool_use_id"], "tool-1")
         self.assertEqual(payload["items"][0]["status"], "accepted")
 
+    def test_mcp_proposals_expose_lifecycle_history_from_store(self):
+        proposal = Proposal(
+            id="tool-history",
+            type="risky_command",
+            trigger="mcp_intercept",
+            title="Commande",
+            summary="Commande",
+            rationale="Test",
+            proposed_action="allow_shell_command",
+            metadata={
+                "transport": {
+                    "tool_use_id": "tool-history",
+                    "command": "rm -rf build",
+                    "translated": "Supprime le dossier build",
+                    "risk_level": "high",
+                    "risk_score": 80,
+                    "is_read_only": False,
+                    "affects": ["fichiers"],
+                }
+            },
+        )
+        mcp_handlers.proposal_store.add(proposal)
+        mcp_handlers.receive_decision("tool-history", "deny")
+
+        response = self.client.get("/mcp/proposals?limit=5")
+
+        self.assertEqual(response.status_code, 200)
+        item = response.get_json()["items"][0]
+        self.assertEqual(item["tool_use_id"], "tool-history")
+        self.assertEqual(item["status"], "refused")
+        self.assertEqual(
+            [event["status"] for event in item["lifecycle"]],
+            ["created", "pending", "refused"],
+        )
+
     def test_mcp_intercept_publishes_and_returns_result(self):
         result = {"decision": "allow", "allowed": True}
         with patch.object(daemon_main.bus, "publish") as publish, \
@@ -77,6 +113,22 @@ class TestMainMcpRoutes(unittest.TestCase):
         self.assertTrue(response.get_json()["ok"])
         receive.assert_called_once_with("tool-1", "deny")
         publish.assert_called_once()
+
+    def test_mcp_decision_publishes_event_even_when_decision_fails(self):
+        with patch.object(daemon_main.bus, "publish") as publish, \
+             patch("daemon.main.receive_decision", return_value=False) as receive:
+            response = self.client.post(
+                "/mcp/decision",
+                json={"tool_use_id": "missing", "decision": "allow"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.get_json()["ok"])
+        receive.assert_called_once_with("missing", "allow")
+        publish.assert_called_once_with(
+            "mcp_decision",
+            {"tool_use_id": "missing", "decision": "allow"},
+        )
 
     def test_e2e_intercept_pending_decision_flux(self):
         """
@@ -144,6 +196,60 @@ class TestMainMcpRoutes(unittest.TestCase):
 
         # La file est vide après résolution
         self.assertEqual(self.client.get("/mcp/pending").status_code, 204)
+
+    def test_e2e_intercept_pending_deny_flux_refuse_commande(self):
+        import threading, time
+        from daemon.interpreter.command_interpreter import CommandInterpretation
+
+        destructive_interpretation = CommandInterpretation(
+            original="rm -rf build",
+            translated="Supprime le dossier build",
+            risk_level="high",
+            risk_score=80,
+            is_read_only=False,
+            affects=["fichiers"],
+            warning="Action irréversible.",
+            needs_llm=False,
+        )
+
+        result_box = {}
+
+        def run_intercept():
+            with patch.object(mcp_handlers.interpreter, "interpret", return_value=destructive_interpretation), \
+                 patch("daemon.mcp.handlers._log_interception"):
+                result_box["result"] = mcp_handlers.intercept_command("rm -rf build", "e2e-tool-deny")
+
+        thread = threading.Thread(target=run_intercept, daemon=True)
+        thread.start()
+
+        deadline = time.time() + 2.0
+        pending_payload = None
+        while time.time() < deadline:
+            response = self.client.get("/mcp/pending")
+            if response.status_code == 200:
+                pending_payload = response.get_json()
+                break
+            time.sleep(0.02)
+
+        self.assertIsNotNone(pending_payload, "La commande n'est pas apparue dans /mcp/pending")
+        self.assertEqual(pending_payload["status"], "pending")
+        self.assertEqual(pending_payload["risk_level"], "high")
+
+        decision_response = self.client.post(
+            "/mcp/decision",
+            json={"tool_use_id": "e2e-tool-deny", "decision": "deny"},
+        )
+        self.assertEqual(decision_response.status_code, 200)
+        self.assertTrue(decision_response.get_json()["ok"])
+
+        thread.join(timeout=2.0)
+        self.assertFalse(thread.is_alive(), "Le thread intercept n'a pas terminé")
+
+        result = result_box.get("result")
+        self.assertIsNotNone(result)
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["status"], "refused")
 
     def test_scoring_status_returns_runtime_capabilities(self):
         with patch("daemon.main.get_scoring_status", return_value={

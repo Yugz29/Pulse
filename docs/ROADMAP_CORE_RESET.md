@@ -826,7 +826,7 @@ Découpage recommandé :
 
 - [x] R6a — Contrat propositions actuel (`docs/PROPOSAL_CONTRACT.md`) ;
 - [x] R6b — ProposalStore lifecycle golden ;
-- [ ] R6c — MCP approval baseline ;
+- [x] R6c — MCP approval baseline ;
 - [ ] R6d — Anti auto-execution baseline ;
 - [ ] R6e — Debug/Lab boundaries ;
 - [ ] R6f — Validation globale R6.
@@ -884,6 +884,34 @@ Validation R6b :
 - comportements verrouillés : création `pending`, refus d'ajout non pending, transitions `accepted`, `refused`, `expired`, lifecycle terminal, pending filtré, historique en ordre inverse, `resolve()` sans effet sur id inconnu ou proposition déjà terminale ;
 - ambiguïté conservée : `ProposalStore.resolve(..., "executed")` permet encore `pending -> executed` sans statut `accepted` préalable ; le test le documente explicitement comme dangereux / hors Core R6 strict ;
 - test ciblé passé : `tests/core/test_proposals.py` ;
+- aucun changement produit.
+
+### R6c — MCP approval baseline
+
+Objectif : prouver que le flux MCP risky command reste contrôlé par une décision humaine explicite et ne confond pas `executed` avec autorisation.
+
+- [x] Vérifier que `intercept_command()` crée une proposition `pending`.
+- [x] Vérifier que `/mcp/pending` expose la commande en attente.
+- [x] Vérifier que `/mcp/decision allow` passe la proposition en `accepted`.
+- [x] Vérifier que `/mcp/decision deny` passe la proposition en `refused`.
+- [x] Vérifier que timeout produit `expired`, `decision: deny` et `allowed: false`.
+- [x] Vérifier qu'une commande denied n'est jamais `allowed: true`.
+- [x] Vérifier qu'une décision invalide garde l'état pending selon le comportement actuel.
+- [x] Vérifier que `/mcp/proposals` expose un historique lisible avec lifecycle.
+- [x] Vérifier qu'aucune réponse `allowed: true` ne sort sans statut `accepted`.
+- [x] Vérifier que MCP n'utilise pas `executed` pour autoriser une commande.
+
+Sortie attendue de R6c :
+
+> Le flux MCP minimal est prouvé comme flux contrôlé : pending visible, décision explicite, refus / timeout sûrs, et autorisation uniquement après `accepted`.
+
+Validation R6c :
+
+- tests complétés dans `tests/mcp/test_handlers_proposals.py` et `tests/test_main_mcp_routes.py` ;
+- comportements verrouillés : intercept crée une proposition pending, `/mcp/pending` expose la proposition, `allow` résout en `accepted`, `deny` résout en `refused`, timeout résout en `expired` et refuse la commande, décisions invalides ne résolvent pas la proposition, `/mcp/proposals` expose l'historique et le lifecycle ;
+- le test prouve que les statuts `refused`, `expired` et `executed` retournent `allowed: false` côté MCP ;
+- ambiguïté conservée : `/mcp/decision` publie encore un événement `mcp_decision` même quand `receive_decision()` retourne `False` ; cet événement n'est pas une preuve d'approbation humaine ;
+- tests ciblés passés : `tests/mcp/test_handlers_proposals.py`, `tests/test_main_mcp_routes.py`, `tests/core/test_proposals.py` ;
 - aucun changement produit.
 
 ### R7 — Apprentissage plus tard
