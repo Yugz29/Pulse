@@ -627,6 +627,43 @@ Validation :
 - mise à jour du profil projet ;
 - mémoire narrative DayDream.
 
+Découpage recommandé :
+
+- [x] R5a — Contrat mémoire minimale actuel (`docs/MINIMAL_MEMORY_CONTRACT.md`) ;
+- [ ] R5b — Snapshot/session history golden ;
+- [ ] R5c — Journal minimal truth layers ;
+- [ ] R5d — Core/Lab contamination guards ;
+- [ ] R5e — Memory routes boundaries ;
+- [ ] R5f — Validation globale R5.
+
+### R5a — Contrat mémoire minimale actuel
+
+Objectif : documenter le comportement mémoire minimal réel avant d'ajouter ou de modifier des tests.
+
+- [x] Documenter `SessionMemory` SQLite comme socle Core R5.
+- [x] Documenter `SessionSnapshotBuilder`.
+- [x] Documenter `export_session_data()`.
+- [x] Documenter `export_memory_payload()`.
+- [x] Documenter le journal Markdown minimal.
+- [x] Documenter le hidden payload.
+- [x] Documenter `truth_layers` : `observed`, `derived`, `inferred`, `narrative`.
+- [x] Documenter `/memory/sessions` comme lecture historique, pas source canonique principale.
+- [x] Documenter `/search` comme recherche events SQLite.
+- [x] Distinguer mémoire minimale, mémoire avancée, facts / profile, vector store, DayDream et résumés LLM.
+
+Sortie attendue de R5a :
+
+> Pulse possède un contrat clair de ce qu'il appelle mémoire minimale aujourd'hui, sans promouvoir les systèmes Lab en fondation Core.
+
+Validation R5a :
+
+- contrat ajouté : `docs/MINIMAL_MEMORY_CONTRACT.md` ;
+- le contrat décrit le comportement actuel, pas une architecture cible ;
+- surfaces Core documentées : `SessionMemory`, `SessionSnapshotBuilder`, `export_session_data()`, `export_memory_payload()`, journal Markdown minimal, hidden payload, `truth_layers`, `/memory/sessions`, `/search` ;
+- limites explicites documentées : `extractor.py` est mixte, `update_memories_from_session()` n'est pas Core-safe comme fonction isolée, le runtime Core ne doit pas l'appeler automatiquement, `projects.md` n'est pas un profil projet fiable, le Markdown visible n'est pas la vérité canonique complète, le hidden payload ne doit pas être exposé comme vérité produit brute, `MemoryStore` et ses tiers `habit` / `preference` / `persistent` restent Lab, et `/memory/write` / `/memory/remove` restent Lab en Core ;
+- tests non lancés : documentation only ;
+- aucun changement produit.
+
 ### R6 — Baseline Propositions contrôlées
 
 Objectif : conserver uniquement un flux de proposition strictement contrôlé par validation humaine.
