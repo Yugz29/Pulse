@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "purpose": "Golden interpretation scenarios for R3. These fixtures describe current scorer inputs and minimal expected interpretation surfaces without changing SignalScorer.",
+  "defaults": {
+    "observed_now": "2026-05-20T09:10:00Z",
+    "session_started_at": "2026-05-20T08:55:00Z"
+  },
+  "scenarios": [
+    {
+      "name": "code_editing_user_source_files",
+      "family": "code_editing",
+      "intent": "A developer app plus multiple user-authored source/test file edits should be interpreted as active coding, with a concrete project and file anchor.",
+      "compute_args": {
+        "observed_now": "2026-05-20T09:10:00Z",
+        "session_started_at": "2026-05-20T08:55:00Z"
+      },
+      "events": [
+        {
+          "type": "app_activated",
+          "timestamp": "2026-05-20T09:06:00Z",
+          "payload": {
+            "app_name": "Cursor",
+            "bundle_id": "com.todesktop.230313mzl4w4u92",
+            "system_category": "public.app-category.developer-tools"
+          }
+        },
+        {
+          "type": "file_modified",
+          "timestamp": "2026-05-20T09:07:00Z",
+          "payload": {
+            "path": "/Users/tester/workspace/acme/src/service.py",
+            "_actor": "user"
+          }
+        },
+        {
+          "type": "file_modified",
+          "timestamp": "2026-05-20T09:08:00Z",
+          "payload": {
+            "path": "/Users/tester/workspace/acme/tests/test_service.py",
+            "_actor": "user"
+          }
+        }
+      ],
+      "expected_minimal": {
+        "probable_task": "coding",
+        "task_confidence_min": 0.7,
+        "activity_level": "editing",
+        "focus_level": "deep",
+        "active_project": "acme",
+        "active_file_suffix": "/src/service.py",
+        "edited_file_count_10m": 2
+      },
+      "notes": [
+        "This fixture uses portable /Users/tester paths.",
+        "R3c should confirm the exact active file chosen by timestamp/workspace ordering."
+      ]
+    },
+    {
+      "name": "terminal_tests_failed_without_recent_file_edit",
+      "family": "terminal_tests_failed",
+      "intent": "A recent normalized failed test command should produce an executing/debug-leaning interpretation without requiring file edits.",
+      "compute_args": {
+        "observed_now": "2026-05-20T09:10:00Z",
+        "session_started_at": "2026-05-20T08:50:00Z"
+      },
+      "events": [
+        {
+          "type": "app_activated",
+          "timestamp": "2026-05-20T09:05:00Z",
+          "payload": {
+            "app_name": "Terminal",
+            "bundle_id": "com.apple.Terminal",
+            "system_category": "public.app-category.developer-tools"
+          }
+        },
+        {
+          "type": "terminal_command_finished",
+          "timestamp": "2026-05-20T09:09:00Z",
+          "payload": {
+            "source": "terminal",
+            "kind": "finished",
+            "terminal_command": "pytest tests/test_service.py",
+            "terminal_command_base": "pytest",
+            "terminal_action_category": "testing",
+            "terminal_is_read_only": false,
+            "terminal_project": "acme",
+            "terminal_cwd": "/Users/tester/workspace/acme",
+            "terminal_exit_code": 1,
+            "terminal_success": false,
+            "terminal_duration_ms": 1400,
+            "terminal_summary": "failed pytest tests/test_service.py"
+          }
+        }
+      ],
+      "expected_minimal": {
+        "probable_task": "debug",
+        "task_confidence_min": 0.6,
+        "activity_level": "executing",
+        "focus_level": "normal",
+        "active_project": "acme",
+        "terminal_action_category": "testing",
+        "terminal_success": false
+      },
+      "notes": [
+        "Terminal payload is already normalized, matching the post-R2 ingestion contract.",
+        "R3c should confirm whether failed tests alone currently produce debug or coding if file edits are also present."
+      ]
+    },
+    {
+      "name": "browser_read_only_exploration",
+      "family": "browser_read_only_exploration",
+      "intent": "Browser navigation with a read-only local inspection signal should remain exploration/reading, not coding.",
+      "compute_args": {
+        "observed_now": "2026-05-20T09:10:00Z",
+        "session_started_at": "2026-05-20T09:00:00Z"
+      },
+      "events": [
+        {
+          "type": "app_activated",
+          "timestamp": "2026-05-20T09:06:00Z",
+          "payload": {
+            "app_name": "Safari",
+            "bundle_id": "com.apple.Safari",
+            "system_category": "public.app-category.productivity"
+          }
+        },
+        {
+          "type": "local_exploration",
+          "timestamp": "2026-05-20T09:08:00Z",
+          "payload": {
+            "source": "debug",
+            "path": "/Users/tester/workspace/acme/README.md"
+          }
+        },
+        {
+          "type": "terminal_command_finished",
+          "timestamp": "2026-05-20T09:09:00Z",
+          "payload": {
+            "source": "terminal",
+            "kind": "finished",
+            "terminal_command": "rg runtime_mode",
+            "terminal_command_base": "rg",
+            "terminal_action_category": "inspection",
+            "terminal_is_read_only": true,
+            "terminal_project": "acme",
+            "terminal_cwd": "/Users/tester/workspace/acme",
+            "terminal_exit_code": 0,
+            "terminal_success": true,
+            "terminal_duration_ms": 95,
+            "terminal_summary": "passed rg runtime_mode"
+          }
+        }
+      ],
+      "expected_minimal": {
+        "probable_task": "exploration",
+        "task_confidence_min": 0.5,
+        "activity_level": "reading",
+        "focus_level": "normal",
+        "active_project": "acme",
+        "terminal_action_category": "inspection"
+      },
+      "notes": [
+        "Read-only inspection is allowed to derive a project from terminal_cwd.",
+        "The scenario must not be promoted to coding without source/test edits."
+      ]
+    },
+    {
+      "name": "idle_after_weak_activity",
+      "family": "idle",
+      "intent": "A recent idle signal with only weak prior activity should keep interpretation idle/general.",
+      "compute_args": {
+        "observed_now": "2026-05-20T09:10:00Z",
+        "session_started_at": "2026-05-20T08:30:00Z"
+      },
+      "events": [
+        {
+          "type": "app_activated",
+          "timestamp": "2026-05-20T09:01:00Z",
+          "payload": {
+            "app_name": "Cursor",
+            "bundle_id": "com.todesktop.230313mzl4w4u92",
+            "system_category": "public.app-category.developer-tools"
+          }
+        },
+        {
+          "type": "file_modified",
+          "timestamp": "2026-05-20T09:02:00Z",
+          "payload": {
+            "path": "/Users/tester/workspace/acme/src/service.py",
+            "_actor": "user"
+          }
+        },
+        {
+          "type": "user_idle",
+          "timestamp": "2026-05-20T09:09:30Z",
+          "payload": {
+            "seconds": 420,
+            "source": "iokit"
+          }
+        }
+      ],
+      "expected_minimal": {
+        "probable_task": "general",
+        "task_confidence_max": 0.5,
+        "activity_level": "idle",
+        "focus_level": "idle",
+        "active_project": "acme",
+        "active_file_suffix": "/src/service.py"
+      },
+      "notes": [
+        "One source edit is intentionally too weak to override the recent idle signal.",
+        "R3c should confirm whether active_project remains anchored while activity/focus are idle."
+      ]
+    },
+    {
+      "name": "noisy_and_tool_assisted_files_do_not_inflate_user_editing",
+      "family": "noisy_tool_assisted",
+      "intent": "Technical noise and tool-assisted file edits should not inflate user edit counts or produce a strong task claim.",
+      "compute_args": {
+        "observed_now": "2026-05-20T09:10:00Z",
+        "session_started_at": "2026-05-20T09:00:00Z"
+      },
+      "events": [
+        {
+          "type": "app_activated",
+          "timestamp": "2026-05-20T09:05:00Z",
+          "payload": {
+            "app_name": "Codex",
+            "bundle_id": "com.openai.codex",
+            "system_category": "public.app-category.developer-tools"
+          }
+        },
+        {
+          "type": "file_modified",
+          "timestamp": "2026-05-20T09:06:00Z",
+          "payload": {
+            "path": "/Users/tester/workspace/acme/.cache/models_cache.json",
+            "_actor": "system",
+            "_noise_policy": "suppress"
+          }
+        },
+        {
+          "type": "file_modified",
+          "timestamp": "2026-05-20T09:07:00Z",
+          "payload": {
+            "path": "/Users/tester/workspace/acme/src/generated_client.py",
+            "_actor": "tool_assisted",
+            "_automation_score": 0.83,
+            "_noise_policy": "normal"
+          }
+        },
+        {
+          "type": "file_modified",
+          "timestamp": "2026-05-20T09:08:00Z",
+          "payload": {
+            "path": "/Users/tester/workspace/acme/poetry.lock",
+            "_actor": "tool_assisted",
+            "_automation_score": 0.76,
+            "_noise_policy": "downrank"
+          }
+        }
+      ],
+      "expected_minimal": {
+        "probable_task": "general",
+        "task_confidence_max": 0.5,
+        "activity_level": "idle",
+        "focus_level": "normal",
+        "active_project": "acme",
+        "active_file_suffix": "/src/generated_client.py",
+        "edited_file_count_10m": 0
+      },
+      "notes": [
+        "Tool-assisted source files may still anchor project/file context.",
+        "They must not count as user edits or promote a strong task by themselves.",
+        "The cache path is included to keep the scenario aligned with R2 noise fixtures."
+      ]
+    }
+  ]
+}

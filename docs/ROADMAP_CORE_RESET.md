@@ -375,7 +375,7 @@ Validation :
 Découpage recommandé :
 
 - [x] R3a — Contrat d’interprétation actuel (`docs/INTERPRETATION_CONTRACT.md`) ;
-- R3b — Fixtures golden scoring ;
+- [x] R3b — Fixtures golden scoring ;
 - R3c — Golden `SignalScorer` ;
 - R3d — Evidence / uncertainty baseline ;
 - R3e — Payload boundaries ;
@@ -1038,18 +1038,29 @@ Validation R3a :
 
 Objectif : créer des scénarios portables d’interprétation.
 
-- [ ] Créer `tests/fixtures/interpretation/scoring_scenarios.json`.
-- [ ] Ajouter un scénario code editing.
-- [ ] Ajouter un scénario terminal tests failed.
-- [ ] Ajouter un scénario browser / read-only exploration.
-- [ ] Ajouter un scénario idle.
-- [ ] Ajouter un scénario noisy / tool-assisted files.
-- [ ] Éviter les chemins locaux `/Users/yugz`.
-- [ ] Réutiliser les principes de `docs/OBSERVATION_CONTRACT.md`.
+- [x] Créer `tests/fixtures/interpretation/scoring_scenarios.json`.
+- [x] Ajouter un scénario code editing.
+- [x] Ajouter un scénario terminal tests failed.
+- [x] Ajouter un scénario browser / read-only exploration.
+- [x] Ajouter un scénario idle.
+- [x] Ajouter un scénario noisy / tool-assisted files.
+- [x] Éviter les chemins locaux `/Users/yugz`.
+- [x] Réutiliser les principes de `docs/OBSERVATION_CONTRACT.md`.
 
 Sortie attendue de R3b :
 
 > Les premiers scénarios golden d’interprétation existent et restent portables.
+
+Validation R3b :
+
+- fixture ajoutée : `tests/fixtures/interpretation/scoring_scenarios.json` ;
+- scénarios couverts : code editing, terminal tests failed, browser / read-only exploration, idle, noisy / tool-assisted files ;
+- chaque scénario contient un nom lisible, une intention de test, des événements compatibles avec `SignalScorer`, des `compute_args`, des attentes minimales futures et des notes ;
+- les chemins sont portables et n’utilisent pas `/Users/yugz` ;
+- test de structure ajouté : `tests/test_interpretation_scoring_fixtures.py` ;
+- test ciblé passé : `tests/test_interpretation_scoring_fixtures.py` ;
+- aucun appel à `SignalScorer.compute()` dans R3b ;
+- aucun changement produit.
 
 ### R3c — Golden `SignalScorer`
 
