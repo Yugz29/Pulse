@@ -3,6 +3,7 @@
 from dataclasses import replace
 from datetime import datetime
 
+from daemon.core.proposals import proposal_store
 from daemon.core.context_probe_executor import (
     build_context_probe_execution_plan,
     can_execute_context_probe,
@@ -16,6 +17,7 @@ from daemon.core.context_probe_request import (
 
 
 def test_execution_plan_allows_approved_non_expired_request():
+    proposal_store.clear()
     request = create_context_probe_request(
         ContextProbeKind.APP_CONTEXT,
         reason="Need app context",
@@ -37,6 +39,7 @@ def test_execution_plan_allows_approved_non_expired_request():
     assert plan.kind == "app_context"
     assert plan.policy["consent"] == "implicit_session"
     assert can_execute_context_probe(approved) is True
+    assert proposal_store.list_history() == []
 
 
 def test_execution_plan_blocks_pending_and_refused_requests():

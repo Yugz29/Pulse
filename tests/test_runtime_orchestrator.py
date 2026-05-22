@@ -1635,6 +1635,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(args[0], "resume_card")
         self.assertEqual(args[1]["project"], "Pulse")
         self.assertEqual(args[1]["generated_by"], "deterministic")
+        self.assertEqual(proposal_store.list_history(), [])
         self.summary_llm.complete.assert_not_called()
 
     def test_resume_card_enqueued_lightweight_summary_si_queue_presente(self):
@@ -1912,6 +1913,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.orchestrator._process_signals(event)
 
         self.assertIsNotNone(self.runtime_state.get_present().work_intent)
+        self.assertEqual(proposal_store.list_history(), [])
 
     def test_work_intent_lifecycle_conserve_meme_projet_debug_executing(self):
         signals = self._signals(active_project="Pulse", probable_task="debug", activity_level="executing")

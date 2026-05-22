@@ -828,7 +828,7 @@ Découpage recommandé :
 - [x] R6b — ProposalStore lifecycle golden ;
 - [x] R6c — MCP approval baseline ;
 - [x] R6d — Anti auto-execution baseline ;
-- [ ] R6e — Debug/Lab boundaries ;
+- [x] R6e — Debug/Lab boundaries ;
 - [ ] R6f — Validation globale R6.
 
 ### R6a — Contrat propositions actuel
@@ -939,6 +939,31 @@ Validation R6d :
 - ambiguïté conservée : `ProposalStore` permet toujours techniquement `pending -> executed`, et le mode Lab conserve l'auto-execution historique pour `context_injection` ;
 - tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/core/test_decision_engine.py`, `tests/core/test_proposals.py`, `tests/mcp/test_handlers_proposals.py`, `tests/test_main_mcp_routes.py` ;
 - changement produit minimal limité à la gate Core/Lab de l'auto-résolution `context_injection`.
+
+### R6e — Debug/Lab boundaries
+
+Objectif : clarifier que les surfaces debug ou Lab proches des propositions ne sont pas des propositions produit controlees Core.
+
+- [x] Vérifier que les propositions Core contrôlées restent limitées au flux MCP validé.
+- [x] Vérifier que `context_injection` Core reste `pending` et n'est pas `executed`.
+- [x] Documenter que `context_injection` Lab/dev conserve l'auto-`executed` historique.
+- [x] Vérifier que les context probes ont un lifecycle séparé et ne passent pas par `ProposalStore`.
+- [x] Vérifier que work intent et resume cards ne créent pas de propositions produit contrôlées.
+- [x] Documenter les surfaces debug/Lab dans `docs/PROPOSAL_CONTRACT.md`.
+- [x] Ne pas modifier MCP, DecisionEngine, probes, dashboard Swift, LLM ou autonomie.
+
+Sortie attendue de R6e :
+
+> Les surfaces proches des propositions sont explicitement séparées : MCP reste le seul flux Core contrôlé, tandis que context injection Lab/dev, context probes, work intent et resume cards restent debug/Lab ou hors preuve R6.
+
+Validation R6e :
+
+- tests complétés dans `tests/test_runtime_orchestrator.py` et `tests/core/test_context_probe_executor.py` ;
+- documentation mise à jour dans `docs/PROPOSAL_CONTRACT.md` pour refléter le comportement après R6d : `context_injection` reste `pending` en Core, Lab/dev conserve l'auto-`executed` historique ;
+- comportements verrouillés : resume cards et work intent ne créent pas d'entrée `ProposalStore`, context probes restent sur leur lifecycle propre sans `ProposalStore`, `context_injection` Core reste pending, et MCP demeure le flux Core contrôlé ;
+- ambiguïtés conservées : `ProposalStore` accepte toujours techniquement `pending -> executed`, et Lab/dev conserve l'auto-résolution historique de `context_injection` ;
+- tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/core/test_decision_engine.py`, `tests/core/test_proposals.py`, `tests/mcp/test_handlers_proposals.py`, `tests/test_main_mcp_routes.py`, `tests/core/test_context_probe_request.py`, `tests/core/test_context_probe_executor.py`, `tests/core/test_context_probe_store.py`, `tests/core/test_context_probe_runner.py` ;
+- aucun changement produit.
 
 ### R7 — Apprentissage plus tard
 

@@ -1,6 +1,6 @@
 # Contrat propositions controlees Pulse
 
-Etat courant au moment de R6a Core Reset. Ce document decrit le comportement existant. Ce n'est pas une architecture cible et il n'introduit aucun nouveau comportement.
+État courant au moment de R6e Core Reset. Ce document décrit le comportement existant. Ce n'est pas une architecture cible et il n'introduit aucun nouveau comportement.
 
 ## Perimetre
 
@@ -23,8 +23,8 @@ R6 doit prouver qu'aucune proposition produit n'est executee sans validation hum
 | `/mcp/pending` | Lecture de la commande MCP en attente | oui |
 | `/mcp/decision` | Reception allow / deny | oui |
 | `/mcp/proposals` | Historique recent des propositions | oui |
-| `DecisionEngine` | Peut emettre `inject_context` depuis signaux locaux | non comme preuve R6 tant que l'auto-execution existe |
-| `RuntimeOrchestrator._attach_context_proposal_if_needed()` | Cree une proposition `context_injection` puis la marque `executed` | hors Core R6 strict / dangereux |
+| `DecisionEngine` | Peut emettre `inject_context` depuis signaux locaux | non comme preuve R6 controlee |
+| `RuntimeOrchestrator._attach_context_proposal_if_needed()` | Cree une proposition `context_injection`; Core la laisse `pending`, Lab/dev conserve l'auto-`executed` historique | mixte, hors preuve Core controlee |
 | Context probes | Cycle request / approve / execute pour collecte de contexte | Lab / debug pendant R6 |
 | Work intent candidates | Intentions issues notamment de probes | Lab / hors R6 strict |
 | Resume cards | Resume deterministe ou enrichi pour reprise | Lab / hors R6 strict |
@@ -178,11 +178,21 @@ Dans `ProposalStore` :
 
 R6 ne doit pas traiter `executed` comme une validation humaine. En l'etat actuel, `executed` est trop ambigu pour etre une preuve Core.
 
-## Context injection auto-`executed`
+## Context injection
 
-`RuntimeOrchestrator._attach_context_proposal_if_needed()` est la contradiction centrale de R6a.
+`RuntimeOrchestrator._attach_context_proposal_if_needed()` etait la contradiction centrale de R6a. Depuis R6d, le comportement est separe par mode.
 
-Flux actuel :
+Flux Core actuel :
+
+```text
+DecisionEngine -> Decision(action="inject_context", reason="context_ready")
+-> _build_context_injection_candidate()
+-> proposal_candidate_to_proposal()
+-> proposal_store.add(pending)
+-> reste pending
+```
+
+Flux Lab/dev actuel :
 
 ```text
 DecisionEngine -> Decision(action="inject_context", reason="context_ready")
@@ -192,9 +202,7 @@ DecisionEngine -> Decision(action="inject_context", reason="context_ready")
 -> proposal_store.resolve(proposal.id, "executed")
 ```
 
-Cette proposition `context_injection` est donc marquee `executed` sans validation humaine explicite.
-
-Ce comportement est hors Core R6 strict. Il ne doit pas etre presente comme une proposition produit controlee. R6 devra soit le desactiver/gater en Core, soit le marquer debug/Lab, soit changer son statut pour eviter de simuler une execution validee.
+En Core, cette proposition ne doit pas etre lue comme une action executee ni comme une validation humaine. En Lab/dev, l'auto-`executed` est conserve comme comportement historique experimental. Il reste hors Core R6 strict et ne doit pas etre presente comme proposition produit controlee.
 
 ## Context probes
 
@@ -208,13 +216,15 @@ create request -> pending -> approve/refuse/abort -> execute si approved -> resu
 
 Le modele de transition des probes est plus explicite que `context_injection`, mais la surface touche la collecte de contexte, le runtime context, et peut creer des work intent candidates. Pendant R6 Core strict, les probes restent Lab / debug. Elles ne doivent pas etre utilisees pour prouver le controle produit des propositions.
 
+Les probes ont leur propre lifecycle `pending -> approved/refused/expired/cancelled -> executed`. Elles ne passent pas par `ProposalStore` et ne doivent pas etre confondues avec le flux Core de propositions controlees MCP.
+
 ## Hors R6 strict
 
 Ces surfaces restent hors Core R6 tant qu'elles ne sont pas explicitement separees et testees :
 
 - context probes automatiques ;
 - work intent intelligent ;
-- context injection auto-`executed` ;
+- context injection Lab/dev auto-`executed` ;
 - resume cards ;
 - propositions generees par LLM ;
 - corrections autonomes ;
@@ -222,11 +232,11 @@ Ces surfaces restent hors Core R6 tant qu'elles ne sont pas explicitement separe
 - apprentissage et adaptation ;
 - dashboard avance de propositions.
 
-## Limites explicites R6a
+## Limites explicites R6
 
 - `pending -> executed` est possible via `ProposalStore.resolve()`.
 - MCP n'utilise pas `executed` pour autoriser une commande ; il retourne `allowed: true` apres `accepted`.
-- `context_injection` auto-`executed` est dangereux et hors Core R6 strict.
+- `context_injection` reste `pending` en Core depuis R6d, mais l'auto-`executed` Lab/dev reste dangereux si on le confond avec une validation humaine.
 - `/mcp/decision` publie un evenement meme si `receive_decision()` retourne `False`.
 - `Proposal` n'a pas de champ `decided_by`, `decision_source` ou `human_approved`.
 - `accepted` ne prouve pas l'execution effective ; `executed` ne prouve pas l'approbation humaine.
