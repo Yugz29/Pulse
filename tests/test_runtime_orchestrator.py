@@ -1232,7 +1232,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         start_worker.assert_not_called()
         self.summary_llm.complete.assert_not_called()
 
-    def test_process_signals_cree_une_proposition_executee_pour_context_ready(self):
+    def test_process_signals_core_ne_marque_pas_context_proposal_executee_sans_validation(self):
         signals = Signals(
             active_project="Pulse", active_file="/tmp/main.py", probable_task="coding",
             friction_score=0.1, focus_level="normal", session_duration_min=25,
@@ -1245,7 +1245,33 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.scorer.compute.return_value = signals
         self.decision_engine.evaluate.return_value = decision
 
-        self.orchestrator._process_signals(event)
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}):
+            self.orchestrator._process_signals(event)
+
+        history = proposal_store.list_history(limit=1)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0].type, "context_injection")
+        self.assertEqual(history[0].status, "pending")
+        self.assertEqual(
+            [event["status"] for event in history[0].lifecycle],
+            ["created", "pending"],
+        )
+
+    def test_process_signals_lab_conserve_context_proposal_auto_executee(self):
+        signals = Signals(
+            active_project="Pulse", active_file="/tmp/main.py", probable_task="coding",
+            friction_score=0.1, focus_level="normal", session_duration_min=25,
+            recent_apps=["Xcode"], clipboard_context="text",
+            edited_file_count_10m=4, file_type_mix_10m={"source": 2, "test": 1, "docs": 1},
+            rename_delete_ratio_10m=0.0, dominant_file_mode="few_files", work_pattern_candidate="feature_candidate",
+        )
+        decision = Decision(action="inject_context", level=1, reason="context_ready", payload={"project": "Pulse", "task": "coding"})
+        event = Event("file_modified", {"path": "/tmp/main.py"})
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = decision
+
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}):
+            self.orchestrator._process_signals(event)
 
         history = proposal_store.list_history(limit=1)
         self.assertEqual(len(history), 1)

@@ -1411,7 +1411,8 @@ class RuntimeOrchestrator:
         )
         proposal = proposal_candidate_to_proposal(candidate, proposal_id=new_uid())
         proposal_store.add(proposal)
-        proposal_store.resolve(proposal.id, "executed")
+        if is_lab_enabled():
+            proposal_store.resolve(proposal.id, "executed")
         payload = dict(decision.payload or {})
         payload["proposal_id"] = proposal.id
         return replace(decision, payload=payload)

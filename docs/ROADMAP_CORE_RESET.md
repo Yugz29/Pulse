@@ -827,7 +827,7 @@ Découpage recommandé :
 - [x] R6a — Contrat propositions actuel (`docs/PROPOSAL_CONTRACT.md`) ;
 - [x] R6b — ProposalStore lifecycle golden ;
 - [x] R6c — MCP approval baseline ;
-- [ ] R6d — Anti auto-execution baseline ;
+- [x] R6d — Anti auto-execution baseline ;
 - [ ] R6e — Debug/Lab boundaries ;
 - [ ] R6f — Validation globale R6.
 
@@ -913,6 +913,32 @@ Validation R6c :
 - ambiguïté conservée : `/mcp/decision` publie encore un événement `mcp_decision` même quand `receive_decision()` retourne `False` ; cet événement n'est pas une preuve d'approbation humaine ;
 - tests ciblés passés : `tests/mcp/test_handlers_proposals.py`, `tests/test_main_mcp_routes.py`, `tests/core/test_proposals.py` ;
 - aucun changement produit.
+
+### R6d — Anti auto-execution baseline
+
+Objectif : empêcher qu'une proposition produit Core soit marquee `executed` sans validation humaine explicite.
+
+- [x] Identifier le comportement de `_attach_context_proposal_if_needed()`.
+- [x] Ajouter un test exposant que `context_injection/context_ready` ne doit pas devenir `executed` en mode Core.
+- [x] Empêcher l'auto-résolution `executed` de `context_injection` en mode Core.
+- [x] Conserver l'ancien comportement Lab pour éviter un changement de surface expérimental plus large.
+- [x] Vérifier que le flux MCP validé en R6c n'est pas modifié.
+- [x] Ne pas modifier `DecisionEngine`.
+- [x] Ne pas toucher context probes, work intent, dashboard Swift, LLM ou autonomie.
+
+Sortie attendue de R6d :
+
+> En mode Core, Pulse ne marque plus une proposition `context_injection` comme exécutée sans validation humaine.
+
+Validation R6d :
+
+- test ajouté dans `tests/test_runtime_orchestrator.py` ;
+- comportement avant : `RuntimeOrchestrator._attach_context_proposal_if_needed()` créait une proposition `context_injection`, l'ajoutait au store, puis la résolvait immédiatement en `executed` ;
+- comportement après : en mode Core, la proposition `context_injection` reste `pending` avec lifecycle `created -> pending` ; en mode Lab, l'ancien auto-`executed` est conservé ;
+- comportements verrouillés : aucune proposition `context_injection` Core ne passe à `executed` sans validation humaine ; MCP reste inchangé et continue à n'autoriser que le statut `accepted` ;
+- ambiguïté conservée : `ProposalStore` permet toujours techniquement `pending -> executed`, et le mode Lab conserve l'auto-execution historique pour `context_injection` ;
+- tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/core/test_decision_engine.py`, `tests/core/test_proposals.py`, `tests/mcp/test_handlers_proposals.py`, `tests/test_main_mcp_routes.py` ;
+- changement produit minimal limité à la gate Core/Lab de l'auto-résolution `context_injection`.
 
 ### R7 — Apprentissage plus tard
 
