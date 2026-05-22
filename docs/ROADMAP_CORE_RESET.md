@@ -365,11 +365,21 @@ Validation :
 - les scénarios golden passent ;
 - le dashboard peut montrer pourquoi Pulse pense quelque chose.
 
+
 À ne pas faire :
 
 - utiliser un LLM pour réparer un scoring faible ;
 - promouvoir des interprétations faibles en mémoire ;
 - ajouter des règles d’adaptation.
+
+Découpage recommandé :
+
+- R3a — Contrat d’interprétation actuel ;
+- R3b — Fixtures golden scoring ;
+- R3c — Golden `SignalScorer` ;
+- R3d — Evidence / uncertainty baseline ;
+- R3e — Payload boundaries ;
+- R3f — Anti-overclaim tests.
 
 ### R4 — Baseline Sessions
 
@@ -511,18 +521,20 @@ Aucun commit ne doit mélanger des changements Core et Lab sans raison claire.
 
 ## 10. Priorité actuelle
 
-La priorité immédiate est R0, puis R1.
+La priorité immédiate est désormais R3 — Baseline Interprétation.
+
+R1 — Baseline Runtime est validée côté Python.
+
+R2 — Baseline Observation est validée côté Python.
 
 Prochaines actions :
 
-1. finaliser et commit ce document ;
-2. aligner le README avec le statut Core Reset ;
-3. introduire le mode runtime minimal ;
-4. exposer `pulse_mode` et `experimental_enabled` ;
-5. gater DayDream dans un patch séparé ;
-6. gater facts / rendu mémoire avancé dans un patch séparé ;
-7. ajouter la santé Core ;
-8. tester le boot Core sans dépendances expérimentales.
+1. formaliser le contrat d’interprétation actuel ;
+2. créer des scénarios golden de scoring ;
+3. verrouiller le comportement actuel de `SignalScorer` sans modifier ses heuristiques ;
+4. vérifier les preuves et incertitudes exposées par `/work-context` ou les builders associés ;
+5. clarifier les frontières `/state` vs `/debug/state` ;
+6. ajouter des tests anti-overclaim.
 
 Rien d’autre ne doit passer avant, sauf si cela corrige un problème de boot Core, d’observation, de scoring, de session ou de journal minimal.
 
@@ -978,9 +990,123 @@ Statut : terminé côté Python.
 - Aucun passage à R3 dans cette validation.
 - Aucun ajout de scoring, mémoire, LLM, facts, DayDream, propositions, dashboard Swift ou branchement global de `event_envelope.py`.
 
+
 Fragilités acceptées en sortie de R2 :
 
 - `observation_qualification.py` et `event_envelope.py` restent des contrats passifs, pas la source de vérité runtime.
 - `/feed` peut encore exposer des événements internes comme `llm_loading` ou `resume_card` si ces événements sont présents dans le bus ; R2 vérifie seulement qu’ils ne dominent pas un bus Core réaliste.
 - Les fichiers meaningful ne sont pas encore projetés comme items feed dédiés ; comportement actuel conservé.
 - Certaines fixtures / anciens tests hors golden utilisent encore des chemins développeur historiques ; les fixtures R2 nouvelles restent portables.
+
+
+## 15. Checklist R3 — Baseline Interprétation
+
+Objectif : prouver que Pulse interprète prudemment les observations, sans sur-vendre une compréhension avancée.
+
+R3 doit verrouiller ce que Pulse dérive depuis les observations fiables de R2.
+
+R3 ne doit pas chercher à rendre Pulse plus intelligent. Il doit prouver ce que le scorer fait déjà, rendre ses sorties auditables, et empêcher les affirmations trop fortes.
+
+### R3a — Contrat d’interprétation actuel
+
+Objectif : documenter les surfaces d’interprétation existantes.
+
+- [ ] Documenter les champs `Signals`.
+- [ ] Documenter les champs `PresentState`.
+- [ ] Documenter les champs `CurrentContext`.
+- [ ] Documenter les champs `WorkContextCard`.
+- [ ] Distinguer observed / normalized / derived / inferred.
+- [ ] Documenter où apparaissent `probable_task`, `task_confidence`, `activity_level`, `focus_level`.
+- [ ] Documenter que `task_confidence` existe dans `Signals`, mais n’est pas exposé dans `PresentState`.
+- [ ] Documenter que `WorkContextCard` reconstruit une explication après coup et n’est pas encore la preuve canonique du scorer.
+
+Sortie attendue de R3a :
+
+> Pulse possède un contrat clair de ce qu’il interprète, où cela apparaît, et avec quel niveau de prudence.
+
+### R3b — Fixtures golden scoring
+
+Objectif : créer des scénarios portables d’interprétation.
+
+- [ ] Créer `tests/fixtures/interpretation/scoring_scenarios.json`.
+- [ ] Ajouter un scénario code editing.
+- [ ] Ajouter un scénario terminal tests failed.
+- [ ] Ajouter un scénario browser / read-only exploration.
+- [ ] Ajouter un scénario idle.
+- [ ] Ajouter un scénario noisy / tool-assisted files.
+- [ ] Éviter les chemins locaux `/Users/yugz`.
+- [ ] Réutiliser les principes de `docs/OBSERVATION_CONTRACT.md`.
+
+Sortie attendue de R3b :
+
+> Les premiers scénarios golden d’interprétation existent et restent portables.
+
+### R3c — Golden `SignalScorer`
+
+Objectif : verrouiller le comportement actuel du scorer sans modifier les heuristiques.
+
+- [ ] Charger les fixtures R3b.
+- [ ] Appeler directement `SignalScorer.compute()`.
+- [ ] Vérifier `probable_task`.
+- [ ] Vérifier `task_confidence`.
+- [ ] Vérifier `activity_level`.
+- [ ] Vérifier `focus_level`.
+- [ ] Vérifier projet actif / fichier actif si disponible.
+- [ ] Documenter les comportements ambigus dans les noms ou commentaires de tests.
+- [ ] Ne pas modifier `SignalScorer` sauf incohérence évidente.
+
+Sortie attendue de R3c :
+
+> Le comportement actuel du scorer est verrouillé par scénarios golden lisibles.
+
+### R3d — Evidence / uncertainty baseline
+
+Objectif : vérifier que l’interprétation exposée reste explicable ou incertaine.
+
+- [ ] Tester `/work-context` ou les builders associés.
+- [ ] Vérifier que les preuves sont visibles quand une tâche / un projet est proposé.
+- [ ] Vérifier que l’incertitude est visible quand les preuves sont faibles.
+- [ ] Vérifier que `project_hint` faible ne devient pas projet confirmé.
+- [ ] Vérifier que `general` ou contexte faible ne produit pas une affirmation forte.
+- [ ] Vérifier les statuts `observed`, `probable`, `inferred`, `weak` si exposés.
+
+Sortie attendue de R3d :
+
+> Pulse sait montrer pourquoi il pense quelque chose, ou dire que la preuve est faible.
+
+### R3e — Payload boundaries
+
+Objectif : clarifier les frontières entre surface produit et surface debug.
+
+- [ ] Vérifier `/state`.
+- [ ] Vérifier `/debug/state`.
+- [ ] Vérifier où `signals` legacy est exposé.
+- [ ] Vérifier que `/state.present` ne paraît pas plus affirmatif que les signaux réels.
+- [ ] Vérifier que les détails expérimentaux / debug restent hors surface produit si possible.
+- [ ] Documenter les limites si aucun refactor n’est fait.
+
+Sortie attendue de R3e :
+
+> Les payloads d’état ne vendent pas une interprétation plus sûre que ce que les signaux prouvent.
+
+### R3f — Anti-overclaim tests
+
+Objectif : ajouter des tests négatifs contre les interprétations trop fortes.
+
+- [ ] Pas de projet confirmé depuis un titre de fenêtre seul.
+- [ ] Pas de `coding` fort depuis une app inconnue seule.
+- [ ] Pas de debug fort depuis une stacktrace ancienne isolée.
+- [ ] Pas de browsing fort depuis un navigateur ancien ou isolé.
+- [ ] Pas d’action ou proposition déclenchée par un signal faible.
+- [ ] Vérifier que `DecisionEngine` ne transforme pas un signal faible en action produit.
+
+Sortie attendue de R3f :
+
+> Pulse évite les interprétations trop confiantes quand les preuves sont faibles.
+
+Notes R3 :
+
+- R3 est une phase d’interprétation prudente, pas d’intelligence.
+- `SignalScorer` est le cœur R3, mais il ne doit pas être rendu plus intelligent avant d’être couvert par scénarios golden.
+- `WorkContextCard` et `WorkEvidenceResolver` sont les meilleures surfaces d’explicabilité actuelles, mais elles ne remplacent pas encore une preuve canonique issue du scorer.
+- `DecisionEngine`, `context_formatter.py`, propositions, LLM et mémoire restent hors R3 strict.
