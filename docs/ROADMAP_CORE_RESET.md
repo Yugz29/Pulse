@@ -632,7 +632,7 @@ Découpage recommandé :
 - [x] R5a — Contrat mémoire minimale actuel (`docs/MINIMAL_MEMORY_CONTRACT.md`) ;
 - [x] R5b — Snapshot/session history golden ;
 - [x] R5c — Journal minimal truth layers ;
-- [ ] R5d — Core/Lab contamination guards ;
+- [x] R5d — Core/Lab contamination guards ;
 - [ ] R5e — Memory routes boundaries ;
 - [ ] R5f — Validation globale R5.
 
@@ -716,6 +716,32 @@ Validation R5c :
 - le test prouve que `probable_task`, `duration_min` et `body` ne sont pas classés comme observations ;
 - le Markdown visible ne contient pas `truth_layers` et n'est pas traité comme vérité canonique ;
 - ambiguïté conservée : `extractor.py` reste mixte et appelle encore le moteur de facts comme chemin interne ; le test R5c le remplace par un moteur inerte et vérifie que vector store / background writer ne sont pas sollicités ;
+- aucun changement produit.
+
+### R5d — Core/Lab contamination guards
+
+Objectif : prouver qu'en mode Core, le flux mémoire minimal ne déclenche pas les systèmes Lab.
+
+- [x] Vérifier que `_sync_memory_background()` retourne sans appeler `update_memories_from_session()` en mode Core.
+- [x] Vérifier que le chemin pre-reset après long verrouillage ne lance pas la sync mémoire avancée en mode Core.
+- [x] Vérifier que les summaries LLM lightweight ne sont pas enqueued par le flux mémoire Core.
+- [x] Vérifier que les embeddings / vector store ne sont pas sollicités par le flux mémoire Core.
+- [x] Vérifier que les background writers mémoire ne sont pas démarrés par le flux mémoire Core.
+- [x] Vérifier que DayDream n'est pas déclenché par le chemin pre-reset Core.
+- [x] Vérifier que `MemoryStore.write()`, `MemoryStore.remove()` et `MemoryStore.render()` ne participent pas au flux mémoire Core.
+- [x] Vérifier que facts / profile ne sont pas observés ou rendus comme mémoire Core.
+
+Sortie attendue de R5d :
+
+> Le runtime Core peut conserver une mémoire minimale de session sans traverser facts, LLM, embeddings, vector store, DayDream, `MemoryStore` ou writers avancés.
+
+Validation R5d :
+
+- tests ajoutés dans `tests/test_runtime_orchestrator.py` ;
+- comportements verrouillés : `_sync_memory_background()` en mode Core n'appelle ni `update_memories_from_session()`, ni LLM, ni embeddings, ni vector store, ni background writer, ni `freeze_memory()`, ni `MemoryStore` ; le chemin pre-reset Core après long verrouillage ferme / démarre la session sans déclencher sync avancée, DayDream, facts, LLM, vector store ou `MemoryStore` ;
+- tests existants conservés : le mode Lab continue à appeler la sync mémoire avancée dans les chemins représentatifs ;
+- ambiguïté conservée : `update_memories_from_session()` reste une fonction mixte et non Core-safe isolément ; R5d prouve que le runtime Core ne l'appelle pas automatiquement ;
+- tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/memory/test_extractor.py`, `tests/memory/test_pipeline.py` ;
 - aucun changement produit.
 
 ### R6 — Baseline Propositions contrôlées

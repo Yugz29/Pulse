@@ -1017,6 +1017,44 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         vector_store.assert_not_called()
         freeze_memory.assert_not_called()
 
+    def test_core_memory_sync_guard_ne_touche_pas_les_systemes_lab(self):
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        snapshot = {
+            "active_project": "Pulse",
+            "duration_min": 45,
+            "probable_task": "coding",
+            "files_changed": 3,
+            "top_files": ["runtime_orchestrator.py"],
+        }
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory, \
+             patch("daemon.memory.extractor.embeddings_enabled") as embeddings_enabled, \
+             patch("daemon.memory.extractor._get_vector_store") as get_vector_store, \
+             patch("daemon.memory.extractor._start_background_writer") as start_background, \
+             patch.object(self.orchestrator, "freeze_memory") as freeze_memory:
+            self.orchestrator._sync_memory_background(
+                snapshot,
+                llm=self.summary_llm,
+                commit_message="fix: core contamination guard",
+                trigger="commit",
+                diff_summary="diff --git a/runtime_orchestrator.py b/runtime_orchestrator.py",
+            )
+
+        sync_memory.assert_not_called()
+        embeddings_enabled.assert_not_called()
+        get_vector_store.assert_not_called()
+        start_background.assert_not_called()
+        freeze_memory.assert_not_called()
+        self.assertIsNone(queue.claim_next())
+        self.summary_llm.complete.assert_not_called()
+        self.memory_store.write.assert_not_called()
+        self.memory_store.remove.assert_not_called()
+        self.memory_store.render.assert_not_called()
+        self.mock_fact_engine.observe_session.assert_not_called()
+        self.mock_fact_engine.render_for_context.assert_not_called()
+
     def test_sync_memory_background_ok_met_a_jour_sync_at_et_freeze(self):
         with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
              patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")):
@@ -1464,6 +1502,39 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         sync_memory.assert_not_called()
         mock_new_session.assert_called_once()
+
+    def test_core_pre_reset_guard_ne_touche_pas_les_systemes_lab(self):
+        t_lock = datetime.now() - timedelta(minutes=35)
+        self.runtime_state.mark_screen_locked(when=t_lock)
+        unlock_event = Event("screen_unlocked", {})
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator.session_memory, "new_session") as new_session, \
+             patch.object(
+                 self.orchestrator.session_memory,
+                 "export_memory_payload",
+                 return_value={"active_project": "Pulse", "duration_min": 25},
+             ), \
+             patch.object(self.orchestrator, "_process_signals"), \
+             patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream, \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory, \
+             patch("daemon.memory.extractor.embeddings_enabled") as embeddings_enabled, \
+             patch("daemon.memory.extractor._get_vector_store") as get_vector_store, \
+             patch("daemon.memory.extractor._start_background_writer") as start_background:
+            self.orchestrator.handle_event(unlock_event)
+
+        sync_memory.assert_not_called()
+        run_daydream.assert_not_called()
+        embeddings_enabled.assert_not_called()
+        get_vector_store.assert_not_called()
+        start_background.assert_not_called()
+        self.summary_llm.complete.assert_not_called()
+        self.memory_store.write.assert_not_called()
+        self.memory_store.remove.assert_not_called()
+        self.memory_store.render.assert_not_called()
+        self.mock_fact_engine.observe_session.assert_not_called()
+        self.mock_fact_engine.render_for_context.assert_not_called()
+        new_session.assert_called_once()
 
     def test_verrou_long_lab_garde_memory_sync_pre_reset(self):
         t_lock = datetime.now() - timedelta(minutes=35)
