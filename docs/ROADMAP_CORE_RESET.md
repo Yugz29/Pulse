@@ -879,7 +879,7 @@ Aucun commit ne doit mélanger des changements Core et Lab sans raison claire.
 
 ## 10. Priorité actuelle
 
-La priorité immédiate est désormais R5 — Baseline Mémoire minimale.
+La priorité immédiate est désormais R6 — Baseline Propositions contrôlées.
 
 R1 — Baseline Runtime est validée côté Python.
 
@@ -889,17 +889,19 @@ R3 — Baseline Interprétation est validée côté Python.
 
 R4 — Baseline Sessions est validée côté Python.
 
+R5 — Baseline Mémoire minimale est validée côté Python.
+
 Prochaines actions :
 
-1. auditer le comportement réel de la mémoire minimale ;
-2. distinguer journal de session minimal, mémoire avancée, facts, vector store et DayDream ;
-3. vérifier que les journaux peuvent être reliés aux événements, signaux et états de session ;
-4. préserver la provenance observée / dérivée / inférée ;
-5. empêcher toute promotion vers facts / profil ;
-6. vérifier que la mémoire minimale peut être désactivée sans casser le runtime ;
-7. documenter les limites avant tout patch produit.
+1. auditer le comportement réel des propositions et du flux MCP ;
+2. distinguer proposition contrôlée, proposition debug, auto-résolution et action exécutée ;
+3. vérifier le cycle `candidate -> pending -> approved | denied | expired -> executed` ;
+4. prouver qu’aucune proposition produit n’est exécutée sans validation humaine explicite ;
+5. vérifier les timeouts, refus et états expirés ;
+6. documenter les surfaces API / dashboard qui exposent les propositions ;
+7. garder les context probes, work intent, actions autonomes et propositions intelligentes hors R6 strict.
 
-Rien d’autre ne doit passer avant, sauf si cela corrige un problème de boot Core, d’observation, de scoring, de session ou de journal minimal.
+Rien d’autre ne doit passer avant, sauf si cela corrige un problème de boot Core, d’observation, de scoring, de session, de journal minimal ou de validation humaine des propositions.
 
 ## 11. Checklist R0 — Gel et autorité
 
