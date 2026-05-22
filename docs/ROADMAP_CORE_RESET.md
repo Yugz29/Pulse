@@ -391,7 +391,7 @@ Découpage recommandé :
 - [x] R4b — Golden `SessionFSM` ;
 - [x] R4c — Intégration runtime session ;
 - [x] R4d — Persistance session minimale ;
-- [ ] R4e — Restart repair baseline ;
+- [x] R4e — Restart repair baseline ;
 - [ ] R4f — Payload boundaries session ;
 - [ ] R4g — Validation globale R4.
 
@@ -526,6 +526,32 @@ Validation R4d :
 - `/memory/sessions` reste volontairement hors preuve principale Core session ;
 - aucune route, LLM, facts, DayDream, vector store, proposition, resume card ou commit linking n'a été touché ;
 - test ciblé passé : `tests/memory/test_session.py` ;
+- aucun changement produit.
+
+### R4e — Restart repair baseline
+
+Objectif : vérifier que la réparation / reprise après redémarrage reste un mécanisme Core limité aux sessions, distinct du commit recovery et de la mémoire avancée.
+
+- [x] Reprise transparente après redémarrage court : `SessionFSM.restore_session_start()` et `SessionMemory.resume_session()` reçoivent le `started_at` original.
+- [x] Reprise partielle après redémarrage moyen : le contexte peut être logué, mais le timer de session n'est pas restauré.
+- [x] Restart ignoré après pause longue : aucune session active trompeuse n'est créée.
+- [x] Etat restart corrompu : un `started_at` invalide ne restaure pas la session.
+- [x] Réparation stale / orpheline déjà couverte côté `SessionMemory` en R4d.
+- [x] `recover_missed_commits()` reste distinct de la preuve principale R4.
+- [x] La reprise session Core ne requiert pas LLM, DayDream, facts, vector store ou sync mémoire avancée.
+
+Sortie attendue de R4e :
+
+> La reprise après restart est testée comme continuité de session Core, sans promouvoir le commit recovery ou la journalisation avancée en fondation R4.
+
+Validation R4e :
+
+- tests complétés dans `tests/core/test_restart_manager.py` et `tests/test_runtime_orchestrator.py` ;
+- reprise verrouillée : restart court restaure `SessionFSM` + `SessionMemory`, restart moyen ne restaure pas le timer, restart long laisse la FSM `idle`, état restart corrompu ignoré sans reprise ;
+- séparation verrouillée : `RestartManager.apply()` ne déclenche pas `recover_missed_commits()`, et `RuntimeOrchestrator.deferred_startup()` appelle la réparation session et le commit recovery comme deux chemins séparés ;
+- stale repair / orphan repair reste couvert par `tests/memory/test_session.py` depuis R4d ;
+- aucun LLM, DayDream, facts, vector store, sync mémoire avancée, proposition, resume card ou commit linking n'a été ajouté ou corrigé ;
+- tests ciblés passés : `tests/core/test_restart_manager.py`, `tests/test_runtime_orchestrator.py`, `tests/memory/test_session.py` ;
 - aucun changement produit.
 
 ### R5 — Baseline Mémoire minimale

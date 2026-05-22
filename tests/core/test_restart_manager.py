@@ -6,6 +6,7 @@ import json
 import tempfile
 
 from daemon.core.restart_manager import RestartManager
+from daemon.core.session_fsm import SessionFSM
 
 
 class TestRestartManager(unittest.TestCase):
@@ -58,14 +59,38 @@ class TestRestartManager(unittest.TestCase):
 
         self.manager.apply(state, session_fsm=session_fsm, session_memory=session_memory)
 
-        session_fsm.restore_session_start.assert_called_once()
-        session_memory.resume_session.assert_called_once()
-        called_with = session_memory.resume_session.call_args
-        self.assertIsNotNone(called_with)
+        session_fsm.restore_session_start.assert_called_once_with(original_start)
+        session_memory.resume_session.assert_called_once_with(started_at=original_start)
 
-    def test_apply_ignore_si_trop_ancien(self):
+    def test_apply_redemarrage_court_repare_session_core_sans_commit_recovery(self):
+        """
+        La reprise Core est limitee a SessionFSM + SessionMemory.
+        La journalisation des commits manques reste un chemin separe.
+        """
+        original_start = datetime.now() - timedelta(minutes=3)
         session_fsm = MagicMock()
         session_memory = MagicMock()
+
+        state = {
+            "elapsed_min": 3.0,
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "started_at": original_start.isoformat(),
+            "last_head_sha": "old",
+            "last_sha_project": "Pulse",
+        }
+
+        with patch.object(self.manager, "recover_missed_commits") as recover_missed_commits:
+            self.manager.apply(state, session_fsm=session_fsm, session_memory=session_memory)
+
+        session_fsm.restore_session_start.assert_called_once_with(original_start)
+        session_memory.resume_session.assert_called_once_with(started_at=original_start)
+        recover_missed_commits.assert_not_called()
+
+    def test_apply_ignore_si_trop_ancien(self):
+        session_fsm = SessionFSM()
+        session_memory = MagicMock()
+        previous_started_at = session_fsm.session_started_at
 
         state = {
             "elapsed_min": 45.0,
@@ -76,7 +101,8 @@ class TestRestartManager(unittest.TestCase):
 
         self.manager.apply(state, session_fsm=session_fsm, session_memory=session_memory)
 
-        session_fsm.restore_session_start.assert_not_called()
+        self.assertEqual(session_fsm.state, SessionFSM.IDLE)
+        self.assertEqual(session_fsm.session_started_at, previous_started_at)
         session_memory.resume_session.assert_not_called()
 
     def test_apply_partiel_entre_5_et_30_min(self):
@@ -94,6 +120,28 @@ class TestRestartManager(unittest.TestCase):
         self.manager.apply(state, session_fsm=session_fsm, session_memory=session_memory)
 
         session_fsm.restore_session_start.assert_not_called()
+        session_memory.resume_session.assert_not_called()
+
+    def test_apply_redemarrage_court_started_at_invalide_ne_cree_pas_reprise_trompeuse(self):
+        """
+        Etat restart corrompu : la session Core ne doit pas etre restauree
+        avec une horloge invalide.
+        """
+        session_fsm = SessionFSM()
+        session_memory = MagicMock()
+        previous_started_at = session_fsm.session_started_at
+
+        state = {
+            "elapsed_min": 2.0,
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "started_at": "not-a-date",
+        }
+
+        self.manager.apply(state, session_fsm=session_fsm, session_memory=session_memory)
+
+        self.assertEqual(session_fsm.state, SessionFSM.IDLE)
+        self.assertEqual(session_fsm.session_started_at, previous_started_at)
         session_memory.resume_session.assert_not_called()
 
     def test_recover_missed_commits_utilise_fallback_deterministe_par_defaut(self):

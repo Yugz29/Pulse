@@ -721,6 +721,35 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.llm_runtime.provider.assert_called_once()
         provider.warmup.assert_called_once()
 
+    def test_deferred_startup_restart_repair_et_commit_recovery_restent_separes(self):
+        restart_state = {
+            "elapsed_min": 3.0,
+            "active_project": "Pulse",
+            "probable_task": "coding",
+            "started_at": "2026-04-23T17:00:00",
+            "last_head_sha": "old",
+            "last_sha_project": "Pulse",
+        }
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core", "PULSE_HEAVY_LLM_AUTOWARM": ""}), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None), \
+             patch.object(self.orchestrator._restart_manager, "load", return_value=restart_state), \
+             patch.object(self.orchestrator._restart_manager, "apply") as apply_restart, \
+             patch.object(self.orchestrator._restart_manager, "recover_missed_commits") as recover_missed_commits:
+            self.orchestrator.deferred_startup()
+
+        apply_restart.assert_called_once_with(
+            restart_state,
+            session_fsm=self.orchestrator._session_fsm,
+            session_memory=self.session_memory,
+        )
+        recover_missed_commits.assert_called_once_with(
+            restart_state,
+            summary_llm=self.summary_llm,
+        )
+        self.mock_fact_engine.archive_legacy_facts.assert_not_called()
+        self.mock_fact_engine.decay_all.assert_not_called()
+
     def test_handle_commit_event_waits_for_new_head_before_processing(self):
         git_root = Path("/tmp/Pulse")
         with patch("daemon.runtime_orchestrator.find_git_root", return_value=git_root), \
