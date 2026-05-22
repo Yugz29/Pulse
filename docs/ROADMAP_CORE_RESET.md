@@ -521,20 +521,23 @@ Aucun commit ne doit mélanger des changements Core et Lab sans raison claire.
 
 ## 10. Priorité actuelle
 
-La priorité immédiate est désormais R3 — Baseline Interprétation.
+La priorité immédiate est désormais R4 — Baseline Sessions.
 
 R1 — Baseline Runtime est validée côté Python.
 
 R2 — Baseline Observation est validée côté Python.
 
+R3 — Baseline Interprétation est validée côté Python.
+
 Prochaines actions :
 
-1. formaliser le contrat d’interprétation actuel ;
-2. créer des scénarios golden de scoring ;
-3. verrouiller le comportement actuel de `SignalScorer` sans modifier ses heuristiques ;
-4. vérifier les preuves et incertitudes exposées par `/work-context` ou les builders associés ;
-5. clarifier les frontières `/state` vs `/debug/state` ;
-6. ajouter des tests anti-overclaim.
+1. auditer le comportement réel de `SessionFSM` ;
+2. vérifier les états session started, active, idle, paused, resumed, closed ;
+3. tester lock / unlock ;
+4. tester pause courte / pause longue ;
+5. tester réparation après redémarrage ;
+6. vérifier que la durée de session vient de `SessionFSM`, pas d’approximations legacy ;
+7. documenter les limites avant tout patch produit.
 
 Rien d’autre ne doit passer avant, sauf si cela corrige un problème de boot Core, d’observation, de scoring, de session ou de journal minimal.
 
@@ -1171,6 +1174,21 @@ Validation R3f :
 - limite actuelle documentée : `DecisionEngine` ne reçoit pas `task_confidence` via `PresentState`, donc R3f verrouille les garde-fous disponibles sans refactor de contrat ;
 - tests ciblés passés : `tests/core/test_signal_scorer.py`, `tests/core/test_work_context_card.py`, `tests/core/test_work_evidence_resolver.py`, `tests/core/test_decision_engine.py` ;
 - aucun changement produit.
+
+### Validation globale R3
+
+- R3a à R3f sont terminés et cochés.
+- Le contrat courant d'interprétation est documenté dans `docs/INTERPRETATION_CONTRACT.md`.
+- Les scénarios golden d'interprétation sont portables et testés depuis `tests/fixtures/interpretation/scoring_scenarios.json`.
+- `SignalScorer.compute()` est couvert par les scénarios golden sans changement d'heuristique.
+- Les surfaces d'explicabilité (`WorkContextCard`, `WorkEvidenceResolver`, `/work-context`) exposent preuves, incertitude et statuts faibles quand les preuves sont insuffisantes.
+- Les frontières `/state` / `/debug/state` sont testées sans refactor de payload.
+- Les tests anti-overclaim verrouillent les cas faibles : titre de fenêtre seul, app inconnue seule, stacktrace ancienne, navigateur isolé et décision runtime sans ancrage suffisant.
+- Tests ciblés R3 passés : `tests/test_interpretation_scoring_fixtures.py`, `tests/test_interpretation_signal_scorer_golden.py`, `tests/core/test_signal_scorer.py`, `tests/core/test_work_context_card.py`, `tests/core/test_work_evidence_resolver.py`, `tests/core/test_decision_engine.py`, `tests/routes/test_runtime_state_payloads.py`, `tests/test_main_runtime_state.py`, `tests/test_runtime_routes.py`.
+- Résultat ciblé R3 : 289 tests passés.
+- Suite complète Python passée via `./scripts/test_all.sh` : 1183 tests passés.
+- R3 reste une baseline d'interprétation prudente : aucun LLM, mémoire, facts, DayDream, proposition, apprentissage ou adaptation n'a été ajouté.
+- Limites restantes assumées : `SignalScorer` ne produit pas encore de trace canonique des poids/preuves, `PresentState` n'expose pas `task_confidence`, et certaines surfaces legacy mélangent encore produit/debug.
 
 Notes R3 :
 
