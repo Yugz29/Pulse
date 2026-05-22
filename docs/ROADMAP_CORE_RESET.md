@@ -829,7 +829,7 @@ Découpage recommandé :
 - [x] R6c — MCP approval baseline ;
 - [x] R6d — Anti auto-execution baseline ;
 - [x] R6e — Debug/Lab boundaries ;
-- [ ] R6f — Validation globale R6.
+- [x] R6f — Validation globale R6.
 
 ### R6a — Contrat propositions actuel
 
@@ -964,6 +964,31 @@ Validation R6e :
 - ambiguïtés conservées : `ProposalStore` accepte toujours techniquement `pending -> executed`, et Lab/dev conserve l'auto-résolution historique de `context_injection` ;
 - tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/core/test_decision_engine.py`, `tests/core/test_proposals.py`, `tests/mcp/test_handlers_proposals.py`, `tests/test_main_mcp_routes.py`, `tests/core/test_context_probe_request.py`, `tests/core/test_context_probe_executor.py`, `tests/core/test_context_probe_store.py`, `tests/core/test_context_probe_runner.py` ;
 - aucun changement produit.
+
+### R6f — Validation globale R6
+
+Objectif : valider que la baseline propositions contrôlées est complète côté Python et cohérente avec le contrat R6.
+
+- [x] Relire `docs/PROPOSAL_CONTRACT.md`.
+- [x] Vérifier que MCP est documenté comme seul flux Core contrôlé.
+- [x] Vérifier que `accepted` et `executed` restent explicitement distincts.
+- [x] Vérifier que MCP n'utilise pas `executed` pour autoriser une commande.
+- [x] Vérifier que `context_injection` Core reste `pending`.
+- [x] Vérifier que `context_injection` Lab/dev auto-`executed` reste hors Core.
+- [x] Vérifier que context probes, work intent et resume cards ne sont pas des propositions produit contrôlées.
+- [x] Lancer les tests ciblés R6.
+- [x] Lancer la suite complète Python.
+- [x] Ne pas passer à R7.
+
+Validation globale R6 :
+
+- tests ciblés R6 passés : `tests/core/test_proposals.py`, `tests/mcp/test_handlers_proposals.py`, `tests/test_main_mcp_routes.py`, `tests/test_runtime_orchestrator.py`, `tests/core/test_decision_engine.py`, `tests/core/test_context_probe_request.py`, `tests/core/test_context_probe_executor.py`, `tests/core/test_context_probe_store.py`, `tests/core/test_context_probe_runner.py`, `tests/core/test_context_probe_policy.py`, `tests/core/test_context_probe_redaction.py`, `tests/core/test_context_probe_debug.py`, `tests/core/test_work_intent_candidate.py`, `tests/core/test_work_intent_lifecycle.py` ;
+- résultat ciblé : 233 tests passés, 3 subtests passés ;
+- suite complète Python passée via `./scripts/test_all.sh` ;
+- résultat suite complète : 1216 tests passés ;
+- état validé : le flux MCP est la seule surface Core contrôlée, `accepted` ne signifie pas `executed`, `executed` n'autorise pas MCP, `context_injection` Core reste `pending`, et les surfaces context probes / work intent / resume cards restent hors propositions produit contrôlées ;
+- fragilités conservées : `ProposalStore` accepte toujours techniquement `pending -> executed`, `context_injection` Lab/dev conserve l'auto-`executed` historique, et `Proposal` ne porte toujours pas `decided_by`, `decision_source` ou `human_approved` ;
+- aucun changement produit pendant la validation globale R6.
 
 ### R7 — Apprentissage plus tard
 
