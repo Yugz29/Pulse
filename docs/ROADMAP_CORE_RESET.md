@@ -393,7 +393,7 @@ Découpage recommandé :
 - [x] R4d — Persistance session minimale ;
 - [x] R4e — Restart repair baseline ;
 - [x] R4f — Payload boundaries session ;
-- [ ] R4g — Validation globale R4.
+- [x] R4g — Validation globale R4.
 
 Travail cible :
 
@@ -579,6 +579,27 @@ Validation R4f :
 - tests ciblés passés : `tests/routes/test_runtime_state_payloads.py`, `tests/test_main_runtime_state.py`, `tests/test_runtime_routes.py` ;
 - aucun changement produit.
 
+### R4g — Validation globale R4
+
+Objectif : valider que la baseline Sessions est cohérente de bout en bout avant de passer à R5.
+
+- [x] Relire `docs/SESSION_CONTRACT.md`.
+- [x] Vérifier que la roadmap R4 reflète l'état réel.
+- [x] Lancer les tests ciblés R4.
+- [x] Lancer la suite complète Python.
+- [x] Ne pas modifier le produit.
+- [x] Ne pas passer à R5 dans ce patch.
+
+Validation globale R4 :
+
+- tests ciblés R4 passés : `tests/core/test_session_fsm.py`, `tests/test_runtime_orchestrator.py`, `tests/memory/test_session.py`, `tests/core/test_restart_manager.py`, `tests/routes/test_runtime_state_payloads.py`, `tests/test_main_runtime_state.py`, `tests/test_runtime_routes.py` ;
+- résultat ciblé R4 : 334 tests passés ;
+- suite complète Python passée via `./scripts/test_all.sh` ;
+- résultat suite complète : 1198 tests passés ;
+- R4 valide les sessions comme baseline Core : états `SessionFSM`, intégration runtime, persistance SQLite minimale, restart repair et payload boundaries ;
+- limites conservées et documentées : `paused` / `closed` / `resumed` ne sont pas des états FSM, `/memory/sessions` Markdown n'est pas la preuve principale Core, `recover_missed_commits()` reste hors R4 strict, et `/state` peut encore exposer `session_fsm` quand le callback est fourni ;
+- aucun changement produit.
+
 ### R5 — Baseline Mémoire minimale
 
 Objectif : écrire des journaux de session historiques vérifiables, sans apprentissage.
@@ -694,7 +715,7 @@ Aucun commit ne doit mélanger des changements Core et Lab sans raison claire.
 
 ## 10. Priorité actuelle
 
-La priorité immédiate est désormais R4 — Baseline Sessions.
+La priorité immédiate est désormais R5 — Baseline Mémoire minimale.
 
 R1 — Baseline Runtime est validée côté Python.
 
@@ -702,16 +723,17 @@ R2 — Baseline Observation est validée côté Python.
 
 R3 — Baseline Interprétation est validée côté Python.
 
+R4 — Baseline Sessions est validée côté Python.
+
 Prochaines actions :
 
-1. auditer le comportement réel de `SessionFSM` ;
-2. vérifier les états réels de `SessionFSM` : `idle`, `active`, `locked` ;
-3. vérifier les notions associées hors FSM : pause runtime, reprise, fermeture session ;
-4. tester lock / unlock ;
-5. tester pause courte / pause longue ;
-6. tester réparation après redémarrage ;
-7. vérifier que la durée de session vient de `SessionFSM`, pas d’approximations legacy ;
-8. documenter les limites avant tout patch produit.
+1. auditer le comportement réel de la mémoire minimale ;
+2. distinguer journal de session minimal, mémoire avancée, facts, vector store et DayDream ;
+3. vérifier que les journaux peuvent être reliés aux événements, signaux et états de session ;
+4. préserver la provenance observée / dérivée / inférée ;
+5. empêcher toute promotion vers facts / profil ;
+6. vérifier que la mémoire minimale peut être désactivée sans casser le runtime ;
+7. documenter les limites avant tout patch produit.
 
 Rien d’autre ne doit passer avant, sauf si cela corrige un problème de boot Core, d’observation, de scoring, de session ou de journal minimal.
 
