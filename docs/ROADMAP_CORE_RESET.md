@@ -388,7 +388,7 @@ Objectif : Pulse suit les sessions de travail de manière fiable.
 Découpage recommandé :
 
 - [x] R4a — Contrat session actuel (`docs/SESSION_CONTRACT.md`) ;
-- [ ] R4b — Golden `SessionFSM` ;
+- [x] R4b — Golden `SessionFSM` ;
 - [ ] R4c — Intégration runtime session ;
 - [ ] R4d — Persistance session minimale ;
 - [ ] R4e — Restart repair baseline ;
@@ -441,6 +441,37 @@ Validation R4a :
 - surfaces couvertes : `SessionFSM`, `RuntimeOrchestrator`, `RuntimeState`, `PresentState`, `SessionMemory`, `SessionSnapshotBuilder`, `RestartManager`, `/state`, `/debug/state`, `/memory/sessions` ;
 - limites explicites documentées : `session_started_at` peut exister avant une vraie activité, `paused` / `resumed` / `closed` ne sont pas des états FSM, `/memory/sessions` n'est pas la preuve principale Core session, `RestartManager.recover_missed_commits()` est hors R4 strict, `daemon/memory/work_heartbeat.py` appartient à la couche mémoire, et `SessionFSM` ne doit pas devenir un moteur mémoire ;
 - tests non lancés : documentation only ;
+- aucun changement produit.
+
+### R4b — Golden `SessionFSM`
+
+Objectif : verrouiller les transitions pures de `SessionFSM` sans orchestrateur, runtime state ni persistance.
+
+- [x] Première activité significative.
+- [x] Passage `idle` -> `active`.
+- [x] Retour `active` -> `idle` après timeout.
+- [x] Gap court qui conserve la session.
+- [x] Gap long qui démarre une nouvelle session.
+- [x] `screen_locked`.
+- [x] `screen_unlocked` court.
+- [x] `screen_unlocked` long.
+- [x] `screen_unlocked` sans lock connu.
+- [x] Supportive activity seule.
+- [x] Supportive activity après activité forte.
+- [x] Vérifier explicitement `state`, `session_started_at`, `last_meaningful_activity_at`, `boundary_detected`, `boundary_reason`, `should_start_new_session`, `should_reset_clock` et `sleep_minutes` quand applicable.
+
+Sortie attendue de R4b :
+
+> Le cycle pur `SessionFSM` est compréhensible et verrouillé par tests golden, sans inventer d'états supplémentaires.
+
+Validation R4b :
+
+- tests complétés dans `tests/core/test_session_fsm.py` ;
+- transitions verrouillées : première activité, `idle` -> `active`, `active` -> `idle` après timeout, gap court, gap long, lock, unlock court, unlock long, unlock sans lock, supportive activity seule, supportive activity après activité forte ;
+- les champs de transition sont explicitement vérifiés : `state`, `boundary_detected`, `boundary_reason`, `should_start_new_session`, `should_reset_clock`, `should_clear_sleep_markers`, `sleep_minutes` ;
+- les champs internes exposés par la FSM sont explicitement vérifiés : `session_started_at`, `last_meaningful_activity_at`, `last_screen_locked_at` ;
+- aucun état `started`, `paused`, `resumed` ou `closed` n'a été ajouté à `SessionFSM` ;
+- test ciblé passé : `tests/core/test_session_fsm.py` ;
 - aucun changement produit.
 
 ### R5 — Baseline Mémoire minimale

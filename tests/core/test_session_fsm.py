@@ -57,8 +57,35 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertIsNone(transition.sleep_minutes)
         self.assertEqual(self.fsm.session_started_at, t_first)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_first)
         self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
+
+    def test_active_retombe_idle_apres_timeout_sans_nouvelle_activite(self):
+        t_first = self._at(35)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", t_first)],
+            now=t_first,
+        )
+
+        transition = self.fsm.observe_recent_events(
+            recent_events=[],
+            now=self.base,
+        )
+
+        self.assertEqual(transition.state, SessionFSM.IDLE)
+        self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertIsNone(transition.sleep_minutes)
+        self.assertEqual(self.fsm.state, SessionFSM.IDLE)
+        self.assertEqual(self.fsm.session_started_at, t_first)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_first)
 
     def test_gap_long_declenche_une_nouvelle_frontiere(self):
         t_old = self._at(35)
@@ -78,9 +105,13 @@ class TestSessionFSM(unittest.TestCase):
 
         self.assertTrue(transition.boundary_detected)
         self.assertEqual(transition.boundary_reason, "idle")
+        self.assertTrue(transition.should_reset_clock)
         self.assertTrue(transition.should_start_new_session)
         self.assertGreaterEqual(transition.sleep_minutes or 0, 35)
+        self.assertEqual(transition.state, SessionFSM.ACTIVE)
+        self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
         self.assertEqual(self.fsm.session_started_at, t_new)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_new)
 
     def test_gap_court_ne_declenche_pas_de_frontiere(self):
         t_first = self._at(20)
@@ -99,7 +130,14 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertIsNone(transition.sleep_minutes)
+        self.assertEqual(transition.state, SessionFSM.ACTIVE)
         self.assertEqual(self.fsm.session_started_at, t_first)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_second)
+        self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
 
     def test_minuit_ne_declenche_pas_de_frontiere_si_l_activite_continue(self):
         before_midnight = datetime(2026, 4, 28, 23, 55, 0)
@@ -159,7 +197,34 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertIsNone(transition.sleep_minutes)
         self.assertEqual(self.fsm.session_started_at, t_activity)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, t_activity)
+
+    def test_screen_locked_met_la_fsm_en_locked_sans_frontiere(self):
+        previous_activity = self._at(15)
+        self.fsm.observe_recent_events(
+            recent_events=[_file_event("/proj/main.py", previous_activity)],
+            now=previous_activity,
+        )
+        original_start = self.fsm.session_started_at
+        locked_at = self._at(5)
+
+        transition = self.fsm.on_screen_locked(when=locked_at)
+
+        self.assertEqual(transition.state, SessionFSM.LOCKED)
+        self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertIsNone(transition.sleep_minutes)
+        self.assertEqual(self.fsm.state, SessionFSM.LOCKED)
+        self.assertEqual(self.fsm.session_started_at, original_start)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, previous_activity)
+        self.assertEqual(self.fsm.last_screen_locked_at, locked_at)
 
     def test_unlock_court_conserve_debut_de_session_sans_nouvelle_session(self):
         previous_activity = self._at(15)
@@ -177,9 +242,14 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
         self.assertTrue(transition.should_reset_clock)
         self.assertFalse(transition.should_start_new_session)
+        self.assertTrue(transition.should_clear_sleep_markers)
+        self.assertAlmostEqual(transition.sleep_minutes or 0, 5.0, places=2)
+        self.assertEqual(transition.state, SessionFSM.ACTIVE)
         self.assertEqual(self.fsm.session_started_at, original_start)
+        self.assertEqual(self.fsm.last_meaningful_activity_at, previous_activity)
         self.assertIsNone(self.fsm.last_screen_locked_at)
         self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
 
@@ -223,22 +293,36 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertTrue(transition.boundary_detected)
+        self.assertTrue(transition.should_reset_clock)
         self.assertTrue(transition.should_start_new_session)
+        self.assertTrue(transition.should_clear_sleep_markers)
         self.assertEqual(transition.boundary_reason, "screen_lock")
+        self.assertAlmostEqual(transition.sleep_minutes or 0, 35.0, places=2)
+        self.assertEqual(transition.state, SessionFSM.ACTIVE)
         self.assertNotEqual(self.fsm.session_started_at, original_start)
         self.assertEqual(self.fsm.session_started_at, self.base)
+        self.assertIsNone(self.fsm.last_meaningful_activity_at)
         self.assertIsNone(self.fsm.last_screen_locked_at)
+        self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
 
     def test_unlock_sans_lock_prealable_n_active_pas_la_session(self):
+        original_start = self.fsm.session_started_at
+
         transition = self.fsm.on_screen_unlocked(
             when=self.base,
             sleep_session_threshold_min=30,
         )
 
+        self.assertEqual(transition.state, SessionFSM.IDLE)
         self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
         self.assertFalse(transition.should_reset_clock)
         self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_clear_sleep_markers)
+        self.assertIsNone(transition.sleep_minutes)
         self.assertEqual(self.fsm.state, SessionFSM.IDLE)
+        self.assertEqual(self.fsm.session_started_at, original_start)
+        self.assertIsNone(self.fsm.last_meaningful_activity_at)
         self.assertIsNone(self.fsm.last_screen_locked_at)
 
     def test_app_de_dev_est_une_activite_significative(self):
@@ -356,6 +440,11 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertIsNone(transition.sleep_minutes)
+        self.assertEqual(transition.state, SessionFSM.ACTIVE)
         self.assertEqual(self.fsm.session_started_at, t_code)
         self.assertEqual(self.fsm.last_meaningful_activity_at, t_browser)
         self.assertEqual(self.fsm.state, SessionFSM.ACTIVE)
@@ -369,6 +458,12 @@ class TestSessionFSM(unittest.TestCase):
         )
 
         self.assertFalse(transition.boundary_detected)
+        self.assertIsNone(transition.boundary_reason)
+        self.assertFalse(transition.should_start_new_session)
+        self.assertFalse(transition.should_reset_clock)
+        self.assertIsNone(transition.sleep_minutes)
+        self.assertEqual(transition.state, SessionFSM.IDLE)
+        self.assertEqual(self.fsm.session_started_at, self._at(120))
         self.assertIsNone(self.fsm.last_meaningful_activity_at)
         self.assertEqual(self.fsm.state, SessionFSM.IDLE)
 
