@@ -822,6 +822,43 @@ Validation :
 - corrections autonomes ;
 - propositions pilotées par apprentissage.
 
+Découpage recommandé :
+
+- [x] R6a — Contrat propositions actuel (`docs/PROPOSAL_CONTRACT.md`) ;
+- [ ] R6b — ProposalStore lifecycle golden ;
+- [ ] R6c — MCP approval baseline ;
+- [ ] R6d — Anti auto-execution baseline ;
+- [ ] R6e — Debug/Lab boundaries ;
+- [ ] R6f — Validation globale R6.
+
+### R6a — Contrat propositions actuel
+
+Objectif : documenter le comportement réel des propositions avant de corriger les contradictions entre flux MCP contrôlé et propositions auto-exécutées.
+
+- [x] Documenter `Proposal`.
+- [x] Documenter `ProposalStore`.
+- [x] Documenter les statuts `pending`, `accepted`, `refused`, `expired`, `executed`.
+- [x] Documenter le flux MCP risky command approval.
+- [x] Documenter `/mcp/pending`, `/mcp/decision` et `/mcp/proposals`.
+- [x] Documenter timeout, refus, acceptation et historique.
+- [x] Documenter la distinction `accepted` vs `executed`.
+- [x] Documenter l'absence actuelle de `decided_by`, `decision_source` et `human_approved`.
+- [x] Documenter `context_injection` auto-`executed`.
+- [x] Documenter les context probes comme hors Core R6 strict.
+
+Sortie attendue de R6a :
+
+> Pulse possède un contrat honnête du contrôle des propositions actuel, y compris la contradiction `context_injection` auto-`executed`.
+
+Validation R6a :
+
+- contrat ajouté : `docs/PROPOSAL_CONTRACT.md` ;
+- le contrat décrit le comportement actuel, pas une architecture cible ;
+- surfaces Core documentées : `Proposal`, `ProposalStore`, adaptateur `ProposalCandidate`, flux MCP risky command, `/mcp/pending`, `/mcp/decision`, `/mcp/proposals`, timeout, refus, acceptation et historique ;
+- limites explicites documentées : `pending -> executed` est possible dans `ProposalStore`, MCP n'utilise pas `executed` pour autoriser une commande, `context_injection` auto-`executed` est dangereux / hors Core R6 strict, `/mcp/decision` peut publier un événement même si `receive_decision()` retourne `False`, et les probes / work intent / resume cards / propositions intelligentes restent Lab ou debug ;
+- tests non lancés : documentation only ;
+- aucun changement produit.
+
 ### R7 — Apprentissage plus tard
 
 Objectif : phase reportée.
