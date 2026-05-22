@@ -531,6 +531,114 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(payload["commit_count"], 2)
         self.assertEqual(payload["work_block_commit_count"], 2)
 
+    def test_minimal_history_snapshot_golden_relies_on_sqlite_session_and_events_only(self):
+        """
+        R5b golden: l'historique minimal vient de SessionMemory SQLite,
+        des events observes et du snapshot runtime, sans journal Markdown
+        ni couche memoire avancee.
+        """
+        start = datetime(2026, 5, 6, 9, 0, 0)
+        end = start + timedelta(minutes=20)
+        repo = Path(self.tmpdir.name) / "workspace" / "acme"
+        (repo / ".git").mkdir(parents=True)
+        source = repo / "src" / "api.py"
+        test_file = repo / "tests" / "test_api.py"
+        cache_file = repo / ".cache" / "build.json"
+        source.parent.mkdir(parents=True)
+        test_file.parent.mkdir(parents=True)
+        cache_file.parent.mkdir(parents=True)
+        source.touch()
+        test_file.touch()
+        cache_file.touch()
+
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.record_event(Event("file_modified", {"path": str(source)}, timestamp=start + timedelta(minutes=3)))
+        self.memory.record_event(Event("file_modified", {"path": str(source)}, timestamp=start + timedelta(minutes=5)))
+        self.memory.record_event(Event("file_modified", {"path": str(test_file)}, timestamp=start + timedelta(minutes=7)))
+        self.memory.record_event(Event("file_modified", {"path": str(cache_file)}, timestamp=start + timedelta(minutes=8)))
+        self.memory.record_event(Event(
+            "terminal_command_finished",
+            {
+                "terminal_command": "pytest tests/test_api.py",
+                "terminal_action_category": "testing",
+                "terminal_success": False,
+                "terminal_exit_code": 1,
+                "terminal_duration_ms": 1200,
+                "terminal_project": "acme",
+                "terminal_cwd": str(repo),
+            },
+            timestamp=start + timedelta(minutes=10),
+        ))
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="acme",
+                active_file=str(source),
+                probable_task="debug",
+                activity_level="executing",
+                focus_level="normal",
+                session_duration_min=20,
+                updated_at=end,
+            ),
+            signals=Signals(
+                active_project="acme",
+                active_file=str(source),
+                probable_task="debug",
+                activity_level="executing",
+                friction_score=0.35,
+                focus_level="normal",
+                session_duration_min=20,
+                recent_apps=["Cursor", "Terminal"],
+                clipboard_context=None,
+            ),
+        )
+
+        recent_events = self.memory.get_recent_events(limit=10)
+        snapshot = self.memory.build_session_snapshot()
+        legacy = self.memory.export_session_data()
+        payload = self.memory.export_memory_payload()
+
+        self.assertEqual(recent_events[0]["timestamp"], start.isoformat())
+        self.assertEqual(recent_events[-1]["timestamp"], (start + timedelta(minutes=10)).isoformat())
+
+        self.assertEqual(snapshot.session_id, "test-session")
+        self.assertEqual(snapshot.started_at, start.isoformat())
+        self.assertEqual(snapshot.updated_at, end.isoformat())
+        self.assertEqual(snapshot.active_project, "acme")
+        self.assertEqual(snapshot.active_file, str(source))
+        self.assertEqual(snapshot.probable_task, "debug")
+        self.assertEqual(snapshot.duration_min, 20)
+        self.assertEqual(snapshot.event_count, 6)
+        self.assertEqual(snapshot.files_changed, 2)
+        self.assertEqual(snapshot.top_files, ["api.py", "test_api.py"])
+        self.assertIn("Cursor", snapshot.recent_apps)
+        self.assertEqual(snapshot.max_friction, 0.35)
+
+        self.assertEqual(legacy["session_id"], snapshot.session_id)
+        self.assertEqual(legacy["started_at"], snapshot.started_at)
+        self.assertEqual(legacy["updated_at"], snapshot.updated_at)
+        self.assertEqual(legacy["duration_min"], snapshot.duration_min)
+        self.assertEqual(legacy["event_count"], snapshot.event_count)
+        self.assertEqual(legacy["top_files"], snapshot.top_files)
+
+        self.assertEqual(payload["active_project"], "acme")
+        self.assertEqual(payload["active_file"], str(source))
+        self.assertEqual(payload["probable_task"], "debug")
+        self.assertEqual(payload["activity_level"], "executing")
+        self.assertEqual(payload["duration_min"], 20)
+        self.assertEqual(payload["top_file_paths"], [str(source), str(test_file)])
+        self.assertEqual(payload["files_changed"], 2)
+        self.assertEqual(payload["project_root"], str(repo))
+        self.assertIn("work_block_started_at", payload)
+        self.assertIn("work_window_started_at", payload)
+        self.assertEqual(payload["work_window_started_at"], payload["work_block_started_at"])
+        self.assertEqual(payload["closed_episodes"], payload["recent_sessions"])
+
+        self.assertFalse((Path(self.tmpdir.name) / ".pulse" / "memory" / "sessions").exists())
+        self.assertEqual(list(Path(self.tmpdir.name).rglob("*.md")), [])
+
     def test_get_today_summary_derive_le_temps_depuis_les_evenements(self):
         today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
         repo = "/Users/yugz/Projets/Pulse/Pulse"

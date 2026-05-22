@@ -630,7 +630,7 @@ Validation :
 Découpage recommandé :
 
 - [x] R5a — Contrat mémoire minimale actuel (`docs/MINIMAL_MEMORY_CONTRACT.md`) ;
-- [ ] R5b — Snapshot/session history golden ;
+- [x] R5b — Snapshot/session history golden ;
 - [ ] R5c — Journal minimal truth layers ;
 - [ ] R5d — Core/Lab contamination guards ;
 - [ ] R5e — Memory routes boundaries ;
@@ -662,6 +662,32 @@ Validation R5a :
 - surfaces Core documentées : `SessionMemory`, `SessionSnapshotBuilder`, `export_session_data()`, `export_memory_payload()`, journal Markdown minimal, hidden payload, `truth_layers`, `/memory/sessions`, `/search` ;
 - limites explicites documentées : `extractor.py` est mixte, `update_memories_from_session()` n'est pas Core-safe comme fonction isolée, le runtime Core ne doit pas l'appeler automatiquement, `projects.md` n'est pas un profil projet fiable, le Markdown visible n'est pas la vérité canonique complète, le hidden payload ne doit pas être exposé comme vérité produit brute, `MemoryStore` et ses tiers `habit` / `preference` / `persistent` restent Lab, et `/memory/write` / `/memory/remove` restent Lab en Core ;
 - tests non lancés : documentation only ;
+- aucun changement produit.
+
+### R5b — Snapshot/session history golden
+
+Objectif : verrouiller l'historique minimal produit directement depuis `SessionMemory` SQLite, `SessionSnapshotBuilder`, `export_session_data()` et `export_memory_payload()`, sans passer par `extractor.py`.
+
+- [x] Construire une session réaliste avec events observés, signaux dérivés, état session, timestamps, projet et fichier actif.
+- [x] Vérifier que `SessionMemory` conserve les events et timestamps observés.
+- [x] Vérifier que `SessionSnapshotBuilder` relie session, events, durée, fichiers, apps et friction.
+- [x] Vérifier que `export_session_data()` reste aligné avec le snapshot structuré.
+- [x] Vérifier que `export_memory_payload()` reste un export session / compatibilité, pas un modèle canonique de mémoire intelligente.
+- [x] Vérifier que le chemin ne crée ni ne lit de journaux Markdown.
+- [x] Ne pas appeler `update_memories_from_session()`.
+- [x] Ne pas toucher facts, LLM, vector store, DayDream ou `MemoryStore`.
+
+Sortie attendue de R5b :
+
+> Le noyau d'historique minimal est prouvé par SQLite + snapshots + exports, indépendamment des journaux Markdown et des systèmes Lab.
+
+Validation R5b :
+
+- tests complétés dans `tests/memory/test_session.py` ;
+- comportements verrouillés : events observés et timestamps conservés, snapshot structuré relié à la session, fichiers techniques exclus des fichiers significatifs, `export_session_data()` aligné avec le snapshot, `export_memory_payload()` expose les champs canoniques et alias legacy de compatibilité ;
+- le test golden prouve que ce chemin ne dépend pas de `/memory/sessions`, des journaux Markdown, de facts, LLM, vector store, DayDream ou `MemoryStore` ;
+- ambiguïté conservée : `export_memory_payload()` contient encore des alias legacy (`work_window_*`, `closed_episodes`) pour compatibilité, mais ils ne sont pas traités comme modèle canonique R5 ;
+- test ciblé passé : `tests/memory/test_session.py` ;
 - aucun changement produit.
 
 ### R6 — Baseline Propositions contrôlées
