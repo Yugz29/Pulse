@@ -470,6 +470,52 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertTrue(kwargs["awake"])
         self.assertFalse(kwargs["locked"])
 
+    def test_handle_event_significatif_alimente_session_fsm_et_present_state(self):
+        event = Event("app_activated", {"app_name": "Xcode"})
+        event.timestamp = datetime.now()
+        self.orchestrator.session_fsm._session_started_at = event.timestamp - timedelta(hours=1)
+        self.scorer.bus.recent.return_value = [event]
+        self.scorer.compute.return_value = self._signals(session_duration_min=0)
+        self.decision_engine.evaluate.return_value = Decision("silent", 0, "nothing_relevant")
+
+        with patch.object(self.orchestrator, "_schedule_memory_sync") as schedule_memory:
+            self.orchestrator.handle_event(event)
+
+        self.assertEqual(self.orchestrator.session_fsm.state, "active")
+        self.assertEqual(self.orchestrator.session_fsm.session_started_at, event.timestamp)
+        self.assertEqual(self.orchestrator.session_fsm.last_meaningful_activity_at, event.timestamp)
+        compute_kwargs = self.scorer.compute.call_args.kwargs
+        self.assertEqual(compute_kwargs["session_started_at"], event.timestamp)
+        present = self.runtime_state.get_present()
+        self.assertEqual(present.session_status, "active")
+        self.assertTrue(present.awake)
+        self.assertFalse(present.locked)
+        self.session_memory.update_present_snapshot.assert_called()
+        schedule_memory.assert_not_called()
+
+    def test_process_signals_projette_idle_fsm_vers_present_state(self):
+        event = Event("user_idle", {"seconds": 360})
+        event.timestamp = datetime.now()
+        self.scorer.bus.recent.return_value = []
+        self.scorer.compute.return_value = self._signals(
+            activity_level="idle",
+            focus_level="idle",
+            session_duration_min=7,
+        )
+        self.decision_engine.evaluate.return_value = Decision("silent", 0, "nothing_relevant")
+
+        with patch.object(self.orchestrator, "_schedule_memory_sync") as schedule_memory:
+            self.orchestrator._process_signals(event)
+
+        present = self.runtime_state.get_present()
+        self.assertEqual(self.orchestrator.session_fsm.state, "idle")
+        self.assertEqual(present.session_status, "idle")
+        self.assertTrue(present.awake)
+        self.assertFalse(present.locked)
+        self.assertEqual(present.session_duration_min, 7)
+        self.session_memory.update_present_snapshot.assert_called()
+        schedule_memory.assert_not_called()
+
     def test_build_context_snapshot_golden_legacy_markdown_output_exact(self):
         self.runtime_state.set_latest_active_app("Cursor")
         signals = Signals(
@@ -1227,6 +1273,29 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
     # ── Verrous écran ─────────────────────────────────────────────────────────
 
+    def test_screen_locked_met_fsm_et_runtime_state_en_locked(self):
+        event = Event("screen_locked", {})
+        event.timestamp = datetime.now()
+        self.scorer.compute.return_value = self._signals(session_duration_min=12)
+        self.decision_engine.evaluate.return_value = Decision("silent", 0, "nothing_relevant")
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream, \
+             patch.object(self.orchestrator, "_schedule_prepared_resume_card") as schedule_resume, \
+             patch.object(self.orchestrator, "_schedule_memory_sync"):
+            self.orchestrator.handle_event(event)
+
+        self.assertEqual(self.orchestrator.session_fsm.state, "locked")
+        self.assertEqual(self.orchestrator.session_fsm.last_screen_locked_at, event.timestamp)
+        self.assertTrue(self.runtime_state.is_screen_locked())
+        self.assertEqual(self.runtime_state.get_last_screen_locked_at(), event.timestamp)
+        present = self.runtime_state.get_present()
+        self.assertEqual(present.session_status, "locked")
+        self.assertFalse(present.awake)
+        self.assertTrue(present.locked)
+        run_daydream.assert_not_called()
+        schedule_resume.assert_called_once()
+
     def test_verrou_court_conserve_session_started_at_sans_nouvelle_session(self):
         original_start = self.orchestrator.session_fsm.session_started_at
         t_lock = datetime.now() - timedelta(minutes=10)
@@ -1239,6 +1308,36 @@ class TestRuntimeOrchestrator(unittest.TestCase):
 
         mock_new_session.assert_not_called()
         self.assertEqual(self.orchestrator.session_fsm.session_started_at, original_start)
+
+    def test_screen_unlocked_court_reactive_fsm_sans_nouvelle_session(self):
+        previous_activity = datetime.now() - timedelta(minutes=15)
+        self.orchestrator.session_fsm._session_started_at = previous_activity - timedelta(minutes=1)
+        self.orchestrator.session_fsm.observe_recent_events(
+            recent_events=[Event("file_modified", {"path": "/tmp/pulse/main.py"}, timestamp=previous_activity)],
+            now=previous_activity,
+        )
+        original_start = self.orchestrator.session_fsm.session_started_at
+        locked_at = datetime.now() - timedelta(minutes=5)
+        lock_event = Event("screen_locked", {}, timestamp=locked_at)
+        unlock_event = Event("screen_unlocked", {}, timestamp=datetime.now())
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream, \
+             patch.object(self.orchestrator, "_process_signals"), \
+             patch.object(self.orchestrator, "_schedule_prepared_resume_card"), \
+             patch.object(self.orchestrator, "_maybe_emit_resume_card"), \
+             patch.object(self.orchestrator.session_memory, "new_session") as new_session:
+            self.orchestrator.handle_event(lock_event)
+            self.orchestrator.handle_event(unlock_event)
+
+        self.assertEqual(self.orchestrator.session_fsm.state, "active")
+        self.assertEqual(self.orchestrator.session_fsm.session_started_at, original_start)
+        self.assertEqual(self.orchestrator.session_fsm.last_meaningful_activity_at, previous_activity)
+        self.assertIsNone(self.orchestrator.session_fsm.last_screen_locked_at)
+        self.assertFalse(self.runtime_state.is_screen_locked())
+        self.assertIsNone(self.runtime_state.get_last_screen_locked_at())
+        new_session.assert_not_called()
+        run_daydream.assert_not_called()
 
     def test_handle_event_core_ne_declenche_pas_daydream_sur_lock_unlock(self):
         with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
@@ -1270,6 +1369,53 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             self.orchestrator.handle_event(unlock_event)
 
         mock_new_session.assert_called_once()
+
+    def test_screen_unlocked_long_declenche_frontiere_session_runtime(self):
+        locked_at = datetime.now() - timedelta(minutes=35)
+        unlock_at = datetime.now()
+        self.runtime_state.mark_screen_locked(when=locked_at)
+        unlock_event = Event("screen_unlocked", {}, timestamp=unlock_at)
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator.session_memory, "new_session") as new_session, \
+             patch.object(self.orchestrator.session_memory, "export_memory_payload", return_value={"duration_min": 0}), \
+             patch.object(self.orchestrator, "_process_signals"), \
+             patch.object(self.orchestrator, "_maybe_emit_resume_card"), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as advanced_sync:
+            self.orchestrator.handle_event(unlock_event)
+
+        self.assertEqual(self.orchestrator.session_fsm.state, "active")
+        self.assertEqual(self.orchestrator.session_fsm.session_started_at, unlock_at)
+        self.assertIsNone(self.orchestrator.session_fsm.last_meaningful_activity_at)
+        self.assertFalse(self.runtime_state.is_screen_locked())
+        self.assertIsNone(self.runtime_state.get_last_screen_locked_at())
+        new_session.assert_called_once()
+        self.assertEqual(new_session.call_args.kwargs["started_at"], unlock_at)
+        advanced_sync.assert_not_called()
+
+    def test_evenement_non_screen_est_ignore_pendant_lock_runtime(self):
+        self.runtime_state.mark_screen_locked(when=datetime.now())
+        original_state = self.orchestrator.session_fsm.state
+        event = Event("app_activated", {"app_name": "Xcode"})
+
+        self.orchestrator.handle_event(event)
+
+        self.assertEqual(self.orchestrator.session_fsm.state, original_state)
+        self.session_memory.record_event.assert_not_called()
+        self.scorer.bus.recent.assert_not_called()
+
+    def test_pause_runtime_bloque_evenements_sans_devenir_etat_fsm(self):
+        self.runtime_state.set_paused(True)
+        original_state = self.orchestrator.session_fsm.state
+        event = Event("screen_locked", {})
+
+        self.orchestrator.handle_event(event)
+
+        self.assertTrue(self.runtime_state.is_paused())
+        self.assertEqual(self.orchestrator.session_fsm.state, original_state)
+        self.assertNotEqual(self.orchestrator.session_fsm.state, "paused")
+        self.session_memory.record_event.assert_not_called()
+        self.scorer.bus.recent.assert_not_called()
 
     def test_verrou_long_core_skip_advanced_memory_sync_pre_reset(self):
         t_lock = datetime.now() - timedelta(minutes=35)

@@ -389,7 +389,7 @@ Découpage recommandé :
 
 - [x] R4a — Contrat session actuel (`docs/SESSION_CONTRACT.md`) ;
 - [x] R4b — Golden `SessionFSM` ;
-- [ ] R4c — Intégration runtime session ;
+- [x] R4c — Intégration runtime session ;
 - [ ] R4d — Persistance session minimale ;
 - [ ] R4e — Restart repair baseline ;
 - [ ] R4f — Payload boundaries session ;
@@ -472,6 +472,32 @@ Validation R4b :
 - les champs internes exposés par la FSM sont explicitement vérifiés : `session_started_at`, `last_meaningful_activity_at`, `last_screen_locked_at` ;
 - aucun état `started`, `paused`, `resumed` ou `closed` n'a été ajouté à `SessionFSM` ;
 - test ciblé passé : `tests/core/test_session_fsm.py` ;
+- aucun changement produit.
+
+### R4c — Intégration runtime session
+
+Objectif : vérifier que `RuntimeOrchestrator` applique correctement `SessionFSM` et projette l'état session dans `RuntimeState` / `PresentState`.
+
+- [x] `handle_event()` transmet les événements significatifs à `SessionFSM`.
+- [x] `screen_locked` met la FSM en `locked` et met à jour les marqueurs runtime.
+- [x] `screen_unlocked` court réactive la FSM sans nouvelle session.
+- [x] `screen_unlocked` long déclenche une frontière / nouvelle session selon le comportement actuel.
+- [x] Les événements non-screen sont ignorés pendant lock runtime.
+- [x] La pause runtime bloque les événements sans devenir un état FSM.
+- [x] `_process_signals()` projette l'état session vers `RuntimeState` / `PresentState`.
+- [x] Les effets Lab restent désactivés en mode Core sur lock / unlock.
+
+Sortie attendue de R4c :
+
+> Le runtime applique la FSM de session et expose l'état courant sans confondre pause runtime, lock écran et états FSM.
+
+Validation R4c :
+
+- tests complétés dans `tests/test_runtime_orchestrator.py` ;
+- intégration verrouillée : activité significative -> FSM `active`, `screen_locked` -> FSM/runtime `locked`, unlock court -> session conservée, unlock long -> nouvelle session runtime, event non-screen ignoré pendant lock, pause runtime sans état FSM `paused`, `_process_signals()` -> `PresentState.session_status` ;
+- en mode Core, DayDream et sync mémoire avancée pré-reset restent non déclenchés dans les chemins testés ;
+- limite actuelle documentée dans le test setup : une activité antidatée ne peut ancrer la FSM que si `session_started_at` est antérieur, car la FSM initialise ce champ dès sa construction ;
+- tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/core/test_session_fsm.py` ;
 - aucun changement produit.
 
 ### R5 — Baseline Mémoire minimale
