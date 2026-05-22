@@ -26,6 +26,15 @@ def test_resolver_window_title_alone_does_not_attribute_project():
     assert "window_title_only" in resolution.warnings
 
 
+def test_resolver_project_hint_alone_does_not_attribute_project():
+    resolution = resolve_work_evidence(WorkEvidenceInput(project_hint="AlphaApp"))
+
+    assert resolution.project is None
+    assert resolution.project_confidence == 0.0
+    assert resolution.project_source is None
+    assert "project_hint_uncorroborated" in resolution.warnings
+
+
 def test_resolver_ai_app_alone_does_not_attribute_project():
     resolution = resolve_work_evidence(WorkEvidenceInput(active_app="ChatGPT", recent_apps=("Codex",)))
 

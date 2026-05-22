@@ -377,7 +377,7 @@ Découpage recommandé :
 - [x] R3a — Contrat d’interprétation actuel (`docs/INTERPRETATION_CONTRACT.md`) ;
 - [x] R3b — Fixtures golden scoring ;
 - [x] R3c — Golden `SignalScorer` ;
-- R3d — Evidence / uncertainty baseline ;
+- [x] R3d — Evidence / uncertainty baseline ;
 - R3e — Payload boundaries ;
 - R3f — Anti-overclaim tests.
 
@@ -1094,16 +1094,28 @@ Validation R3c :
 
 Objectif : vérifier que l’interprétation exposée reste explicable ou incertaine.
 
-- [ ] Tester `/work-context` ou les builders associés.
-- [ ] Vérifier que les preuves sont visibles quand une tâche / un projet est proposé.
-- [ ] Vérifier que l’incertitude est visible quand les preuves sont faibles.
-- [ ] Vérifier que `project_hint` faible ne devient pas projet confirmé.
-- [ ] Vérifier que `general` ou contexte faible ne produit pas une affirmation forte.
-- [ ] Vérifier les statuts `observed`, `probable`, `inferred`, `weak` si exposés.
+- [x] Tester `/work-context` ou les builders associés.
+- [x] Vérifier que les preuves sont visibles quand une tâche / un projet est proposé.
+- [x] Vérifier que l’incertitude est visible quand les preuves sont faibles.
+- [x] Vérifier que `project_hint` faible ne devient pas projet confirmé.
+- [x] Vérifier que `general` ou contexte faible ne produit pas une affirmation forte.
+- [x] Vérifier les statuts `observed`, `probable`, `inferred`, `weak` si exposés.
 
 Sortie attendue de R3d :
 
 > Pulse sait montrer pourquoi il pense quelque chose, ou dire que la preuve est faible.
+
+Validation R3d :
+
+- tests complétés dans `tests/core/test_work_context_card.py`, `tests/core/test_work_evidence_resolver.py` et `tests/test_runtime_routes.py` ;
+- `/work-context` expose des preuves quand un projet / une tâche est proposé ;
+- les contextes faibles exposent `missing_context`, `project_warnings`, `project_status: unknown` ou `task_status: unknown/weak` ;
+- `project_hint` seul reste un hint faible et ne devient pas projet confirmé ;
+- `general` ne produit pas d’evidence de tâche, même avec une confiance numérique élevée ;
+- `task_status: weak` est verrouillé pour une tâche non générale avec confiance faible ;
+- statuts couverts : `observed`, `probable`, `inferred`, `weak`, `unknown` ;
+- tests ciblés passés : `tests/core/test_work_context_card.py`, `tests/core/test_work_evidence_resolver.py`, `tests/test_runtime_routes.py` ;
+- aucun changement produit.
 
 ### R3e — Payload boundaries
 

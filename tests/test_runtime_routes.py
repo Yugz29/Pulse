@@ -1967,6 +1967,43 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertIn("project_hint_uncorroborated", card["project_warnings"])
         self.assertIn("Projet actif non identifié", card["missing_context"])
 
+    def test_work_context_route_marks_low_confidence_task_as_weak(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file=None,
+            probable_task="debug",
+            friction_score=0.0,
+            focus_level="normal",
+            session_duration_min=5,
+            recent_apps=["Terminal"],
+            clipboard_context=None,
+            activity_level="executing",
+            task_confidence=0.32,
+            terminal_action_category="testing",
+            terminal_summary="pytest failed",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Terminal")
+
+        response = self.client.get("/work-context")
+
+        self.assertEqual(response.status_code, 200)
+        card = response.get_json()["card"]
+        self.assertEqual(card["project"], "Pulse")
+        self.assertEqual(card["project_status"], "observed")
+        self.assertEqual(card["probable_task"], "debug")
+        self.assertEqual(card["confidence"], 0.32)
+        self.assertEqual(card["task_status"], "weak")
+        self.assertIn("Tâche possible : debug", card["evidence"])
+        self.assertNotIn("Tâche probable : debug", card["evidence"])
+        self.assertNotIn("Tâche inférée : debug", card["evidence"])
+
     def test_work_context_route_does_not_expose_raw_paths_commands_or_window_title(self):
         secret = "SECRET_TOKEN"
         full_path = "/Users/yugz/Projets/Pulse/Pulse/daemon/runtime_state.py"

@@ -131,6 +131,44 @@ def test_build_work_context_card_reports_missing_context_when_uncertain():
     assert card.safe_next_probes == ("app_context", "window_title")
 
 
+def test_build_work_context_card_marks_low_confidence_task_as_weak():
+    current_context = SimpleNamespace(
+        active_project="Pulse",
+        activity_level="executing",
+        probable_task="debug",
+        task_confidence=0.32,
+        active_app="Terminal",
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.project == "Pulse"
+    assert card.project_status == "observed"
+    assert card.probable_task == "debug"
+    assert card.confidence == 0.32
+    assert card.task_status == "weak"
+    assert "Tâche possible : debug" in card.evidence
+    assert all("Tâche probable" not in item for item in card.evidence)
+    assert all("Tâche inférée" not in item for item in card.evidence)
+
+
+def test_build_work_context_card_does_not_turn_general_into_task_evidence():
+    current_context = SimpleNamespace(
+        active_project=None,
+        activity_level="reading",
+        probable_task="general",
+        task_confidence=0.9,
+        active_app="Code",
+        window_title=None,
+    )
+
+    card = build_work_context_card(current_context)
+
+    assert card.task_status == "unknown"
+    assert "Tâche utilisateur encore générale" in card.missing_context
+    assert all(not item.startswith("Tâche ") for item in card.evidence)
+
+
 def test_build_work_context_card_does_not_report_terminal_missing_when_commands_are_known():
     current_context = SimpleNamespace(
         active_project="Pulse",
