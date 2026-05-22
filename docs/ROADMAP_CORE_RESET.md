@@ -374,7 +374,7 @@ Validation :
 
 Découpage recommandé :
 
-- R3a — Contrat d’interprétation actuel ;
+- [x] R3a — Contrat d’interprétation actuel (`docs/INTERPRETATION_CONTRACT.md`) ;
 - R3b — Fixtures golden scoring ;
 - R3c — Golden `SignalScorer` ;
 - R3d — Evidence / uncertainty baseline ;
@@ -1011,18 +1011,28 @@ R3 ne doit pas chercher à rendre Pulse plus intelligent. Il doit prouver ce que
 
 Objectif : documenter les surfaces d’interprétation existantes.
 
-- [ ] Documenter les champs `Signals`.
-- [ ] Documenter les champs `PresentState`.
-- [ ] Documenter les champs `CurrentContext`.
-- [ ] Documenter les champs `WorkContextCard`.
-- [ ] Distinguer observed / normalized / derived / inferred.
-- [ ] Documenter où apparaissent `probable_task`, `task_confidence`, `activity_level`, `focus_level`.
-- [ ] Documenter que `task_confidence` existe dans `Signals`, mais n’est pas exposé dans `PresentState`.
-- [ ] Documenter que `WorkContextCard` reconstruit une explication après coup et n’est pas encore la preuve canonique du scorer.
+- [x] Documenter les champs `Signals`.
+- [x] Documenter les champs `PresentState`.
+- [x] Documenter les champs `CurrentContext`.
+- [x] Documenter les champs `WorkContextCard`.
+- [x] Distinguer observed / normalized / derived / inferred.
+- [x] Documenter où apparaissent `probable_task`, `task_confidence`, `activity_level`, `focus_level`.
+- [x] Documenter que `task_confidence` existe dans `Signals`, mais n’est pas exposé dans `PresentState`.
+- [x] Documenter que `WorkContextCard` reconstruit une explication après coup et n’est pas encore la preuve canonique du scorer.
 
 Sortie attendue de R3a :
 
 > Pulse possède un contrat clair de ce qu’il interprète, où cela apparaît, et avec quel niveau de prudence.
+
+Validation R3a :
+
+- contrat ajouté : `docs/INTERPRETATION_CONTRACT.md` ;
+- le contrat décrit le comportement actuel, pas une architecture cible ;
+- surfaces couvertes : `Signals`, `PresentState`, `CurrentContext`, `WorkContextCard`, `WorkEvidenceResolver`, `/state`, `/debug/state`, `/work-context` ;
+- distinction documentée entre champs observés, normalisés, dérivés et inférés ;
+- limites explicites documentées : `SignalScorer` ne retourne pas encore de trace détaillée des poids / preuves internes, `task_confidence` existe dans `Signals` mais pas dans `PresentState`, `/state.present` peut paraître plus affirmatif que la confiance réelle, et `WorkContextCard` reconstruit une explication après coup ;
+- tests non lancés : documentation only ;
+- aucun changement produit.
 
 ### R3b — Fixtures golden scoring
 
