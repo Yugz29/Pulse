@@ -631,7 +631,7 @@ Découpage recommandé :
 
 - [x] R5a — Contrat mémoire minimale actuel (`docs/MINIMAL_MEMORY_CONTRACT.md`) ;
 - [x] R5b — Snapshot/session history golden ;
-- [ ] R5c — Journal minimal truth layers ;
+- [x] R5c — Journal minimal truth layers ;
 - [ ] R5d — Core/Lab contamination guards ;
 - [ ] R5e — Memory routes boundaries ;
 - [ ] R5f — Validation globale R5.
@@ -688,6 +688,34 @@ Validation R5b :
 - le test golden prouve que ce chemin ne dépend pas de `/memory/sessions`, des journaux Markdown, de facts, LLM, vector store, DayDream ou `MemoryStore` ;
 - ambiguïté conservée : `export_memory_payload()` contient encore des alias legacy (`work_window_*`, `closed_episodes`) pour compatibilité, mais ils ne sont pas traités comme modèle canonique R5 ;
 - test ciblé passé : `tests/memory/test_session.py` ;
+- aucun changement produit.
+
+### R5c — Journal minimal truth layers
+
+Objectif : verrouiller le journal minimal actuel comme historique structuré avec provenance, sans promouvoir le Markdown visible en vérité canonique.
+
+- [x] Vérifier la création déterministe d'un journal sans LLM.
+- [x] Vérifier la présence du hidden payload.
+- [x] Vérifier la présence de `truth_layers`.
+- [x] Vérifier la séparation `observed`, `derived`, `inferred`, `narrative`.
+- [x] Vérifier que les événements observés restent traçables.
+- [x] Vérifier que les signaux et tâches probables restent dérivés / inférés, pas observés.
+- [x] Vérifier que le narratif reste `narrative`, pas vérité canonique.
+- [x] Neutraliser explicitement les chemins facts / vector store / background writer dans le test R5c.
+- [x] Ne pas améliorer le rendu Markdown visible.
+- [x] Ne pas activer facts, LLM, vector store, DayDream ou `MemoryStore`.
+
+Sortie attendue de R5c :
+
+> Le journal minimal conserve une provenance structurée dans son hidden payload, tandis que le Markdown visible reste une lecture humaine non canonique.
+
+Validation R5c :
+
+- test ajouté dans `tests/memory/test_extractor.py` ;
+- comportements verrouillés : journal déterministe sans LLM, hidden payload présent, `truth_layers` présentes, timestamps / apps / chemins fichiers en `observed`, durée / compte fichiers / top files en `derived`, `probable_task` / projet / activité / boundary / flags d'incertitude en `inferred`, corps de journal en `narrative` ;
+- le test prouve que `probable_task`, `duration_min` et `body` ne sont pas classés comme observations ;
+- le Markdown visible ne contient pas `truth_layers` et n'est pas traité comme vérité canonique ;
+- ambiguïté conservée : `extractor.py` reste mixte et appelle encore le moteur de facts comme chemin interne ; le test R5c le remplace par un moteur inerte et vérifie que vector store / background writer ne sont pas sollicités ;
 - aucun changement produit.
 
 ### R6 — Baseline Propositions contrôlées

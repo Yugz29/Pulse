@@ -40,6 +40,22 @@ class MarkdownLLM:
         return "*   **Analyse :**\n6.  **\n<final>Résumé *court* avec **markdown** parasite.</final>"
 
 
+class NoopFactEngine:
+
+    def __init__(self):
+        self.observed_sessions = []
+
+    def observe_session(self, session_data):
+        self.observed_sessions.append(dict(session_data))
+        return []
+
+    def clear_runtime_error(self):
+        pass
+
+    def mark_runtime_error(self, exc):
+        raise AssertionError(f"unexpected fact engine error: {exc}")
+
+
 def _hidden_journal_entries(journal: str):
     return json.loads(
         journal.split("<!-- pulse-journal-data:start\n", 1)[1].split("\npulse-journal-data:end -->", 1)[0]
@@ -1286,6 +1302,90 @@ class TestExtractor(unittest.TestCase):
 
         self.assertIn("truth_layers", hidden[0])
         self.assertEqual(set(hidden[0]["truth_layers"]), {"observed", "derived", "inferred", "narrative"})
+
+    def test_minimal_journal_truth_layers_stay_structured_without_llm_or_lab_services(self):
+        fact_engine = NoopFactEngine()
+        session = {
+            "active_project": "acme",
+            "duration_min": 22,
+            "probable_task": "debug",
+            "task_confidence": 0.46,
+            "activity_level": "executing",
+            "focus_level": "normal",
+            "recent_apps": ["Cursor", "Terminal"],
+            "files_changed": 2,
+            "top_files": ["api.py", "test_api.py"],
+            "top_file_paths": [
+                "/Users/tester/workspace/acme/src/api.py",
+                "/Users/tester/workspace/acme/tests/test_api.py",
+            ],
+            "started_at": "2026-05-06T09:00:00",
+            "ended_at": "2026-05-06T09:22:00",
+            "updated_at": "2026-05-06T09:22:00",
+            "uncertainty_flags": ["tool_assisted_files"],
+        }
+
+        with patch.object(extractor_module, "get_fact_engine", return_value=fact_engine), \
+                patch.object(extractor_module, "embeddings_enabled", return_value=False) as embeddings_enabled, \
+                patch.object(extractor_module, "_get_vector_store") as get_vector_store, \
+                patch.object(extractor_module, "_start_background_writer") as start_background:
+            report_ref = update_memories_from_session(
+                session,
+                llm=None,
+                memory_dir=self.memory_dir,
+                trigger="screen_lock",
+            )
+
+        self.assertIsNotNone(report_ref)
+        self.assertEqual(len(fact_engine.observed_sessions), 1)
+        embeddings_enabled.assert_called_once()
+        get_vector_store.assert_not_called()
+        start_background.assert_not_called()
+
+        journal = report_ref[0].read_text()
+        visible_markdown = journal.split("<!-- pulse-journal-data:start", 1)[0]
+        entry = _hidden_journal_entries(journal)[0]
+        layers = entry["truth_layers"]
+
+        self.assertIn("Session de 22 min.", visible_markdown)
+        self.assertNotIn("truth_layers", visible_markdown)
+        self.assertEqual(set(layers), {"observed", "derived", "inferred", "narrative"})
+
+        self.assertEqual(_truth_item(entry, "observed", "started_at")["value"], "2026-05-06T09:00:00")
+        self.assertEqual(_truth_item(entry, "observed", "ended_at")["value"], "2026-05-06T09:22:00")
+        self.assertEqual(_truth_item(entry, "observed", "recent_apps")["value"], ["Cursor", "Terminal"])
+        self.assertEqual(
+            _truth_item(entry, "observed", "top_file_paths")["value"],
+            [
+                "/Users/tester/workspace/acme/src/api.py",
+                "/Users/tester/workspace/acme/tests/test_api.py",
+            ],
+        )
+
+        self.assertEqual(_truth_item(entry, "derived", "duration_min")["value"], 22)
+        self.assertEqual(_truth_item(entry, "derived", "files_count")["value"], 2)
+        self.assertEqual(_truth_item(entry, "derived", "top_files")["value"], ["api.py", "test_api.py"])
+
+        task = _truth_item(entry, "inferred", "probable_task")
+        self.assertEqual(task["value"], "debug")
+        self.assertEqual(task["confidence"], 0.46)
+        self.assertEqual(_truth_item(entry, "inferred", "active_project")["value"], "acme")
+        self.assertEqual(_truth_item(entry, "inferred", "activity_level")["value"], "executing")
+        self.assertEqual(_truth_item(entry, "inferred", "boundary_reason")["value"], "screen_lock")
+        self.assertEqual(
+            _truth_item(entry, "inferred", "uncertainty_flags")["value"],
+            ["tool_assisted_files"],
+        )
+
+        body = _truth_item(entry, "narrative", "body")
+        self.assertEqual(body["value"], entry["body"])
+        self.assertEqual(body["source"], "deterministic_fallback")
+        self.assertEqual(body["status"], "llm_unavailable")
+
+        self.assertNotIn("probable_task", _truth_kinds(entry, "observed"))
+        self.assertNotIn("duration_min", _truth_kinds(entry, "observed"))
+        self.assertNotIn("body", _truth_kinds(entry, "observed"))
+        self.assertNotIn("body", _truth_kinds(entry, "derived"))
 
     def test_journal_truth_layers_classify_probable_task_as_inferred(self):
         update_memories_from_session(
