@@ -385,9 +385,20 @@ Découpage recommandé :
 
 Objectif : Pulse suit les sessions de travail de manière fiable.
 
+Découpage recommandé :
+
+- [x] R4a — Contrat session actuel (`docs/SESSION_CONTRACT.md`) ;
+- [ ] R4b — Golden `SessionFSM` ;
+- [ ] R4c — Intégration runtime session ;
+- [ ] R4d — Persistance session minimale ;
+- [ ] R4e — Restart repair baseline ;
+- [ ] R4f — Payload boundaries session ;
+- [ ] R4g — Validation globale R4.
+
 Travail cible :
 
-- vérifier les états session started, active, idle, paused, resumed, closed ;
+- vérifier les états réels de `SessionFSM` : `idle`, `active`, `locked` ;
+- vérifier les notions runtime / persistance associées : pause runtime, reprise, fermeture session, réparation après redémarrage ;
 - vérifier le comportement lock / unlock ;
 - vérifier les pauses courtes et longues ;
 - vérifier la réparation après redémarrage du daemon ;
@@ -405,6 +416,32 @@ Validation :
 - liaison commits / épisodes ;
 - resume cards intelligentes ;
 - résumés narratifs.
+
+### R4a — Contrat session actuel
+
+Objectif : documenter le comportement session réel avant d'ajouter ou de modifier des tests.
+
+- [x] Documenter les états réels de `SessionFSM` : `idle`, `active`, `locked`.
+- [x] Documenter que `paused` est une pause runtime dans `RuntimeState`, pas un état FSM.
+- [x] Documenter que `closed` est une fermeture / persistance côté `SessionMemory`, pas un état FSM.
+- [x] Documenter que `resumed` correspond à plusieurs mécanismes de reprise, pas à un état FSM unique.
+- [x] Documenter où les données session apparaissent dans `/state` et `/debug/state`.
+- [x] Documenter comment `session_started_at`, durée session, lock / unlock et idle sont produits.
+- [x] Distinguer session runtime, session persistée, work blocks / episodes, journal Markdown et mémoire avancée.
+- [x] Documenter ce qui est Core R4 strict et ce qui reste hors R4.
+
+Sortie attendue de R4a :
+
+> Pulse possède un contrat clair de ce qu'il appelle session aujourd'hui, sans inventer des états qui n'existent pas dans le code.
+
+Validation R4a :
+
+- contrat ajouté : `docs/SESSION_CONTRACT.md` ;
+- le contrat décrit le comportement actuel, pas une architecture cible ;
+- surfaces couvertes : `SessionFSM`, `RuntimeOrchestrator`, `RuntimeState`, `PresentState`, `SessionMemory`, `SessionSnapshotBuilder`, `RestartManager`, `/state`, `/debug/state`, `/memory/sessions` ;
+- limites explicites documentées : `session_started_at` peut exister avant une vraie activité, `paused` / `resumed` / `closed` ne sont pas des états FSM, `/memory/sessions` n'est pas la preuve principale Core session, `RestartManager.recover_missed_commits()` est hors R4 strict, `daemon/memory/work_heartbeat.py` appartient à la couche mémoire, et `SessionFSM` ne doit pas devenir un moteur mémoire ;
+- tests non lancés : documentation only ;
+- aucun changement produit.
 
 ### R5 — Baseline Mémoire minimale
 
@@ -532,12 +569,13 @@ R3 — Baseline Interprétation est validée côté Python.
 Prochaines actions :
 
 1. auditer le comportement réel de `SessionFSM` ;
-2. vérifier les états session started, active, idle, paused, resumed, closed ;
-3. tester lock / unlock ;
-4. tester pause courte / pause longue ;
-5. tester réparation après redémarrage ;
-6. vérifier que la durée de session vient de `SessionFSM`, pas d’approximations legacy ;
-7. documenter les limites avant tout patch produit.
+2. vérifier les états réels de `SessionFSM` : `idle`, `active`, `locked` ;
+3. vérifier les notions associées hors FSM : pause runtime, reprise, fermeture session ;
+4. tester lock / unlock ;
+5. tester pause courte / pause longue ;
+6. tester réparation après redémarrage ;
+7. vérifier que la durée de session vient de `SessionFSM`, pas d’approximations legacy ;
+8. documenter les limites avant tout patch produit.
 
 Rien d’autre ne doit passer avant, sauf si cela corrige un problème de boot Core, d’observation, de scoring, de session ou de journal minimal.
 
