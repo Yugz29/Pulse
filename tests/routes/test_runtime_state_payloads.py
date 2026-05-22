@@ -218,6 +218,42 @@ def test_build_state_payload_legacy_signals_contains_expected_fields():
     assert payload["signals"]["last_session_context"] == "last session for Pulse"
 
 
+def test_build_state_payload_keeps_task_confidence_out_of_present_boundary():
+    present = PresentState(
+        active_project="Pulse",
+        active_file="/tmp/pulse.py",
+        probable_task="debug",
+        activity_level="executing",
+        focus_level="normal",
+        session_duration_min=12,
+    )
+
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_signals(), present=present),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+    )
+
+    assert payload["present"]["probable_task"] == "debug"
+    assert "task_confidence" not in payload["present"]
+    assert payload["signals"]["task_confidence"] == 0.82
+
+
+def test_build_state_payload_documents_legacy_signals_exposed_by_default():
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_signals()),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+    )
+
+    assert "debug" not in payload
+    assert "signals" in payload
+    assert payload["signals"]["terminal_command"] == "pytest"
+    assert payload["signals"]["task_confidence"] == 0.82
+
+
 def test_build_state_payload_keeps_present_minimal_when_state_signals_are_enriched():
     payload = build_state_payload(
         store_state=StoreStub().to_dict(),
@@ -295,6 +331,23 @@ def test_build_state_payload_can_include_legacy_debug_when_requested(monkeypatch
     )
     assert payload["debug"]["runtime"]["memory_synced_at"] == "2026-05-06T10:00:00"
     assert payload["debug"]["signals"]["active_project"] == "Pulse"
+
+
+def test_build_state_payload_keeps_debug_surface_out_by_default_but_not_legacy_signals(monkeypatch):
+    monkeypatch.delenv("PULSE_MODE", raising=False)
+
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_signals()),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+        include_debug=False,
+    )
+
+    assert "debug" not in payload
+    assert "store" not in payload
+    assert "runtime" not in payload
+    assert "signals" in payload
 
 
 def test_build_debug_state_payload_returns_debug_surface_without_legacy_marker(monkeypatch):

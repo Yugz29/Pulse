@@ -740,6 +740,43 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         self.assertNotIn("debug", payload)
 
+    def test_state_present_boundary_omits_confidence_while_legacy_signals_expose_it(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/pulse.py",
+            probable_task="debug",
+            friction_score=0.1,
+            focus_level="normal",
+            session_duration_min=12,
+            recent_apps=["Terminal"],
+            clipboard_context=None,
+            activity_level="executing",
+            task_confidence=0.32,
+            terminal_action_category="testing",
+            terminal_summary="pytest failed",
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Terminal")
+        self.store.to_dict.return_value = {"last_event_type": "terminal_command_finished"}
+
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
+            response = self.client.get("/state")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertNotIn("debug", payload)
+        self.assertEqual(payload["present"]["probable_task"], "debug")
+        self.assertNotIn("task_confidence", payload["present"])
+        self.assertEqual(payload["signals"]["probable_task"], "debug")
+        self.assertEqual(payload["signals"]["task_confidence"], 0.32)
+        self.assertEqual(payload["signals"]["terminal_summary"], "pytest failed")
+
     def test_state_include_debug_query_exposes_legacy_debug_block(self):
         signals = Signals(
             active_project="Pulse",
@@ -824,6 +861,49 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["runtime"]["latest_active_app"], "Xcode")
         self.assertEqual(payload["signals"]["active_project"], "Pulse")
         self.assertEqual(payload["decision"]["action"], "silent")
+
+    def test_debug_state_route_exposes_debug_surface_separate_from_state(self):
+        signals = Signals(
+            active_project="Pulse",
+            active_file="/tmp/current.py",
+            probable_task="coding",
+            friction_score=0.15,
+            focus_level="normal",
+            session_duration_min=24,
+            recent_apps=["Xcode"],
+            clipboard_context="text",
+            activity_level="editing",
+            task_confidence=0.81,
+        )
+        self.runtime_state.update_present(
+            signals=signals,
+            session_status="active",
+            awake=True,
+            locked=False,
+        )
+        self.runtime_state.set_analysis(signals=signals, decision=None)
+        self.runtime_state.set_latest_active_app("Xcode")
+        self.store.to_dict.return_value = {
+            "active_app": "Xcode",
+            "last_event_type": "file_modified",
+        }
+
+        with patch("daemon.routes.runtime_state_payloads.last_session_context", return_value=None):
+            state_response = self.client.get("/state")
+            debug_response = self.client.get("/debug/state")
+
+        self.assertEqual(state_response.status_code, 200)
+        self.assertEqual(debug_response.status_code, 200)
+        state_payload = state_response.get_json()
+        debug_payload = debug_response.get_json()
+        self.assertNotIn("debug", state_payload)
+        self.assertNotIn("store", state_payload)
+        self.assertNotIn("runtime", state_payload)
+        self.assertEqual(debug_payload["surface"], "debug_state")
+        self.assertFalse(debug_payload["legacy_in_state"])
+        self.assertEqual(debug_payload["store"]["last_event_type"], "file_modified")
+        self.assertEqual(debug_payload["runtime"]["latest_active_app"], "Xcode")
+        self.assertEqual(debug_payload["signals"]["task_confidence"], 0.81)
 
     def test_state_fallbacks_to_builder_when_current_context_absent(self):
         signals = Signals(

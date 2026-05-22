@@ -378,7 +378,7 @@ Découpage recommandé :
 - [x] R3b — Fixtures golden scoring ;
 - [x] R3c — Golden `SignalScorer` ;
 - [x] R3d — Evidence / uncertainty baseline ;
-- R3e — Payload boundaries ;
+- [x] R3e — Payload boundaries ;
 - R3f — Anti-overclaim tests.
 
 ### R4 — Baseline Sessions
@@ -1121,16 +1121,28 @@ Validation R3d :
 
 Objectif : clarifier les frontières entre surface produit et surface debug.
 
-- [ ] Vérifier `/state`.
-- [ ] Vérifier `/debug/state`.
-- [ ] Vérifier où `signals` legacy est exposé.
-- [ ] Vérifier que `/state.present` ne paraît pas plus affirmatif que les signaux réels.
-- [ ] Vérifier que les détails expérimentaux / debug restent hors surface produit si possible.
-- [ ] Documenter les limites si aucun refactor n’est fait.
+- [x] Vérifier `/state`.
+- [x] Vérifier `/debug/state`.
+- [x] Vérifier où `signals` legacy est exposé.
+- [x] Vérifier que `/state.present` ne paraît pas plus affirmatif que les signaux réels.
+- [x] Vérifier que les détails expérimentaux / debug restent hors surface produit si possible.
+- [x] Documenter les limites si aucun refactor n’est fait.
 
 Sortie attendue de R3e :
 
 > Les payloads d’état ne vendent pas une interprétation plus sûre que ce que les signaux prouvent.
+
+Validation R3e :
+
+- tests complétés dans `tests/routes/test_runtime_state_payloads.py` et `tests/test_runtime_routes.py` ;
+- `/state.present` reste la projection compacte et n’expose pas `task_confidence` ;
+- `task_confidence` reste visible dans `signals` legacy et dans les surfaces debug / contexte quand disponibles ;
+- `/state` n’expose pas de bloc `debug`, `store` ou `runtime` par défaut ;
+- `/debug/state` expose explicitement `surface: debug_state`, `store`, `runtime` et `signals` ;
+- limite actuelle verrouillée : `signals` legacy reste exposé dans `/state` même sans `include_debug` ;
+- limite actuelle documentée : aucun refactor de frontière produit/debug n’a été fait dans R3e ;
+- tests ciblés passés : `tests/routes/test_runtime_state_payloads.py`, `tests/test_main_runtime_state.py`, `tests/test_runtime_routes.py` ;
+- aucun changement produit.
 
 ### R3f — Anti-overclaim tests
 
