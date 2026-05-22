@@ -376,7 +376,7 @@ Découpage recommandé :
 
 - [x] R3a — Contrat d’interprétation actuel (`docs/INTERPRETATION_CONTRACT.md`) ;
 - [x] R3b — Fixtures golden scoring ;
-- R3c — Golden `SignalScorer` ;
+- [x] R3c — Golden `SignalScorer` ;
 - R3d — Evidence / uncertainty baseline ;
 - R3e — Payload boundaries ;
 - R3f — Anti-overclaim tests.
@@ -1066,19 +1066,29 @@ Validation R3b :
 
 Objectif : verrouiller le comportement actuel du scorer sans modifier les heuristiques.
 
-- [ ] Charger les fixtures R3b.
-- [ ] Appeler directement `SignalScorer.compute()`.
-- [ ] Vérifier `probable_task`.
-- [ ] Vérifier `task_confidence`.
-- [ ] Vérifier `activity_level`.
-- [ ] Vérifier `focus_level`.
-- [ ] Vérifier projet actif / fichier actif si disponible.
-- [ ] Documenter les comportements ambigus dans les noms ou commentaires de tests.
-- [ ] Ne pas modifier `SignalScorer` sauf incohérence évidente.
+- [x] Charger les fixtures R3b.
+- [x] Appeler directement `SignalScorer.compute()`.
+- [x] Vérifier `probable_task`.
+- [x] Vérifier `task_confidence`.
+- [x] Vérifier `activity_level`.
+- [x] Vérifier `focus_level`.
+- [x] Vérifier projet actif / fichier actif si disponible.
+- [x] Documenter les comportements ambigus dans les noms ou commentaires de tests.
+- [x] Ne pas modifier `SignalScorer` sauf incohérence évidente.
 
 Sortie attendue de R3c :
 
 > Le comportement actuel du scorer est verrouillé par scénarios golden lisibles.
+
+Validation R3c :
+
+- test golden ajouté : `tests/test_interpretation_signal_scorer_golden.py` ;
+- les scénarios R3b appellent maintenant directement `SignalScorer.compute()` ;
+- champs verrouillés : `probable_task`, `task_confidence`, `activity_level`, `focus_level`, projet actif / fichier actif quand applicable, signaux terminal et compteur d’éditions quand applicable ;
+- scénarios verrouillés : code editing, terminal tests failed, browser / read-only exploration, idle, noisy / tool-assisted files ;
+- ambiguïtés documentées dans la fixture : le fichier actif suit le dernier fichier du workspace dominant, un test terminal échoué seul produit `debug` avec confiance seulement modérée, et `probable_task` peut rester `coding` pendant que `activity_level` / `focus_level` sont `idle` ;
+- tests ciblés passés : `tests/test_interpretation_signal_scorer_golden.py`, `tests/test_interpretation_scoring_fixtures.py`, `tests/core/test_signal_scorer.py` ;
+- aucun changement produit et aucune modification de `SignalScorer`.
 
 ### R3d — Evidence / uncertainty baseline
 

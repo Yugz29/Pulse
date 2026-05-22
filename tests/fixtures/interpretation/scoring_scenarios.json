@@ -47,12 +47,12 @@
         "activity_level": "editing",
         "focus_level": "deep",
         "active_project": "acme",
-        "active_file_suffix": "/src/service.py",
+        "active_file_suffix": "/tests/test_service.py",
         "edited_file_count_10m": 2
       },
       "notes": [
         "This fixture uses portable /Users/tester paths.",
-        "R3c should confirm the exact active file chosen by timestamp/workspace ordering."
+        "R3c confirmed the current scorer chooses the latest file inside the dominant workspace."
       ]
     },
     {
@@ -94,7 +94,7 @@
       ],
       "expected_minimal": {
         "probable_task": "debug",
-        "task_confidence_min": 0.6,
+        "task_confidence_min": 0.5,
         "activity_level": "executing",
         "focus_level": "normal",
         "active_project": "acme",
@@ -103,7 +103,7 @@
       },
       "notes": [
         "Terminal payload is already normalized, matching the post-R2 ingestion contract.",
-        "R3c should confirm whether failed tests alone currently produce debug or coding if file edits are also present."
+        "R3c confirmed failed tests alone currently produce debug, but confidence is only moderate because terminal testing also contributes to coding."
       ]
     },
     {
@@ -200,16 +200,16 @@
         }
       ],
       "expected_minimal": {
-        "probable_task": "general",
-        "task_confidence_max": 0.5,
+        "probable_task": "coding",
+        "task_confidence_min": 0.7,
         "activity_level": "idle",
         "focus_level": "idle",
         "active_project": "acme",
         "active_file_suffix": "/src/service.py"
       },
       "notes": [
-        "One source edit is intentionally too weak to override the recent idle signal.",
-        "R3c should confirm whether active_project remains anchored while activity/focus are idle."
+        "One source edit is enough for the current scorer to keep probable_task=coding.",
+        "R3c confirmed that focus/activity can be idle while probable_task remains coding from recent file evidence."
       ]
     },
     {
