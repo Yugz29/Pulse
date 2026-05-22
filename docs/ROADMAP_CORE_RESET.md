@@ -634,7 +634,7 @@ Découpage recommandé :
 - [x] R5c — Journal minimal truth layers ;
 - [x] R5d — Core/Lab contamination guards ;
 - [x] R5e — Memory routes boundaries ;
-- [ ] R5f — Validation globale R5.
+- [x] R5f — Validation globale R5.
 
 ### R5a — Contrat mémoire minimale actuel
 
@@ -767,6 +767,28 @@ Validation R5e :
 - comportements verrouillés : `/memory/sessions` masque le hidden payload par défaut, expose le brut uniquement via `include_hidden=true`, marque sa surface comme lecture historique, et ne consulte pas `SessionMemory.export_session_data()`, `export_memory_payload()` ou `search_events()` ; `/memory/write` et `/memory/remove` retournent `lab_surface_disabled` en mode Core sans appeler `MemoryStore` ; `/search` appelle uniquement `SessionMemory.search_events()` et ne touche ni `MemoryStore`, ni facts, ni LLM, ni vector store ;
 - ambiguïté conservée : `/memory/sessions?include_hidden=true` expose encore le payload brut pour compatibilité / debug explicite ; cette route reste une lecture historique et non la source canonique de session Core ;
 - tests ciblés passés : `tests/test_main_memory_routes.py`, `tests/memory/test_session.py` ;
+- aucun changement produit.
+
+### R5f — Validation globale R5
+
+Objectif : valider que la baseline mémoire minimale est cohérente, testée et séparée des systèmes Lab.
+
+- [x] Relire `docs/MINIMAL_MEMORY_CONTRACT.md`.
+- [x] Vérifier que R5a à R5e reflètent l'état réel.
+- [x] Lancer les tests ciblés R5.
+- [x] Lancer la suite complète Python.
+- [x] Ne pas modifier le produit.
+- [x] Ne pas passer à R6.
+
+Validation globale R5 :
+
+- tests ciblés R5 passés : `tests/memory/test_session.py`, `tests/memory/test_extractor.py`, `tests/memory/test_pipeline.py`, `tests/test_runtime_orchestrator.py`, `tests/test_main_memory_routes.py` ;
+- résultat ciblé : 279 tests passés, 3 subtests passés ;
+- suite complète Python passée via `./scripts/test_all.sh` ;
+- résultat suite complète : 1204 tests passés ;
+- état validé : la mémoire minimale Core repose sur `SessionMemory` SQLite, snapshots, exports session, journal minimal avec hidden payload / `truth_layers`, routes de lecture historique et recherche events SQLite ;
+- frontières Lab validées : facts / profile, LLM summaries, embeddings / vector store, DayDream, `MemoryStore.write()` / `remove()`, background writers et sync mémoire avancée ne sont pas requis par le Core ;
+- fragilités conservées : `extractor.py` reste mixte et `update_memories_from_session()` n'est toujours pas Core-safe comme fonction isolée ; `/memory/sessions?include_hidden=true` expose encore le payload brut explicitement ; `export_memory_payload()` contient encore des alias legacy de compatibilité ;
 - aucun changement produit.
 
 ### R6 — Baseline Propositions contrôlées
