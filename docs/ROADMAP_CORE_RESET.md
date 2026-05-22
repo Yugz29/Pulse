@@ -390,7 +390,7 @@ Découpage recommandé :
 - [x] R4a — Contrat session actuel (`docs/SESSION_CONTRACT.md`) ;
 - [x] R4b — Golden `SessionFSM` ;
 - [x] R4c — Intégration runtime session ;
-- [ ] R4d — Persistance session minimale ;
+- [x] R4d — Persistance session minimale ;
 - [ ] R4e — Restart repair baseline ;
 - [ ] R4f — Payload boundaries session ;
 - [ ] R4g — Validation globale R4.
@@ -498,6 +498,34 @@ Validation R4c :
 - en mode Core, DayDream et sync mémoire avancée pré-reset restent non déclenchés dans les chemins testés ;
 - limite actuelle documentée dans le test setup : une activité antidatée ne peut ancrer la FSM que si `session_started_at` est antérieur, car la FSM initialise ce champ dès sa construction ;
 - tests ciblés passés : `tests/test_runtime_orchestrator.py`, `tests/core/test_session_fsm.py` ;
+- aucun changement produit.
+
+### R4d — Persistance session minimale
+
+Objectif : vérifier que `SessionMemory` persiste les sessions et events Core sans dépendre de mémoire avancée.
+
+- [x] Création de session persistée.
+- [x] Ajout d'events.
+- [x] Timestamps observés.
+- [x] `new_session()`.
+- [x] `resume_session()`.
+- [x] `close()`.
+- [x] Réparation de sessions stale / orphelines.
+- [x] `recent_sessions`.
+- [x] Séparation entre persistance session Core et journaux Markdown / mémoire avancée.
+
+Sortie attendue de R4d :
+
+> La persistance minimale de session fonctionne via SQLite et snapshots structurés, sans utiliser les journaux Markdown comme preuve Core.
+
+Validation R4d :
+
+- tests complétés dans `tests/memory/test_session.py` ;
+- persistance verrouillée : création de ligne session, stockage d'events, timestamps observés, `new_session()`, `resume_session()`, `close()`, stale repair, projection `recent_sessions`, snapshot structuré et adaptateur legacy ;
+- le test de séparation Core vérifie que `export_session_data()` fonctionne sans créer ni lire de journaux Markdown sous `.pulse/memory/sessions` ;
+- `/memory/sessions` reste volontairement hors preuve principale Core session ;
+- aucune route, LLM, facts, DayDream, vector store, proposition, resume card ou commit linking n'a été touché ;
+- test ciblé passé : `tests/memory/test_session.py` ;
 - aucun changement produit.
 
 ### R5 — Baseline Mémoire minimale

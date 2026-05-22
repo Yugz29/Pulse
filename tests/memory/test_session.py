@@ -272,6 +272,52 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(session["started_at"], restarted_from.isoformat())
         self.assertEqual(session["session_duration_min"], 12)
 
+    def test_new_session_cloture_la_session_courante_et_cree_une_ligne_persistante(self):
+        start = datetime(2026, 4, 23, 9, 0, 0)
+        end = start + timedelta(minutes=25)
+        next_start = start + timedelta(minutes=40)
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.update_present_snapshot(
+            PresentState(
+                session_status="active",
+                awake=True,
+                locked=False,
+                active_project="Pulse",
+                probable_task="coding",
+                activity_level="editing",
+                focus_level="normal",
+                session_duration_min=25,
+                updated_at=end,
+            ),
+            signals=Signals(
+                active_project="Pulse",
+                active_file="/tmp/main.py",
+                probable_task="coding",
+                activity_level="editing",
+                friction_score=0.1,
+                focus_level="normal",
+                session_duration_min=25,
+                recent_apps=["Cursor"],
+                clipboard_context=None,
+            ),
+        )
+
+        self.memory.new_session(
+            started_at=next_start,
+            ended_at=end,
+            close_reason="screen_lock",
+        )
+
+        old_session = self.memory.get_session("test-session")
+        current_session = self.memory.get_session()
+        self.assertEqual(old_session["ended_at"], end.isoformat())
+        self.assertEqual(old_session["session_duration_min"], 25)
+        self.assertNotEqual(current_session["id"], "test-session")
+        self.assertEqual(current_session["started_at"], next_start.isoformat())
+        self.assertEqual(current_session["updated_at"], next_start.isoformat())
+        self.assertIsNone(current_session["ended_at"])
+        self.assertEqual(current_session["session_duration_min"], 0)
+
     def test_get_recent_events_ordonne_par_timestamp(self):
         older = datetime(2026, 4, 23, 16, 0, 0)
         newer = datetime(2026, 4, 23, 16, 5, 0)
@@ -350,6 +396,20 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(data["files_changed"], 1)
         self.assertIn("Cursor", data["recent_apps"])
         self.assertEqual(data["max_friction"], 0.8)
+
+    def test_persistence_core_ne_depend_pas_des_journaux_markdown(self):
+        start = datetime(2026, 4, 28, 11, 0, 0)
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.record_event(
+            Event("file_modified", {"path": "/Users/yugz/Projets/Pulse/Pulse/daemon/main.py"}, timestamp=start)
+        )
+
+        data = self.memory.export_session_data()
+
+        self.assertEqual(data["session_id"], "test-session")
+        self.assertEqual(data["event_count"], 2)
+        self.assertFalse((Path(self.tmpdir.name) / ".pulse" / "memory" / "sessions").exists())
+        self.assertEqual(list(Path(self.tmpdir.name).rglob("*.md")), [])
 
     def test_export_memory_payload_contient_les_champs_canoniques(self):
         start = datetime(2026, 4, 28, 11, 0, 0)
