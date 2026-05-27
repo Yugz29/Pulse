@@ -3,6 +3,7 @@
 > Statut : **document maître prioritaire**  
 > Périmètre : recadrage de Pulse autour du Core  
 > Priorité : ce document passe devant les anciennes roadmaps, notes d’architecture, documents mémoire, agent, apprentissage, DayDream, facts, propositions et extensions dashboard tant que le Core Reset n’est pas terminé et vérifié.
+> Synthèse R1-R6 validée : [`docs/CORE_RESET_VALIDATION_SUMMARY.md`](CORE_RESET_VALIDATION_SUMMARY.md)
 
 ## 0. Objectif du document
 
@@ -1047,7 +1048,7 @@ Aucun commit ne doit mélanger des changements Core et Lab sans raison claire.
 
 ## 10. Priorité actuelle
 
-La priorité immédiate est désormais R6 — Baseline Propositions contrôlées.
+La priorité immédiate est désormais la validation terrain du Core.
 
 R1 — Baseline Runtime est validée côté Python.
 
@@ -1059,15 +1060,17 @@ R4 — Baseline Sessions est validée côté Python.
 
 R5 — Baseline Mémoire minimale est validée côté Python.
 
+R6 — Baseline Propositions contrôlées est validée côté Python.
+
 Prochaines actions :
 
-1. auditer le comportement réel des propositions et du flux MCP ;
-2. distinguer proposition contrôlée, proposition debug, auto-résolution et action exécutée ;
-3. vérifier le cycle `candidate -> pending -> approved | denied | expired -> executed` ;
-4. prouver qu’aucune proposition produit n’est exécutée sans validation humaine explicite ;
-5. vérifier les timeouts, refus et états expirés ;
-6. documenter les surfaces API / dashboard qui exposent les propositions ;
-7. garder les context probes, work intent, actions autonomes et propositions intelligentes hors R6 strict.
+1. lancer Pulse en `PULSE_MODE=core` sur une vraie session de travail ;
+2. observer les logs daemon, erreurs, événements ignorés, lock / unlock et restart repair ;
+3. vérifier `/health/core`, `/state`, `/debug/state` et `/feed` pendant l’usage ;
+4. comparer ce que Pulse affiche avec ce qui s’est réellement passé ;
+5. vérifier que le dashboard reste diagnostic et ne présente pas les surfaces Lab comme stables ;
+6. relancer les smoke tests daemon et `./scripts/test_all.sh` après observation ;
+7. nettoyer README / docs si elles prétendent encore que Pulse fait plus que le Core validé.
 
 Rien d’autre ne doit passer avant, sauf si cela corrige un problème de boot Core, d’observation, de scoring, de session, de journal minimal ou de validation humaine des propositions.
 
