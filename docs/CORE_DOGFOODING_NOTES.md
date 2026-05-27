@@ -365,3 +365,288 @@ Pendant les prochaines sessions de développement de Pulse, noter séparément :
 - conflit de ports ;
 - session courte attendue ;
 - session courte qui pollue réellement les métriques.
+
+
+---
+
+## 2026-05-27 — Session hors-code : candidatures
+
+### Contexte
+
+Activité réelle : candidature à plusieurs offres d’emploi.
+
+Ce n’était pas une session de code ni une session centrée sur le projet Pulse.
+
+Cette session sert à vérifier un point important du Core Reset : Pulse doit rester prudent quand l’activité n’entre pas clairement dans son modèle de session de travail technique.
+
+### Vérification `/health/core`
+
+Commande :
+
+```bash
+curl http://127.0.0.1:8765/health/core | python -m json.tool
+```
+
+Résultat :
+
+```json
+{
+  "status": "ok",
+  "pulse_mode": "core",
+  "experimental_enabled": false,
+  "checks": {
+    "runtime": "ok",
+    "runtime_state": "ok",
+    "event_bus": "ok",
+    "feed_source": "ok",
+    "scoring": "available",
+    "session_fsm": "ok",
+    "lab_services": "not_required"
+  },
+  "failed": {}
+}
+```
+
+Conclusion : le daemon reste sain après une activité hors-code.
+
+### Vérification `/state`
+
+Commande :
+
+```bash
+curl http://127.0.0.1:8765/state | python -m json.tool | head -120
+```
+
+Extraits significatifs :
+
+```json
+{
+  "active_app": "Code",
+  "active_file": "CORE_DOGFOODING_NOTES.md",
+  "active_project": "Pulse",
+  "experimental_enabled": false,
+  "current_context": {
+    "active_app": "Code",
+    "active_project": "Pulse",
+    "active_file": "CORE_DOGFOODING_NOTES.md",
+    "activity_level": "executing",
+    "probable_task": "general",
+    "task_confidence": 0.48,
+    "terminal_action_category": "execution",
+    "terminal_cwd": "/Users/yugz/Projets/Pulse/Pulse",
+    "terminal_project": "Pulse"
+  },
+  "present": {
+    "active_project": "Pulse",
+    "active_file": "CORE_DOGFOODING_NOTES.md",
+    "activity_level": "executing",
+    "probable_task": "general",
+    "session_duration_min": 104,
+    "session_status": "active"
+  }
+}
+```
+
+Applications récentes observées :
+
+```json
+[
+  "Plans",
+  "Safari",
+  "Google Chrome",
+  "ChatGPT",
+  "Code"
+]
+```
+
+### Lecture terrain
+
+Le résultat `/state` reflète surtout le contexte live au moment de la commande : retour dans VS Code, fichier de notes dogfooding ouvert, commande `curl` lancée depuis le repo Pulse.
+
+Il ne résume pas directement toute l’activité précédente de candidature.
+
+Les applications récentes racontent mieux le flux réel hors-code : navigation web, possible consultation de lieux / trajets, ChatGPT, puis retour dans Code.
+
+### Limite connue
+
+Cette limite est attendue pour l’instant.
+
+Pulse Core est encore centré sur les sessions de travail et les signaux techniques observables. Une activité personnelle, administrative ou hors projet peut donc être traitée comme :
+
+- contexte faible ;
+- activité générale ;
+- navigation / lecture / rédaction si les signaux sont suffisants ;
+- bruit ou activité hors projet si elle ne se rattache pas clairement à un espace de travail.
+
+Ce comportement est préférable à une sur-interprétation.
+
+Le bon comportement actuel n’est pas que Pulse comprenne parfaitement une candidature. Le bon comportement est qu’il n’invente pas un projet technique, une tâche de code ou une mémoire forte à partir de signaux faibles.
+
+### Points positifs
+
+- Le Core reste sain après une activité hors-code.
+- `pulse_mode=core` et `experimental_enabled=false` restent corrects.
+- Pulse ne force pas une tâche spécialisée : `probable_task=general`.
+- La confiance reste prudente : `task_confidence=0.48`.
+- Le contexte live est correctement compris après retour dans VS Code.
+- Les apps récentes conservent une trace utile de l’activité précédente.
+
+
+### Vérification `/feed`
+
+Commande :
+
+```bash
+curl http://127.0.0.1:8765/feed | python -m json.tool
+```
+
+Résultat observé :
+
+```json
+[
+  {
+    "command": "curl http://127.0.0.1:8765/health/core | python -m json.tool",
+    "kind": "terminal",
+    "label": "✓ Télécharge des données depuis 127.0.0.1:8765",
+    "success": true,
+    "timestamp": "2026-05-27T12:31:59"
+  },
+  {
+    "command": "curl http://127.0.0.1:8765/state | python -m json.tool | head -120",
+    "kind": "terminal",
+    "label": "✓ Télécharge des données depuis 127.0.0.1:8765",
+    "success": true,
+    "timestamp": "2026-05-27T12:33:25"
+  },
+  {
+    "command": "clear",
+    "kind": "terminal",
+    "label": "✓ Commande terminal",
+    "success": true,
+    "timestamp": "2026-05-27T12:35:36"
+  }
+]
+```
+
+Lecture terrain :
+
+- `/feed` reste fonctionnel et lisible ;
+- les commandes terminal sont correctement normalisées ;
+- les commandes réussies sont bien marquées `success: true` ;
+- le feed ne raconte pas l’activité de candidature elle-même ;
+- il reflète surtout les commandes de diagnostic lancées après coup.
+
+
+### Vérification `/debug/state`
+
+Commande :
+
+```bash
+curl http://127.0.0.1:8765/debug/state | python -m json.tool | head -180
+```
+
+Extraits significatifs :
+
+```json
+{
+  "pulse_mode": "core",
+  "experimental_enabled": false,
+  "legacy_in_state": false,
+  "current_context": {
+    "active_app": "Code",
+    "active_file": "/Users/yugz/Projets/Pulse/Pulse/docs/CORE_DOGFOODING_NOTES.md",
+    "active_project": "Pulse",
+    "activity_level": "executing",
+    "probable_task": "writing",
+    "task_confidence": 0.52,
+    "terminal_project": "Pulse"
+  },
+  "session_fsm": {
+    "state": "active",
+    "session_started_at": "2026-05-27T10:48:47",
+    "last_meaningful_activity_at": "2026-05-27T12:39:46",
+    "last_screen_locked_at": null
+  }
+}
+```
+
+Applications récentes :
+
+```json
+[
+  "Plans",
+  "Safari",
+  "Google Chrome",
+  "ChatGPT",
+  "Code"
+]
+```
+
+Lecture terrain :
+
+- `/debug/state` confirme que Pulse reste en Core ;
+- le contexte live est revenu sur le projet Pulse après retour dans VS Code ;
+- la rédaction de `CORE_DOGFOODING_NOTES.md` est maintenant qualifiée comme `writing` ;
+- la confiance reste modérée (`0.52`) ;
+- `recent_apps` garde une trace de la séquence hors-code précédente ;
+- `SessionFSM` reste `active`, avec une activité significative récente.
+
+Conclusion : le comportement est cohérent. Pulse ne résume pas toute la période de candidature, mais il suit correctement le contexte live après retour sur la documentation et reste prudent dans son interprétation.
+
+### Captures dashboard après retour sur la documentation
+
+Captures observées après retour dans Pulse / VS Code et rédaction des notes de dogfooding.
+
+État visible dans l’onglet `Aujourd’hui` :
+
+- daemon actif ;
+- travail du jour autour de `01h00` ;
+- `10` commits ;
+- `4` blocs ;
+- `1` projet ;
+- projet du jour : `Pulse` ;
+- contexte actuel : `Rédaction` ;
+- projet : `Pulse` ;
+- tâche : `Rédaction` ;
+- activité : `Exécution` ;
+- focus : `Normal` ;
+- confiance : `76 %` ;
+- explication : projet corroboré par les signaux disponibles, avec mention que des apps support détectées ne sont pas utilisées comme preuve principale.
+
+État visible dans l’onglet `Travail` :
+
+- une séquence en cours `12:36 → 12:40`, durée `3 min`, étiquetée `Pulse`, `Docs`, `Rédaction` ;
+- statut `En cours` ;
+- message : `Pulse observe encore cette séquence de travail.` ;
+- confiance `0.60` ;
+- séquences précédentes autour de livraison / Git et rédaction.
+
+Lecture terrain :
+
+- après retour sur la documentation, le dashboard converge vers une interprétation plus solide que juste après le redémarrage ;
+- la tâche `Rédaction` est cohérente avec la modification de `CORE_DOGFOODING_NOTES.md` ;
+- l’onglet `Travail` isole correctement une séquence courte `Pulse / Docs / Rédaction` en cours ;
+- l’activité `Exécution` reste probablement influencée par les commandes terminal `curl` lancées pour diagnostiquer Pulse ;
+- la confiance élevée côté dashboard (`76 %`) peut coexister avec une confiance plus modérée dans certains payloads debug (`0.52`) car les surfaces ne semblent pas représenter exactement la même temporalité ou le même agrégat ;
+- l’onglet `Travail` distingue mieux les séquences historiques et la séquence en cours.
+
+Observation UX : le dashboard affiche plusieurs niveaux de vérité en même temps : résumé du jour, bloc courant, contexte live, séquence de travail et historique. Ces informations peuvent toutes être correctes, mais l’interface ne nomme pas encore assez clairement la source temporelle de chaque donnée.
+
+Point précis observé : `Tâche = Rédaction` et `Activité = Exécution` peuvent paraître contradictoires visuellement. C’est probablement cohérent côté signaux, car la tâche principale est la rédaction de documentation tandis qu’un signal terminal récent indique une exécution de commande. Côté UX, il serait plus clair de distinguer `tâche principale` et `signal récent` plutôt que de présenter `Exécution` comme activité globale non contextualisée.
+
+Conclusion : le dashboard devient plus cohérent après activité solide dans le projet Pulse. Le problème principal n’est pas forcément le scorer, mais la lisibilité des agrégats affichés : contexte live, activité du jour, séquence de travail, historique et signaux récents doivent rester visuellement distingués.
+
+### Points à surveiller
+
+- `/state` est une photo du contexte live, pas un résumé de toute la période précédente.
+- Les commandes de diagnostic après coup peuvent masquer l’activité réelle précédente.
+- Les activités hors projet risquent d’être invisibles ou faiblement qualifiées, ce qui est acceptable tant que Pulse ne sur-affirme pas.
+- Le dashboard devra éviter de présenter une activité hors-code comme une session technique claire.
+
+### Décision provisoire
+
+Ne pas corriger maintenant.
+
+Pour le Core actuel, ce comportement est acceptable : Pulse reste prudent et ne prétend pas comprendre une activité hors projet.
+
+Une amélioration éventuelle devra d’abord passer par une décision produit explicite : Pulse doit-il couvrir aussi les activités personnelles / administratives, ou rester centré sur le travail projet ?
