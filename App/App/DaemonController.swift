@@ -4,7 +4,7 @@ import Combine
 
 // MARK: - État du daemon
 
-enum DaemonState {
+enum DaemonState: Equatable {
     case running
     case paused
     case stopped
@@ -25,10 +25,33 @@ class DaemonController: ObservableObject {
     @Published var state: DaemonState = .stopped
     @Published var lastError: String?  = nil
 
-    private let base          = "http://127.0.0.1:8765"
-    private let session       = URLSession.shared
+    private let base: String
+    private let session: URLSession
     private let launchLabel   = "cafe.pulse.daemon"
+    private let launchAgentInstalledOverride: Bool?
+    private let launchAgentStopTimeout: TimeInterval
+    private let directStopTimeout: TimeInterval
+    private let directRestartStopTimeout: TimeInterval
+    private let stopPollIntervalNanoseconds: UInt64
     private var daemonProcess: Process?
+
+    init(
+        base: String = "http://127.0.0.1:8765",
+        session: URLSession = .shared,
+        launchAgentInstalled: Bool? = nil,
+        launchAgentStopTimeout: TimeInterval = 6,
+        directStopTimeout: TimeInterval = 5,
+        directRestartStopTimeout: TimeInterval = 4,
+        stopPollIntervalNanoseconds: UInt64 = 400_000_000
+    ) {
+        self.base = base
+        self.session = session
+        self.launchAgentInstalledOverride = launchAgentInstalled
+        self.launchAgentStopTimeout = launchAgentStopTimeout
+        self.directStopTimeout = directStopTimeout
+        self.directRestartStopTimeout = directRestartStopTimeout
+        self.stopPollIntervalNanoseconds = stopPollIntervalNanoseconds
+    }
 
     // Chemin de la plist installée
     private var launchAgentPlist: URL {
@@ -37,7 +60,8 @@ class DaemonController: ObservableObject {
     }
 
     var isLaunchAgentInstalled: Bool {
-        FileManager.default.fileExists(atPath: launchAgentPlist.path)
+        if let launchAgentInstalledOverride { return launchAgentInstalledOverride }
+        return FileManager.default.fileExists(atPath: launchAgentPlist.path)
     }
 
     // ── Actions publiques ────────────────────────────────────────────────────
@@ -161,15 +185,11 @@ class DaemonController: ObservableObject {
             _ = await shell("/bin/launchctl",
                             args: ["bootout", "gui/\(uid)/\(launchLabel)"])
             // bootout tue déjà le process — on attend la confirmation
-            await waitForStop(timeout: 6)
+            _ = await waitForStop(timeout: launchAgentStopTimeout)
         } else {
             // Mode dev : shutdown HTTP puis kill si nécessaire
             _ = await postDaemon("/daemon/shutdown")
-            await waitForStop(timeout: 5)
-            if state != .stopped {
-                daemonProcess?.terminate()
-                state = .stopped
-            }
+            _ = await waitForStop(timeout: directStopTimeout)
         }
     }
 
@@ -193,7 +213,7 @@ class DaemonController: ObservableObject {
         } else {
             // Mode dev : shutdown HTTP puis redémarre le process
             _ = await postDaemon("/daemon/shutdown")
-            await waitForStop(timeout: 4)
+            guard await waitForStop(timeout: directRestartStopTimeout) else { return }
             await startDirectly()
         }
     }
@@ -216,17 +236,19 @@ class DaemonController: ObservableObject {
     }
 
     /// Attend que le daemon arrête de répondre (max `timeout` secondes).
-    private func waitForStop(timeout: TimeInterval) async {
+    @discardableResult
+    private func waitForStop(timeout: TimeInterval) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if !(await ping()) {
                 state = .stopped
-                return
+                return true
             }
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(nanoseconds: stopPollIntervalNanoseconds)
         }
-        // Timeout — on suppose qu'il est quand même arrêté
-        state = .stopped
+        state = .running
+        lastError = "Daemon still responds on :8765 after stop timeout"
+        return false
     }
 
     // ── Helpers HTTP ─────────────────────────────────────────────────────────
