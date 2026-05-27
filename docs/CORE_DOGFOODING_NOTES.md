@@ -649,4 +649,63 @@ Ne pas corriger maintenant.
 
 Pour le Core actuel, ce comportement est acceptable : Pulse reste prudent et ne prétend pas comprendre une activité hors projet.
 
-Une amélioration éventuelle devra d’abord passer par une décision produit explicite : Pulse doit-il couvrir aussi les activités personnelles / administratives, ou rester centré sur le travail projet ?
+
+---
+
+## 2026-05-27 — Patch UI : clarification des temporalités dashboard
+
+### Contexte
+
+Après les premières captures terrain, le dashboard donnait parfois une impression de contradiction entre plusieurs informations pourtant probablement cohérentes côté backend :
+
+- `Tâche = Rédaction` ;
+- `Activité = Exécution` ;
+- confiance dashboard élevée ;
+- confiance de séquence différente ;
+- confiance debug/current context différente.
+
+Lecture : le problème principal n’était pas le scoring, mais la lisibilité des sources et temporalités affichées.
+
+### Patch appliqué
+
+Patch Swift/UI appliqué pour clarifier les libellés, sans modifier les données backend :
+
+- `Travail` -> `Séquences debug` ;
+- `Mémoire` -> `Mémoire (Lab)` ;
+- `DayDream` -> `DayDream (Lab)` ;
+- `Contexte` -> `Contexte (Lab)` ;
+- `Contexte actuel` -> `Lecture courante` ;
+- `Bloc de travail courant` -> `Bloc du jour en cours` ;
+- `Épisodes de travail` -> `Séquences reconstruites (debug)` ;
+- `Tâche` -> `Tâche principale` ;
+- `Activité` -> `Activité récente` ;
+- `Confiance` -> `Confiance tâche` ;
+- `Confiance` des séquences -> `Confiance séquence`.
+
+Micro-copy ajoutée :
+
+- le contexte live décrit l’instant courant ;
+- les séquences et le résumé du jour agrègent une période plus large ;
+- les séquences debug sont une reconstruction depuis événements / journal, pas une source Core canonique.
+
+### Observation après patch
+
+Captures après patch :
+
+- la navigation distingue mieux Core, debug et Lab ;
+- les surfaces expérimentales sont plus honnêtes : `Mémoire (Lab)`, `DayDream (Lab)`, `Contexte (Lab)` ;
+- `Séquences debug` rend plus clair que l’onglet `Travail` repose sur une reconstruction ;
+- `Lecture courante` et `Hypothèse live` rendent mieux la nature instantanée du contexte ;
+- `Tâche principale` et `Activité récente` réduisent l’impression de contradiction entre `Développement` / `Lecture` ou `Rédaction` / `Exécution`.
+
+### Verdict provisoire
+
+Patch UI réussi pour le dogfooding.
+
+Il ne rend pas le dashboard parfait, mais il réduit fortement le risque de vendre une reconstruction debug ou une surface Lab comme vérité Core stable.
+
+À surveiller dans les prochaines sessions :
+
+- est-ce que les nouveaux libellés suffisent à comprendre les différences entre live, journée, séquence et historique ?
+- est-ce que le terme `debug` est assez clair sans rendre l’interface trop anxiogène ?
+- est-ce que `Activité récente` reste compréhensible quand le signal récent vient du terminal mais que la tâche principale est rédaction / développement ?

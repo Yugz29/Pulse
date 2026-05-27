@@ -9,13 +9,13 @@ private let gPurple = "#8B5CF6"
 
 enum DashboardSection: String, CaseIterable, Identifiable {
     case session = "Aujourd’hui"
-    case episodes = "Travail"
+    case episodes = "Séquences debug"
     case observation = "Observation"
-    case memory = "Mémoire"
-    case daydream = "DayDream"
+    case memory = "Mémoire (Lab)"
+    case daydream = "DayDream (Lab)"
     case events = "Événements"
     case notifications = "Notifications"
-    case contextProbes = "Contexte"
+    case contextProbes = "Contexte (Lab)"
     case mcp = "MCP"
     case system = "Système"
 
@@ -268,7 +268,7 @@ struct DashboardRootView: View {
                             Image(systemName: "waveform.path.ecg")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
-                            Text("Bloc de travail courant")
+                            Text("Bloc du jour en cours")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
@@ -278,8 +278,8 @@ struct DashboardRootView: View {
                                 .foregroundStyle(.primary)
                         }
                         signalRow("Projet", currentBlock?.project ?? currentWindow?.project ?? "—")
-                        signalRow("Tâche", currentBlock?.taskLabel ?? currentWindow?.taskLabel ?? "—")
-                        signalRow("Activité", currentWindow?.activityLabel ?? "—")
+                        signalRow("Tâche principale", currentBlock?.taskLabel ?? currentWindow?.taskLabel ?? "—")
+                        signalRow("Activité récente", currentWindow?.activityLabel ?? "—")
                         signalRow("Commits", "\(currentWindow?.commitCount ?? totals?.commitCount ?? 0)")
                     }
                 }
@@ -344,11 +344,14 @@ struct DashboardRootView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Épisodes de travail")
+                        Text("Séquences reconstruites (debug)")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                         Text(vm.debugWorkEpisodes?.date ?? vm.debugCommitEpisodeLinks?.date ?? "aujourd’hui")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
+                        Text("Reconstruction debug depuis événements/journal, pas source Core canonique.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
                     }
                     Spacer()
                     Button {
@@ -386,7 +389,7 @@ struct DashboardRootView: View {
 
         return GlassCard(accent: gOrange) {
             VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Work episodes", icon: "rectangle.stack")
+                cardTitle("Séquences debug", icon: "rectangle.stack")
 
                 if episodes.isEmpty {
                     emptyState("Aucun épisode reçu ou route debug indisponible")
@@ -634,7 +637,11 @@ struct DashboardRootView: View {
 
         return GlassCard(accent: context?.boundaryColor ?? gBlue) {
             VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Contexte actuel", icon: "timeline.selection")
+                cardTitle("Lecture courante", icon: "timeline.selection")
+                Text("Le contexte live décrit l’instant courant. Les séquences et le résumé du jour agrègent une période plus large.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let context {
                     VStack(alignment: .leading, spacing: 6) {
@@ -656,7 +663,7 @@ struct DashboardRootView: View {
                             Image(systemName: "shippingbox")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
-                            Text("Interprétation")
+                            Text("Hypothèse live")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
@@ -676,10 +683,10 @@ struct DashboardRootView: View {
                             }
                             .padding(.top, 2)
                         }
-                        signalRow("Tâche", context.taskLabel)
-                        signalRow("Activité", context.activityLabel)
+                        signalRow("Tâche principale", context.taskLabel)
+                        signalRow("Activité récente", context.activityLabel)
                         signalRow("Focus", focusLabel(present?.focusLevel))
-                        signalRow("Confiance", dashboardPercent(context.taskConfidence))
+                        signalRow("Confiance tâche", dashboardPercent(context.taskConfidence))
                         if context.boundaryReason == "idle_timeout" {
                             signalRow("Fin", "Estimée par inactivité")
                         }
@@ -831,7 +838,7 @@ struct DashboardRootView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        metaLabel("Confiance")
+                        metaLabel("Confiance tâche")
                         Spacer()
                         Text(dashboardPercent(context?.taskConfidence ?? signals?.taskConfidence))
                             .font(.system(size: 11, weight: .semibold))
@@ -845,7 +852,7 @@ struct DashboardRootView: View {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                    Text((present?.activityLabel ?? context?.activityLabel) ?? "—")
+                    Text("Activité récente: \((present?.activityLabel ?? context?.activityLabel) ?? "—")")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -2604,7 +2611,7 @@ private struct WorkEpisodeCard: View {
                     compactMetric("Weak", "\(episode.weakEventCount ?? 0)", gGray)
                     compactMetric("Fin", boundaryLabel(episode.boundaryReason), status.colorHex)
                     if let confidence = episode.confidence {
-                        compactMetric("Confiance", dashboardScore(confidence), gBlue)
+                        compactMetric("Confiance séquence", dashboardScore(confidence), gBlue)
                     }
                 }
 
@@ -2852,7 +2859,7 @@ func scopeLabel(_ scope: String?) -> String {
     case "app_swift": return "App Swift"
     case "routes": return "Routes"
     case "memory": return "Mémoire"
-    case "work_episode": return "Épisodes de travail"
+    case "work_episode": return "Séquences debug"
     case "tests": return "Tests"
     case "git": return "Git"
     case "extractor": return "Extracteur"

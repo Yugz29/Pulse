@@ -25,7 +25,7 @@ struct CurrentStateView: View {
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        sectionHeader("Contexte actuel")
+                        sectionHeader("Lecture courante")
                             .padding(.horizontal, 18)
                             .padding(.top, 10)
 
@@ -35,7 +35,7 @@ struct CurrentStateView: View {
                         if currentContext != nil || currentPresent != nil {
                             Divider().background(Color.white.opacity(0.05))
 
-                            sectionHeader("Bloc courant")
+                            sectionHeader("Hypothèse live")
                                 .padding(.horizontal, 18)
                                 .padding(.top, 8)
 
@@ -234,7 +234,7 @@ struct CurrentStateView: View {
 
                     Spacer(minLength: 8)
 
-                    Text(context != nil ? "Contexte" : "Live")
+                    Text(context != nil ? "Contexte live" : "Live")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(Color(hex: accent))
                         .padding(.horizontal, 6)
@@ -280,10 +280,10 @@ struct CurrentStateView: View {
         let project = context?.activeProject ?? present?.activeProject ?? "—"
         let activity = present?.activityLabel ?? context?.activityLabel ?? "—"
         if let context {
-            return "Bloc courant sur \(project) · \(context.taskLabel) · \(activity)"
+            return "Hypothèse live sur \(project) · \(context.taskLabel) · signal récent \(activity)"
         }
         if let present {
-            return "Lecture live sur \(project) · \(present.taskLabel) · \(activity)"
+            return "Lecture live sur \(project) · \(present.taskLabel) · signal récent \(activity)"
         }
         return "Pas encore assez de contexte local."
     }
