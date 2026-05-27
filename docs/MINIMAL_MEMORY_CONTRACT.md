@@ -194,6 +194,20 @@ Il contient aussi des chemins hors Core R5 :
 
 Conclusion : `update_memories_from_session()` n'est pas Core-safe comme fonction isolee. Elle peut ecrire un journal minimal, mais elle peut aussi toucher facts, projects, LLM repair et embeddings selon le contexte et la configuration.
 
+### Facts / profile legacy
+
+Les anciens semantic contracts decrivaient le moteur de facts comme un pipeline heuristique : observations extraites des sessions, repetition, promotion mecanique en facts, decay, archivage et rendu contextuel pour certains chemins Lab.
+
+Ce comportement reste hors Core R5. Il ne doit pas etre lu comme memoire minimale, profil utilisateur fiable ou apprentissage.
+
+Limites conservees :
+
+- la promotion par seuil compte la repetition d'une observation, pas sa verite ;
+- `_promote_pending()` ne revalide pas la qualite semantique de la cle au moment de promouvoir ;
+- `render_for_context()` filtre des facts par confiance, mais ne prouve ni validation utilisateur ni pertinence pour la tache courante ;
+- `autonomy_level` peut exister comme donnee persistante Lab, mais ne gouverne pas le comportement Core ;
+- absence de contradiction ne vaut pas confirmation.
+
 ### Runtime Core
 
 Le runtime Core ne doit pas appeler automatiquement `update_memories_from_session()`.
