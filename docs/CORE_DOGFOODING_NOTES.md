@@ -704,8 +704,138 @@ Patch UI réussi pour le dogfooding.
 
 Il ne rend pas le dashboard parfait, mais il réduit fortement le risque de vendre une reconstruction debug ou une surface Lab comme vérité Core stable.
 
-À surveiller dans les prochaines sessions :
 
-- est-ce que les nouveaux libellés suffisent à comprendre les différences entre live, journée, séquence et historique ?
-- est-ce que le terme `debug` est assez clair sans rendre l’interface trop anxiogène ?
-- est-ce que `Activité récente` reste compréhensible quand le signal récent vient du terminal mais que la tâche principale est rédaction / développement ?
+---
+
+## 2026-05-27 — Hardening daemon dev : stop / restart / ports occupés
+
+### Contexte
+
+Pendant le développement de Pulse, les redémarrages daemon sont fréquents pour appliquer du nouveau code.
+
+Les premières sessions de dogfooding ont montré deux risques autour du cycle daemon :
+
+- l’interface pouvait croire que le daemon était arrêté alors qu’il répondait encore ;
+- le script dev pouvait lancer `daemon.main` alors que le port `8765` était déjà occupé mais que `/ping` ne répondait pas comme un daemon Pulse valide.
+
+Ces cas pouvaient provoquer des faux redémarrages, des conflits de ports ou des sessions très courtes parasites.
+
+### Patch Swift appliqué
+
+Patch appliqué côté `DaemonController` :
+
+- `waitForStop()` confirme maintenant réellement l’arrêt du daemon ;
+- si `/ping` cesse de répondre avant timeout, l’état passe à `.stopped` ;
+- si `/ping` répond encore après timeout, l’état repasse à `.running` ;
+- `lastError` indique : `Daemon still responds on :8765 after stop timeout` ;
+- `restartDaemon()` ne relance plus le script dev si l’arrêt n’est pas confirmé.
+
+Tests ajoutés :
+
+- stop confirmé -> `.stopped` ;
+- stop timeout avec `/ping` vivant -> reste `.running` ;
+- restart timeout -> ne relance pas après arrêt non confirmé.
+
+Validation ciblée :
+
+```bash
+xcodebuild test -project App/Pulse.xcodeproj -scheme App -only-testing:AppTests/DaemonControllerTests
+```
+
+Résultat observé : `3 tests OK`.
+
+### Patch script appliqué
+
+Patch appliqué dans `scripts/start_pulse_daemon.sh` :
+
+- le script teste maintenant `/ping` avant de vérifier `.venv` ;
+- si `/ping` répond, il loggue `Daemon already active on :8765.` et sort `0` ;
+- si `/ping` échoue mais que `8765` a déjà un listener, il refuse de lancer `daemon.main` et sort `1` ;
+- si `8766` est occupé, il loggue un warning non bloquant et continue le lancement Core ;
+- l’absence éventuelle de `lsof` est traitée par warning, sans bloquer.
+
+Comportement corrigé :
+
+- avant : `8765` occupé + `/ping` invalide -> lancement de `python -m daemon.main` ;
+- après : `8765` occupé + `/ping` invalide -> refus explicite, pas de lancement Python.
+
+### Validation manuelle
+
+Commande lancée avec un daemon déjà actif :
+
+```bash
+scripts/start_pulse_daemon.sh
+echo $?
+```
+
+Résultat observé :
+
+```text
+[Pulse] Daemon already active on :8765.
+0
+```
+
+Vérification ports :
+
+```bash
+lsof -i :8765
+lsof -i :8766
+```
+
+Résultat : un seul process Python écoute sur les deux ports.
+
+Conclusion : le script détecte correctement un daemon déjà actif et ne relance pas `daemon.main`.
+
+### Observation `/state` après hardening
+
+Après les patchs, Pulse détecte correctement une session de développement sur le script daemon :
+
+```text
+active_app = Code
+active_file = scripts/start_pulse_daemon.sh
+active_project = Pulse
+probable_task = coding
+activity_level = executing
+task_confidence = 0.71
+session_status = active
+```
+
+Lecture terrain : le contexte est cohérent avec le travail réel effectué : audit, patch script, tests Swift, tests Python, validation ports et commandes de diagnostic.
+
+### Observation `/feed` après hardening
+
+Le feed devient pertinent sur une vraie session de développement projet. Il expose notamment :
+
+- `/health/core` ;
+- tests `xcodebuild` ciblés ;
+- `./scripts/test_all.sh` ;
+- `scripts/start_pulse_daemon.sh` ;
+- `lsof -i :8765` / `lsof -i :8766` ;
+- commandes `curl` de diagnostic.
+
+Lecture terrain : contrairement aux sessions hors-code, `/feed` raconte correctement une session technique Pulse.
+
+### Point à surveiller
+
+`recent_sessions` peut encore contenir des sessions très courtes ou incohérentes issues de tests, redémarrages ou artefacts de développement.
+
+Hypothèse actuelle : ces entrées sont liées aux cycles dev / tests Codex / restart daemon, pas à un problème utilisateur normal.
+
+Décision provisoire : ne pas corriger tant que ce n’est pas reproduit hors cycle dev.
+
+### Verdict provisoire
+
+Le cycle daemon dev est plus robuste :
+
+- Swift évite le faux état `stopped` ;
+- le script évite le faux démarrage quand `8765` est déjà occupé ;
+- le risque de sessions courtes parasites est réduit à la source ;
+- le Core reste sain après les patchs.
+
+À vérifier dans les prochaines sessions :
+
+- redémarrage volontaire depuis l’interface ;
+- conflit de ports réel ;
+- lisibilité de l’erreur côté app ;
+- absence de second daemon lancé ;
+- impact restant des sessions courtes de dev dans le dashboard.
