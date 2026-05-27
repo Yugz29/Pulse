@@ -9,7 +9,7 @@ Il distingue explicitement :
 
 Il ne décrit pas un système idéal.
 
-Note 2026 : les sections historiques qui parlent d'`EpisodeFSM` décrivent l'ancienne piste d'architecture. Elles sont conservées uniquement comme archive de conception et ne doivent plus guider les changements runtime. Le runtime actuel a supprimé `EpisodeFSM` et utilise `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`. La référence courte à jour est [architecture.md](./architecture.md).
+Note 2026 : les sections historiques qui parlent d'`EpisodeFSM` décrivent l'ancienne piste d'architecture. Elles sont conservées uniquement comme archive de conception et ne doivent plus guider les changements runtime. Le runtime actuel a supprimé `EpisodeFSM` et utilise `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`. Les références à jour sont [`ROADMAP_CORE_RESET.md`](../ROADMAP_CORE_RESET.md), [`INTERPRETATION_CONTRACT.md`](../INTERPRETATION_CONTRACT.md) et [`SESSION_CONTRACT.md`](../SESSION_CONTRACT.md).
 
 ---
 
@@ -413,7 +413,7 @@ pas comme un système de compréhension avancée.
 > Cette partie est conservée uniquement pour comprendre l'ancienne piste de conception `EpisodeFSM`.
 > Elle ne doit plus servir de contrat d'implémentation, de roadmap active, ni de base pour de nouveaux patchs.
 >
-> Le contrat actuel est décrit dans `architecture.md` et repose sur `current_context`, `recent_sessions`, `work_blocks` et `work_block_*`.
+> Le contrat actuel est décrit dans [`ROADMAP_CORE_RESET.md`](../ROADMAP_CORE_RESET.md), [`INTERPRETATION_CONTRACT.md`](../INTERPRETATION_CONTRACT.md) et [`SESSION_CONTRACT.md`](../SESSION_CONTRACT.md).
 
 Cette section décrit l'ancien contrat de l'épisode dans Pulse.
 

@@ -10,7 +10,7 @@ It explicitly separates:
 It does not describe an ideal system.
 It does not describe Episode System either.
 
-2026 note: historical sections that mention `EpisodeFSM` describe the previous architecture path. They are kept only as design archive and must no longer guide runtime changes. The current runtime removed `EpisodeFSM` and uses `current_context`, `recent_sessions`, `work_blocks`, and `work_block_*`. The short up-to-date reference is [architecture.md](./architecture.md).
+2026 note: historical sections that mention `EpisodeFSM` describe the previous architecture path. They are kept only as design archive and must no longer guide runtime changes. The current runtime removed `EpisodeFSM` and uses `current_context`, `recent_sessions`, `work_blocks`, and `work_block_*`. The up-to-date references are [`ROADMAP_CORE_RESET.md`](../ROADMAP_CORE_RESET.md), [`INTERPRETATION_CONTRACT.md`](../INTERPRETATION_CONTRACT.md), and [`SESSION_CONTRACT.md`](../SESSION_CONTRACT.md).
 
 Current Pulse memory is still primarily:
 - session-centric

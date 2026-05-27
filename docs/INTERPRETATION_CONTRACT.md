@@ -111,6 +111,19 @@ Statuts actuels :
 
 Limite importante : `WorkContextCard` reconstruit une explication apres coup depuis `CurrentContext`, `PresentState`, `Signals` et la decision runtime. Cette carte est utile pour debug/transparence, mais elle n'est pas encore la preuve canonique produite par `SignalScorer`.
 
+La route `/work-context` doit rester une surface passive de lecture / debug local. Elle ne doit pas :
+
+- observer de nouvelles données ;
+- déclencher un context probe ;
+- modifier la mémoire ;
+- approuver une demande ;
+- exécuter une action ;
+- prendre une décision autonome.
+
+`safe_next_probes` signifie seulement que Pulse pourrait demander ce contexte proprement. Cela ne signifie pas que Pulse peut le lire automatiquement. Un manque de contexte n'est pas une autorisation.
+
+`WorkContextCard` ne doit pas devenir une mémoire, une source de vérité parallèle, une couche d'auto-approval ou un moteur d'autonomie.
+
 ## `WorkEvidenceResolver`
 
 `WorkEvidenceResolver` resout surtout le projet de travail. Il est plus prudent que le scorer brut.

@@ -109,6 +109,31 @@ Les champs inférés sont probabilistes ou heuristiques et ne doivent pas être 
 
 L’attribution d’acteur s’applique actuellement uniquement aux événements fichier dans `/event`.
 
+## Influence et sensibilité
+
+Une observation reste une preuve partielle. Une source isolée ne doit pas être lue comme une certitude sur le travail utilisateur.
+
+Règles prudentes conservées depuis l'ancien modèle d'observation :
+
+- présence utilisateur seule ne prouve pas du travail ;
+- app active seule ne prouve pas un projet ni une tâche ;
+- titre de fenêtre seul ne confirme pas un projet ;
+- commande terminal read-only seule indique surtout de l'inspection ;
+- event MCP read-only seul indique un contexte outil, pas du travail utilisateur direct ;
+- event fichier `tool_assisted` peut contribuer au contexte, mais ne doit pas être compté comme édition utilisateur directe ;
+- event fichier `system` ou chemin technique ne doit pas influencer le présent ;
+- clipboard seul ne doit pas inférer un projet ni créer une activité ;
+- `screen_unlocked` seul ne rouvre pas automatiquement une activité de travail.
+
+Les données sensibles doivent rester minimisées :
+
+- contenu brut du clipboard : retiré avant publication ;
+- commandes terminal / MCP : à traiter comme sensibles et à redacter avant persistance durable quand elles sont stockées ;
+- titres de fenêtre : utiles comme support, mais potentiellement sensibles et faibles comme preuve ;
+- chemins fichiers : utiles, mais les chemins techniques, caches, secrets et artefacts système doivent être filtrés ou déclassés.
+
+Règle générale : plus une donnée est sensible, plus sa durée de vie et son influence doivent être réduites.
+
 ## Fixtures golden actuelles
 
 La première fixture golden R2 est `tests/fixtures/observation/core_events.json`.
