@@ -1,3 +1,14 @@
+> ⚠️ Document Lab / future design
+>
+> Ce document décrit une surface expérimentale ou une idée de conception future.
+> Il ne fait pas partie du Core validé R1-R6.
+>
+> Autorité actuelle :
+> - `../CORE_RESET_VALIDATION_SUMMARY.md`
+> - `../ROADMAP_CORE_RESET.md`
+>
+> Ne pas utiliser ce document comme roadmap active sans revalidation explicite.
+
 # Resume Card
 
 Resume Card est la première boucle proactive de Pulse.

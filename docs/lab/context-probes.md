@@ -1,3 +1,14 @@
+> ⚠️ Document Lab / future design
+>
+> Ce document décrit une surface expérimentale ou une idée de conception future.
+> Il ne fait pas partie du Core validé R1-R6.
+>
+> Autorité actuelle :
+> - `../CORE_RESET_VALIDATION_SUMMARY.md`
+> - `../ROADMAP_CORE_RESET.md`
+>
+> Ne pas utiliser ce document comme roadmap active sans revalidation explicite.
+
 # Context Probes — Politique de sécurité et flux d'approbation
 
 Ce document décrit le **niveau 1.5** de Pulse : les lectures contextuelles ponctuelles, contrôlées et _read-only_. Il se situe entre l'observation passive (`/event`, signaux système, fichiers, terminal, présence) et les couches plus hautes de qualification, mémoire, proposition ou action.
