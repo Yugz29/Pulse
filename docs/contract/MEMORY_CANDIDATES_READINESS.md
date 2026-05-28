@@ -25,6 +25,20 @@ Pulse n'est pas prêt à apprendre automatiquement. Il peut seulement préparer 
 - À tester avant code : pending-only, preuves multiples, aucune candidate depuis `/state` seul, `curl`, `/debug/state`, `/insights`, LLM summary, DayDream ou facts Lab.
 - Niveau de risque : moyen si store/routes sont séparés ; élevé si intégré aux chemins mémoire existants.
 
+## C4-mini decision
+
+C4-mini ne doit pas implémenter `memory_candidates`.
+
+La décision de préparation est limitée à des garde-fous :
+
+- les routes candidates ne sont pas enregistrées tant que le store dédié et les tests de non-promotion n'existent pas ;
+- `/state.present` ne doit pas exposer `memory_candidate` ou `memory_candidates` ;
+- `/feed` doit rester une sélection notable et ne doit pas devenir une surface de candidates ;
+- le futur patch produit devra créer store dédié + routes dédiées + tests avant toute génération ;
+- le futur patch produit ne devra pas toucher `RuntimeOrchestrator` au départ.
+
+Donc le prochain patch produit autorisable n'est pas "générer des candidates". C'est un squelette test-first, pending-only, local-only, sans LLM et sans Lab.
+
 ## Stockage
 
 ### Option `SessionMemory`

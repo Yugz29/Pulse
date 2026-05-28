@@ -329,6 +329,8 @@ def test_state_present_contract_rejects_raw_debug_lab_and_terminal_fields():
         "vector_store",
         "embeddings",
         "llm_summary",
+        "memory_candidate",
+        "memory_candidates",
     }
 
     assert forbidden_present_fields.isdisjoint(payload["present"].keys())

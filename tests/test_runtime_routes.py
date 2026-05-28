@@ -1287,6 +1287,7 @@ class TestRuntimeRoutes(unittest.TestCase):
             Event("user_presence", {"state": "active", "idle_seconds": 0}, now),
             Event("screen_locked", {}, now),
             Event("screen_unlocked", {}, now),
+            Event("memory_candidate_created", {"claim": "Pulse semble récurrent"}, now),
             Event(
                 "terminal_command_finished",
                 {

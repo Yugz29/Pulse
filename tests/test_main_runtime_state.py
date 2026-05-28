@@ -308,6 +308,7 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertTrue(core_routes.issubset(routes))
         self.assertTrue(debug_routes.issubset(routes))
         self.assertTrue(lab_or_legacy_routes.issubset(routes))
+        self.assertFalse(any(route.startswith("/memory/candidates") for route in routes))
 
     def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
         runtime = daemon_main.create_runtime()
