@@ -1493,6 +1493,9 @@ Cette couche fait son travail Core : observer sans prétendre comprendre.
 - Ne pas rendre le bus persistant.
 - Ne pas toucher aux règles de lock / unlock sans tests session complets.
 - Ne pas remplacer les heuristiques hardcodées par config dynamique prématurée.
+
+---
+
 # Audit groupé : Routes runtime / surfaces API
 
 ## Verdict
@@ -1860,3 +1863,260 @@ Acceptable maintenant :
 - Ne pas activer context probes / work intent comme produit.
 - Ne pas ajouter auth / refactor global maintenant.
 - Ne pas démarrer R7 ou apprentissage.
+
+---
+
+# Audit groupé : Swift runtime / Dashboard surfaces
+
+## Verdict
+
+La couche Swift est utilisable pour le dogfooding, mais ce n’est pas une UI Core pure. C’est un cockpit interne qui mélange Core, debug, Lab et legacy.
+
+Les récents libellés “Lab”, “debug”, “Lecture courante”, “Activité récente” réduisent la confusion, mais le couplage réel reste large : le Dashboard consomme encore facts, mémoire, DayDream, LLM, context probes, work intent, debug episodes et `/insights`.
+
+Point le plus important : le backend Core R1-R6 est plus strict que l’UI. Swift ne casse pas le Core, mais il peut encore le présenter comme plus intelligent, plus agentique ou plus dépendant du LLM qu’il ne l’est réellement.
+
+## Rôle global Swift runtime / Dashboard
+
+La couche Swift fait trois choses :
+
+- surveiller le daemon local et piloter start / stop / restart ;
+- consommer les surfaces daemon pour alimenter Notch + Dashboard ;
+- exposer à l’utilisateur un mélange de lecture live, historique, debug, Lab et contrôle MCP.
+
+Elle n’est pas seulement une UI Core. Elle reste aussi une console de laboratoire.
+
+## Responsabilité par fichier
+
+| Fichier | Rôle | Risque |
+|---|---|---|
+| `App/App/DaemonBridge.swift` | Client HTTP bas niveau vers `127.0.0.1:8765` | Base URL hardcodée, pas de notion Core / Lab. |
+| `App/App/DaemonBridge+CoreAPI.swift` | Bindings API daemon | Mélange Core, debug, Lab, LLM, facts, DayDream, probes. |
+| `App/App/DaemonBridgeModels.swift` | Décodage JSON + labels UI | Beaucoup de champs legacy / Lab ; `StateResponse` ne décode pas `pulse_mode` / `experimental_enabled`. |
+| `App/App/DashboardViewModel.swift` | Agrégateur Dashboard + polling | Charge beaucoup de surfaces Lab / debug en slow refresh. |
+| `App/App/DashboardRootView.swift` | UI Dashboard complète | Libellés mieux clarifiés, mais Lab encore très visible. |
+| `App/App/CurrentStateContentView.swift` | Panneau Notch “lecture courante” | Présente des hypothèses live de façon plus prudente qu’avant, mais reste synthétique. |
+| `App/App/PulseViewModel+Runtime.swift` | Polling Notch runtime | Polling agressif, dépend encore de LLM / probes / MCP / feed. |
+| `App/App/DaemonController.swift` | Cycle start / stop / restart daemon | Patch récent cohérent : ne marque plus stopped si `/ping` répond encore. |
+
+## Flux de données daemon -> Swift
+
+Surfaces Core consommées :
+
+- `/ping` : daemon reachable, pause ;
+- `/state` : présent, current context, signals, recent sessions ;
+- `/feed` : événements notables pour notifications ;
+- `/event` : envoi d’événements Swift vers daemon ;
+- `/scoring/status` : statut scoring, Dashboard système.
+
+Surface Core non consommée :
+
+- `/health/core` existe côté backend, mais Swift ne semble pas l’utiliser. L’UI continue à dériver la santé via `/ping`, état daemon et disponibilité LLM.
+
+Surfaces debug / raw :
+
+- `/insights` pour l’onglet Événements et le Notch insight ;
+- `/debug/work-episodes` ;
+- `/debug/commit-episode-links` ;
+- `/work-context`.
+
+Surfaces Lab visibles :
+
+- `/daydreams` ;
+- facts / profile / stats / archive ;
+- `/memory` ;
+- context probes ;
+- work intent candidates ;
+- LLM models / status / lightweight ;
+- MCP proposals.
+
+## Notch vs Dashboard
+
+Le Notch est plus sensible que le Dashboard parce qu’il est toujours présent.
+
+Il poll :
+
+- `/ping` toutes les 0,5 s ;
+- `/feed` toutes les 0,5 s ;
+- `/mcp/pending` toutes les 0,5 s ;
+- `/state` environ toutes les 3 s ;
+- `/insights` + `/mcp/proposals` si panneau insight / currentState ouvert ;
+- LLM models périodiquement.
+
+Problème : le Notch traite encore `LLM indisponible` comme état dégradé global. En Core, LLM n’est pas requis. C’est une dette UX importante : cela peut faire croire que Pulse Core dépend du LLM.
+
+Le Dashboard est plus explicitement interne. Il est acceptable pour dogfooding, mais pas comme surface produit Core propre.
+
+## Core / debug / Lab dans l’UI
+
+Ce qui est bien :
+
+- `Mémoire (Lab)`, `DayDream (Lab)`, `Contexte (Lab)` sont marqués ;
+- `Séquences debug` et “Reconstruction debug…” sont clairs ;
+- `Lecture courante`, `Hypothèse live`, `Tâche principale`, `Activité récente`, `Confiance tâche` sont meilleurs que les anciens labels.
+
+Ce qui reste fragile :
+
+- `MCP` n’est pas clairement nommé comme “MCP contrôlé” ou “validation commande” ;
+- Work intent peut apparaître dans `Aujourd’hui`, donc une surface Lab fuit dans une surface Core ;
+- la mémoire Lab contient encore des textes très affirmatifs : “Profil injecté au LLM”, “Mémoire figée”, “Consolidée depuis les faits… injectée dans chaque échange LLM” ;
+- DayDream affiche encore “se déclenche automatiquement…” alors qu’en Core DayDream est Lab-gated.
+
+## Temporalités affichées
+
+Temporalités actuellement mélangées mais mieux nommées :
+
+- live : `/state.present`, `session_fsm`, `current_context` ;
+- interprétation courante : `/state.current_context` ;
+- explication reconstruite : `/work-context` ;
+- feed notable : `/feed` ;
+- événements raw-ish : `/insights` ;
+- journée : `/today_summary` ;
+- historique : `/state.recent_sessions`, `/memory/sessions` ;
+- debug : work episodes / commit links ;
+- Lab : memory, facts, DayDream, probes, work intent, LLM.
+
+Le patch UI récent améliore la lisibilité, mais la séparation reste conventionnelle, pas structurelle. L’UI ne s’appuie pas encore sur `pulse_mode` pour masquer ou annoter automatiquement les surfaces.
+
+## Risques d’overclaim
+
+Risques encore présents :
+
+- `probable_task` est affiché comme titre principal dans plusieurs endroits ;
+- `active_project` peut paraître confirmé alors qu’il vient parfois d’un contexte faible ;
+- le Notch privilégie `currentContext` avant `present`, ce qui peut donner une impression d’interprétation plus forte ;
+- `Confiance tâche` est affichée sans toujours rappeler la source exacte ;
+- les blocs du jour et séquences debug peuvent être lus comme des sessions Core alors qu’ils agrègent différemment ;
+- `session_duration` est lisible, mais l’utilisateur peut confondre durée live, bloc du jour, session persistée et séquence reconstruite.
+
+Le niveau est acceptable pour usage interne, pas pour une UI publique.
+
+## Données sensibles affichées
+
+Exposition sensible confirmée :
+
+- titres de fenêtres dans Observation ;
+- commandes terminal récentes ;
+- chemins / fichiers, même si souvent réduits au basename ;
+- app names et bundle IDs dans diagnostics AX ;
+- textes capturés / redacted via context probes ;
+- MCP commands ;
+- facts / profile / memory en Lab ;
+- journaux de session.
+
+C’est cohérent avec une app locale-first de diagnostic, mais il faut continuer à traiter le Dashboard comme surface locale / debug, pas comme UI produit externe.
+
+## Robustesse polling / parsing / daemon down
+
+Points solides :
+
+- beaucoup d’appels utilisent `try?`, donc l’UI ne tombe pas brutalement si une route manque ;
+- `DaemonController.waitForStop()` est maintenant cohérent : timeout + `/ping` encore vivant => reste `.running` avec erreur ;
+- le Dashboard tolère plusieurs payloads absents.
+
+Points fragiles :
+
+- Notch poll très fréquent : `/ping`, `/feed`, `/mcp/pending` toutes les 0,5 s ;
+- `/health/core` n’est pas utilisé pour distinguer Core OK vs Lab indisponible ;
+- les erreurs réseau sont souvent silencieuses ;
+- si le daemon est down, certaines zones gardent potentiellement le dernier état connu sans signal visuel très fort ;
+- `DaemonBridge` imprime du JSON brut sur erreur de décodage MCP, potentiellement sensible.
+
+## Couplage Swift ↔ API
+
+Champs backend difficiles à supprimer sans casser Swift :
+
+- `/state.present` ;
+- `/state.current_context` ;
+- `/state.signals` ;
+- `/state.session_fsm` ;
+- `/state.recent_sessions` ;
+- top-level `active_app`, `active_file`, `active_project`, `session_duration_min`, `runtime_paused` ;
+- `/feed` payload `kind`, `label`, `timestamp`, `command`, `resume_card` ;
+- `/insights` type / timestamp / payload simple ;
+- `/mcp/pending`, `/mcp/proposals` ;
+- `/memory/sessions` ;
+- `/today_summary`.
+
+Dette claire : `StateResponse` ne décode pas `pulse_mode` / `experimental_enabled`. Les labels Lab sont donc hardcodés côté UI, pas pilotés par le runtime mode.
+
+## Hardcoding identifié
+
+- Base daemon : `http://127.0.0.1:8765` ;
+- poll Notch : 0,5 s ;
+- refresh `/state` Notch : environ 3 s ;
+- Dashboard refresh : 10 s, slow refresh environ 60 s ;
+- LaunchAgent label : `cafe.pulse.daemon` ;
+- chemins dev script : `~/Projets/Pulse/Pulse/scripts/start_pulse_daemon.sh`, etc. ;
+- labels FR hardcodés ;
+- catégories de tâches, activités, focus et confidence hardcodées côté Swift ;
+- filtrage événementiel `/insights` dupliqué côté Swift pour fichiers techniques ;
+- onglets Lab / debug hardcodés, non dérivés de `PULSE_MODE`.
+
+## Tests existants
+
+Tests Swift pertinents :
+
+- `AppTests/DaemonControllerTests.swift` ;
+- `AppTests/PulseViewModelInteractionsTests.swift` ;
+- `AppTests/DaemonBridgeLLMTests.swift` ;
+- `AppTests/AccessibilityContextProbeServiceTests.swift`.
+
+Couverture utile déjà présente :
+
+- `DaemonController` stop / restart timeout ;
+- décodage `StateResponse` ;
+- labels events `screen_locked`, `screen_unlocked`, `user_presence` ;
+- labels sections Dashboard, dont `Séquences debug` et `Contexte (Lab)` ;
+- modèles work context, signals, proposals, work intent ;
+- context probes.
+
+## Tests manquants
+
+Manques principaux :
+
+- test Swift prouvant que `/health/core` n’est pas requis ou, mieux plus tard, utilisé pour santé Core ;
+- test que l’état Core ne devient pas “dégradé” seulement parce que LLM est indisponible ;
+- test que les surfaces Lab restent clairement marquées dans tous les emplacements où elles apparaissent ;
+- test que work intent ne fuit pas comme Core dans `Aujourd’hui` ;
+- test que `/insights` user_presence reste masqué par défaut dans l’UI ;
+- test que DayDream / Mémoire copy ne présente pas Lab comme automatique / stable ;
+- test de fallback UI quand `/state` manque `current_context`, `signals` ou `present`.
+
+## Dette acceptable
+
+Acceptable maintenant :
+
+- Dashboard comme outil interne de dogfooding ;
+- onglets Lab visibles mais marqués ;
+- `/insights` encore utilisé pour l’onglet Événements ;
+- labels encore imparfaits si le Core reste en validation terrain ;
+- polling local un peu bavard tant que l’impact batterie / logs est observé.
+
+## Dette à corriger plus tard
+
+À corriger avant une UI Core propre :
+
+- décoder et afficher `pulse_mode` / `experimental_enabled` ;
+- utiliser `/health/core` pour santé Core au lieu de faire dépendre la santé UI du LLM ;
+- réduire ou cadencer mieux le polling Notch ;
+- séparer structurellement Core / debug / Lab dans le Dashboard ;
+- corriger les textes DayDream et Mémoire qui vendent encore des comportements Lab comme naturels ;
+- éviter que work intent / context probes apparaissent dans les surfaces Core ;
+- remplacer progressivement `/insights` par une surface événementielle mieux bornée pour l’UI ;
+- réduire l’exposition brute de commandes, titres, diagnostics AX et mémoire dans les vues non-debug.
+
+## Ce qu’il ne faut pas modifier maintenant
+
+- Ne pas toucher scoring.
+- Ne pas toucher daemon Core.
+- Ne pas toucher `SessionFSM`.
+- Ne pas toucher `RuntimeState`.
+- Ne pas toucher EventBus.
+- Ne pas toucher routes backend.
+- Ne pas toucher gates Core / Lab.
+- Ne pas modifier DayDream / facts / vector / LLM pour les “améliorer”.
+- Ne pas rendre work intent / context probes plus intelligents.
+- Ne pas faire de gros refactor Dashboard.
+
+Le bon angle reste Core hardening : clarifier, tester, réduire l’ambiguïté, sans relancer une phase Lab.
