@@ -41,7 +41,10 @@ Core Reset R1-R6 : validé côté Python.
 
 Phase actuelle : dogfooding et hardening Core.
 
-C1 — Core Internal Audit : démarré.
+C1 — Core Internal Audit : terminé.
+C2 — Hardening minimal : en cours.
+
+C2.1, C2.2 et C2.3 sont terminés : santé Core côté Swift, clarification des textes Lab UI, et tests de garde routes / state / UI.
 
 ---
 
@@ -1909,9 +1912,11 @@ Surfaces Core consommées :
 - `/event` : envoi d’événements Swift vers daemon ;
 - `/scoring/status` : statut scoring, Dashboard système.
 
-Surface Core non consommée :
+Surface Core historiquement non consommée au moment de l’audit C1 :
 
-- `/health/core` existe côté backend, mais Swift ne semble pas l’utiliser. L’UI continue à dériver la santé via `/ping`, état daemon et disponibilité LLM.
+- `/health/core` existait côté backend, mais Swift ne semblait pas l’utiliser. L’UI continuait à dériver la santé via `/ping`, état daemon et disponibilité LLM.
+
+Note C2.1 : ce point a été corrigé. Swift consomme désormais `/health/core` pour distinguer santé Core et disponibilité LLM. Un Core sain ne doit plus apparaître dégradé seulement parce que le LLM est indisponible.
 
 Surfaces debug / raw :
 
@@ -1943,7 +1948,9 @@ Il poll :
 - `/insights` + `/mcp/proposals` si panneau insight / currentState ouvert ;
 - LLM models périodiquement.
 
-Problème : le Notch traite encore `LLM indisponible` comme état dégradé global. En Core, LLM n’est pas requis. C’est une dette UX importante : cela peut faire croire que Pulse Core dépend du LLM.
+Problème observé au moment de l’audit C1 : le Notch traitait encore `LLM indisponible` comme état dégradé global. En Core, LLM n’est pas requis. Cette dette UX pouvait faire croire que Pulse Core dépendait du LLM.
+
+Note C2.1 : ce point a été corrigé côté Swift. L’indisponibilité LLM reste visible comme capacité LLM / Lab, mais ne dégrade plus l’état Core global si `/health/core.status == "ok"`.
 
 Le Dashboard est plus explicitement interne. Il est acceptable pour dogfooding, mais pas comme surface produit Core propre.
 
@@ -1958,9 +1965,9 @@ Ce qui est bien :
 Ce qui reste fragile :
 
 - `MCP` n’est pas clairement nommé comme “MCP contrôlé” ou “validation commande” ;
-- Work intent peut apparaître dans `Aujourd’hui`, donc une surface Lab fuit dans une surface Core ;
-- la mémoire Lab contient encore des textes très affirmatifs : “Profil injecté au LLM”, “Mémoire figée”, “Consolidée depuis les faits… injectée dans chaque échange LLM” ;
-- DayDream affiche encore “se déclenche automatiquement…” alors qu’en Core DayDream est Lab-gated.
+- Work intent peut apparaître dans `Aujourd’hui`, donc une surface Lab fuit dans une surface Core.
+
+Note C2.2 : les textes Mémoire / DayDream / `context_injection` ont été corrigés. Les formulations qui présentaient profil LLM, mémoire figée, injection LLM ou DayDream automatique comme des comportements Core stables ont été remplacées par des libellés Lab / debug, non requis par le Core.
 
 ## Temporalités affichées
 
@@ -2017,7 +2024,7 @@ Points solides :
 Points fragiles :
 
 - Notch poll très fréquent : `/ping`, `/feed`, `/mcp/pending` toutes les 0,5 s ;
-- `/health/core` n’est pas utilisé pour distinguer Core OK vs Lab indisponible ;
+- point C1 corrigé en C2.1 : `/health/core` est maintenant utilisé côté Swift pour distinguer Core OK et indisponibilité LLM / Lab ;
 - les erreurs réseau sont souvent silencieuses ;
 - si le daemon est down, certaines zones gardent potentiellement le dernier état connu sans signal visuel très fort ;
 - `DaemonBridge` imprime du JSON brut sur erreur de décodage MCP, potentiellement sensible.
@@ -2075,12 +2082,11 @@ Couverture utile déjà présente :
 
 Manques principaux :
 
-- test Swift prouvant que `/health/core` n’est pas requis ou, mieux plus tard, utilisé pour santé Core ;
-- test que l’état Core ne devient pas “dégradé” seulement parce que LLM est indisponible ;
-- test que les surfaces Lab restent clairement marquées dans tous les emplacements où elles apparaissent ;
+- fait en C2.1 : test que l’état Core ne devient pas “dégradé” seulement parce que LLM est indisponible ;
+- fait / renforcé en C2.3 : test que les surfaces Lab restent clairement marquées dans les labels principaux ;
+- fait en C2.2 : test que DayDream / Mémoire / `context_injection` ne présentent plus le Lab comme automatique ou stable Core ;
 - test que work intent ne fuit pas comme Core dans `Aujourd’hui` ;
 - test que `/insights` user_presence reste masqué par défaut dans l’UI ;
-- test que DayDream / Mémoire copy ne présente pas Lab comme automatique / stable ;
 - test de fallback UI quand `/state` manque `current_context`, `signals` ou `present`.
 
 ## Dette acceptable
@@ -2098,10 +2104,10 @@ Acceptable maintenant :
 À corriger avant une UI Core propre :
 
 - décoder et afficher `pulse_mode` / `experimental_enabled` ;
-- utiliser `/health/core` pour santé Core au lieu de faire dépendre la santé UI du LLM ;
+- fait en C2.1 : utiliser `/health/core` pour santé Core au lieu de faire dépendre la santé UI du LLM ;
 - réduire ou cadencer mieux le polling Notch ;
 - séparer structurellement Core / debug / Lab dans le Dashboard ;
-- corriger les textes DayDream et Mémoire qui vendent encore des comportements Lab comme naturels ;
+- fait en C2.2 : corriger les textes DayDream et Mémoire qui vendaient encore des comportements Lab comme naturels ;
 - éviter que work intent / context probes apparaissent dans les surfaces Core ;
 - remplacer progressivement `/insights` par une surface événementielle mieux bornée pour l’UI ;
 - réduire l’exposition brute de commandes, titres, diagnostics AX et mémoire dans les vues non-debug.
@@ -2119,7 +2125,7 @@ Acceptable maintenant :
 - Ne pas rendre work intent / context probes plus intelligents.
 - Ne pas faire de gros refactor Dashboard.
 
-Le bon angle reste Core hardening : clarifier, tester, réduire l’ambiguïté, documenter, migrer les surfaces brutes vers des surfaces plus sûres, et observer en usage réel avant toute reprise de R7 ou d’apprentissage.
+Le bon angle reste Core hardening : clarifier, tester, réduire l’ambiguïté, sans relancer une phase Lab.e l’ambiguïté, documenter, migrer les surfaces brutes vers des surfaces plus sûres, et observer en usage réel avant toute reprise de R7 ou d’apprentissage.
 
 ---
 
