@@ -6,6 +6,22 @@ struct PingResponse: Codable {
     let paused: Bool?
 }
 
+struct CoreHealthResponse: Decodable {
+    let status: String
+    let pulseMode: String?
+    let experimentalEnabled: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case pulseMode = "pulse_mode"
+        case experimentalEnabled = "experimental_enabled"
+    }
+
+    var isOK: Bool {
+        status == "ok"
+    }
+}
+
 struct LightweightLLMPendingResponse: Decodable {
     let request: LightweightLLMRequest?
 }

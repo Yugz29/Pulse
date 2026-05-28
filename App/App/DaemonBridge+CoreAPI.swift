@@ -12,6 +12,13 @@ extension DaemonBridge {
         return try decode(PingResponse.self, from: data)
     }
 
+    func getCoreHealth() async throws -> CoreHealthResponse {
+        let url = try makeURL("/health/core")
+        let (data, response) = try await data(from: url)
+        try validate(response, expectedStatus: 200)
+        return try decode(CoreHealthResponse.self, from: data)
+    }
+
     func getState() async throws -> StateResponse {
         let url = try makeURL("/state")
         let (data, response) = try await data(from: url)

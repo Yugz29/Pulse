@@ -14,6 +14,7 @@ final class PulseViewModel: ObservableObject {
     @Published var isOllamaOnline = false
     @Published var isModelSelected = false
     @Published var llmReadyState = false
+    @Published var coreHealth: CoreHealthResponse? = nil
     @Published var inputText = ""
     @Published var transientStatusText: String? = nil
     @Published var transientStatusAccent = Color(hex: "#5DCAA5")
@@ -109,6 +110,7 @@ final class PulseViewModel: ObservableObject {
         if !isDaemonActive { return .daemonOffline }
         if daemonController.state == .paused { return .daemonPaused }
         if !isObservingEnabled { return .observationPaused }
+        if coreHealth?.isOK == true { return .healthy }
         if !isLLMReady { return .llmUnavailable }
         return .healthy
     }

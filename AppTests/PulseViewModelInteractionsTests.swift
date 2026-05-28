@@ -225,6 +225,43 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertFalse(ok)
     }
 
+    func testCoreHealthOkKeepsGlobalStatusHealthyWhenLLMUnavailable() {
+        let vm = PulseViewModel()
+        vm.isDaemonActive = true
+        vm.isOllamaOnline = false
+        vm.isModelSelected = false
+        vm.llmReadyState = false
+        vm.coreHealth = CoreHealthResponse(
+            status: "ok",
+            pulseMode: "core",
+            experimentalEnabled: false
+        )
+
+        switch vm.serviceStatus {
+        case .healthy:
+            break
+        default:
+            XCTFail("Core health ok should keep Pulse globally healthy even when LLM is unavailable")
+        }
+    }
+
+    func testDaemonBridgeDecodesCoreHealth() async throws {
+        let json = """
+        {
+          "status": "ok",
+          "pulse_mode": "core",
+          "experimental_enabled": false
+        }
+        """
+        let bridge = makeJSONBridge(json: json, path: "/health/core")
+
+        let health = try await bridge.getCoreHealth()
+
+        XCTAssertTrue(health.isOK)
+        XCTAssertEqual(health.pulseMode, "core")
+        XCTAssertEqual(health.experimentalEnabled, false)
+    }
+
     func testToggleObservationDoesNotShowImmediateSuccessStatus() {
         let vm = PulseViewModel()
         vm.isObservingEnabled = true
@@ -509,6 +546,16 @@ final class PulseViewModelInteractionsTests: XCTestCase {
                 }
                 """
                 return (response, Data(json.utf8))
+            }
+
+            if path == "/health/core" {
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, Data(#"{"status":"ok","pulse_mode":"core","experimental_enabled":false}"#.utf8))
             }
 
             if path == "/mcp/pending" {

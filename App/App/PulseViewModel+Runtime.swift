@@ -13,6 +13,9 @@ extension PulseViewModel {
                 let paused = ping?.paused ?? false
                 let daemonJustCameBack = alive && !self.isDaemonActive
                 self.syncDaemonReachability(alive: alive, paused: paused)
+                if alive && (daemonJustCameBack || tick % 6 == 0) {
+                    self.coreHealth = try? await self.bridge.getCoreHealth()
+                }
                 if daemonJustCameBack {
                     self.onDaemonReconnected?()
                     // Grace period de 15s pour le chargement LLM au démarrage
@@ -122,6 +125,7 @@ extension PulseViewModel {
                 } else {
                     self.isLLMActive = false
                     self.isOllamaOnline = false
+                    self.coreHealth = nil
                     self.lastModelsRefreshAt = nil
                 }
 
