@@ -2119,4 +2119,141 @@ Acceptable maintenant :
 - Ne pas rendre work intent / context probes plus intelligents.
 - Ne pas faire de gros refactor Dashboard.
 
-Le bon angle reste Core hardening : clarifier, tester, réduire l’ambiguïté, sans relancer une phase Lab.
+Le bon angle reste Core hardening : clarifier, tester, réduire l’ambiguïté, documenter, migrer les surfaces brutes vers des surfaces plus sûres, et observer en usage réel avant toute reprise de R7 ou d’apprentissage.
+
+---
+
+# Synthèse C1 — Core Internal Audit
+
+## Verdict global
+
+Pulse Core est réellement stabilisé pour du dogfooding local : runtime, observation, interprétation prudente, sessions, mémoire minimale et MCP contrôlé ont des garde-fous et des tests.
+
+Mais le Core reste entouré d’un Lab très branché : routes enregistrées, modèles Swift, mémoire avancée, DayDream, facts, LLM, probes, work intent, resume cards.
+
+Le vrai état : Pulse est un runtime local de diagnostic de contexte de travail, pas encore un agent intelligent. Il est prêt pour usage terrain contrôlé, pas pour R7, apprentissage ou mémoire intelligente.
+
+## Ce qui est solide
+
+- Observation passive : `/event`, EventBus, filtrage bruit, actor classification, terminal normalization.
+- `SignalScorer` : déterministe, sans LLM, anti-overclaim correct, tests golden.
+- `RuntimeState` : source live saine, thread-safe, pas moteur d’intelligence.
+- `SessionFSM` + `SessionMemory` : sessions testées, lock / unlock, restart repair, close reasons.
+- Gates R1-R6 : DayDream / facts / sync mémoire avancée / LLM auto sont neutralisés en Core.
+- MCP approval : seul flux Core de proposition contrôlée, avec validation humaine.
+
+## Ce qui est fragile mais acceptable
+
+- `main.py` crée le runtime au module import et avant bind Flask.
+- `RuntimeOrchestrator` concentre trop de responsabilités Core + Lab.
+- `/state` est trop large pour une API produit propre.
+- Swift Dashboard reste une console interne Core / debug / Lab.
+- `/insights` expose du raw-ish et reste consommé par l’UI.
+- Les routes Lab restent enregistrées, mais globalement gatées ou marquées.
+- Le Notch traite encore LLM indisponible comme dégradation globale, alors que Core n’en dépend pas.
+
+## Risques principaux
+
+Le risque numéro un est de recommencer à ajouter des features intelligentes sur une base encore trop mélangée.
+
+Chaque ajout dans `RuntimeOrchestrator`, `/state` ou le Dashboard risque de brouiller Core / Lab et de vendre des hypothèses comme des vérités.
+
+Le second risque est UX / API : Pulse peut être techniquement prudent mais apparaître trop affirmatif, notamment avec `probable_task`, `active_project`, `Confiance`, `session_duration`, work blocks et debug sequences.
+
+## Top 5 dettes Core
+
+1. `RuntimeOrchestrator` est un hub trop large : sessions, scoring, memory, DayDream, proposals, resume, commits.
+2. `main.py` a des side effects au chargement et un ordre de boot encore fragile.
+3. `/state` mélange surface produit, debug, legacy et données sensibles.
+4. Swift consomme et expose trop de surfaces Lab / debug pour une UI Core.
+5. Les routes Lab sont enregistrées partout ; les gates tiennent, mais la frontière reste implicite.
+
+## Corrections prioritaires
+
+### Patch minimal maintenant
+
+- Faire consommer `/health/core` côté Swift pour distinguer “Core OK” de “LLM indisponible”.
+- Corriger les textes UI DayDream / Mémoire qui vendent encore du Lab comme comportement normal.
+- Ajouter un test Swift : Core ne doit pas apparaître dégradé si seul le LLM est indisponible.
+- Ajouter un test route inventory Core / debug / Lab pour éviter les dérives silencieuses.
+- Ajouter un test `/state` anti-expansion : pas de nouveau champ sensible sans décision explicite.
+
+### Patch plus tard
+
+- Démarrer moins de workers inutiles en Core, notamment periodic sync no-op.
+- Remplacer progressivement `/insights` côté UI par `/events/debug` ou une surface filtrée.
+- Décoder `pulse_mode` / `experimental_enabled` côté Swift.
+- Marquer uniformément les routes Lab avec `surface`, `lab_only`, `disabled_in_core`.
+- Séparer restart repair et commit recovery.
+
+### Documentation seulement
+
+- Documenter `/state` comme surface compat / debug large, pas API produit propre.
+- Documenter que le Dashboard est un cockpit interne de dogfooding.
+- Documenter que `task_confidence` est heuristique, pas probabiliste.
+- Documenter que `/feed` est une sélection notable, pas un journal complet.
+
+### À ne pas toucher
+
+- `SessionFSM`.
+- Heuristiques `SignalScorer` sans nouveaux golden tests.
+- Gates Core / Lab existants.
+- Routes Swift-consumed comme `/state.signals` ou `/insights` sans migration.
+- Grand refactor `main.py`, `RuntimeOrchestrator` ou Dashboard maintenant.
+
+## Tests de garde prioritaires
+
+- Swift : Core health OK même si LLM absent.
+- Routes : inventaire Core / debug / Lab enregistré.
+- `/state` : pas d’ajout de champs sensibles non documentés.
+- `/insights` : explicitement raw / debug ou remplacé côté UI.
+- Runtime : periodic sync Core ne déclenche aucune sync avancée observable.
+- Orchestrator : close_reason complet `RuntimeOrchestrator -> SessionMemory -> /state.recent_sessions`.
+- UI : DayDream / Mémoire / Contexte restent marqués Lab partout.
+- MCP : aucun `allowed=true` sans `accepted`.
+
+## Roadmap courte proposée
+
+### C2 — Hardening minimal
+
+- Santé Core côté Swift.
+- Nettoyage textes Lab UI.
+- Tests de garde routes / state / UI.
+- Observation dogfooding : logs, batterie, polling, sessions courtes, port conflicts.
+
+### C3 — Contrats mémoire / apprentissage contrôlé
+
+- Uniquement contrat et critères, pas implémentation.
+- Définir promotion evidence, contradiction, decay, validation humaine.
+- Décider ce qui serait Core-safe plus tard.
+
+### R7 — Plus tard
+
+R7 ne doit reprendre qu’après C2 validé en usage réel et C3 écrit.
+
+Pas avant que Core / Lab soit lisible dans API et UI.
+
+## Sujets interdits temporairement
+
+- apprentissage utilisateur / projet ;
+- facts / profile comme produit ;
+- mémoire intelligente ;
+- vector store / embeddings ;
+- DayDream ;
+- LLM summaries ;
+- context probes automatiques ;
+- work intent intelligent ;
+- smart proposals ;
+- autonomie agentique ;
+- refonte Dashboard ;
+- gros refactor `RuntimeOrchestrator`.
+
+## Conclusion
+
+Pulse n’est pas prêt pour apprentissage ou mémoire intelligente.
+
+Il est prêt pour dogfooding Core et hardening ciblé.
+
+La bonne prochaine étape n’est pas de rendre Pulse plus intelligent. C’est de réduire les ambiguïtés restantes : santé Core UI, surfaces Lab, `/state`, `/insights`, textes qui sur-vendent, tests de garde.
+
+Le Core est enfin assez solide pour être observé en usage réel ; il n’est pas encore assez séparé pour supporter R7 sans recréer le désordre initial.
