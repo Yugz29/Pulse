@@ -1,5 +1,3 @@
-
-
 # Core Internal Audit
 
 Ce document suit l’audit interne du Core Pulse après la validation du Core Reset R1-R6.
@@ -275,3 +273,342 @@ Acceptable pour le moment :
 - Ne pas refactorer `main.py` en grand composition root maintenant.
 - Ne pas casser les tests qui importent `daemon.main` et utilisent les globals.
 - Ne pas mélanger hardening boot avec nouvelles features.
+
+---
+
+# Audit fichier : `daemon/runtime_orchestrator.py`
+
+## Verdict
+
+`daemon/runtime_orchestrator.py` est le vrai cœur opérationnel de Pulse. Il relie observation, scoring, sessions, state, mémoire minimale, restart repair, propositions contextuelles et surfaces Lab.
+
+Le fichier est beaucoup trop chargé, mais les gates Core / Lab posées en R1-R6 tiennent globalement.
+
+Le risque principal n’est pas une feature isolée : c’est la concentration. Ce fichier est à la fois orchestrateur Core, scheduler, glue mémoire, runner DayDream, gestionnaire commit, producteur resume cards, passerelle lightweight LLM et émetteur de propositions contextuelles.
+
+Pour le dogfooding Core, cette dette reste acceptable tant qu’on ne rend pas ce fichier plus intelligent.
+
+## Rôle réel
+
+`RuntimeOrchestrator` est le coordinateur runtime après ingestion dans l’`EventBus`.
+
+Il :
+
+- reçoit les events via `handle_event()` ;
+- filtre certains events fichiers ;
+- met à jour `SessionFSM` ;
+- met à jour `RuntimeState` ;
+- appelle `SignalScorer` ;
+- appelle `DecisionEngine` ;
+- persiste events et snapshots dans `SessionMemory` ;
+- prépare, ferme et reprend des sessions ;
+- déclenche ou bloque les sync mémoire avancées ;
+- gère restart repair ;
+- gère DayDream en Lab ;
+- gère resume cards ;
+- gère context injection proposals ;
+- gère commit detection et commit memory sync.
+
+## Responsabilités concentrées
+
+Responsabilités Core légitimes :
+
+- lifecycle workers `start()` / `shutdown_runtime()` ;
+- file burst debounce ;
+- lock / unlock ;
+- idle / user presence ;
+- scoring pipeline ;
+- session boundaries ;
+- `RuntimeState.update_present()` ;
+- `SessionMemory.record_event()` ;
+- `SessionMemory.update_present_snapshot()` ;
+- snapshot Core minimal dans `freeze_memory()` quand Lab est désactivé.
+
+Responsabilités Lab / legacy concentrées :
+
+- facts engine ;
+- DayDream scheduler ;
+- advanced memory sync ;
+- `MemoryStore` ;
+- LLM warmup ;
+- lightweight LLM queue ;
+- resume card generation / update ;
+- commit journal enrichment ;
+- context injection proposal ;
+- work intent lifecycle ;
+- commit episode / work block linking helpers.
+
+## Flux événementiel Core
+
+Flux réel :
+
+1. `/event` publie dans `EventBus`.
+2. `main.py` abonne `runtime_orchestrator.handle_event`.
+3. `handle_event()` filtre pause / lock / noise.
+4. `SessionMemory.record_event(event)` persiste l’event.
+5. Events fichiers : debounce puis `_process_file_burst()`.
+6. Events non fichiers : `_process_signals(event)`.
+7. `_process_signals()` lit `scorer.bus.recent()`.
+8. `SessionFSM.observe_recent_events()` calcule lifecycle.
+9. `SignalScorer.compute()` produit les signaux.
+10. `RuntimeState.update_present()` expose l’état live.
+11. `DecisionEngine.evaluate()` produit une décision.
+12. `SessionMemory.update_present_snapshot()` persiste le snapshot session.
+13. `RuntimeState.set_analysis()` expose signals / decision.
+
+Le flux est cohérent, mais contient encore des embranchements Lab.
+
+## Gestion sessions
+
+`start()` :
+
+- démarre deux workers : file burst et periodic sync.
+
+Fermeture :
+
+- `shutdown_runtime()` draine les fichiers ;
+- exporte payload ;
+- sauvegarde restart state ;
+- ferme `SessionMemory` avec `close_reason="session_end"`.
+
+Lock / unlock :
+
+- `screen_locked` appelle `SessionFSM.on_screen_locked()` et `RuntimeState.mark_screen_locked()` ;
+- `screen_unlocked` appelle `SessionFSM.on_screen_unlocked()` ;
+- lock long peut créer une nouvelle session avec `close_reason="screen_lock"`.
+
+Idle :
+
+- `user_idle` force `SessionFSM.on_user_idle()` ;
+- boundary idle passe ensuite par `new_session(... close_reason="idle_timeout")`.
+
+Restart repair :
+
+- `deferred_startup()` charge restart state et applique `RestartManager` ;
+- `recover_missed_commits()` est appelé dans le même bloc ;
+- utile en dogfooding dev, mais hors Core session strict.
+
+`close_reason` :
+
+- maintenant transmis depuis l’orchestrator vers `SessionMemory` ;
+- mapping actuel : `screen_lock`, `idle_timeout`, `session_end` ;
+- ces raisons sont désormais persistées et projetées dans `recent_sessions`.
+
+## Mémoire Core vs Lab
+
+Core :
+
+- `SessionMemory.record_event()` ;
+- `SessionMemory.update_present_snapshot()` ;
+- `export_memory_payload()` comme compatibilité / historique minimal ;
+- `freeze_memory()` produit un `Pulse Core Snapshot` en Core.
+
+Lab :
+
+- `update_memories_from_session()` ;
+- `render_project_memory()` ;
+- `load_memory_context()` ;
+- `MemoryStore.render()` ;
+- `fact_engine.render_for_context()` ;
+- lightweight summaries ;
+- DayDream ;
+- resume cards intelligentes.
+
+Bon point : `_sync_memory_background()` retourne immédiatement en Core si `not is_lab_enabled()`.
+
+Point fragile : le periodic sync worker démarre quand même en Core, puis finit par appeler `_schedule_memory_sync()` selon conditions. La sync est ensuite no-op. Ce n’est pas dangereux aujourd’hui, mais c’est du bruit architectural.
+
+## Propositions Core vs Lab
+
+MCP Core contrôlé n’est pas principalement géré ici.
+
+Le point sensible dans ce fichier est `context_injection` :
+
+- `_attach_context_proposal_if_needed()` crée une proposition via `proposal_store` ;
+- en Core, elle reste `pending` ;
+- en Lab / dev, elle est auto-résolue `executed`.
+
+C’est conforme à R6d / R6e, mais dangereux à garder dans le même orchestrateur Core : une régression de gate pourrait remettre de l’auto-execution dans le chemin runtime.
+
+## Frontières Core / Lab
+
+Gates présentes :
+
+- DayDream derrière `is_lab_enabled()` ;
+- facts maintenance derrière `is_lab_enabled()` ;
+- advanced memory sync derrière `is_lab_enabled()` ;
+- lightweight commit / resume summaries derrière `is_lab_enabled()` ;
+- context proposal auto-execution derrière `is_lab_enabled()` ;
+- LLM warmup derrière lifecycle policy.
+
+Frontière imparfaite :
+
+- `get_fact_engine()` est instancié dans `__init__` même en Core ;
+- `MemoryStore` est injecté et utilisé pour purge expired au startup ;
+- resume card deterministic paths existent dans Core ;
+- work intent lifecycle tourne dans `_process_signals()` ;
+- periodic sync worker tourne en Core ;
+- commit recovery est mélangé au restart repair.
+
+## Hardcoding identifié
+
+Seuils / timeouts :
+
+- `sleep_session_threshold_min = 30` ;
+- `file_debounce_sec = 0.25` ;
+- `commit_poll_sec = 0.4` ;
+- `commit_confirm_timeout_sec = 15` ;
+- `_diff_cooldown_sec = 120` ;
+- `_prepared_resume_card_ttl_sec = 8h` ;
+- `_resume_card_wait_timeout_sec = 90` ;
+- `_resume_card_wait_poll_sec = 0.5` ;
+- `_periodic_sync_interval_sec = 30min` ;
+- `_critical_worker_join_timeout_sec = 1`.
+
+Types events :
+
+- `screen_locked`, `screen_unlocked` ;
+- `user_presence`, `user_idle`, `user_active` ;
+- `file_modified`, `file_created` ;
+- `COMMIT_EDITMSG` ;
+- `resume_card`.
+
+Boundary reasons :
+
+- `screen_lock` ;
+- `idle_timeout` ;
+- `session_end` ;
+- `user_idle`.
+
+Provider / flags :
+
+- `is_lab_enabled()` ;
+- `is_heavy_llm_autowarm_enabled()` ;
+- `is_legacy_journal_repair_enabled()`.
+
+## Sources de vérité
+
+- `EventBus` : source des observations récentes.
+- `SessionFSM` : vérité runtime des transitions session.
+- `RuntimeState` : vérité live exposée par `/state`.
+- `SessionMemory` : vérité persistée sessions / events.
+- `SignalScorer` : vérité heuristique des signaux.
+- `DecisionEngine` : décision runtime.
+- `StateStore` : encore injecté, mais les tests interdisent son usage direct dans l’orchestrator.
+
+## Side effects / risques runtime
+
+Side effects à l’instanciation :
+
+- instancie `FactEngine` ;
+- instancie `SessionFSM` ;
+- instancie `RestartManager` ;
+- ne démarre pas de threads tant que `start()` n’est pas appelé.
+
+Side effects à `start()` :
+
+- démarre file burst worker ;
+- démarre periodic sync worker.
+
+Risques :
+
+- beaucoup de workers critiques en daemon threads ;
+- shutdown join timeout très court ;
+- periodic sync Core inutile mais actif ;
+- commit watch lance subprocess `git` ;
+- restart repair et commit recovery mélangés ;
+- resume card peut publier des events depuis lock / unlock ;
+- context proposal global `proposal_store` mutable ;
+- erreurs aval souvent loggées puis absorbées, ce qui protège le runtime mais peut masquer des régressions.
+
+## Legacy restant
+
+Legacy clair :
+
+- `SessionContext` fallback ;
+- `work_window` alias ;
+- legacy journal repair ;
+- commit summary repair Ollama ;
+- `MemoryStore` ;
+- facts engine instancié ;
+- DayDream methods dans l’orchestrator ;
+- resume card pipeline ;
+- `StateStore` injecté ;
+- `load_memory_context()` fallback Lab ;
+- `proposal_store` global.
+
+Tout cela est hors Core strict, mais encore dans le fichier Core le plus critique.
+
+## Tests existants
+
+Très bonne couverture dans :
+
+- `tests/test_runtime_orchestrator.py` ;
+- `tests/test_runtime_lifecycle.py` ;
+- `tests/core/test_restart_manager.py` ;
+- `tests/core/test_session_fsm.py` ;
+- `tests/routes/test_runtime_state_payloads.py`.
+
+Les tests couvrent :
+
+- workers start / shutdown ;
+- lock / unlock ;
+- DayDream gated ;
+- facts gated ;
+- memory sync Core no-op ;
+- lightweight queue Core no-op ;
+- context proposal Core pending / Lab executed ;
+- session boundary ;
+- restart repair ;
+- state projection.
+
+## Tests manquants
+
+Manques utiles :
+
+- test end-to-end `EventBus -> RuntimeOrchestrator -> /state -> SessionMemory` sur scénario lock long réel ;
+- test periodic sync en Core prouvant qu’il ne crée pas de worker advanced observable ;
+- test restart repair sans commit recovery ;
+- test `close_reason` depuis `RuntimeOrchestrator` jusqu’à `get_recent_sessions()` ;
+- test d’absence de resume card produit en Core si on décide que resume cards restent Lab ;
+- test sur ordre shutdown avec workers réels, pas seulement mocks ;
+- test de non-utilisation `MemoryStore` en Core hors purge ;
+- test de non-instanciation facts en Core si ce point devient objectif.
+
+## Dette acceptable
+
+Acceptable maintenant :
+
+- garder `RuntimeOrchestrator` large mais sous tests ;
+- garder gates internes plutôt que refactor global ;
+- garder periodic sync worker no-op en Core ;
+- garder facts engine instancié si aucun effet Core visible ;
+- garder resume card deterministic si les tests R6 maintiennent la frontière produit ;
+- garder commit watch, car dogfooding dev en bénéficie ;
+- garder `proposal_store` global tant que R6 tests restent stricts.
+
+## Dette à corriger plus tard
+
+À corriger après dogfooding :
+
+- extraire `CoreRuntimePipeline` ou au moins séparer mémoire / LLM / DayDream / proposals ;
+- sortir DayDream du fichier orchestrator ;
+- sortir lightweight LLM handlers ;
+- séparer restart repair de commit recovery ;
+- rendre periodic sync non démarré en Core ;
+- rendre facts engine lazy ou Lab-only ;
+- clarifier resume cards comme Lab ou Core debug, puis aligner le code ;
+- supprimer alias legacy `work_window` quand plus nécessaire ;
+- centraliser les event type constants.
+
+## Ce qu’il ne faut pas modifier maintenant
+
+- Ne pas toucher `SessionFSM`.
+- Ne pas rendre le scorer plus intelligent.
+- Ne pas réactiver advanced memory en Core.
+- Ne pas lancer R7.
+- Ne pas ajouter facts/profile, DayDream, vector store, LLM summaries ou apprentissage.
+- Ne pas supprimer brutalement resume cards / proposals sans audit UI/API.
+- Ne pas refactorer ce fichier en grand maintenant : trop de risques.
+- Ne pas déplacer les gates Core / Lab sans tests équivalents.
+- Ne pas confondre hardening Core avec nouvelle autonomie.
