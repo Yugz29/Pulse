@@ -976,6 +976,66 @@ Autre observation : l’onglet `Événements` contient beaucoup d’événements
 
 ### Verdict provisoire
 
+
 Le cycle lock / unlock semble fonctionner côté Core, mais son observabilité est incomplète.
 
 La priorité n’est pas de modifier `SessionFSM`. Le sujet terrain est plutôt l’explicabilité : rendre les transitions lock / unlock plus lisibles dans les surfaces de diagnostic, sans transformer chaque `user_presence` en événement visible de même importance.
+
+---
+
+## 2026-05-28 — Patch UI : réduction du bruit `user_presence` dans Événements
+
+### Contexte
+
+Le test terrain pause / verrouillage / déverrouillage a confirmé que les événements `screen_locked` et `screen_unlocked` existent bien et sont visibles dans l’onglet `Événements`.
+
+Le problème observé n’était pas une perte d’événement côté backend, mais une lisibilité insuffisante : beaucoup d’événements `user_presence` rendaient la vue `Tous` trop bruitée.
+
+### Patch appliqué
+
+Patch Swift/UI appliqué sans modification backend :
+
+- `user_presence` est masqué par défaut dans l’onglet `Événements` quand le filtre est `Tous` ;
+- le filtre explicite `user_presence` reste disponible via les chips existants ;
+- une micro-copy indique que `user_presence` est masqué par défaut pour réduire le bruit ;
+- les labels sont rendus plus lisibles :
+  - `screen_locked` -> `Verrouillage écran` ;
+  - `screen_unlocked` -> `Déverrouillage écran` ;
+  - `user_presence` -> `Présence`.
+
+### Comportement avant / après
+
+Avant :
+
+- `user_presence` pouvait dominer la vue `Tous` ;
+- les événements lock / unlock existaient, mais se retrouvaient noyés dans le bruit de présence ;
+- les labels bruts `screen_locked` / `screen_unlocked` restaient trop techniques.
+
+Après :
+
+- la vue `Tous` reste plus lisible ;
+- les événements de cycle écran ressortent mieux ;
+- `user_presence` reste inspectable explicitement en debug ;
+- aucun événement n’est supprimé côté backend.
+
+### Tests
+
+Test Swift ciblé ajouté / lancé :
+
+```bash
+xcodebuild test -project App/Pulse.xcodeproj -scheme App -destination 'platform=macOS' -only-testing:AppTests/PulseViewModelInteractionsTests/testInsightEventLabelsUseReadableLifecycleNames
+```
+
+Résultat observé : `TEST SUCCEEDED`.
+
+### Verdict provisoire
+
+Patch réussi pour le dogfooding.
+
+La correction reste au bon niveau : elle améliore l’observabilité et la lisibilité de l’onglet `Événements` sans toucher au runtime, à l’EventBus, à `SessionFSM`, à `SessionMemory`, au scoring ou aux heartbeats `user_presence`.
+
+À vérifier dans les prochaines sessions :
+
+- `Verrouillage écran` / `Déverrouillage écran` ressortent-ils clairement dans `Tous` ?
+- le filtre `Présence` reste-t-il suffisant pour inspecter le bruit de présence quand nécessaire ?
+- la micro-copy est-elle utile sans surcharger l’interface ?
