@@ -71,6 +71,21 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         super.tearDown()
     }
 
+    func testInsightEventLabelsUseReadableLifecycleNames() {
+        XCTAssertEqual(
+            InsightEvent(type: "screen_locked", timestamp: "", keyValue: nil).label,
+            "Verrouillage écran"
+        )
+        XCTAssertEqual(
+            InsightEvent(type: "screen_unlocked", timestamp: "", keyValue: nil).label,
+            "Déverrouillage écran"
+        )
+        XCTAssertEqual(
+            InsightEvent(type: "user_presence", timestamp: "", keyValue: nil).label,
+            "Présence"
+        )
+    }
+
     func testSendMessageNormalResponseRemainsUnchanged() async {
         let body = """
         data: {"token":"Bonjour","done":false}

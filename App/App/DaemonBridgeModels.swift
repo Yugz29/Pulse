@@ -1804,8 +1804,9 @@ struct InsightEvent: Identifiable {
         case "file_deleted": return "Supprimé"
         case "file_renamed": return "Renommé"
         case "clipboard_updated": return "Clipboard"
-        case "screen_locked": return "screen_locked"
-        case "screen_unlocked": return "screen_unlocked"
+        case "screen_locked": return "Verrouillage écran"
+        case "screen_unlocked": return "Déverrouillage écran"
+        case "user_presence": return "Présence"
         case "mcp_command_received": return "MCP"
         default: return type
         }
@@ -1875,6 +1876,7 @@ struct InsightEvent: Identifiable {
         case "clipboard_updated": return "presse-papiers mis à jour"
         case "screen_locked": return "session verrouillée"
         case "screen_unlocked": return "session déverrouillée"
+        case "user_presence": return "présence utilisateur"
         case "mcp_command_received": return "commande reçue"
         default: return label.lowercased()
         }

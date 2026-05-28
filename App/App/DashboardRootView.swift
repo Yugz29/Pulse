@@ -1377,6 +1377,13 @@ struct DashboardRootView: View {
             }
             .background(.ultraThinMaterial)
 
+            Text("Les événements user_presence sont masqués par défaut pour réduire le bruit.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
+
             Divider()
 
             ScrollView {
@@ -2263,7 +2270,9 @@ struct DashboardRootView: View {
 
     private var filteredEvents: [InsightEvent] {
         let ordered = vm.events.reversed()
-        guard eventFilter != "all" else { return Array(ordered) }
+        guard eventFilter != "all" else {
+            return ordered.filter { $0.type != "user_presence" }
+        }
         return ordered.filter { $0.type == eventFilter }
     }
 
