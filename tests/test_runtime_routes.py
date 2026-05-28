@@ -1279,6 +1279,36 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(feed_response.get_json(), [])
         self.bus.recent.assert_called_with(200)
 
+    def test_feed_contract_is_not_a_complete_raw_event_journal(self):
+        now = datetime(2026, 5, 28, 10, 0, 0)
+        self.bus.recent.return_value = [
+            Event("app_activated", {"app_name": "Code"}, now),
+            Event("file_modified", {"path": "/Users/tester/workspace/acme/app.py"}, now),
+            Event("user_presence", {"state": "active", "idle_seconds": 0}, now),
+            Event("screen_locked", {}, now),
+            Event("screen_unlocked", {}, now),
+            Event(
+                "terminal_command_finished",
+                {
+                    "terminal_command": "pytest tests/test_runtime_routes.py -q",
+                    "terminal_command_base": "pytest",
+                    "terminal_success": True,
+                    "terminal_summary": "✓ pytest tests/test_runtime_routes.py",
+                },
+                now,
+            ),
+        ]
+
+        response = self.client.get("/feed")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["kind"], "terminal")
+        self.assertEqual(payload[0]["label"], "pytest test_runtime_routes")
+        self.assertEqual(payload[0]["command"], "pytest tests/test_runtime_routes.py -q")
+        self.bus.recent.assert_called_with(200)
+
     def test_health_core_ne_depend_pas_des_services_lab(self):
         with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
              patch("daemon.memory.daydream.get_daydream_status") as daydream_status, \
