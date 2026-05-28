@@ -263,6 +263,7 @@ Acceptable pour le moment :
 - clarifier ownership de `StateStore` legacy ;
 - réduire les globals exposés par `main.py`.
 
+## Ce qu’il ne faut pas modifier maintenant
 
 - Ne pas toucher `SessionFSM`.
 - Ne pas lancer R7.
@@ -846,6 +847,7 @@ Ce fichier n’est pas le problème prioritaire du Core.
 - Ne pas supprimer des champs consommés par Swift sans migration API.
 - Ne pas changer `mark_screen_unlocked()` pour nettoyer aveuglément `last_screen_locked_at`.
 - Ne pas faire de `user_presence` une preuve directe de session.
+- Ne pas transformer `WorkIntent` en feature Core.
 
 ---
 
@@ -1127,6 +1129,9 @@ C’est exactement le bon niveau pour Core hardening : déterministe, testable, 
 - Ne pas corriger les heuristiques sans golden tests.
 - Ne pas brancher facts / vector / DayDream / mémoire intelligente.
 - Ne pas faire du scorer un moteur de décision ou de proposition.
+
+---
+
 # Audit groupé : Observation / Events
 
 ## Verdict
@@ -1488,3 +1493,370 @@ Cette couche fait son travail Core : observer sans prétendre comprendre.
 - Ne pas rendre le bus persistant.
 - Ne pas toucher aux règles de lock / unlock sans tests session complets.
 - Ne pas remplacer les heuristiques hardcodées par config dynamique prématurée.
+# Audit groupé : Routes runtime / surfaces API
+
+## Verdict
+
+Les routes runtime / API sont fonctionnelles pour le Core, mais la frontière produit / debug / Lab reste imparfaite.
+
+Les surfaces essentielles Core existent et sont testées : `/ping`, `/health/core`, `/state`, `/event`, `/feed`. Elles permettent le dogfooding.
+
+Le problème principal : `/state` est encore trop large pour être une surface Core propre. Même sans `include_debug`, il peut exposer `signals`, `decision`, `current_context`, `session_fsm`, `recent_sessions`. C’est utile pour compatibilité Swift et debug, mais ce n’est pas une API produit nette.
+
+Les routes Lab restent enregistrées. Plusieurs sont neutralisées en Core, mais pas toutes au même niveau : certaines sont lecture seule avec metadata Lab, certaines restent actives parce qu’elles sont debug / consent-based, et certaines peuvent encore déclencher des effets de bord si appelées explicitement.
+
+## Rôle global des routes runtime / API
+
+Les routes sont la frontière entre :
+
+- observation locale (`/event`) ;
+- état Core live (`/state`, `/health/core`, `/ping`) ;
+- feed UI notable (`/feed`) ;
+- debug local (`/debug/state`, `/insights`, `/events/debug`, `/work-context`) ;
+- mémoire minimale / historique (`/memory/sessions`, `/search`) ;
+- surfaces Lab / legacy encore visibles (`/memory`, `/facts`, `/daydreams`, `/context-probes`, `/work-intent`, `/llm/lightweight`, resume cards).
+
+La couche routes ne doit pas devenir une couche d’intelligence. Elle agrège, expose, marque ou bloque.
+
+## Responsabilité par fichier
+
+| Fichier | Rôle réel | Statut |
+|---|---|---|
+| `daemon/routes/runtime.py` | Agrégateur de routes runtime | Critique, mais enregistre Core + debug + Lab ensemble. |
+| `daemon/routes/runtime_ingestion.py` | `/event`, normalisation terminal, filtrage pause / lock / bruit | Core stable. |
+| `daemon/routes/runtime_feed_routes.py` | `/feed`, `/observation`, `/today_summary`, `/daydreams` | Mix Core / debug / Lab. |
+| `daemon/routes/runtime_status_routes.py` | `/ping`, `/health/core`, `/state`, `/debug/state`, `/insights` | Core + debug brut. |
+| `daemon/routes/runtime_state_payloads.py` | Construction payload `/state` et `/debug/state` | Critique, frontière produit / debug encore floue. |
+| `daemon/routes/memory.py` | mémoire list / write / remove / session / search | Mix historique Core + Lab mémoire avancée. |
+| `daemon/routes/facts.py` | facts / profile / mutations | Lab, mutations gatées en Core. |
+| `daemon/routes/mcp.py` | MCP pending / intercept / decision / proposals | Core R6 contrôlé, mais expose commandes sensibles. |
+| `daemon/routes/runtime_debug_routes.py` | events debug, timeline preview, work-context | Debug local, plutôt bien marqué. |
+| `daemon/routes/debug_memory.py` | work episodes, journal candidates, commit links | Debug mémoire, hors Core strict produit. |
+| `daemon/routes/runtime_probe_routes.py` | context probes lifecycle | Lab / debug, encore enregistré. |
+| `daemon/routes/work_intent_routes.py` | work intent candidates | Lab / future, peut modifier `RuntimeState.work_intent`. |
+| `daemon/routes/lightweight_llm.py` | lightweight LLM queue / result | Lab, correctement neutralisé en Core. |
+| `daemon/routes/runtime_resume_card_routes.py` | debug resume card generation | Debug / Lab, peut publier `resume_card`. |
+| `daemon/routes/runtime_daemon_routes.py` | pause / resume / shutdown / restart | Core dev / control, avec LLM warmup gated par policy. |
+
+## Surfaces Core stables
+
+Surfaces Core raisonnablement stables :
+
+- `/ping` ;
+- `/health/core` ;
+- `/state` ;
+- `/event` ;
+- `/feed` ;
+- `/daemon/pause` ;
+- `/daemon/resume` ;
+- `/search` comme recherche events SQLite minimale ;
+- `/memory/sessions` comme lecture historique Markdown, non canonique.
+
+`/event` est bien défensif : pause, lock, filtrage, normalisation terminal, actor attribution, coalescing.
+
+`/health/core` est sobre et ne dépend pas de DayDream, facts, embeddings, vector store ou LLM.
+
+## Surfaces debug
+
+Surfaces debug nettes :
+
+- `/debug/state` ;
+- `/events/debug` ;
+- `/events/schema` ;
+- `/timeline/preview` ;
+- `/timeline/schema` ;
+- `/work-context` ;
+- `/debug/work-episodes` ;
+- `/debug/journal-candidates` ;
+- `/debug/journal-comparison` ;
+- `/debug/commit-episode-links` ;
+- `/debug/resume-card` ;
+- `/debug/resume-card/llm`.
+
+`/events/debug` est mieux conçu que `/insights` : il expose metadata, privacy, retention et payload keys, sans valeurs raw.
+
+`/insights` est plus risqué : il retourne les payloads récents bruts.
+
+## Surfaces Lab / legacy
+
+Lab / legacy visibles :
+
+- `/memory` ;
+- `/memory/write` ;
+- `/memory/remove` ;
+- `/memory/usage` ;
+- `/facts` ;
+- `/facts/stats` ;
+- `/facts/profile` ;
+- `/facts/<id>/reinforce` ;
+- `/facts/<id>/contradict` ;
+- `/facts/<id>/archive` ;
+- `/daydreams` ;
+- `/context-probes/*` ;
+- `/work-intent/*` ;
+- `/llm/lightweight/*` ;
+- `/debug/resume-card/llm`.
+
+Gating inégal :
+
+- `memory/write/remove` : bloqués en Core ;
+- `facts/profile` : retourne profil vide en Core ;
+- facts mutations : bloquées en Core ;
+- lightweight LLM pending/result : neutralisé en Core ;
+- context probes : pas globalement gated par `PULSE_MODE`, mais consent / lifecycle-based ;
+- work intent : pas gated, peut modifier runtime state si candidat existant ;
+- `/daydreams` : lecture de fichiers DayDream encore exposée, non bloquante mais Lab visible.
+
+## `/state` : structure et risques
+
+`/state` expose :
+
+- top-level aliases : `active_app`, `active_file`, `active_project`, `session_duration_min`, `last_event_type`, `runtime_paused` ;
+- `pulse_mode`, `experimental_enabled` ;
+- `present` ;
+- et, selon runtime / callbacks : `decision`, `session_fsm`, `current_context`, `signals`, `recent_sessions`.
+
+Risque : même sans `include_debug`, `build_debug_state_payload()` enrichit `product_state` avec des champs legacy / debug. Le test le documente explicitement : `signals` est exposé par défaut.
+
+Risques concrets :
+
+- `present.probable_task` sans `task_confidence` ;
+- `signals.task_confidence` ailleurs dans le même payload ;
+- `current_context` peut avoir une temporalité différente ;
+- `recent_sessions` vient de persistance historique ;
+- `session_fsm` est runtime live ;
+- top-level aliases dupliquent `present` ;
+- `terminal_command`, `terminal_cwd`, `window_title` peuvent apparaître via `signals/current_context`.
+
+Donc `/state` est encore trop large pour une surface Core stable propre. Le réduire brutalement casserait Swift et les tests.
+
+## `/feed` : rôle réel
+
+`/feed` n’est pas un journal complet.
+
+Rôle réel :
+
+- sélection d’événements notables pour UI ;
+- principalement terminal commands finies avec succès / échec ;
+- quelques événements internes : `llm_loading`, `llm_ready`, `resume_card` ;
+- labels raccourcis pour pytest / build / git / setup.
+
+Il ignore volontairement :
+
+- la plupart des fichiers ;
+- lock / unlock ;
+- user_presence ;
+- app activations ;
+- bruit technique.
+
+Il doit rester une sélection notable, pas devenir un journal exhaustif. Le journal brut existe déjà via `/insights` ou `/events/debug`.
+
+## `/health/core` : garanties et limites
+
+Garanties réelles :
+
+- daemon répond ;
+- runtime state présent ;
+- EventBus / feed source présent ;
+- scoring marqué disponible ;
+- session FSM présent ou `not_checked` ;
+- mode runtime exposé ;
+- Lab non requis en Core ;
+- ne touche pas DayDream / facts / embeddings / vector store.
+
+Limites :
+
+- ne prouve pas que `/event` publie réellement ;
+- ne prouve pas que `SignalScorer.compute()` fonctionne ;
+- ne prouve pas `SessionMemory` ;
+- ne vérifie pas SQLite ;
+- ne vérifie pas le dashboard Swift ;
+- `scoring: "available"` est déclaratif ;
+- `session_fsm: "not_checked"` possible selon injection.
+
+C’est une santé minimale, pas un diagnostic complet.
+
+## `/debug/state` / `/insights` : exposition brute
+
+`/debug/state` est clairement marqué :
+
+- `surface: "debug_state"` ;
+- `legacy_in_state` ;
+- `runtime` ;
+- `signals` ;
+- `current_context` ;
+- `recent_sessions`.
+
+C’est suffisamment marqué debug.
+
+`/insights` est moins sûr :
+
+- retourne `event.payload` brut ;
+- peut contenir terminal commands, cwd, git context, window titles, chemins privés ;
+- limite 100 ;
+- utile au dashboard / onglet événements, mais brut-ish.
+
+Pour UI produit, `/events/debug` est plus sain que `/insights`.
+
+## Gates Core / Lab
+
+Routes Lab encore enregistrées : oui.
+
+Neutralisation Core :
+
+- bonne pour `memory/write/remove` ;
+- bonne pour facts mutations ;
+- bonne pour facts profile rendu ;
+- bonne pour lightweight LLM claim/result ;
+- partielle pour memory list/usage, qui appellent encore `memory_store` mais marquent Lab metadata ;
+- inexistante ou non uniforme pour context probes / work intent / debug resume card.
+
+Effets de bord encore possibles en Core si appel explicite :
+
+- `/context-probes/requests` crée une demande ;
+- approve / refuse / execute modifient le store probes ;
+- execute peut publier `context_probe_executed` ;
+- work intent accept peut modifier `RuntimeState.work_intent` ;
+- debug resume-card peut publier `resume_card` ;
+- `/daemon/resume` peut publier LLM loading / ready si policy heavy LLM l’autorise.
+
+Ce sont des surfaces debug / Lab locales, pas chemin Core automatique. Mais elles restent actives.
+
+## Hardcoding identifié
+
+Hardcoding :
+
+- noms de routes ;
+- version `/ping`: `0.1.0` ;
+- `/health/core` checks sous forme string ;
+- `/insights` limite 25, clamp 100 ;
+- `/events/debug` limite 50, clamp 200 ;
+- `/feed` lit 200 events ;
+- labels feed en français ;
+- generic labels filtrés ;
+- `/memory/sessions` limite 7, clamp 30 ;
+- `/search` limite 20, clamp 100 ;
+- facts limit 20, clamp 100 ;
+- DayDream lit `~/.pulse/memory/daydreams` ;
+- routes debug / probes / work-intent toujours enregistrées par `register_runtime_routes()`.
+
+Acceptable pour hardening, mais pas propre pour API contract long terme.
+
+## Données sensibles exposées
+
+Exposées ou potentiellement exposées :
+
+- chemins complets ;
+- terminal command ;
+- terminal cwd ;
+- git context ;
+- window title ;
+- app bundle IDs ;
+- recent apps ;
+- MCP commands ;
+- memory entries ;
+- facts ;
+- session Markdown ;
+- hidden payload si `include_hidden=true` ;
+- raw event payloads via `/insights` ;
+- resume card payload ;
+- context probe results.
+
+Les surfaces sont locales, mais ce n’est pas une API “safe by default” partout.
+
+## Compatibilité Swift
+
+Champs probablement difficiles à supprimer brutalement :
+
+- `/ping.status`, `/ping.paused` ;
+- `/state.active_app` ;
+- `/state.active_file` ;
+- `/state.active_project` ;
+- `/state.session_duration_min` ;
+- `/state.runtime_paused` ;
+- `/state.present` ;
+- `/state.signals` ;
+- `/state.current_context` ;
+- `/state.recent_sessions` ;
+- `/feed.kind`, `label`, `success`, `command`, `timestamp` ;
+- `/insights` raw events pour onglet Événements ;
+- `/today_summary` ;
+- `/memory/sessions` ;
+- `/daydreams` si onglet Lab visible ;
+- `/mcp/pending`, `/mcp/proposals`.
+
+Tout nettoyage doit être additif ou documenté, pas destructif.
+
+## Tests existants
+
+Tests utiles :
+
+- `tests/test_runtime_routes.py` ;
+- `tests/routes/test_runtime_state_payloads.py` ;
+- `tests/test_main_runtime_state.py` ;
+- `tests/test_observation_ingestion_golden.py` ;
+- `tests/test_main_memory_routes.py` ;
+- `tests/test_facts_routes.py` ;
+- `tests/test_main_mcp_routes.py` ;
+- `tests/mcp/test_handlers_proposals.py` ;
+- `tests/test_lightweight_llm_routes.py` ;
+- tests context probe / work intent ;
+- tests debug events / schema / feed readability.
+
+La couverture est bonne sur Core + beaucoup de boundaries.
+
+## Tests manquants
+
+Manques utiles :
+
+- test inventaire global des routes Core / debug / Lab enregistrées ;
+- test que `/state` n’ajoute pas de nouveaux champs sensibles sans accord ;
+- test que `/insights` est explicitement debug/raw dans un metadata ou doc contract ;
+- test `/daydreams` marqué Lab en Core ;
+- test context probes Core mode : statut Lab / debug explicite ;
+- test work-intent Core mode : statut Lab / debug explicite ou absence d’effet sans candidat ;
+- test `/memory` list / usage metadata Lab et absence de mutation ;
+- test facts list / stats en Core : metadata Lab + pas de profile rendering ;
+- test `/daemon/resume` n’émet pas LLM events en Core si policy désactivée ;
+- test Swift contract minimal sur labels / champs consommés, si côté Swift.
+
+## Dette acceptable
+
+Acceptable maintenant :
+
+- routes Lab enregistrées mais non appelées automatiquement ;
+- `/state` large pour compatibilité ;
+- `/feed` sélection notable, pas journal complet ;
+- `/insights` brut pour dashboard local ;
+- `/events/debug` comme meilleure surface debug future ;
+- memory sessions Markdown legacy ;
+- facts routes lisibles mais marquées Lab ;
+- MCP Core R6 conservé comme flux contrôlé.
+
+## Dette à corriger plus tard
+
+À corriger après dogfooding :
+
+- définir `/state/core` ou réduire progressivement `/state` ;
+- déplacer les champs legacy vers `/debug/state` ;
+- remplacer l’usage UI de `/insights` par `/events/debug` ou une surface events filtrée ;
+- marquer `/daydreams`, context probes, work intent et resume-card comme Lab dans payload ;
+- auditer toutes les routes enregistrées par `register_runtime_routes()` avec une table Core / debug / Lab ;
+- ajouter metadata `surface`, `lab_only`, `debug_only` partout où nécessaire ;
+- clarifier `memory.py` entre historique Core et mémoire avancée Lab ;
+- éviter `get_fact_engine()` sur routes facts read en Core si coût / side effects réels ;
+- documenter les champs Swift consommés.
+
+## Ce qu’il ne faut pas modifier maintenant
+
+- Ne pas supprimer `/state.signals` brutalement.
+- Ne pas supprimer `/insights` avant migration Swift.
+- Ne pas transformer `/feed` en journal complet.
+- Ne pas désenregistrer toutes les routes Lab d’un coup.
+- Ne pas casser `/mcp/*`, qui est le flux Core R6 validé.
+- Ne pas rendre `/health/core` dépendant de LLM, facts, vector store ou DayDream.
+- Ne pas déplacer memory sessions vers MemoryStore.
+- Ne pas exposer facts / profile comme Core.
+- Ne pas activer context probes / work intent comme produit.
+- Ne pas ajouter auth / refactor global maintenant.
+- Ne pas démarrer R7 ou apprentissage.
