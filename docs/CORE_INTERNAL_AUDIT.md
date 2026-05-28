@@ -846,4 +846,284 @@ Ce fichier n’est pas le problème prioritaire du Core.
 - Ne pas supprimer des champs consommés par Swift sans migration API.
 - Ne pas changer `mark_screen_unlocked()` pour nettoyer aveuglément `last_screen_locked_at`.
 - Ne pas faire de `user_presence` une preuve directe de session.
-- Ne pas transformer `WorkIntent` en feature Core.
+
+---
+
+# Audit fichier : `daemon/core/signal_scorer.py`
+
+## Verdict
+
+`daemon/core/signal_scorer.py` est un vrai composant Core. Il transforme les observations récentes en signaux prudents, déterministes et testés.
+
+Il ne fait pas d’apprentissage, pas de LLM, pas de mémoire intelligente, pas de Lab actif.
+
+Le fichier est solide pour le dogfooding Core, mais il reste heuristique et non explicable de façon canonique : les poids existent, mais `SignalScorer.compute()` ne retourne pas la liste des signaux actifs ni leur contribution.
+
+Le risque principal reste l’overclaim côté surfaces consommatrices, pas le calcul brut lui-même.
+
+## Rôle réel
+
+`SignalScorer` lit les derniers événements de l’`EventBus` et produit un objet `Signals`.
+
+Il calcule :
+
+- projet / fichier actif probable ;
+- tâche probable ;
+- niveau d’activité ;
+- niveau de focus ;
+- confiance de tâche ;
+- friction ;
+- mix de fichiers ;
+- signaux terminal / MCP / window title / presence ;
+- durées app / window ;
+- compteurs de switchs.
+
+Il ne possède plus la session : `reset_session()` est explicitement un shim legacy, et la durée vient de `session_started_at` fourni par l’extérieur.
+
+## Signaux produits
+
+`Signals` expose une surface riche :
+
+- `active_project`, `active_file` ;
+- `probable_task` ;
+- `task_confidence` ;
+- `activity_level` ;
+- `focus_level` ;
+- `friction_score` ;
+- `session_duration_min` ;
+- `recent_apps` ;
+- `clipboard_context` ;
+- `edited_file_count_10m` ;
+- `file_type_mix_10m` ;
+- `rename_delete_ratio_10m` ;
+- `dominant_file_mode` ;
+- `work_pattern_candidate` ;
+- signaux MCP ;
+- signaux terminal ;
+- window title ;
+- app bundle / category ;
+- app / window durations ;
+- switch counts ;
+- user presence.
+
+Cette sortie est une interprétation, pas une preuve observée brute.
+
+## Heuristiques / hardcoding
+
+Hardcoding assumé et centralisé :
+
+- fenêtres temporelles : 5, 10, 30, 60 minutes selon les signaux ;
+- `_TASK_MIN_SCORE = 1.0` ;
+- `_TASK_WEIGHTS` pour `coding`, `debug`, `writing`, `exploration` ;
+- seuils de focus : 6 switches, 3 fichiers, 2 fichiers pour `deep` ;
+- friction : max churn divisé par `6`, bonus stacktrace `+0.3` ;
+- `task_confidence` plafonnée à `0.92` ;
+- pattern workspace dominant pondéré par `0.65 ** index` ;
+- `reading_only = 0.8`, donc insuffisant seul ;
+- `high_friction = 0.3`, donc jamais décisif seul.
+
+C’est acceptable maintenant, mais ce sont des constantes produit déguisées en code. Elles devront rester stables pendant le dogfooding.
+
+## Sources d’événements
+
+Le scorer consomme notamment :
+
+- `file_created`, `file_modified`, `file_renamed`, `file_deleted`, `file_change` ;
+- `app_activated`, `app_switch` ;
+- `clipboard_updated`, `clipboard_update` ;
+- `mcp_command_received`, `mcp_decision` ;
+- `terminal_command_started`, `terminal_command_finished` ;
+- `window_title_poll` ;
+- `user_presence`, `user_active`, `user_idle` ;
+- `screen_locked` ;
+- `local_exploration`.
+
+La qualification bruit / scoring est déléguée à `event_meaning._default_policy`, donc le scorer dépend fortement de la qualité R2.
+
+## Calcul `probable_task`
+
+Le calcul est raisonnablement prudent :
+
+1. Collecte des signaux actifs.
+2. Pondération via `_TASK_WEIGHTS`.
+3. Fallback `general` si aucun score ou score sous seuil.
+4. Sinon meilleure tâche + confiance relative au total positif, plafonnée à `0.92`.
+
+Points forts :
+
+- `browsing` n’est plus une tâche ; c’est `exploration` + `activity_level=navigating` ;
+- `executing` n’est pas une tâche ; c’est une activité ;
+- debug exige une preuve forte ;
+- app dev seule sans édition ne force pas `coding` ;
+- tool-assisted peut ancrer le projet mais n’inflate pas l’édition utilisateur.
+
+Limite : le scorer ne retourne pas les signaux actifs, donc l’explication doit être reconstruite ailleurs.
+
+## Calcul `activity_level` / `focus_level`
+
+`activity_level` est séparé de `probable_task`, ce qui est sain :
+
+- `idle` ;
+- `executing` ;
+- `editing` ;
+- `navigating` ;
+- `reading`.
+
+`focus_level` reste pragmatique :
+
+- `idle` si lock / user idle récent sans activité fichier substantielle ;
+- `normal` si workflow IA assisté ou switchs nombreux avec activité fichier ;
+- `scattered` si 6+ switches non-IA sans activité fichier suffisante ;
+- `deep` si peu de switches et au moins 2 edits fichiers ;
+- sinon `normal`.
+
+Ces labels peuvent encore être surinterprétés côté UI.
+
+## Calcul `task_confidence`
+
+`task_confidence` est une confiance relative du meilleur score :
+
+```text
+confidence = min(best_score / positive_total, 0.92)
+```
+
+S’il n’y a pas de score : `0.4`.
+
+Si le score est sous seuil : `0.4 + best_score * 0.1`.
+
+Limite importante : ce n’est pas une probabilité statistique. C’est une confiance heuristique normalisée. Elle ne mesure ni qualité des observations, ni fraîcheur globale, ni contradiction entre sources.
+
+## Anti-overclaim
+
+Le fichier contient de bons garde-fous :
+
+- fichiers `system` exclus comme ancre projet ;
+- fichiers `tool_assisted` exclus des counts utilisateur ;
+- bruit technique filtré via `event_meaning` ;
+- screenshots / caches / `.pulse` couverts par tests ;
+- project hint rejeté sans signal de continuité ;
+- window title seul ne confirme pas le projet ;
+- stacktrace ancienne ignorée ;
+- navigateur ancien n’impose pas exploration ;
+- app inconnue seule ne crée pas coding ;
+- `user_presence` ne crée pas du travail à lui seul ;
+- MCP deny n’est pas usable ;
+- diff git est signal de secours, plus faible que FSEvents.
+
+C’est aligné Core Reset.
+
+## Limites connues
+
+Limites à garder visibles :
+
+- pas de trace canonique des poids internes dans `Signals` ;
+- pas de raison structurée “pourquoi cette tâche” ;
+- `task_confidence` est heuristique, pas probabiliste ;
+- `active_file` peut venir d’un titre de fenêtre basename-only ;
+- `active_project` peut venir du terminal ou d’un project hint conservé ;
+- certains signaux Lab / debug peuvent influencer l’interprétation ;
+- `SESSION_TIMEOUT_MIN` est importé mais semble inutilisé ;
+- `_is_pulse_internal_path()` paraît inutilisé localement ;
+- dépendance à `_default_policy` interne de `event_meaning` ;
+- les listes d’apps bootstrap restent un biais fort.
+
+## Données sensibles
+
+Le scorer manipule et expose potentiellement :
+
+- chemins de fichiers complets ;
+- noms de projets ;
+- commandes terminal ;
+- cwd terminal ;
+- résumés terminal ;
+- bundle IDs ;
+- titres de fenêtres ;
+- type de clipboard ;
+- signaux MCP.
+
+Il ne semble pas exposer le contenu brut du clipboard, ce qui est bon. Mais les titres de fenêtre et commandes terminal peuvent déjà contenir des informations sensibles.
+
+## Dépendances Core / Lab
+
+Core :
+
+- `EventBus` ;
+- `event_meaning` ;
+- `file_classifier` ;
+- `app_classifier` ;
+- `workspace_context` ;
+- `terminal_event_normalizer` en amont ;
+- `RuntimeState` en aval.
+
+Lab / à surveiller :
+
+- MCP signals ;
+- app transition `app_ai_assisted` ;
+- `local_exploration` ;
+- diff summary ;
+- downstream resume cards / probes / work intent qui consomment ces champs.
+
+Le scorer ne lance aucun système Lab, mais il accepte des signaux issus de surfaces proches du Lab. C’est acceptable tant que les consommateurs ne les vendent pas comme vérité produit.
+
+## Tests existants
+
+Très bonne couverture :
+
+- `tests/core/test_signal_scorer.py` ;
+- `tests/test_interpretation_signal_scorer_golden.py` ;
+- `tests/core/test_signal_scorer_session.py` ;
+- `tests/core/test_observation_qualification_consistency.py` ;
+- tests payloads `/state`, qui vérifient notamment que `task_confidence` reste hors `PresentState`.
+
+## Tests manquants
+
+Manques utiles plus tard :
+
+- test explicite sur l’import inutilisé `SESSION_TIMEOUT_MIN` / absence de dépendance session ;
+- test que `_TASK_WEIGHTS` ne contient pas de nouvelle tâche non documentée ;
+- test de stabilité des signaux actifs si deux tâches ont score égal ;
+- test sur terminal `deny` ou signal terminal invalide ;
+- test de non-exposition de contenu clipboard brut ;
+- test que `local_exploration` seul ne devient pas projet confirmé hors contexte terminal ;
+- test de fraîcheur des `active_app_duration_sec` / `active_window_title_duration_sec` ;
+- tests de drift sur bootstrap app lists si elles changent.
+
+## Dette acceptable
+
+Acceptable maintenant :
+
+- heuristiques codées en dur ;
+- poids simples ;
+- pas de ML ;
+- pas d’explication canonique ;
+- confiance heuristique ;
+- dépendance à `event_meaning` ;
+- consommation passive de signaux MCP / terminal ;
+- window title comme fallback faible.
+
+C’est exactement le bon niveau pour Core hardening : déterministe, testable, pas magique.
+
+## Dette future
+
+À corriger plus tard, après dogfooding :
+
+- retourner une trace structurée : signaux actifs, poids, score par tâche ;
+- documenter les poids comme contrat testable ;
+- séparer clairement signaux Core et signaux Lab / debug dans la sortie ;
+- supprimer imports / méthodes mortes ;
+- rendre les constantes de seuil auditées, pas dispersées ;
+- mieux qualifier les sources sensibles ;
+- améliorer le tie-break entre tâches ;
+- clarifier `task_confidence` comme “heuristic confidence”.
+
+## Ce qu’il ne faut pas modifier maintenant
+
+- Ne pas ajouter LLM, apprentissage ou profil utilisateur dans le scorer.
+- Ne pas transformer `task_confidence` en pseudo-certitude.
+- Ne pas faire de `user_presence` une preuve de travail.
+- Ne pas réintroduire `browsing` ou `executing` comme tâches produit.
+- Ne pas compter `tool_assisted` comme édition utilisateur.
+- Ne pas rendre `project_hint` autoritaire.
+- Ne pas corriger les heuristiques sans golden tests.
+- Ne pas brancher facts / vector / DayDream / mémoire intelligente.
+- Ne pas faire du scorer un moteur de décision ou de proposition.
