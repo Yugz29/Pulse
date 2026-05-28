@@ -1128,3 +1128,120 @@ Ce patch améliore l’observabilité du cycle de session sans toucher à `Sessi
 - les coupures idle exposent bien `idle_timeout` ;
 - les anciennes sessions restent lisibles avec `session_end` ;
 - le dashboard utilise cette information sans surinterpréter les sessions historiques.
+---
+
+## 2026-05-28 — C1 terminé / C2.1 santé Core côté Swift
+
+### Contexte
+
+Après plusieurs audits ciblés et groupés, la phase `C1 — Core Internal Audit` a été synthétisée.
+
+Verdict C1 : Pulse Core est suffisamment stabilisé pour le dogfooding local, mais il n’est pas prêt pour R7, apprentissage utilisateur ou mémoire intelligente.
+
+Le Core actuel doit rester centré sur :
+
+- observation passive ;
+- interprétation prudente ;
+- sessions fiables ;
+- mémoire minimale ;
+- propositions contrôlées avec validation humaine ;
+- surfaces Core / debug / Lab plus lisibles.
+
+### Synthèse C1
+
+Points solides confirmés :
+
+- `/event`, `EventBus`, filtrage bruit et attribution acteur fonctionnent comme fondation d’observation ;
+- `SignalScorer` reste déterministe, testé, sans LLM ni apprentissage ;
+- `RuntimeState` reste une source live, pas un moteur d’intelligence ;
+- `SessionFSM` et `SessionMemory` couvrent sessions, lock / unlock, restart repair et `close_reason` ;
+- les gates R1-R6 neutralisent DayDream, facts, sync mémoire avancée et LLM auto en Core ;
+- MCP reste le seul flux Core de proposition contrôlée, avec validation humaine.
+
+Dettes principales identifiées :
+
+- `RuntimeOrchestrator` concentre encore trop de responsabilités Core + Lab ;
+- `main.py` conserve des effets de bord au chargement et un ordre de boot fragile ;
+- `/state` reste trop large pour une API produit propre ;
+- le Dashboard Swift reste un cockpit interne Core / debug / Lab ;
+- les routes Lab restent enregistrées, même si les gates tiennent globalement.
+
+Décision : ne pas lancer R7. La phase suivante est `C2 — Hardening minimal`.
+
+### C2.1 — Santé Core côté Swift
+
+Problème ciblé : côté Swift, l’état global pouvait encore être perçu comme dégradé lorsque le LLM était indisponible, même si le Core répondait correctement.
+
+Or en `PULSE_MODE=core`, le LLM n’est pas requis.
+
+Le bon contrat est :
+
+```text
+Core OK + LLM indisponible ≠ Pulse dégradé
+```
+
+### Patch appliqué
+
+Patch Swift appliqué :
+
+- ajout d’un modèle Swift minimal pour `/health/core` ;
+- ajout d’un appel API `/health/core` ;
+- `PulseViewModel` peut maintenant considérer le Core comme sain si `/health/core.status == "ok"` ;
+- l’indisponibilité LLM reste visible via les champs LLM existants, mais ne dégrade plus l’état Core global ;
+- fallback conservé : si `/health/core` échoue ou n’est pas disponible, l’ancien comportement continue de fonctionner.
+
+Fichiers modifiés :
+
+- `App/App/DaemonBridge+CoreAPI.swift` ;
+- `App/App/DaemonBridgeModels.swift` ;
+- `App/App/PulseViewModel.swift` ;
+- `App/App/PulseViewModel+Runtime.swift` ;
+- `AppTests/PulseViewModelInteractionsTests.swift`.
+
+### Comportement avant / après
+
+Avant :
+
+- `/ping` OK + LLM indisponible pouvait produire un statut global `llmUnavailable` ;
+- cela donnait l’impression que Pulse Core dépendait du LLM.
+
+Après :
+
+- `/health/core.status == "ok"` maintient le statut global Core sain ;
+- le LLM devient une capacité Lab / génération séparée ;
+- l’UI distingue mieux daemon / Core / LLM.
+
+### Tests
+
+Tests Swift ajoutés :
+
+- `testCoreHealthOkKeepsGlobalStatusHealthyWhenLLMUnavailable` ;
+- `testDaemonBridgeDecodesCoreHealth`.
+
+Test ajusté :
+
+- le test de polling daemon reconnecté accepte maintenant l’appel `/health/core`.
+
+Tests lancés :
+
+```bash
+xcodebuild test -project App/Pulse.xcodeproj -scheme App -destination 'platform=macOS' -only-testing:AppTests/PulseViewModelInteractionsTests
+```
+
+Résultat observé : `64 tests passed`.
+
+### Verdict provisoire
+
+C2.1 est cohérent avec l’audit C1.
+
+Le patch ne rend pas Pulse plus intelligent. Il rend l’UI plus honnête sur l’état réel du Core.
+
+À surveiller :
+
+- impact du nouvel appel `/health/core` pendant le polling ;
+- cohérence visuelle entre santé Core, statut LLM et surfaces Lab ;
+- absence de régression quand le daemon est down ou quand `/health/core` est temporairement indisponible.
+
+### Prochaine étape C2
+
+C2.2 : clarifier les textes UI Lab, notamment DayDream et Mémoire, pour éviter de vendre des comportements Lab comme automatiques ou requis par le Core.
