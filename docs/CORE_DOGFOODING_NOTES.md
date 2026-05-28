@@ -1476,3 +1476,150 @@ Le patch documente explicitement que certaines surfaces Lab / debug restent visi
 C2.1, C2.2 et C2.3 sont terminés.
 
 Le Core est dans un état adapté au dogfooding post-hardening : santé Core séparée du LLM, surfaces Lab moins trompeuses, et tests de garde autour des frontières API / UI.
+
+---
+
+## 2026-05-28 — C2.4 observation terrain post-hardening
+
+### Contexte
+
+Après C2.1, C2.2 et C2.3, une session terrain d’environ 20 à 30 minutes a été observée.
+
+Objectif : vérifier que le Core reste sain en usage réel après les corrections de hardening, sans relancer de nouvelle feature.
+
+Activités observées pendant la session :
+
+- édition et nettoyage de documentation Core ;
+- utilisation de scripts Python locaux pour modifier la documentation ;
+- commandes Git ;
+- résolution d’un `index.lock` Git ;
+- vérification de l’état Pulse via les endpoints Core.
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```json
+{
+  "status": "ok",
+  "pulse_mode": "core",
+  "experimental_enabled": false,
+  "checks": {
+    "event_bus": "ok",
+    "feed_source": "ok",
+    "lab_services": "not_required",
+    "ping": "ok",
+    "runtime": "ok",
+    "runtime_state": "ok",
+    "scoring": "available",
+    "session_fsm": "ok"
+  },
+  "failed": {}
+}
+```
+
+Lecture terrain : le Core reste sain après une session réelle de documentation / Git. Les services Lab restent non requis.
+
+### Vérification `/state`
+
+État live observé après la session :
+
+```text
+pulse_mode = core
+experimental_enabled = false
+session_status = active
+session_duration_min = 26
+session_fsm.state = active
+session_fsm.session_started_at = 2026-05-28T21:31:34
+user_presence_state = active
+activity_level = executing
+probable_task = general
+task_confidence = 0.4
+active_project = Pulse
+```
+
+Lecture terrain : la session active est cohérente avec une période d’environ 26 minutes.
+
+Le contexte reste prudent : `probable_task=general` avec une confiance faible / modérée. C’est acceptable, car au moment de la vérification, les signaux récents étaient surtout des commandes terminal et les signaux app / fichier étaient absents.
+
+### Observation app / fichier actif
+
+Point à surveiller : au moment du `curl`, certains champs live étaient absents :
+
+```text
+active_app = null
+active_file = null
+recent_apps = []
+```
+
+Mais le projet restait correctement ancré par le terminal :
+
+```text
+terminal_cwd = /Users/yugz/Projets/Pulse/Pulse
+terminal_project = Pulse
+active_project = Pulse
+```
+
+Lecture terrain : Pulse ne force pas une interprétation quand les signaux app / fichier ne sont pas disponibles. Le fallback terminal permet tout de même de garder le projet actif.
+
+Décision provisoire : ne pas corriger maintenant. Surveiller si `active_app` / `active_file` restent régulièrement `null` pendant des sessions normales où VS Code est clairement actif.
+
+### Vérification `/feed`
+
+Le feed a correctement raconté les commandes récentes de la session :
+
+- activation de l’environnement virtuel ;
+- script Python de remplacement documentaire ;
+- `git add` ;
+- `git commit` / `git push` ;
+- `ps aux | grep git` ;
+- suppression de `.git/index.lock`.
+
+Lecture terrain : `/feed` fonctionne correctement après commande terminée. Les cas précédents où `/feed` répondait `[]` étaient liés au timing : l’endpoint était interrogé pendant que la commande courante était encore au stade `terminal_command_started`.
+
+### Vérification `recent_sessions`
+
+Les raisons de fermeture récentes sont maintenant plus informatives :
+
+```text
+stale_repair
+idle_timeout
+stale_repair
+session_end
+```
+
+Points validés :
+
+- `stale_repair` apparaît après redémarrage / réparation d’une session ouverte ;
+- `idle_timeout` apparaît pour une coupure liée à l’inactivité ;
+- les anciennes sessions gardent `session_end` comme fallback.
+
+Lecture terrain : le patch `close_reason` apporte une vraie valeur d’observabilité dans `/state.recent_sessions`.
+
+### Points positifs
+
+- Core sain après une session terrain de 20 à 30 minutes.
+- Mode Core confirmé.
+- Services Lab non requis.
+- Session active cohérente.
+- `/feed` utile sur une vraie activité terminal / Git.
+- `boundary_reason` devient exploitable avec `stale_repair` et `idle_timeout`.
+- Le scorer reste prudent quand les preuves app / fichier sont faibles.
+
+### Points à surveiller
+
+- `active_app` / `active_file` peuvent être `null` même pendant une session de travail, selon la fraîcheur ou la disponibilité des signaux Swift / app.
+- Les commandes de diagnostic `curl` continuent de polluer le contexte live immédiatement après vérification.
+- `/feed` ne doit pas être interprété comme un journal complet ; il reste une sélection notable.
+- `StateStore` reste legacy et ne doit pas être utilisé comme vérité produit si ses valeurs divergent de `present` / `session_fsm`.
+
+### Verdict provisoire
+
+C2.4 confirme que le Core tient en dogfooding post-hardening.
+
+Aucun patch immédiat n’est nécessaire.
+
+Le prochain mouvement ne doit pas être une nouvelle feature. Deux options raisonnables :
+
+- poursuivre le dogfooding terrain et documenter seulement les irritants reproduits ;
+- préparer C3 sous forme de contrats mémoire / apprentissage contrôlé, sans implémentation.
