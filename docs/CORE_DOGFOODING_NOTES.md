@@ -839,3 +839,143 @@ Le cycle daemon dev est plus robuste :
 - lisibilité de l’erreur côté app ;
 - absence de second daemon lancé ;
 - impact restant des sessions courtes de dev dans le dashboard.
+---
+
+## 2026-05-28 — Test terrain : pause, verrouillage, déverrouillage, reprise
+
+### Contexte
+
+Session terrain après application des réglages Xcode recommandés, lancement de tests, pause avec verrouillage / déverrouillage du Mac, puis reprise et relance de tests.
+
+Objectif : vérifier le comportement Core autour d’un cycle naturel de travail : activité -> pause / lock -> unlock -> reprise.
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```json
+{
+  "status": "ok",
+  "pulse_mode": "core",
+  "experimental_enabled": false,
+  "checks": {
+    "runtime": "ok",
+    "runtime_state": "ok",
+    "event_bus": "ok",
+    "feed_source": "ok",
+    "scoring": "available",
+    "session_fsm": "ok",
+    "lab_services": "not_required"
+  },
+  "failed": {}
+}
+```
+
+Conclusion : le Core reste sain après pause, verrouillage et déverrouillage.
+
+### Vérification `/state`
+
+Après reprise, le contexte live indique :
+
+```text
+active_app = Code
+active_file = CORE_DOGFOODING_NOTES.md
+active_project = Pulse
+probable_task = writing
+activity_level = executing
+task_confidence = 0.43
+session_status = active
+locked = false
+user_presence_state = active
+```
+
+Lecture terrain : après retour dans VS Code et lancement des commandes de diagnostic, Pulse comprend correctement que le contexte live est revenu sur Pulse / documentation / terminal.
+
+La confiance modérée est cohérente : le contexte est réel, mais les commandes `curl` de diagnostic influencent l’activité récente.
+
+### Vérification `/debug/state`
+
+État runtime observé après reprise :
+
+```text
+pulse_mode = core
+experimental_enabled = false
+legacy_in_state = false
+session_fsm.state = active
+session_fsm.session_started_at = 2026-05-28T12:24:32
+session_fsm.last_meaningful_activity_at = 2026-05-28T12:25:24
+runtime.lock_marker_active = false
+runtime.last_screen_locked_at = null
+```
+
+Une session précédente a été fermée :
+
+```text
+started_at = 2026-05-28T12:05:11
+ended_at = 2026-05-28T12:20:33
+duration_sec = 922
+active_project = Pulse
+probable_task = coding
+activity_level = executing
+```
+
+Lecture terrain : Pulse semble avoir séparé la session de travail avant pause de la session active après reprise. Ce comportement est acceptable si la pause / lock représente une vraie rupture de travail.
+
+Limite : le `boundary_reason` exposé dans `recent_sessions` reste générique (`session_end`). Il ne permet pas encore de savoir clairement si la coupure vient du lock, de l’idle, d’un timeout ou d’un restart.
+
+### Vérification `/feed`
+
+`/feed` expose surtout les événements terminal récents :
+
+```text
+pytest -m
+pytest
+pytest
+clear
+```
+
+Lecture terrain : pour une session de dev, le feed reste utile pour les commandes terminal, mais il ne raconte pas clairement le cycle lock / unlock.
+
+Conclusion : `/feed` est encore très terminal-centric. Il ne doit pas être utilisé seul pour comprendre les transitions de session.
+
+### Observation dashboard / Événements
+
+Dans l’onglet `Événements`, le déverrouillage est visible :
+
+```text
+screen_unlocked
+session déverrouillée
+```
+
+Le verrouillage est aussi visible dans la capture :
+
+```text
+screen_locked
+session verrouillée
+```
+
+Observation : les événements lock / unlock existent bien dans la surface Événements, mais ils ne ressortent pas dans `/feed` et ne sont pas expliqués clairement dans `recent_sessions`.
+
+Autre observation : l’onglet `Événements` contient beaucoup d’événements `user_presence`, ce qui ajoute du bruit visuel autour des événements réellement importants comme `screen_locked` et `screen_unlocked`.
+
+### Points positifs
+
+- Le daemon reste sain après lock / unlock.
+- `SessionFSM` revient en `active` après reprise.
+- Le contexte live redevient cohérent après retour dans VS Code.
+- Les événements `screen_locked` et `screen_unlocked` sont bien visibles dans l’onglet Événements.
+- Une session de travail précédente est bien présente dans `recent_sessions`.
+
+### Points à surveiller
+
+- `/feed` ne montre pas clairement le lock / unlock.
+- `recent_sessions.boundary_reason` reste trop générique (`session_end`).
+- `runtime.last_screen_locked_at` vaut `null` après reprise, ce qui est normal si l’état lock est terminé, mais moins utile pour comprendre l’historique immédiat.
+- L’onglet `Événements` est bruité par de nombreux `user_presence`.
+- Il faudra décider si `user_presence` doit être filtré, groupé ou rendu moins visible dans la vue par défaut.
+
+### Verdict provisoire
+
+Le cycle lock / unlock semble fonctionner côté Core, mais son observabilité est incomplète.
+
+La priorité n’est pas de modifier `SessionFSM`. Le sujet terrain est plutôt l’explicabilité : rendre les transitions lock / unlock plus lisibles dans les surfaces de diagnostic, sans transformer chaque `user_presence` en événement visible de même importance.
