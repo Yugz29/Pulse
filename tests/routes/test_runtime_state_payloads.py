@@ -302,6 +302,40 @@ def test_build_state_payload_keeps_present_minimal_when_state_signals_are_enrich
     assert "SECRET stdout" not in serialized
 
 
+def test_state_present_contract_rejects_raw_debug_lab_and_terminal_fields():
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_sensitive_signals()),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+    )
+
+    forbidden_present_fields = {
+        "command",
+        "terminal_command",
+        "terminal_cwd",
+        "terminal_summary",
+        "mcp_command",
+        "window_title",
+        "git_context",
+        "repo_root",
+        "raw",
+        "raw_output",
+        "stdout",
+        "stderr",
+        "facts",
+        "profile",
+        "daydream",
+        "vector_store",
+        "embeddings",
+        "llm_summary",
+    }
+
+    assert forbidden_present_fields.isdisjoint(payload["present"].keys())
+    assert payload["signals"]["terminal_command"] == _sensitive_signals().terminal_command
+    assert "signals" in payload  # legacy compatibility surface remains intentionally broad.
+
+
 def test_build_state_payload_omits_debug_by_default_but_keeps_product_fields(monkeypatch):
     monkeypatch.delenv("PULSE_MODE", raising=False)
 

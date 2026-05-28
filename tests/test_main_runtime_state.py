@@ -274,6 +274,41 @@ class TestMainRuntimeState(unittest.TestCase):
             app.runtime_event_coalescer.close()
             runtime.runtime_orchestrator.shutdown_runtime()
 
+    def test_runtime_api_route_inventory_documents_core_debug_and_lab_surfaces(self):
+        routes = {
+            rule.rule
+            for rule in daemon_main.app.url_map.iter_rules()
+            if rule.endpoint != "static"
+        }
+
+        core_routes = {
+            "/ping",
+            "/health/core",
+            "/state",
+            "/event",
+            "/feed",
+        }
+        debug_routes = {
+            "/debug/state",
+            "/insights",
+            "/events/debug",
+            "/work-context",
+            "/debug/work-episodes",
+        }
+        lab_or_legacy_routes = {
+            "/daydreams",
+            "/facts",
+            "/memory",
+            "/context-probes/requests",
+            "/work-intent/candidates",
+            "/llm/lightweight/status",
+            "/llm/lightweight/pending",
+        }
+
+        self.assertTrue(core_routes.issubset(routes))
+        self.assertTrue(debug_routes.issubset(routes))
+        self.assertTrue(lab_or_legacy_routes.issubset(routes))
+
     def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
         runtime = daemon_main.create_runtime()
         app = daemon_main.create_app(runtime)

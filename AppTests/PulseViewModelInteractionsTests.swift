@@ -1600,6 +1600,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
     func testDashboardSectionLabelsUseProductNavigation() {
         XCTAssertEqual(DashboardSection.session.rawValue, "Aujourd’hui")
         XCTAssertEqual(DashboardSection.episodes.rawValue, "Séquences debug")
+        XCTAssertEqual(DashboardSection.memory.rawValue, "Mémoire (Lab)")
+        XCTAssertEqual(DashboardSection.daydream.rawValue, "DayDream (Lab)")
         XCTAssertEqual(DashboardSection.contextProbes.rawValue, "Contexte (Lab)")
     }
 
