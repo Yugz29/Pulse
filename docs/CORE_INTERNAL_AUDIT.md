@@ -1127,3 +1127,364 @@ C’est exactement le bon niveau pour Core hardening : déterministe, testable, 
 - Ne pas corriger les heuristiques sans golden tests.
 - Ne pas brancher facts / vector / DayDream / mémoire intelligente.
 - Ne pas faire du scorer un moteur de décision ou de proposition.
+# Audit groupé : Observation / Events
+
+## Verdict
+
+La couche Observation / Events est une bonne fondation R2 pour le Core : elle reste passive, déterministe, locale, testée, et ne déclenche pas de mémoire intelligente, LLM, DayDream, facts ou propositions avancées.
+
+Le point fort : le filtrage bruit, l’attribution d’acteur, la normalisation terminal et le traitement lock / presence sont déjà pensés pour éviter que des signaux faibles contaminent le Core.
+
+Le point faible : la couche reste permissive pour les événements non-fichier inconnus, repose sur plusieurs listes hardcodées, et mélange encore une surface legacy dict avec des concepts plus récents comme qualification, actor, noise policy et coalescing.
+
+Ce n’est pas cassé, mais ce n’est pas encore une enveloppe d’événement propre.
+
+## Rôle global de la couche Observation / Events
+
+Cette couche transforme des événements locaux bruts en événements publiables et consommables par le runtime.
+
+Pipeline réel :
+
+```text
+Swift / producer local
+-> POST /event
+-> runtime_ingestion
+-> EventMeaningPolicy
+-> EventActorClassifier pour fichiers
+-> terminal normalization si terminal
+-> FileEventCoalescer si fichier coalescible
+-> EventBus
+-> RuntimeOrchestrator.handle_event()
+-> SessionMemory / RuntimeState / SignalScorer
+```
+
+Elle ne doit pas interpréter profondément. Son rôle est de recevoir, nettoyer, filtrer, qualifier assez pour que les couches R3-R6 puissent travailler sans avaler du bruit.
+
+## Responsabilité par fichier
+
+| Fichier | Rôle réel | Commentaire |
+|---|---|---|
+| `daemon/core/events.py` | Introuvable | Le fichier demandé n’existe pas dans le repo actuel. Le modèle d’événement réel est dans `event_bus.py`. |
+| `daemon/core/event_bus.py` | Bus mémoire thread-safe | Stocke les derniers events dans une `deque`, notifie les subscribers, isole les erreurs d’abonnés. |
+| `daemon/core/event_meaning.py` | Politique de publication / bruit / scoring | Décide `publish_to_bus`, `runtime_relevant`, `scoring_relevant`, `file_significance`, `noise_policy`, coalescing et sanitation. |
+| `daemon/core/file_classifier.py` | Classification type fichier | Classe `source`, `test`, `config`, `docs`, `assets`, `other`; délègue la significance à `event_meaning`. |
+| `daemon/core/event_actor_classifier.py` | Introuvable | Le fichier réel est `daemon/core/event_actor.py`. |
+| `daemon/core/event_actor.py` | Attribution acteur fichier | Infère `user`, `system`, `tool_assisted`, `unknown` avec confidence / automation score. |
+| `daemon/platform/idle_heartbeat.py` | Heartbeat présence utilisateur | Publie `user_presence` depuis idle probe, sans créer de travail par lui-même. |
+| `daemon/routes/runtime_ingestion.py` | Entrée `/event` | Normalise terminal, filtre pause / lock / bruit, attribue acteur fichier, publie via coalescer. |
+
+## Chemin complet d’un événement
+
+1. Swift ou un producteur local poste vers `/event`.
+2. `runtime_ingestion.receive_event()` lit JSON, `type`, timestamp et payload.
+3. Si runtime en pause : réponse `{"ok": true, "paused": true, "ignored": true}`.
+4. Si app event : mise à jour de `RuntimeState.latest_active_app`.
+5. Si terminal event : transformation vers payload normalisé.
+6. Si écran verrouillé : seuls `screen_locked` / `screen_unlocked` passent.
+7. `EventMeaningPolicy.classify()` nettoie et décide publication.
+8. Si fichier : `EventActorClassifier` ajoute `_actor`, `_actor_confidence`, `_automation_score`, `_noise_policy`.
+9. `FileEventCoalescer` retarde / fusionne certains bursts fichiers.
+10. `EventBus.publish()` stocke et notifie.
+11. `RuntimeOrchestrator.handle_event()` applique session, state, mémoire minimale.
+12. `SignalScorer` relit les events récents depuis l’EventBus pour produire `Signals`.
+
+Ce flux reste passif : il observe et publie, il n’agit pas.
+
+## Événements bruts vs qualifiés vs meaningful
+
+Événement brut :
+
+- JSON reçu par `/event` ;
+- peut contenir `command`, `raw`, `content`, chemin complet, titre fenêtre, etc.
+
+Événement nettoyé / normalisé :
+
+- terminal : `terminal_command`, `terminal_command_base`, `terminal_action_category`, `terminal_success`, `test_result` ;
+- clipboard : `content` supprimé, `content_kind` conservé ;
+- terminal raw `command` / `raw` supprimés par `EventMeaningPolicy` avant bus si non normalisés.
+
+Événement qualifié :
+
+- via `EventMeaningPolicy` : `file_significance`, `noise_policy`, pertinence runtime / scoring ;
+- via `EventActorClassifier` : `_actor`, confidence, automation score ;
+- via `observation_qualification.py` : contrat passif, non source runtime principale aujourd’hui.
+
+`meaningful` :
+
+- source / test / config / docs / assets de projet ;
+- peut influencer runtime / scoring ;
+- peut ancrer projet / fichier.
+
+`technical_noise` :
+
+- `.pulse`, `.git` hors `COMMIT_EDITMSG`, caches, venv, site-packages, DB, logs, UUID, private var, system libs ;
+- généralement non publié.
+
+`observe_only` :
+
+- screenshots ;
+- visible comme observation, pas preuve de travail.
+
+`neutral` :
+
+- lockfiles, Downloads, CSV, plist génériques ;
+- souvent non publié au bus, mais classé plus prudemment que bruit technique.
+
+## Filtrage / minimisation
+
+Filtrage au bon endroit : oui, globalement.
+
+- `/event` applique pause / lock avant bus.
+- `EventMeaningPolicy` filtre bruit fichier.
+- `EventActorClassifier` n’intervient qu’après décision de publication.
+- `SignalScorer` refiltre via policy pour ne pas compter le bruit.
+
+Minimisation correcte :
+
+- `clipboard_updated.content` est retiré ;
+- terminal `command` / `raw` sont retirés par la policy, puis remplacés par une forme normalisée quand l’ingestion terminal passe ;
+- `.pulse` est filtré ;
+- caches et `site-packages` sont filtrés ;
+- screenshots sont observe-only ;
+- lockfiles sont downrank / neutral.
+
+Fragilité : les commandes terminal normalisées restent sensibles. Ce n’est pas du contenu brut complet, mais cela peut inclure secrets si l’utilisateur tape une commande contenant un token.
+
+## Lock / unlock / user_presence / idle
+
+`screen_locked` / `screen_unlocked` :
+
+- passent toujours, même pendant lock ;
+- ne sont pas `runtime_relevant` dans `EventMeaningPolicy`, mais sont traités explicitement par `RuntimeOrchestrator` ;
+- mettent à jour `SessionFSM` et `RuntimeState` ;
+- servent de signal lifecycle, pas d’activité projet.
+
+Pendant lock :
+
+- `/event` bloque tout sauf lock / unlock ;
+- `RuntimeOrchestrator` refiltre aussi ;
+- `IdlePresenceHeartbeat` ne publie pas si `is_locked()` est vrai ;
+- si le callback lock échoue, heartbeat fail-closed et ne publie rien.
+
+`user_presence` :
+
+- publié par heartbeat Python ;
+- peut aussi venir d’autres producteurs ;
+- influence activity / focus comme signal support ;
+- ne doit pas créer de work block seul ;
+- tests présents pour garantir que ce n’est pas une preuve de travail.
+
+Il existe un doublon potentiel Swift / Python autour présence / idle : Swift peut envoyer `user_idle` / `user_active`, Python heartbeat publie `user_presence`. Le scorer accepte les deux familles. C’est acceptable, mais cela peut bruiter les surfaces brutes.
+
+## Classification des acteurs
+
+Acteurs :
+
+- `user` ;
+- `system` ;
+- `tool_assisted` ;
+- `unknown`.
+
+L’attribution s’applique aux événements fichier dans `/event`.
+
+Règles principales :
+
+- prior utilisateur de base ;
+- chemins système => `system` ;
+- répétitions rapides même fichier => `system` ;
+- lockfiles / dépendances => tendance `tool_assisted` ;
+- bursts rapides multi-fichiers => tendance `tool_assisted` ;
+- app outil / IA active => tendance `tool_assisted` ;
+- chemins système court-circuitent comme système.
+
+Point important : `tool_assisted` peut encore ancrer projet / fichier, mais `SignalScorer` l’empêche d’inflater `edited_file_count_10m`. C’est la bonne séparation.
+
+## Thread-safety / EventBus
+
+`EventBus` :
+
+- utilise une `deque(maxlen=500)` par défaut ;
+- protège queue avec un lock ;
+- `recent()` et `recent_of_type()` prennent le lock ;
+- les subscribers sont appelés hors lock ;
+- erreur subscriber isolée avec `print`.
+
+Limites :
+
+- la liste `_subscribers` n’est pas protégée par lock lors de `subscribe` ;
+- les subscribers peuvent voir des événements pendant mutation externe du payload si un producteur réutilise le dict ;
+- `Event.payload` est mutable ;
+- queue mémoire uniquement, pas durable ;
+- pas de backpressure ;
+- pas d’ID d’événement.
+
+Pour Core local-first, c’est acceptable.
+
+## Hardcoding identifié
+
+Hardcoding important mais assumé :
+
+- types fichier : `file_created`, `file_modified`, `file_renamed`, `file_deleted`, `file_change` ;
+- types terminal ;
+- lock passthrough ;
+- noms de lockfiles ;
+- extensions screenshots ;
+- patterns screenshots FR / EN ;
+- segments path bruit : `.git`, `node_modules`, `__pycache__`, `site-packages`, `.venv`, `.cache`, `.codex`, Homebrew, `/private/var`, `/System/Library` ;
+- coalescing file event : `1.0s` ;
+- dedupe policy : `cleanup_ttl=5s`, `dedupe_window=1s` ;
+- actor burst : 4 fichiers en 600 ms ;
+- repeat : 3 répétitions en 30 s ;
+- idle heartbeat : 30 s, idle threshold 300 s.
+
+Ces filtres sont hardcodés mais acceptables maintenant parce qu’ils sont locaux, testés et lisibles. Ne pas les transformer en système dynamique avant retour terrain.
+
+## Sources de vérité
+
+Sources actuelles :
+
+- `EventBus` : vérité mémoire des événements récents publiés.
+- `EventMeaningPolicy` : vérité de publish / runtime / scoring / noise pour les fichiers.
+- `file_classifier` : vérité de type fichier.
+- `EventActorClassifier` : vérité d’attribution acteur fichier.
+- `runtime_ingestion` : vérité d’entrée `/event`.
+- `IdlePresenceHeartbeat` : source Python de `user_presence`.
+- `RuntimeState` : état lock / pause / latest app utilisé pour filtrage et actor attribution.
+- `RuntimeOrchestrator` : vérité de l’effet runtime / session après publication.
+
+`observation_qualification.py` est un contrat passif utile, mais son docstring dit explicitement qu’il n’est pas encore câblé comme source de comportement runtime.
+
+## Données sensibles
+
+Données sensibles qui peuvent traverser la couche :
+
+- chemins complets ;
+- noms de fichiers ;
+- titres de fenêtre ;
+- app bundle IDs ;
+- terminal command normalisée ;
+- cwd ;
+- git context ;
+- test output summary / output summary ;
+- clipboard metadata ;
+- MCP command metadata ;
+- source idle / présence.
+
+La minimisation est bonne sur clipboard et raw terminal, mais le Core expose encore des données brutes-ish dans `/events/debug`, `/insights`, `/state.signals`, `/feed` partiel et mémoire session.
+
+Ce n’est pas bloquant pour local-first, mais il faut continuer à l’afficher comme diagnostic local, pas produit cloud-safe.
+
+## Frontières Core / Lab
+
+Core :
+
+- `/event` ;
+- `EventBus` ;
+- `EventMeaningPolicy` ;
+- file classifier ;
+- actor classifier ;
+- terminal normalization ;
+- idle heartbeat ;
+- lock / unlock filtering.
+
+Lab / debug proche mais non Core produit :
+
+- `context_probe_executed` ;
+- `llm_loading` ;
+- `llm_ready` ;
+- `resume_card` ;
+- MCP comme signal d’outil ;
+- `local_exploration` ;
+- `event_envelope.py`, qui reste passif et non branché globalement.
+
+Observation reste passive. Elle ne déclenche pas d’action autonome. Les risques viennent des consommateurs, pas de cette couche elle-même.
+
+## Legacy restant
+
+Legacy / dette visible :
+
+- `daemon/core/events.py` absent alors que le nom existe encore dans la tête / doc utilisateur ;
+- `event_actor_classifier.py` absent, remplacé par `event_actor.py` ;
+- payload legacy dict, pas envelope typée ;
+- `observation_qualification.py` décrit un contrat mais n’est pas source runtime principale ;
+- `EventMeaningPolicy` et `file_classifier` dupliquent certains patterns screenshot / UUID / `.pulse` ;
+- `EventMeaningPolicy._default_policy` singleton utilisé directement par plusieurs modules ;
+- `EventBus` utilise des payloads mutables ;
+- événements inconnus non-fichier passent par défaut ;
+- `print` pour erreurs subscriber, pas logger structuré.
+
+## Tests existants
+
+Couverture solide :
+
+- `tests/test_observation_ingestion_golden.py` ;
+- `tests/core/test_event_meaning.py` ;
+- `tests/core/test_file_classifier.py` ;
+- `tests/core/test_event_actor.py` ;
+- `tests/core/test_event_bus.py` ;
+- `tests/platform/test_idle_probe.py` ;
+- `tests/test_bus_filter.py` ;
+- `tests/core/test_observation_qualification.py` ;
+- `tests/core/test_observation_qualification_consistency.py`.
+
+Les tests R2 sont sérieux : golden ingestion, bruit, actor, terminal, feed readability, lock / presence.
+
+## Tests manquants
+
+Tests utiles plus tard :
+
+- `/event` avec type inconnu non-fichier : vérifier explicitement la permissivité actuelle ;
+- payload non-dict ou JSON invalide ;
+- mutation payload après `bus.publish` ;
+- thread-safety subscribe / publish concurrent ;
+- event coalescer avec actor attribution conservée sur priorité gagnante ;
+- coalescing screenshots FR / EN avec unicode variants côté coalescer et policy ;
+- duplication Swift `user_idle` + Python `user_presence` ;
+- terminal command contenant secret : vérifier au moins que `raw` disparaît partout ;
+- MCP events dans `/event` vs routes MCP directes ;
+- `EventMeaningPolicy` singleton state cleanup ;
+- test que `observation_qualification` reste passif et non utilisé comme runtime source.
+
+## Dette acceptable
+
+Acceptable maintenant :
+
+- filtres hardcodés ;
+- payload dict legacy ;
+- EventBus mémoire ;
+- queue size 500 ;
+- actor classifier heuristique ;
+- singleton `_default_policy` ;
+- événements non-fichier généralement publiés ;
+- duplication partielle entre `file_classifier` et `event_meaning` ;
+- heartbeat présence Python en plus de possibles events Swift.
+
+Cette couche fait son travail Core : observer sans prétendre comprendre.
+
+## Dette à corriger plus tard
+
+À corriger après dogfooding :
+
+- introduire une envelope typée uniquement si le besoin est prouvé ;
+- unifier les patterns de classification fichier entre `event_meaning` et `file_classifier` ;
+- décider quoi faire des événements inconnus ;
+- rendre les erreurs EventBus loggées proprement ;
+- rendre payloads immutables ou copier défensivement dans `EventBus` ;
+- clarifier source Swift vs Python pour présence ;
+- réduire l’exposition brute dans surfaces debug accessibles à l’UI ;
+- rendre `observation_qualification` soit réellement source de contrat, soit strictement doc / test-only ;
+- supprimer les vieux noms mentaux `events.py` / `event_actor_classifier.py` dans docs si encore présents.
+
+## Ce qu’il ne faut pas modifier maintenant
+
+- Ne pas brancher `event_envelope.py` globalement maintenant.
+- Ne pas rendre l’observation intelligente.
+- Ne pas ajouter apprentissage, facts, vector store, LLM ou DayDream.
+- Ne pas faire de `user_presence` une preuve de travail.
+- Ne pas compter `tool_assisted` comme édition utilisateur.
+- Ne pas bloquer brutalement tous les événements inconnus sans audit UI / Swift.
+- Ne pas supprimer les événements debug / Lab sans vérifier les routes.
+- Ne pas déplacer le filtrage bruit dans le scorer uniquement.
+- Ne pas rendre le bus persistant.
+- Ne pas toucher aux règles de lock / unlock sans tests session complets.
+- Ne pas remplacer les heuristiques hardcodées par config dynamique prématurée.
