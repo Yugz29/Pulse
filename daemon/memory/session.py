@@ -620,13 +620,14 @@ class SessionMemory:
                 conn.execute(
                     """
                     UPDATE sessions
-                    SET updated_at = ?, ended_at = ?, session_duration_min = ?
+                    SET updated_at = ?, ended_at = ?, session_duration_min = ?, close_reason = ?
                     WHERE id = ?
                     """,
                     (
                         effective_end.isoformat(),
                         effective_end.isoformat(),
                         self._duration_min(end_at=effective_end),
+                        close_reason or "session_end",
                         self.session_id,
                     ),
                 )
@@ -666,6 +667,7 @@ class SessionMemory:
                     started_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     ended_at TEXT,
+                    close_reason TEXT,
                     session_duration_min INTEGER DEFAULT 0,
                     active_project TEXT,
                     active_file TEXT,
@@ -677,6 +679,7 @@ class SessionMemory:
                 """
             )
             self._ensure_sessions_column(conn, "activity_level", "TEXT")
+            self._ensure_sessions_column(conn, "close_reason", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -733,8 +736,18 @@ class SessionMemory:
                     started_at = _parse_iso_datetime(session.get("started_at")) or repair_end
                     duration_min = max(int((repair_end - started_at).total_seconds() / 60), 0)
                     conn.execute(
-                        "UPDATE sessions SET updated_at = ?, ended_at = ?, session_duration_min = ? WHERE id = ?",
-                        (repair_end.isoformat(), repair_end.isoformat(), duration_min, session["id"]),
+                        """
+                        UPDATE sessions
+                        SET updated_at = ?, ended_at = ?, session_duration_min = ?, close_reason = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            repair_end.isoformat(),
+                            repair_end.isoformat(),
+                            duration_min,
+                            "stale_repair",
+                            session["id"],
+                        ),
                     )
                 conn.commit()
 
@@ -856,7 +869,7 @@ class SessionMemory:
             "session_id": session.get("id"),
             "started_at": session.get("started_at"),
             "ended_at": session.get("ended_at") or session.get("updated_at"),
-            "boundary_reason": "session_end",
+            "boundary_reason": session.get("close_reason") or "session_end",
             "duration_sec": duration_sec,
             "active_project": session.get("active_project"),
             "probable_task": session.get("probable_task"),

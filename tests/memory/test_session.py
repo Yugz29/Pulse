@@ -311,12 +311,15 @@ class TestSessionMemory(unittest.TestCase):
         old_session = self.memory.get_session("test-session")
         current_session = self.memory.get_session()
         self.assertEqual(old_session["ended_at"], end.isoformat())
+        self.assertEqual(old_session["close_reason"], "screen_lock")
         self.assertEqual(old_session["session_duration_min"], 25)
         self.assertNotEqual(current_session["id"], "test-session")
         self.assertEqual(current_session["started_at"], next_start.isoformat())
         self.assertEqual(current_session["updated_at"], next_start.isoformat())
         self.assertIsNone(current_session["ended_at"])
         self.assertEqual(current_session["session_duration_min"], 0)
+        recent_sessions = self.memory.get_recent_sessions()
+        self.assertEqual(recent_sessions[0]["boundary_reason"], "screen_lock")
 
     def test_get_recent_events_ordonne_par_timestamp(self):
         older = datetime(2026, 4, 23, 16, 0, 0)
@@ -1232,6 +1235,47 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(sessions[0]["active_project"], "Pulse")
         self.assertEqual(sessions[0]["probable_task"], "coding")
         self.assertEqual(sessions[0]["duration_sec"], 25 * 60)
+        self.assertEqual(sessions[0]["boundary_reason"], "session_end")
+
+    def test_get_recent_sessions_preserve_idle_timeout_close_reason(self):
+        start = datetime(2026, 4, 28, 9, 0, 0)
+        end = start + timedelta(minutes=30)
+        self.memory.started_at = start
+        self.memory.record_event(Event("app_activated", {"app_name": "Cursor"}, timestamp=start))
+        self.memory.close(ended_at=end, close_reason="idle_timeout")
+
+        sessions = self.memory.get_recent_sessions()
+
+        self.assertEqual(sessions[0]["boundary_reason"], "idle_timeout")
+
+    def test_session_schema_adds_close_reason_to_existing_db(self):
+        db_path = str(Path(self.tmpdir.name) / "legacy.db")
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE sessions (
+                    id TEXT PRIMARY KEY,
+                    started_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    ended_at TEXT,
+                    session_duration_min INTEGER DEFAULT 0
+                )
+                """
+            )
+            conn.commit()
+
+        memory = SessionMemory(db_path=db_path, session_id="legacy-session")
+        memory.close(close_reason="session_end")
+
+        with sqlite3.connect(db_path) as conn:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+            row = conn.execute(
+                "SELECT close_reason FROM sessions WHERE id = ?",
+                ("legacy-session",),
+            ).fetchone()
+
+        self.assertIn("close_reason", columns)
+        self.assertEqual(row[0], "session_end")
 
     def test_build_session_snapshot_plus_adaptateur_legacy(self):
         session = {
@@ -1318,7 +1362,7 @@ class TestSessionMemory(unittest.TestCase):
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             session_row = conn.execute(
-                "SELECT ended_at, updated_at, session_duration_min FROM sessions WHERE id = ?",
+                "SELECT ended_at, updated_at, session_duration_min, close_reason FROM sessions WHERE id = ?",
                 ("stale-session",),
             ).fetchone()
             fresh_row = conn.execute(
@@ -1329,6 +1373,7 @@ class TestSessionMemory(unittest.TestCase):
         self.assertIsNotNone(session_row)
         self.assertIsNotNone(session_row["ended_at"])
         self.assertEqual(session_row["session_duration_min"], 25)
+        self.assertEqual(session_row["close_reason"], "stale_repair")
         self.assertIsNotNone(fresh_row)
         self.assertIsNone(fresh_row["ended_at"])
         self.assertEqual(reopened.session_id, "fresh-session")

@@ -1039,3 +1039,92 @@ La correction reste au bon niveau : elle améliore l’observabilité et la lisi
 - `Verrouillage écran` / `Déverrouillage écran` ressortent-ils clairement dans `Tous` ?
 - le filtre `Présence` reste-t-il suffisant pour inspecter le bruit de présence quand nécessaire ?
 - la micro-copy est-elle utile sans surcharger l’interface ?
+---
+
+## 2026-05-28 — Patch Core : persistance de `close_reason` session
+
+### Contexte
+
+Le test terrain lock / unlock a montré que `SessionFSM` et les événements `screen_locked` / `screen_unlocked` fonctionnent, mais que `/state.recent_sessions` exposait systématiquement :
+
+```text
+boundary_reason = session_end
+```
+
+Cette valeur était trop générique et pouvait masquer la vraie raison de fermeture d’une session : lock long, idle timeout, shutdown ou réparation stale.
+
+Audit ciblé : le problème ne venait pas de `SessionFSM`. Le runtime transmettait déjà parfois une vraie raison via `close_reason`, mais `SessionMemory` ne la persistait pas et reconstruisait ensuite `boundary_reason` en dur.
+
+### Patch appliqué
+
+Patch Core minimal appliqué côté `SessionMemory` :
+
+- ajout de la colonne SQLite `close_reason TEXT` sur la table `sessions` ;
+- `SessionMemory.close(close_reason=...)` persiste maintenant la raison de fermeture ;
+- `_repair_stale_open_rows()` marque les fermetures réparées avec `close_reason="stale_repair"` ;
+- `get_recent_sessions()` expose maintenant :
+
+```text
+boundary_reason = close_reason or session_end
+```
+
+### Comportement avant / après
+
+Avant :
+
+- `/state.recent_sessions[].boundary_reason` valait toujours `session_end` ;
+- l’UI ne pouvait pas distinguer une fermeture normale, un lock long, un idle timeout ou une réparation stale ;
+- la projection était artificielle et moins honnête que le runtime.
+
+Après :
+
+- une session fermée par lock peut exposer `boundary_reason="screen_lock"` ;
+- une session fermée par idle peut exposer `boundary_reason="idle_timeout"` ;
+- une session réparée peut exposer `boundary_reason="stale_repair"` ;
+- les anciennes lignes sans `close_reason` conservent le fallback `session_end`.
+
+### Migration / compatibilité SQLite
+
+Le patch reste compatible avec les anciennes bases locales :
+
+- la colonne `close_reason` est ajoutée automatiquement via le mécanisme d’extension de schéma existant ;
+- les anciennes sessions sans valeur persistée continuent d’être projetées avec `boundary_reason="session_end"` ;
+- aucune migration lourde ni refonte de `SessionFSM` n’est nécessaire.
+
+### Tests
+
+Tests ciblés lancés :
+
+```bash
+.venv/bin/python3 -m pytest tests/memory/test_session.py tests/test_runtime_orchestrator.py tests/routes/test_runtime_state_payloads.py -q
+```
+
+Résultat observé : `164 passed`.
+
+Cas couverts :
+
+- fermeture normale -> `session_end` ;
+- `new_session(..., close_reason="screen_lock")` -> `boundary_reason="screen_lock"` ;
+- `close(..., close_reason="idle_timeout")` -> `boundary_reason="idle_timeout"` ;
+- DB legacy sans colonne -> colonne ajoutée automatiquement ;
+- stale repair -> `close_reason="stale_repair"` ;
+- projection `/state.recent_sessions` conserve `boundary_reason`.
+
+### Verdict provisoire
+
+Patch Core réussi.
+
+La chaîne de vérité est plus propre :
+
+```text
+RuntimeOrchestrator -> SessionMemory.close(close_reason) -> SQLite -> get_recent_sessions() -> /state.recent_sessions[].boundary_reason
+```
+
+Ce patch améliore l’observabilité du cycle de session sans toucher à `SessionFSM`, au scoring, à l’EventBus, aux routes Lab ou à la mémoire intelligente.
+
+À vérifier dans les prochaines sessions :
+
+- les nouvelles sessions fermées après lock long exposent bien `screen_lock` ;
+- les coupures idle exposent bien `idle_timeout` ;
+- les anciennes sessions restent lisibles avec `session_end` ;
+- le dashboard utilise cette information sans surinterpréter les sessions historiques.

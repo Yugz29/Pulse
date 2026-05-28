@@ -494,6 +494,7 @@ def test_state_closed_persisted_session_does_not_override_idle_runtime_session(m
                 "id": "closed-session",
                 "started_at": "2026-05-06T08:00:00",
                 "ended_at": "2026-05-06T08:45:00",
+                "boundary_reason": "screen_lock",
                 "active_project": "Pulse",
                 "activity_level": "editing",
             }
@@ -504,6 +505,7 @@ def test_state_closed_persisted_session_does_not_override_idle_runtime_session(m
     assert payload["session_fsm"]["state"] == "idle"
     assert payload["session_duration_min"] == 0
     assert payload["recent_sessions"][0]["ended_at"] == "2026-05-06T08:45:00"
+    assert payload["recent_sessions"][0]["boundary_reason"] == "screen_lock"
 
 
 def test_state_session_boundary_does_not_require_markdown_session_context(monkeypatch):
