@@ -1138,7 +1138,7 @@ struct DashboardRootView: View {
                         Text("Aucun DayDream généré")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.secondary)
-                        Text("DayDream se déclenche automatiquement au premier verrouillage après 23h59.")
+                        Text("DayDream est une expérimentation Lab, non requise par le Core. Son déclenchement automatique est désactivé ou ignoré en mode Core.")
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
@@ -1184,15 +1184,15 @@ struct DashboardRootView: View {
     private func daydreamStatusDetail(_ status: DaydreamStatus) -> String? {
         switch status.lastReason {
         case "awaiting_screen_lock":
-            return "Le résumé nocturne attend le prochain verrouillage d’écran après 23h59."
+            return "Mode Lab : le résumé nocturne attend le prochain verrouillage d’écran après 23h59."
         case "running":
-            return "Le résumé de la journée est en cours de génération."
+            return "Mode Lab : le résumé de la journée est en cours de génération."
         case "generated":
-            return "Le résumé a été généré avec succès."
+            return "Mode Lab : le résumé a été généré avec succès."
         case "already_exists":
             return "Le fichier DayDream existait déjà; aucune régénération n’a été faite."
         case "already_completed_for_date":
-            return "Cette journée a déjà été consolidée."
+            return "Mode Lab : cette journée a déjà été consolidée."
         case "no_journal_entries":
             return "Aucune entrée de journal exploitable n’a été trouvée pour cette date."
         case "unexpected_error":
@@ -1207,7 +1207,7 @@ struct DashboardRootView: View {
             VStack(alignment: .leading, spacing: 20) {
                 GlassCard(accent: gBlue) {
                     VStack(alignment: .leading, spacing: 10) {
-                        cardTitle("Profil injecté au LLM", icon: "brain.head.profile")
+                        cardTitle("Profil Lab pour contexte LLM", icon: "brain.head.profile")
                         if let profile = vm.factsProfile?.profile, !profile.isEmpty {
                             Text(profile)
                                 .font(.system(size: 12))
@@ -1215,7 +1215,7 @@ struct DashboardRootView: View {
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
-                            emptyState("Aucun profil consolidé")
+                            emptyState("Aucun profil Lab consolidé")
                         }
                     }
                 }
@@ -1223,7 +1223,7 @@ struct DashboardRootView: View {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            cardTitle("Faits consolidés", icon: "checkmark.seal")
+                            cardTitle("Faits Lab consolidés", icon: "checkmark.seal")
                             Spacer()
                             Toggle("Archivés (\(vm.factsStats?.archived ?? 0))",
                                    isOn: $showArchivedFacts)
@@ -1258,7 +1258,7 @@ struct DashboardRootView: View {
 
                 GlassCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        cardTitle("Mémoire figée", icon: "memorychip")
+                        cardTitle("Snapshot mémoire Lab / debug", icon: "memorychip")
                         HStack(spacing: 6) {
                             Image(systemName: "clock")
                                 .font(.system(size: 11))
@@ -1267,7 +1267,7 @@ struct DashboardRootView: View {
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                         }
-                        Text("Consolidée depuis les faits et journaux de session, injectée dans chaque échange LLM.")
+                        Text("Vue Lab issue des faits et journaux. Non requise par le Core et non injectée dans le chemin Core.")
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
                             .fixedSize(horizontal: false, vertical: true)

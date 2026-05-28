@@ -661,9 +661,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertTrue(blocking.detailText?.contains("attend votre choix") == true)
 
         XCTAssertEqual(automatic.typeLabel, "Contexte assistant")
-        XCTAssertEqual(automatic.flowLabel, "application automatique")
+        XCTAssertEqual(automatic.flowLabel, "Lab automatique")
         XCTAssertEqual(automatic.statusLabel, "Appliquée")
-        XCTAssertTrue(automatic.detailText?.contains("automatiquement") == true)
+        XCTAssertTrue(automatic.detailText?.contains("hors Core contrôlé") == true)
     }
 
     func testProposalRecordDetailFallsBackToRationaleWithoutRepeatingTitle() {

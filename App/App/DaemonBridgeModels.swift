@@ -1247,7 +1247,7 @@ struct ProposalRecord: Identifiable, Codable {
         case "risky_command":
             return status == "pending" ? "validation requise" : "validation utilisateur"
         case "context_injection":
-            return "application automatique"
+            return "Lab automatique"
         default:
             return status == "pending" ? "en attente" : "traitement interne"
         }
@@ -1300,9 +1300,9 @@ struct ProposalRecord: Identifiable, Codable {
         case ("risky_command", "expired"):
             return "La commande sensible a expiré sans validation."
         case ("context_injection", "executed"):
-            return "Pulse a injecté le contexte existant automatiquement."
+            return "Contexte Lab appliqué automatiquement, hors Core contrôlé."
         case ("context_injection", "pending"):
-            return "Pulse prépare une injection de contexte."
+            return "Contexte Lab préparé, hors chemin Core contrôlé."
         default:
             return "Pulse a enregistré cette proposition."
         }
