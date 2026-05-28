@@ -263,7 +263,6 @@ Acceptable pour le moment :
 - clarifier ownership de `StateStore` legacy ;
 - réduire les globals exposés par `main.py`.
 
-## Ce qu’il ne faut pas modifier maintenant
 
 - Ne pas toucher `SessionFSM`.
 - Ne pas lancer R7.
@@ -612,3 +611,239 @@ Acceptable maintenant :
 - Ne pas refactorer ce fichier en grand maintenant : trop de risques.
 - Ne pas déplacer les gates Core / Lab sans tests équivalents.
 - Ne pas confondre hardening Core avec nouvelle autonomie.
+
+---
+
+# Audit fichier : `daemon/runtime_state.py`
+
+## Verdict
+
+`daemon/runtime_state.py` est une brique Core critique et globalement saine. C’est un conteneur thread-safe de l’état live, pas un moteur d’intelligence.
+
+Il fait correctement le pont entre signaux calculés, état runtime, présence utilisateur, pause, lock et payloads `/state`.
+
+Le risque principal n’est pas technique pur : c’est que l’UI ou l’API lise `PresentState` comme une vérité certaine alors que plusieurs champs sont dérivés ou inférés depuis `Signals`.
+
+## Rôle réel
+
+`RuntimeState` est la source de vérité live côté daemon pour :
+
+- état courant exposé dans `/state.present` ;
+- pause runtime ;
+- lock marker ;
+- présence utilisateur ;
+- dernier état de signaux / décision ;
+- dernière app active observée ;
+- timestamps de sync mémoire / diff ;
+- état transitoire `work_intent`.
+
+Il ne score pas, ne persiste pas, ne décide pas de session canonique, et ne devrait pas devenir un orchestrateur.
+
+## Responsabilités concentrées
+
+Le fichier concentre :
+
+- `PresentState` : vue live lisible du contexte courant ;
+- `RuntimeSnapshot` : snapshot debug / runtime plus large ;
+- pause / ping ;
+- lock / unlock markers ;
+- présence utilisateur ;
+- projection des `Signals` vers le présent ;
+- cache des derniers `signals` et `decision` ;
+- `WorkIntent` ;
+- déduplication fichier via `event_meaning` ;
+- latest active app / bundle / category.
+
+Cette concentration reste acceptable, mais la frontière Core / debug est fine.
+
+## Données du présent
+
+`PresentState` expose notamment :
+
+- `session_status` ;
+- `awake` ;
+- `locked` ;
+- `active_file` ;
+- `active_project` ;
+- `probable_task` ;
+- `activity_level` ;
+- `focus_level` ;
+- `friction_score` ;
+- `clipboard_context` ;
+- `user_presence_state` ;
+- `user_idle_seconds` ;
+- `user_presence_source` ;
+- durées app / window ;
+- compteurs de switch ;
+- `session_duration_min` ;
+- `work_intent`.
+
+Point important : `probable_task`, `active_project`, `activity_level` et `focus_level` viennent des `Signals`. Ce sont des interprétations, pas des observations brutes.
+
+`task_confidence` n’est pas dans `PresentState`, donc la surface live peut paraître plus affirmative que le scorer réel.
+
+## Core stable vs debug / legacy
+
+Core raisonnablement stable :
+
+- pause runtime ;
+- ping ;
+- `PresentState` ;
+- lock markers ;
+- présence utilisateur ;
+- latest active app ;
+- projection des signaux récents ;
+- déduplication fichier via policy existante.
+
+Debug / legacy / Lab-ish :
+
+- `_last_signals` ;
+- `_last_decision` ;
+- `memory_synced_at` ;
+- `last_diff_summary` ;
+- `WorkIntent` ;
+- `clipboard_context` ;
+- `get_signal_snapshot()` / `get_context_snapshot()` ;
+- `_recent_file_events`, qui semble désormais résiduel puisque la déduplication délègue à `event_meaning`.
+
+## Lock / presence / pause
+
+La séparation est correcte :
+
+- `paused` est une pause runtime, pas un état `SessionFSM` ;
+- `locked` est un état d’écran / runtime ;
+- `user_presence` est un signal de présence, pas une preuve de travail ;
+- `last_screen_locked_at` reste volontairement après unlock jusqu’à `clear_sleep_markers()`.
+
+Point fragile : `mark_screen_unlocked()` ne nettoie pas tout seul le timestamp de lock. C’est probablement intentionnel pour calculer la durée de sommeil, mais dangereux si quelqu’un lit ce champ sans connaître le protocole.
+
+## Projet, fichier, app active
+
+`active_file` et `active_project` viennent des signaux. Ce ne sont pas des vérités observées directement.
+
+`latest_active_app` signifie plutôt “dernière app observée” que “app actuellement certaine”. Il n’y a pas de fraîcheur ou expiration locale dans `RuntimeState`.
+
+Le top-level `/state.active_app` et `present.active_project` / `present.active_file` peuvent donc raconter des temporalités différentes.
+
+## Champs sensibles ou trop bruts
+
+Champs à surveiller :
+
+- `active_file` : chemin local potentiellement sensible ;
+- `active_project` : peut révéler nom de workspace / client ;
+- `clipboard_context` : ambigu et potentiellement sensible ;
+- `work_intent.summary` / `evidence_refs` : Lab-ish, peut sembler produit ;
+- `latest_active_app_bundle_id` ;
+- `last_diff_summary` ;
+- `signals` / `decision` stockés en `Any` puis exposables via payloads debug / legacy.
+
+Ce n’est pas forcément un bug, mais ce n’est pas une surface produit neutre.
+
+## Hardcoding identifié
+
+Hardcoding modéré :
+
+- valeurs par défaut : `idle`, `general`, `normal` ;
+- déduplication fichier : cleanup TTL `5s`, fenêtre `1s` ;
+- `WorkIntent.evidence_refs` limité à 5 items, 120 caractères chacun ;
+- confidence clampée entre `0.0` et `1.0`.
+
+Pas de hardcoding de port, provider LLM ou chemin utilisateur dans ce fichier.
+
+## Sources de vérité
+
+Sources réelles :
+
+- `SignalScorer` produit les `Signals` ;
+- `RuntimeState` stocke la projection live ;
+- `SessionFSM` reste source de logique session runtime ;
+- `SessionMemory` reste source de persistance historique ;
+- `EventMeaningPolicy` porte la logique de déduplication / bruit fichier ;
+- `RuntimeOrchestrator` décide de l’ordre d’update ;
+- ingestion runtime alimente latest active app et présence.
+
+`RuntimeState` est une source de vérité live, pas la source canonique des sessions ou de la mémoire.
+
+## Risques UI / API
+
+Risques principaux :
+
+- `/state.present.probable_task` peut sembler certain sans `task_confidence` ;
+- `activity_level` peut être lu comme activité produit alors que c’est un signal récent ;
+- `paused`, `locked`, `awake`, `session_status` peuvent être confondus ;
+- `active_app`, `active_file`, `active_project` n’ont pas tous la même temporalité ;
+- `work_intent` peut être pris pour du Core alors qu’il doit rester Lab / debug ;
+- les payload builders ajoutent `signals`, `current_context`, `recent_sessions`, ce qui brouille produit / debug.
+
+## Legacy restant
+
+Legacy clair :
+
+- `get_signal_snapshot()` / `get_context_snapshot()` ;
+- `_recent_file_events` inutilisé localement ;
+- stockage `Any` de `signals` et `decision` ;
+- `WorkIntent` dans le runtime live alors que ce n’est pas Core strict ;
+- `last_diff_workspace` / `last_diff_computed_at` stockés mais peu exposés ;
+- `memory_synced_at` encore présent dans snapshot Core / debug malgré gating mémoire avancée.
+
+## Tests existants
+
+Couverture utile existante :
+
+- `tests/test_main_runtime_state.py` ;
+- `tests/routes/test_runtime_state_payloads.py` ;
+- `tests/test_runtime_routes.py` ;
+- `tests/test_runtime_orchestrator.py` ;
+- `tests/platform/test_idle_probe.py` ;
+- `tests/core/test_signal_scorer.py` ;
+- tests work intent / decision engine qui utilisent `PresentState`.
+
+La couverture est correcte pour la stabilité actuelle.
+
+## Tests manquants
+
+Manques utiles plus tard :
+
+- invalidité / normalisation de `user_presence` ;
+- fraîcheur ou staleness de `latest_active_app` ;
+- test explicite que `PresentState` n’expose pas `task_confidence` ;
+- comportement voulu de `last_screen_locked_at` après unlock ;
+- `WorkIntent.from_dict()` sur payloads invalides ;
+- garantie que `work_intent` reste hors Core produit ;
+- test de non-exposition des champs diff / memory dans surface produit ;
+- stress thread-safety si le daemon devient plus concurrent.
+
+## Dette acceptable
+
+Acceptable maintenant :
+
+- conteneur mutable protégé par lock ;
+- `Any` pour compatibilité avec les objets signaux actuels ;
+- duplication partielle `/state` / `/debug/state` ;
+- présence de `WorkIntent` tant qu’il reste traité comme Lab / debug ;
+- lock timestamp conservé après unlock ;
+- déduplication déléguée à `event_meaning`.
+
+Ce fichier n’est pas le problème prioritaire du Core.
+
+## Dette à corriger plus tard
+
+À corriger après dogfooding, sans ouvrir R7 :
+
+- séparer plus nettement `CorePresentState` et `DebugRuntimeSnapshot` ;
+- rendre explicite confidence / uncertainty dans les surfaces UI / API ;
+- sortir ou marquer plus fortement `WorkIntent` comme Lab ;
+- supprimer `_recent_file_events` ;
+- clarifier `latest_active_app` en `latest_observed_app` ou ajouter une fraîcheur ;
+- valider les champs `user_presence` ;
+- réduire les payloads bruts exposables côté produit.
+
+## Ce qu’il ne faut pas modifier maintenant
+
+- Ne pas fusionner `SessionFSM` dans `RuntimeState`.
+- Ne pas faire scorer `RuntimeState`.
+- Ne pas ajouter mémoire intelligente, facts, LLM, DayDream ou apprentissage ici.
+- Ne pas supprimer des champs consommés par Swift sans migration API.
+- Ne pas changer `mark_screen_unlocked()` pour nettoyer aveuglément `last_screen_locked_at`.
+- Ne pas faire de `user_presence` une preuve directe de session.
+- Ne pas transformer `WorkIntent` en feature Core.
