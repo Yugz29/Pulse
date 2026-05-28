@@ -1562,7 +1562,9 @@ active_project = Pulse
 
 Lecture terrain : Pulse ne force pas une interprétation quand les signaux app / fichier ne sont pas disponibles. Le fallback terminal permet tout de même de garder le projet actif.
 
-Décision provisoire : ne pas corriger maintenant. Surveiller si `active_app` / `active_file` restent régulièrement `null` pendant des sessions normales où VS Code est clairement actif.
+Décision provisoire au moment de C2.4 : ne pas corriger immédiatement. Surveiller si `active_app` / `active_file` restent régulièrement `null` pendant des sessions normales où VS Code est clairement actif.
+
+Note C2.5 : ce point a été réévalué après relance de l’app macOS via Xcode. Les champs `active_app`, `active_file` et `recent_apps` sont revenus correctement. L’hypothèse la plus probable est que le daemon Python tournait sans producteur Swift / SystemObserver complet pendant l’observation précédente. Ce n’est pas un bug Core confirmé.
 
 ### Vérification `/feed`
 
@@ -1619,7 +1621,138 @@ C2.4 confirme que le Core tient en dogfooding post-hardening.
 
 Aucun patch immédiat n’est nécessaire.
 
+
 Le prochain mouvement ne doit pas être une nouvelle feature. Deux options raisonnables :
 
 - poursuivre le dogfooding terrain et documenter seulement les irritants reproduits ;
 - préparer C3 sous forme de contrats mémoire / apprentissage contrôlé, sans implémentation.
+
+---
+
+## 2026-05-28 — C2.5 petit patch test `/feed` et observation avec app Swift lancée
+
+### Contexte
+
+Après C2.4, une petite session de code / test a été réalisée sans redémarrer le daemon ni l’app, afin de produire une activité de développement réelle observable par Pulse.
+
+Objectifs :
+
+- ne pas ajouter de feature ;
+- renforcer seulement un contrat existant si nécessaire ;
+- observer comment Pulse lit une activité dev normale ;
+- vérifier l’hypothèse `active_app = null` observée en C2.4.
+
+### Patch test appliqué
+
+Patch test-only appliqué côté Python.
+
+Fichier modifié :
+
+- `tests/test_runtime_routes.py`.
+
+Test ajouté :
+
+- `test_feed_contract_is_not_a_complete_raw_event_journal`.
+
+Contrat verrouillé :
+
+```text
+/feed = sélection d’événements notables
+/feed ≠ journal brut complet
+```
+
+Le test vérifie que `/feed` ignore les événements bruts non promus, notamment :
+
+- `app_activated` ;
+- `file_modified` ;
+- `user_presence` ;
+- `screen_locked` ;
+- `screen_unlocked`.
+
+Et qu’il ne retourne que l’événement terminal notable.
+
+### Tests lancés
+
+Tests Python ciblés :
+
+```bash
+.venv/bin/python3 -m pytest tests/test_main_runtime_state.py tests/routes/test_runtime_state_payloads.py tests/test_runtime_routes.py -q
+```
+
+Résultat observé : `166 passed`.
+
+Tests non lancés :
+
+- suite Python complète ;
+- suite Swift, non concernée par ce patch test-only.
+
+### Observation terrain après commit / push
+
+Après commit et push du patch test, les endpoints Core ont été vérifiés sans redémarrage du daemon.
+
+`/health/core` est resté sain :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+La session active est restée cohérente :
+
+```text
+session_status = active
+session_duration_min = 37
+active_project = Pulse
+activity_level = executing
+probable_task = general
+task_confidence = 0.4
+```
+
+Le feed a correctement raconté les commandes notables de la session :
+
+- activation de l’environnement virtuel ;
+- script Python de documentation ;
+- `git add` ;
+- `git commit` / `git push` ;
+- diagnostic Git autour de `.git/index.lock` ;
+- commandes `curl` de vérification.
+
+Lecture terrain : le comportement réel de `/feed` est aligné avec le nouveau test C2.5. Le feed reste une timeline lisible d’événements notables, pas un journal exhaustif.
+
+### Réévaluation `active_app = null`
+
+Pendant C2.4, `active_app`, `active_file` et `recent_apps` étaient parfois `null` / vides alors que le projet restait détecté via le terminal.
+
+Une cause probable a été identifiée : l’app macOS Pulse n’était pas lancée via Xcode pendant cette observation. Le daemon Python tournait, mais il ne recevait pas forcément les événements Swift / SystemObserver complets.
+
+Après lancement de l’app via Xcode, les signaux sont revenus correctement :
+
+```text
+active_app = Code
+active_file = CORE_DOGFOODING_NOTES.md
+active_project = Pulse
+active_app_bundle_id = com.microsoft.VSCode
+recent_apps = Xcode, Codex, ChatGPT, Code
+```
+
+Lecture terrain : l’anomalie `active_app = null` n’est pas un bug Core confirmé. Elle correspond probablement à une condition de test incomplète : daemon actif sans app Swift lancée.
+
+### Verdict provisoire
+
+C2.5 confirme plusieurs points :
+
+- le Core reste sain pendant un petit patch test réel ;
+- `/feed` fonctionne comme sélection notable ;
+- le contrat `/feed` est maintenant verrouillé par test ;
+- `active_app` / `active_file` reviennent quand l’app Swift est lancée correctement ;
+- les observations C2.4 doivent être lues avec cette nuance.
+
+Aucun patch runtime immédiat n’est nécessaire.
+
+### Points à surveiller
+
+- si `active_app` / `active_file` redeviennent `null` alors que l’app Swift est bien lancée, ouvrir une investigation ciblée Swift / SystemObserver ;
+- si `/feed` devient trop bavard, conserver le contrat C2.5 comme garde-fou ;
+- documenter clairement dans les futures sessions si le daemon tourne seul ou si l’app macOS est aussi lancée.
