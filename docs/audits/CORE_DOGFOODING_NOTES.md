@@ -2153,6 +2153,49 @@ surface = memory_candidates
 
 Lecture terrain : le rejet humain est persisté, la candidate reste auditable dans la surface dédiée, et aucune mémoire canonique n’est créée.
 
+### Suppression de la candidate de test
+
+Commande testée : `DELETE /memory/candidates/<id>`.
+
+Résultat observé :
+
+```json
+{
+  "deleted": true,
+  "ok": true,
+  "surface": "memory_candidates"
+}
+```
+
+Après suppression, `GET /memory/candidates` retourne :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Lecture terrain : la candidate de test rejetée est supprimée correctement. La surface `memory_candidates` revient à vide, sans mémoire canonique créée.
+
+### Vérification `/state` après suppression
+
+Après suppression, `/state` reste cohérent avec l’activité live :
+
+```text
+active_app = Terminal
+active_file = docs/audits/CORE_DOGFOODING_NOTES.md
+active_project = Pulse
+probable_task = writing
+activity_level = executing
+task_confidence = 0.76
+session_status = active
+```
+
+Lecture terrain : la suppression d’une candidate ne pollue pas le Core live. `memory_candidates` reste séparé de `/state`.
+
 ### Verdict provisoire
 
 C4-mini.1 fonctionne en dogfooding terrain :
@@ -2161,10 +2204,12 @@ C4-mini.1 fonctionne en dogfooding terrain :
 - candidate `pending` créée uniquement sur action explicite ;
 - preuve `human_manual` conservée ;
 - sensibilité `low` conservée ;
-- lecture liste et lecture individuelle OK ;
-- rejet humain OK ;
-- trace de review persistée ;
-- aucune mémoire canonique créée ;
+    - lecture liste et lecture individuelle OK ;
+    - rejet humain OK ;
+    - trace de review persistée ;
+    - suppression de la candidate de test OK ;
+    - liste revenue vide après suppression ;
+    - aucune mémoire canonique créée ;
 - aucune injection LLM ;
 - aucune génération automatique observée ;
 - `/state` reste séparé de la surface `memory_candidates`.
@@ -2173,7 +2218,7 @@ Aucun patch code immédiat n’est nécessaire.
 
 ### Points à surveiller
 
-- tester plus tard `edit`, `archive` et `delete` en terrain réel ;
+    - tester plus tard `edit` et `archive` en terrain réel ;
 - vérifier que les candidates rejetées ne sont pas reproposées par un futur générateur ;
 - ne pas ajouter de générateur offline sans décision séparée ;
 - ne pas présenter `accepted` ou `rejected` comme mémoire produit stable ;
