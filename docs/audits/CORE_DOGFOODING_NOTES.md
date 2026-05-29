@@ -1618,7 +1618,7 @@ Lecture terrain : le patch `close_reason` apporte une vraie valeur d’observabi
 
 C2.4 confirme que le Core tient en dogfooding post-hardening.
 
- Aucun patch immédiat n’est nécessaire.
+Aucun patch immédiat n’est nécessaire.
 
 Le prochain mouvement ne doit pas être une nouvelle feature. Deux options raisonnables :
 
@@ -1815,6 +1815,46 @@ Points validés :
 - `count=0` confirme l’absence de génération automatique ;
 - `canonical_memory=false` confirme que la surface ne représente pas une mémoire stable ;
 - `surface=memory_candidates` confirme que la réponse est isolée de la mémoire Core / Lab existante.
+
+### Vérification complémentaire après activité documentaire réelle
+
+Après un peu d’activité autour de la documentation, de Codex, ChatGPT, VS Code et Terminal, les endpoints Core ont été revérifiés.
+
+`/health/core` reste sain :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+`/state` reflète correctement le contexte réel :
+
+```text
+active_app = Terminal
+active_file = docs/audits/CORE_DOGFOODING_NOTES.md
+active_project = Pulse
+probable_task = writing
+activity_level = executing
+task_confidence = 0.76
+session_status = active
+```
+
+Lecture terrain : après activité documentaire réelle, Pulse qualifie mieux le contexte comme `writing`. Les commandes `curl` restent visibles dans le contexte live, ce qui est attendu pendant le diagnostic.
+
+`/memory/candidates` reste vide :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Conclusion : même après activité réelle, le squelette `memory_candidates` ne génère rien automatiquement et ne crée aucune mémoire canonique.
 
 ### Verdict provisoire
 
