@@ -2196,6 +2196,72 @@ session_status = active
 
 Lecture terrain : la suppression d’une candidate ne pollue pas le Core live. `memory_candidates` reste séparé de `/state`.
 
+### Vérification complémentaire `edit` / `archive`
+
+Une deuxième candidate manuelle a été créée pour tester les actions de review restantes.
+
+Candidate créée :
+
+```text
+id = 019e74a5-1d7c-7e71-ae6d-abf63e8d491a
+status = pending
+claim = Pulse est un projet de travail récurrent.
+evidence.source_type = human_manual
+```
+
+`POST /memory/candidates/<id>/edit` a modifié la claim :
+
+```text
+claim = Pulse est un projet personnel récurrent de diagnostic local.
+status = edited
+human_review.decision = edited
+human_review.edited_claim = Pulse est un projet personnel récurrent de diagnostic local.
+canonical_memory_created = false
+llm_injected = false
+```
+
+`POST /memory/candidates/<id>/archive` a archivé la candidate :
+
+```text
+status = archived
+human_review.decision = archived
+trace[0].decision = edited
+trace[1].decision = archived
+canonical_memory_created = false
+llm_injected = false
+```
+
+La relecture individuelle confirme :
+
+```text
+status = archived
+canonical_memory = false
+surface = memory_candidates
+```
+
+La candidate a ensuite été supprimée :
+
+```json
+{
+  "deleted": true,
+  "ok": true,
+  "surface": "memory_candidates"
+}
+```
+
+Après suppression, `GET /memory/candidates` retourne :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Lecture terrain : `edit`, `archive`, la relecture, puis `delete` fonctionnent correctement. Les actions de review restent tracées, sans création de mémoire canonique ni injection LLM.
+
 ### Verdict provisoire
 
 C4-mini.1 fonctionne en dogfooding terrain :
@@ -2204,12 +2270,14 @@ C4-mini.1 fonctionne en dogfooding terrain :
 - candidate `pending` créée uniquement sur action explicite ;
 - preuve `human_manual` conservée ;
 - sensibilité `low` conservée ;
-    - lecture liste et lecture individuelle OK ;
-    - rejet humain OK ;
-    - trace de review persistée ;
-    - suppression de la candidate de test OK ;
-    - liste revenue vide après suppression ;
-    - aucune mémoire canonique créée ;
+- lecture liste et lecture individuelle OK ;
+- rejet humain OK ;
+- édition humaine OK ;
+- archivage humain OK ;
+- trace multi-action conservée ;
+- suppression de la candidate de test OK ;
+- liste revenue vide après suppression ;
+- aucune mémoire canonique créée ;
 - aucune injection LLM ;
 - aucune génération automatique observée ;
 - `/state` reste séparé de la surface `memory_candidates`.
@@ -2218,7 +2286,7 @@ Aucun patch code immédiat n’est nécessaire.
 
 ### Points à surveiller
 
-    - tester plus tard `edit` et `archive` en terrain réel ;
+- tester plus tard `accept` avec wording strict avant toute UI ;
 - vérifier que les candidates rejetées ne sont pas reproposées par un futur générateur ;
 - ne pas ajouter de générateur offline sans décision séparée ;
 - ne pas présenter `accepted` ou `rejected` comme mémoire produit stable ;
