@@ -1899,3 +1899,282 @@ Aucun patch code immédiat n’est nécessaire.
 - vérifier que les futures actions `accept`, `edit`, `reject`, `archive` et `delete` restent review-only ;
 - ne pas ajouter de création manuelle, génération offline ou scan de sessions sans décision séparée ;
 - documenter toute future modification de la mécanique `memory_candidates` dans `docs/decisions/` et/ou les contrats concernés avant implémentation.
+
+---
+
+## 2026-05-29 — C4-mini.1 manual candidate creation pre-restart check
+
+### Contexte
+
+Avant redémarrage du daemon après l’implémentation de `POST /memory/candidates/manual`, les endpoints Core ont été vérifiés pour capturer l’état réel de la session en cours.
+
+Objectif : confirmer que le Core existant reste sain et que le squelette `memory_candidates` reste inerte avant activation du nouveau code.
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+Lecture terrain : le daemon actif reste sain en mode Core avant redémarrage.
+
+### Vérification `/state`
+
+État live observé pendant les commandes de diagnostic :
+
+```text
+active_app = Terminal
+active_file = tests/memory/test_candidates.py
+active_project = Pulse
+probable_task = coding
+activity_level = executing
+task_confidence = 0.92
+session_status = active
+session_duration_min = 26
+```
+
+Lecture terrain : Pulse comprend correctement la session comme une activité de code / tests sur le projet Pulse. Le fichier actif `tests/memory/test_candidates.py`, le contexte Terminal et l’activité récente Codex / ChatGPT / VS Code expliquent `probable_task=coding` avec une confiance élevée.
+
+Les commandes `curl` de diagnostic restent visibles dans le contexte live, ce qui est attendu pendant le dogfooding.
+
+### Vérification `/feed`
+
+Le feed expose les commandes terminal notables récentes, notamment :
+
+- correction documentaire locale via script Python ;
+- vérifications `/health/core`, `/state` et `/memory/candidates` ;
+- commande `clear` ;
+- vérification complète `/health/core`, `/state`, `/feed`, `/memory/candidates` et `/debug/state`.
+
+Lecture terrain : `/feed` reste conforme à son contrat. Il raconte les commandes notables de la session sans devenir un journal brut complet.
+
+### Vérification `/memory/candidates`
+
+Résultat observé :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Points validés :
+
+- aucune candidate n’est créée automatiquement pendant l’activité de code / tests ;
+- aucune mémoire canonique n’est créée ;
+- la surface reste dédiée à `memory_candidates` ;
+- `count=0` confirme l’inertie avant redémarrage du daemon.
+
+### Vérification `/debug/state`
+
+`/debug/state` confirme le contexte runtime :
+
+```text
+pulse_mode = core
+experimental_enabled = false
+legacy_in_state = false
+active_app = Terminal
+active_file = tests/memory/test_candidates.py
+active_project = Pulse
+probable_task = coding
+activity_level = executing
+task_confidence = 0.92
+session_fsm.state = active
+```
+
+`recent_sessions` expose encore des fermetures avec `stale_repair` et `screen_lock`, cohérentes avec les redémarrages daemon et les cycles lock / unlock déjà observés pendant le dogfooding.
+
+### Verdict provisoire
+
+Pré-redémarrage conforme :
+
+- Core sain ;
+- session active cohérente ;
+- scoring pertinent pour une activité de code / tests ;
+- feed exploitable ;
+- `/memory/candidates` reste vide ;
+- aucune candidate spontanée ;
+- aucune mémoire canonique créée.
+
+Ce test valide l’état du daemon actif avant activation du nouveau code `POST /memory/candidates/manual`.
+
+Après redémarrage, vérifier explicitement :
+
+- `/health/core` ;
+- `/memory/candidates` avant création ;
+- `POST /memory/candidates/manual` ;
+- `GET /memory/candidates` après création ;
+- `/state`, pour confirmer l’absence de pollution Core ;
+- puis documenter le résultat terrain post-redémarrage.
+
+---
+
+## 2026-05-29 — C4-mini.1 manual candidate creation post-restart check
+
+### Contexte
+
+Après redémarrage du daemon avec `POST /memory/candidates/manual`, le cycle manuel de création et de review a été testé en conditions réelles Core.
+
+Objectif : vérifier qu’une candidate peut être créée explicitement, relue, rejetée, et rester isolée de la mémoire canonique et du LLM.
+
+### Vérification initiale
+
+`/health/core` reste sain :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+Avant création, `/memory/candidates` est vide :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Lecture terrain : le Core reste sain après redémarrage, et la surface `memory_candidates` ne contient aucune candidate avant action explicite.
+
+### Création manuelle
+
+Commande testée : `POST /memory/candidates/manual`.
+
+Payload utilisé :
+
+```json
+{
+  "memory_type": "project_pattern",
+  "claim": "Pulse est un projet de travail récurrent.",
+  "evidence": [
+    {
+      "source_type": "human_manual",
+      "summary": "Créé explicitement par l’utilisateur pour tester le cycle de review."
+    }
+  ],
+  "sensitivity": {
+    "level": "low",
+    "reason": "non-sensitive project pattern"
+  }
+}
+```
+
+Résultat observé :
+
+```text
+ok = true
+surface = memory_candidates
+status = pending
+canonical_memory_created = false
+llm_injected = false
+human_review.required = true
+confidence = 0.0
+```
+
+Candidate créée :
+
+```text
+id = 019e749a-f966-7ffe-965c-60da278bc4dd
+memory_type = project_pattern
+claim = Pulse est un projet de travail récurrent.
+status = pending
+evidence.source_type = human_manual
+sensitivity.level = low
+```
+
+Lecture terrain : la route crée bien une candidate `pending`, sourcée, non sensible, sans mémoire canonique et sans injection LLM.
+
+### Lecture après création
+
+`GET /memory/candidates` expose la candidate avec `count=1`.
+
+`GET /memory/candidates/<id>` permet de lire la candidate individuellement.
+
+Points validés :
+
+- la candidate est persistée ;
+- elle reste dans la surface dédiée `memory_candidates` ;
+- elle reste `pending` avant review ;
+- `canonical_memory=false` confirme l’absence de mémoire stable ;
+- `/state` ne présente pas `memory_candidates` comme état Core live.
+
+### Rejet humain
+
+Commande testée : `POST /memory/candidates/<id>/reject`.
+
+Raison fournie :
+
+```text
+Candidate créée uniquement pour tester le cycle de review.
+```
+
+Résultat observé :
+
+```text
+ok = true
+surface = memory_candidates
+status = rejected
+canonical_memory_created = false
+llm_injected = false
+human_review.decision = rejected
+human_review.reviewer = human
+```
+
+La trace de review est conservée :
+
+```text
+human_review.trace[0].decision = rejected
+human_review.trace[0].reason = Candidate créée uniquement pour tester le cycle de review.
+```
+
+### Relecture après rejet
+
+`GET /memory/candidates/<id>` confirme :
+
+```text
+status = rejected
+human_review.decision = rejected
+canonical_memory = false
+surface = memory_candidates
+```
+
+Lecture terrain : le rejet humain est persisté, la candidate reste auditable dans la surface dédiée, et aucune mémoire canonique n’est créée.
+
+### Verdict provisoire
+
+C4-mini.1 fonctionne en dogfooding terrain :
+
+- création manuelle explicite OK ;
+- candidate `pending` créée uniquement sur action explicite ;
+- preuve `human_manual` conservée ;
+- sensibilité `low` conservée ;
+- lecture liste et lecture individuelle OK ;
+- rejet humain OK ;
+- trace de review persistée ;
+- aucune mémoire canonique créée ;
+- aucune injection LLM ;
+- aucune génération automatique observée ;
+- `/state` reste séparé de la surface `memory_candidates`.
+
+Aucun patch code immédiat n’est nécessaire.
+
+### Points à surveiller
+
+- tester plus tard `edit`, `archive` et `delete` en terrain réel ;
+- vérifier que les candidates rejetées ne sont pas reproposées par un futur générateur ;
+- ne pas ajouter de générateur offline sans décision séparée ;
+- ne pas présenter `accepted` ou `rejected` comme mémoire produit stable ;
+- documenter toute prochaine évolution `memory_candidates` avant implémentation.
