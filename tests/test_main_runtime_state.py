@@ -255,6 +255,7 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertIs(daemon_main.summary_llm, daemon_main.runtime.summary_llm)
         self.assertIs(daemon_main.session_memory, daemon_main.runtime.session_memory)
         self.assertIs(daemon_main.memory_store, daemon_main.runtime.memory_store)
+        self.assertIs(daemon_main.memory_candidate_store, daemon_main.runtime.memory_candidate_store)
         self.assertIs(daemon_main.runtime_state, daemon_main.runtime.runtime_state)
         self.assertIs(daemon_main.llm_runtime, daemon_main.runtime.llm_runtime)
         self.assertIs(daemon_main.runtime_orchestrator, daemon_main.runtime.runtime_orchestrator)
@@ -304,11 +305,22 @@ class TestMainRuntimeState(unittest.TestCase):
             "/llm/lightweight/status",
             "/llm/lightweight/pending",
         }
+        memory_candidate_routes = {
+            "/memory/candidates",
+            "/memory/candidates/<candidate_id>",
+            "/memory/candidates/<candidate_id>/accept",
+            "/memory/candidates/<candidate_id>/edit",
+            "/memory/candidates/<candidate_id>/reject",
+            "/memory/candidates/<candidate_id>/archive",
+        }
 
         self.assertTrue(core_routes.issubset(routes))
         self.assertTrue(debug_routes.issubset(routes))
         self.assertTrue(lab_or_legacy_routes.issubset(routes))
-        self.assertFalse(any(route.startswith("/memory/candidates") for route in routes))
+        self.assertTrue(memory_candidate_routes.issubset(routes))
+        self.assertTrue(memory_candidate_routes.isdisjoint(core_routes))
+        self.assertTrue(memory_candidate_routes.isdisjoint(debug_routes))
+        self.assertTrue(memory_candidate_routes.isdisjoint(lab_or_legacy_routes))
 
     def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
         runtime = daemon_main.create_runtime()

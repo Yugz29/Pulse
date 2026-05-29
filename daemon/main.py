@@ -33,6 +33,7 @@ from daemon.mcp.handlers import (
     set_selected_command_llm_model,
 )
 from daemon.mcp.server import start_mcp_server
+from daemon.memory.candidates import MemoryCandidateStore
 from daemon.memory.session import SessionMemory
 from daemon.memory.store import MemoryStore
 from daemon.platform.idle_heartbeat import create_idle_presence_heartbeat
@@ -40,6 +41,7 @@ from daemon.routes.assistant import register_assistant_routes
 from daemon.routes.facts import register_facts_routes
 from daemon.routes.mcp import register_mcp_routes
 from daemon.routes.memory import register_memory_routes
+from daemon.routes.memory_candidates import register_memory_candidate_routes
 from daemon.routes.runtime import register_runtime_routes
 from daemon.routes.runtime_daemon_routes import DAEMON_EXIT_GRACE_SEC
 from daemon.runtime_orchestrator import RuntimeOrchestrator
@@ -154,6 +156,7 @@ class RuntimeBundle:
     summary_llm: object
     session_memory: SessionMemory
     memory_store: MemoryStore
+    memory_candidate_store: MemoryCandidateStore
     runtime_state: RuntimeState
     llm_runtime: LLMRuntime
     lightweight_queue: LightweightLLMQueue
@@ -169,6 +172,7 @@ def create_runtime() -> RuntimeBundle:
     configure_llm_router(runtime_summary_llm)
     runtime_session_memory = SessionMemory()
     runtime_memory_store = MemoryStore()
+    runtime_memory_candidate_store = MemoryCandidateStore()
     runtime_state_obj = RuntimeState()
     runtime_lightweight_queue = LightweightLLMQueue()
     runtime_settings_path = Path.home() / ".pulse" / "settings.json"
@@ -199,6 +203,7 @@ def create_runtime() -> RuntimeBundle:
         summary_llm=runtime_summary_llm,
         session_memory=runtime_session_memory,
         memory_store=runtime_memory_store,
+        memory_candidate_store=runtime_memory_candidate_store,
         runtime_state=runtime_state_obj,
         llm_runtime=runtime_llm,
         lightweight_queue=runtime_lightweight_queue,
@@ -214,6 +219,7 @@ decision_engine = runtime.decision_engine
 summary_llm = runtime.summary_llm
 session_memory = runtime.session_memory
 memory_store = runtime.memory_store
+memory_candidate_store = runtime.memory_candidate_store
 runtime_state = runtime.runtime_state
 llm_runtime = runtime.llm_runtime
 lightweight_queue = runtime.lightweight_queue
@@ -379,6 +385,13 @@ def create_app(runtime: RuntimeBundle) -> Flask:
         memory_store=runtime.memory_store,
         session_memory=runtime.session_memory,
         get_frozen_memory_at=lambda: runtime.runtime_orchestrator.get_frozen_memory_at(),
+    )
+
+    # Dedicated memory candidates review surface. It is intentionally separate
+    # from facts, DayDream, debug memory, MemoryStore, and /state.
+    register_memory_candidate_routes(
+        flask_app,
+        candidate_store=runtime.memory_candidate_store,
     )
 
     register_mcp_routes(

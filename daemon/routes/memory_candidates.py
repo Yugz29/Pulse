@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+from typing import Any
+
+from flask import Flask, jsonify, request
+
+from daemon.memory.candidates import MemoryCandidateError
+
+
+def register_memory_candidate_routes(
+    app: Flask,
+    *,
+    candidate_store: Any,
+) -> None:
+    """Register the dedicated memory candidates review surface."""
+
+    @app.route("/memory/candidates", methods=["GET"])
+    def memory_candidates_list():
+        status = request.args.get("status")
+        limit = _query_limit()
+        try:
+            candidates = candidate_store.list_candidates(status=status, limit=limit)
+        except MemoryCandidateError as exc:
+            return jsonify({"ok": False, "error": str(exc), "surface": "memory_candidates"}), 400
+        return jsonify({
+            "surface": "memory_candidates",
+            "canonical_memory": False,
+            "count": len(candidates),
+            "candidates": candidates,
+        })
+
+    @app.route("/memory/candidates/<candidate_id>", methods=["GET"])
+    def memory_candidates_get(candidate_id: str):
+        candidate = candidate_store.get_candidate(candidate_id)
+        if candidate is None:
+            return jsonify({"ok": False, "error": "not_found", "surface": "memory_candidates"}), 404
+        return jsonify({
+            "surface": "memory_candidates",
+            "canonical_memory": False,
+            "candidate": candidate,
+        })
+
+    @app.route("/memory/candidates/<candidate_id>/accept", methods=["POST"])
+    def memory_candidates_accept(candidate_id: str):
+        candidate = candidate_store.accept(candidate_id, reviewer=_reviewer())
+        if candidate is None:
+            return jsonify({"ok": False, "error": "not_found", "surface": "memory_candidates"}), 404
+        return jsonify({
+            "ok": True,
+            "surface": "memory_candidates",
+            "canonical_memory_created": False,
+            "llm_injected": False,
+            "candidate": candidate,
+        })
+
+    @app.route("/memory/candidates/<candidate_id>/edit", methods=["POST"])
+    def memory_candidates_edit(candidate_id: str):
+        data = _json_object()
+        try:
+            candidate = candidate_store.edit(
+                candidate_id,
+                claim=data.get("claim", ""),
+                reviewer=_reviewer(data),
+            )
+        except MemoryCandidateError as exc:
+            return jsonify({"ok": False, "error": str(exc), "surface": "memory_candidates"}), 400
+        if candidate is None:
+            return jsonify({"ok": False, "error": "not_found", "surface": "memory_candidates"}), 404
+        return jsonify({
+            "ok": True,
+            "surface": "memory_candidates",
+            "canonical_memory_created": False,
+            "llm_injected": False,
+            "candidate": candidate,
+        })
+
+    @app.route("/memory/candidates/<candidate_id>/reject", methods=["POST"])
+    def memory_candidates_reject(candidate_id: str):
+        data = _json_object()
+        candidate = candidate_store.reject(
+            candidate_id,
+            reviewer=_reviewer(data),
+            reason=data.get("reason"),
+        )
+        if candidate is None:
+            return jsonify({"ok": False, "error": "not_found", "surface": "memory_candidates"}), 404
+        return jsonify({
+            "ok": True,
+            "surface": "memory_candidates",
+            "canonical_memory_created": False,
+            "llm_injected": False,
+            "candidate": candidate,
+        })
+
+    @app.route("/memory/candidates/<candidate_id>/archive", methods=["POST"])
+    def memory_candidates_archive(candidate_id: str):
+        candidate = candidate_store.archive(candidate_id, reviewer=_reviewer())
+        if candidate is None:
+            return jsonify({"ok": False, "error": "not_found", "surface": "memory_candidates"}), 404
+        return jsonify({
+            "ok": True,
+            "surface": "memory_candidates",
+            "canonical_memory_created": False,
+            "llm_injected": False,
+            "candidate": candidate,
+        })
+
+    @app.route("/memory/candidates/<candidate_id>", methods=["DELETE"])
+    def memory_candidates_delete(candidate_id: str):
+        deleted = candidate_store.delete(candidate_id)
+        if not deleted:
+            return jsonify({"ok": False, "error": "not_found", "surface": "memory_candidates"}), 404
+        return jsonify({
+            "ok": True,
+            "surface": "memory_candidates",
+            "deleted": True,
+        })
+
+
+def _json_object() -> dict[str, Any]:
+    payload = request.get_json(silent=True)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _query_limit(default: int = 50) -> int:
+    try:
+        return int(request.args.get("limit", default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _reviewer(data: dict[str, Any] | None = None) -> str:
+    payload = data if isinstance(data, dict) else _json_object()
+    reviewer = str(payload.get("reviewer") or "human").strip()
+    return reviewer or "human"
