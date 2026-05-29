@@ -24,6 +24,7 @@
 
 - `decisions/C2_CLOSURE_DECISIONS.md`
 - `decisions/C4_MINI_MEMORY_CANDIDATES_SKELETON.md`
+- `decisions/C4_MINI_MEMORY_CANDIDATES_MANUAL_CREATION.md`
 
 ## Journaux / audits
 
