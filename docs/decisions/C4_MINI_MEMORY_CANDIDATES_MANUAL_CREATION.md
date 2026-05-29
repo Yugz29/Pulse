@@ -86,13 +86,18 @@ Payload conceptuel :
 Règles :
 
 - `claim` doit être courte, falsifiable et non sensible.
-- `evidence` doit être non vide.
+- `evidence` est obligatoire.
+- `evidence` doit être une liste non vide.
+- Chaque item `evidence` doit être un objet.
 - `sensitivity` doit être explicite.
 - Le store force `pending`.
+- `MemoryCandidateStore` ne doit pas permettre de candidate manuelle valide sans preuve.
+
+Cette règle renforce le contrat : une candidate n'est pas une mémoire, mais elle doit quand même être sourcée.
 
 ## Règles de validation
 
-La future route doit refuser :
+La route manuelle et `MemoryCandidateStore` doivent refuser :
 
 - payload non-objet ;
 - `claim` absente ou vide ;
@@ -105,6 +110,12 @@ La future route doit refuser :
 - `sensitivity.level` sensible ;
 - type médical, financier, identité, vie privée, credential, profil psychologique ou préférence sensible.
 
+Erreurs attendues pour `evidence` :
+
+- `evidence_required` si `evidence` est absente ou vide ;
+- `invalid_evidence` si `evidence` n'est pas une liste ;
+- `invalid_evidence_item` si un item `evidence` n'est pas un objet.
+
 ## Tests requis avant implémentation
 
 Tests obligatoires :
@@ -113,6 +124,8 @@ Tests obligatoires :
 - refuse `claim` absente ;
 - refuse `evidence` absente ;
 - refuse `evidence` vide ;
+- `MemoryCandidateStore.create_manual_candidate()` refuse `evidence` absente ;
+- `MemoryCandidateStore.create_manual_candidate()` refuse `evidence` vide ;
 - refuse `sensitivity` absente ;
 - refuse `sensitivity` inconnue ;
 - refuse sensitive type ;

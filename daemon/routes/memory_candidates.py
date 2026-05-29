@@ -14,6 +14,34 @@ def register_memory_candidate_routes(
 ) -> None:
     """Register the dedicated memory candidates review surface."""
 
+    @app.route("/memory/candidates/manual", methods=["POST"])
+    def memory_candidates_manual_create():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return _bad_request("invalid_payload")
+
+        error = _manual_candidate_payload_error(data)
+        if error:
+            return _bad_request(error)
+
+        try:
+            candidate = candidate_store.create_manual_candidate(
+                memory_type=data["memory_type"],
+                claim=data["claim"],
+                evidence=data["evidence"],
+                sensitivity=data["sensitivity"],
+            )
+        except MemoryCandidateError as exc:
+            return _bad_request(str(exc))
+
+        return jsonify({
+            "ok": True,
+            "surface": "memory_candidates",
+            "canonical_memory_created": False,
+            "llm_injected": False,
+            "candidate": candidate,
+        })
+
     @app.route("/memory/candidates", methods=["GET"])
     def memory_candidates_list():
         status = request.args.get("status")
@@ -115,6 +143,52 @@ def register_memory_candidate_routes(
             "surface": "memory_candidates",
             "deleted": True,
         })
+
+
+def _bad_request(error: str):
+    return jsonify({"ok": False, "error": error, "surface": "memory_candidates"}), 400
+
+
+def _manual_candidate_payload_error(data: dict[str, Any]) -> str | None:
+    if "memory_type" not in data:
+        return "memory_type_required"
+    if "claim" not in data:
+        return "claim_required"
+    if not isinstance(data.get("claim"), str):
+        return "invalid_claim"
+    if not str(data.get("claim") or "").strip():
+        return "claim_required"
+    if _looks_sensitive_claim(str(data.get("claim") or "")):
+        return "sensitive_claim_refused"
+    if "evidence" not in data:
+        return "evidence_required"
+    evidence = data["evidence"]
+    if not isinstance(evidence, list):
+        return "invalid_evidence"
+    if not evidence:
+        return "evidence_required"
+    if any(not isinstance(item, dict) for item in evidence):
+        return "invalid_evidence_item"
+    if "sensitivity" not in data:
+        return "sensitivity_required"
+    if not isinstance(data["sensitivity"], dict):
+        return "invalid_sensitivity"
+    return None
+
+
+def _looks_sensitive_claim(claim: str) -> bool:
+    lowered = claim.lower()
+    sensitive_markers = {
+        "api key",
+        "apikey",
+        "bearer ",
+        "credential",
+        "mot de passe",
+        "password",
+        "secret",
+        "token",
+    }
+    return any(marker in lowered for marker in sensitive_markers)
 
 
 def _json_object() -> dict[str, Any]:

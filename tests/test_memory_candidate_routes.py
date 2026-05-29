@@ -31,10 +31,30 @@ def _seed(store: MemoryCandidateStore) -> dict:
     )
 
 
+def _manual_payload(**overrides) -> dict:
+    payload = {
+        "memory_type": "project_pattern",
+        "claim": "Pulse est un projet de travail recurrent.",
+        "evidence": [
+            {
+                "source_type": "human_manual",
+                "summary": "Cree explicitement par l'utilisateur pour tester le cycle de review.",
+            }
+        ],
+        "sensitivity": {
+            "level": "low",
+            "reason": "non-sensitive project pattern",
+        },
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_routes_are_dedicated_review_surface_only(tmp_path):
     app = _candidate_app(MemoryCandidateStore(tmp_path / "candidates.sqlite"))
     routes = {rule.rule: rule.methods for rule in app.url_map.iter_rules() if rule.endpoint != "static"}
 
+    assert "/memory/candidates/manual" in routes
     assert "/memory/candidates" in routes
     assert "/memory/candidates/<candidate_id>" in routes
     assert "/memory/candidates/<candidate_id>/accept" in routes
@@ -42,6 +62,204 @@ def test_routes_are_dedicated_review_surface_only(tmp_path):
     assert "/memory/candidates/<candidate_id>/reject" in routes
     assert "/memory/candidates/<candidate_id>/archive" in routes
     assert "POST" not in routes["/memory/candidates"]
+
+
+def test_manual_create_route_creates_pending_candidate(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload())
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["surface"] == "memory_candidates"
+    assert payload["canonical_memory_created"] is False
+    assert payload["llm_injected"] is False
+    assert payload["candidate"]["status"] == "pending"
+    assert payload["candidate"]["memory_type"] == "project_pattern"
+    assert store.list_candidates()[0]["id"] == payload["candidate"]["id"]
+
+
+def test_manual_create_refuses_non_object_payload(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=["bad"])
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_payload"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_missing_claim(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+    payload = _manual_payload()
+    payload.pop("claim")
+
+    response = client.post("/memory/candidates/manual", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "claim_required"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_empty_claim(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload(claim="  "))
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "claim_required"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_non_string_claim(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload(claim=123))
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_claim"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_missing_memory_type(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+    payload = _manual_payload()
+    payload.pop("memory_type")
+
+    response = client.post("/memory/candidates/manual", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "memory_type_required"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_forbidden_memory_type(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload(memory_type="credential"))
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "forbidden_memory_type"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_missing_evidence(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+    payload = _manual_payload()
+    payload.pop("evidence")
+
+    response = client.post("/memory/candidates/manual", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "evidence_required"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_empty_evidence(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload(evidence=[]))
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "evidence_required"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_non_list_evidence(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload(evidence={"bad": True}))
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_evidence"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_non_object_evidence_item(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload(evidence=["bad"]))
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_evidence_item"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_missing_sensitivity(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+    payload = _manual_payload()
+    payload.pop("sensitivity")
+
+    response = client.post("/memory/candidates/manual", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "sensitivity_required"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_non_object_sensitivity(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload(sensitivity="low"))
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_sensitivity"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_unknown_sensitivity_level(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post(
+        "/memory/candidates/manual",
+        json=_manual_payload(sensitivity={"level": "unknown", "reason": "bad"}),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_sensitivity"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_sensitive_sensitivity_level(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post(
+        "/memory/candidates/manual",
+        json=_manual_payload(sensitivity={"level": "credential", "reason": "secret-like"}),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "sensitive_candidate_refused"
+    assert store.list_candidates() == []
+
+
+def test_manual_create_refuses_sensitive_claim(tmp_path):
+    store = MemoryCandidateStore(tmp_path / "candidates.sqlite")
+    client = _candidate_app(store).test_client()
+
+    response = client.post(
+        "/memory/candidates/manual",
+        json=_manual_payload(claim="Le token secret est stocke dans le projet."),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "sensitive_claim_refused"
+    assert store.list_candidates() == []
 
 
 def test_accept_route_does_not_call_llm_or_create_product_memory(tmp_path):
@@ -147,6 +365,7 @@ def test_routes_module_has_no_lab_or_state_dependencies():
     source = inspect.getsource(memory_candidate_routes)
 
     assert "MemoryStore" not in source
+    assert "RuntimeOrchestrator" not in source
     assert "memory_store" not in source
     assert "DayDream" not in source
     assert "daydream" not in source

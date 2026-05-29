@@ -17,6 +17,10 @@ def _store(tmp_path):
     return MemoryCandidateStore(db_path=tmp_path / "candidates.sqlite")
 
 
+def _evidence():
+    return [{"source_type": "human_manual", "summary": "Preuve explicite de test."}]
+
+
 def test_manual_candidate_starts_pending(tmp_path):
     candidate = _store(tmp_path).create_manual_candidate(
         memory_type="project_pattern",
@@ -37,6 +41,7 @@ def test_accept_does_not_create_product_memory_or_llm_injection(tmp_path):
     candidate = store.create_manual_candidate(
         memory_type="workflow_pattern",
         claim="Les tests Python sont souvent l'etape de verification.",
+        evidence=_evidence(),
     )
 
     accepted = store.accept(candidate["id"])
@@ -54,6 +59,7 @@ def test_reject_keeps_explicit_rejection_policy(tmp_path):
     candidate = store.create_manual_candidate(
         memory_type="caution",
         claim="Ne pas apprendre depuis curl seul.",
+        evidence=_evidence(),
     )
 
     rejected = store.reject(candidate["id"], reason="insufficient_evidence")
@@ -68,6 +74,7 @@ def test_edit_keeps_human_trace(tmp_path):
     candidate = store.create_manual_candidate(
         memory_type="tool_usage",
         claim="pytest est utilise.",
+        evidence=_evidence(),
     )
 
     edited = store.edit(candidate["id"], claim="pytest est utilise pour verifier les patchs.")
@@ -84,6 +91,7 @@ def test_delete_removes_candidate(tmp_path):
     candidate = store.create_manual_candidate(
         memory_type="tool_usage",
         claim="pytest est utilise.",
+        evidence=_evidence(),
     )
 
     assert store.delete(candidate["id"]) is True
@@ -132,6 +140,23 @@ def test_evidence_items_must_be_objects(tmp_path):
             memory_type="project_pattern",
             claim="Claim avec preuve invalide.",
             evidence=["bad"],
+        )
+
+
+def test_manual_candidate_requires_evidence(tmp_path):
+    with pytest.raises(MemoryCandidateError, match="evidence_required"):
+        _store(tmp_path).create_manual_candidate(
+            memory_type="project_pattern",
+            claim="Claim sans preuve.",
+        )
+
+
+def test_manual_candidate_requires_non_empty_evidence(tmp_path):
+    with pytest.raises(MemoryCandidateError, match="evidence_required"):
+        _store(tmp_path).create_manual_candidate(
+            memory_type="project_pattern",
+            claim="Claim avec preuve vide.",
+            evidence=[],
         )
 
 

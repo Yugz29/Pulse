@@ -394,6 +394,8 @@ class MemoryCandidateStore:
 
     @staticmethod
     def _validate_claim(claim: str) -> str:
+        if not isinstance(claim, str):
+            raise MemoryCandidateError("invalid_claim")
         clean_claim = (claim or "").strip()
         if not clean_claim:
             raise MemoryCandidateError("claim_required")
@@ -423,9 +425,11 @@ class MemoryCandidateStore:
     @staticmethod
     def _validate_evidence(evidence: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
         if evidence is None:
-            return []
+            raise MemoryCandidateError("evidence_required")
         if not isinstance(evidence, list):
             raise MemoryCandidateError("invalid_evidence")
+        if not evidence:
+            raise MemoryCandidateError("evidence_required")
         if any(not isinstance(item, dict) for item in evidence):
             raise MemoryCandidateError("invalid_evidence_item")
         return evidence
