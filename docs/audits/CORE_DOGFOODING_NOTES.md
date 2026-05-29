@@ -1856,6 +1856,29 @@ Lecture terrain : après activité documentaire réelle, Pulse qualifie mieux le
 
 Conclusion : même après activité réelle, le squelette `memory_candidates` ne génère rien automatiquement et ne crée aucune mémoire canonique.
 
+### Vérification complémentaire `/debug/state`
+
+Après les vérifications Core, `/debug/state` confirme que le contexte runtime reste cohérent :
+
+```text
+pulse_mode = core
+experimental_enabled = false
+legacy_in_state = false
+active_app = Terminal
+active_file = docs/audits/CORE_DOGFOODING_NOTES.md
+active_project = Pulse
+probable_task = writing
+activity_level = executing
+task_confidence = 0.76
+session_fsm.state = active
+```
+
+`recent_sessions` expose des fermetures avec `stale_repair` et `screen_lock`, cohérentes avec les redémarrages daemon et les cycles lock / unlock observés pendant le dogfooding.
+
+Lecture terrain : le squelette `memory_candidates` ne modifie pas la compréhension runtime. Pulse continue à lire correctement une session de documentation / diagnostic, tout en gardant `/memory/candidates` vide.
+
+Conclusion : la surface `memory_candidates` reste inerte même après consultation de `/debug/state` et activité documentaire réelle.
+
 ### Verdict provisoire
 
 Le squelette C4-mini est inerte en Core après redémarrage.
