@@ -98,6 +98,10 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(payload["decision"]["payload"]["file"], "PanelView.swift")
         self.assertEqual(payload["debug"]["store"]["active_app"], "Xcode")
         self.assertEqual(payload["debug"]["signals"]["active_project"], "Pulse")
+        self.assertNotIn("memory_candidate", payload)
+        self.assertNotIn("memory_candidates", payload)
+        self.assertNotIn("memory_candidate", payload["present"])
+        self.assertNotIn("memory_candidates", payload["present"])
 
     def test_runtime_snapshot_is_atomic_for_present_signals_and_decision(self):
         signals = Signals(
@@ -276,11 +280,12 @@ class TestMainRuntimeState(unittest.TestCase):
             runtime.runtime_orchestrator.shutdown_runtime()
 
     def test_runtime_api_route_inventory_documents_core_debug_and_lab_surfaces(self):
-        routes = {
-            rule.rule
-            for rule in daemon_main.app.url_map.iter_rules()
-            if rule.endpoint != "static"
-        }
+        route_methods = {}
+        for rule in daemon_main.app.url_map.iter_rules():
+            if rule.endpoint == "static":
+                continue
+            route_methods.setdefault(rule.rule, set()).update(rule.methods - {"HEAD", "OPTIONS"})
+        routes = set(route_methods)
 
         core_routes = {
             "/ping",
@@ -293,21 +298,78 @@ class TestMainRuntimeState(unittest.TestCase):
             "/debug/state",
             "/insights",
             "/events/debug",
+            "/events/schema",
             "/work-context",
+            "/debug/commit-episode-links",
+            "/debug/journal-candidates",
+            "/debug/journal-comparison",
+            "/debug/resume-card",
+            "/debug/resume-card/llm",
             "/debug/work-episodes",
         }
+        historical_minimal_memory_routes = {
+            "/memory/sessions",
+            "/search",
+        }
+        lab_memory_routes = {
+            "/memory",
+            "/memory/write",
+            "/memory/remove",
+            "/memory/usage",
+        }
+        mcp_routes = {
+            "/mcp/pending",
+            "/mcp/decision",
+            "/mcp/intercept",
+            "/mcp/proposals",
+        }
         lab_or_legacy_routes = {
+            "/ask",
+            "/ask/stream",
+            "/context",
+            "/context-probes/request-preview",
+            "/context-probes/requests",
+            "/context-probes/requests/<request_id>",
+            "/context-probes/requests/<request_id>/abort",
+            "/context-probes/requests/<request_id>/approve",
+            "/context-probes/requests/<request_id>/execute",
+            "/context-probes/requests/<request_id>/refuse",
+            "/context-probes/requests/<request_id>/result",
+            "/context-probes/schema",
             "/daydreams",
             "/facts",
-            "/memory",
+            "/facts/<fact_id>/archive",
+            "/facts/<fact_id>/contradict",
+            "/facts/<fact_id>/reinforce",
+            "/facts/profile",
+            "/facts/stats",
+            "/llm/model",
+            "/llm/models",
             "/context-probes/requests",
             "/work-intent/candidates",
+            "/work-intent/candidates/<candidate_id>/accept",
+            "/work-intent/candidates/<candidate_id>/refuse",
             "/llm/lightweight/status",
             "/llm/lightweight/pending",
+            "/llm/lightweight/result",
+        }
+        daemon_control_routes = {
+            "/daemon/pause",
+            "/daemon/restart",
+            "/daemon/resume",
+            "/daemon/shutdown",
+        }
+        runtime_observation_routes = {
+            "/observation",
+            "/scoring/status",
+            "/timeline/preview",
+            "/timeline/schema",
+            "/today_summary",
         }
         memory_candidate_routes = {
             "/memory/candidates",
             "/memory/candidates/<candidate_id>",
+            "/memory/candidates/manual",
             "/memory/candidates/<candidate_id>/accept",
             "/memory/candidates/<candidate_id>/edit",
             "/memory/candidates/<candidate_id>/reject",
@@ -316,11 +378,30 @@ class TestMainRuntimeState(unittest.TestCase):
 
         self.assertTrue(core_routes.issubset(routes))
         self.assertTrue(debug_routes.issubset(routes))
+        self.assertTrue(historical_minimal_memory_routes.issubset(routes))
+        self.assertTrue(lab_memory_routes.issubset(routes))
+        self.assertTrue(mcp_routes.issubset(routes))
         self.assertTrue(lab_or_legacy_routes.issubset(routes))
+        self.assertTrue(daemon_control_routes.issubset(routes))
+        self.assertTrue(runtime_observation_routes.issubset(routes))
         self.assertTrue(memory_candidate_routes.issubset(routes))
         self.assertTrue(memory_candidate_routes.isdisjoint(core_routes))
         self.assertTrue(memory_candidate_routes.isdisjoint(debug_routes))
+        self.assertTrue(memory_candidate_routes.isdisjoint(historical_minimal_memory_routes))
+        self.assertTrue(memory_candidate_routes.isdisjoint(lab_memory_routes))
+        self.assertTrue(memory_candidate_routes.isdisjoint(mcp_routes))
         self.assertTrue(memory_candidate_routes.isdisjoint(lab_or_legacy_routes))
+        self.assertEqual(route_methods["/memory/candidates"], {"GET"})
+        self.assertEqual(route_methods["/memory/candidates/manual"], {"POST"})
+        self.assertEqual(route_methods["/memory/candidates/<candidate_id>"], {"GET", "DELETE"})
+        self.assertEqual(route_methods["/memory/candidates/<candidate_id>/accept"], {"POST"})
+        self.assertEqual(route_methods["/memory/candidates/<candidate_id>/edit"], {"POST"})
+        self.assertEqual(route_methods["/memory/candidates/<candidate_id>/reject"], {"POST"})
+        self.assertEqual(route_methods["/memory/candidates/<candidate_id>/archive"], {"POST"})
+        self.assertEqual(route_methods["/memory/write"], {"POST"})
+        self.assertEqual(route_methods["/memory/remove"], {"POST"})
+        self.assertNotIn("/memory/candidates/generate", routes)
+        self.assertNotIn("POST", route_methods["/memory/candidates"])
 
     def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
         runtime = daemon_main.create_runtime()
