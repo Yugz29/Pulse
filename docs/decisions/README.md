@@ -9,5 +9,6 @@ Si une décision contredit un contrat, le contrat gagne sauf revalidation explic
 ## Sommaire
 
 - `C2_CLOSURE_DECISIONS.md` — clôture C2 hardening Core.
+- `C4_ARCHITECTURE_CLEANUP_PLAN.md` — plan C4 de cleanup architectural progressif.
 - `C4_MINI_MEMORY_CANDIDATES_SKELETON.md` — décision C4-mini pour le squelette review-only memory candidates.
 - `C4_MINI_MEMORY_CANDIDATES_MANUAL_CREATION.md` — décision C4-mini.1 pour une future création manuelle explicite de candidates pending.
