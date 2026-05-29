@@ -554,7 +554,7 @@ Extraits significatifs :
   "legacy_in_state": false,
   "current_context": {
     "active_app": "Code",
-    "active_file": "/Users/yugz/Projets/Pulse/Pulse/docs/CORE_DOGFOODING_NOTES.md",
+    "active_file": "/Users/yugz/Projets/Pulse/Pulse/docs/audits/CORE_DOGFOODING_NOTES.md",
     "active_project": "Pulse",
     "activity_level": "executing",
     "probable_task": "writing",

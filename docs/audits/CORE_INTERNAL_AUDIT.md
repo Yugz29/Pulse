@@ -7,7 +7,7 @@ Il ne remplace pas :
 - `docs/ROADMAP_CORE_RESET.md` ;
 - `docs/CORE_RESET_VALIDATION_SUMMARY.md` ;
 - les contrats Core ;
-- `docs/CORE_DOGFOODING_NOTES.md`.
+- `docs/audits/CORE_DOGFOODING_NOTES.md`.
 
 ## Objectif
 
