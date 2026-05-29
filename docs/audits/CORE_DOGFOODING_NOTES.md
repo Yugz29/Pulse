@@ -1,5 +1,4 @@
 
-
 # Notes de dogfooding Core
 
 Ce document rassemble les observations terrain faites après la validation du Core Reset R1-R6.
@@ -1619,8 +1618,7 @@ Lecture terrain : le patch `close_reason` apporte une vraie valeur d’observabi
 
 C2.4 confirme que le Core tient en dogfooding post-hardening.
 
-Aucun patch immédiat n’est nécessaire.
-
+ Aucun patch immédiat n’est nécessaire.
 
 Le prochain mouvement ne doit pas être une nouvelle feature. Deux options raisonnables :
 
@@ -1756,3 +1754,85 @@ Aucun patch runtime immédiat n’est nécessaire.
 - si `active_app` / `active_file` redeviennent `null` alors que l’app Swift est bien lancée, ouvrir une investigation ciblée Swift / SystemObserver ;
 - si `/feed` devient trop bavard, conserver le contrat C2.5 comme garde-fou ;
 - documenter clairement dans les futures sessions si le daemon tourne seul ou si l’app macOS est aussi lancée.
+
+---
+
+## 2026-05-29 — C4-mini memory candidates skeleton terrain check
+
+### Contexte
+
+Après l’ajout et le push du squelette C4-mini `memory_candidates`, Pulse a été redémarré pour vérifier que le nouveau code fonctionne en conditions réelles Core.
+
+Objectif : confirmer que la surface `memory_candidates` reste dédiée, locale, review-only et inerte après redémarrage, sans polluer le Core live.
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+Lecture terrain : le Core reste sain après l’ajout du squelette `memory_candidates`. Les services Lab restent non requis.
+
+### Vérification `/state`
+
+État live observé pendant les commandes de diagnostic :
+
+```text
+active_app = Terminal
+active_project = Pulse
+activity_level = executing
+probable_task = general
+task_confidence = 0.48
+session_status = active
+```
+
+Lecture terrain : le contexte est cohérent avec l’activité réelle du moment, à savoir des commandes `curl` de diagnostic lancées depuis le repo Pulse.
+
+Le scorer reste prudent : `probable_task=general` avec une confiance modérée. C’est attendu, car les commandes de diagnostic influencent temporairement le contexte live.
+
+### Vérification `/memory/candidates`
+
+Résultat observé :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Points validés :
+
+- la route dédiée `/memory/candidates` répond correctement ;
+- aucune candidate n’est créée spontanément ;
+- `count=0` confirme l’absence de génération automatique ;
+- `canonical_memory=false` confirme que la surface ne représente pas une mémoire stable ;
+- `surface=memory_candidates` confirme que la réponse est isolée de la mémoire Core / Lab existante.
+
+### Verdict provisoire
+
+Le squelette C4-mini est inerte en Core après redémarrage.
+
+Comportement conforme au contrat :
+
+- pas de génération automatique ;
+- pas de candidate créée depuis `/state` ou les commandes de diagnostic ;
+- pas de pollution visible du Core live ;
+- pas de mémoire canonique créée ;
+- surface `memory_candidates` disponible mais vide.
+
+Aucun patch code immédiat n’est nécessaire.
+
+### Points à surveiller
+
+- vérifier que `/memory/candidates` reste vide tant qu’aucune création explicite n’existe ;
+- vérifier que les futures actions `accept`, `edit`, `reject`, `archive` et `delete` restent review-only ;
+- ne pas ajouter de création manuelle, génération offline ou scan de sessions sans décision séparée ;
+- documenter toute future modification de la mécanique `memory_candidates` dans `docs/decisions/` et/ou les contrats concernés avant implémentation.
