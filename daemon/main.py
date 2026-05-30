@@ -337,10 +337,9 @@ def get_scoring_status():
     }
 
 
-def create_app(runtime: RuntimeBundle) -> Flask:
-    flask_app = Flask(__name__)
-
-    coalescer = register_runtime_routes(
+def _register_runtime_surface_routes(flask_app: Flask, runtime: RuntimeBundle):
+    """Core, debug, daemon controls, feed, observation, and bounded runtime surfaces."""
+    return register_runtime_routes(
         flask_app,
         bus=runtime.bus,
         store=runtime.store,
@@ -361,8 +360,10 @@ def create_app(runtime: RuntimeBundle) -> Flask:
         apply_lightweight_llm_result=runtime.runtime_orchestrator.apply_lightweight_llm_result,
         log=log,
     )
-    setattr(flask_app, "runtime_event_coalescer", coalescer)
 
+
+def _register_lab_assistant_routes(flask_app: Flask, runtime: RuntimeBundle) -> None:
+    """Assistant / LLM legacy surface. Registered separately from Core routes."""
     register_assistant_routes(
         flask_app,
         cognitive_ask=cognitive_ask,
@@ -380,6 +381,9 @@ def create_app(runtime: RuntimeBundle) -> Flask:
         llm_provider=lambda: _llm_provider(),
     )
 
+
+def _register_historical_and_lab_memory_routes(flask_app: Flask, runtime: RuntimeBundle) -> None:
+    """Historical memory reads plus legacy Lab memory write/remove surfaces."""
     register_memory_routes(
         flask_app,
         memory_store=runtime.memory_store,
@@ -387,13 +391,17 @@ def create_app(runtime: RuntimeBundle) -> Flask:
         get_frozen_memory_at=lambda: runtime.runtime_orchestrator.get_frozen_memory_at(),
     )
 
-    # Dedicated memory candidates review surface. It is intentionally separate
-    # from facts, DayDream, debug memory, MemoryStore, and /state.
+
+def _register_memory_candidate_routes(flask_app: Flask, runtime: RuntimeBundle) -> None:
+    """Dedicated memory candidates review surface, separate from Lab memory and /state."""
     register_memory_candidate_routes(
         flask_app,
         candidate_store=runtime.memory_candidate_store,
     )
 
+
+def _register_mcp_surface_routes(flask_app: Flask, runtime: RuntimeBundle) -> None:
+    """MCP command interception and proposal history surfaces."""
     register_mcp_routes(
         flask_app,
         bus=runtime.bus,
@@ -410,10 +418,26 @@ def create_app(runtime: RuntimeBundle) -> Flask:
         log=log,
     )
 
+
+def _register_facts_lab_routes(flask_app: Flask, runtime: RuntimeBundle) -> None:
+    """Facts/profile Lab surface. Registered last to preserve the historical order."""
     register_facts_routes(
         flask_app,
         get_fact_engine=lambda: runtime.runtime_orchestrator.fact_engine,
     )
+
+
+def create_app(runtime: RuntimeBundle) -> Flask:
+    flask_app = Flask(__name__)
+
+    coalescer = _register_runtime_surface_routes(flask_app, runtime)
+    setattr(flask_app, "runtime_event_coalescer", coalescer)
+
+    _register_lab_assistant_routes(flask_app, runtime)
+    _register_historical_and_lab_memory_routes(flask_app, runtime)
+    _register_memory_candidate_routes(flask_app, runtime)
+    _register_mcp_surface_routes(flask_app, runtime)
+    _register_facts_lab_routes(flask_app, runtime)
 
     return flask_app
 
