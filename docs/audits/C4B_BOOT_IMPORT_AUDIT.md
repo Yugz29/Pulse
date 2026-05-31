@@ -156,6 +156,25 @@ Les globals restent disponibles temporairement pour compatibilité.
 
 Le timing de création runtime / app à l'import reste inchangé.
 
+## Mise à jour C4b.3 — migration finale des consommateurs simples
+
+La migration des consommateurs simples est plus avancée.
+
+Les usages directs restants de `daemon.main.app` et `daemon.main.runtime` dans les tests sont maintenant limités aux vérifications de compatibilité legacy :
+
+- `get_app()` retourne encore `app` ;
+- `get_runtime()` retourne encore `runtime` ;
+- `app` reste disponible temporairement ;
+- les aliases legacy restent alignés sur le runtime exposé par `get_runtime()`.
+
+Les usages de lecture courante de l'app complète passent par `get_app()`.
+
+Les usages de lecture courante du runtime passent par `get_runtime()`.
+
+La dette principale reste inchangée : `runtime` et `app` sont encore créés à l'import.
+
+La prochaine étape possible est de décider si un lazy réel est faisable sans casser les garanties de compatibilité.
+
 ## Garde-fous avant correction
 
 Tout patch boot doit :
@@ -170,7 +189,7 @@ Tout patch boot doit :
 
 C4b.3 :
 
-- continuer la migration progressive des consommateurs vers `get_runtime()` et `get_app()` ;
+- décider si un lazy réel de `get_runtime()` et `get_app()` est faisable ;
 - garder les globals disponibles tant que les consommateurs legacy existent ;
 - ne pas rendre les accessors lazy avant que la compatibilité soit couverte par tests ;
 - ne pas déplacer la création runtime globale sans patch C4b.3 dédié et dogfooding post-redémarrage.

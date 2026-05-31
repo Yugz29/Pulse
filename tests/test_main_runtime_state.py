@@ -377,17 +377,19 @@ print(json.dumps({
         runtime.runtime_orchestrator.shutdown_runtime()
 
     def test_globals_legacy_pointent_vers_le_bundle_global(self):
-        self.assertIs(daemon_main.bus, daemon_main.runtime.bus)
-        self.assertIs(daemon_main.store, daemon_main.runtime.store)
-        self.assertIs(daemon_main.scorer, daemon_main.runtime.scorer)
-        self.assertIs(daemon_main.decision_engine, daemon_main.runtime.decision_engine)
-        self.assertIs(daemon_main.summary_llm, daemon_main.runtime.summary_llm)
-        self.assertIs(daemon_main.session_memory, daemon_main.runtime.session_memory)
-        self.assertIs(daemon_main.memory_store, daemon_main.runtime.memory_store)
-        self.assertIs(daemon_main.memory_candidate_store, daemon_main.runtime.memory_candidate_store)
-        self.assertIs(daemon_main.runtime_state, daemon_main.runtime.runtime_state)
-        self.assertIs(daemon_main.llm_runtime, daemon_main.runtime.llm_runtime)
-        self.assertIs(daemon_main.runtime_orchestrator, daemon_main.runtime.runtime_orchestrator)
+        runtime = daemon_main.get_runtime()
+
+        self.assertIs(daemon_main.bus, runtime.bus)
+        self.assertIs(daemon_main.store, runtime.store)
+        self.assertIs(daemon_main.scorer, runtime.scorer)
+        self.assertIs(daemon_main.decision_engine, runtime.decision_engine)
+        self.assertIs(daemon_main.summary_llm, runtime.summary_llm)
+        self.assertIs(daemon_main.session_memory, runtime.session_memory)
+        self.assertIs(daemon_main.memory_store, runtime.memory_store)
+        self.assertIs(daemon_main.memory_candidate_store, runtime.memory_candidate_store)
+        self.assertIs(daemon_main.runtime_state, runtime.runtime_state)
+        self.assertIs(daemon_main.llm_runtime, runtime.llm_runtime)
+        self.assertIs(daemon_main.runtime_orchestrator, runtime.runtime_orchestrator)
 
     def test_lazy_compat_accessors_return_existing_globals(self):
         self.assertIs(daemon_main.get_runtime(), daemon_main.runtime)
