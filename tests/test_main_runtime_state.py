@@ -421,6 +421,89 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(route_endpoints["/llm/lightweight/result"], "post_lightweight_result")
         self.assertEqual(route_endpoints["/scoring/status"], "scoring_status")
 
+    def test_lab_legacy_mutation_routes_remain_registered_but_blocked_in_core(self):
+        with patch.dict(os.environ, {"PULSE_MODE": "core"}), \
+             patch.object(daemon_main.memory_store, "write") as memory_write, \
+             patch.object(daemon_main.memory_store, "remove") as memory_remove, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "reinforce") as reinforce, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "contradict") as contradict, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "archive") as archive, \
+             patch.object(
+                 daemon_main.runtime_orchestrator,
+                 "apply_lightweight_llm_result",
+             ) as apply_lightweight_result:
+            memory_write_response = self.client.post(
+                "/memory/write",
+                json={"content": "Projet Pulse", "tier": "persistent"},
+            )
+            memory_remove_response = self.client.post(
+                "/memory/remove",
+                json={"old_text": "Projet Pulse"},
+            )
+            reinforce_response = self.client.post("/facts/fact-1/reinforce")
+            contradict_response = self.client.post("/facts/fact-1/contradict")
+            archive_response = self.client.post("/facts/fact-1/archive")
+            lightweight_response = self.client.post(
+                "/llm/lightweight/result",
+                json={"id": "req-1", "status": "generated", "text": "ignored"},
+            )
+
+        for response in (
+            memory_write_response,
+            memory_remove_response,
+            reinforce_response,
+            contradict_response,
+            archive_response,
+            lightweight_response,
+        ):
+            self.assertEqual(response.status_code, 403)
+            payload = response.get_json()
+            self.assertEqual(payload["error"], "lab_surface_disabled")
+            self.assertEqual(payload["pulse_mode"], "core")
+            self.assertTrue(payload["disabled_in_core"])
+
+        memory_write.assert_not_called()
+        memory_remove.assert_not_called()
+        reinforce.assert_not_called()
+        contradict.assert_not_called()
+        archive.assert_not_called()
+        apply_lightweight_result.assert_not_called()
+
+    def test_facts_profile_is_registered_but_neutralized_in_core(self):
+        with patch.dict(os.environ, {"PULSE_MODE": "core"}), \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "render_for_context") as render:
+            response = self.client.get("/facts/profile")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["profile"], "")
+        self.assertTrue(payload["lab_only"])
+        self.assertTrue(payload["disabled_in_core"])
+        render.assert_not_called()
+
+    def test_health_core_from_full_app_does_not_depend_on_lab_services(self):
+        with patch.dict(os.environ, {"PULSE_MODE": "core"}), \
+             patch.object(daemon_main.memory_store, "usage") as memory_usage, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "stats") as fact_stats, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "render_for_context") as render_facts, \
+             patch.object(daemon_main.summary_llm, "complete", create=True) as llm_complete, \
+             patch("daemon.memory.daydream.get_daydream_status") as daydream_status, \
+             patch("daemon.memory.vector_store.VectorStore") as vector_store:
+            response = self.client.get("/health/core")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["pulse_mode"], "core")
+        self.assertFalse(payload["experimental_enabled"])
+        self.assertEqual(payload["checks"]["lab_services"], "not_required")
+        memory_usage.assert_not_called()
+        fact_stats.assert_not_called()
+        render_facts.assert_not_called()
+        llm_complete.assert_not_called()
+        daydream_status.assert_not_called()
+        vector_store.assert_not_called()
+
     def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
         runtime = daemon_main.create_runtime()
         app = daemon_main.create_app(runtime)
