@@ -7,6 +7,14 @@ private let gBlue = "#5E9EFF"
 private let gGray = "#7c7c80"
 private let gPurple = "#8B5CF6"
 
+private let dashboardBackground = Color(red: 0.035, green: 0.038, blue: 0.044)
+private let dashboardSidebarBackground = Color(red: 0.025, green: 0.027, blue: 0.032)
+private let dashboardPanelBackground = Color.white.opacity(0.045)
+private let dashboardPanelSelectedBackground = Color.white.opacity(0.075)
+private let dashboardStroke = Color.white.opacity(0.075)
+private let dashboardSubtleStroke = Color.white.opacity(0.045)
+private let dashboardDivider = Color.white.opacity(0.06)
+
 enum DashboardSection: String, CaseIterable, Identifiable {
     case session = "Aujourd’hui"
     case episodes = "Séquences debug"
@@ -107,8 +115,10 @@ struct DashboardRootView: View {
                 .navigationSplitViewColumnWidth(200)
         } detail: {
             detailView
-                .background(.ultraThinMaterial)
+                .background(dashboardBackground)
         }
+        .background(dashboardBackground)
+        .preferredColorScheme(.dark)
         .onAppear {
             if vm.lastRefreshedAt == nil {
                 Task { await vm.refresh() }
@@ -122,7 +132,7 @@ struct DashboardRootView: View {
                 HStack(spacing: 8) {
                     Circle()
                         .fill(Color(hex: daemonStatusColor))
-                        .frame(width: 8, height: 8)
+                        .frame(width: 7, height: 7)
                     Text("Pulse")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.primary)
@@ -135,7 +145,9 @@ struct DashboardRootView: View {
             .padding(.top, 20)
             .padding(.bottom, 16)
 
-            Divider().padding(.horizontal, 8)
+            Divider()
+                .background(dashboardDivider)
+                .padding(.horizontal, 10)
 
             surfaceSelector
                 .padding(.horizontal, 12)
@@ -152,7 +164,9 @@ struct DashboardRootView: View {
 
             Spacer()
 
-            Divider().padding(.horizontal, 8)
+            Divider()
+                .background(dashboardDivider)
+                .padding(.horizontal, 10)
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lastRefreshLabel)
@@ -176,7 +190,7 @@ struct DashboardRootView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(.regularMaterial)
+        .background(dashboardSidebarBackground)
     }
 
     private var surfaceSelector: some View {
@@ -193,14 +207,18 @@ struct DashboardRootView: View {
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(selectedSurface == surface ? Color.white.opacity(0.10) : Color.clear)
+                                .fill(selectedSurface == surface ? dashboardPanelSelectedBackground : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(3)
-        .background(Color.white.opacity(0.05))
+        .background(dashboardPanelBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(dashboardSubtleStroke, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 
@@ -236,12 +254,21 @@ struct DashboardRootView: View {
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(selectedSection == section
-                        ? Color(hex: section.accent).opacity(0.12)
+                        ? Color(hex: section.accent).opacity(0.10)
                         : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(
+                        selectedSection == section
+                            ? Color(hex: section.accent).opacity(0.20)
+                            : Color.clear,
+                        lineWidth: 1
+                    )
             )
         }
         .buttonStyle(.plain)
@@ -275,43 +302,324 @@ struct DashboardRootView: View {
 
     private var sessionView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                sessionHero
+            VStack(alignment: .leading, spacing: 16) {
+                productTodayHero
 
                 HStack(alignment: .top, spacing: 16) {
-                    todayOverviewCard
-                    todayProjectsCard
-                }
+                    productRecentBlocksCard
+                        .frame(maxWidth: .infinity)
 
-                currentContextCard
+                    VStack(alignment: .leading, spacing: 16) {
+                        productNowCompactCard
+                        productProjectsCompactCard
+                    }
+                    .frame(width: 320)
+                }
 
                 if !activeWorkIntentCandidates.isEmpty {
                     GlassCard(accent: gPurple) {
                         workIntentCandidatesSection
                     }
                 }
-
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(alignment: .top, spacing: 16) {
-                            recentSessionsCard
-                            taskCard
-                        }
-                        HStack(alignment: .top, spacing: 16) {
-                            signalsCard
-                            contextCard
-                        }
-                        appsCard
-                        fileMixCard
-                    }
-                    .padding(.top, 8)
-                } label: {
-                    Label("Détails runtime", systemImage: "slider.horizontal.3")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
             }
             .padding(24)
+        }
+    }
+
+    private var productTodayHero: some View {
+        let summary = vm.todaySummary
+        let totals = summary?.totals
+        let currentWindow = summary?.currentWindow
+        let currentBlock = summary?.workBlocks.last
+        let present = vm.state?.present
+        let context = vm.state?.currentContext
+        let fsm = vm.state?.sessionFsm
+        let accent = context?.taskAccentHex ?? present?.taskAccentHex ?? fsm?.stateColor ?? gGreen
+        let project = currentBlock?.project ?? currentWindow?.project ?? context?.activeProject ?? present?.activeProject ?? "Projet non identifié"
+        let task = currentBlock?.taskLabel ?? currentWindow?.taskLabel ?? productTaskTitle(context, present)
+        let activity = currentWindow?.activityLabel ?? present?.activityLabel ?? context?.activityLabel ?? "—"
+
+        return GlassCard(accent: accent) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color(hex: accent))
+                                .frame(width: 7, height: 7)
+                            Text("Aujourd’hui")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .tracking(0.5)
+                        }
+
+                        Text(task)
+                            .font(.system(size: 30, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(hex: accent))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+
+                        HStack(spacing: 8) {
+                            Label(project, systemImage: "shippingbox")
+                            Text("·")
+                            Text(activity)
+                            if let stateLabel = fsm?.stateLabel, !stateLabel.isEmpty {
+                                Text("·")
+                                Text(stateLabel)
+                            }
+                        }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 16)
+
+                    VStack(alignment: .trailing, spacing: 5) {
+                        metaLabel("Bloc en cours")
+                        if currentBlock != nil || currentWindow != nil {
+                            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                                Text(sessionDurationLabel(from: currentBlock?.startedAt ?? currentWindow?.startedAt))
+                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                    .monospacedDigit()
+                            }
+                            Text("Mis à jour \(dashboardRelativeTimestamp(summary?.generatedAt))")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            Text("—")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    productHeroMetric("Travail", dashboardMinutes(totals?.workedMin), gGreen)
+                    productHeroMetric("Commits", dashboardCount(totals?.commitCount), gOrange)
+                    productHeroMetric("Blocs", dashboardCount(totals?.windowCount), gBlue)
+                    productHeroMetric("Projets", dashboardCount(totals?.projectCount), gGray)
+                }
+            }
+        }
+    }
+
+    private func productHeroMetric(_ label: String, _ value: String, _ colorHex: String) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color(hex: colorHex).opacity(0.85))
+                .frame(width: 6, height: 6)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                Text(value)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private var productRecentBlocksCard: some View {
+        let blocks = Array((vm.todaySummary?.workBlocks ?? []).suffix(5).reversed())
+
+        return GlassCard(accent: gGreen) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    cardTitle("Derniers blocs", icon: "list.bullet.rectangle")
+                    Spacer()
+                    Text(dashboardRelativeTimestamp(vm.todaySummary?.timeline.lastActivityAt))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if blocks.isEmpty {
+                    emptyState("Aucun bloc de travail persistant aujourd’hui")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(blocks) { block in
+                            productBlockRow(block)
+                            if block.id != blocks.last?.id {
+                                Divider()
+                                    .background(dashboardDivider)
+                                    .padding(.leading, 88)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func productBlockRow(_ block: TodayWorkBlock) -> some View {
+        let visibleFiles = Array((block.topFiles ?? []).prefix(3))
+        let hiddenFileCount = max((block.topFiles ?? []).count - visibleFiles.count, 0)
+
+        return HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(dashboardShortTime(block.startedAt))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Text(dashboardMinutes(block.durationMin))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(width: 74, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(block.taskLabel)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    if let project = block.project, !project.isEmpty {
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+                        Text(project)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .lineLimit(1)
+
+                if !visibleFiles.isEmpty {
+                    HStack(spacing: 5) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                        Text(visibleFiles.joined(separator: " · "))
+                        if hiddenFileCount > 0 {
+                            Text("· +\(hiddenFileCount)")
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                } else {
+                    Text("Signal récent : \(block.activityLabel)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+    }
+
+    private var productNowCompactCard: some View {
+        let context = vm.state?.currentContext
+        let present = vm.state?.present
+        let signals = vm.state?.signals
+        let fsm = vm.state?.sessionFsm
+        let statusAccent = fsm?.stateColor ?? (vm.ping != nil ? gGreen : gOrange)
+        let statusLabel = fsm?.stateLabel ?? (vm.ping != nil ? "Daemon actif" : "Daemon injoignable")
+        let activity = present?.activityLabel ?? context?.activityLabel ?? "—"
+        let updatedAt = present?.updatedAt ?? vm.todaySummary?.generatedAt
+
+        return GlassCard(accent: statusAccent) {
+            VStack(alignment: .leading, spacing: 10) {
+                cardTitle("État Pulse", icon: "checkmark.circle")
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color(hex: statusAccent))
+                            .frame(width: 7, height: 7)
+                        Text(statusLabel)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Text("Signal live : \(activity)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Dernière mise à jour")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Text(dashboardRelativeTimestamp(updatedAt))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Confiance")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Text(signals?.taskEvidenceLabel ?? "Lecture live")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(isWeakProductTask(context, present) ? .tertiary : .secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.top, 2)
+
+                if let lastSignal = fsm?.lastMeaningfulActivityAt {
+                    Text("Dernier signal \(dashboardRelativeTimestamp(lastSignal))")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private var productProjectsCompactCard: some View {
+        let projects = vm.todaySummary?.projects ?? []
+
+        return GlassCard(accent: gBlue) {
+            VStack(alignment: .leading, spacing: 12) {
+                cardTitle("Projets du jour", icon: "square.grid.2x2")
+
+                if projects.isEmpty {
+                    emptyState("Aucun projet persistant")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(projects.prefix(4)) { project in
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Circle()
+                                    .fill(Color(hex: gBlue).opacity(0.65))
+                                    .frame(width: 6, height: 6)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack {
+                                        Text(project.name)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        Spacer()
+                                        Text(dashboardMinutes(project.workedMin))
+                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(.secondary)
+                                            .monospacedDigit()
+                                    }
+                                    if !project.topTasks.isEmpty {
+                                        Text(project.topTasks.prefix(2).map(todayTaskLabel).joined(separator: " · "))
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.tertiary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 7)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2501,17 +2809,25 @@ private struct GlassCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             content
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(dashboardPanelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(
-                    accent.map { Color(hex: $0).opacity(0.25) } ?? Color.white.opacity(0.08),
+                    accent.map { Color(hex: $0).opacity(0.16) } ?? dashboardStroke,
                     lineWidth: 1
                 )
         )
+        .overlay(alignment: .topLeading) {
+            if let accent {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(hex: accent).opacity(0.22))
+                    .frame(width: 2)
+                    .padding(.vertical, 10)
+            }
+        }
     }
 }
 
