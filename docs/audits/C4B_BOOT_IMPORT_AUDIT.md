@@ -23,9 +23,9 @@ Source :
 - `tests/test_main_runtime_state.py`
 - `test_import_main_documente_les_effets_de_bord_boot_actuels`
 
-## Effets de bord confirmés à l'import
+## Effets de bord confirmés à l'import avant C4b.3-real
 
-L'import de `daemon.main` crée déjà :
+Avant C4b.3-real phase 1, l'import de `daemon.main` créait déjà :
 
 - un `RuntimeBundle` global ;
 - une app Flask globale ;
@@ -41,9 +41,9 @@ Les routes observées incluent notamment :
 - `/feed` ;
 - `/memory/candidates`.
 
-Ce comportement est une dette C4b confirmée.
+Ce comportement était une dette C4b confirmée.
 
-Il n'est pas corrigé dans C4b.1.
+Il n'a pas été corrigé dans C4b.1.
 
 ## Ce qui ne démarre pas à l'import
 
@@ -175,6 +175,59 @@ La dette principale reste inchangée : `runtime` et `app` sont encore créés à
 
 La prochaine étape possible est de décider si un lazy réel est faisable sans casser les garanties de compatibilité.
 
+## Mise à jour C4b.3-real phase 1 — lazy accessors
+
+`get_runtime()` et `get_app()` sont maintenant réellement lazy.
+
+L'import de `daemon.main` ne crée plus immédiatement :
+
+- `RuntimeBundle` ;
+- app Flask ;
+- routes Flask ;
+- DB / stores ;
+- fichiers `.pulse`.
+
+`get_runtime()` crée le `RuntimeBundle` au premier accès, abonne le bus au `StateStore` et à `_handle_event`, puis retourne le même objet pendant le process.
+
+`get_app()` crée l'app Flask au premier accès via `create_app(get_runtime())`, puis retourne la même app pendant le process.
+
+Les handlers de log ne créent plus `.pulse/logs` au moment de l'import. Le dossier de log est créé seulement si le fichier de log est effectivement ouvert.
+
+Les globals `runtime` et `app` restent disponibles via compatibilité lazy module-level. Ils ne sont plus définis dans `daemon.main.__dict__` à l'import, mais les accès legacy `daemon.main.runtime` et `daemon.main.app` résolvent vers `get_runtime()` et `get_app()`.
+
+Les aliases legacy restent disponibles via compatibilité lazy :
+
+- `bus` ;
+- `store` ;
+- `scorer` ;
+- `decision_engine` ;
+- `summary_llm` ;
+- `session_memory` ;
+- `memory_store` ;
+- `memory_candidate_store` ;
+- `runtime_state` ;
+- `llm_runtime` ;
+- `lightweight_queue` ;
+- `runtime_orchestrator` ;
+- `idle_presence_heartbeat` ;
+- `runtime_event_coalescer`.
+
+L'import ne lance toujours pas :
+
+- `Flask.run` ;
+- `RuntimeOrchestrator` ;
+- file flush worker ;
+- periodic sync worker ;
+- idle heartbeat thread.
+
+Tests lancés pour ce patch :
+
+- `.venv/bin/python -m pytest tests/test_main_runtime_state.py tests/test_main_memory_routes.py tests/test_main_mcp_routes.py tests/test_main_llm_models.py -q` — `71 passed` ;
+- `.venv/bin/python -m pytest tests/test_runtime_routes.py tests/test_memory_candidate_routes.py tests/routes/test_runtime_state_payloads.py -q` — `167 passed` ;
+- `.venv/bin/python -m pytest tests/test_main_memory_routes.py tests/test_main_mcp_routes.py tests/mcp/test_handlers_proposals.py -q` — `42 passed, 3 subtests passed`.
+
+Dogfooding post-redémarrage reste obligatoire avant de considérer C4b.3 complètement clôturé côté terrain.
+
 ## Garde-fous avant correction
 
 Tout patch boot doit :
@@ -187,9 +240,15 @@ Tout patch boot doit :
 
 ## Prochaine étape recommandée
 
-C4b.3 :
+C4b.3 phase terrain :
 
-- décider si un lazy réel de `get_runtime()` et `get_app()` est faisable ;
-- garder les globals disponibles tant que les consommateurs legacy existent ;
-- ne pas rendre les accessors lazy avant que la compatibilité soit couverte par tests ;
-- ne pas déplacer la création runtime globale sans patch C4b.3 dédié et dogfooding post-redémarrage.
+- redémarrer le daemon avec le lazy runtime/app actif ;
+- vérifier `/health/core` ;
+- vérifier `/state` ;
+- vérifier `/feed` ;
+- vérifier `/memory/candidates` ;
+- confirmer que le boot lazy ne crée pas de régression visible côté Core ;
+- confirmer qu’aucune candidate mémoire n’est créée spontanément ;
+- documenter le dogfooding post-redémarrage dans `docs/audits/CORE_DOGFOODING_NOTES.md`.
+
+Après dogfooding, décider séparément si les globals legacy doivent rester comme façade de compatibilité ou être progressivement retirés.

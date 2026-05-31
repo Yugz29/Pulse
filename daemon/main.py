@@ -57,6 +57,12 @@ _ACCESS_REQUEST_RE = re.compile(
 )
 
 
+class _PulseRotatingFileHandler(RotatingFileHandler):
+    def _open(self):
+        Path(self.baseFilename).parent.mkdir(parents=True, exist_ok=True)
+        return super()._open()
+
+
 def _resolve_daemon_log_level(environ=None) -> int:
     environ = os.environ if environ is None else environ
     configured_level = str(environ.get("PULSE_LOG_LEVEL", "")).strip().upper()
@@ -73,11 +79,10 @@ def _resolve_daemon_log_level(environ=None) -> int:
 
 def _build_logging_handlers(log_dir: Path | None = None) -> list[logging.Handler]:
     resolved_log_dir = log_dir or (Path.home() / ".pulse" / "logs")
-    resolved_log_dir.mkdir(parents=True, exist_ok=True)
 
     return [
         logging.StreamHandler(),
-        RotatingFileHandler(
+        _PulseRotatingFileHandler(
             resolved_log_dir / "daemon.app.log",
             maxBytes=_APP_LOG_MAX_BYTES,
             backupCount=_APP_LOG_BACKUP_COUNT,
@@ -211,87 +216,92 @@ def create_runtime() -> RuntimeBundle:
     )
 
 
-runtime = create_runtime()
-bus = runtime.bus
-store = runtime.store
-scorer = runtime.scorer
-decision_engine = runtime.decision_engine
-summary_llm = runtime.summary_llm
-session_memory = runtime.session_memory
-memory_store = runtime.memory_store
-memory_candidate_store = runtime.memory_candidate_store
-runtime_state = runtime.runtime_state
-llm_runtime = runtime.llm_runtime
-lightweight_queue = runtime.lightweight_queue
-runtime_orchestrator = runtime.runtime_orchestrator
-idle_presence_heartbeat = create_idle_presence_heartbeat(
-    bus,
-    is_locked=runtime_state.is_screen_locked,
-)
+_runtime: RuntimeBundle | None = None
+_app: Flask | None = None
+_idle_presence_heartbeat = None
+_runtime_lock = threading.RLock()
+
+_RUNTIME_ALIAS_FIELDS = {
+    "bus": "bus",
+    "store": "store",
+    "scorer": "scorer",
+    "decision_engine": "decision_engine",
+    "summary_llm": "summary_llm",
+    "session_memory": "session_memory",
+    "memory_store": "memory_store",
+    "memory_candidate_store": "memory_candidate_store",
+    "runtime_state": "runtime_state",
+    "llm_runtime": "llm_runtime",
+    "lightweight_queue": "lightweight_queue",
+    "runtime_orchestrator": "runtime_orchestrator",
+}
 
 WATCHDOG_TIMEOUT_SEC = 30
 WATCHDOG_GRACE_SEC = 15
 
 
 def _ollama_ping() -> bool:
-    return llm_runtime.ollama_ping()
+    return get_runtime().llm_runtime.ollama_ping()
 
 
 def _llm_provider():
-    return llm_runtime.provider()
+    return get_runtime().llm_runtime.provider()
 
 
 def _llm_unload_background() -> None:
-    runtime_orchestrator.llm_unload_background()
+    get_runtime().runtime_orchestrator.llm_unload_background()
 
 
 def _llm_warmup_background() -> None:
-    runtime_orchestrator.llm_warmup_background()
+    get_runtime().runtime_orchestrator.llm_warmup_background()
 
 
 def _handle_event(event) -> None:
-    runtime_orchestrator.handle_event(event)
+    get_runtime().runtime_orchestrator.handle_event(event)
 
 
 def get_selected_summary_llm_model():
-    return llm_runtime.get_selected_summary_model()
+    return get_runtime().llm_runtime.get_selected_summary_model()
 
 
 def set_selected_summary_llm_model(model: str) -> bool:
-    return llm_runtime.set_selected_summary_model(model)
+    return get_runtime().llm_runtime.set_selected_summary_model(model)
 
 
 def set_unified_model(model: str) -> bool:
-    return llm_runtime.set_unified_model(model)
+    return get_runtime().llm_runtime.set_unified_model(model)
 
 
 def _persist_selected_models() -> None:
-    llm_runtime.persist_selected_models()
+    get_runtime().llm_runtime.persist_selected_models()
 
 
 def start_runtime_services() -> None:
-    runtime_orchestrator.start()
-    idle_presence_heartbeat.start()
+    get_runtime().runtime_orchestrator.start()
+    get_idle_presence_heartbeat().start()
 
 
 def _shutdown_runtime() -> None:
     try:
-        idle_presence_heartbeat.stop()
+        if _idle_presence_heartbeat is not None:
+            _idle_presence_heartbeat.stop()
     except Exception as exc:
         log.warning("shutdown idle heartbeat failed: %s", exc)
     try:
-        runtime_event_coalescer.close()
+        if _app is not None:
+            _app.runtime_event_coalescer.close()
     except Exception as exc:
         log.warning("shutdown coalescer failed: %s", exc)
-    runtime_orchestrator.shutdown_runtime()
+    if _runtime is not None:
+        _runtime.runtime_orchestrator.shutdown_runtime()
 
 
 def build_context_snapshot() -> str:
-    return runtime_orchestrator.build_context_snapshot()
+    return get_runtime().runtime_orchestrator.build_context_snapshot()
 
 
 def _deferred_startup() -> None:
-    runtime_orchestrator.deferred_startup()
+    get_runtime().runtime_orchestrator.deferred_startup()
 
 
 def _is_launchd_child() -> bool:
@@ -311,7 +321,7 @@ def _watchdog_loop() -> None:
 
     while True:
         time.sleep(10)
-        last = runtime_state.get_last_ping_at()
+        last = get_runtime().runtime_state.get_last_ping_at()
         if last is None:
             continue
         silence = (datetime.now() - last).total_seconds()
@@ -446,29 +456,65 @@ def create_app(runtime: RuntimeBundle) -> Flask:
     return flask_app
 
 
-bus.subscribe(store.update)
-bus.subscribe(_handle_event)
-
-app = create_app(runtime)
-runtime_event_coalescer = app.runtime_event_coalescer
-
-
 def get_runtime() -> RuntimeBundle:
-    return runtime
+    global _runtime
+    with _runtime_lock:
+        if _runtime is None:
+            resolved_runtime = create_runtime()
+            resolved_runtime.bus.subscribe(resolved_runtime.store.update)
+            resolved_runtime.bus.subscribe(_handle_event)
+            _runtime = resolved_runtime
+        return _runtime
 
 
 def get_app() -> Flask:
-    return app
+    global _app
+    with _runtime_lock:
+        if _app is None:
+            _app = create_app(get_runtime())
+        return _app
+
+
+def get_idle_presence_heartbeat():
+    global _idle_presence_heartbeat
+    with _runtime_lock:
+        if _idle_presence_heartbeat is None:
+            resolved_runtime = get_runtime()
+            _idle_presence_heartbeat = create_idle_presence_heartbeat(
+                resolved_runtime.bus,
+                is_locked=resolved_runtime.runtime_state.is_screen_locked,
+            )
+        return _idle_presence_heartbeat
+
+
+def get_runtime_event_coalescer():
+    return get_app().runtime_event_coalescer
+
+
+def __getattr__(name: str):
+    if name == "runtime":
+        return get_runtime()
+    if name == "app":
+        return get_app()
+    if name == "idle_presence_heartbeat":
+        return get_idle_presence_heartbeat()
+    if name == "runtime_event_coalescer":
+        return get_runtime_event_coalescer()
+    runtime_field = _RUNTIME_ALIAS_FIELDS.get(name)
+    if runtime_field is not None:
+        return getattr(get_runtime(), runtime_field)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def main() -> None:
+    flask_app = get_app()
     start_runtime_services()
     atexit.register(_shutdown_runtime)
     start_mcp_server(host="127.0.0.1", port=8766)
     threading.Thread(target=_watchdog_loop, daemon=True, name="pulse-watchdog").start()
     threading.Thread(target=_deferred_startup, daemon=True, name="pulse-startup").start()
     log.info("✓ Pulse daemon démarré sur http://127.0.0.1:8765 (threaded=True)")
-    app.run(host="127.0.0.1", port=8765, debug=False, threaded=True)
+    flask_app.run(host="127.0.0.1", port=8765, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

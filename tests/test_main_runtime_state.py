@@ -250,38 +250,58 @@ with patch("flask.Flask.run") as flask_run:
 
 home = Path.home()
 pulse_dir = home / ".pulse"
+pulse_dir_exists_at_import = pulse_dir.exists()
+created_paths_at_import = []
+if pulse_dir_exists_at_import:
+    created_paths_at_import = sorted(
+        str(path.relative_to(home))
+        for path in pulse_dir.rglob("*")
+    )
+
+runtime_defined_at_import = "runtime" in main.__dict__
+app_defined_at_import = "app" in main.__dict__
+runtime_state_defined_at_import = "runtime_state" in main.__dict__
+idle_heartbeat_created_at_import = main.__dict__.get("_idle_presence_heartbeat") is not None
+
+runtime_obj = main.get_runtime()
+app_obj = main.get_app()
 routes = {
     rule.rule
-    for rule in main.get_app().url_map.iter_rules()
+    for rule in app_obj.url_map.iter_rules()
     if rule.endpoint != "static"
 }
-created_paths = []
+created_paths_after_access = []
 if pulse_dir.exists():
-    created_paths = sorted(
+    created_paths_after_access = sorted(
         str(path.relative_to(home))
         for path in pulse_dir.rglob("*")
     )
 
 print(json.dumps({
-    "has_runtime": hasattr(main, "runtime"),
-    "runtime_type": type(main.get_runtime()).__name__,
-    "get_runtime_returns_global": main.get_runtime() is main.runtime,
-    "has_app": hasattr(main, "app"),
-    "app_type": type(main.get_app()).__name__,
-    "get_app_returns_global": main.get_app() is main.app,
+    "runtime_defined_at_import": runtime_defined_at_import,
+    "runtime_state_defined_at_import": runtime_state_defined_at_import,
+    "runtime_type": type(runtime_obj).__name__,
+    "get_runtime_returns_same_object": main.get_runtime() is runtime_obj,
+    "get_runtime_returns_legacy_runtime": main.get_runtime() is main.runtime,
+    "app_defined_at_import": app_defined_at_import,
+    "app_type": type(app_obj).__name__,
+    "get_app_returns_same_object": main.get_app() is app_obj,
+    "get_app_returns_legacy_app": main.get_app() is main.app,
     "has_main_entrypoint": callable(getattr(main, "main", None)),
     "flask_run_called_on_import": flask_run.called,
-    "pulse_dir_exists": pulse_dir.exists(),
-    "created_paths": created_paths,
+    "pulse_dir_exists_at_import": pulse_dir_exists_at_import,
+    "created_paths_at_import": created_paths_at_import,
+    "pulse_dir_exists_after_access": pulse_dir.exists(),
+    "created_paths_after_access": created_paths_after_access,
     "route_count": len(routes),
     "has_health_core": "/health/core" in routes,
     "has_state": "/state" in routes,
     "has_feed": "/feed" in routes,
     "has_memory_candidates": "/memory/candidates" in routes,
-    "orchestrator_started": main.runtime_orchestrator._started,
-    "file_flush_worker_started": main.runtime_orchestrator._file_flush_worker is not None,
-    "periodic_sync_worker_started": main.runtime_orchestrator._periodic_sync_worker is not None,
-    "idle_heartbeat_thread_started": main.idle_presence_heartbeat._thread is not None,
+    "orchestrator_started": runtime_obj.runtime_orchestrator._started,
+    "file_flush_worker_started": runtime_obj.runtime_orchestrator._file_flush_worker is not None,
+    "periodic_sync_worker_started": runtime_obj.runtime_orchestrator._periodic_sync_worker is not None,
+    "idle_heartbeat_created_at_import": idle_heartbeat_created_at_import,
 }))
 """
             result = subprocess.run(
@@ -296,20 +316,25 @@ print(json.dumps({
 
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        created_paths = set(payload["created_paths"])
+        created_paths_at_import = set(payload["created_paths_at_import"])
+        created_paths_after_access = set(payload["created_paths_after_access"])
 
-        self.assertTrue(payload["has_runtime"])
+        self.assertFalse(payload["runtime_defined_at_import"])
+        self.assertFalse(payload["runtime_state_defined_at_import"])
         self.assertEqual(payload["runtime_type"], "RuntimeBundle")
-        self.assertTrue(payload["get_runtime_returns_global"])
-        self.assertTrue(payload["has_app"])
+        self.assertTrue(payload["get_runtime_returns_same_object"])
+        self.assertTrue(payload["get_runtime_returns_legacy_runtime"])
+        self.assertFalse(payload["app_defined_at_import"])
         self.assertEqual(payload["app_type"], "Flask")
-        self.assertTrue(payload["get_app_returns_global"])
+        self.assertTrue(payload["get_app_returns_same_object"])
+        self.assertTrue(payload["get_app_returns_legacy_app"])
         self.assertTrue(payload["has_main_entrypoint"])
         self.assertFalse(payload["flask_run_called_on_import"])
-        self.assertTrue(payload["pulse_dir_exists"])
-        self.assertIn(".pulse/logs", created_paths)
-        self.assertTrue(any(path.endswith(".db") for path in created_paths))
-        self.assertIn(".pulse/memory/candidates.sqlite", created_paths)
+        self.assertFalse(payload["pulse_dir_exists_at_import"])
+        self.assertEqual(created_paths_at_import, set())
+        self.assertTrue(payload["pulse_dir_exists_after_access"])
+        self.assertTrue(any(path.endswith(".db") for path in created_paths_after_access))
+        self.assertIn(".pulse/memory/candidates.sqlite", created_paths_after_access)
         self.assertTrue(payload["has_health_core"])
         self.assertTrue(payload["has_state"])
         self.assertTrue(payload["has_feed"])
@@ -318,7 +343,7 @@ print(json.dumps({
         self.assertFalse(payload["orchestrator_started"])
         self.assertFalse(payload["file_flush_worker_started"])
         self.assertFalse(payload["periodic_sync_worker_started"])
-        self.assertFalse(payload["idle_heartbeat_thread_started"])
+        self.assertFalse(payload["idle_heartbeat_created_at_import"])
 
     def test_main_entrypoint_delegue_le_lancement_executable_sans_changer_le_boot(self):
         _DummyThread.instances = []
@@ -394,6 +419,8 @@ print(json.dumps({
     def test_lazy_compat_accessors_return_existing_globals(self):
         self.assertIs(daemon_main.get_runtime(), daemon_main.runtime)
         self.assertIs(daemon_main.get_app(), daemon_main.app)
+        self.assertIs(daemon_main.get_runtime(), daemon_main.get_runtime())
+        self.assertIs(daemon_main.get_app(), daemon_main.get_app())
 
     def test_get_app_preserves_core_route_inventory(self):
         routes = {
