@@ -33,6 +33,21 @@ Ne pas créer de nouvelle route maintenant.
 
 Ne pas créer `GET /today` dans cette étape. Dogfooder d'abord `/today_summary` et `/feed`, puis vérifier si la carte Swift “Aujourd'hui” permet déjà de répondre à la question produit.
 
+## État après sessions terrain #1/#2
+
+Les premières sessions terrain ont confirmé que `/today_summary` est la bonne surface de départ.
+
+Un premier patch minimal a été appliqué après la session #1 :
+
+- `top_files` est maintenant exposé dans `/today_summary.work_blocks[]` ;
+- la carte Swift “Aujourd'hui” affiche les derniers blocs avec heures courtes, tâche / projet, signal récent et fichiers principaux ;
+- aucune nouvelle route n'a été créée ;
+- aucune surface Lab, LLM ou mémoire avancée n'a été utilisée.
+
+La session #2 a confirmé que le couple `/today_summary` + `/feed` reste cohérent : `/today_summary` donne la structure et les fichiers quand ils existent, tandis que `/feed` expose les commandes terminal notables comme `pytest`.
+
+Cette validation ne justifie pas encore d'ajouter `notable_commands` dans `/today_summary`.
+
 ## Interdits
 
 Cette décision n'autorise pas :
@@ -52,7 +67,7 @@ Cette décision n'autorise pas :
 
 ## Dogfooding requis
 
-Avant tout patch produit, effectuer au moins 5 sessions terrain.
+Avant tout nouvel enrichissement produit, continuer le dogfooding jusqu'à au moins 5 sessions terrain.
 
 Chaque session doit vérifier :
 
@@ -94,14 +109,14 @@ Un patch produit futur est autorisé seulement si le manque est confirmé par do
 
 Options limitées :
 
-- ajouter `top_files` dans `/today_summary` ;
-- ajouter `notable_commands` dans `/today_summary` si `/feed` ne suffit pas ;
-- simplifier ensuite l'UI “Aujourd'hui” pour mettre la reprise du fil au premier plan.
+- ajuster la lisibilité de la carte “Aujourd'hui” si les derniers blocs restent trop denses ;
+- ajouter `notable_commands` dans `/today_summary` seulement si `/feed` ne suffit pas sur plusieurs sessions ;
+- envisager une synthèse documentaire dédiée si `CORE_DOGFOODING_NOTES.md` devient trop long à exploiter.
 
 Toute évolution doit rester déterministe, locale, Core-only et sans LLM.
 
 ## Décision finale
 
-Observer avant coder.
+Observer avant tout nouvel enrichissement.
 
 La boucle de valeur minimale “Aujourd'hui” doit d'abord être validée avec `/today_summary`, `/feed` et la carte Swift existante. C4c.2+ reste en pause temporaire pendant cette validation.
