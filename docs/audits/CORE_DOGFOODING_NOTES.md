@@ -2882,3 +2882,78 @@ Ne pas ajouter `notable_commands` maintenant.
 ### Limite
 
 Cette session est courte. Il faut encore une session plus longue code + tests pour valider la boucle “Aujourd'hui” sur une activité plus représentative.
+
+---
+
+## 2026-05-31 — Dashboard Product / Debug-Lab split visual check
+
+### Contexte
+
+Après la décision `UI_PRODUCT_DEBUG_LAB_SPLIT`, un patch UI-only a séparé la navigation du dashboard Swift en deux surfaces locales :
+
+- `Produit` ;
+- `Debug / Lab`.
+
+Objectif : vérifier que le dashboard ne présente plus toutes les surfaces comme équivalentes et que la boucle produit “Aujourd’hui” devient l’entrée principale.
+
+### Patch observé
+
+Changement appliqué côté Swift uniquement :
+
+- ajout d’une surface `Produit` ;
+- ajout d’une surface `Debug / Lab` ;
+- ajout d’un sélecteur en haut de la sidebar ;
+- filtrage des sections visibles selon la surface ;
+- sélection automatique d’une section valide lors du changement de surface.
+
+Aucun changement daemon, route, modèle API, `/today_summary`, `/feed`, `/state`, backend Lab ou encoche n’a été fait dans ce patch.
+
+### Surface Produit
+
+La surface `Produit` expose uniquement :
+
+- `Aujourd’hui` ;
+- `Notifications`.
+
+Lecture terrain : la vue produit est maintenant centrée sur la reprise du fil et les informations utiles au quotidien, sans mélanger directement les surfaces internes ou expérimentales.
+
+### Surface Debug / Lab
+
+La surface `Debug / Lab` conserve les surfaces internes :
+
+- `Séquences debug` ;
+- `Observation` ;
+- `Événements` ;
+- `MCP` ;
+- `Système` ;
+- `Mémoire (Lab)` ;
+- `DayDream (Lab)` ;
+- `Contexte (Lab)`.
+
+Lecture terrain : les outils de diagnostic et les surfaces expérimentales restent accessibles, mais ils ne sont plus au même niveau que l’expérience produit principale.
+
+### Vérifications attendues
+
+Le dogfooding visuel doit confirmer :
+
+- le sélecteur `Produit` / `Debug / Lab` est visible en haut de sidebar ;
+- `Produit` n’affiche que `Aujourd’hui` et `Notifications` ;
+- `Debug / Lab` garde toutes les anciennes surfaces internes ;
+- le passage vers `Produit` sélectionne `Aujourd’hui` si nécessaire ;
+- le passage vers `Debug / Lab` sélectionne `Séquences debug` si nécessaire ;
+- aucune surface Debug/Lab n’a été supprimée.
+
+### Verdict provisoire
+
+Le split `Produit` / `Debug-Lab` est cohérent avec la direction produit actuelle.
+
+Il améliore la lisibilité du dashboard sans modifier le backend et sans cacher les outils de dogfooding.
+
+La prochaine étape ne doit pas être une nouvelle donnée backend. Elle doit rester UI-only : vérifier le confort visuel, puis décider séparément si l’encoche doit être alignée avec la nouvelle hiérarchie produit.
+
+### Points à surveiller
+
+- `DashboardViewModel.refresh()` charge encore des données Produit, Debug et Lab ensemble ; c’est accepté pour ce patch UI-only.
+- L’optimisation réseau ou le lazy loading par surface est hors scope.
+- Le skin visuel global du dashboard reste basique et pourra être retravaillé plus tard.
+- L’encoche n’a pas encore été mise à jour pour refléter la séparation Produit / Debug-Lab.
