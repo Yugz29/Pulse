@@ -50,8 +50,10 @@ def register_runtime_routes(
 
     current_context_builder = CurrentContextBuilder()
 
+    # Core ingestion surface: /event and file coalescing.
     coalescer = register_ingestion_routes(app, bus=bus, runtime_state=runtime_state)
 
+    # Historical/session/journal debug projections. Read-only diagnostic surfaces.
     register_debug_memory_routes(
         app,
         get_work_episodes=get_today_work_episodes,
@@ -60,6 +62,7 @@ def register_runtime_routes(
         get_commit_episode_links=get_today_commit_episode_links,
     )
 
+    # Debug/local diagnostics: event browser, timeline preview, work-context, schemas.
     register_debug_routes(
         app,
         bus=bus,
@@ -68,6 +71,8 @@ def register_runtime_routes(
         parse_timestamp_fn=_parse_event_timestamp,
     )
 
+    # Observation/feed surfaces: /feed is Core; /observation, /today_summary, and
+    # /daydreams are read-only inspection/historical surfaces registered here.
     register_feed_routes(
         app,
         bus=bus,
@@ -75,6 +80,8 @@ def register_runtime_routes(
         get_today_summary=get_today_summary,
     )
 
+    # Lab/experimental bounded helpers: context probes can produce work-intent
+    # candidates, but they are not Core state or memory candidates.
     register_probe_routes(
         app,
         bus=bus,
@@ -84,12 +91,14 @@ def register_runtime_routes(
         current_context_builder=current_context_builder,
     )
 
+    # Work intent review surface. Kept separate from memory candidates.
     register_work_intent_routes(
         app,
         runtime_state=runtime_state,
         candidate_store=work_intent_candidate_store,
     )
 
+    # Daemon lifecycle controls: pause/resume/shutdown/restart.
     register_daemon_routes(
         app,
         bus=bus,
@@ -100,6 +109,8 @@ def register_runtime_routes(
         log=log,
     )
 
+    # Bounded runtime helpers for resume cards. Deterministic by default; explicit
+    # debug LLM path remains separate and policy-gated.
     register_resume_card_routes(
         app,
         bus=bus,
@@ -109,6 +120,8 @@ def register_runtime_routes(
         resume_card_llm=resume_card_llm,
     )
 
+    # Lightweight LLM worker surface, only registered when the queue integration
+    # is provided by the composition root.
     if lightweight_queue is not None and apply_lightweight_llm_result is not None:
         register_lightweight_llm_routes(
             app,
@@ -116,6 +129,8 @@ def register_runtime_routes(
             apply_result=apply_lightweight_llm_result,
         )
 
+    # Core status/state surfaces: /ping, /health/core, /state, /debug/state,
+    # and /insights remain in the status router for compatibility.
     register_status_routes(
         app,
         bus=bus,

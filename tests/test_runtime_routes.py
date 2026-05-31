@@ -84,6 +84,90 @@ class TestRuntimeRoutes(unittest.TestCase):
         )
         self.client = self.app.test_client()
 
+    def test_runtime_route_aggregator_documents_internal_surface_families(self):
+        route_methods = {}
+        for rule in self.app.url_map.iter_rules():
+            if rule.endpoint == "static":
+                continue
+            route_methods.setdefault(rule.rule, set()).update(rule.methods - {"HEAD", "OPTIONS"})
+        routes = set(route_methods)
+
+        core_state_runtime = {
+            "/event",
+            "/feed",
+            "/health/core",
+            "/ping",
+            "/state",
+        }
+        debug_local_diagnostics = {
+            "/debug/state",
+            "/events/debug",
+            "/events/schema",
+            "/insights",
+            "/timeline/preview",
+            "/timeline/schema",
+            "/work-context",
+        }
+        daemon_controls = {
+            "/daemon/pause",
+            "/daemon/restart",
+            "/daemon/resume",
+            "/daemon/shutdown",
+        }
+        observation_timeline = {
+            "/observation",
+            "/timeline/preview",
+            "/timeline/schema",
+        }
+        historical_session_journal_projections = {
+            "/today_summary",
+            "/debug/work-episodes",
+            "/debug/journal-candidates",
+            "/debug/journal-comparison",
+            "/debug/commit-episode-links",
+        }
+        bounded_runtime_helpers = {
+            "/debug/resume-card",
+            "/debug/resume-card/llm",
+        }
+        conditional_lightweight_llm_helpers = {
+            "/llm/lightweight/status",
+            "/llm/lightweight/pending",
+            "/llm/lightweight/result",
+        }
+        lab_or_experimental_helpers = {
+            "/context-probes/request-preview",
+            "/context-probes/requests",
+            "/context-probes/requests/<request_id>",
+            "/context-probes/requests/<request_id>/abort",
+            "/context-probes/requests/<request_id>/approve",
+            "/context-probes/requests/<request_id>/execute",
+            "/context-probes/requests/<request_id>/refuse",
+            "/context-probes/requests/<request_id>/result",
+            "/context-probes/schema",
+            "/daydreams",
+            "/work-intent/candidates",
+            "/work-intent/candidates/<candidate_id>/accept",
+            "/work-intent/candidates/<candidate_id>/refuse",
+        }
+
+        self.assertTrue(core_state_runtime.issubset(routes))
+        self.assertTrue(debug_local_diagnostics.issubset(routes))
+        self.assertTrue(daemon_controls.issubset(routes))
+        self.assertTrue(observation_timeline.issubset(routes))
+        self.assertNotIn("/scoring/status", routes)
+        self.assertTrue(historical_session_journal_projections.issubset(routes))
+        self.assertTrue(bounded_runtime_helpers.issubset(routes))
+        self.assertTrue(conditional_lightweight_llm_helpers.isdisjoint(routes))
+        self.assertTrue(lab_or_experimental_helpers.issubset(routes))
+        self.assertTrue(core_state_runtime.isdisjoint(historical_session_journal_projections))
+        self.assertTrue(core_state_runtime.isdisjoint(bounded_runtime_helpers))
+        self.assertTrue(core_state_runtime.isdisjoint(lab_or_experimental_helpers))
+        self.assertEqual(route_methods["/state"], {"GET"})
+        self.assertEqual(route_methods["/debug/state"], {"GET"})
+        self.assertEqual(route_methods["/insights"], {"GET"})
+        self.assertEqual(route_methods["/event"], {"POST"})
+
     def test_daydreams_expose_etat_meme_sans_fichier(self):
         with patch("pathlib.Path.home", return_value=Path("/tmp/pulse-home")), \
              patch("daemon.memory.daydream.get_daydream_status", return_value={
