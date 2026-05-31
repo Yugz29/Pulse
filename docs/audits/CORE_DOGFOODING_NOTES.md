@@ -2729,3 +2729,115 @@ Ne pas ajouter `notable_commands` pour l'instant.
 ### Suite
 
 Continuer le dogfooding sur 1 ou 2 sessions réelles avant d'élargir la surface “Aujourd'hui”.
+
+
+---
+
+## 2026-05-31 — Today value-loop field session 2
+
+### Contexte
+
+Mini-session terrain après le patch `top_files` dans `/today_summary` et le micro-ajustement UI de la carte “Aujourd'hui”.
+
+Activité réelle observée :
+
+- exploration légère de la documentation Pulse ;
+- consultation du `README.md` ;
+- lancement de `pytest` ;
+- vérification des surfaces Core.
+
+Surfaces vérifiées :
+
+- `/health/core`
+- `/today_summary`
+- `/feed`
+- `/state`
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+Lecture terrain : le Core reste sain.
+
+### Vérification `/today_summary`
+
+Résultat observé :
+
+```text
+worked_min = 146
+active_min = 146
+window_count = 8
+project_count = 1
+commit_count = 29
+project = Pulse
+top_tasks = writing, tests
+```
+
+Bloc récent :
+
+```text
+20:38 -> 20:39
+project = Pulse
+probable_task = tests
+activity_level = executing
+duration_min = 1
+event_count = 9
+top_files = []
+```
+
+Lecture terrain : Pulse identifie correctement un bloc court de tests après `pytest`. `top_files=[]` est compréhensible pour une commande terminal courte sans fichier actif significatif.
+
+### Vérification `/feed`
+
+Résultat observé :
+
+```text
+pytest
+clear
+```
+
+Lecture terrain : `/feed` complète utilement `/today_summary` en exposant `pytest`.
+
+### Vérification `/state`
+
+Résultat observé :
+
+```text
+active_app = Code
+active_file = README.md
+active_project = Pulse
+probable_task = writing
+activity_level = executing
+session_status = active
+```
+
+Lecture terrain : le live state reflète la consultation / écriture autour du `README.md`. `probable_task=writing` côté live et `tests` dans le bloc récent ne sont pas contradictoires : ce sont deux temporalités différentes.
+
+### Lecture produit
+
+La séparation actuelle reste pertinente :
+
+- `/today_summary` donne structure + fichiers principaux quand ils existent ;
+- `/feed` donne les commandes terminal notables ;
+- `/state` décrit la situation live.
+
+Cette session n'est pas encore une preuve suffisante pour ajouter `notable_commands` dans `/today_summary`.
+
+### Verdict provisoire
+
+Session terrain #2 légère exploitable.
+
+Le couple `/today_summary` + `/feed` reste cohérent.
+
+Ne pas ajouter `notable_commands` dans `/today_summary` maintenant.
+
+### Suite recommandée
+
+Continuer le dogfooding sur une session plus longue, idéalement avec code + tests, sans interroger Pulse trop souvent pendant le travail.
