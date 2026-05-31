@@ -2375,3 +2375,89 @@ Avant toute suppression des globals legacy ou des façades de compatibilité, un
 - le risque Swift / tests ;
 - la stratégie de migration ;
 - les tests et le dogfooding requis.
+
+
+---
+
+## 2026-05-31 — C4b.4b HTTP port preflight post-restart check
+
+### Contexte
+
+Après l’ajout du préflight local du port HTTP principal `127.0.0.1:8765` dans `main()`, le daemon a été redémarré pour vérifier le comportement terrain.
+
+Objectif : confirmer que le préflight 8765 ne crée pas de régression visible côté Core.
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+Lecture terrain : le Core reste sain après redémarrage avec le préflight 8765 actif.
+
+### Vérification `/state`
+
+État observé :
+
+```text
+active_app = Code
+active_file = C4B_PORT_CONFLICT_AUDIT.md
+active_project = Pulse
+activity_level = executing
+probable_task = general
+task_confidence = 0.48
+session_status = active
+```
+
+Lecture terrain : Pulse capte correctement une session de documentation / diagnostic dans VS Code et Terminal. Le scoring reste prudent, ce qui est acceptable pour cette activité mixte.
+
+### Vérification `/feed`
+
+Résultat observé : le feed expose une commande terminal notable récente, `clear`.
+
+Lecture terrain : `/feed` reste disponible et conserve son rôle de sélection notable, sans devenir un journal brut complet.
+
+### Vérification `/memory/candidates`
+
+Résultat observé :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Lecture terrain : aucune candidate mémoire n’est créée spontanément après redémarrage. La surface `memory_candidates` reste vide et séparée de la mémoire canonique.
+
+### Verdict provisoire
+
+C4b.4b est conforme en dogfooding post-redémarrage :
+
+- `/health/core` OK ;
+- `/state` OK ;
+- `/feed` OK ;
+- `/memory/candidates` OK ;
+- aucune candidate spontanée ;
+- aucune mémoire canonique créée ;
+- aucune régression Core visible.
+
+Point observé : `recent_sessions` expose encore `stale_repair` après redémarrage, cohérent avec les observations précédentes.
+
+### Suite
+
+C4b.4b peut être considéré validé côté terrain pour le chemin de démarrage normal.
+
+Avant de traiter le port `8766` ou les conflits MCP plus finement, une décision séparée devra confirmer :
+
+- le comportement attendu si `8766` est occupé ;
+- le rôle exact du script `scripts/start_pulse_daemon.sh` comme première ligne de défense ;
+- le comportement souhaité du lancement direct `python -m daemon.main` ;
+- les tests et le dogfooding requis.
