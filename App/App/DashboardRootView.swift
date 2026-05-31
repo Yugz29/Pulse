@@ -52,8 +52,50 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     }
 }
 
+enum DashboardSurface: String, CaseIterable, Identifiable {
+    case product = "Produit"
+    case debugLab = "Debug / Lab"
+
+    var id: String { rawValue }
+
+    var defaultSection: DashboardSection {
+        switch self {
+        case .product:
+            return .session
+        case .debugLab:
+            return .episodes
+        }
+    }
+
+    var sections: [DashboardSection] {
+        switch self {
+        case .product:
+            return [
+                .session,
+                .notifications,
+            ]
+        case .debugLab:
+            return [
+                .episodes,
+                .observation,
+                .events,
+                .mcp,
+                .system,
+                .memory,
+                .daydream,
+                .contextProbes,
+            ]
+        }
+    }
+
+    func contains(_ section: DashboardSection) -> Bool {
+        sections.contains(section)
+    }
+}
+
 struct DashboardRootView: View {
     @ObservedObject var vm: DashboardViewModel
+    @State private var selectedSurface: DashboardSurface = .product
     @State private var selectedSection: DashboardSection = .session
     @State private var expandedJournal: String? = nil
     @State private var showArchivedFacts = false
@@ -95,14 +137,17 @@ struct DashboardRootView: View {
 
             Divider().padding(.horizontal, 8)
 
+            surfaceSelector
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(DashboardSection.allCases) { section in
+                    ForEach(selectedSurface.sections) { section in
                         sidebarItem(section)
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.top, 8)
             }
 
             Spacer()
@@ -132,6 +177,40 @@ struct DashboardRootView: View {
             .padding(.vertical, 10)
         }
         .background(.regularMaterial)
+    }
+
+    private var surfaceSelector: some View {
+        HStack(spacing: 4) {
+            ForEach(DashboardSurface.allCases) { surface in
+                Button {
+                    selectSurface(surface)
+                } label: {
+                    Text(surface.rawValue)
+                        .font(.system(size: 11, weight: selectedSurface == surface ? .semibold : .medium))
+                        .foregroundStyle(selectedSurface == surface ? .primary : .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(selectedSurface == surface ? Color.white.opacity(0.10) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Color.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private func selectSurface(_ surface: DashboardSurface) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            selectedSurface = surface
+            if !surface.contains(selectedSection) {
+                selectedSection = surface.defaultSection
+            }
+        }
     }
 
     private func sidebarItem(_ section: DashboardSection) -> some View {

@@ -1603,10 +1603,39 @@ final class PulseViewModelInteractionsTests: XCTestCase {
 
     func testDashboardSectionLabelsUseProductNavigation() {
         XCTAssertEqual(DashboardSection.session.rawValue, "Aujourd’hui")
+        XCTAssertEqual(DashboardSection.notifications.rawValue, "Notifications")
         XCTAssertEqual(DashboardSection.episodes.rawValue, "Séquences debug")
         XCTAssertEqual(DashboardSection.memory.rawValue, "Mémoire (Lab)")
         XCTAssertEqual(DashboardSection.daydream.rawValue, "DayDream (Lab)")
         XCTAssertEqual(DashboardSection.contextProbes.rawValue, "Contexte (Lab)")
+    }
+
+    func testDashboardSurfacesExposeProductAndDebugLabSections() {
+        XCTAssertEqual(DashboardSurface.product.rawValue, "Produit")
+        XCTAssertEqual(DashboardSurface.debugLab.rawValue, "Debug / Lab")
+
+        XCTAssertEqual(DashboardSurface.product.defaultSection, .session)
+        XCTAssertEqual(DashboardSurface.product.sections, [
+            .session,
+            .notifications,
+        ])
+
+        XCTAssertEqual(DashboardSurface.debugLab.defaultSection, .episodes)
+        XCTAssertEqual(DashboardSurface.debugLab.sections, [
+            .episodes,
+            .observation,
+            .events,
+            .mcp,
+            .system,
+            .memory,
+            .daydream,
+            .contextProbes,
+        ])
+
+        XCTAssertTrue(DashboardSurface.product.contains(.session))
+        XCTAssertFalse(DashboardSurface.product.contains(.episodes))
+        XCTAssertTrue(DashboardSurface.debugLab.contains(.contextProbes))
+        XCTAssertFalse(DashboardSurface.debugLab.contains(.notifications))
     }
 
     func testTimelineCommitEvidenceLabelsAreUserFacing() {
