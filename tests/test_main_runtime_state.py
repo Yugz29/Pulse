@@ -843,6 +843,30 @@ print(json.dumps({
         daydream_status.assert_not_called()
         vector_store.assert_not_called()
 
+    def test_today_summary_from_full_app_does_not_depend_on_lab_services(self):
+        with patch.dict(os.environ, {"PULSE_MODE": "core"}), \
+             patch.object(daemon_main.memory_store, "usage") as memory_usage, \
+             patch.object(daemon_main.memory_store, "render") as memory_render, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "stats") as fact_stats, \
+             patch.object(daemon_main.runtime_orchestrator.fact_engine, "render_for_context") as render_facts, \
+             patch.object(daemon_main.summary_llm, "complete", create=True) as llm_complete, \
+             patch.object(daemon_main.memory_candidate_store, "list_candidates") as list_candidates, \
+             patch("daemon.memory.daydream.get_daydream_status") as daydream_status, \
+             patch("daemon.memory.vector_store.VectorStore") as vector_store:
+            response = self.client.get("/today_summary")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertIn("work_blocks", payload)
+        memory_usage.assert_not_called()
+        memory_render.assert_not_called()
+        fact_stats.assert_not_called()
+        render_facts.assert_not_called()
+        llm_complete.assert_not_called()
+        list_candidates.assert_not_called()
+        daydream_status.assert_not_called()
+        vector_store.assert_not_called()
+
     def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
         runtime = daemon_main.create_runtime()
         app = daemon_main.create_app(runtime)

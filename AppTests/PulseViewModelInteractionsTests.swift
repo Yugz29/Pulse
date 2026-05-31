@@ -1154,7 +1154,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
               "duration_min": 42,
               "event_count": 12,
               "project": "Pulse",
-              "probable_task": "coding"
+              "probable_task": "coding",
+              "activity_level": "editing",
+              "top_files": ["DashboardRootView.swift", "DaemonBridgeModels.swift"]
             }
           ],
           "timeline": {
@@ -1178,6 +1180,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(summary.workBlocks.count, 1)
         XCTAssertEqual(summary.workBlocks.first?.project, "Pulse")
         XCTAssertEqual(summary.workBlocks.first?.taskLabel, "Développement")
+        XCTAssertEqual(summary.workBlocks.first?.activityLabel, "Édition")
+        XCTAssertEqual(summary.workBlocks.first?.topFiles, ["DashboardRootView.swift", "DaemonBridgeModels.swift"])
         XCTAssertEqual(summary.currentWindow?.commitCount, 3)
     }
 

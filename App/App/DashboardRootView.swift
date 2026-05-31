@@ -241,6 +241,7 @@ struct DashboardRootView: View {
         let totals = summary?.totals
         let currentWindow = summary?.currentWindow
         let currentBlock = summary?.workBlocks.last
+        let recentBlocks = Array((summary?.workBlocks ?? []).suffix(3).reversed())
 
         return GlassCard(accent: gGreen) {
             VStack(alignment: .leading, spacing: 12) {
@@ -281,6 +282,46 @@ struct DashboardRootView: View {
                         signalRow("Tâche principale", currentBlock?.taskLabel ?? currentWindow?.taskLabel ?? "—")
                         signalRow("Activité récente", currentWindow?.activityLabel ?? "—")
                         signalRow("Commits", "\(currentWindow?.commitCount ?? totals?.commitCount ?? 0)")
+                    }
+                }
+
+                if !recentBlocks.isEmpty {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "list.bullet.rectangle")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text("Derniers blocs")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(recentBlocks) { block in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(dashboardAbsoluteTimestamp(block.startedAt)) → \(dashboardAbsoluteTimestamp(block.endedAt)) · \(dashboardMinutes(block.durationMin))")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                HStack(spacing: 6) {
+                                    Text(block.taskLabel)
+                                    Text("·")
+                                    Text(block.activityLabel)
+                                    if let project = block.project, !project.isEmpty {
+                                        Text("·")
+                                        Text(project)
+                                    }
+                                }
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                if let files = block.topFiles, !files.isEmpty {
+                                    Text(files.prefix(3).joined(separator: " · "))
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.tertiary)
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
                     }
                 }
             }

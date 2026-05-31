@@ -298,6 +298,7 @@ class SessionMemory:
                 "project": block.project or project,
                 "probable_task": block.probable_task or fallback_task,
                 "activity_level": block.activity_level,
+                "top_files": list(block.top_files or []),
             }
             for block in builder_blocks
         ]
@@ -331,6 +332,7 @@ class SessionMemory:
                     "project": window.get("project") or project,
                     "probable_task": window_task,
                     "activity_level": window.get("activity_level"),
+                    "top_files": list(window.get("top_files") or []),
                 }
             )
 

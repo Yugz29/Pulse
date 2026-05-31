@@ -696,6 +696,8 @@ class TestSessionMemory(unittest.TestCase):
         self.assertEqual(summary["work_blocks"][0]["duration_min"], 10)
         self.assertEqual(summary["work_blocks"][1]["duration_min"], 1)
         self.assertEqual(summary["work_blocks"][1]["project"], "Pulse")
+        self.assertEqual(summary["work_blocks"][0]["top_files"], ["main.py", "session.py"])
+        self.assertEqual(summary["work_blocks"][1]["top_files"], ["runtime_orchestrator.py"])
 
     def test_get_today_summary_weak_isole_ne_cree_pas_de_work_block(self):
         today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
@@ -828,10 +830,12 @@ class TestSessionMemory(unittest.TestCase):
                 "project",
                 "probable_task",
                 "activity_level",
+                "top_files",
             },
         )
         self.assertEqual(block["duration_min"], 5)
         self.assertEqual(block["event_count"], 2)
+        self.assertEqual(block["top_files"], ["main.py"])
 
     def test_get_today_work_episodes_expose_les_episodes_du_jour_en_debug(self):
         today = datetime.now().replace(hour=11, minute=5, second=0, microsecond=0)

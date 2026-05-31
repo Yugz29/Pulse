@@ -828,6 +828,8 @@ struct TodayWorkBlock: Decodable, Identifiable {
     let eventCount: Int
     let project: String?
     let probableTask: String?
+    let activityLevel: String?
+    let topFiles: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -837,6 +839,8 @@ struct TodayWorkBlock: Decodable, Identifiable {
         case eventCount = "event_count"
         case project
         case probableTask = "probable_task"
+        case activityLevel = "activity_level"
+        case topFiles = "top_files"
     }
 
     var taskLabel: String {
@@ -847,6 +851,17 @@ struct TodayWorkBlock: Decodable, Identifiable {
         case "exploration", "browsing": return "Exploration"
         case "general": return "Général"
         default: return probableTask ?? "—"
+        }
+    }
+
+    var activityLabel: String {
+        switch activityLevel {
+        case "editing": return "Édition"
+        case "reading": return "Lecture"
+        case "executing": return "Exécution"
+        case "navigating": return "Navigation"
+        case "idle": return "Inactif"
+        default: return activityLevel ?? "—"
         }
     }
 }
