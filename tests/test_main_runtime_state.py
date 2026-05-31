@@ -468,6 +468,39 @@ print(json.dumps({
         self.assertIsNone(runtime.runtime_orchestrator._periodic_sync_worker)
         runtime.runtime_orchestrator.shutdown_runtime()
 
+    def test_c4c_create_runtime_documente_services_core_et_lab_sans_workers(self):
+        runtime = daemon_main.create_runtime()
+
+        try:
+            self.assertEqual(type(runtime.bus).__name__, "EventBus")
+            self.assertEqual(type(runtime.store).__name__, "StateStore")
+            self.assertEqual(type(runtime.scorer).__name__, "SignalScorer")
+            self.assertEqual(type(runtime.decision_engine).__name__, "DecisionEngine")
+            self.assertEqual(type(runtime.session_memory).__name__, "SessionMemory")
+            self.assertEqual(type(runtime.memory_candidate_store).__name__, "MemoryCandidateStore")
+            self.assertEqual(type(runtime.runtime_state).__name__, "RuntimeState")
+
+            self.assertEqual(type(runtime.memory_store).__name__, "MemoryStore")
+            self.assertEqual(type(runtime.lightweight_queue).__name__, "LightweightLLMQueue")
+            self.assertIsNotNone(runtime.summary_llm)
+            self.assertIsNotNone(runtime.runtime_orchestrator.fact_engine)
+
+            self.assertIs(runtime.runtime_orchestrator.session_memory, runtime.session_memory)
+            self.assertIs(runtime.runtime_orchestrator.memory_store, runtime.memory_store)
+            self.assertIs(runtime.runtime_orchestrator.lightweight_queue, runtime.lightweight_queue)
+            self.assertIsNot(runtime.memory_candidate_store, runtime.memory_store)
+            self.assertIsNot(runtime.memory_candidate_store, runtime.session_memory)
+
+            self.assertFalse(runtime.runtime_orchestrator._started)
+            self.assertIsNone(runtime.runtime_orchestrator._file_flush_worker)
+            self.assertIsNone(runtime.runtime_orchestrator._periodic_sync_worker)
+            self.assertIsNone(runtime.runtime_orchestrator._file_flush_stop_event)
+            self.assertIsNone(runtime.runtime_orchestrator._periodic_sync_stop_event)
+            with runtime.runtime_orchestrator._critical_worker_lock:
+                self.assertEqual(runtime.runtime_orchestrator._critical_workers, set())
+        finally:
+            runtime.runtime_orchestrator.shutdown_runtime()
+
     def test_globals_legacy_pointent_vers_le_bundle_global(self):
         runtime = daemon_main.get_runtime()
 
