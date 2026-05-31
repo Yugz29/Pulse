@@ -1591,6 +1591,38 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(len(captured_triggers), 1)
         self.assertEqual(captured_triggers[0].payload["path"], "/tmp/new.py")
 
+    def test_file_burst_core_planifie_pulse_diff_et_respecte_cooldown_workspace(self):
+        signals = self._signals(active_file="/tmp/Pulse/daemon/runtime_orchestrator.py")
+        self._set_runtime_analysis(signals)
+        summary = "Diff en cours : runtime_orchestrator.py (+3 -1)"
+        created_threads = []
+
+        class InlineThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.name = kwargs.get("name")
+                self.daemon = kwargs.get("daemon", False)
+                created_threads.append(self)
+
+            def start(self):
+                self.target()
+
+        event = Event("file_modified", {"path": "/tmp/Pulse/daemon/runtime_orchestrator.py"})
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator, "_process_signals"), \
+             patch("daemon.runtime_orchestrator.find_workspace_root", return_value=Path("/tmp/Pulse")) as workspace_root, \
+             patch("daemon.runtime_orchestrator.read_diff_summary", return_value=summary) as read_diff, \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: InlineThread(*a, **k)):
+            self.orchestrator._process_file_burst([event])
+            self.orchestrator._process_file_burst([event])
+
+        self.assertEqual([thread.name for thread in created_threads], ["pulse-diff"])
+        self.assertTrue(created_threads[0].daemon)
+        workspace_root.assert_called_with("/tmp/Pulse/daemon/runtime_orchestrator.py")
+        read_diff.assert_called_once_with("/tmp/Pulse")
+        self.assertEqual(self.runtime_state.get_diff_summary(), summary)
+
     # ── Verrous écran ─────────────────────────────────────────────────────────
 
     def test_screen_locked_met_fsm_et_runtime_state_en_locked(self):
