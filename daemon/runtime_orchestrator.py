@@ -1040,6 +1040,8 @@ class RuntimeOrchestrator:
                     elapsed_min = (datetime.now() - previous_sync_at).total_seconds() / 60
                     if elapsed_min < 25:
                         continue
+                if not is_lab_enabled():
+                    continue
                 self.log.info("periodic sync déclenché (diff actif, %d min de session)",
                               snapshot.present.session_duration_min)
                 memory_snapshot = self._export_memory_payload()

@@ -1055,6 +1055,97 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.mock_fact_engine.observe_session.assert_not_called()
         self.mock_fact_engine.render_for_context.assert_not_called()
 
+    def test_periodic_sync_core_ne_planifie_pas_worker_memory_sync(self):
+        class OneCycleStopEvent:
+            def __init__(self):
+                self.wait_count = 0
+
+            def wait(self, timeout):
+                self.wait_count += 1
+                return self.wait_count >= 3
+
+            def is_set(self):
+                return False
+
+        queue = LightweightLLMQueue()
+        self.orchestrator.lightweight_queue = queue
+        self._set_runtime_analysis(self._signals(session_duration_min=30))
+        self.runtime_state.set_diff_summary(
+            "/tmp/Pulse",
+            "diff --git a/daemon/runtime_orchestrator.py b/daemon/runtime_orchestrator.py",
+        )
+        scheduled = []
+
+        def run_worker_inline(*, target, args=(), kwargs=None, name=None):
+            scheduled.append(name)
+            target(*args, **(kwargs or {}))
+            return MagicMock(name=name)
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator, "_start_critical_worker", side_effect=run_worker_inline), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory, \
+             patch("daemon.memory.extractor.embeddings_enabled") as embeddings_enabled, \
+             patch("daemon.memory.extractor._get_vector_store") as get_vector_store, \
+             patch("daemon.memory.extractor._start_background_writer") as start_background, \
+             patch.object(self.orchestrator, "freeze_memory") as freeze_memory:
+            self.orchestrator._periodic_sync_loop(stop_event=OneCycleStopEvent())
+
+        self.assertEqual(scheduled, [])
+        self.session_memory.export_memory_payload.assert_not_called()
+        sync_memory.assert_not_called()
+        embeddings_enabled.assert_not_called()
+        get_vector_store.assert_not_called()
+        start_background.assert_not_called()
+        freeze_memory.assert_not_called()
+        self.assertIsNone(queue.claim_next())
+        self.summary_llm.complete.assert_not_called()
+        self.memory_store.write.assert_not_called()
+        self.memory_store.remove.assert_not_called()
+        self.memory_store.render.assert_not_called()
+        self.mock_fact_engine.observe_session.assert_not_called()
+        self.mock_fact_engine.render_for_context.assert_not_called()
+
+    def test_periodic_sync_lab_conserve_planification_worker_memory_sync(self):
+        class OneCycleStopEvent:
+            def __init__(self):
+                self.wait_count = 0
+
+            def wait(self, timeout):
+                self.wait_count += 1
+                return self.wait_count >= 3
+
+            def is_set(self):
+                return False
+
+        self._set_runtime_analysis(self._signals(session_duration_min=30))
+        self.runtime_state.set_diff_summary(
+            "/tmp/Pulse",
+            "diff --git a/daemon/runtime_orchestrator.py b/daemon/runtime_orchestrator.py",
+        )
+        memory_snapshot = {
+            "active_project": "Pulse",
+            "duration_min": 30,
+            "probable_task": "coding",
+            "top_files": ["daemon/runtime_orchestrator.py"],
+        }
+        self.session_memory.export_memory_payload.return_value = memory_snapshot
+
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch.object(self.orchestrator, "_start_critical_worker") as start_worker:
+            self.orchestrator._periodic_sync_loop(stop_event=OneCycleStopEvent())
+
+        start_worker.assert_called_once_with(
+            target=self.orchestrator._sync_memory_background,
+            args=(
+                memory_snapshot,
+                None,
+                None,
+                "screen_lock",
+                "diff --git a/daemon/runtime_orchestrator.py b/daemon/runtime_orchestrator.py",
+            ),
+            name="pulse-memory-sync",
+        )
+
     def test_sync_memory_background_ok_met_a_jour_sync_at_et_freeze(self):
         with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
              patch("daemon.runtime_orchestrator.update_memories_from_session", return_value=("journal.md", "entry-1")):
