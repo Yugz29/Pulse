@@ -19,3 +19,4 @@ Si une décision contredit un contrat, le contrat gagne sauf revalidation explic
 - `C4_MINI_MEMORY_CANDIDATES_SKELETON.md` — décision C4-mini pour le squelette review-only memory candidates.
 - `C4_MINI_MEMORY_CANDIDATES_MANUAL_CREATION.md` — décision C4-mini.1 pour une future création manuelle explicite de candidates pending.
 - `TODAY_VALUE_LOOP_PLAN.md` — décision de boucle de valeur minimale “Aujourd'hui” avant reprise C4c.2+.
+- `UI_PRODUCT_DEBUG_LAB_SPLIT.md` — décision UI pour séparer les surfaces Produit, Debug / Lab et Encoche.

@@ -33,6 +33,7 @@
 - `decisions/C4_MINI_MEMORY_CANDIDATES_SKELETON.md`
 - `decisions/C4_MINI_MEMORY_CANDIDATES_MANUAL_CREATION.md`
 - `decisions/TODAY_VALUE_LOOP_PLAN.md`
+- `decisions/UI_PRODUCT_DEBUG_LAB_SPLIT.md`
 
 ## Journaux / audits
 
