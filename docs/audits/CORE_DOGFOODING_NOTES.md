@@ -2461,3 +2461,109 @@ Avant de traiter le port `8766` ou les conflits MCP plus finement, une décision
 - le rôle exact du script `scripts/start_pulse_daemon.sh` comme première ligne de défense ;
 - le comportement souhaité du lancement direct `python -m daemon.main` ;
 - les tests et le dogfooding requis.
+
+
+---
+
+## 2026-05-31 — Today summary value-loop check
+
+### Contexte
+
+Après C4a, C4b et l'audit C4c.1, la priorité produit est temporairement réorientée vers la boucle de valeur minimale “Aujourd'hui”.
+
+Objectif terrain : vérifier si les surfaces existantes permettent déjà de répondre à la question :
+
+> Qu'est-ce que j'ai fait aujourd'hui ?
+
+Surfaces vérifiées :
+
+- `GET /today_summary`
+- `GET /feed`
+
+Commandes utilisées :
+
+```bash
+curl http://127.0.0.1:8765/today_summary | python -m json.tool
+curl http://127.0.0.1:8765/feed | python -m json.tool
+```
+
+### Observation `/today_summary`
+
+Résultat utile observé :
+
+```text
+date = 2026-05-31
+project = Pulse
+worked_min = 103
+active_min = 103
+window_count = 4
+project_count = 1
+commit_count = 24
+first_activity_at = 2026-05-31T12:04:28
+last_activity_at = 2026-05-31T14:24:26
+current_window.project = Pulse
+current_window.probable_task = writing
+current_window.activity_level = executing
+```
+
+Blocs de travail observés :
+
+```text
+12:04 -> 12:44 | Pulse | writing | editing | 39 min | 95 events
+13:05 -> 13:30 | Pulse | writing | editing | 25 min | 69 events
+13:40 -> 13:54 | Pulse | writing | editing | 14 min | 17 events
+13:58 -> 14:24 | Pulse | writing | executing | 25 min | 81 events
+```
+
+Lecture terrain : `/today_summary` donne déjà une structure exploitable de la journée. Pulse identifie correctement que le travail du jour concerne `Pulse`, avec des blocs temporels cohérents et une activité majoritairement `writing`.
+
+### Observation `/feed`
+
+Résultat utile observé : `/feed` retourne seulement une commande notable récente, `clear`.
+
+Lecture terrain : `/feed` est disponible, mais trop pauvre dans cette session pour aider réellement à reprendre le fil. Il confirme que la surface fonctionne, pas encore qu'elle apporte une valeur suffisante pour “Aujourd'hui”.
+
+### Lecture produit
+
+`/today_summary` répond partiellement à :
+
+> Pulse a-t-il compris que j'ai travaillé sur Pulse aujourd'hui ?
+
+Réponse terrain : oui, partiellement. Le projet, la durée, les blocs et la fenêtre courante sont exploitables.
+
+`/today_summary` ne répond pas encore assez à :
+
+> Qu'est-ce que j'ai réellement fait ?
+
+La surface reste trop agrégée pour expliquer le contenu du travail sans ouvrir d'autres vues ou relire les journaux.
+
+### Manques observés
+
+- fichiers principaux par bloc ;
+- commandes utiles par bloc ou journée ;
+- commits ou messages de commit ;
+- sujet lisible du bloc ;
+- lien explicite entre les blocs.
+
+### Verdict provisoire
+
+`/today_summary` est la bonne surface de départ pour la boucle de valeur minimale “Aujourd'hui”.
+
+Ne pas créer immédiatement une nouvelle route `/today`.
+
+Un enrichissement déterministe futur peut être utile si le besoin est confirmé par d'autres sessions terrain, par exemple :
+
+- `top_files` dans `/today_summary` ;
+- commandes notables utiles par journée ou par bloc ;
+- commits ou messages de commit filtrés.
+
+### Interdits maintenus
+
+- pas de Lab ;
+- pas de DayDream ;
+- pas de `FactEngine` ;
+- pas de `VectorStore` ;
+- pas de LLM summaries ;
+- pas de génération de memory candidates ;
+- pas de nouvelle mémoire ;
+- pas de nouvelle route produit tant que `/today_summary` n'a pas été évalué davantage.
