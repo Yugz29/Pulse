@@ -297,15 +297,15 @@ struct DashboardRootView: View {
                                 .foregroundStyle(.secondary)
                         }
                         ForEach(recentBlocks) { block in
+                            let visibleFiles = Array((block.topFiles ?? []).prefix(2))
+                            let hiddenFileCount = max((block.topFiles ?? []).count - visibleFiles.count, 0)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("\(dashboardAbsoluteTimestamp(block.startedAt)) → \(dashboardAbsoluteTimestamp(block.endedAt)) · \(dashboardMinutes(block.durationMin))")
+                                Text("\(dashboardShortTime(block.startedAt)) → \(dashboardShortTime(block.endedAt)) · \(dashboardMinutes(block.durationMin))")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
                                 HStack(spacing: 6) {
                                     Text(block.taskLabel)
-                                    Text("·")
-                                    Text(block.activityLabel)
                                     if let project = block.project, !project.isEmpty {
                                         Text("·")
                                         Text(project)
@@ -314,10 +314,19 @@ struct DashboardRootView: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
-                                if let files = block.topFiles, !files.isEmpty {
-                                    Text(files.prefix(3).joined(separator: " · "))
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(.tertiary)
+                                Text("Signal récent : \(block.activityLabel)")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                                if !visibleFiles.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Text(visibleFiles.joined(separator: " · "))
+                                        if hiddenFileCount > 0 {
+                                            Text("· +\(hiddenFileCount)")
+                                        }
+                                    }
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
                             }
@@ -3058,6 +3067,11 @@ private func dashboardAbsoluteTimestamp(_ raw: String?) -> String {
     return DashboardDateFormatting.absolute.string(from: date)
 }
 
+private func dashboardShortTime(_ raw: String?) -> String {
+    guard let date = dashboardDate(from: raw) else { return "—" }
+    return DashboardDateFormatting.shortTime.string(from: date)
+}
+
 private func dashboardRelativeTimestamp(_ raw: String?) -> String {
     guard let date = dashboardDate(from: raw) else { return "—" }
     let diff = Date().timeIntervalSince(date)
@@ -3131,6 +3145,14 @@ private enum DashboardDateFormatting {
         f.locale = Locale(identifier: "fr_FR")
         f.dateStyle = .medium
         f.timeStyle = .short
+        return f
+    }()
+
+    static let shortTime: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.timeZone = .current
+        f.dateFormat = "HH:mm"
         return f
     }()
 }
