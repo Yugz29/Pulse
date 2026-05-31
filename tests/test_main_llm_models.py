@@ -14,7 +14,7 @@ class TestMainLLMModels(unittest.TestCase):
     def setUp(self):
         daemon_main.runtime_state.reset_for_tests()
         daemon_main.runtime_orchestrator.reset_for_tests()
-        self.client = daemon_main.app.test_client()
+        self.client = daemon_main.get_app().test_client()
 
     def test_llm_models_reports_ready_when_online_and_model_is_selected(self):
         class _Provider:

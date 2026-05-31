@@ -18,7 +18,7 @@ class TestMainMemoryRoutes(unittest.TestCase):
         self.addCleanup(self._home_patch.stop)
         daemon_main.runtime_state.reset_for_tests()
         daemon_main.runtime_orchestrator.reset_for_tests()
-        self.client = daemon_main.app.test_client()
+        self.client = daemon_main.get_app().test_client()
         self.sessions_dir = Path(_TEST_HOME) / ".pulse" / "memory" / "sessions"
         if self.sessions_dir.exists():
             for file in self.sessions_dir.glob("*.md"):

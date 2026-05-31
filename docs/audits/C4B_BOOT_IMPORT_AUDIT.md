@@ -135,6 +135,27 @@ La dette principale reste inchangée : `runtime` et `app` sont encore créés à
 
 La prochaine étape possible est de migrer progressivement les consommateurs vers `get_runtime()` et `get_app()` avant toute tentative de lazy réel.
 
+## Mise à jour C4b.3 — migration partielle des consommateurs
+
+Une partie des consommateurs de test a été migrée vers les accessors explicites.
+
+Les clients Flask de test utilisent maintenant `get_app().test_client()` sur les principales suites full-app.
+
+Les inventaires de routes utilisent maintenant `get_app().url_map`.
+
+Le test d'import utilise `get_runtime()` et `get_app()` pour lire le type runtime / app tout en vérifiant que ces accessors retournent encore les globals existants.
+
+Les usages directs de `app` et `runtime` sont conservés uniquement dans les tests de compatibilité legacy :
+
+- vérification que `get_app()` retourne `app` ;
+- vérification que `get_runtime()` retourne `runtime` ;
+- vérification que les aliases legacy restent alignés sur `runtime` ;
+- vérification que `app` reste disponible temporairement.
+
+Les globals restent disponibles temporairement pour compatibilité.
+
+Le timing de création runtime / app à l'import reste inchangé.
+
 ## Garde-fous avant correction
 
 Tout patch boot doit :
@@ -147,8 +168,9 @@ Tout patch boot doit :
 
 ## Prochaine étape recommandée
 
-C4b.2 :
+C4b.3 :
 
-- vérifier ou préparer une frontière claire entrypoint / import ;
-- confirmer que serveur et workers ne démarrent pas à l'import ;
-- ne pas encore déplacer la création runtime globale sauf décision C4b.3.
+- continuer la migration progressive des consommateurs vers `get_runtime()` et `get_app()` ;
+- garder les globals disponibles tant que les consommateurs legacy existent ;
+- ne pas rendre les accessors lazy avant que la compatibilité soit couverte par tests ;
+- ne pas déplacer la création runtime globale sans patch C4b.3 dédié et dogfooding post-redémarrage.

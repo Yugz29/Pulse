@@ -17,7 +17,7 @@ class TestMainMcpRoutes(unittest.TestCase):
         daemon_main.runtime_orchestrator.reset_for_tests()
         mcp_handlers.reset_proposals_for_tests()
         daemon_main.bus.clear()
-        self.client = daemon_main.app.test_client()
+        self.client = daemon_main.get_app().test_client()
 
     def test_mcp_pending_returns_204_when_empty(self):
         with patch("daemon.main.get_pending_command", return_value=None):

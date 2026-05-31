@@ -35,7 +35,7 @@ class TestMainRuntimeState(unittest.TestCase):
         daemon_main.runtime_state.reset_for_tests()
         daemon_main.runtime_orchestrator.reset_for_tests()
         daemon_main.bus.clear()
-        self.client = daemon_main.app.test_client()
+        self.client = daemon_main.get_app().test_client()
 
     def tearDown(self):
         daemon_main.runtime_orchestrator.reset_for_tests()
@@ -252,7 +252,7 @@ home = Path.home()
 pulse_dir = home / ".pulse"
 routes = {
     rule.rule
-    for rule in main.app.url_map.iter_rules()
+    for rule in main.get_app().url_map.iter_rules()
     if rule.endpoint != "static"
 }
 created_paths = []
@@ -264,10 +264,10 @@ if pulse_dir.exists():
 
 print(json.dumps({
     "has_runtime": hasattr(main, "runtime"),
-    "runtime_type": type(main.runtime).__name__,
+    "runtime_type": type(main.get_runtime()).__name__,
     "get_runtime_returns_global": main.get_runtime() is main.runtime,
     "has_app": hasattr(main, "app"),
-    "app_type": type(main.app).__name__,
+    "app_type": type(main.get_app()).__name__,
     "get_app_returns_global": main.get_app() is main.app,
     "has_main_entrypoint": callable(getattr(main, "main", None)),
     "flask_run_called_on_import": flask_run.called,
@@ -326,7 +326,7 @@ print(json.dumps({
              patch.object(daemon_main.atexit, "register") as register_exit, \
              patch.object(daemon_main, "start_mcp_server") as start_mcp, \
              patch.object(daemon_main.threading, "Thread", side_effect=lambda *args, **kwargs: _DummyThread(*args, **kwargs)), \
-             patch.object(daemon_main.app, "run") as app_run:
+             patch.object(daemon_main.get_app(), "run") as app_run:
             daemon_main.main()
 
         start_services.assert_called_once_with()
@@ -422,7 +422,7 @@ print(json.dumps({
 
     def test_runtime_api_route_inventory_documents_core_debug_and_lab_surfaces(self):
         route_methods = {}
-        for rule in daemon_main.app.url_map.iter_rules():
+        for rule in daemon_main.get_app().url_map.iter_rules():
             if rule.endpoint == "static":
                 continue
             route_methods.setdefault(rule.rule, set()).update(rule.methods - {"HEAD", "OPTIONS"})
@@ -547,7 +547,7 @@ print(json.dumps({
     def test_route_inventory_documents_conditional_and_transverse_registrations(self):
         route_methods = {}
         route_endpoints = {}
-        for rule in daemon_main.app.url_map.iter_rules():
+        for rule in daemon_main.get_app().url_map.iter_rules():
             if rule.endpoint == "static":
                 continue
             route_methods.setdefault(rule.rule, set()).update(rule.methods - {"HEAD", "OPTIONS"})
@@ -564,7 +564,7 @@ print(json.dumps({
 
     def test_route_inventory_documents_assistant_probes_and_work_intent_as_non_core(self):
         route_methods = {}
-        for rule in daemon_main.app.url_map.iter_rules():
+        for rule in daemon_main.get_app().url_map.iter_rules():
             if rule.endpoint == "static":
                 continue
             route_methods.setdefault(rule.rule, set()).update(rule.methods - {"HEAD", "OPTIONS"})
@@ -726,12 +726,14 @@ print(json.dumps({
             runtime.runtime_orchestrator.shutdown_runtime()
 
     def test_globals_legacy_restent_disponibles(self):
+        self.assertIsNotNone(daemon_main.get_app())
+        self.assertIsNotNone(daemon_main.get_runtime())
         self.assertIsNotNone(daemon_main.app)
         self.assertIsNotNone(daemon_main.bus)
         self.assertIsNotNone(daemon_main.runtime_state)
         self.assertIsNotNone(daemon_main.runtime_orchestrator)
         self.assertIsNotNone(daemon_main.runtime_event_coalescer)
-        self.assertIs(daemon_main.runtime_event_coalescer, daemon_main.app.runtime_event_coalescer)
+        self.assertIs(daemon_main.runtime_event_coalescer, daemon_main.get_app().runtime_event_coalescer)
 
     def test_shutdown_draine_coalescer_avant_runtime_orchestrator(self):
         calls = []
