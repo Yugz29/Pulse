@@ -2291,3 +2291,87 @@ Aucun patch code immédiat n’est nécessaire.
 - ne pas ajouter de générateur offline sans décision séparée ;
 - ne pas présenter `accepted` ou `rejected` comme mémoire produit stable ;
 - documenter toute prochaine évolution `memory_candidates` avant implémentation.
+---
+
+## 2026-05-31 — C4b.3 lazy runtime/app post-restart check
+
+### Contexte
+
+Après l’implémentation de C4b.3-real phase 1, le daemon a été redémarré pour vérifier le comportement terrain du lazy `get_runtime()` / `get_app()`.
+
+Objectif : confirmer que le boot lazy ne crée pas de régression visible côté Core.
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+Lecture terrain : le Core reste sain après redémarrage avec lazy runtime/app.
+
+### Vérification `/state`
+
+État observé :
+
+```text
+active_app = Code
+active_file = C4B_BOOT_IMPORT_AUDIT.md
+active_project = Pulse
+activity_level = executing
+probable_task = general
+task_confidence = 0.48
+session_status = active
+```
+
+Lecture terrain : Pulse capte correctement une session de documentation / diagnostic dans VS Code et Terminal. Le scoring reste prudent, ce qui est acceptable pour une activité mixte.
+
+### Vérification `/feed`
+
+Résultat observé : le feed expose une commande terminal notable récente, `clear`.
+
+Lecture terrain : `/feed` reste disponible et conserve son rôle de sélection notable, sans devenir un journal brut complet.
+
+### Vérification `/memory/candidates`
+
+Résultat observé :
+
+```json
+{
+  "candidates": [],
+  "canonical_memory": false,
+  "count": 0,
+  "surface": "memory_candidates"
+}
+```
+
+Lecture terrain : aucune candidate mémoire n’est créée spontanément après redémarrage. La surface `memory_candidates` reste vide et séparée de la mémoire canonique.
+
+### Verdict provisoire
+
+C4b.3-real phase 1 est conforme en dogfooding post-redémarrage :
+
+- `/health/core` OK ;
+- `/state` OK ;
+- `/feed` OK ;
+- `/memory/candidates` OK ;
+- aucune candidate spontanée ;
+- aucune mémoire canonique créée ;
+- aucune régression Core visible.
+
+Point observé : `recent_sessions` expose un `stale_repair` après redémarrage, cohérent avec le comportement déjà observé pendant le dogfooding.
+
+### Suite
+
+C4b.3 peut être considéré validé côté terrain pour cette première phase lazy.
+
+Avant toute suppression des globals legacy ou des façades de compatibilité, une décision séparée devra confirmer :
+
+- les consommateurs restants ;
+- le risque Swift / tests ;
+- la stratégie de migration ;
+- les tests et le dogfooding requis.
