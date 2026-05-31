@@ -3096,3 +3096,134 @@ Le prochain travail UI ne doit pas ajouter de données backend. Les prochaines p
 - `État Pulse` contient encore des formulations techniques comme `Confiance` et `Signal live`.
 - L’encoche n’est pas encore alignée avec cette nouvelle composition produit.
 - Debug / Lab n’a pas encore reçu de traitement visuel spécifique, ce qui est accepté pour cette phase.
+
+---
+
+## 2026-05-31 — Today value-loop field session 3 intense
+
+### Contexte
+
+Session terrain représentative après séparation `Produit` / `Debug / Lab` et refonte visuelle de la surface Produit du dashboard Swift.
+
+Activité réelle observée :
+
+- travail UI autour du dashboard Produit ;
+- documentation de la décision `UI_PRODUCT_DEBUG_LAB_SPLIT` ;
+- modifications de composition dans `DashboardRootView.swift` ;
+- tests Swift ciblés ;
+- mise à jour des notes de dogfooding.
+
+Surfaces vérifiées :
+
+- `/health/core`
+- `/today_summary`
+- `/feed`
+- `/state`
+- `/memory/candidates`
+- `history | tail -30`
+
+### Vérification `/health/core`
+
+Résultat observé :
+
+```text
+status = ok
+pulse_mode = core
+experimental_enabled = false
+lab_services = not_required
+```
+
+Lecture terrain : le Core est sain. Les services Lab restent non requis.
+
+### Vérification `/today_summary`
+
+Résultat observé :
+
+```text
+worked_min = 203
+active_min = 203
+window_count = 10
+project_count = 1
+commit_count = 37
+top_tasks = writing, tests
+```
+
+Bloc principal :
+
+```text
+23:14 -> 23:58
+project = Pulse
+probable_task = writing
+activity_level = executing
+duration_min = 44
+event_count = 100
+top_files =
+  - UI_PRODUCT_DEBUG_LAB_SPLIT.md
+  - README.md
+  - DashboardRootView.swift
+  - PulseViewModelInteractionsTests.swift
+  - CORE_DOGFOODING_NOTES.md
+```
+
+Lecture terrain : le bloc permet de reconstruire clairement le travail réel sans relire toute la conversation. Il capture à la fois la décision UI, le dashboard Swift, les tests et les notes terrain.
+
+### Vérification `/feed`
+
+Résultat observé :
+
+```text
+clear
+```
+
+Lecture terrain : `/feed` est pauvre sur cette session, mais ce n'est pas bloquant pour une session UI/docs. Les commandes ne sont pas la valeur principale ici.
+
+### Vérification `/state`
+
+Résultat observé :
+
+```text
+active_app = Code
+active_file = CORE_DOGFOODING_NOTES.md
+active_project = Pulse
+probable_task = writing
+activity_level = executing
+session_duration_min = 66
+```
+
+Lecture terrain : l'état live est cohérent avec l'instant courant, mais il sert surtout à comprendre ce qui se passe maintenant. Pour reprendre le fil de la session, `/today_summary` reste plus utile.
+
+### Vérification `/memory/candidates`
+
+Résultat observé :
+
+```text
+count = 0
+canonical_memory = false
+surface = memory_candidates
+```
+
+Lecture terrain : aucune candidate spontanée n'a été créée. La surface reste non canonique et ne perturbe pas la boucle Core.
+
+### Lecture produit
+
+Cette session valide mieux la boucle “Aujourd'hui” sur une activité UI/docs significative :
+
+- la journée est structurée ;
+- les derniers blocs sont exploitables ;
+- `top_files` donne le vrai contenu de la session ;
+- `/feed` peut rester complémentaire sans être intégré à `/today_summary` ;
+- la vue Produit doit continuer à privilégier les derniers blocs plutôt qu'une unique tâche probable.
+
+La combinaison des totals, du bloc principal et des fichiers principaux suffit à comprendre le travail réel : séparation Produit / Debug-Lab, refonte du dashboard Produit, tests Swift et dogfooding.
+
+### Verdict
+
+Session terrain #3 intense validée.
+
+`/today_summary` + `top_files` suffisent à reprendre le fil sur une session UI/docs significative.
+
+Ne pas ajouter `notable_commands`.
+
+### Prochaine étape
+
+Alignement visuel de l'encoche dans une décision séparée.
