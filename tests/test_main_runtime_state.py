@@ -1,4 +1,8 @@
+import json
 import os
+from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
@@ -215,6 +219,83 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertIsNone(daemon_main.runtime_orchestrator._file_flush_worker)
         self.assertIsNone(daemon_main.runtime_orchestrator._periodic_sync_worker)
         self.assertIsNone(daemon_main.idle_presence_heartbeat._thread)
+
+    def test_import_main_documente_les_effets_de_bord_boot_actuels(self):
+        # C4b.1 audit: this documents current import-time debt; it does not fix it.
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(prefix="pulse-import-audit-home-") as temp_home:
+            env = os.environ.copy()
+            env["HOME"] = temp_home
+            env["PYTHONPATH"] = f"{repo_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+            script = """
+import json
+from pathlib import Path
+
+import daemon.main as main
+
+home = Path.home()
+pulse_dir = home / ".pulse"
+routes = {
+    rule.rule
+    for rule in main.app.url_map.iter_rules()
+    if rule.endpoint != "static"
+}
+created_paths = []
+if pulse_dir.exists():
+    created_paths = sorted(
+        str(path.relative_to(home))
+        for path in pulse_dir.rglob("*")
+    )
+
+print(json.dumps({
+    "has_runtime": hasattr(main, "runtime"),
+    "runtime_type": type(main.runtime).__name__,
+    "has_app": hasattr(main, "app"),
+    "app_type": type(main.app).__name__,
+    "pulse_dir_exists": pulse_dir.exists(),
+    "created_paths": created_paths,
+    "route_count": len(routes),
+    "has_health_core": "/health/core" in routes,
+    "has_state": "/state" in routes,
+    "has_feed": "/feed" in routes,
+    "has_memory_candidates": "/memory/candidates" in routes,
+    "orchestrator_started": main.runtime_orchestrator._started,
+    "file_flush_worker_started": main.runtime_orchestrator._file_flush_worker is not None,
+    "periodic_sync_worker_started": main.runtime_orchestrator._periodic_sync_worker is not None,
+    "idle_heartbeat_thread_started": main.idle_presence_heartbeat._thread is not None,
+}))
+"""
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                cwd=repo_root,
+                env=env,
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        created_paths = set(payload["created_paths"])
+
+        self.assertTrue(payload["has_runtime"])
+        self.assertEqual(payload["runtime_type"], "RuntimeBundle")
+        self.assertTrue(payload["has_app"])
+        self.assertEqual(payload["app_type"], "Flask")
+        self.assertTrue(payload["pulse_dir_exists"])
+        self.assertIn(".pulse/logs", created_paths)
+        self.assertTrue(any(path.endswith(".db") for path in created_paths))
+        self.assertIn(".pulse/memory/candidates.sqlite", created_paths)
+        self.assertTrue(payload["has_health_core"])
+        self.assertTrue(payload["has_state"])
+        self.assertTrue(payload["has_feed"])
+        self.assertTrue(payload["has_memory_candidates"])
+        self.assertGreater(payload["route_count"], 0)
+        self.assertFalse(payload["orchestrator_started"])
+        self.assertFalse(payload["file_flush_worker_started"])
+        self.assertFalse(payload["periodic_sync_worker_started"])
+        self.assertFalse(payload["idle_heartbeat_thread_started"])
 
     def test_start_runtime_services_delegue_a_orchestrator_start(self):
         with patch.object(daemon_main.runtime_orchestrator, "start") as start, \
