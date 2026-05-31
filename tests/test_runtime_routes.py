@@ -61,6 +61,14 @@ class _ManualTimer:
             self.callback(*self.args, **self.kwargs)
 
 
+class _DummyLightweightQueue:
+    def status(self):
+        return {"enabled": True, "pending": 0}
+
+    def claim_next(self):
+        return None
+
+
 class TestRuntimeRoutes(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
@@ -167,6 +175,32 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(route_methods["/debug/state"], {"GET"})
         self.assertEqual(route_methods["/insights"], {"GET"})
         self.assertEqual(route_methods["/event"], {"POST"})
+
+    def test_lightweight_llm_routes_are_registered_only_with_queue_integration(self):
+        app = Flask(__name__)
+
+        register_runtime_routes(
+            app,
+            bus=self.bus,
+            store=self.store,
+            runtime_state=self.runtime_state,
+            llm_unload_background=self.llm_unload_background,
+            llm_warmup_background=self.llm_warmup_background,
+            shutdown_runtime=self.shutdown_runtime,
+            lightweight_queue=_DummyLightweightQueue(),
+            apply_lightweight_llm_result=lambda **kwargs: {"ok": True, **kwargs},
+            log=self.log,
+        )
+
+        route_methods = {
+            rule.rule: rule.methods - {"HEAD", "OPTIONS"}
+            for rule in app.url_map.iter_rules()
+            if rule.endpoint != "static"
+        }
+
+        self.assertEqual(route_methods["/llm/lightweight/status"], {"GET"})
+        self.assertEqual(route_methods["/llm/lightweight/pending"], {"GET"})
+        self.assertEqual(route_methods["/llm/lightweight/result"], {"POST"})
 
     def test_daydreams_expose_etat_meme_sans_fichier(self):
         with patch("pathlib.Path.home", return_value=Path("/tmp/pulse-home")), \

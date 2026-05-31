@@ -339,6 +339,8 @@ def get_scoring_status():
 
 def _register_runtime_surface_routes(flask_app: Flask, runtime: RuntimeBundle):
     """Core, debug, daemon controls, feed, observation, and bounded runtime surfaces."""
+    # Also wires the conditional /llm/lightweight/* routes because the queue and
+    # result callback are runtime services owned by the composition root.
     return register_runtime_routes(
         flask_app,
         bus=runtime.bus,
@@ -402,6 +404,8 @@ def _register_memory_candidate_routes(flask_app: Flask, runtime: RuntimeBundle) 
 
 def _register_mcp_surface_routes(flask_app: Flask, runtime: RuntimeBundle) -> None:
     """MCP command interception and proposal history surfaces."""
+    # /scoring/status is a transverse runtime capability route exposed through
+    # this helper because MCP already owns command/scoring capability reporting.
     register_mcp_routes(
         flask_app,
         bus=runtime.bus,

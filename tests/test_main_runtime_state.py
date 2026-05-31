@@ -403,6 +403,24 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertNotIn("/memory/candidates/generate", routes)
         self.assertNotIn("POST", route_methods["/memory/candidates"])
 
+    def test_route_inventory_documents_conditional_and_transverse_registrations(self):
+        route_methods = {}
+        route_endpoints = {}
+        for rule in daemon_main.app.url_map.iter_rules():
+            if rule.endpoint == "static":
+                continue
+            route_methods.setdefault(rule.rule, set()).update(rule.methods - {"HEAD", "OPTIONS"})
+            route_endpoints[rule.rule] = rule.endpoint
+
+        self.assertEqual(route_methods["/llm/lightweight/status"], {"GET"})
+        self.assertEqual(route_methods["/llm/lightweight/pending"], {"GET"})
+        self.assertEqual(route_methods["/llm/lightweight/result"], {"POST"})
+        self.assertEqual(route_methods["/scoring/status"], {"GET"})
+        self.assertEqual(route_endpoints["/llm/lightweight/status"], "get_lightweight_status")
+        self.assertEqual(route_endpoints["/llm/lightweight/pending"], "get_lightweight_pending")
+        self.assertEqual(route_endpoints["/llm/lightweight/result"], "post_lightweight_result")
+        self.assertEqual(route_endpoints["/scoring/status"], "scoring_status")
+
     def test_create_app_expose_le_coalescer_http_pour_shutdown(self):
         runtime = daemon_main.create_runtime()
         app = daemon_main.create_app(runtime)
