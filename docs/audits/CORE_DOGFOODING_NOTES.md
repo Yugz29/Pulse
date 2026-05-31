@@ -2957,3 +2957,142 @@ La prochaine étape ne doit pas être une nouvelle donnée backend. Elle doit re
 - L’optimisation réseau ou le lazy loading par surface est hors scope.
 - Le skin visuel global du dashboard reste basique et pourra être retravaillé plus tard.
 - L’encoche n’a pas encore été mise à jour pour refléter la séparation Produit / Debug-Lab.
+
+---
+
+## 2026-05-31 — Product dashboard visual redesign check
+
+### Contexte
+
+Après la décision `UI_PRODUCT_DEBUG_LAB_SPLIT`, le dashboard Swift a été séparé en deux surfaces :
+
+- `Produit` ;
+- `Debug / Lab`.
+
+Une première passe visuelle avait surtout changé le skin sombre. Le résultat restait trop proche d’un dashboard admin/debug : grille rigide, cartes éclatées, vide important et hiérarchie produit encore faible.
+
+Un second patch UI-only a donc refondu la composition de la surface `Produit`, sans modifier le daemon, les routes, les modèles API, `/today_summary`, `/feed`, `DashboardViewModel`, l’encoche ou Debug / Lab.
+
+### Patch observé
+
+La surface `Aujourd’hui` a été réorganisée autour de trois zones principales :
+
+- un hero `Aujourd’hui` en haut ;
+- une carte centrale `Derniers blocs` ;
+- une colonne secondaire avec `État Pulse` et `Projets du jour`.
+
+Le hero regroupe maintenant :
+
+- la tâche principale du jour ;
+- le projet ;
+- l’activité récente ;
+- l’état actif ;
+- le bloc en cours ;
+- le temps travaillé ;
+- les commits ;
+- les blocs ;
+- les projets.
+
+Lecture terrain : le hero devient la source principale de lecture produit. Il donne immédiatement l’état de la journée sans obliger à lire plusieurs cartes indépendantes.
+
+### Derniers blocs
+
+La carte `Derniers blocs` devient la zone centrale de reprise du fil.
+
+Elle affiche les blocs récents avec :
+
+- heure courte ;
+- durée ;
+- tâche ;
+- projet ;
+- fichiers principaux ;
+- suffixe `+N` quand plusieurs fichiers sont masqués.
+
+Exemples visibles après patch :
+
+```text
+23:14 | 31 min | Rédaction | Pulse
+UI_PRODUCT_DEBUG_LAB_SPLIT.md · README.md · DashboardRootView.swift · +2
+
+22:52 | 8 min | Rédaction | Pulse
+TODAY_VALUE_LOOP_PLAN.md · CORE_DOGFOODING_NOTES.md
+
+20:38 | 6 min | tests | Pulse
+CORE_DOGFOODING_NOTES.md
+```
+
+Lecture terrain : cette zone répond mieux à la question produit `Qu’est-ce que j’ai fait aujourd’hui ?`. Elle raconte les sujets de travail récents sans passer par les vues debug.
+
+### Clarification `Aujourd’hui` / `Maintenant`
+
+Une confusion visuelle restait après la première refonte de composition :
+
+- le hero `Aujourd’hui` affichait déjà la tâche, le projet, l’activité récente et le bloc en cours ;
+- une carte `Maintenant` dans la colonne droite affichait aussi une interprétation live forte.
+
+Cela donnait deux lectures concurrentes du présent.
+
+Un ajustement UI-only a remplacé `Maintenant` par une carte plus passive : `État Pulse`.
+
+`État Pulse` affiche maintenant :
+
+- l’état actif ;
+- un signal live léger ;
+- la dernière mise à jour ;
+- la confiance / ambiguïté ;
+- le dernier signal.
+
+Lecture terrain : la hiérarchie est plus claire. Le hero `Aujourd’hui` porte la vérité produit principale, tandis que `État Pulse` reste un statut secondaire.
+
+### Surface Produit après refonte
+
+La surface `Produit` est maintenant plus cohérente :
+
+- `Aujourd’hui` devient une page de reprise du fil ;
+- `Derniers blocs` apporte la valeur principale ;
+- `État Pulse` ne concurrence plus le hero ;
+- `Projets du jour` reste un contexte secondaire ;
+- Debug / Lab reste séparé dans sa propre surface.
+
+Lecture terrain : le dashboard commence à ressembler à une vraie surface produit, et plus seulement à un cockpit de diagnostic assombri.
+
+### Ce qui n’a pas été changé
+
+Aucun changement n’a été fait sur :
+
+- daemon ;
+- routes ;
+- modèles API ;
+- `/today_summary` ;
+- `/feed` ;
+- `/state` ;
+- `DashboardViewModel` ;
+- encoche ;
+- Debug / Lab ;
+- memory candidates ;
+- Lab backend ;
+- LLM ;
+- DayDream ;
+- FactEngine ;
+- VectorStore.
+
+### Verdict provisoire
+
+La refonte visuelle Produit est validée côté dogfooding initial.
+
+Elle améliore fortement la lisibilité et renforce la direction produit actuelle : Pulse doit aider à reprendre le fil avant d’ajouter de nouvelles capacités intelligentes.
+
+Le prochain travail UI ne doit pas ajouter de données backend. Les prochaines pistes doivent rester visuelles ou structurelles :
+
+- vérifier le confort sur fenêtre réduite ;
+- surveiller les fichiers longs dans `Derniers blocs` ;
+- rendre les formulations comme `Confiance : Ambigu` plus naturelles plus tard ;
+- aligner l’encoche avec la nouvelle hiérarchie produit dans une décision séparée.
+
+### Points à surveiller
+
+- La page garde encore du vide vertical sur grande fenêtre.
+- La sidebar reste assez orientée outil développeur.
+- `État Pulse` contient encore des formulations techniques comme `Confiance` et `Signal live`.
+- L’encoche n’est pas encore alignée avec cette nouvelle composition produit.
+- Debug / Lab n’a pas encore reçu de traitement visuel spécifique, ce qui est accepté pour cette phase.
