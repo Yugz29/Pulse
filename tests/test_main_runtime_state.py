@@ -421,6 +421,69 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(route_endpoints["/llm/lightweight/result"], "post_lightweight_result")
         self.assertEqual(route_endpoints["/scoring/status"], "scoring_status")
 
+    def test_route_inventory_documents_assistant_probes_and_work_intent_as_non_core(self):
+        route_methods = {}
+        for rule in daemon_main.app.url_map.iter_rules():
+            if rule.endpoint == "static":
+                continue
+            route_methods.setdefault(rule.rule, set()).update(rule.methods - {"HEAD", "OPTIONS"})
+        routes = set(route_methods)
+
+        core_minimal_routes = {
+            "/ping",
+            "/health/core",
+            "/state",
+            "/event",
+            "/feed",
+        }
+        assistant_legacy_routes = {
+            "/ask",
+            "/ask/stream",
+            "/context",
+            "/llm/model",
+            "/llm/models",
+        }
+        context_probe_routes = {
+            "/context-probes/request-preview",
+            "/context-probes/requests",
+            "/context-probes/requests/<request_id>",
+            "/context-probes/requests/<request_id>/abort",
+            "/context-probes/requests/<request_id>/approve",
+            "/context-probes/requests/<request_id>/execute",
+            "/context-probes/requests/<request_id>/refuse",
+            "/context-probes/requests/<request_id>/result",
+            "/context-probes/schema",
+        }
+        work_intent_routes = {
+            "/work-intent/candidates",
+            "/work-intent/candidates/<candidate_id>/accept",
+            "/work-intent/candidates/<candidate_id>/refuse",
+        }
+
+        self.assertTrue(assistant_legacy_routes.issubset(routes))
+        self.assertTrue(context_probe_routes.issubset(routes))
+        self.assertTrue(work_intent_routes.issubset(routes))
+        self.assertTrue(assistant_legacy_routes.isdisjoint(core_minimal_routes))
+        self.assertTrue(context_probe_routes.isdisjoint(core_minimal_routes))
+        self.assertTrue(work_intent_routes.isdisjoint(core_minimal_routes))
+        self.assertEqual(route_methods["/ask"], {"POST"})
+        self.assertEqual(route_methods["/ask/stream"], {"POST"})
+        self.assertEqual(route_methods["/context"], {"GET"})
+        self.assertEqual(route_methods["/llm/model"], {"POST"})
+        self.assertEqual(route_methods["/llm/models"], {"GET"})
+        self.assertEqual(route_methods["/context-probes/schema"], {"GET"})
+        self.assertEqual(route_methods["/context-probes/request-preview"], {"POST"})
+        self.assertEqual(route_methods["/context-probes/requests"], {"GET", "POST"})
+        self.assertEqual(route_methods["/context-probes/requests/<request_id>"], {"GET"})
+        self.assertEqual(route_methods["/context-probes/requests/<request_id>/approve"], {"POST"})
+        self.assertEqual(route_methods["/context-probes/requests/<request_id>/refuse"], {"POST"})
+        self.assertEqual(route_methods["/context-probes/requests/<request_id>/abort"], {"POST"})
+        self.assertEqual(route_methods["/context-probes/requests/<request_id>/execute"], {"POST"})
+        self.assertEqual(route_methods["/context-probes/requests/<request_id>/result"], {"POST"})
+        self.assertEqual(route_methods["/work-intent/candidates"], {"GET"})
+        self.assertEqual(route_methods["/work-intent/candidates/<candidate_id>/accept"], {"POST"})
+        self.assertEqual(route_methods["/work-intent/candidates/<candidate_id>/refuse"], {"POST"})
+
     def test_lab_legacy_mutation_routes_remain_registered_but_blocked_in_core(self):
         with patch.dict(os.environ, {"PULSE_MODE": "core"}), \
              patch.object(daemon_main.memory_store, "write") as memory_write, \
@@ -486,6 +549,9 @@ class TestMainRuntimeState(unittest.TestCase):
              patch.object(daemon_main.memory_store, "usage") as memory_usage, \
              patch.object(daemon_main.runtime_orchestrator.fact_engine, "stats") as fact_stats, \
              patch.object(daemon_main.runtime_orchestrator.fact_engine, "render_for_context") as render_facts, \
+             patch("daemon.main.build_context_snapshot") as build_context_snapshot, \
+             patch.object(daemon_main.runtime_orchestrator, "get_frozen_memory") as get_frozen_memory, \
+             patch.object(daemon_main.runtime_state, "set_work_intent") as set_work_intent, \
              patch.object(daemon_main.summary_llm, "complete", create=True) as llm_complete, \
              patch("daemon.memory.daydream.get_daydream_status") as daydream_status, \
              patch("daemon.memory.vector_store.VectorStore") as vector_store:
@@ -500,6 +566,9 @@ class TestMainRuntimeState(unittest.TestCase):
         memory_usage.assert_not_called()
         fact_stats.assert_not_called()
         render_facts.assert_not_called()
+        build_context_snapshot.assert_not_called()
+        get_frozen_memory.assert_not_called()
+        set_work_intent.assert_not_called()
         llm_complete.assert_not_called()
         daydream_status.assert_not_called()
         vector_store.assert_not_called()
