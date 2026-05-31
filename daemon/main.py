@@ -453,6 +453,14 @@ app = create_app(runtime)
 runtime_event_coalescer = app.runtime_event_coalescer
 
 
+def get_runtime() -> RuntimeBundle:
+    return runtime
+
+
+def get_app() -> Flask:
+    return app
+
+
 def main() -> None:
     start_runtime_services()
     atexit.register(_shutdown_runtime)

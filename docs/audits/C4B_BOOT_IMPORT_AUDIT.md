@@ -105,6 +105,36 @@ La création runtime globale à l'import n'est pas corrigée par C4b.2.
 
 Cette dette reste pour C4b.3.
 
+## Mise à jour C4b.3-prep — accessors de compatibilité
+
+`get_runtime()` et `get_app()` existent maintenant.
+
+Ils ne sont pas encore lazy.
+
+Ils retournent les globals existants :
+
+- `get_runtime()` retourne `runtime` ;
+- `get_app()` retourne `app`.
+
+Ils ne réduisent pas encore les effets de bord d'import.
+
+Ils créent une surface de migration progressive avant toute tentative de lazy réel.
+
+Les tests vérifient que ces accessors retournent les mêmes objets que les globals.
+
+Les tests vérifient que les aliases legacy restent alignés sur le `RuntimeBundle` global.
+
+Les tests vérifient que les routes principales sont toujours présentes via `get_app().url_map`, notamment :
+
+- `/health/core` ;
+- `/state` ;
+- `/feed` ;
+- `/memory/candidates`.
+
+La dette principale reste inchangée : `runtime` et `app` sont encore créés à l'import.
+
+La prochaine étape possible est de migrer progressivement les consommateurs vers `get_runtime()` et `get_app()` avant toute tentative de lazy réel.
+
 ## Garde-fous avant correction
 
 Tout patch boot doit :

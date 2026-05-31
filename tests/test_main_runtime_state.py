@@ -265,8 +265,10 @@ if pulse_dir.exists():
 print(json.dumps({
     "has_runtime": hasattr(main, "runtime"),
     "runtime_type": type(main.runtime).__name__,
+    "get_runtime_returns_global": main.get_runtime() is main.runtime,
     "has_app": hasattr(main, "app"),
     "app_type": type(main.app).__name__,
+    "get_app_returns_global": main.get_app() is main.app,
     "has_main_entrypoint": callable(getattr(main, "main", None)),
     "flask_run_called_on_import": flask_run.called,
     "pulse_dir_exists": pulse_dir.exists(),
@@ -298,8 +300,10 @@ print(json.dumps({
 
         self.assertTrue(payload["has_runtime"])
         self.assertEqual(payload["runtime_type"], "RuntimeBundle")
+        self.assertTrue(payload["get_runtime_returns_global"])
         self.assertTrue(payload["has_app"])
         self.assertEqual(payload["app_type"], "Flask")
+        self.assertTrue(payload["get_app_returns_global"])
         self.assertTrue(payload["has_main_entrypoint"])
         self.assertFalse(payload["flask_run_called_on_import"])
         self.assertTrue(payload["pulse_dir_exists"])
@@ -384,6 +388,22 @@ print(json.dumps({
         self.assertIs(daemon_main.runtime_state, daemon_main.runtime.runtime_state)
         self.assertIs(daemon_main.llm_runtime, daemon_main.runtime.llm_runtime)
         self.assertIs(daemon_main.runtime_orchestrator, daemon_main.runtime.runtime_orchestrator)
+
+    def test_lazy_compat_accessors_return_existing_globals(self):
+        self.assertIs(daemon_main.get_runtime(), daemon_main.runtime)
+        self.assertIs(daemon_main.get_app(), daemon_main.app)
+
+    def test_get_app_preserves_core_route_inventory(self):
+        routes = {
+            rule.rule
+            for rule in daemon_main.get_app().url_map.iter_rules()
+            if rule.endpoint != "static"
+        }
+
+        self.assertIn("/health/core", routes)
+        self.assertIn("/state", routes)
+        self.assertIn("/feed", routes)
+        self.assertIn("/memory/candidates", routes)
 
     def test_create_app_enregistre_les_routes_sans_demarrer_runtime(self):
         runtime = daemon_main.create_runtime()
