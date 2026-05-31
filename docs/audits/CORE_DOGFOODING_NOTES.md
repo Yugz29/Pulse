@@ -2841,3 +2841,44 @@ Ne pas ajouter `notable_commands` dans `/today_summary` maintenant.
 ### Suite recommandée
 
 Continuer le dogfooding sur une session plus longue, idéalement avec code + tests, sans interroger Pulse trop souvent pendant le travail.
+
+
+---
+
+## 2026-05-31 — Today value-loop field session 3
+
+### Contexte
+
+Session courte de revue documentaire autour de `TODAY_VALUE_LOOP_PLAN.md`, après validation du patch `top_files`.
+
+### Observations
+
+`/health/core` est OK.
+
+`/today_summary` reste cohérent.
+
+Dernier bloc observé :
+
+```text
+22:52 -> 22:57
+project = Pulse
+probable_task = writing
+activity_level = executing
+top_files = TODAY_VALUE_LOOP_PLAN.md
+```
+
+`/state` reflète bien `TODAY_VALUE_LOOP_PLAN.md` comme fichier actif.
+
+`/feed` ne remonte que `clear`, mais ce n'est pas bloquant pour une session documentaire courte.
+
+### Lecture produit
+
+Pour une session documentaire courte, `top_files` suffit à reprendre le fil. Le bloc indique clairement que l'activité récente concernait le plan Today.
+
+### Décision provisoire
+
+Ne pas ajouter `notable_commands` maintenant.
+
+### Limite
+
+Cette session est courte. Il faut encore une session plus longue code + tests pour valider la boucle “Aujourd'hui” sur une activité plus représentative.
