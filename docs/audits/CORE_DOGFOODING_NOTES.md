@@ -2702,3 +2702,30 @@ Ne pas ajouter `notable_commands` immédiatement.
 - confirmer que les 3 derniers blocs restent lisibles ;
 - continuer le dogfooding sur au moins une ou deux sessions ;
 - commit si l'UI est correcte.
+
+
+---
+
+## 2026-05-31 — Today card visual check after compact blocks
+
+### Contexte
+
+Après le patch UI de la carte “Aujourd'hui”, la section “Derniers blocs” a été vérifiée visuellement dans l'app macOS.
+
+### Observation
+
+La carte affiche maintenant les derniers blocs avec des heures courtes `HH:mm → HH:mm`, sans date complète. La durée reste visible sur la ligne principale.
+
+La tâche et le projet sont affichés ensemble, tandis que l'activité est clarifiée comme `Signal récent`. Cette distinction rend la lecture moins ambiguë.
+
+Les fichiers principaux sont affichés sur une ligne dédiée. Le suffixe `+N` évite de surcharger la carte quand un bloc contient plus de deux fichiers.
+
+### Lecture produit
+
+Le résultat est lisible et aide davantage à reprendre le fil. Les blocs restent compacts tout en donnant des indices concrets sur le travail récent.
+
+Ne pas ajouter `notable_commands` pour l'instant.
+
+### Suite
+
+Continuer le dogfooding sur 1 ou 2 sessions réelles avant d'élargir la surface “Aujourd'hui”.
