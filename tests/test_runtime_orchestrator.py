@@ -805,7 +805,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             "Diff en cours : DashboardViewModel.swift (+10 -2), "
             "DashboardRootView.swift (+22 -4), DashboardContentView.swift (+8 -1)"
         )
-        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
              patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
              patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value=diff_summary):
             self.orchestrator._process_confirmed_commit(git_root)
@@ -873,7 +874,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 captured_threads.append(self)
             def start(self): return None
 
-        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
              patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
              patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Fonctions touchées : refresh"), \
              patch("daemon.runtime_orchestrator.read_commit_file_names", return_value=[
@@ -912,7 +914,8 @@ class TestRuntimeOrchestrator(unittest.TestCase):
                 captured_threads.append(self)
             def start(self): return None
 
-        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
              patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
              patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Diff en cours : runtime.py (+10 -2)"):
             self.orchestrator._process_confirmed_commit(git_root)
@@ -924,6 +927,35 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         snapshot = sync_thread.pulse_args[0]
         self.assertEqual(snapshot["activity_level"], "executing")
         self.assertEqual(snapshot["uncertainty_flags"], ["tool_assisted"])
+
+    def test_process_confirmed_commit_core_ne_planifie_pas_memory_sync(self):
+        git_root = Path("/tmp/Pulse")
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 19,
+            "top_files": ["plugin.json"],
+            "files_changed": 12,
+            "activity_level": "executing",
+        }
+        self.scorer.compute.return_value = self._signals(session_duration_min=19)
+
+        captured_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.name = kwargs.get("name")
+                captured_threads.append(self)
+
+            def start(self):
+                return None
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)), \
+             patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: split episode"), \
+             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Diff en cours : runtime.py (+10 -2)"):
+            self.orchestrator._process_confirmed_commit(git_root)
+
+        self.assertEqual(captured_threads, [])
 
     def test_annotate_commit_work_block_prefere_l_activite_des_fichiers_du_commit(self):
         self.session_memory.find_file_activity_window.return_value = {
@@ -987,7 +1019,7 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         messages = [call[0][0] for call in self.log.info.call_args_list if call[0]]
         self.assertTrue(any("llm_request_terminal" in msg and "status=success" in msg for msg in messages))
 
-    def test_process_signals_ne_met_pas_a_jour_memory_synced_at_avant_sync_reelle(self):
+    def test_process_signals_core_ne_planifie_pas_memory_sync_classique(self):
         signals = self._signals(session_duration_min=45)
         decision = Decision(action="silent", level=0, reason="ok", payload={})
         event = MagicMock()
@@ -996,13 +1028,117 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.decision_engine.evaluate.return_value = decision
         self.session_memory.export_memory_payload.return_value = {"active_project": "Pulse", "duration_min": 45}
 
-        class DummyThread:
-            def __init__(self, *args, **kwargs): self.started = False
-            def start(self): self.started = True
+        captured_threads = []
 
-        with patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread()):
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.started = False
+                self.name = kwargs.get("name")
+                captured_threads.append(self)
+
+            def start(self):
+                self.started = True
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)):
             self.orchestrator._process_signals(event)
+
+        self.assertEqual(captured_threads, [])
+        self.session_memory.export_memory_payload.assert_not_called()
         self.assertIsNone(self.runtime_state.get_last_memory_sync_at())
+
+    def test_process_signals_lab_conserve_memory_sync_classique(self):
+        signals = self._signals(session_duration_min=45)
+        decision = Decision(action="silent", level=0, reason="ok", payload={})
+        event = MagicMock()
+        event.type = "screen_locked"
+        self.scorer.compute.return_value = signals
+        self.decision_engine.evaluate.return_value = decision
+        memory_snapshot = {"active_project": "Pulse", "duration_min": 45}
+        self.session_memory.export_memory_payload.return_value = memory_snapshot
+
+        captured_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.started = False
+                self.name = kwargs.get("name")
+                captured_threads.append(self)
+
+            def start(self):
+                self.started = True
+
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)):
+            self.orchestrator._process_signals(event)
+
+        self.assertEqual([thread.name for thread in captured_threads], ["pulse-memory-sync"])
+        self.assertEqual(captured_threads[0].pulse_args, (memory_snapshot, None, None, "screen_lock", None))
+        self.assertIsNone(self.runtime_state.get_last_memory_sync_at())
+
+    def test_process_signals_boundary_core_ne_planifie_pas_memory_sync(self):
+        lifecycle_transition = MagicMock()
+        lifecycle_transition.boundary_detected = True
+        lifecycle_transition.boundary_reason = "idle"
+        lifecycle_transition.sleep_minutes = 31
+        lifecycle_transition.should_start_new_session = False
+        lifecycle_transition.state = "active"
+        event = MagicMock()
+        event.type = "app_activated"
+        self.scorer.compute.return_value = self._signals(session_duration_min=12)
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        self.session_memory.export_memory_payload.return_value = {"active_project": "Pulse", "duration_min": 12}
+
+        captured_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                captured_threads.append(self)
+
+            def start(self):
+                return None
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator._session_fsm, "observe_recent_events", return_value=lifecycle_transition), \
+             patch.object(self.orchestrator, "_should_sync_memory", return_value=False), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)):
+            self.orchestrator._process_signals(event)
+
+        self.assertEqual(captured_threads, [])
+        self.session_memory.export_memory_payload.assert_called_once()
+
+    def test_process_signals_boundary_lab_conserve_memory_sync(self):
+        lifecycle_transition = MagicMock()
+        lifecycle_transition.boundary_detected = True
+        lifecycle_transition.boundary_reason = "idle"
+        lifecycle_transition.sleep_minutes = 31
+        lifecycle_transition.should_start_new_session = False
+        lifecycle_transition.state = "active"
+        event = MagicMock()
+        event.type = "app_activated"
+        self.scorer.compute.return_value = self._signals(session_duration_min=12)
+        self.decision_engine.evaluate.return_value = Decision(action="silent", level=0, reason="ok", payload={})
+        memory_snapshot = {"active_project": "Pulse", "duration_min": 12}
+        self.session_memory.export_memory_payload.return_value = memory_snapshot
+
+        captured_threads = []
+
+        class DummyThread:
+            def __init__(self, *args, **kwargs):
+                self.name = kwargs.get("name")
+                captured_threads.append(self)
+
+            def start(self):
+                return None
+
+        with patch.dict("os.environ", {"PULSE_MODE": "lab"}), \
+             patch.object(self.orchestrator._session_fsm, "observe_recent_events", return_value=lifecycle_transition), \
+             patch.object(self.orchestrator, "_should_sync_memory", return_value=False), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DummyThread(*a, **k)):
+            self.orchestrator._process_signals(event)
+
+        self.assertEqual([thread.name for thread in captured_threads], ["pulse-memory-sync"])
+        self.assertEqual(captured_threads[0].pulse_args, (memory_snapshot, None, None, "screen_lock", None))
 
     def test_sync_memory_background_skipped_ne_freeze_pas(self):
         with patch.dict("os.environ", {"PULSE_MODE": "core"}), \

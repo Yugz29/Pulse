@@ -1174,7 +1174,8 @@ class RuntimeOrchestrator:
             commit_scope_files=commit_scope_files,
             git_root=git_root,
         )
-        self._schedule_memory_sync(snapshot, self.summary_llm, commit_msg, "commit", diff_summary)
+        if is_lab_enabled():
+            self._schedule_memory_sync(snapshot, self.summary_llm, commit_msg, "commit", diff_summary)
 
     @staticmethod
     def _append_uncertainty_flag(snapshot: dict, flag: str) -> None:
@@ -1314,7 +1315,7 @@ class RuntimeOrchestrator:
             try:
                 snapshot = self._export_memory_payload()
                 resume_memory_payload = snapshot
-                if snapshot.get("duration_min", 0) >= 5:
+                if is_lab_enabled() and snapshot.get("duration_min", 0) >= 5:
                     self._schedule_memory_sync(snapshot, None, None, "screen_lock")
             except Exception as exc:
                 self.log.warning("session boundary flush échouée : %s", exc)
@@ -1387,7 +1388,7 @@ class RuntimeOrchestrator:
                 memory_payload=resume_memory_payload,
                 event_type="resume_after_pause",
             )
-        if should_sync:
+        if is_lab_enabled() and should_sync:
             snapshot = self._export_memory_payload()
             llm = self._summary_llm_for(trigger_event.type, present)
             trigger_map = {
