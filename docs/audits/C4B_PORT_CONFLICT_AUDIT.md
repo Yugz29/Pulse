@@ -31,9 +31,9 @@ Sources lues :
 - `docs/audits/CORE_DOGFOODING_NOTES.md`
 - `docs/decisions/C4B_LAZY_RUNTIME_CREATION_DECISION.md`
 
-## Comportement de `main()`
+## Comportement de `main()` avant C4b.4b
 
-`main()` appelle actuellement `get_app()` avant de lancer les services et avant `app.run(...)`.
+Avant C4b.4b, `main()` appelait `get_app()` avant de lancer les services et avant `app.run(...)`.
 
 Effet :
 
@@ -46,7 +46,7 @@ Effet :
 - deux threads daemon sont lancés pour watchdog et deferred startup ;
 - `app.run(host="127.0.0.1", port=8765, ...)` tente ensuite le bind HTTP principal.
 
-Conclusion : en lancement direct `python -m daemon.main`, le runtime, l'app, les routes et certains workers sont déjà créés avant que Flask échoue si le port 8765 est occupé.
+Conclusion avant C4b.4b : en lancement direct `python -m daemon.main`, le runtime, l'app, les routes et certains workers étaient déjà créés avant que Flask échoue si le port 8765 était occupé.
 
 ## Port 8765 déjà occupé
 
@@ -104,9 +104,47 @@ C4b.3 réduit déjà les effets de bord avant exécution :
 - les fichiers `.pulse` ne sont créés qu'au premier accès runtime/app ;
 - le lancement via script peut refuser 8765 avant d'exécuter Python.
 
-Limite :
+Limite avant C4b.4b :
 
 - une fois `main()` appelé, le bind 8765 reste tenté après création runtime/app et démarrage des services.
+
+## Mise à jour C4b.4b — préflight 8765 dans `main()`
+
+`daemon/main.py` possède maintenant un préflight local du port HTTP principal.
+
+`main()` appelle `_is_port_available("127.0.0.1", 8765)` avant :
+
+- `get_app()` ;
+- `get_runtime()` indirect ;
+- `start_runtime_services()` ;
+- `start_mcp_server()` ;
+- threads watchdog / deferred startup ;
+- `app.run(...)`.
+
+Si 8765 est indisponible :
+
+- une erreur claire est loggée ;
+- `main()` lève `SystemExit(1)` ;
+- runtime / app ne sont pas matérialisés par `main()` ;
+- les services runtime ne sont pas démarrés ;
+- le serveur MCP SSE secondaire n'est pas démarré ;
+- les threads watchdog / deferred startup ne sont pas créés ;
+- `Flask.run` n'est pas appelé.
+
+Si 8765 est disponible, l'ordre historique est conservé après le préflight :
+
+1. `get_app()` ;
+2. `start_runtime_services()` ;
+3. `atexit.register(...)` ;
+4. `start_mcp_server(host="127.0.0.1", port=8766)` ;
+5. threads watchdog / deferred startup ;
+6. `app.run(host="127.0.0.1", port=8765, ...)`.
+
+Le script `scripts/start_pulse_daemon.sh` reste la première ligne de défense pour les chemins Swift / LaunchAgent.
+
+Le chemin direct `python -m daemon.main` est maintenant mieux protégé contre les effets de bord si 8765 est déjà occupé.
+
+Dogfooding post-redémarrage reste requis.
 
 ## Tests existants
 
@@ -114,16 +152,16 @@ Tests existants pertinents :
 
 - `tests/test_main_runtime_state.py` vérifie que l'import ne lance pas `Flask.run` et ne démarre pas les workers ;
 - les tests full-app vérifient que `get_app()` expose les routes attendues ;
-- les tests ne couvrent pas encore un échec réel de bind 8765 ;
+- les tests unitaires C4b.4b vérifient le préflight 8765 sans occuper de vrai port système ;
 - les tests ne couvrent pas encore le comportement de `scripts/start_pulse_daemon.sh` en cas de ports occupés.
 
-Aucun test nouveau n'est ajouté dans cet audit pour éviter de simuler de façon fragile des ports système, `lsof`, `curl` et `launchctl`.
+Les tests C4b.4b utilisent des mocks / fakes pour éviter de simuler de façon fragile des ports système, `lsof`, `curl` et `launchctl`.
 
 ## Risques confirmés
 
 Risques confirmés :
 
-- lancement direct `python -m daemon.main` peut créer runtime/app/stores et démarrer des services avant d'échouer sur 8765 ;
+- le lancement direct `python -m daemon.main` est mieux protégé, mais le préflight reste un check best-effort avant `Flask.run` ;
 - un conflit 8766 est toléré et peut rendre le serveur MCP SSE secondaire indisponible ;
 - le script crée `~/.pulse/logs` avant les checks de port, pour pouvoir logger les refus ;
 - le comportement du script dépend de `curl` et `lsof` ;
@@ -131,19 +169,19 @@ Risques confirmés :
 
 ## Prochaine correction possible
 
-Correction C4b.4 candidate :
+Correction C4b.4 restante candidate :
 
-- ajouter un préflight de port 8765 dans `main()` avant `get_app()` et `start_runtime_services()` ;
 - garder le script comme première ligne de défense ;
 - conserver les ports existants ;
 - ne pas changer les routes ni les payloads ;
-- ajouter des tests unitaires en patchant le préflight plutôt qu'en occupant réellement un port ;
+- envisager un traitement plus explicite du port 8766 si nécessaire ;
+- envisager des tests du script de lancement avec commandes mockées si cela reste stable ;
 - documenter le dogfooding après redémarrage daemon.
 
 ## Décision provisoire
 
-Le comportement actuel est acceptable temporairement parce que les chemins Swift et LaunchAgent passent par `start_pulse_daemon.sh`.
+Le comportement actuel est amélioré pour le lancement direct et reste protégé par le script pour les chemins Swift / LaunchAgent.
 
-La dette reste ouverte pour les lancements directs.
+La dette restante concerne surtout le caractère best-effort du préflight et le cas 8766.
 
-Ne pas corriger brutalement dans cet audit.
+Ne pas ajouter de correction plus large sans dogfooding.

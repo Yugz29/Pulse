@@ -3,6 +3,7 @@ import importlib
 import logging
 import re
 import os
+import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -491,6 +492,16 @@ def get_runtime_event_coalescer():
     return get_app().runtime_event_coalescer
 
 
+def _is_port_available(host: str, port: int) -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
 def __getattr__(name: str):
     if name == "runtime":
         return get_runtime()
@@ -507,6 +518,15 @@ def __getattr__(name: str):
 
 
 def main() -> None:
+    host = "127.0.0.1"
+    port = 8765
+    if not _is_port_available(host, port):
+        log.error(
+            "Pulse daemon startup aborted: port %s is already in use before runtime/app initialization.",
+            port,
+        )
+        raise SystemExit(1)
+
     flask_app = get_app()
     start_runtime_services()
     atexit.register(_shutdown_runtime)
@@ -514,7 +534,7 @@ def main() -> None:
     threading.Thread(target=_watchdog_loop, daemon=True, name="pulse-watchdog").start()
     threading.Thread(target=_deferred_startup, daemon=True, name="pulse-startup").start()
     log.info("✓ Pulse daemon démarré sur http://127.0.0.1:8765 (threaded=True)")
-    flask_app.run(host="127.0.0.1", port=8765, debug=False, threaded=True)
+    flask_app.run(host=host, port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

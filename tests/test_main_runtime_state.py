@@ -347,13 +347,16 @@ print(json.dumps({
 
     def test_main_entrypoint_delegue_le_lancement_executable_sans_changer_le_boot(self):
         _DummyThread.instances = []
-        with patch.object(daemon_main, "start_runtime_services") as start_services, \
+        app = daemon_main.get_app()
+        with patch.object(daemon_main, "_is_port_available", return_value=True) as port_available, \
+             patch.object(daemon_main, "start_runtime_services") as start_services, \
              patch.object(daemon_main.atexit, "register") as register_exit, \
              patch.object(daemon_main, "start_mcp_server") as start_mcp, \
              patch.object(daemon_main.threading, "Thread", side_effect=lambda *args, **kwargs: _DummyThread(*args, **kwargs)), \
-             patch.object(daemon_main.get_app(), "run") as app_run:
+             patch.object(app, "run") as app_run:
             daemon_main.main()
 
+        port_available.assert_called_once_with("127.0.0.1", 8765)
         start_services.assert_called_once_with()
         register_exit.assert_called_once_with(daemon_main._shutdown_runtime)
         start_mcp.assert_called_once_with(host="127.0.0.1", port=8766)
@@ -365,6 +368,70 @@ print(json.dumps({
         self.assertTrue(all(thread.kwargs.get("daemon") is True for thread in _DummyThread.instances))
         self.assertTrue(all(thread.started for thread in _DummyThread.instances))
         app_run.assert_called_once_with(host="127.0.0.1", port=8765, debug=False, threaded=True)
+
+    def test_main_entrypoint_stoppe_avant_runtime_si_port_http_indisponible(self):
+        _DummyThread.instances = []
+        with patch.object(daemon_main, "_is_port_available", return_value=False) as port_available, \
+             patch.object(daemon_main, "get_app") as get_app, \
+             patch.object(daemon_main, "start_runtime_services") as start_services, \
+             patch.object(daemon_main.atexit, "register") as register_exit, \
+             patch.object(daemon_main, "start_mcp_server") as start_mcp, \
+             patch.object(daemon_main.threading, "Thread", side_effect=lambda *args, **kwargs: _DummyThread(*args, **kwargs)):
+            with self.assertRaises(SystemExit) as raised:
+                daemon_main.main()
+
+        self.assertEqual(raised.exception.code, 1)
+        port_available.assert_called_once_with("127.0.0.1", 8765)
+        get_app.assert_not_called()
+        start_services.assert_not_called()
+        register_exit.assert_not_called()
+        start_mcp.assert_not_called()
+        self.assertEqual(_DummyThread.instances, [])
+
+    def test_port_preflight_uses_bind_without_leaking_socket(self):
+        class _Socket:
+            def __init__(self):
+                self.options = []
+                self.bound = None
+                self.closed = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                self.closed = True
+
+            def setsockopt(self, *args):
+                self.options.append(args)
+
+            def bind(self, address):
+                self.bound = address
+
+        fake_socket = _Socket()
+        with patch.object(daemon_main.socket, "socket", return_value=fake_socket) as socket_factory:
+            available = daemon_main._is_port_available("127.0.0.1", 8765)
+
+        self.assertTrue(available)
+        socket_factory.assert_called_once_with(daemon_main.socket.AF_INET, daemon_main.socket.SOCK_STREAM)
+        self.assertEqual(fake_socket.bound, ("127.0.0.1", 8765))
+        self.assertTrue(fake_socket.closed)
+
+    def test_port_preflight_returns_false_on_bind_error(self):
+        class _Socket:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def setsockopt(self, *args):
+                pass
+
+            def bind(self, address):
+                raise OSError("in use")
+
+        with patch.object(daemon_main.socket, "socket", return_value=_Socket()):
+            self.assertFalse(daemon_main._is_port_available("127.0.0.1", 8765))
 
     def test_start_runtime_services_delegue_a_orchestrator_start(self):
         with patch.object(daemon_main.runtime_orchestrator, "start") as start, \
