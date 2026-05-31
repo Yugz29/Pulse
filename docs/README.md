@@ -32,6 +32,7 @@
 - `decisions/C4B_RUNTIME_CREATION_TIMING.md`
 - `decisions/C4_MINI_MEMORY_CANDIDATES_SKELETON.md`
 - `decisions/C4_MINI_MEMORY_CANDIDATES_MANUAL_CREATION.md`
+- `decisions/TODAY_VALUE_LOOP_PLAN.md`
 
 ## Journaux / audits
 
