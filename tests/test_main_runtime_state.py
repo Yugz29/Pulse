@@ -17,6 +17,19 @@ from daemon.core.signal_scorer import Signals
 from daemon.runtime_state import WorkIntent
 
 
+class _DummyThread:
+    instances = []
+
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.started = False
+        self.__class__.instances.append(self)
+
+    def start(self):
+        self.started = True
+
+
 class TestMainRuntimeState(unittest.TestCase):
     def setUp(self):
         daemon_main.runtime_state.reset_for_tests()
@@ -230,8 +243,10 @@ class TestMainRuntimeState(unittest.TestCase):
             script = """
 import json
 from pathlib import Path
+from unittest.mock import patch
 
-import daemon.main as main
+with patch("flask.Flask.run") as flask_run:
+    import daemon.main as main
 
 home = Path.home()
 pulse_dir = home / ".pulse"
@@ -252,6 +267,8 @@ print(json.dumps({
     "runtime_type": type(main.runtime).__name__,
     "has_app": hasattr(main, "app"),
     "app_type": type(main.app).__name__,
+    "has_main_entrypoint": callable(getattr(main, "main", None)),
+    "flask_run_called_on_import": flask_run.called,
     "pulse_dir_exists": pulse_dir.exists(),
     "created_paths": created_paths,
     "route_count": len(routes),
@@ -283,6 +300,8 @@ print(json.dumps({
         self.assertEqual(payload["runtime_type"], "RuntimeBundle")
         self.assertTrue(payload["has_app"])
         self.assertEqual(payload["app_type"], "Flask")
+        self.assertTrue(payload["has_main_entrypoint"])
+        self.assertFalse(payload["flask_run_called_on_import"])
         self.assertTrue(payload["pulse_dir_exists"])
         self.assertIn(".pulse/logs", created_paths)
         self.assertTrue(any(path.endswith(".db") for path in created_paths))
@@ -296,6 +315,27 @@ print(json.dumps({
         self.assertFalse(payload["file_flush_worker_started"])
         self.assertFalse(payload["periodic_sync_worker_started"])
         self.assertFalse(payload["idle_heartbeat_thread_started"])
+
+    def test_main_entrypoint_delegue_le_lancement_executable_sans_changer_le_boot(self):
+        _DummyThread.instances = []
+        with patch.object(daemon_main, "start_runtime_services") as start_services, \
+             patch.object(daemon_main.atexit, "register") as register_exit, \
+             patch.object(daemon_main, "start_mcp_server") as start_mcp, \
+             patch.object(daemon_main.threading, "Thread", side_effect=lambda *args, **kwargs: _DummyThread(*args, **kwargs)), \
+             patch.object(daemon_main.app, "run") as app_run:
+            daemon_main.main()
+
+        start_services.assert_called_once_with()
+        register_exit.assert_called_once_with(daemon_main._shutdown_runtime)
+        start_mcp.assert_called_once_with(host="127.0.0.1", port=8766)
+        self.assertEqual(len(_DummyThread.instances), 2)
+        self.assertEqual(
+            {thread.kwargs.get("name") for thread in _DummyThread.instances},
+            {"pulse-watchdog", "pulse-startup"},
+        )
+        self.assertTrue(all(thread.kwargs.get("daemon") is True for thread in _DummyThread.instances))
+        self.assertTrue(all(thread.started for thread in _DummyThread.instances))
+        app_run.assert_called_once_with(host="127.0.0.1", port=8765, debug=False, threaded=True)
 
     def test_start_runtime_services_delegue_a_orchestrator_start(self):
         with patch.object(daemon_main.runtime_orchestrator, "start") as start, \

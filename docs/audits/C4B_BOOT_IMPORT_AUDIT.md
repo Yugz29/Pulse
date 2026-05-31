@@ -87,6 +87,24 @@ La prochaine étape recommandée est C4b.2 — entrypoint guard minimal.
 
 La correction du timing runtime doit rester pour C4b.3 ou pour une décision dédiée.
 
+## Mise à jour C4b.2 — entrypoint explicite
+
+`main()` existe maintenant comme entrypoint exécutable explicite.
+
+`if __name__ == "__main__"` délègue à `main()`.
+
+Le lancement serveur / workers reste inchangé.
+
+L'import de `daemon.main` ne lance toujours pas `Flask.run`.
+
+Le test d'import vérifie que `Flask.run` n'est pas appelé à l'import.
+
+Un test dédié vérifie que `main()` délègue le lancement exécutable sans changer le boot.
+
+La création runtime globale à l'import n'est pas corrigée par C4b.2.
+
+Cette dette reste pour C4b.3.
+
 ## Garde-fous avant correction
 
 Tout patch boot doit :

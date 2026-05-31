@@ -453,7 +453,7 @@ app = create_app(runtime)
 runtime_event_coalescer = app.runtime_event_coalescer
 
 
-if __name__ == "__main__":
+def main() -> None:
     start_runtime_services()
     atexit.register(_shutdown_runtime)
     start_mcp_server(host="127.0.0.1", port=8766)
@@ -461,3 +461,7 @@ if __name__ == "__main__":
     threading.Thread(target=_deferred_startup, daemon=True, name="pulse-startup").start()
     log.info("✓ Pulse daemon démarré sur http://127.0.0.1:8765 (threaded=True)")
     app.run(host="127.0.0.1", port=8765, debug=False, threaded=True)
+
+
+if __name__ == "__main__":
+    main()
