@@ -13,5 +13,6 @@ Si une décision contredit un contrat, le contrat gagne sauf revalidation explic
 - `C4A_NON_CORE_REGISTERED_SURFACES.md` — décision C4a.7 sur les surfaces non-Core enregistrées temporairement.
 - `C4A_ROUTE_SURFACES_CLOSURE.md` — clôture C4a route registration / surface boundaries.
 - `C4B_MAIN_BOOT_SAFETY_PLAN.md` — décision C4b pour le cleanup minimal du boot `main.py`.
+- `C4B_RUNTIME_CREATION_TIMING.md` — décision C4b.3 sur le timing de création runtime.
 - `C4_MINI_MEMORY_CANDIDATES_SKELETON.md` — décision C4-mini pour le squelette review-only memory candidates.
 - `C4_MINI_MEMORY_CANDIDATES_MANUAL_CREATION.md` — décision C4-mini.1 pour une future création manuelle explicite de candidates pending.
