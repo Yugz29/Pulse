@@ -59,10 +59,13 @@ class ContextProbeRedactionResult:
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 _URL_RE = re.compile(r"\bhttps?://[^\s<>'\"]+", re.IGNORECASE)
 _HOME_PATH_RE = re.compile(r"/Users/[^/\s]+")
-_SSH_KEY_RE = re.compile(
-    r"-----BEGIN (?:(?:OPENSSH|RSA|DSA|EC) )?PRIVATE KEY-----.*?-----END (?:(?:OPENSSH|RSA|DSA|EC) )?PRIVATE KEY-----",
-    re.DOTALL,
-)
+_SSH_PRIVATE_KEY_LABELS = frozenset({
+    "PRIVATE KEY",
+    "OPENSSH PRIVATE KEY",
+    "RSA PRIVATE KEY",
+    "DSA PRIVATE KEY",
+    "EC PRIVATE KEY",
+})
 _ENV_SECRET_RE = re.compile(
     r"\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY|PRIVATE_KEY)[A-Z0-9_]*)\s*=\s*([^\s]+)",
     re.IGNORECASE,
@@ -87,11 +90,7 @@ def redact_context_probe_value(
 
     redacted = raw
 
-    redacted, changed = _sub_with_flag(
-        redacted,
-        _SSH_KEY_RE,
-        "[REDACTED_SSH_PRIVATE_KEY]",
-    )
+    redacted, changed = _redact_ssh_private_keys(redacted)
     if changed:
         flags.append(ContextProbeRedactionFlag.SSH_KEY)
 
@@ -159,6 +158,45 @@ def redact_context_probe_values(
 def _sub_with_flag(text: str, pattern: re.Pattern[str], replacement: str) -> tuple[str, bool]:
     updated, count = pattern.subn(replacement, text)
     return updated, count > 0
+
+
+def _redact_ssh_private_keys(text: str) -> tuple[str, bool]:
+    begin_prefix = "-----BEGIN "
+    marker_suffix = "-----"
+    chunks: list[str] = []
+    cursor = 0
+    changed = False
+
+    while True:
+        begin = text.find(begin_prefix, cursor)
+        if begin < 0:
+            chunks.append(text[cursor:])
+            break
+
+        label_start = begin + len(begin_prefix)
+        label_end = text.find(marker_suffix, label_start)
+        if label_end < 0:
+            chunks.append(text[cursor:])
+            break
+
+        label = text[label_start:label_end]
+        if label not in _SSH_PRIVATE_KEY_LABELS:
+            chunks.append(text[cursor:label_end + len(marker_suffix)])
+            cursor = label_end + len(marker_suffix)
+            continue
+
+        end_marker = f"-----END {label}-----"
+        end = text.find(end_marker, label_end + len(marker_suffix))
+        if end < 0:
+            chunks.append(text[cursor:])
+            break
+
+        chunks.append(text[cursor:begin])
+        chunks.append("[REDACTED_SSH_PRIVATE_KEY]")
+        cursor = end + len(end_marker)
+        changed = True
+
+    return "".join(chunks), changed
 
 
 def _dedupe_flags(flags: Iterable[ContextProbeRedactionFlag]) -> tuple[ContextProbeRedactionFlag, ...]:

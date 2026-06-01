@@ -74,6 +74,32 @@ secret-key-content
     assert "secret-key-content" not in result.redacted_value
 
 
+def test_redact_private_key_inside_untrusted_long_value_without_regex_backtracking():
+    raw = (
+        "before "
+        "-----BEGIN RSA PRIVATE KEY-----\n"
+        + ("secret-key-content\n" * 200)
+        + "-----END RSA PRIVATE KEY-----"
+        " after"
+    )
+
+    result = redact_context_probe_value(raw, max_chars=1000)
+
+    assert result.redacted_value == "before [REDACTED_SSH_PRIVATE_KEY] after"
+    assert result.flags == (ContextProbeRedactionFlag.SSH_KEY,)
+    assert "secret-key-content" not in result.redacted_value
+
+
+def test_unclosed_private_key_marker_on_long_value_is_truncated_without_ssh_flag():
+    raw = "-----BEGIN PRIVATE KEY-----\n" + ("x " * 2500)
+
+    result = redact_context_probe_value(raw, max_chars=80)
+
+    assert result.redacted_value.startswith("-----BEGIN PRIVATE KEY-----")
+    assert result.redacted_value.endswith("…")
+    assert result.flags == (ContextProbeRedactionFlag.TRUNCATED,)
+
+
 def test_redact_truncates_long_value_after_redaction():
     result = redact_context_probe_value("hello " + "x" * 20, max_chars=10)
 
