@@ -8,10 +8,10 @@ Si un contrat contredit une doc Lab ou archive, le contrat gagne. Si deux contra
 
 ## Sommaire
 
-- `OBSERVATION_CONTRACT.md` — observation locale, filtrage, bruit, événements.
-- `INTERPRETATION_CONTRACT.md` — signaux, scoring prudent, incertitude.
-- `SESSION_CONTRACT.md` — sessions, lock, idle, lifecycle.
-- `MINIMAL_MEMORY_CONTRACT.md` — mémoire minimale Core.
-- `PROPOSAL_CONTRACT.md` — propositions contrôlées / MCP.
+- `observation.md` — observation locale, filtrage, bruit, événements.
+- `interpretation.md` — signaux, scoring prudent, incertitude.
+- `session.md` — sessions, lock, idle, lifecycle.
+- `minimal-memory.md` — mémoire minimale Core.
+- `proposal.md` — propositions contrôlées / MCP.
 
 Les contrats mémoire/apprentissage futurs sont hors parcours public tant que Lab/R7 est gelé. Les copies locales éventuelles vivent sous `docs/private/memory/` et ne doivent pas être ajoutées au repo public.

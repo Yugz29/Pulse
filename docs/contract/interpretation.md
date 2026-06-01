@@ -1,4 +1,4 @@
-# Contrat d'interpretation Pulse
+# Interpretation Contract
 
 Etat courant au moment de R3a Core Reset. Ce document decrit le comportement qui existe aujourd'hui. Ce n'est pas une architecture cible et il n'introduit aucun nouveau comportement.
 

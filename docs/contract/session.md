@@ -1,4 +1,4 @@
-# Contrat session Pulse
+# Session Contract
 
 Etat courant au moment de R4a Core Reset. Ce document decrit le comportement qui existe aujourd'hui. Ce n'est pas une architecture cible et il n'introduit aucun nouveau comportement.
 

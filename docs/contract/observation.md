@@ -1,4 +1,4 @@
-# Contrat d’observation Pulse
+# Observation Contract
 
 État courant au moment de R2a Core Reset. Ce document décrit le comportement runtime qui existe aujourd’hui. Ce n’est pas une architecture cible et il n’introduit aucun nouveau comportement.
 

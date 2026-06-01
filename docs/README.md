@@ -10,11 +10,11 @@
 
 ## Contrats
 
-- `contract/OBSERVATION_CONTRACT.md`
-- `contract/INTERPRETATION_CONTRACT.md`
-- `contract/SESSION_CONTRACT.md`
-- `contract/MINIMAL_MEMORY_CONTRACT.md`
-- `contract/PROPOSAL_CONTRACT.md`
+- `contract/observation.md`
+- `contract/interpretation.md`
+- `contract/session.md`
+- `contract/minimal-memory.md`
+- `contract/proposal.md`
 
 ## Décisions
 

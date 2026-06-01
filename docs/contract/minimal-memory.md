@@ -1,4 +1,4 @@
-# Contrat memoire minimale Pulse
+# Minimal Memory Contract
 
 Etat courant au moment de R5a Core Reset. Ce document decrit le comportement existant. Ce n'est pas une architecture cible et il n'introduit aucun nouveau comportement.
 

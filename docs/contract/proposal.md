@@ -1,4 +1,4 @@
-# Contrat propositions controlees Pulse
+# Proposal Contract
 
 État courant au moment de R6e Core Reset. Ce document décrit le comportement existant. Ce n'est pas une architecture cible et il n'introduit aucun nouveau comportement.
 
