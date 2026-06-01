@@ -58,6 +58,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS' \
             -derivedDataPath /tmp/PulseDerivedData \
+            CODE_SIGNING_ALLOWED=NO \
             clean build
 
       - name: Perform CodeQL Analysis
