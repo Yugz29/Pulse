@@ -100,6 +100,29 @@ def test_unclosed_private_key_marker_on_long_value_is_truncated_without_ssh_flag
     assert result.flags == (ContextProbeRedactionFlag.TRUNCATED,)
 
 
+def test_long_untrusted_value_is_bounded_before_regex_scan():
+    raw = ("safe " * 900) + "TOKEN=secret-after-limit"
+
+    result = redact_context_probe_value(raw, max_chars=-1)
+
+    assert result.redacted_value.endswith("…")
+    assert "secret-after-limit" not in result.redacted_value
+    assert result.flags == (ContextProbeRedactionFlag.TRUNCATED,)
+
+
+def test_long_untrusted_value_still_redacts_secret_before_bound():
+    raw = "OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456 " + ("safe " * 900)
+
+    result = redact_context_probe_value(raw, max_chars=120)
+
+    assert "sk-" not in result.redacted_value
+    assert result.redacted_value.startswith("OPENAI_API_KEY=[REDACTED_SECRET]")
+    assert result.flags == (
+        ContextProbeRedactionFlag.ENV_SECRET,
+        ContextProbeRedactionFlag.TRUNCATED,
+    )
+
+
 def test_redact_truncates_long_value_after_redaction():
     result = redact_context_probe_value("hello " + "x" * 20, max_chars=10)
 

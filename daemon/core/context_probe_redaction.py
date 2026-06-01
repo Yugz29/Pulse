@@ -73,6 +73,7 @@ _ENV_SECRET_RE = re.compile(
 _TOKEN_RE = re.compile(
     r"\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|xox[baprs]-[A-Za-z0-9-]{16,}|[A-Za-z0-9_-]{32,})\b"
 )
+_REDACTION_INPUT_LIMIT = 4096
 
 
 def redact_context_probe_value(
@@ -89,6 +90,10 @@ def redact_context_probe_value(
         return _result("", original=raw, flags=flags)
 
     redacted = raw
+    input_truncated = False
+    if len(redacted) > _REDACTION_INPUT_LIMIT:
+        redacted = redacted[:_REDACTION_INPUT_LIMIT]
+        input_truncated = True
 
     redacted, changed = _redact_ssh_private_keys(redacted)
     if changed:
@@ -136,6 +141,10 @@ def redact_context_probe_value(
 
     redacted = redacted.strip()
 
+    if input_truncated and (max_chars < 0 or len(redacted) <= max_chars):
+        redacted = redacted.rstrip() + "…"
+        flags.append(ContextProbeRedactionFlag.TRUNCATED)
+
     if max_chars >= 0 and len(redacted) > max_chars:
         redacted = redacted[:max_chars].rstrip() + "…"
         flags.append(ContextProbeRedactionFlag.TRUNCATED)
@@ -156,8 +165,10 @@ def redact_context_probe_values(
 
 
 def _sub_with_flag(text: str, pattern: re.Pattern[str], replacement: str) -> tuple[str, bool]:
-    updated, count = pattern.subn(replacement, text)
-    return updated, count > 0
+    scan_text = text[:_REDACTION_INPUT_LIMIT]
+    suffix = text[_REDACTION_INPUT_LIMIT:]
+    updated, count = pattern.subn(replacement, scan_text)
+    return updated + suffix, count > 0
 
 
 def _redact_ssh_private_keys(text: str) -> tuple[str, bool]:
