@@ -2,10 +2,10 @@
 
 ## Statut
 
-- Audit et suivi C4c.1 a C4c.10.
+- Audit et suivi C4c.1 a C4c.12.
 - C4c.1 a cartographie les services Core/Lab instancies, lazy, gated ou toleres.
-- C4c.2 a C4c.10 ont cible les workers runtime, surtout `pulse-memory-sync`, `pulse-diff` et `pulse-prepare-resume-card`.
-- Aucune modification Swift, UI dashboard, `/today_summary`, `/feed` ou memory candidates n'a ete faite dans C4c.2-C4c.10.
+- C4c.2 a C4c.12 ont cible les workers runtime, surtout `pulse-memory-sync`, `pulse-diff`, `pulse-prepare-resume-card` et `pulse-commit-watch`.
+- Aucune modification Swift, UI dashboard, `/today_summary`, `/feed` ou memory candidates n'a ete faite dans C4c.2-C4c.12.
 - Le comportement Lab doit rester conserve.
 
 ## Pourquoi cet audit existe
@@ -33,6 +33,7 @@ Tests documentaires ajoutes pendant C4c :
 - tests C4c.3/C4c.5 sur le gating de `pulse-memory-sync` en Core et la conservation Lab
 - `test_file_burst_core_planifie_pulse_diff_et_respecte_cooldown_workspace`
 - `test_resume_card_preparee_core_est_deterministe_et_consommee_sans_lab`
+- `test_commit_editmsg_core_planifie_commit_watch_deduplique_et_ne_sync_pas_memory`
 
 ## Services crees par `create_runtime()`
 
@@ -60,7 +61,7 @@ Tests documentaires ajoutes pendant C4c :
 
 Ces creations ont lieu seulement quand `get_runtime()` est appele. Elles n'ont plus lieu a l'import de `daemon.main`.
 
-## Workers et lifecycle apres C4c.10
+## Workers et lifecycle apres C4c.12
 
 `create_runtime()` :
 
@@ -90,7 +91,7 @@ Le heartbeat idle cree :
 
 - `pulse-idle-heartbeat`.
 
-## Classification workers apres C4c.10
+## Classification workers apres C4c.12
 
 ### Core strict
 
@@ -102,7 +103,7 @@ Le heartbeat idle cree :
 ### Core toleres
 
 - `pulse-diff` : declenche par file burst apres detection workspace ; lit git en arriere-plan et alimente le contexte.
-- `pulse-commit-watch` : declenche sur `COMMIT_EDITMSG` ; reste a auditer en C4c.11.
+- `pulse-commit-watch` : declenche sur `COMMIT_EDITMSG` ; lit HEAD/metadata git et confirme les commits en Core sans memory sync.
 - `pulse-prepare-resume-card` : prepare une resume card deterministe au `screen_locked`.
 - `pulse-resume-card` : worker d'emission differee possible, conserve mais non utilise par le chemin normal actuel quand `should_wait_for_llm=False`.
 - `pulse-startup` : startup differee mixte ; ses parties DayDream/facts/LLM restent conditionnelles ou gated.
@@ -114,7 +115,7 @@ Le heartbeat idle cree :
 - `pulse-daydream-scheduler` : planifie seulement en Lab.
 - `pulse-daydream` : execute seulement via chemins Lab.
 
-## Progression C4c.2 a C4c.10
+## Progression C4c.2 a C4c.12
 
 ### C4c.2 — Periodic sync audit
 
@@ -220,7 +221,80 @@ Test documentaire ajoute :
 - un evenement `resume_card` est publie ;
 - le payload prepare est vide apres emission.
 
-## Etat actuel apres C4c.10
+### C4c.11 — `pulse-commit-watch` audit
+
+`pulse-commit-watch` demarre en Core sur un evenement `COMMIT_EDITMSG`.
+
+Declencheur :
+
+- event type `file_modified` ou `file_created` ;
+- path contenant `/COMMIT_EDITMSG` ;
+- orchestrateur non paused ;
+- ecran non locked ;
+- evenement non filtre par `_should_ignore_event()`.
+
+`COMMIT_EDITMSG` reste `runtime_relevant=True` malgre sa classification fichier `technical_noise`. Cela permet au runtime de detecter une livraison de commit sans scorer le fichier `.git` comme activite de code normale.
+
+Le worker est deduplique par git root via `_pending_commit_watch`.
+
+Donnees lues :
+
+- path `COMMIT_EDITMSG` ;
+- git root ;
+- `.git/HEAD` et refs ;
+- commit message ;
+- timestamp HEAD ;
+- diff HEAD compact ;
+- fichiers du commit en fallback ;
+- runtime snapshot ;
+- session payload ;
+- fenetre d'activite fichier.
+
+Commandes git/subprocess :
+
+- `git show -s --format=%ct HEAD` ;
+- `git show HEAD --format=format: -U2` ;
+- `git show --name-only --format=format: --diff-filter=ACDMRTUXB HEAD`.
+
+En Core :
+
+- met a jour `_last_head_sha` ;
+- construit un snapshot commit enrichi ;
+- peut rafraichir les signaux runtime ;
+- ne planifie plus `pulse-memory-sync` apres C4c.5 ;
+- ne touche pas `MemoryStore`, `FactEngine`, `VectorStore`, LLM ou memory candidates.
+
+En Lab :
+
+- peut declencher le pipeline memoire avance via memory sync.
+
+Classification : Core tolere / Produit, pas Core strict, pas Lab, pas Debug.
+
+Risques :
+
+- subprocess git ;
+- chemins, fichiers et message de commit potentiellement sensibles ;
+- cout IO ;
+- bruit si `COMMIT_EDITMSG` est touche sans commit reel, mitige par la confirmation HEAD.
+
+### C4c.12 — `pulse-commit-watch` test
+
+Test documentaire ajoute :
+
+- `test_commit_editmsg_core_planifie_commit_watch_deduplique_et_ne_sync_pas_memory`.
+
+Le test verifie en Core :
+
+- `handle_event(file_modified COMMIT_EDITMSG)` planifie `pulse-commit-watch` ;
+- le worker est nomme correctement ;
+- le second evenement immediat du meme repo est deduplique ;
+- le commit peut etre confirme avec HEAD mocke ;
+- aucun `pulse-memory-sync` n'est cree ;
+- aucun chemin `MemoryStore`, `FactEngine`, `VectorStore` ou LLM n'est appele.
+
+Le test mocke les acces git et ne lance pas de vrai subprocess.
+
+## Etat actuel apres C4c.12
 
 La frontiere memory-sync Core/Lab est plus propre :
 
@@ -232,11 +306,19 @@ La frontiere memory-sync Core/Lab est plus propre :
 Les workers Core toleres encore presents servent principalement la reprise du fil :
 
 - `pulse-diff` fournit un resume local compact du diff ;
+- `pulse-commit-watch` observe les livraisons de commit et construit un snapshot commit enrichi ;
 - `pulse-prepare-resume-card` prepare une carte deterministe ;
-- `pulse-resume-card` reste un chemin d'emission differee possible ;
-- `pulse-commit-watch` reste a auditer.
+- `pulse-resume-card` reste un chemin d'emission differee possible.
 
-Les patchs C4c.2-C4c.10 n'ont pas modifie Swift, UI, dashboard, `/today_summary`, `/feed`, memory candidates ou les contrats Lab.
+Les workers Core toleres principaux sont maintenant audites/testes :
+
+- `pulse-diff` ;
+- `pulse-prepare-resume-card` ;
+- `pulse-commit-watch`.
+
+Les risques restants sont surtout le cout et la sensibilite des donnees locales, pas une contamination Lab.
+
+Les patchs C4c.2-C4c.12 n'ont pas modifie Swift, UI, dashboard, `/today_summary`, `/feed`, memory candidates ou les contrats Lab.
 
 ## Surfaces dediees separees
 
@@ -297,28 +379,24 @@ Ces routes restent enregistrees pour compatibilite, mais elles ne doivent pas de
 
 ## Risques restants
 
-- `pulse-commit-watch` reste a auditer : declencheur, donnees lues, donnees produites, cout et classification Core/Lab.
-- `pulse-diff` reste un subprocess git en Core, avec cooldown par workspace.
-- `pulse-prepare-resume-card` garde un payload en memoire jusqu'a expiration ou consommation.
 - `pulse-startup` reste mixte, meme si ses parties Lab sont gated.
+- Le warmup heavy LLM eventuel reste a surveiller si l'environnement/policy l'active explicitement.
+- `pulse-diff` et `pulse-commit-watch` restent des chemins subprocess/IO Core toleres.
+- `pulse-prepare-resume-card` garde un payload en memoire jusqu'a expiration ou consommation.
 - Les workers Core toleres doivent rester testes et surveilles pour eviter une derive vers des effets de bord Lab.
+- Il faut maintenant decider si C4c peut etre cloture ou s'il reste un audit cible a faire.
 
 ## Decision provisoire
 
 C4c confirme que le Core ne depend pas directement des surfaces Lab pour `/health/core`, `/state`, `/feed` et `memory_candidates`.
 
-Apres C4c.10, la dette principale n'est plus la creation de `pulse-memory-sync` en Core par les flux normaux. Elle se deplace vers les workers Core toleres, surtout ceux qui lisent le workspace ou gardent du contexte temporaire.
+Apres C4c.12, la dette principale n'est plus la creation de `pulse-memory-sync` en Core par les flux normaux. Elle se deplace vers les workers Core toleres, surtout ceux qui lisent le workspace ou gardent du contexte temporaire.
 
 ## Prochaine etape recommandee
 
-C4c.11 : audit-only sur `pulse-commit-watch`.
+Deux options restent ouvertes :
 
-Points a documenter :
+- cloturer C4c si la cartographie actuelle suffit pour Core reset ;
+- ou faire un audit cible `pulse-startup` avant cloture.
 
-- declencheur exact ;
-- donnees lues ;
-- donnees produites ;
-- surfaces consommatrices ;
-- cout et subprocess eventuels ;
-- classification Core strict / Core tolere / Lab ;
-- tests existants et gaps documentaires.
+Si une derniere passe est retenue, C4c.14 devrait etre audit-only sur `pulse-startup` : declencheur, operations au boot differe, gates Lab, heavy LLM warmup eventuel, cout et tests existants.
