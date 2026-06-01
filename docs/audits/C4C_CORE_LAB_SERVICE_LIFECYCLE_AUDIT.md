@@ -2,10 +2,10 @@
 
 ## Statut
 
-- Audit et suivi C4c.1 a C4c.12.
+- Audit et suivi C4c.1 a C4c.14.
 - C4c.1 a cartographie les services Core/Lab instancies, lazy, gated ou toleres.
-- C4c.2 a C4c.12 ont cible les workers runtime, surtout `pulse-memory-sync`, `pulse-diff`, `pulse-prepare-resume-card` et `pulse-commit-watch`.
-- Aucune modification Swift, UI dashboard, `/today_summary`, `/feed` ou memory candidates n'a ete faite dans C4c.2-C4c.12.
+- C4c.2 a C4c.14 ont cible les workers runtime, surtout `pulse-memory-sync`, `pulse-diff`, `pulse-prepare-resume-card`, `pulse-commit-watch` et `pulse-startup`.
+- Aucune modification Swift, UI dashboard, `/today_summary`, `/feed` ou memory candidates n'a ete faite dans C4c.2-C4c.14.
 - Le comportement Lab doit rester conserve.
 
 ## Pourquoi cet audit existe
@@ -61,7 +61,7 @@ Tests documentaires ajoutes pendant C4c :
 
 Ces creations ont lieu seulement quand `get_runtime()` est appele. Elles n'ont plus lieu a l'import de `daemon.main`.
 
-## Workers et lifecycle apres C4c.12
+## Workers et lifecycle apres C4c.14
 
 `create_runtime()` :
 
@@ -91,7 +91,7 @@ Le heartbeat idle cree :
 
 - `pulse-idle-heartbeat`.
 
-## Classification workers apres C4c.12
+## Classification workers apres C4c.14
 
 ### Core strict
 
@@ -106,7 +106,7 @@ Le heartbeat idle cree :
 - `pulse-commit-watch` : declenche sur `COMMIT_EDITMSG` ; lit HEAD/metadata git et confirme les commits en Core sans memory sync.
 - `pulse-prepare-resume-card` : prepare une resume card deterministe au `screen_locked`.
 - `pulse-resume-card` : worker d'emission differee possible, conserve mais non utilise par le chemin normal actuel quand `should_wait_for_llm=False`.
-- `pulse-startup` : startup differee mixte ; ses parties DayDream/facts/LLM restent conditionnelles ou gated.
+- `pulse-startup` : startup differee mixte / Core toleree ; ses parties DayDream/facts restent Lab-gated et heavy LLM warmup reste env-gated.
 - warmup heavy LLM eventuel : seulement si l'environnement/policy l'active explicitement.
 
 ### Lab only par flux normal
@@ -115,7 +115,7 @@ Le heartbeat idle cree :
 - `pulse-daydream-scheduler` : planifie seulement en Lab.
 - `pulse-daydream` : execute seulement via chemins Lab.
 
-## Progression C4c.2 a C4c.12
+## Progression C4c.2 a C4c.14
 
 ### C4c.2 — Periodic sync audit
 
@@ -294,7 +294,80 @@ Le test verifie en Core :
 
 Le test mocke les acces git et ne lance pas de vrai subprocess.
 
-## Etat actuel apres C4c.12
+### C4c.14 — `pulse-startup` audit
+
+`pulse-startup` est cree dans `daemon.main.main()`.
+
+Il demarre apres :
+
+- port HTTP disponible ;
+- `get_app()` ;
+- `start_runtime_services()` ;
+- `atexit.register(_shutdown_runtime)` ;
+- MCP ;
+- `pulse-watchdog`.
+
+Le thread appelle `_deferred_startup()`, puis `get_runtime().runtime_orchestrator.deferred_startup()`.
+
+Operations Core :
+
+- `time.sleep(0.2)` ;
+- `llm_runtime.load_persisted_models()` ;
+- `RestartManager.load()` ;
+- possible `RestartManager.apply(...)` ;
+- possible `recover_missed_commits(...)` ;
+- `memory_store.purge_expired()` ;
+- `session_memory.purge_old_events(keep_hours=48)` ;
+- `freeze_memory()` en snapshot Core-safe.
+
+Operations Lab gated :
+
+- `FactEngine.archive_legacy_facts()` ;
+- `FactEngine.decay_all()` ;
+- `_mark_missed_daydream_pending()` ;
+- `pulse-daydream-scheduler` ;
+- `pulse-daydream`.
+
+Operations env/policy :
+
+- heavy LLM warmup via `PULSE_HEAVY_LLM_AUTOWARM` ;
+- desactive par defaut ;
+- si active, peut appeler provider/warmup et publier `llm_loading` / `llm_ready`.
+
+Effets de bord en Core :
+
+- lecture settings runtime LLM ;
+- possible mutation modele selectionne en memoire ;
+- lecture restart state ;
+- possible restauration session FSM/session memory ;
+- purge `MemoryStore` legacy ;
+- purge `session.db`, WAL checkpoint, `VACUUM` ;
+- mise a jour `_frozen_memory` en memoire ;
+- recovery de commits manques pouvant ecrire un journal deterministe via `update_memories_from_session(...)`.
+
+Classification : `pulse-startup` est mixte / Core tolere, pas Core strict, pas Lab only. Facts et DayDream sont Lab-gated. Heavy LLM warmup est env-gated.
+
+Risques :
+
+- maintenance legacy en Core ;
+- recovery commit pouvant ecrire via `update_memories_from_session(...)` ;
+- effets de bord disque au startup ;
+- warmup LLM si env activee.
+
+Tests existants :
+
+- entrypoint demarre `pulse-startup` ;
+- deferred startup load models/purge sans warmup par defaut ;
+- Core ne lance pas facts maintenance ;
+- Lab lance facts maintenance ;
+- Core ne planifie pas DayDream ;
+- Lab garde DayDream actif ;
+- autowarm provider si env activee ;
+- restart repair et commit recovery separes ;
+- `freeze_memory` Core exclut facts/memoire legacy ;
+- missed commits fallback deterministe.
+
+## Etat actuel apres C4c.14
 
 La frontiere memory-sync Core/Lab est plus propre :
 
@@ -308,17 +381,19 @@ Les workers Core toleres encore presents servent principalement la reprise du fi
 - `pulse-diff` fournit un resume local compact du diff ;
 - `pulse-commit-watch` observe les livraisons de commit et construit un snapshot commit enrichi ;
 - `pulse-prepare-resume-card` prepare une carte deterministe ;
-- `pulse-resume-card` reste un chemin d'emission differee possible.
+- `pulse-resume-card` reste un chemin d'emission differee possible ;
+- `pulse-startup` assure la maintenance differee de boot, avec des branches Lab/env gatees et des effets legacy Core toleres.
 
-Les workers Core toleres principaux sont maintenant audites/testes :
+Les workers Core toleres principaux sont maintenant audites/testes ou audites :
 
 - `pulse-diff` ;
 - `pulse-prepare-resume-card` ;
-- `pulse-commit-watch`.
+- `pulse-commit-watch` ;
+- `pulse-startup`.
 
 Les risques restants sont surtout le cout et la sensibilite des donnees locales, pas une contamination Lab.
 
-Les patchs C4c.2-C4c.12 n'ont pas modifie Swift, UI, dashboard, `/today_summary`, `/feed`, memory candidates ou les contrats Lab.
+Les patchs C4c.2-C4c.14 n'ont pas modifie Swift, UI, dashboard, `/today_summary`, `/feed`, memory candidates ou les contrats Lab.
 
 ## Surfaces dediees separees
 
@@ -379,24 +454,25 @@ Ces routes restent enregistrees pour compatibilite, mais elles ne doivent pas de
 
 ## Risques restants
 
-- `pulse-startup` reste mixte, meme si ses parties Lab sont gated.
+- `pulse-startup` est maintenant audite et classe mixte / Core tolere.
+- La cloture C4c doit explicitement accepter ou reporter la maintenance legacy startup.
+- La dette principale restante devient le statut du recovery journal deterministe en Core, pas une contamination Lab active.
 - Le warmup heavy LLM eventuel reste a surveiller si l'environnement/policy l'active explicitement.
 - `pulse-diff` et `pulse-commit-watch` restent des chemins subprocess/IO Core toleres.
 - `pulse-prepare-resume-card` garde un payload en memoire jusqu'a expiration ou consommation.
 - Les workers Core toleres doivent rester testes et surveilles pour eviter une derive vers des effets de bord Lab.
-- Il faut maintenant decider si C4c peut etre cloture ou s'il reste un audit cible a faire.
 
 ## Decision provisoire
 
 C4c confirme que le Core ne depend pas directement des surfaces Lab pour `/health/core`, `/state`, `/feed` et `memory_candidates`.
 
-Apres C4c.12, la dette principale n'est plus la creation de `pulse-memory-sync` en Core par les flux normaux. Elle se deplace vers les workers Core toleres, surtout ceux qui lisent le workspace ou gardent du contexte temporaire.
+Apres C4c.14, la dette principale n'est plus la creation de `pulse-memory-sync` en Core par les flux normaux. Elle se deplace vers l'acceptation explicite des workers Core toleres, surtout `pulse-startup` et son recovery journal deterministe.
 
 ## Prochaine etape recommandee
 
-Deux options restent ouvertes :
+C4c closure decision :
 
-- cloturer C4c si la cartographie actuelle suffit pour Core reset ;
-- ou faire un audit cible `pulse-startup` avant cloture.
-
-Si une derniere passe est retenue, C4c.14 devrait etre audit-only sur `pulse-startup` : declencheur, operations au boot differe, gates Lab, heavy LLM warmup eventuel, cout et tests existants.
+- acter que les principaux workers Core toleres sont audites/testes ;
+- acter que la frontiere memory-sync Core/Lab est nettoyee ;
+- accepter temporairement ou reporter explicitement le cleanup futur de `pulse-startup` / recovery legacy ;
+- ne pas creer de nouvelle capacite Core a partir des surfaces Lab restantes.
