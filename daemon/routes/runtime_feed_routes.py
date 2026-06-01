@@ -89,7 +89,7 @@ def register_feed_routes(
                     **daydream_memory_metadata(),
                 })
             except Exception:
-                log.exception("Failed to read DayDream file")
+                log.warning("Failed to read DayDream file")
         return jsonify({"daydreams": result, "status": _public_daydream_status(get_daydream_status())})
 
     @app.route("/today_summary")
