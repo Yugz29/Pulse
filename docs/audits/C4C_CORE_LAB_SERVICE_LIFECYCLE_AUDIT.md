@@ -468,6 +468,32 @@ C4c confirme que le Core ne depend pas directement des surfaces Lab pour `/healt
 
 Apres C4c.14, la dette principale n'est plus la creation de `pulse-memory-sync` en Core par les flux normaux. Elle se deplace vers l'acceptation explicite des workers Core toleres, surtout `pulse-startup` et son recovery journal deterministe.
 
+## Validation post-redemarrage apres cloture C4c
+
+Apres C4c.15 et la decision de cloture C4c, le daemon a ete redemarre et les checks cibles sont restes verts.
+
+Tests relances :
+
+- `./.venv/bin/python -m pytest tests/test_runtime_orchestrator.py tests/test_main_runtime_state.py tests/test_runtime_lifecycle.py -q` : 157 passed ;
+- `./.venv/bin/python -m pytest tests/test_runtime_routes.py tests/memory/test_session.py tests/routes/test_runtime_state_payloads.py -q` : 190 passed ;
+- `git diff --check` : OK.
+
+Checks runtime observes :
+
+- `/health/core` : `status=ok`, `pulse_mode=core`, `experimental_enabled=false`, `lab_services=not_required` ;
+- `/today_summary` : `worked_min=27`, `commit_count=10`, projet `Pulse`, blocs coherents autour de `CORE_DOGFOODING_NOTES.md`, `test_runtime_orchestrator.py`, `runtime_orchestrator.py` et un bloc tests court sans `top_files` ;
+- `/feed` : expose la commande pytest complete comme commande notable reussie ;
+- `/memory/candidates` : `count=0`, `canonical_memory=false`.
+
+Lecture :
+
+- Core sain apres redemarrage ;
+- tests cibles C4c et routes/session passants ;
+- `/today_summary` coherent ;
+- `/feed` complete les blocs terminal/tests ;
+- aucune memory candidate spontanee ;
+- pas de signe de reactivation Lab.
+
 ## Prochaine etape recommandee
 
 C4c closure decision :
