@@ -353,7 +353,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         dashboardVM?.stopPolling()
     }
 
-    private func toggleDashboard() {
+    @MainActor private func toggleDashboard() {
         if dashboardWindow == nil {
             let vm = DashboardViewModel(
                 bridge: bridge,

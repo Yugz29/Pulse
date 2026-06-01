@@ -1,10 +1,10 @@
 import SwiftUI
 
-private func serviceHealthIcon(vm: PulseViewModel) -> String {
+@MainActor private func serviceHealthIcon(vm: PulseViewModel) -> String {
     vm.serviceStatus.iconName
 }
 
-private func serviceHealthColor(vm: PulseViewModel) -> Color {
+@MainActor private func serviceHealthColor(vm: PulseViewModel) -> Color {
     vm.serviceStatus.color
 }
 
