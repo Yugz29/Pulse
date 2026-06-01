@@ -1703,7 +1703,7 @@ def _commit_item_replacement_bodies(body: str, commit_items: List[Dict[str, Any]
 def _commit_item_id(message: Any, delivered_at: Any = None) -> str:
     message_text = _redact_memory_text(message).strip()
     delivered_text = str(delivered_at or "").strip()
-    digest = hashlib.sha1(f"{message_text}\0{delivered_text}".encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(f"{message_text}\0{delivered_text}".encode("utf-8")).hexdigest()[:16]
     return f"commit-item-{digest}"
 
 

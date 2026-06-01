@@ -100,6 +100,44 @@ class TestExtractor(unittest.TestCase):
         extractor_module._COOLDOWN_FILE = self._orig_cooldown_file
         self.tmpdir.cleanup()
 
+    def test_commit_item_id_est_deterministe(self):
+        first = extractor_module._commit_item_id(
+            "fix(memory): stabilize commit item id",
+            "2026-06-01T10:00:00",
+        )
+        second = extractor_module._commit_item_id(
+            "fix(memory): stabilize commit item id",
+            "2026-06-01T10:00:00",
+        )
+
+        self.assertEqual(first, second)
+        self.assertTrue(first.startswith("commit-item-"))
+        self.assertEqual(len(first.removeprefix("commit-item-")), 16)
+
+    def test_commit_item_id_change_quand_l_entree_change(self):
+        first = extractor_module._commit_item_id(
+            "fix(memory): stabilize commit item id",
+            "2026-06-01T10:00:00",
+        )
+        second = extractor_module._commit_item_id(
+            "fix(memory): stabilize commit item id",
+            "2026-06-01T10:01:00",
+        )
+
+        self.assertNotEqual(first, second)
+
+    def test_commit_item_id_for_item_conserve_un_id_existant(self):
+        item = {
+            "commit_item_id": "commit-item-existing",
+            "message": "fix(memory): stabilize commit item id",
+            "delivered_at": "2026-06-01T10:00:00",
+        }
+
+        self.assertEqual(
+            extractor_module._commit_item_id_for_item(item),
+            "commit-item-existing",
+        )
+
     def test_update_memories_cree_projects_et_index(self):
         update_memories_from_session(
             {
