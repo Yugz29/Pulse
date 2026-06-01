@@ -4,18 +4,22 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from daemon.core.path_safety import resolve_observed_path
+
 GIT_CONTEXT_TIMEOUT_SEC = 0.5
 
 
 def find_git_root(path: str | Path) -> Path | None:
     try:
-        candidate = Path(path).expanduser()
+        candidate = resolve_observed_path(path)
+        if candidate is None:
+            return None
         start = candidate if candidate.is_dir() else candidate.parent
         result = _run_git(["git", "rev-parse", "--show-toplevel"], cwd=start)
         if result is None:
             return None
         root = result.strip()
-        return Path(root) if root else None
+        return resolve_observed_path(root)
     except Exception:
         return None
 
@@ -77,9 +81,12 @@ def _parse_porcelain_counts(output: str) -> tuple[int, int, int]:
 
 def _run_git(args: list[str], *, cwd: Path) -> str | None:
     try:
+        safe_cwd = resolve_observed_path(cwd)
+        if safe_cwd is None:
+            return None
         result = subprocess.run(
             args,
-            cwd=str(cwd),
+            cwd=str(safe_cwd),
             capture_output=True,
             text=True,
             timeout=GIT_CONTEXT_TIMEOUT_SEC,

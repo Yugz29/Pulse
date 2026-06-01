@@ -70,6 +70,14 @@ def test_git_context_returns_none_when_git_unavailable():
         assert read_git_context("/tmp/not-git") is None
 
 
+def test_git_context_rejects_path_outside_observed_roots():
+    with patch("daemon.core.git_context.subprocess.run") as run:
+        assert find_git_root("/etc/passwd") is None
+        assert read_git_context("/etc/passwd") is None
+
+    run.assert_not_called()
+
+
 def test_git_context_returns_none_on_timeout():
     with patch("daemon.core.git_context.Path.is_dir", return_value=True), \
          patch("daemon.core.git_context.subprocess.run", side_effect=TimeoutExpired("git", 0.5)):

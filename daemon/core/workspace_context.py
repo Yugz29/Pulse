@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+from daemon.core.path_safety import resolve_observed_path
+
 
 _STANDARD_PROJECT_CHILD_DIRS = {
     "src",
@@ -58,8 +60,8 @@ def find_workspace_root(file_path: Optional[str]) -> Optional[Path]:
     if not file_path:
         return None
 
-    path = Path(file_path)
-    if not path.is_absolute():
+    path = resolve_observed_path(file_path)
+    if path is None:
         return None
 
     start = path if path.is_dir() else path.parent
@@ -83,7 +85,7 @@ def extract_project_name(file_path: Optional[str]) -> Optional[str]:
     name = root.name.strip()
     if not _is_plausible_project_root(root):
         return None
-    original_path = Path(file_path) if file_path else None
+    original_path = resolve_observed_path(file_path)
     if original_path and original_path.suffix and name == original_path.name:
         return None
     return name or None

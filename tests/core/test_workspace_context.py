@@ -76,6 +76,12 @@ class TestWorkspaceContext(unittest.TestCase):
                 self.assertIsNone(find_workspace_root(file_path))
                 self.assertIsNone(extract_project_name(file_path))
 
+    def test_path_traversal_outside_observed_roots_returns_none(self):
+        file_path = "/tmp/workspace/../../etc/passwd"
+
+        self.assertIsNone(find_workspace_root(file_path))
+        self.assertIsNone(extract_project_name(file_path))
+
     def test_standard_child_dir_parent_must_be_plausible(self):
         for file_path in ("/src/handler.py", "/tmp/src/handler.py"):
             with self.subTest(file_path=file_path):

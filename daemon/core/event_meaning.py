@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from daemon.core.file_classifier import classify_file_type
+from daemon.core.path_safety import resolve_observed_path
 
 
 _BUS_FILE_EVENT_TYPES: frozenset[str] = frozenset({
@@ -295,11 +296,14 @@ def is_pulse_internal_path(path: str) -> bool:
     if not path:
         return False
     try:
-        p = Path(path).expanduser().resolve()
+        p = resolve_observed_path(path)
+        if p is None:
+            return False
+        p = p.resolve(strict=False)
         pulse_home = (Path.home() / ".pulse").resolve()
         return p == pulse_home or pulse_home in p.parents
     except Exception:
-        return "/.pulse/" in str(path) or str(path).endswith("/.pulse")
+        return False
 
 
 def _is_screenshot_path(path: str) -> bool:

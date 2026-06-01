@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from daemon.core.event_meaning import EventMeaningPolicy
+from daemon.core.event_meaning import EventMeaningPolicy, is_pulse_internal_path
 
 
 def test_lock_screen_event_publishes_but_is_not_runtime_relevant():
@@ -106,6 +106,10 @@ def test_pulse_internal_path_is_filtered():
     assert decision.file_significance == "technical_noise"
     assert decision.publish_to_bus is False
     assert decision.runtime_relevant is False
+
+
+def test_pulse_internal_path_rejects_unsafe_absolute_path():
+    assert is_pulse_internal_path("/etc/.pulse/facts.db") is False
 
 
 def test_clipboard_payload_strips_content():
