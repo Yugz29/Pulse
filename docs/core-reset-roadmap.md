@@ -49,10 +49,10 @@ Objectifs principaux :
 
 ## Documentation publique utile
 
-- `CORE_RESET_VALIDATION_SUMMARY.md`
+- `core-reset-validation.md`
 - `contract/`
 - `decisions/`
-- `TESTING.md`
+- `testing.md`
 
 ## Phase actuelle : observation / stabilisation
 

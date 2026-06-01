@@ -2,9 +2,9 @@
 
 ## Parcours public principal
 
-1. `CORE_RESET_VALIDATION_SUMMARY.md`
-2. `ROADMAP_CORE_RESET.md`
-3. `TESTING.md`
+1. `core-reset-validation.md`
+2. `core-reset-roadmap.md`
+3. `testing.md`
 4. `contract/`
 5. `decisions/`
 

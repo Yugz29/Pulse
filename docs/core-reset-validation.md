@@ -1,4 +1,4 @@
-# Synthèse de validation — Pulse Core Reset R1-R6
+# Core Reset Validation Summary
 
 État courant : R1 à R6 sont validés côté Python. La suite complète récente `./scripts/test_all.sh` passe avec 1216 tests OK.
 

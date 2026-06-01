@@ -1,4 +1,4 @@
-# Tests Pulse
+# Testing Pulse
 
 Ce guide remplace les anciennes notes de test FR/EN. Il est aligné sur le Core Reset R1-R6 validé côté Python.
 

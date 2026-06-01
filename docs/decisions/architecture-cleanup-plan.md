@@ -28,7 +28,7 @@ Avant de faire UI, générateur ou apprentissage, il faut réduire les couplages
 
 Sources publiques :
 
-- `docs/ROADMAP_CORE_RESET.md`
+- `docs/core-reset-roadmap.md`
 - `docs/decisions/core-reset-foundation-closure.md`
 
 Contexte historique : C4-mini et C4-mini.1 avaient ajouté une surface isolée `memory_candidates`, sans génération.
