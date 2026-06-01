@@ -13,6 +13,5 @@ Si un contrat contredit une doc Lab ou archive, le contrat gagne. Si deux contra
 - `SESSION_CONTRACT.md` — sessions, lock, idle, lifecycle.
 - `MINIMAL_MEMORY_CONTRACT.md` — mémoire minimale Core.
 - `PROPOSAL_CONTRACT.md` — propositions contrôlées / MCP.
-- `MEMORY_LEARNING_CONTRACT.md` — règles C3 mémoire / apprentissage.
-- `MEMORY_CANDIDATES_READINESS.md` — readiness technique avant MVP candidates.
-- `MEMORY_CANDIDATES_MVP.md` — cadre MVP conceptuel des candidates.
+
+Les contrats mémoire/apprentissage futurs sont hors parcours public tant que Lab/R7 est gelé. Les copies locales éventuelles vivent sous `docs/private/memory/` et ne doivent pas être ajoutées au repo public.
