@@ -2,33 +2,41 @@
 
 ## Statut
 
-- Audit documentaire C4c.1.
-- Aucun comportement produit corrigé dans cette note.
-- Aucun service Lab supprimé.
-- Aucune route, payload, UI ou surface Swift modifiée.
-- Le but est de documenter ce qui est instancié, lazy, no-op, gated ou toléré en Core.
+- Audit et suivi C4c.1 a C4c.10.
+- C4c.1 a cartographie les services Core/Lab instancies, lazy, gated ou toleres.
+- C4c.2 a C4c.10 ont cible les workers runtime, surtout `pulse-memory-sync`, `pulse-diff` et `pulse-prepare-resume-card`.
+- Aucune modification Swift, UI dashboard, `/today_summary`, `/feed` ou memory candidates n'a ete faite dans C4c.2-C4c.10.
+- Le comportement Lab doit rester conserve.
 
 ## Pourquoi cet audit existe
 
-C4a a clarifié les surfaces de routes. C4b a réduit les effets de bord du boot : `import daemon.main` ne matérialise plus runtime, app, routes ou fichiers `.pulse`, et le lancement direct vérifie maintenant le port HTTP principal avant création runtime/app.
+C4a a clarifie les surfaces de routes. C4b a reduit les effets de bord du boot : `import daemon.main` ne materialise plus runtime, app, routes ou fichiers `.pulse`, et le lancement direct verifie le port HTTP principal avant creation runtime/app.
 
-C4c commence par vérifier les services encore présents en Core avant toute réduction de couplage. Cette phase ne doit pas activer d'apprentissage, de mémoire avancée, de générateur, de DayDream, de facts produit, de vector store ou d'injection LLM.
+C4c verifie ensuite les services et workers encore presents en Core avant toute reduction de couplage. Cette phase ne doit pas activer d'apprentissage, de memoire avancee, de generateur, de DayDream, de facts produit, de vector store ou d'injection LLM en Core.
 
-## Source de test
+## Sources de test
 
 Tests de garde principaux :
 
 - `tests/test_main_runtime_state.py`
+- `tests/test_runtime_orchestrator.py`
+- `tests/test_runtime_lifecycle.py`
 - `tests/test_runtime_routes.py`
 - `tests/test_main_memory_routes.py`
 - `tests/test_memory_candidate_routes.py`
 - `tests/routes/test_runtime_state_payloads.py`
 
-Le test C4c.1 ajouté documente que `create_runtime()` instancie le bundle complet sans démarrer les workers permanents.
+Tests documentaires ajoutes pendant C4c :
 
-## Services créés par `create_runtime()`
+- `test_init_ne_demarre_pas_les_workers_permanents`
+- `test_start_demarre_les_deux_workers_permanents`
+- tests C4c.3/C4c.5 sur le gating de `pulse-memory-sync` en Core et la conservation Lab
+- `test_file_burst_core_planifie_pulse_diff_et_respecte_cooldown_workspace`
+- `test_resume_card_preparee_core_est_deterministe_et_consommee_sans_lab`
 
-`create_runtime()` crée aujourd'hui :
+## Services crees par `create_runtime()`
+
+`create_runtime()` cree aujourd'hui :
 
 - `EventBus`
 - `StateStore`
@@ -43,170 +51,274 @@ Le test C4c.1 ajouté documente que `create_runtime()` instancie le bundle compl
 - `LLMRuntime`
 - `RuntimeOrchestrator`
 
-`RuntimeOrchestrator.__init__()` crée aussi :
+`RuntimeOrchestrator.__init__()` cree aussi :
 
 - `FactEngine`
 - `CurrentContextBuilder`
 - `SessionFSM`
 - `RestartManager`
 
-Ces créations ont lieu seulement quand `get_runtime()` est appelé. Elles n'ont plus lieu à l'import de `daemon.main`.
+Ces creations ont lieu seulement quand `get_runtime()` est appele. Elles n'ont plus lieu a l'import de `daemon.main`.
 
-## Core strict
-
-Services considérés comme Core strict ou nécessaires au flux runtime validé :
-
-- `EventBus`
-- `StateStore`, encore legacy mais branché au flux local existant
-- `SignalScorer`
-- `DecisionEngine`
-- `RuntimeState`
-- `SessionMemory`
-- `SessionFSM`
-- `RuntimeOrchestrator`, comme orchestrateur Core actuel
-- file coalescer HTTP enregistré par `create_app(runtime)`
-
-Ces services supportent `/event`, `/state`, `/feed`, `/health/core`, les sessions et le cycle runtime local.
-
-## Surfaces dédiées séparées
-
-`MemoryCandidateStore` est instancié par `create_runtime()` mais reste une surface dédiée :
-
-- séparée de `SessionMemory` ;
-- séparée de `MemoryStore` ;
-- séparée de facts ;
-- séparée de DayDream ;
-- séparée de LLM ;
-- non branchée dans `RuntimeOrchestrator`.
-
-Les tests `memory_candidates` vérifient que les routes candidates n'appellent pas `MemoryStore`, facts, DayDream ou LLM, et que `/state`, `/debug/state` et `/insights` ne créent pas de candidates.
-
-## Lab / legacy toléré en Core
-
-Services ou surfaces Lab/legacy encore instanciés ou enregistrés pour compatibilité :
-
-- `MemoryStore`, créé par `create_runtime()`.
-- `FactEngine`, créé par `RuntimeOrchestrator.__init__()`.
-- `summary_llm`, construit par `_build_summary_llm()` avec fallback `UnavailableLLMRouter`.
-- `LLMRuntime`, créé par `create_runtime()`.
-- `LightweightLLMQueue`, créé par `create_runtime()`.
-- Routes assistant / LLM legacy.
-- Routes facts/profile.
-- Routes context probes.
-- Routes work intent.
-- Route `/daydreams`.
-
-Ces éléments restent tolérés temporairement parce que les tests de C4a/C4b verrouillent leurs frontières : ils ne doivent pas devenir Core minimal, ne doivent pas alimenter memory candidates et ne doivent pas devenir dépendances de `/health/core`.
-
-## Services créés lors de `create_app(runtime)`
-
-`create_app(runtime)` enregistre les routes et crée aussi des stores locaux de routes runtime :
-
-- `ContextProbeRequestStore`
-- `WorkIntentCandidateStore`
-- `CurrentContextBuilder`
-
-Ces créations arrivent à la matérialisation de l'app, pas à l'import de `daemon.main`. Elles restent des surfaces non-Core enregistrées temporairement pour compatibilité locale / dogfooding.
-
-## Workers et side effects observés
+## Workers et lifecycle apres C4c.10
 
 `create_runtime()` :
 
-- ne démarre pas `RuntimeOrchestrator` ;
-- ne démarre pas `pulse-file-burst` ;
-- ne démarre pas `pulse-periodic-sync` ;
-- ne crée pas de critical workers ;
-- ne démarre pas de serveur Flask ;
-- ne démarre pas le heartbeat idle.
+- ne demarre pas `RuntimeOrchestrator` ;
+- ne demarre pas `pulse-file-burst` ;
+- ne demarre pas `pulse-periodic-sync` ;
+- ne cree pas de critical workers ;
+- ne demarre pas de serveur Flask ;
+- ne demarre pas le heartbeat idle.
 
-`start_runtime_services()` démarre ensuite :
+`start_runtime_services()` demarre ensuite :
 
 - `RuntimeOrchestrator.start()` ;
 - le heartbeat idle.
 
-`RuntimeOrchestrator.start()` démarre aujourd'hui deux workers permanents :
+`RuntimeOrchestrator.start()` demarre deux workers permanents :
 
 - `pulse-file-burst` ;
 - `pulse-periodic-sync`.
 
-Le worker `pulse-periodic-sync` reste une dette C4c : il existe en Core, mais ses conditions internes doivent rester strictes et ne doivent pas transformer le Core en apprentissage automatique.
+`daemon.main` demarre aussi, au lancement direct du daemon :
 
-Les workers DayDream et warmup LLM restent conditionnels :
+- `pulse-watchdog` ;
+- `pulse-startup`.
 
-- DayDream est gated par `is_lab_enabled()`.
-- Le warmup LLM dépend de la policy heavy LLM autowarm.
-- Les memory sync background workers sont déclenchés par des chemins runtime précis, pas par `create_runtime()` seul.
+Le heartbeat idle cree :
 
-## Dépendances des surfaces Core
+- `pulse-idle-heartbeat`.
+
+## Classification workers apres C4c.10
+
+### Core strict
+
+- `pulse-file-burst` : coalesce les evenements fichiers et alimente le runtime local.
+- `pulse-periodic-sync` : worker permanent conserve en Core, mais ses chemins memoire sont gates apres C4c.3/C4c.5.
+- `pulse-idle-heartbeat` : presence/idle locale.
+- `pulse-watchdog` : surveillance daemon.
+
+### Core toleres
+
+- `pulse-diff` : declenche par file burst apres detection workspace ; lit git en arriere-plan et alimente le contexte.
+- `pulse-commit-watch` : declenche sur `COMMIT_EDITMSG` ; reste a auditer en C4c.11.
+- `pulse-prepare-resume-card` : prepare une resume card deterministe au `screen_locked`.
+- `pulse-resume-card` : worker d'emission differee possible, conserve mais non utilise par le chemin normal actuel quand `should_wait_for_llm=False`.
+- `pulse-startup` : startup differee mixte ; ses parties DayDream/facts/LLM restent conditionnelles ou gated.
+- warmup heavy LLM eventuel : seulement si l'environnement/policy l'active explicitement.
+
+### Lab only par flux normal
+
+- `pulse-memory-sync` : ne doit plus etre cree par les flux runtime normaux en Core apres C4c.5.
+- `pulse-daydream-scheduler` : planifie seulement en Lab.
+- `pulse-daydream` : execute seulement via chemins Lab.
+
+## Progression C4c.2 a C4c.10
+
+### C4c.2 — Periodic sync audit
+
+`pulse-periodic-sync` demarrait en Core avec `RuntimeOrchestrator.start()`. Il pouvait planifier `pulse-memory-sync` si un diff et une duree de session suffisante etaient presents.
+
+Le worker memoire etait deja no-op en Core via `is_lab_enabled()` dans `_sync_memory_background()`. La dette confirmee etait donc la creation inutile possible d'un worker `pulse-memory-sync`, sans mutation Lab.
+
+### C4c.3 — Gate periodic memory sync
+
+Un gate `is_lab_enabled()` a ete ajoute avant la planification de `pulse-memory-sync` dans le chemin periodic sync.
+
+Etat obtenu :
+
+- en Core, `pulse-periodic-sync` ne cree plus `pulse-memory-sync` ;
+- en Lab, le comportement periodic sync est conserve.
+
+### C4c.4 — Inventaire `_schedule_memory_sync`
+
+Les appels a `_schedule_memory_sync(...)` identifies etaient :
+
+- periodic sync ;
+- commit confirme ;
+- boundary flush ;
+- sync classique dans `_process_signals`.
+
+Apres C4c.3, seuls commit confirme, boundary flush et sync classique pouvaient encore creer `pulse-memory-sync` en Core.
+
+### C4c.5 — Gate all memory sync call sites
+
+Des gates `is_lab_enabled()` ont ete ajoutes avant les call sites runtime restants accessibles en Core.
+
+Etat obtenu :
+
+- en Core, aucun chemin runtime normal ne cree plus `pulse-memory-sync` ;
+- `_schedule_memory_sync()` n'a pas ete modifie globalement ;
+- en Lab, le comportement existant est conserve.
+
+### C4c.6 — Workers inventory
+
+Inventaire des workers non memoire apres le gating complet de `pulse-memory-sync`.
+
+Conclusion principale :
+
+- les workers Core strict restent limites au lifecycle local necessaire ;
+- `pulse-diff`, `pulse-commit-watch`, `pulse-prepare-resume-card`, `pulse-resume-card` et `pulse-startup` restent Core toleres ;
+- DayDream et memory sync restent Lab only par flux normal.
+
+### C4c.7 — `pulse-diff` audit
+
+`pulse-diff` demarre en Core apres file burst quand un workspace est detecte et que le cooldown par workspace le permet.
+
+Il lance `read_diff_summary(workspace)`, qui lit un resume git compact a partir de `git diff HEAD` ou fallback `git diff --cached`. Le resultat est stocke dans `RuntimeState` via `set_diff_summary(workspace, summary)`.
+
+Surfaces alimentees indirectement :
+
+- scoring / signaux runtime ;
+- resume cards ;
+- contexte runtime ;
+- surfaces qui lisent le snapshot runtime.
+
+Classification : Core tolere, pas Core strict.
+
+Risques :
+
+- cout subprocess git ;
+- bruit local ;
+- noms de fichiers/fonctions ;
+- contexte de workspace local.
+
+### C4c.8 — `pulse-diff` test
+
+Test documentaire ajoute :
+
+- un file burst en Core peut planifier `pulse-diff` ;
+- `read_diff_summary` est mocke, donc pas de vrai subprocess git ;
+- le resume est stocke dans `RuntimeState` ;
+- le cooldown par workspace empeche un second worker immediat.
+
+### C4c.9 — `pulse-prepare-resume-card` audit
+
+`pulse-prepare-resume-card` demarre en Core sur `screen_locked`.
+
+Il prepare une resume card deterministe :
+
+- ne passe pas par `freeze_memory()` ;
+- n'appelle pas LLM ;
+- ne touche pas `MemoryStore`, `FactEngine` ou `VectorStore` ;
+- lit le snapshot runtime, le payload session et le diff summary courant ;
+- stocke un payload temporaire en memoire avec TTL.
+
+Classification : Core Produit tolere.
+
+### C4c.10 — prepared resume card test
+
+Test documentaire ajoute :
+
+- `screen_locked` prepare une carte deterministe en Core ;
+- le payload est stocke ;
+- aucun LLM n'est appele ;
+- `freeze_memory()` n'est pas appele ;
+- aucun chemin Lab memoire n'est appele ;
+- le payload est consomme au unlock/reprise si les conditions sont reunies ;
+- un evenement `resume_card` est publie ;
+- le payload prepare est vide apres emission.
+
+## Etat actuel apres C4c.10
+
+La frontiere memory-sync Core/Lab est plus propre :
+
+- `pulse-memory-sync` reste disponible pour les flux Lab ;
+- les flux runtime normaux Core ne creent plus `pulse-memory-sync` ;
+- `_sync_memory_background()` reste no-op en Core, mais le guard est maintenant place avant la creation des workers sur les call sites normaux ;
+- le comportement Lab est conserve.
+
+Les workers Core toleres encore presents servent principalement la reprise du fil :
+
+- `pulse-diff` fournit un resume local compact du diff ;
+- `pulse-prepare-resume-card` prepare une carte deterministe ;
+- `pulse-resume-card` reste un chemin d'emission differee possible ;
+- `pulse-commit-watch` reste a auditer.
+
+Les patchs C4c.2-C4c.10 n'ont pas modifie Swift, UI, dashboard, `/today_summary`, `/feed`, memory candidates ou les contrats Lab.
+
+## Surfaces dediees separees
+
+`MemoryCandidateStore` est instancie par `create_runtime()` mais reste une surface dediee :
+
+- separee de `SessionMemory` ;
+- separee de `MemoryStore` ;
+- separee de facts ;
+- separee de DayDream ;
+- separee de LLM ;
+- non branchee dans `RuntimeOrchestrator`.
+
+Les tests `memory_candidates` verifient que les routes candidates n'appellent pas `MemoryStore`, facts, DayDream ou LLM, et que `/state`, `/debug/state` et `/insights` ne creent pas de candidates.
+
+## Dependances des surfaces Core
 
 `/health/core` :
 
-- ne dépend pas de `MemoryStore` ;
-- ne dépend pas de facts ;
-- ne dépend pas de DayDream ;
-- ne dépend pas de LLM ;
-- ne dépend pas de vector store / embeddings ;
-- ne dépend pas de context probes ou work intent.
+- ne depend pas de `MemoryStore` ;
+- ne depend pas de facts ;
+- ne depend pas de DayDream ;
+- ne depend pas de LLM ;
+- ne depend pas de vector store / embeddings ;
+- ne depend pas de context probes ou work intent.
 
 `/state` :
 
-- reste basé sur `RuntimeState`, `StateStore`, `SessionFSM`, `CurrentContextBuilder` et `SessionMemory` ;
-- ne doit pas matérialiser de mémoire Lab ;
+- reste base sur `RuntimeState`, `StateStore`, `SessionFSM`, `CurrentContextBuilder` et `SessionMemory` ;
+- ne doit pas materialiser de memoire Lab ;
 - ne doit pas exposer `memory_candidates`.
 
 `/feed` :
 
-- reste basé sur `EventBus.recent()` ;
-- ne doit pas être une source de création de memory candidates ;
-- ne doit pas déclencher DayDream, facts, MemoryStore ou LLM.
+- reste base sur `EventBus.recent()` ;
+- ne doit pas etre une source de creation de memory candidates ;
+- ne doit pas declencher DayDream, facts, MemoryStore ou LLM.
 
 `/memory/candidates` :
 
-- dépend de `MemoryCandidateStore` ;
-- ne dépend pas de `MemoryStore` ;
-- ne dépend pas de facts ;
-- ne dépend pas de DayDream ;
-- ne dépend pas de LLM ;
-- ne dépend pas de `RuntimeOrchestrator`.
+- depend de `MemoryCandidateStore` ;
+- ne depend pas de `MemoryStore` ;
+- ne depend pas de facts ;
+- ne depend pas de DayDream ;
+- ne depend pas de LLM ;
+- ne depend pas de `RuntimeOrchestrator`.
 
 ## Mutations Lab en Core
 
 Les tests existants documentent que :
 
-- `/memory/write` est enregistrée mais bloquée en Core ;
-- `/memory/remove` est enregistrée mais bloquée en Core ;
-- les mutations facts `reinforce`, `contradict` et `archive` sont bloquées en Core ;
-- `/facts/profile` est neutralisée en Core ;
-- `/llm/lightweight/result` est bloquée en Core.
+- `/memory/write` est enregistree mais bloquee en Core ;
+- `/memory/remove` est enregistree mais bloquee en Core ;
+- les mutations facts `reinforce`, `contradict` et `archive` sont bloquees en Core ;
+- `/facts/profile` est neutralisee en Core ;
+- `/llm/lightweight/result` est bloquee en Core.
 
-Ces routes restent enregistrées pour compatibilité, mais elles ne doivent pas devenir des capacités Core actives.
+Ces routes restent enregistrees pour compatibilite, mais elles ne doivent pas devenir des capacites Core actives.
 
-## Contradictions / dettes confirmées
+## Risques restants
 
-Dettes acceptées pour C4c.1 :
+- `pulse-commit-watch` reste a auditer : declencheur, donnees lues, donnees produites, cout et classification Core/Lab.
+- `pulse-diff` reste un subprocess git en Core, avec cooldown par workspace.
+- `pulse-prepare-resume-card` garde un payload en memoire jusqu'a expiration ou consommation.
+- `pulse-startup` reste mixte, meme si ses parties Lab sont gated.
+- Les workers Core toleres doivent rester testes et surveilles pour eviter une derive vers des effets de bord Lab.
 
-- `MemoryStore` est encore instancié par `create_runtime()` en Core.
-- `FactEngine` est encore instancié par `RuntimeOrchestrator.__init__()` en Core.
-- `summary_llm` et `LLMRuntime` sont encore créés dans le bundle runtime.
-- `LightweightLLMQueue` est encore créée et ses routes sont enregistrées, même si les mutations restent gated.
-- `ContextProbeRequestStore` et `WorkIntentCandidateStore` sont créés à l'enregistrement de l'app complète.
-- `pulse-periodic-sync` démarre avec `RuntimeOrchestrator.start()` même en Core.
+## Decision provisoire
 
-Ces dettes ne sont pas corrigées dans C4c.1. Elles doivent être traitées par petits patchs test-first.
+C4c confirme que le Core ne depend pas directement des surfaces Lab pour `/health/core`, `/state`, `/feed` et `memory_candidates`.
 
-## Décision provisoire
+Apres C4c.10, la dette principale n'est plus la creation de `pulse-memory-sync` en Core par les flux normaux. Elle se deplace vers les workers Core toleres, surtout ceux qui lisent le workspace ou gardent du contexte temporaire.
 
-C4c.1 confirme que le Core ne dépend pas directement des surfaces Lab pour `/health/core`, `/state`, `/feed` et `memory_candidates`, mais que plusieurs services Lab/legacy restent instanciés pour compatibilité.
+## Prochaine etape recommandee
 
-Le comportement est toléré temporairement. Il ne doit pas être interprété comme une validation produit de facts, DayDream, LLM, context probes, work intent ou MemoryStore en Core.
+C4c.11 : audit-only sur `pulse-commit-watch`.
 
-## Prochaine étape recommandée
+Points a documenter :
 
-C4c.2 devrait cibler une dette précise, sans refactor massif. Les candidats les plus sûrs sont :
-
-- rendre `FactEngine` lazy ou explicitement no-op en Core ;
-- rendre `MemoryStore` lazy si les routes Lab peuvent conserver leur compatibilité ;
-- documenter ou tester plus strictement le no-op du worker `pulse-periodic-sync` en Core ;
-- éviter la création des stores context probes / work intent tant qu'une route non-Core n'est pas appelée.
-
-Toute correction C4c.2 doit préserver les routes, payloads, gates Lab, memory candidates et le lancement daemon validé par C4b.
+- declencheur exact ;
+- donnees lues ;
+- donnees produites ;
+- surfaces consommatrices ;
+- cout et subprocess eventuels ;
+- classification Core strict / Core tolere / Lab ;
+- tests existants et gaps documentaires.

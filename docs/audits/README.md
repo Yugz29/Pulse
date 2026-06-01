@@ -13,4 +13,4 @@ Si un audit contredit un contrat ou une décision, le contrat ou la décision ga
 - `C4A_NON_CORE_ROUTE_CONSUMERS.md` — inventaire C4a des consommateurs Swift / tests des routes non-Core enregistrées.
 - `C4B_BOOT_IMPORT_AUDIT.md` — audit C4b.1 des effets de bord à l'import de `daemon.main`.
 - `C4B_PORT_CONFLICT_AUDIT.md` — audit C4b.4a des conflits de port et daemon déjà actif au boot.
-- `C4C_CORE_LAB_SERVICE_LIFECYCLE_AUDIT.md` — audit C4c.1 des services Core / Lab instanciés, lazy, gated ou tolérés.
+- `C4C_CORE_LAB_SERVICE_LIFECYCLE_AUDIT.md` — audit C4c des services et workers Core / Lab instanciés, lazy, gated ou tolérés.
