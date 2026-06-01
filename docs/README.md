@@ -1,14 +1,12 @@
 # Pulse Documentation Index
 
-## Documents autoritaires actuels
+## Parcours public principal
 
 1. `CORE_RESET_VALIDATION_SUMMARY.md`
 2. `ROADMAP_CORE_RESET.md`
 3. `TESTING.md`
-4. `decisions/C2_CLOSURE_DECISIONS.md`
-5. `decisions/C4A_ROUTE_SURFACES_CLOSURE.md`
-6. `decisions/C4B_BOOT_SAFETY_CLOSURE.md`
-7. `decisions/C4C_SERVICE_LIFECYCLE_CLOSURE.md`
+4. `contract/`
+5. `decisions/`
 
 ## Contrats
 
@@ -17,9 +15,6 @@
 - `contract/SESSION_CONTRACT.md`
 - `contract/MINIMAL_MEMORY_CONTRACT.md`
 - `contract/PROPOSAL_CONTRACT.md`
-- `contract/MEMORY_LEARNING_CONTRACT.md`
-- `contract/MEMORY_CANDIDATES_READINESS.md`
-- `contract/MEMORY_CANDIDATES_MVP.md`
 
 ## Décisions
 
@@ -39,20 +34,16 @@
 
 ## Journaux / audits
 
-Les audits et notes de dogfooding ne font plus partie du parcours public principal. Ils sont conserves dans `private/` comme historique interne versionne.
+Les audits et notes de dogfooding ne font plus partie du parcours public principal.
 
 ## Lab / expérimental
 
-- `lab/*`
+Les documents Lab, memory future et notes longues peuvent exister localement sous `docs/private/`, mais ils ne font pas partie du repo public.
 
-## Historique interne versionne
+## Zone locale privée
 
-- `private/README.md`
-- `private/audits/*`
-- `private/dogfooding/*`
+`docs/private/` est une zone locale privée non versionnée. Elle ne fait pas partie du parcours public et ne doit pas être ajoutée avec `git add -f`.
 
 ## Archives
 
-- `archives/*`
-
-Les archives conservent des brouillons/exports locaux non publics. Pour l'historique interne versionne, utiliser `private/`.
+Les archives locales peuvent être conservées sous `docs/private/archives/`. Elles ne sont pas autoritaires et ne sont pas publiées dans le repo.
