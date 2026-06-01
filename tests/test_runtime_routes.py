@@ -222,6 +222,22 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload["daydreams"], [])
         self.assertEqual(payload["status"]["status"], "skipped")
         self.assertEqual(payload["status"]["last_reason"], "no_journal_entries")
+        self.assertNotIn("last_error", payload["status"])
+
+    def test_daydreams_redacts_status_error(self):
+        with patch("pathlib.Path.home", return_value=Path("/tmp/pulse-home")), \
+             patch("daemon.memory.daydream.get_daydream_status", return_value={
+                 "status": "failed",
+                 "last_reason": "unexpected_error",
+                 "last_error": "secret path /Users/yugz/.pulse/token",
+             }):
+            response = self.client.get("/daydreams")
+
+        self.assertEqual(response.status_code, 200)
+        status = response.get_json()["status"]
+        self.assertEqual(status["error"], "daydream_unavailable")
+        self.assertNotIn("last_error", status)
+        self.assertNotIn("secret path", str(status))
 
     def test_daydreams_expose_narrative_non_canonical_metadata(self):
         with tempfile.TemporaryDirectory() as temp_home:
@@ -2798,7 +2814,9 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         self.assertEqual(refuse_response.status_code, 200)
         self.assertEqual(approve_response.status_code, 409)
-        self.assertEqual(approve_response.get_json()["error"], "invalid_transition")
+        payload = approve_response.get_json()
+        self.assertEqual(payload["error"], "invalid_transition")
+        self.assertNotIn("message", payload)
 
 
     def test_context_probe_requests_list_invalid_status_returns_400(self):
@@ -3399,6 +3417,7 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         self.assertEqual(refuse_response.status_code, 200)
         self.assertEqual(accept_response.status_code, 409)
+        self.assertNotIn("message", accept_response.get_json())
         self.assertIsNone(self.runtime_state.get_present().work_intent)
 
     def test_active_work_intent_prevents_new_probe_candidate(self):

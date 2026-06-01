@@ -1,10 +1,32 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from flask import Flask, jsonify, request
 
 from daemon.memory.candidates import MemoryCandidateError
+
+log = logging.getLogger(__name__)
+
+_PUBLIC_MEMORY_CANDIDATE_ERRORS = {
+    "claim_required",
+    "claim_too_long",
+    "evidence_required",
+    "forbidden_memory_type",
+    "invalid_claim",
+    "invalid_confidence",
+    "invalid_evidence",
+    "invalid_evidence_item",
+    "invalid_memory_type",
+    "invalid_payload",
+    "invalid_sensitivity",
+    "invalid_status",
+    "memory_type_required",
+    "sensitive_candidate_refused",
+    "sensitive_claim_refused",
+    "sensitivity_required",
+}
 
 
 def register_memory_candidate_routes(
@@ -32,7 +54,7 @@ def register_memory_candidate_routes(
                 sensitivity=data["sensitivity"],
             )
         except MemoryCandidateError as exc:
-            return _bad_request(str(exc))
+            return _bad_request(_public_memory_candidate_error(exc))
 
         return jsonify({
             "ok": True,
@@ -49,7 +71,7 @@ def register_memory_candidate_routes(
         try:
             candidates = candidate_store.list_candidates(status=status, limit=limit)
         except MemoryCandidateError as exc:
-            return jsonify({"ok": False, "error": str(exc), "surface": "memory_candidates"}), 400
+            return _bad_request(_public_memory_candidate_error(exc))
         return jsonify({
             "surface": "memory_candidates",
             "canonical_memory": False,
@@ -91,7 +113,7 @@ def register_memory_candidate_routes(
                 reviewer=_reviewer(data),
             )
         except MemoryCandidateError as exc:
-            return jsonify({"ok": False, "error": str(exc), "surface": "memory_candidates"}), 400
+            return _bad_request(_public_memory_candidate_error(exc))
         if candidate is None:
             return jsonify({"ok": False, "error": "not_found", "surface": "memory_candidates"}), 404
         return jsonify({
@@ -147,6 +169,14 @@ def register_memory_candidate_routes(
 
 def _bad_request(error: str):
     return jsonify({"ok": False, "error": error, "surface": "memory_candidates"}), 400
+
+
+def _public_memory_candidate_error(exc: MemoryCandidateError) -> str:
+    code = exc.args[0].strip() if exc.args and isinstance(exc.args[0], str) else ""
+    if code in _PUBLIC_MEMORY_CANDIDATE_ERRORS:
+        return code
+    log.exception("Memory candidate request failed")
+    return "invalid_request"
 
 
 def _manual_candidate_payload_error(data: dict[str, Any]) -> str | None:

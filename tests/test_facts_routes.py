@@ -64,6 +64,20 @@ class TestFactsRoutes(unittest.TestCase):
         data = resp.get_json()
         self.assertGreater(data["count"], 0)
 
+    def test_get_facts_degraded_redacts_exception_message(self):
+        with patch.object(
+            self.engine,
+            "get_facts",
+            side_effect=RuntimeError("secret path /Users/yugz/.pulse/facts.db"),
+        ):
+            resp = self.client.get("/facts")
+
+        self.assertEqual(resp.status_code, 503)
+        data = resp.get_json()
+        self.assertEqual(data["status"], "degraded")
+        self.assertEqual(data["reason"], "facts_unavailable")
+        self.assertNotIn("secret path", str(data))
+
     def test_get_facts_expose_source_type(self):
         _promote_facts(self.engine)
         resp = self.client.get("/facts")

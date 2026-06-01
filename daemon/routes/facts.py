@@ -9,12 +9,15 @@ POST /facts/<id>/contradict — corriger un fait (baisse la confiance)
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from flask import Flask, jsonify, request
 
 from daemon.runtime_mode import is_lab_enabled
 from daemon.routes.lab_surface import lab_surface_disabled_response, lab_surface_metadata
+
+log = logging.getLogger(__name__)
 
 
 def register_facts_routes(
@@ -39,11 +42,11 @@ def register_facts_routes(
                 include_archived=archived,
                 limit=limit,
             )
-        except Exception as exc:
-            reason = f"{exc.__class__.__name__}: {exc}"
+        except Exception:
+            log.exception("Facts list failed")
             payload = {
                 "status": "degraded",
-                "reason": reason,
+                "reason": "facts_unavailable",
                 "count": 0,
                 "facts": [],
             }

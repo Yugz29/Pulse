@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from flask import Flask
 
-from daemon.memory.candidates import MemoryCandidateStore
+from daemon.memory.candidates import MemoryCandidateError, MemoryCandidateStore
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.routes.memory_candidates import register_memory_candidate_routes
 from daemon.routes.runtime_status_routes import register_status_routes
@@ -148,6 +148,21 @@ def test_manual_create_refuses_forbidden_memory_type(tmp_path):
     assert response.status_code == 400
     assert response.get_json()["error"] == "forbidden_memory_type"
     assert store.list_candidates() == []
+
+
+def test_manual_create_redacts_unexpected_store_error():
+    store = MagicMock()
+    store.create_manual_candidate.side_effect = MemoryCandidateError(
+        "secret path /Users/yugz/.pulse/token"
+    )
+    client = _candidate_app(store).test_client()
+
+    response = client.post("/memory/candidates/manual", json=_manual_payload())
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["error"] == "invalid_request"
+    assert "secret path" not in str(payload)
 
 
 def test_manual_create_refuses_missing_evidence(tmp_path):

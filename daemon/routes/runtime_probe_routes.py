@@ -1,6 +1,7 @@
 """Context probe lifecycle routes — create, list, approve, refuse, execute. No side effects beyond probe state."""
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -28,6 +29,8 @@ from daemon.core.context_probe_runner import (
 from daemon.core.current_context_builder import CurrentContextBuilder
 from daemon.memory.extractor import find_git_root
 from daemon.core.workspace_context import find_workspace_root
+
+log = logging.getLogger(__name__)
 
 
 def register_probe_routes(
@@ -156,8 +159,8 @@ def register_probe_routes(
                 probe_request,
                 decision_reason=data.get("reason"),
             )
-        except ValueError as exc:
-            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        except ValueError:
+            return _invalid_transition_response("approve")
         probe_store.update(approved)
         return jsonify({
             "request": approved.to_dict(),
@@ -176,8 +179,8 @@ def register_probe_routes(
                 probe_request,
                 decision_reason=data.get("reason"),
             )
-        except ValueError as exc:
-            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        except ValueError:
+            return _invalid_transition_response("refuse")
         probe_store.update(refused)
         return jsonify({
             "request": refused.to_dict(),
@@ -196,8 +199,8 @@ def register_probe_routes(
                 probe_request,
                 decision_reason=data.get("reason"),
             )
-        except ValueError as exc:
-            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        except ValueError:
+            return _invalid_transition_response("abort")
         probe_store.update(aborted)
         return jsonify({
             "request": aborted.to_dict(),
@@ -254,8 +257,8 @@ def register_probe_routes(
 
         try:
             executed = execute_context_probe_request(probe_request)
-        except ValueError as exc:
-            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        except ValueError:
+            return _invalid_transition_response("execute")
         probe_store.update(executed)
         probe_store.store_result(executed.request_id, result.to_dict())
         _maybe_create_work_intent_candidate(
@@ -300,8 +303,8 @@ def register_probe_routes(
 
         try:
             executed = execute_context_probe_request(probe_request)
-        except ValueError as exc:
-            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        except ValueError:
+            return _invalid_transition_response("submit_result")
         probe_store.update(executed)
         probe_store.store_result(executed.request_id, result.to_dict())
         _maybe_create_work_intent_candidate(
@@ -323,6 +326,11 @@ def register_probe_routes(
             "request": executed.to_dict(),
             "debug": describe_context_probe_request_for_debug(executed),
         })
+
+
+def _invalid_transition_response(action: str):
+    log.exception("Context probe %s invalid transition", action)
+    return jsonify({"error": "invalid_transition"}), 409
 
 
 def _maybe_create_work_intent_candidate(

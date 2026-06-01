@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from flask import Flask, jsonify
 
 from daemon.core.work_intent_candidate import WorkIntentCandidateStore, candidates_to_dicts
+
+log = logging.getLogger(__name__)
 
 
 def register_work_intent_routes(
@@ -27,8 +30,9 @@ def register_work_intent_routes(
             candidate = candidate_store.accept(candidate_id)
         except KeyError:
             return jsonify({"error": "not_found"}), 404
-        except ValueError as exc:
-            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        except ValueError:
+            log.exception("Work intent candidate accept failed")
+            return jsonify({"error": "invalid_transition"}), 409
         runtime_state.set_work_intent(candidate.to_work_intent())
         return jsonify({
             "candidate": candidate.to_dict(),
@@ -41,6 +45,7 @@ def register_work_intent_routes(
             candidate = candidate_store.refuse(candidate_id)
         except KeyError:
             return jsonify({"error": "not_found"}), 404
-        except ValueError as exc:
-            return jsonify({"error": "invalid_transition", "message": str(exc)}), 409
+        except ValueError:
+            log.exception("Work intent candidate refuse failed")
+            return jsonify({"error": "invalid_transition"}), 409
         return jsonify({"candidate": candidate.to_dict()})

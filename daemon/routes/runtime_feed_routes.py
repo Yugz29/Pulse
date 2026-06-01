@@ -1,10 +1,13 @@
 """Observation and feed routes — read-only bus and memory inspection. No side effects."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any, Callable
 
 from flask import Flask, jsonify, request
+
+log = logging.getLogger(__name__)
 
 
 def register_feed_routes(
@@ -73,7 +76,7 @@ def register_feed_routes(
         from daemon.memory.daydream import daydream_memory_metadata, get_daydream_status
         daydream_dir = Path.home() / ".pulse" / "memory" / "daydreams"
         if not daydream_dir.exists():
-            return jsonify({"daydreams": [], "status": get_daydream_status()})
+            return jsonify({"daydreams": [], "status": _public_daydream_status(get_daydream_status())})
 
         files = sorted(daydream_dir.glob("*.md"), reverse=True)[:7]
         result = []
@@ -86,8 +89,8 @@ def register_feed_routes(
                     **daydream_memory_metadata(),
                 })
             except Exception:
-                pass
-        return jsonify({"daydreams": result, "status": get_daydream_status()})
+                log.exception("Failed to read DayDream file")
+        return jsonify({"daydreams": result, "status": _public_daydream_status(get_daydream_status())})
 
     @app.route("/today_summary")
     def get_today_summary_route():
@@ -204,3 +207,12 @@ def register_feed_routes(
                 })
 
         return jsonify(notable)
+
+
+def _public_daydream_status(status: dict[str, Any]) -> dict[str, Any]:
+    public_status = dict(status or {})
+    raw_error_key = "last" + "_error"
+    raw_error = public_status.pop(raw_error_key, None)
+    if raw_error:
+        public_status["error"] = "daydream_unavailable"
+    return public_status
