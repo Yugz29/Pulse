@@ -2,12 +2,13 @@
 
 ## Documents autoritaires actuels
 
-1. `ROADMAP_CORE_RESET.md`
-2. `CORE_RESET_VALIDATION_SUMMARY.md`
-3. `decisions/C2_CLOSURE_DECISIONS.md`
-4. `contract/MEMORY_LEARNING_CONTRACT.md`
-5. `contract/MEMORY_CANDIDATES_READINESS.md`
-6. `contract/MEMORY_CANDIDATES_MVP.md`
+1. `CORE_RESET_VALIDATION_SUMMARY.md`
+2. `ROADMAP_CORE_RESET.md`
+3. `TESTING.md`
+4. `decisions/C2_CLOSURE_DECISIONS.md`
+5. `decisions/C4A_ROUTE_SURFACES_CLOSURE.md`
+6. `decisions/C4B_BOOT_SAFETY_CLOSURE.md`
+7. `decisions/C4C_SERVICE_LIFECYCLE_CLOSURE.md`
 
 ## Contrats
 
@@ -38,15 +39,20 @@
 
 ## Journaux / audits
 
-- `audits/CORE_INTERNAL_AUDIT.md`
-- `audits/CORE_DOGFOODING_NOTES.md`
+Les audits et notes de dogfooding ne font plus partie du parcours public principal. Ils sont conserves dans `private/` comme historique interne versionne.
 
 ## Lab / expérimental
 
 - `lab/*`
 
+## Historique interne versionne
+
+- `private/README.md`
+- `private/audits/*`
+- `private/dogfooding/*`
+
 ## Archives
 
 - `archives/*`
 
-Les archives conservent l'historique, mais ne sont pas autoritaires.
+Les archives conservent des brouillons/exports locaux non publics. Pour l'historique interne versionne, utiliser `private/`.

@@ -44,3 +44,6 @@ App/Pulse.xcodeproj/project.xcworkspace/xcuserdata/
 App/Pulse.xcodeproj/xcuserdata/
 *.xcuserstate
 cortex-snapshot.json
+
+# Private Docs
+docs/private
