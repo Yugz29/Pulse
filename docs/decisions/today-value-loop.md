@@ -1,4 +1,6 @@
-# Today Value Loop Plan
+# Today Value Loop
+
+Internal context: product dogfooding
 
 ## Statut
 

@@ -1,4 +1,6 @@
-# C4c — Service Lifecycle Closure
+# Service Lifecycle Closure
+
+Internal phase: C4c
 
 ## Statut
 

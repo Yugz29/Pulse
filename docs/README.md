@@ -18,13 +18,13 @@
 
 ## Décisions
 
-- `decisions/C2_CLOSURE_DECISIONS.md`
-- `decisions/C4_ARCHITECTURE_CLEANUP_PLAN.md`
-- `decisions/C4A_ROUTE_SURFACES_CLOSURE.md`
-- `decisions/C4B_BOOT_SAFETY_CLOSURE.md`
-- `decisions/C4C_SERVICE_LIFECYCLE_CLOSURE.md`
-- `decisions/TODAY_VALUE_LOOP_PLAN.md`
-- `decisions/UI_PRODUCT_DEBUG_LAB_SPLIT.md`
+- `decisions/core-reset-foundation-closure.md`
+- `decisions/architecture-cleanup-plan.md`
+- `decisions/route-surfaces-closure.md`
+- `decisions/boot-safety-closure.md`
+- `decisions/service-lifecycle-closure.md`
+- `decisions/today-value-loop.md`
+- `decisions/product-debug-lab-ui-split.md`
 
 ## Journaux / audits
 

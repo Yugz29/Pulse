@@ -1,4 +1,6 @@
-# C4 — Architecture Cleanup Plan
+# Architecture Cleanup Plan
+
+Internal phase: C4
 
 ## Statut
 
@@ -24,14 +26,12 @@ Avant de faire UI, générateur ou apprentissage, il faut réduire les couplages
 
 ## Sources
 
-Sources internes :
+Sources publiques :
 
 - `docs/ROADMAP_CORE_RESET.md`
-- `docs/decisions/C2_CLOSURE_DECISIONS.md`
-- `docs/audits/CORE_INTERNAL_AUDIT.md`
-- `docs/contract/MEMORY_LEARNING_CONTRACT.md`
-- `docs/decisions/C4_MINI_MEMORY_CANDIDATES_SKELETON.md`
-- `docs/decisions/C4_MINI_MEMORY_CANDIDATES_MANUAL_CREATION.md`
+- `docs/decisions/core-reset-foundation-closure.md`
+
+Contexte historique : C4-mini et C4-mini.1 avaient ajouté une surface isolée `memory_candidates`, sans génération.
 
 ## Décision
 
@@ -235,7 +235,7 @@ Chaque patch C4 doit prévoir selon son périmètre :
 
 Chaque sous-phase C4 doit documenter sa décision si elle change une frontière.
 
-Tout dogfooding terrain doit être ajouté dans `docs/audits/CORE_DOGFOODING_NOTES.md`.
+Tout dogfooding terrain doit être conservé dans les notes locales privées.
 
 Toute évolution memory candidates doit être documentée avant implémentation.
 

@@ -1,4 +1,6 @@
-# UI — Product / Debug-Lab Split
+# Product, Debug, and Lab UI Split
+
+Internal context: UI/Product split
 
 ## Statut
 

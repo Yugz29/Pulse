@@ -1,4 +1,6 @@
-# C2 Closure Decisions — Core Hardening
+# Core Reset Foundation Closure
+
+Internal phase: C2
 
 ## Statut
 

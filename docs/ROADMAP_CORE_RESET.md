@@ -43,9 +43,9 @@ Objectifs principaux :
 
 ## Decisions de cloture
 
-- `decisions/C4A_ROUTE_SURFACES_CLOSURE.md`
-- `decisions/C4B_BOOT_SAFETY_CLOSURE.md`
-- `decisions/C4C_SERVICE_LIFECYCLE_CLOSURE.md`
+- `decisions/route-surfaces-closure.md`
+- `decisions/boot-safety-closure.md`
+- `decisions/service-lifecycle-closure.md`
 
 ## Documentation publique utile
 
