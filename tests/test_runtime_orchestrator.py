@@ -1897,6 +1897,85 @@ class TestRuntimeOrchestrator(unittest.TestCase):
         self.assertEqual(proposal_store.list_history(), [])
         self.summary_llm.complete.assert_not_called()
 
+    def test_resume_card_preparee_core_est_deterministe_et_consommee_sans_lab(self):
+        created_threads = []
+
+        class InlineThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.name = kwargs.get("name")
+                self.daemon = kwargs.get("daemon", False)
+                created_threads.append(self)
+
+            def start(self):
+                self.target()
+
+            def is_alive(self):
+                return False
+
+        lock_event = Event("screen_locked", {}, timestamp=datetime(2026, 4, 29, 9, 0, 0))
+        unlock_event = Event("screen_unlocked", {}, timestamp=datetime(2026, 4, 29, 9, 35, 0))
+        signals = self._signals(active_project="Pulse", session_duration_min=42)
+        self._set_runtime_analysis(signals)
+        self.runtime_state.set_diff_summary("/tmp/Pulse", "M daemon/runtime_orchestrator.py\n")
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 42,
+            "top_files": ["/tmp/Pulse/daemon/runtime_orchestrator.py"],
+            "work_block_started_at": "2026-04-29T08:30:00",
+        }
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch.object(self.orchestrator, "_process_signals"), \
+             patch.object(self.orchestrator, "freeze_memory") as freeze_memory, \
+             patch.object(self.orchestrator, "_run_daydream_if_pending") as run_daydream, \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory, \
+             patch("daemon.memory.extractor.embeddings_enabled") as embeddings_enabled, \
+             patch("daemon.memory.extractor._get_vector_store") as get_vector_store, \
+             patch("daemon.memory.extractor._start_background_writer") as start_background, \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: InlineThread(*a, **k)):
+            self.orchestrator.handle_event(lock_event)
+
+            self.assertEqual([thread.name for thread in created_threads], ["pulse-prepare-resume-card"])
+            self.assertTrue(created_threads[0].daemon)
+            with self.orchestrator._prepared_resume_card_lock:
+                prepared_payload = dict(self.orchestrator._prepared_resume_card_payload or {})
+                prepared_at = self.orchestrator._prepared_resume_card_created_at
+
+            self.assertEqual(prepared_at, lock_event.timestamp)
+            self.assertEqual(prepared_payload["project"], "Pulse")
+            self.assertEqual(prepared_payload["generated_by"], "deterministic")
+            self.assertTrue(prepared_payload["prepared"])
+            self.assertEqual(prepared_payload["prepared_reason"], "screen_locked")
+            self.assertIn("prepared_resume_card", prepared_payload["source_refs"])
+
+            self.orchestrator._maybe_emit_resume_card(event=unlock_event, sleep_minutes=35)
+
+        self.scorer.bus.publish.assert_called_once()
+        published_type, published_payload, published_at = self.scorer.bus.publish.call_args.args
+        self.assertEqual(published_type, "resume_card")
+        self.assertEqual(published_at, unlock_event.timestamp)
+        self.assertEqual(published_payload["id"], prepared_payload["id"])
+        self.assertEqual(published_payload["generated_by"], "deterministic")
+        self.assertEqual(published_payload["prepared_consumed_at"], unlock_event.timestamp.isoformat())
+        with self.orchestrator._prepared_resume_card_lock:
+            self.assertIsNone(self.orchestrator._prepared_resume_card_payload)
+            self.assertIsNone(self.orchestrator._prepared_resume_card_created_at)
+        freeze_memory.assert_not_called()
+        run_daydream.assert_not_called()
+        sync_memory.assert_not_called()
+        embeddings_enabled.assert_not_called()
+        get_vector_store.assert_not_called()
+        start_background.assert_not_called()
+        self.summary_llm.complete.assert_not_called()
+        self.llm_runtime.provider.assert_not_called()
+        self.llm_runtime.warmup_background.assert_not_called()
+        self.memory_store.write.assert_not_called()
+        self.memory_store.remove.assert_not_called()
+        self.memory_store.render.assert_not_called()
+        self.mock_fact_engine.observe_session.assert_not_called()
+        self.mock_fact_engine.render_for_context.assert_not_called()
+
     def test_resume_card_enqueued_lightweight_summary_si_queue_presente(self):
         queue = LightweightLLMQueue()
         self.orchestrator.lightweight_queue = queue
