@@ -1,6 +1,6 @@
 # Testing Pulse
 
-Ce guide remplace les anciennes notes de test FR/EN. Il est aligné sur le Core Reset R1-R6 validé côté Python.
+Ce guide remplace les anciennes notes de test FR/EN. Il est aligné sur le Core Reset validé côté Python, puis sur les clôtures C4a Route surfaces, C4b Boot safety et C4c Service lifecycle.
 
 Pulse Core est un runtime local de diagnostic du contexte de travail. Les tests Core prouvent le runtime, l'observation, l'interprétation prudente, les sessions, la mémoire minimale et les propositions MCP contrôlées. Ils ne prouvent pas que les surfaces Lab sont des fonctionnalités produit stables.
 
@@ -22,7 +22,7 @@ Le script canonique vérifie lui-même le runtime attendu :
 
 Ce script utilise `./.venv/bin/python3`, exige Python 3.11+ et lance la suite Python non interactive.
 
-Dernière validation Core Reset documentée : `1216 tests OK`.
+Validation historique R1-R6 documentée : `1216 tests OK`. Les validations C4a/C4b/C4c ajoutent des tests ciblés de routes, boot safety, lifecycle workers et séparation Core/Lab.
 
 ## Suite complète
 
@@ -163,6 +163,22 @@ Tests utiles :
 
 Ces tests prouvent le lifecycle `ProposalStore`, le flux MCP approval, l'absence d'auto-exécution Core pour `context_injection`, et la séparation des surfaces Lab/debug.
 
+### Validation C4c / stabilisation
+
+Tests ciblés récents pour le lifecycle Core/Lab :
+
+```bash
+./.venv/bin/python -m pytest tests/test_runtime_orchestrator.py tests/test_main_runtime_state.py tests/test_runtime_lifecycle.py -q
+```
+
+Tests ciblés routes/session/payloads :
+
+```bash
+./.venv/bin/python -m pytest tests/test_runtime_routes.py tests/memory/test_session.py tests/routes/test_runtime_state_payloads.py -q
+```
+
+Ces tests documentent notamment les workers Core tolérés, les gates `pulse-memory-sync`, les routes runtime, `/feed`, les sessions, et les payloads exposés.
+
 ## Core tests vs Lab regression tests
 
 Les tests Core valident le chemin produit minimal :
@@ -184,9 +200,9 @@ Les tests Lab peuvent rester utiles pour éviter des régressions, mais ils ne r
 - lightweight LLM queue ;
 - context probes ;
 - work intent ;
-- resume cards ;
+- resume cards LLM ou intelligentes ;
 - smart proposals ;
-- dashboard avancé ;
+- surfaces Lab avancées ;
 - adaptation.
 
 Règle : un test Lab qui passe ne transforme pas une surface Lab en capacité Core.
@@ -211,11 +227,13 @@ Ces tests ne remplacent pas la suite complète et ne prouvent pas la stabilité 
 
 ## Validation terrain Core
 
-Après R1-R6, la prochaine validation utile est terrain, pas une nouvelle feature :
+Après Core Reset et C4a/C4b/C4c, la validation utile reste terrain, pas une nouvelle feature :
 
 - lancer Pulse en `PULSE_MODE=core` ;
 - observer les logs daemon ;
-- vérifier `/health/core`, `/state`, `/debug/state` et `/feed` ;
+- vérifier `/health/core`, `/state`, `/debug/state`, `/feed` et `/today_summary` ;
+- vérifier que `/today_summary` expose des `top_files` cohérents ;
+- vérifier que les memory candidates restent vides en Core sauf action explicite ;
 - comparer l'état affiché avec l'activité réelle ;
-- vérifier que le dashboard reste diagnostic ;
+- vérifier que les surfaces Produit restent séparées des surfaces Debug / Lab ;
 - relancer `./scripts/test_all.sh` après observation.

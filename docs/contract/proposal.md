@@ -225,7 +225,7 @@ Ces surfaces restent hors Core R6 tant qu'elles ne sont pas explicitement separe
 - context probes automatiques ;
 - work intent intelligent ;
 - context injection Lab/dev auto-`executed` ;
-- resume cards ;
+- resume cards LLM/intelligentes ;
 - propositions generees par LLM ;
 - corrections autonomes ;
 - actions proactives ;
@@ -240,7 +240,7 @@ Ces surfaces restent hors Core R6 tant qu'elles ne sont pas explicitement separe
 - `/mcp/decision` publie un evenement meme si `receive_decision()` retourne `False`.
 - `Proposal` n'a pas de champ `decided_by`, `decision_source` ou `human_approved`.
 - `accepted` ne prouve pas l'execution effective ; `executed` ne prouve pas l'approbation humaine.
-- Context probes, work intent, resume cards et propositions intelligentes restent Lab / debug pendant R6.
+- Context probes, work intent, resume cards LLM/intelligentes et propositions intelligentes restent Lab / debug pendant R6.
 
 ## Garde-fous R6
 

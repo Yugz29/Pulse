@@ -10,7 +10,9 @@ Internal context: UI/Product split
 - aucun changement route ;
 - aucun changement API ;
 - aucun changement Swift dans ce patch ;
-- prépare un futur patch UI-only.
+- la séparation Produit / Debug-Lab a depuis été appliquée et validée côté UI ;
+- cette décision reste le cadre de navigation Produit actuel ;
+- l'encoche n'est pas prioritaire dans cette décision.
 
 ## Pourquoi
 
@@ -72,9 +74,9 @@ Pulse acte trois surfaces UI.
 - `DashboardViewModel.refresh()` peut continuer à charger les données existantes dans le premier patch.
 - L'optimisation réseau est hors scope.
 
-## Premier patch autorisé
+## Premier patch UI
 
-Un patch UI-only est autorisé dans `DashboardRootView.swift` :
+Le patch UI initial a appliqué dans `DashboardRootView.swift` :
 
 - ajouter une notion locale de surface :
   - Produit
@@ -110,6 +112,6 @@ Un patch UI-only est autorisé dans `DashboardRootView.swift` :
 
 ## Décision finale
 
-La séparation Produit / Debug-Lab devient la prochaine étape UI.
+La séparation Produit / Debug-Lab est le cadre de navigation Produit actuel.
 
-Le premier patch doit être UI-only, minimal et réversible.
+Les évolutions futures doivent rester minimales, réversibles, et ne pas activer Lab.

@@ -84,9 +84,9 @@ Cette décision interdit :
 - utilisation de ces routes pour `memory_candidates` ou mémoire canonique ;
 - ajout UI produit sans décision séparée.
 
-## Prochaine étape recommandée
+## Suite historique à la clôture C4a
 
-La prochaine phase recommandée est C4b — `main.py` boot safety minimal.
+La phase recommandée après C4a était C4b — `main.py` boot safety minimal.
 
 Objectif C4b :
 
@@ -100,6 +100,6 @@ Objectif C4b :
 
 C4a est clôturable.
 
-La prochaine phase recommandée est C4b.
+La suite historique était C4b.
 
 Aucun gating ou UI n'est autorisé par cette clôture.

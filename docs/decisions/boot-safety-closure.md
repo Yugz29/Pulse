@@ -105,9 +105,9 @@ Dettes reportées :
 - poursuivre la réduction du rôle composition root de `main.py` dans une phase ultérieure si nécessaire ;
 - garder le dogfooding attentif aux sessions réparées avec `stale_repair` après redémarrage.
 
-## Prochaine phase recommandée
+## Suite historique à la clôture C4b
 
-La prochaine phase recommandée est C4c — Core/Lab service lifecycle cleanup.
+La phase recommandée après C4b était C4c — Core/Lab service lifecycle cleanup.
 
 Objectif C4c :
 
@@ -121,6 +121,6 @@ Objectif C4c :
 
 C4b est clôturé.
 
-La prochaine phase recommandée est C4c.
+La suite historique était C4c.
 
 Aucun nouveau comportement produit n'est autorisé par cette clôture.

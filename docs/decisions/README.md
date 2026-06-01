@@ -13,5 +13,5 @@ Si une décision contredit un contrat, le contrat gagne sauf revalidation explic
 - `route-surfaces-closure.md` — clôture C4a route registration / surface boundaries.
 - `boot-safety-closure.md` — clôture C4b main.py boot safety minimal.
 - `service-lifecycle-closure.md` — clôture C4c du lifecycle services/workers Core / Lab.
-- `today-value-loop.md` — décision de boucle de valeur minimale “Aujourd'hui” avant reprise C4c.2+.
+- `today-value-loop.md` — décision de boucle de valeur minimale “Aujourd'hui”, validée en dogfooding initial et utilisée pour cadrer l'observation / stabilisation.
 - `product-debug-lab-ui-split.md` — décision UI pour séparer les surfaces Produit, Debug / Lab et Encoche.

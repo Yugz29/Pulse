@@ -6,6 +6,8 @@ Internal phase: C4
 
 Ce document est documentation-only. Aucun code n'est autorisé dans ce patch.
 
+Ce document est le plan C4 initial. C4a Route surfaces, C4b Boot safety et C4c Service lifecycle sont maintenant clôturés. Les phases restantes éventuelles sont reportées et doivent faire l'objet d'une décision séparée.
+
 C4 est une phase de nettoyage architectural. C4 ne lance pas R7, ne lance pas l'apprentissage, ne lance pas l'UI memory candidates et ne lance pas de générateur de candidates.
 
 C4 ne doit pas devenir un refactor massif.

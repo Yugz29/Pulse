@@ -1,8 +1,18 @@
 # Core Reset Validation Summary
 
-État courant : R1 à R6 sont validés côté Python. La suite complète récente `./scripts/test_all.sh` passe avec 1216 tests OK.
+État courant : R1 à R6 sont validés côté Python. La suite complète `./scripts/test_all.sh` à 1216 tests OK reste la validation historique R1-R6, complétée ensuite par les clôtures C4a, C4b et C4c.
 
-Ce document ne démarre pas R7. Il ne propose pas d'apprentissage, de facts / profile, de DayDream, de vector store, de résumés LLM, de dashboard avancé ni de nouvelle feature.
+Ce document ne démarre pas R7. Il ne propose pas d'apprentissage, de facts / profile, de DayDream, de vector store, de résumés LLM, de surfaces Lab produit ni de nouvelle feature.
+
+## État après C4
+
+C4a Route surfaces, C4b Boot safety et C4c Service lifecycle sont clôturés.
+
+Le lifecycle Core/Lab est plus net : aucun flux runtime Core normal ne crée `pulse-memory-sync`, et les chemins mémoire avancés restent Lab-gated.
+
+Les workers `pulse-diff`, `pulse-prepare-resume-card` et `pulse-commit-watch` sont audités/testés et acceptés comme Core tolérés. `pulse-startup` reste mixte / Core toléré, audité et documenté.
+
+La boucle minimale "Aujourd'hui" est validée en dogfooding initial : `/today_summary` expose notamment `top_files`, et `/feed` complète les blocs de reprise. Côté UI, les surfaces Produit sont séparées des surfaces Debug / Lab.
 
 ## Verdict Core Reset
 
@@ -53,7 +63,7 @@ Pulse Core ne garantit pas :
 - de l'adaptation ;
 - une preuve canonique détaillée des poids internes du `SignalScorer` ;
 - une séparation parfaite produit/debug dans tous les payloads ;
-- que le dashboard Swift reflète parfaitement toutes les frontières Core/Lab ;
+- que les surfaces UI Produit et Debug / Lab reflètent parfaitement toutes les frontières Core/Lab ;
 - une robustesse terrain macOS prolongée au-delà des tests Python.
 
 Les tests prouvent une baseline. Ils ne prouvent pas encore que Pulse est stable après plusieurs jours d'usage réel.
@@ -71,11 +81,11 @@ Restent Lab ou hors Core :
 - lightweight LLM queue en produit Core ;
 - context probes ;
 - work intent candidates ;
-- resume cards intelligentes ;
+- resume cards LLM ou intelligentes ;
 - context injection Lab/dev auto-`executed` ;
 - commit episode linking ;
 - work episodes riches ;
-- dashboard avancé ;
+- surfaces Lab avancées ;
 - apprentissage utilisateur / projet ;
 - adaptation ;
 - propositions générées par LLM ;
@@ -104,13 +114,14 @@ Assez solide pour usage réel prudent :
 
 - démarrage daemon en mode Core ;
 - santé `/health/core` ;
-- `/ping`, `/state`, `/debug/state`, `/feed` ;
+- `/ping`, `/state`, `/debug/state`, `/feed`, `/today_summary` ;
 - ingestion d'événements app / file / terminal / lock / idle ;
 - lisibilité du feed ;
 - observation du bruit filtré ;
 - scoring courant comme hypothèse, pas vérité ;
 - sessions lock / unlock / idle / restart ;
 - snapshots session SQLite ;
+- resume cards déterministes ;
 - lecture historique mémoire minimale ;
 - flux MCP approval / deny / timeout.
 
@@ -129,7 +140,7 @@ Ne pas toucher maintenant :
 - propositions intelligentes ;
 - context probes automatiques ;
 - work intent intelligent ;
-- dashboard avancé ;
+- surfaces Lab avancées ;
 - refactor massif de `RuntimeOrchestrator` ;
 - refonte mémoire ;
 - optimisation LLM ;
@@ -162,6 +173,6 @@ Plan court :
 - observer les logs daemon : erreurs, bruit, events ignorés, lock / unlock, restart repair ;
 - vérifier `/health/core`, `/state`, `/debug/state` et `/feed` pendant l'usage ;
 - comparer ce que Pulse affiche avec ce qui s'est réellement passé ;
-- vérifier que le dashboard reste diagnostic et ne vend pas de Lab comme stable ;
+- vérifier que les surfaces Produit restent séparées des surfaces Debug / Lab ;
 - relancer les smoke tests daemon et `./scripts/test_all.sh` après les observations ;
 - nettoyer README / docs uniquement si elles prétendent encore que Pulse fait plus que le Core validé.

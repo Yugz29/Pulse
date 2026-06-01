@@ -115,6 +115,6 @@ Pulse Core est prêt pour dogfooding contrôlé : observer, filtrer, interpréte
 
 Pulse n'est pas prêt pour apprentissage automatique, mémoire intelligente, profil utilisateur / projet ou adaptation.
 
-La prochaine phase logique est C3 — Memory / Learning Contract, documentation only.
+La suite historique de C2 était C3 — Memory / Learning Contract, documentation only.
 
-C3 doit définir les règles avant tout code. C4 — Architecture Cleanup viendra ensuite, guidé par les contrats C3.
+C3 devait définir les règles avant tout code. C4 — Architecture Cleanup venait ensuite, guidé par les contrats C3.

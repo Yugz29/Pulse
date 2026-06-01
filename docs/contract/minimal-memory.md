@@ -10,7 +10,7 @@ R5 commence apres les baselines runtime, observation, interpretation et sessions
 EventBus -> SessionMemory SQLite -> SessionSnapshot -> export historique -> journal minimal
 ```
 
-R5 doit prouver que Pulse peut produire un historique minimal utile, tracable et verifiable. R5 ne couvre pas l'apprentissage, les facts / profils, DayDream, le vector store, les resumes LLM, les propositions, les resume cards intelligentes, le commit episode linking ou l'adaptation.
+R5 doit prouver que Pulse peut produire un historique minimal utile, tracable et verifiable. R5 ne couvre pas l'apprentissage, les facts / profils, DayDream, le vector store, les resumes LLM, les propositions, les resume cards LLM/intelligentes, le commit episode linking ou l'adaptation.
 
 ## Surfaces principales
 
@@ -233,7 +233,7 @@ Ces surfaces appartiennent a Lab ou a une phase ulterieure :
 - `journal_candidate_builder`;
 - `commit_episode_linker`;
 - debug memory views ;
-- resume cards intelligentes ;
+- resume cards LLM/intelligentes ;
 - apprentissage utilisateur / projet ;
 - adaptation.
 
@@ -252,4 +252,4 @@ Ces surfaces appartiennent a Lab ou a une phase ulterieure :
 
 ## Garde-fous R5
 
-Ne pas utiliser R5 pour ajouter facts, profils, vector search, DayDream, resumes LLM, resume cards intelligentes, commit episode linking, apprentissage ou adaptation. R5 doit seulement prouver un historique minimal, qualifie et verifiable depuis les sessions et events deja observes.
+Ne pas utiliser R5 pour ajouter facts, profils, vector search, DayDream, resumes LLM, resume cards LLM/intelligentes, commit episode linking, apprentissage ou adaptation. R5 doit seulement prouver un historique minimal, qualifie et verifiable depuis les sessions et events deja observes.

@@ -8,11 +8,12 @@ Internal context: product dogfooding
 - Aucun code dans ce patch.
 - Aucun test modifié.
 - Aucune UI Swift modifiée.
-- C4c.2+ est mis en pause temporairement pour valider la valeur utilisateur.
+- La parenthèse produit “Aujourd'hui” a été faite, puis C4c a repris et est maintenant clôturé.
+- Cette décision reste utile pour cadrer l'observation / stabilisation Core-Produit.
 
 ## Objectif
 
-Valider la boucle de valeur minimale “Aujourd'hui” avant de poursuivre le cleanup architectural C4c.
+Valider la boucle de valeur minimale “Aujourd'hui” et cadrer son usage pendant la phase observation / stabilisation Core-Produit.
 
 Question produit à tester :
 
@@ -82,7 +83,7 @@ Chaque session doit vérifier :
 - aucune memory candidate spontanée n'est créée ;
 - aucun contenu Lab n'est présenté comme Core stable.
 
-Les observations doivent être ajoutées dans `docs/audits/CORE_DOGFOODING_NOTES.md`.
+Les observations terrain peuvent être gardées localement dans `docs/private/dogfooding/` ou synthétisées dans une décision publique si elles deviennent structurantes.
 
 ## Critères d'évaluation
 
@@ -113,7 +114,7 @@ Options limitées :
 
 - ajuster la lisibilité de la carte “Aujourd'hui” si les derniers blocs restent trop denses ;
 - ajouter `notable_commands` dans `/today_summary` seulement si `/feed` ne suffit pas sur plusieurs sessions ;
-- envisager une synthèse documentaire dédiée si `CORE_DOGFOODING_NOTES.md` devient trop long à exploiter.
+- envisager une synthèse documentaire publique dédiée si les notes locales deviennent structurantes.
 
 Toute évolution doit rester déterministe, locale, Core-only et sans LLM.
 
@@ -121,4 +122,4 @@ Toute évolution doit rester déterministe, locale, Core-only et sans LLM.
 
 Observer avant tout nouvel enrichissement.
 
-La boucle de valeur minimale “Aujourd'hui” doit d'abord être validée avec `/today_summary`, `/feed` et la carte Swift existante. C4c.2+ reste en pause temporaire pendant cette validation.
+La boucle de valeur minimale “Aujourd'hui” a été validée initialement avec `/today_summary`, `/feed` et la carte Swift existante. Elle reste le cadre Produit minimal pendant l'observation / stabilisation.

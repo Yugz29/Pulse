@@ -10,7 +10,7 @@ R4 commence apres l'observation R2 et l'interpretation R3 :
 EventBus -> SessionFSM -> RuntimeOrchestrator -> RuntimeState / SessionMemory -> /state
 ```
 
-R4 doit prouver que Pulse suit les sessions de travail de maniere comprehensible et reparable. R4 ne couvre pas la memoire avancee, les facts, DayDream, les LLM, les propositions, les resume cards intelligentes, le commit episode linking, l'apprentissage ou l'adaptation.
+R4 doit prouver que Pulse suit les sessions de travail de maniere comprehensible et reparable. R4 ne couvre pas la memoire avancee, les facts, DayDream, les LLM, les propositions, les resume cards LLM/intelligentes, le commit episode linking, l'apprentissage ou l'adaptation.
 
 ## Surfaces principales
 
@@ -226,4 +226,4 @@ Ces notions ne sont pas interchangeables :
 
 ## Garde-fous R4
 
-Ne pas utiliser R4 pour ajouter ou reparer DayDream, facts, vector store, LLM summaries, resume cards intelligentes, commit episode linking, propositions, apprentissage ou adaptation. R4 doit seulement rendre la session runtime et sa persistence minimale comprehensibles, testables et reparables.
+Ne pas utiliser R4 pour ajouter ou reparer DayDream, facts, vector store, LLM summaries, resume cards LLM/intelligentes, commit episode linking, propositions, apprentissage ou adaptation. R4 doit seulement rendre la session runtime et sa persistence minimale comprehensibles, testables et reparables.
