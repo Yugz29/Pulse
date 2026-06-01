@@ -107,17 +107,24 @@ Ces éléments peuvent rester dans le dépôt et être testés comme Lab, mais i
 
 ## Documentation de référence
 
-Documents autoritaires actuels :
+Documents publics actuels :
 
-- [Synthèse Core Reset R1-R6](./docs/CORE_RESET_VALIDATION_SUMMARY.md)
-- [Roadmap Core Reset](./docs/ROADMAP_CORE_RESET.md)
-- [Contrat observation](./docs/OBSERVATION_CONTRACT.md)
-- [Contrat interprétation](./docs/INTERPRETATION_CONTRACT.md)
-- [Contrat sessions](./docs/SESSION_CONTRACT.md)
-- [Contrat mémoire minimale](./docs/MINIMAL_MEMORY_CONTRACT.md)
-- [Contrat propositions contrôlées](./docs/PROPOSAL_CONTRACT.md)
+- [Documentation Pulse](./docs/README.md)
+- [Roadmap Core Reset](./docs/core-reset-roadmap.md)
+- [Synthèse de validation Core Reset](./docs/core-reset-validation.md)
+- [Guide de tests](./docs/testing.md)
+- [Contrats Core](./docs/contract/README.md)
+- [Décisions publiques](./docs/decisions/README.md)
 
-Les anciennes roadmaps, notes d'architecture, documents mémoire, agent, DayDream, facts, propositions et dashboard sont secondaires si elles contredisent ces documents.
+Contrats Core actifs :
+
+- [Observation](./docs/contract/observation.md)
+- [Interprétation](./docs/contract/interpretation.md)
+- [Sessions](./docs/contract/session.md)
+- [Mémoire minimale](./docs/contract/minimal-memory.md)
+- [Propositions contrôlées](./docs/contract/proposal.md)
+
+Les audits longs, notes de dogfooding, documents Lab et contrats mémoire futurs ne font plus partie du parcours public principal. Ils peuvent exister localement sous `docs/private/`, qui est privé, ignoré par Git et non versionné.
 
 ## Lancer le daemon
 
@@ -205,7 +212,7 @@ Valider Pulse Core en usage réel :
 2. observer les logs daemon ;
 3. vérifier `/health/core`, `/state`, `/debug/state` et `/feed` pendant une vraie session ;
 4. comparer ce que Pulse affiche avec ce qui s'est réellement passé ;
-5. vérifier que le dashboard reste diagnostic ;
+5. vérifier que les surfaces Produit et Debug/Lab restent lisibles et séparées ;
 6. relancer `./scripts/test_all.sh` après observation.
 
 Ne pas démarrer R7 tant que le Core n'a pas été validé sur usage terrain.
