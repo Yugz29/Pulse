@@ -759,6 +759,73 @@ class TestRuntimeOrchestrator(unittest.TestCase):
             self.orchestrator._handle_commit_event("/tmp/Pulse/.git/COMMIT_EDITMSG")
         process_commit.assert_called_once_with(git_root)
 
+    def test_commit_editmsg_core_planifie_commit_watch_deduplique_et_ne_sync_pas_memory(self):
+        git_root = Path("/tmp/Pulse")
+        created_threads = []
+
+        class DeferredThread:
+            def __init__(self, *args, **kwargs):
+                self.target = kwargs.get("target")
+                self.name = kwargs.get("name")
+                self.daemon = kwargs.get("daemon", False)
+                created_threads.append(self)
+
+            def start(self):
+                return None
+
+            def is_alive(self):
+                return False
+
+        self._set_runtime_analysis(self._signals(active_project="Pulse", session_duration_min=19))
+        self.session_memory.export_memory_payload.return_value = {
+            "active_project": "Pulse",
+            "duration_min": 19,
+            "top_files": ["daemon/runtime_orchestrator.py"],
+            "files_changed": 1,
+            "activity_level": "executing",
+            "work_block_started_at": "2026-04-29T09:00:00",
+        }
+        event = Event("file_modified", {"path": "/tmp/Pulse/.git/COMMIT_EDITMSG"})
+        event.timestamp = datetime(2026, 4, 29, 10, 0, 0)
+
+        with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
+             patch("daemon.runtime_orchestrator.find_git_root", return_value=git_root), \
+             patch("daemon.runtime_orchestrator.threading.Thread", side_effect=lambda *a, **k: DeferredThread(*a, **k)), \
+             patch.object(self.orchestrator, "_head_commit_is_recent", return_value=False), \
+             patch.object(self.orchestrator, "_refresh_runtime_signals_for_closure") as refresh, \
+             patch("daemon.runtime_orchestrator.read_head_sha", side_effect=["old", "new"]), \
+             patch("daemon.runtime_orchestrator.read_commit_message", return_value="feat: core commit watch"), \
+             patch("daemon.runtime_orchestrator.read_commit_diff_summary", return_value="Diff en cours : runtime.py (+10 -2)"), \
+             patch("daemon.runtime_orchestrator.time.sleep", return_value=None), \
+             patch("daemon.runtime_orchestrator.update_memories_from_session") as sync_memory, \
+             patch("daemon.memory.extractor.embeddings_enabled") as embeddings_enabled, \
+             patch("daemon.memory.extractor._get_vector_store") as get_vector_store, \
+             patch("daemon.memory.extractor._start_background_writer") as start_background:
+            self.orchestrator.handle_event(event)
+            self.orchestrator.handle_event(event)
+
+            self.assertEqual([thread.name for thread in created_threads], ["pulse-commit-watch"])
+            self.assertTrue(created_threads[0].daemon)
+            self.assertEqual(self.orchestrator._pending_commit_watch, {str(git_root)})
+
+            created_threads[0].target()
+
+        self.assertEqual([thread.name for thread in created_threads], ["pulse-commit-watch"])
+        self.assertEqual(self.orchestrator._pending_commit_watch, set())
+        refresh.assert_called_once_with(drain_pending=True)
+        sync_memory.assert_not_called()
+        embeddings_enabled.assert_not_called()
+        get_vector_store.assert_not_called()
+        start_background.assert_not_called()
+        self.summary_llm.complete.assert_not_called()
+        self.llm_runtime.provider.assert_not_called()
+        self.llm_runtime.warmup_background.assert_not_called()
+        self.memory_store.write.assert_not_called()
+        self.memory_store.remove.assert_not_called()
+        self.memory_store.render.assert_not_called()
+        self.mock_fact_engine.observe_session.assert_not_called()
+        self.mock_fact_engine.render_for_context.assert_not_called()
+
     def test_process_signals_ne_fait_pas_regresser_observed_now(self):
         newer = Event("app_activated", {"app_name": "Chrome"})
         newer.timestamp = datetime(2026, 4, 23, 18, 10, 0)
