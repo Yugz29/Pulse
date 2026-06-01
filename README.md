@@ -8,7 +8,7 @@ Pulse n'est pas un agent intelligent. Il n'apprend pas encore les habitudes util
 
 ## Statut actuel
 
-Le Core Reset R1-R6 est validé côté Python.
+Le Core Reset R1-R6 est terminé côté Python, puis les phases de cleanup C4a, C4b et C4c ont été clôturées.
 
 - R1 — Baseline Runtime
 - R2 — Baseline Observation
@@ -16,15 +16,20 @@ Le Core Reset R1-R6 est validé côté Python.
 - R4 — Baseline Sessions
 - R5 — Baseline Mémoire minimale
 - R6 — Baseline Propositions contrôlées
+- C4a — Route surfaces
+- C4b — Boot safety
+- C4c — Service lifecycle
 
-Dernière validation complète documentée :
+Validation historique R1-R6 :
 
 ```bash
 ./scripts/test_all.sh
 # 1216 tests OK
 ```
 
-La prochaine étape saine est la validation terrain du Core en `PULSE_MODE=core`, sans démarrer R7 et sans ajouter de nouvelle feature intelligente.
+La phase actuelle est observation / stabilisation Core-Produit. La boucle minimale “Aujourd'hui” est validée en dogfooding initial avec `/today_summary`, `top_files` et `/feed`. Les surfaces Produit et Debug / Lab sont séparées côté UI.
+
+Lab, R7 et l'apprentissage restent gelés. Ne pas ajouter de nouvelle feature intelligente tant que le Core-Produit n'a pas été stabilisé en usage réel.
 
 ## Ce que Pulse Core fait aujourd'hui
 
@@ -61,7 +66,7 @@ Pulse Core ne garantit pas :
 - des propositions intelligentes ;
 - des actions autonomes ;
 - une adaptation du comportement ;
-- une séparation parfaite produit/debug dans toutes les surfaces ;
+- une séparation parfaite Produit / Debug-Lab dans toutes les surfaces ;
 - une robustesse terrain prolongée au-delà des tests Python.
 
 Les tests prouvent une baseline. Ils ne prouvent pas encore plusieurs jours d'usage réel macOS.
@@ -78,7 +83,7 @@ Pulse Core est le chemin stable à valider en usage réel :
 - interprétation prudente ;
 - sessions ;
 - mémoire minimale ;
-- dashboard diagnostic ;
+- surfaces Produit et Debug / Lab séparées ;
 - MCP approval contrôlé.
 
 ### Pulse Lab
@@ -153,6 +158,7 @@ PULSE_MODE=core python daemon/main.py
 | GET | `/state` | État runtime courant |
 | GET | `/debug/state` | État runtime enrichi/debug |
 | GET | `/feed` | Feed lisible d'événements |
+| GET | `/today_summary` | Synthèse déterministe de la journée avec blocs et `top_files` |
 | POST | `/event` | Ingestion d'événements locaux |
 | GET | `/scoring/status` | Statut scoring |
 | POST | `/daemon/pause` | Pause runtime |
@@ -210,7 +216,7 @@ Valider Pulse Core en usage réel :
 
 1. lancer Pulse en `PULSE_MODE=core` ;
 2. observer les logs daemon ;
-3. vérifier `/health/core`, `/state`, `/debug/state` et `/feed` pendant une vraie session ;
+3. vérifier `/health/core`, `/state`, `/debug/state`, `/feed` et `/today_summary` pendant une vraie session ;
 4. comparer ce que Pulse affiche avec ce qui s'est réellement passé ;
 5. vérifier que les surfaces Produit et Debug/Lab restent lisibles et séparées ;
 6. relancer `./scripts/test_all.sh` après observation.

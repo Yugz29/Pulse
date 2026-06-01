@@ -210,13 +210,15 @@ Limites conservees :
 
 ### Runtime Core
 
-Le runtime Core ne doit pas appeler automatiquement `update_memories_from_session()`.
+Les flux runtime Core normaux ne doivent pas créer `pulse-memory-sync` ni déclencher la mémoire avancée.
 
 Etat actuel important :
 
 - `_sync_memory_background()` retourne immediatement en mode Core ;
 - en mode Lab, il peut appeler `update_memories_from_session()` ;
 - `freeze_memory()` produit une snapshot Core minimale quand Lab est desactive ;
+- `pulse-startup` reste mixte / Core tolere et `recover_missed_commits()` peut encore ecrire un journal deterministe en Core ;
+- cette dette est acceptee temporairement et documentee dans `docs/decisions/service-lifecycle-closure.md` ;
 - les objets avancés peuvent exister, mais ne doivent pas etre requis par `/ping`, `/state`, `/feed`, sessions ou le journal minimal Core.
 
 ## Hors R5 strict

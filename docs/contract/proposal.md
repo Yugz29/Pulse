@@ -27,7 +27,8 @@ R6 doit prouver qu'aucune proposition produit n'est executee sans validation hum
 | `RuntimeOrchestrator._attach_context_proposal_if_needed()` | Cree une proposition `context_injection`; Core la laisse `pending`, Lab/dev conserve l'auto-`executed` historique | mixte, hors preuve Core controlee |
 | Context probes | Cycle request / approve / execute pour collecte de contexte | Lab / debug pendant R6 |
 | Work intent candidates | Intentions issues notamment de probes | Lab / hors R6 strict |
-| Resume cards | Resume deterministe ou enrichi pour reprise | Lab / hors R6 strict |
+| Resume cards deterministes | Reprise du fil sans LLM | Core tolere / Produit, hors preuve R6 strict |
+| Resume cards LLM/intelligentes | Resume enrichi pour reprise | Lab / gele, hors R6 strict |
 
 ## `Proposal`
 
@@ -241,6 +242,7 @@ Ces surfaces restent hors Core R6 tant qu'elles ne sont pas explicitement separe
 - `Proposal` n'a pas de champ `decided_by`, `decision_source` ou `human_approved`.
 - `accepted` ne prouve pas l'execution effective ; `executed` ne prouve pas l'approbation humaine.
 - Context probes, work intent, resume cards LLM/intelligentes et propositions intelligentes restent Lab / debug pendant R6.
+- Les resume cards deterministes sont une surface Produit Core toleree, mais elles ne prouvent pas le contrat R6 de propositions controlees.
 
 ## Garde-fous R6
 
