@@ -175,7 +175,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             lastSessionContext: "Ancien contexte observé pendant 1244 min."
         ))
 
-        XCTAssertEqual(snapshot.nextActionLine, "Revenir au fichier actif observé.")
+        XCTAssertEqual(snapshot.nextActionLine, "Revenir à brief.txt.")
     }
 
     func testResumeThreadSnapshotFallbackUsesRecentSignalBeforeGenericFallback() {
@@ -206,7 +206,7 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(snapshot.nextActionLine, "Reprendre depuis le dernier signal observé.")
     }
 
-    func testResumeThreadSnapshotUsesShortSanitizedLastSessionOnlyWithoutCurrentContext() {
+    func testResumeThreadSnapshotIgnoresLastSessionWhenOnlyGenericFallbackRemains() {
         let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
             activeProject: nil,
             activeApp: nil,
@@ -222,10 +222,10 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             lastSessionContext: "Session observée pendant 1244 min. Détail ancien à ne pas étendre."
         ))
 
-        XCTAssertEqual(snapshot.nextActionLine, "Session observée pendant 20 h 44.")
+        XCTAssertEqual(snapshot.nextActionLine, "Revenir au contexte actif observé.")
     }
 
-    func testResumeThreadSnapshotWhyLineStaysGeneric() {
+    func testResumeThreadSnapshotWhyLineUsesActiveFileAndRecentApps() {
         let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
             activeProject: "Projet local",
             activeApp: "Éditeur",
@@ -238,10 +238,67 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             whyLine: "3 fichier(s) touché(s) sur 10 min, surtout docs",
             resumeNextAction: nil,
             workIntentSummary: nil,
-            lastSessionContext: nil
+            lastSessionContext: nil,
+            recentApps: ["Navigateur", "Éditeur"]
         ))
 
-        XCTAssertEqual(snapshot.whyLine, "Le contexte vient de l’app active et des fichiers récents.")
+        XCTAssertEqual(snapshot.whyLine, "Le contexte vient du fichier actif et des apps récentes.")
+    }
+
+    func testResumeThreadSnapshotWhyLineUsesTerminalSummaryWithoutRawCommand() {
+        let feedEvent = FeedEvent(
+            kind: "terminal",
+            label: "Commande terminée",
+            success: true,
+            command: "deploy --token secret-value",
+            timestamp: "2026-06-02T10:00:00Z",
+            resumeCard: nil,
+            loadTimeSec: nil
+        )
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: nil,
+            activeApp: "Terminal",
+            activeFile: nil,
+            taskLabel: "Général",
+            sessionDuration: 0,
+            focusLabel: "Focus normal",
+            feedEvent: feedEvent,
+            insightEvent: nil,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: nil,
+            terminalSummary: "Commande terminée avec succès",
+            terminalSuccess: true,
+            terminalActionCategory: "execution",
+            recentApps: ["Terminal"]
+        ))
+
+        XCTAssertEqual(snapshot.whyLine, "Une commande récente a été détectée.")
+        XCTAssertFalse(snapshot.whyLine.contains("deploy"))
+        XCTAssertFalse(snapshot.whyLine.contains("secret-value"))
+    }
+
+    func testResumeThreadSnapshotNextActionUsesTerminalSummaryWhenNoFile() {
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: nil,
+            activeApp: "Terminal",
+            activeFile: nil,
+            taskLabel: "Général",
+            sessionDuration: 0,
+            focusLabel: "Focus normal",
+            feedEvent: nil,
+            insightEvent: nil,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: nil,
+            terminalSummary: "Commande terminée",
+            terminalSuccess: true,
+            terminalActionCategory: "execution"
+        ))
+
+        XCTAssertEqual(snapshot.nextActionLine, "Reprendre depuis la dernière commande observée.")
     }
 
     func testResumeThreadSnapshotPrefersFeedHistoryForLastSignal() {
@@ -271,11 +328,12 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             whyLine: nil,
             resumeNextAction: nil,
             workIntentSummary: nil,
-            lastSessionContext: nil
+            lastSessionContext: nil,
+            terminalSummary: "Commande terminée avec succès"
         ))
 
         XCTAssertEqual(snapshot.lastSignalTitle, "Commande terminée")
-        XCTAssertEqual(snapshot.lastSignalDetail, "make verify")
+        XCTAssertEqual(snapshot.lastSignalDetail, "Commande terminée avec succès")
     }
 
     func testSendMessageNormalResponseRemainsUnchanged() async {

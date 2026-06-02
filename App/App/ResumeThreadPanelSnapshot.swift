@@ -14,13 +14,17 @@ struct ResumeThreadPanelSnapshot: Equatable {
         var resumeNextAction: String?
         var workIntentSummary: String?
         var lastSessionContext: String?
+        var terminalSummary: String? = nil
+        var terminalSuccess: Bool? = nil
+        var terminalActionCategory: String? = nil
+        var recentApps: [String] = []
 
         var hasCurrentContext: Bool {
             ResumeThreadPanelSnapshot.firstNonEmpty(activeProject, activeApp, activeFile) != nil
         }
 
         var hasRecentSignal: Bool {
-            feedEvent != nil || insightEvent != nil
+            feedEvent != nil || insightEvent != nil || ResumeThreadPanelSnapshot.nonEmpty(terminalSummary) != nil
         }
     }
 
@@ -54,7 +58,11 @@ struct ResumeThreadPanelSnapshot: Equatable {
                 ?? vm.currentSignals?.fileActivitySummary,
             resumeNextAction: vm.activeResumeCard?.nextAction,
             workIntentSummary: vm.currentContext?.workIntent?.summary,
-            lastSessionContext: vm.currentSignals?.lastSessionContext
+            lastSessionContext: vm.currentSignals?.lastSessionContext,
+            terminalSummary: vm.currentContext?.terminalSummary,
+            terminalSuccess: vm.currentContext?.terminalSuccess,
+            terminalActionCategory: vm.currentContext?.terminalActionCategory,
+            recentApps: vm.recentApps
         ))
     }
 
@@ -68,7 +76,11 @@ struct ResumeThreadPanelSnapshot: Equatable {
             : "Duree non etablie"
         focusLine = source.focusLabel
 
-        let signal = Self.lastSignal(feedEvent: source.feedEvent, insightEvent: source.insightEvent)
+        let signal = Self.lastSignal(
+            feedEvent: source.feedEvent,
+            insightEvent: source.insightEvent,
+            terminalSummary: source.terminalSummary
+        )
         lastSignalTitle = signal.title
         lastSignalDetail = signal.detail
 
@@ -84,37 +96,43 @@ struct ResumeThreadPanelSnapshot: Equatable {
             return action
         }
 
-        if nonEmpty(source.activeFile) != nil {
-            return "Revenir au fichier actif observé."
+        if let fileName = fileName(source.activeFile) {
+            return "Revenir à \(fileName)."
+        }
+
+        if nonEmpty(source.terminalSummary) != nil {
+            return "Reprendre depuis la dernière commande observée."
         }
 
         if source.hasRecentSignal {
             return "Reprendre depuis le dernier signal observé."
         }
 
-        if !source.hasCurrentContext, let lastSession = sanitizedLastSessionContext(source.lastSessionContext) {
-            return lastSession
-        }
-
         return "Revenir au contexte actif observé."
     }
 
     private static func whyLine(_ source: Source) -> String {
-        if nonEmpty(source.activeFile) != nil, nonEmpty(source.activeProject) != nil {
-            return "Le contexte vient de l’app active et des fichiers récents."
+        if nonEmpty(source.terminalSummary) != nil {
+            return "Une commande récente a été détectée."
+        }
+
+        if nonEmpty(source.activeFile) != nil, hasRecentApps(source.recentApps) {
+            return "Le contexte vient du fichier actif et des apps récentes."
         }
 
         if nonEmpty(source.activeFile) != nil {
             return "Le contexte vient du fichier actif observé."
         }
 
-        if source.feedEvent?.kind == "terminal" {
-            return nonEmpty(source.activeProject) != nil
-                ? "Une commande récente a été détectée dans ce projet."
-                : "Une commande récente a été détectée."
+        if nonEmpty(source.activeApp) != nil, hasRecentApps(source.recentApps) {
+            return "Le contexte vient de l’app active et des apps récentes."
         }
 
-        if source.insightEvent != nil {
+        if hasRecentApps(source.recentApps) {
+            return "Le contexte vient de l’app active et des apps récentes."
+        }
+
+        if source.feedEvent != nil || source.insightEvent != nil {
             return "Le contexte vient surtout des signaux récents du poste."
         }
 
@@ -141,6 +159,16 @@ struct ResumeThreadPanelSnapshot: Equatable {
     nonisolated private static func fileLine(_ path: String?) -> String {
         guard let path = nonEmpty(path) else { return "Aucun fichier actif" }
         return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    nonisolated private static func fileName(_ path: String?) -> String? {
+        guard let path = nonEmpty(path) else { return nil }
+        let name = URL(fileURLWithPath: path).lastPathComponent
+        return nonEmpty(name)
+    }
+
+    nonisolated private static func hasRecentApps(_ apps: [String]) -> Bool {
+        apps.contains { nonEmpty($0) != nil }
     }
 
     nonisolated private static func formatDuration(_ minutes: Int) -> String {
@@ -188,11 +216,17 @@ struct ResumeThreadPanelSnapshot: Equatable {
         return result
     }
 
-    private static func lastSignal(feedEvent: FeedEvent?, insightEvent: InsightEvent?) -> (title: String, detail: String) {
+    private static func lastSignal(
+        feedEvent: FeedEvent?,
+        insightEvent: InsightEvent?,
+        terminalSummary: String?
+    ) -> (title: String, detail: String) {
         if let event = feedEvent {
             return (
                 event.label,
-                nonEmpty(event.command) ?? event.timestamp
+                nonEmpty(terminalSummary)
+                    ?? safeCommandDetail(event.command)
+                    ?? event.timestamp
             )
         }
         if let event = insightEvent {
@@ -202,6 +236,16 @@ struct ResumeThreadPanelSnapshot: Equatable {
             )
         }
         return ("Aucun signal notable", "Pulse n'a pas encore observe d'evenement recent important.")
+    }
+
+    nonisolated private static func safeCommandDetail(_ command: String?) -> String? {
+        guard let command = nonEmpty(command), command.count <= 80 else { return nil }
+        let lowered = command.lowercased()
+        let sensitiveMarkers = ["token", "secret", "password", "api_key", "private_key"]
+        if sensitiveMarkers.contains(where: { lowered.contains($0) }) {
+            return nil
+        }
+        return command
     }
 
     private static func taskLabel(
