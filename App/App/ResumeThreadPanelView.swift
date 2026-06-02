@@ -101,10 +101,11 @@ struct ResumeThreadPanelView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                    let expandedText = title == "Pourquoi" || isEmphasized
                     Text(line)
                         .font(.system(size: index == 0 || isEmphasized ? 12 : 11, weight: index == 0 || isEmphasized ? .semibold : .regular))
                         .foregroundColor(.white.opacity(index == 0 || isEmphasized ? 0.80 : 0.48))
-                        .lineLimit(isEmphasized ? 3 : 2)
+                        .lineLimit(expandedText ? 3 : 2)
                         .truncationMode(.middle)
                         .fixedSize(horizontal: false, vertical: true)
                 }

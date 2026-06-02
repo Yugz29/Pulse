@@ -106,59 +106,150 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         XCTAssertEqual(snapshot.contextLine, "Contexte local")
         XCTAssertEqual(snapshot.fileLine, "Aucun fichier actif")
         XCTAssertEqual(snapshot.sessionLine, "Duree non etablie")
+        XCTAssertEqual(snapshot.whyLine, "Le contexte local reste limité aux signaux observés.")
         XCTAssertEqual(snapshot.lastSignalTitle, "Aucun signal notable")
         XCTAssertEqual(snapshot.nextActionLine, "Revenir au contexte actif observé.")
     }
 
-    func testResumeThreadSnapshotNextActionPriority() {
+    func testResumeThreadSnapshotFormatsLongDuration() {
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: nil,
+            activeApp: "Éditeur",
+            activeFile: nil,
+            taskLabel: "Général",
+            sessionDuration: 1_244,
+            focusLabel: "Focus normal",
+            feedEvent: nil,
+            insightEvent: nil,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: nil
+        ))
+
+        XCTAssertEqual(snapshot.sessionLine, "20 h 44 observées")
+    }
+
+    func testResumeThreadSnapshotNextActionPriorityKeepsExplicitCurrentSuggestions() {
         let base = ResumeThreadPanelSnapshot.Source(
-            activeProject: "Pulse",
-            activeApp: "Xcode",
-            activeFile: "/tmp/App.swift",
-            taskLabel: "Développement",
+            activeProject: "Projet local",
+            activeApp: "Éditeur",
+            activeFile: "/tmp/brief.txt",
+            taskLabel: "Rédaction",
             sessionDuration: 12,
             focusLabel: "Focus normal",
             feedEvent: nil,
             insightEvent: nil,
-            whyLine: "Lecture prudente.",
-            resumeNextAction: "Relancer les tests ciblés.",
-            workIntentSummary: "Finir le panneau.",
-            lastSessionContext: "Reprendre le fichier App.swift."
+            whyLine: nil,
+            resumeNextAction: "Reprendre la note ouverte.",
+            workIntentSummary: "Continuer le document actif.",
+            lastSessionContext: "Ancien contexte observé pendant 1244 min."
         )
 
         XCTAssertEqual(
             ResumeThreadPanelSnapshot(source: base).nextActionLine,
-            "Relancer les tests ciblés."
+            "Reprendre la note ouverte."
         )
 
         var withoutResumeCard = base
         withoutResumeCard.resumeNextAction = nil
         XCTAssertEqual(
             ResumeThreadPanelSnapshot(source: withoutResumeCard).nextActionLine,
-            "Finir le panneau."
+            "Continuer le document actif."
         )
+    }
 
-        var withoutWorkIntent = withoutResumeCard
-        withoutWorkIntent.workIntentSummary = nil
-        XCTAssertEqual(
-            ResumeThreadPanelSnapshot(source: withoutWorkIntent).nextActionLine,
-            "Reprendre le fichier App.swift."
-        )
+    func testResumeThreadSnapshotLastSessionContextDoesNotOverrideCurrentFile() {
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: "Projet local",
+            activeApp: "Éditeur",
+            activeFile: "/tmp/brief.txt",
+            taskLabel: "Rédaction",
+            sessionDuration: 12,
+            focusLabel: "Focus normal",
+            feedEvent: nil,
+            insightEvent: nil,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: "Ancien contexte observé pendant 1244 min."
+        ))
 
-        var withoutContext = withoutWorkIntent
-        withoutContext.lastSessionContext = nil
-        XCTAssertEqual(
-            ResumeThreadPanelSnapshot(source: withoutContext).nextActionLine,
-            "Revenir au contexte actif observé."
+        XCTAssertEqual(snapshot.nextActionLine, "Revenir au fichier actif observé.")
+    }
+
+    func testResumeThreadSnapshotFallbackUsesRecentSignalBeforeGenericFallback() {
+        let feedEvent = FeedEvent(
+            kind: "terminal",
+            label: "Commande terminée",
+            success: true,
+            command: "make verify",
+            timestamp: "2026-06-02T10:00:00Z",
+            resumeCard: nil,
+            loadTimeSec: nil
         )
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: nil,
+            activeApp: nil,
+            activeFile: nil,
+            taskLabel: "Général",
+            sessionDuration: 0,
+            focusLabel: "Focus normal",
+            feedEvent: feedEvent,
+            insightEvent: nil,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: "Ancien contexte observé pendant 1244 min."
+        ))
+
+        XCTAssertEqual(snapshot.nextActionLine, "Reprendre depuis le dernier signal observé.")
+    }
+
+    func testResumeThreadSnapshotUsesShortSanitizedLastSessionOnlyWithoutCurrentContext() {
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: nil,
+            activeApp: nil,
+            activeFile: nil,
+            taskLabel: "Général",
+            sessionDuration: 0,
+            focusLabel: "Focus normal",
+            feedEvent: nil,
+            insightEvent: nil,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: "Session observée pendant 1244 min. Détail ancien à ne pas étendre."
+        ))
+
+        XCTAssertEqual(snapshot.nextActionLine, "Session observée pendant 20 h 44.")
+    }
+
+    func testResumeThreadSnapshotWhyLineStaysGeneric() {
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: "Projet local",
+            activeApp: "Éditeur",
+            activeFile: "/tmp/brief.txt",
+            taskLabel: "Rédaction",
+            sessionDuration: 12,
+            focusLabel: "Focus normal",
+            feedEvent: nil,
+            insightEvent: nil,
+            whyLine: "3 fichier(s) touché(s) sur 10 min, surtout docs",
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: nil
+        ))
+
+        XCTAssertEqual(snapshot.whyLine, "Le contexte vient de l’app active et des fichiers récents.")
     }
 
     func testResumeThreadSnapshotPrefersFeedHistoryForLastSignal() {
         let feedEvent = FeedEvent(
             kind: "terminal",
-            label: "Tests OK",
+            label: "Commande terminée",
             success: true,
-            command: "xcodebuild test",
+            command: "make verify",
             timestamp: "2026-06-02T10:00:00Z",
             resumeCard: nil,
             loadTimeSec: nil
@@ -166,13 +257,13 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         let insightEvent = InsightEvent(
             type: "file_modified",
             timestamp: "2026-06-02T09:59:00Z",
-            keyValue: "DashboardContentView.swift"
+            keyValue: "brief.txt"
         )
         let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
-            activeProject: "Pulse",
+            activeProject: "Projet local",
             activeApp: nil,
             activeFile: nil,
-            taskLabel: "Développement",
+            taskLabel: "Rédaction",
             sessionDuration: 8,
             focusLabel: "Focus normal",
             feedEvent: feedEvent,
@@ -183,8 +274,8 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             lastSessionContext: nil
         ))
 
-        XCTAssertEqual(snapshot.lastSignalTitle, "Tests OK")
-        XCTAssertEqual(snapshot.lastSignalDetail, "xcodebuild test")
+        XCTAssertEqual(snapshot.lastSignalTitle, "Commande terminée")
+        XCTAssertEqual(snapshot.lastSignalDetail, "make verify")
     }
 
     func testSendMessageNormalResponseRemainsUnchanged() async {

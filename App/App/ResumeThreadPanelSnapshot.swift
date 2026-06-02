@@ -14,6 +14,14 @@ struct ResumeThreadPanelSnapshot: Equatable {
         var resumeNextAction: String?
         var workIntentSummary: String?
         var lastSessionContext: String?
+
+        var hasCurrentContext: Bool {
+            ResumeThreadPanelSnapshot.firstNonEmpty(activeProject, activeApp, activeFile) != nil
+        }
+
+        var hasRecentSignal: Bool {
+            feedEvent != nil || insightEvent != nil
+        }
     }
 
     let title: String
@@ -56,7 +64,7 @@ struct ResumeThreadPanelSnapshot: Equatable {
         fileLine = Self.fileLine(source.activeFile)
         taskLine = source.taskLabel
         sessionLine = source.sessionDuration > 0
-            ? "\(source.sessionDuration) min observees"
+            ? "\(Self.formatDuration(source.sessionDuration)) observées"
             : "Duree non etablie"
         focusLine = source.focusLabel
 
@@ -64,12 +72,61 @@ struct ResumeThreadPanelSnapshot: Equatable {
         lastSignalTitle = signal.title
         lastSignalDetail = signal.detail
 
-        whyLine = Self.nonEmpty(source.whyLine) ?? "Pulse garde une lecture prudente du contexte local."
-        nextActionLine = Self.firstNonEmpty(
+        whyLine = Self.whyLine(source)
+        nextActionLine = Self.nextActionLine(source)
+    }
+
+    private static func nextActionLine(_ source: Source) -> String {
+        if let action = firstNonEmpty(
             source.resumeNextAction,
-            source.workIntentSummary,
-            source.lastSessionContext
-        ) ?? "Revenir au contexte actif observé."
+            source.workIntentSummary
+        ) {
+            return action
+        }
+
+        if nonEmpty(source.activeFile) != nil {
+            return "Revenir au fichier actif observé."
+        }
+
+        if source.hasRecentSignal {
+            return "Reprendre depuis le dernier signal observé."
+        }
+
+        if !source.hasCurrentContext, let lastSession = sanitizedLastSessionContext(source.lastSessionContext) {
+            return lastSession
+        }
+
+        return "Revenir au contexte actif observé."
+    }
+
+    private static func whyLine(_ source: Source) -> String {
+        if nonEmpty(source.activeFile) != nil, nonEmpty(source.activeProject) != nil {
+            return "Le contexte vient de l’app active et des fichiers récents."
+        }
+
+        if nonEmpty(source.activeFile) != nil {
+            return "Le contexte vient du fichier actif observé."
+        }
+
+        if source.feedEvent?.kind == "terminal" {
+            return nonEmpty(source.activeProject) != nil
+                ? "Une commande récente a été détectée dans ce projet."
+                : "Une commande récente a été détectée."
+        }
+
+        if source.insightEvent != nil {
+            return "Le contexte vient surtout des signaux récents du poste."
+        }
+
+        if nonEmpty(source.activeProject) != nil || nonEmpty(source.activeApp) != nil {
+            return "Le contexte vient de l’app active et des signaux récents."
+        }
+
+        if nonEmpty(source.whyLine) != nil {
+            return "Le contexte vient surtout des signaux récents du poste."
+        }
+
+        return "Le contexte local reste limité aux signaux observés."
     }
 
     nonisolated private static func firstNonEmpty(_ values: String?...) -> String? {
@@ -84,6 +141,51 @@ struct ResumeThreadPanelSnapshot: Equatable {
     nonisolated private static func fileLine(_ path: String?) -> String {
         guard let path = nonEmpty(path) else { return "Aucun fichier actif" }
         return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    nonisolated private static func formatDuration(_ minutes: Int) -> String {
+        if minutes < 60 {
+            return "\(minutes) min"
+        }
+
+        let hours = minutes / 60
+        let remainingMinutes = minutes % 60
+        if remainingMinutes == 0 {
+            return "\(hours) h"
+        }
+        return "\(hours) h \(remainingMinutes)"
+    }
+
+    nonisolated private static func sanitizedLastSessionContext(_ value: String?) -> String? {
+        guard var line = nonEmpty(value) else { return nil }
+        line = replaceMinuteDurations(in: line)
+        if let sentenceEnd = line.firstIndex(where: { ".!?".contains($0) }) {
+            line = String(line[...sentenceEnd])
+        }
+        if line.count > 120 {
+            line = String(line.prefix(117)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+        }
+        return nonEmpty(line)
+    }
+
+    nonisolated private static func replaceMinuteDurations(in line: String) -> String {
+        let pattern = #"\b(\d+)\s*min\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return line }
+        let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
+        let matches = regex.matches(in: line, range: nsRange).reversed()
+        var result = line
+
+        for match in matches {
+            guard
+                match.numberOfRanges > 1,
+                let fullRange = Range(match.range(at: 0), in: result),
+                let valueRange = Range(match.range(at: 1), in: result),
+                let minutes = Int(result[valueRange])
+            else { continue }
+            result.replaceSubrange(fullRange, with: formatDuration(minutes))
+        }
+
+        return result
     }
 
     private static func lastSignal(feedEvent: FeedEvent?, insightEvent: InsightEvent?) -> (title: String, detail: String) {
