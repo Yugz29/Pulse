@@ -57,6 +57,7 @@ final class PulseViewModel: ObservableObject {
     var onObservationToggle: ((Bool) -> Void)?
     var onDaemonReconnected: (() -> Void)?
     var onToggleDashboard: (() -> Void)?
+    var onShowResumeThreadPanel: (() -> Void)?
 
     let bridge: DaemonBridge
     var lastModelsRefreshAt: Date?

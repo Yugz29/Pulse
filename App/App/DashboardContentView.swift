@@ -8,6 +8,18 @@ struct DashboardView: View {
             NowSummaryCard(vm: vm)
 
             HStack(spacing: 8) {
+                Button(action: { vm.showResumeThreadPanel() }) {
+                    Label("Reprise", systemImage: "arrow.clockwise.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: "#5DCAA5").opacity(0.82))
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .background(Color.white.opacity(0.08))
+                    .frame(height: 16)
+
                 TextField("Demande…", text: $vm.inputText)
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.75))

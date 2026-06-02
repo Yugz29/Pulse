@@ -45,6 +45,12 @@ extension PulseViewModel {
         }
     }
 
+    func showResumeThreadPanel() {
+        refreshState()
+        refreshInsights()
+        onShowResumeThreadPanel?()
+    }
+
     func toggleObservation() {
         isObservingEnabled.toggle()
         onObservationToggle?(isObservingEnabled)

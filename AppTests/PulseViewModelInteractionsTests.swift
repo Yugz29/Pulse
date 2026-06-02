@@ -86,6 +86,107 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         )
     }
 
+    func testResumeThreadSnapshotFallsBackWithoutProjectOrFile() {
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: nil,
+            activeApp: nil,
+            activeFile: nil,
+            taskLabel: "Contexte léger",
+            sessionDuration: 0,
+            focusLabel: "Focus normal",
+            feedEvent: nil,
+            insightEvent: nil,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: nil
+        ))
+
+        XCTAssertEqual(snapshot.title, "Reprise du fil")
+        XCTAssertEqual(snapshot.contextLine, "Contexte local")
+        XCTAssertEqual(snapshot.fileLine, "Aucun fichier actif")
+        XCTAssertEqual(snapshot.sessionLine, "Duree non etablie")
+        XCTAssertEqual(snapshot.lastSignalTitle, "Aucun signal notable")
+        XCTAssertEqual(snapshot.nextActionLine, "Revenir au contexte actif observé.")
+    }
+
+    func testResumeThreadSnapshotNextActionPriority() {
+        let base = ResumeThreadPanelSnapshot.Source(
+            activeProject: "Pulse",
+            activeApp: "Xcode",
+            activeFile: "/tmp/App.swift",
+            taskLabel: "Développement",
+            sessionDuration: 12,
+            focusLabel: "Focus normal",
+            feedEvent: nil,
+            insightEvent: nil,
+            whyLine: "Lecture prudente.",
+            resumeNextAction: "Relancer les tests ciblés.",
+            workIntentSummary: "Finir le panneau.",
+            lastSessionContext: "Reprendre le fichier App.swift."
+        )
+
+        XCTAssertEqual(
+            ResumeThreadPanelSnapshot(source: base).nextActionLine,
+            "Relancer les tests ciblés."
+        )
+
+        var withoutResumeCard = base
+        withoutResumeCard.resumeNextAction = nil
+        XCTAssertEqual(
+            ResumeThreadPanelSnapshot(source: withoutResumeCard).nextActionLine,
+            "Finir le panneau."
+        )
+
+        var withoutWorkIntent = withoutResumeCard
+        withoutWorkIntent.workIntentSummary = nil
+        XCTAssertEqual(
+            ResumeThreadPanelSnapshot(source: withoutWorkIntent).nextActionLine,
+            "Reprendre le fichier App.swift."
+        )
+
+        var withoutContext = withoutWorkIntent
+        withoutContext.lastSessionContext = nil
+        XCTAssertEqual(
+            ResumeThreadPanelSnapshot(source: withoutContext).nextActionLine,
+            "Revenir au contexte actif observé."
+        )
+    }
+
+    func testResumeThreadSnapshotPrefersFeedHistoryForLastSignal() {
+        let feedEvent = FeedEvent(
+            kind: "terminal",
+            label: "Tests OK",
+            success: true,
+            command: "xcodebuild test",
+            timestamp: "2026-06-02T10:00:00Z",
+            resumeCard: nil,
+            loadTimeSec: nil
+        )
+        let insightEvent = InsightEvent(
+            type: "file_modified",
+            timestamp: "2026-06-02T09:59:00Z",
+            keyValue: "DashboardContentView.swift"
+        )
+        let snapshot = ResumeThreadPanelSnapshot(source: ResumeThreadPanelSnapshot.Source(
+            activeProject: "Pulse",
+            activeApp: nil,
+            activeFile: nil,
+            taskLabel: "Développement",
+            sessionDuration: 8,
+            focusLabel: "Focus normal",
+            feedEvent: feedEvent,
+            insightEvent: insightEvent,
+            whyLine: nil,
+            resumeNextAction: nil,
+            workIntentSummary: nil,
+            lastSessionContext: nil
+        ))
+
+        XCTAssertEqual(snapshot.lastSignalTitle, "Tests OK")
+        XCTAssertEqual(snapshot.lastSignalDetail, "xcodebuild test")
+    }
+
     func testSendMessageNormalResponseRemainsUnchanged() async {
         let body = """
         data: {"token":"Bonjour","done":false}

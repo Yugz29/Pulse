@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let bridge = DaemonBridge()
     private var dashboardWindow: DashboardWindow?
     private var dashboardVM: DashboardViewModel?
+    private var resumeThreadPanel: ResumeThreadPanelWindow?
     private var appleFoundationWorker: AppleFoundationWorker?
     private let accessibilityDiagnosticStore = AccessibilityContextProbeDiagnosticStore()
     private var contextHotKeyRef: EventHotKeyRef?
@@ -133,6 +134,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         vm.onToggleDashboard = { [weak self] in
             self?.toggleDashboard()
+        }
+        vm.onShowResumeThreadPanel = { [weak self] in
+            self?.toggleResumeThreadPanel()
         }
         notchWindow?.orderFrontRegardless()
     }
@@ -346,11 +350,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         cancellables.removeAll()
         notchWindow = nil
         dashboardWindow = nil
+        resumeThreadPanel = nil
     }
 
     func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow, window == dashboardWindow else { return }
-        dashboardVM?.stopPolling()
+        guard let window = notification.object as? NSWindow else { return }
+        if window == dashboardWindow {
+            dashboardVM?.stopPolling()
+        }
+        if window == resumeThreadPanel {
+            resumeThreadPanel = nil
+        }
+    }
+
+    @MainActor private func toggleResumeThreadPanel() {
+        if resumeThreadPanel == nil {
+            let panel = ResumeThreadPanelWindow()
+            let hostingView = FirstMouseHostingView(rootView: ResumeThreadPanelView(
+                vm: vm,
+                onClose: { [weak self] in
+                    self?.resumeThreadPanel?.orderOut(nil)
+                }
+            ))
+            hostingView.frame = panel.contentView?.bounds ?? .zero
+            hostingView.autoresizingMask = [.width, .height]
+            hostingView.wantsLayer = true
+            hostingView.layer?.backgroundColor = CGColor(red: 0, green: 0, blue: 0, alpha: 0)
+            if let containerView = panel.contentView {
+                containerView.addSubview(hostingView)
+            } else {
+                panel.contentView = hostingView
+            }
+            panel.delegate = self
+            resumeThreadPanel = panel
+        }
+
+        guard let panel = resumeThreadPanel else { return }
+        if panel.isVisible {
+            panel.orderOut(nil)
+            return
+        }
+
+        panel.positionNearNotch(on: notchWindow?.screen, below: notchWindow?.frame)
+        panel.orderFrontRegardless()
     }
 
     @MainActor private func toggleDashboard() {
