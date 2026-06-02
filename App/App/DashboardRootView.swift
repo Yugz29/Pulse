@@ -429,28 +429,72 @@ struct DashboardRootView: View {
     }
 
     private var productRecentBlocksCard: some View {
-        let blocks = Array((vm.todaySummary?.workBlocks ?? []).suffix(5).reversed())
+        let allBlocks = vm.todaySummary?.workBlocks ?? []
+        let blocks = Array(allBlocks.suffix(3).reversed())
+        let dayBlocks = Array(allBlocks.suffix(8).reversed())
+        let currentWindowId = vm.todaySummary?.currentWindow?.id
 
         return GlassCard(accent: gGreen) {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    cardTitle("Derniers blocs", icon: "list.bullet.rectangle")
-                    Spacer()
-                    Text(dashboardRelativeTimestamp(vm.todaySummary?.timeline.lastActivityAt))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.tertiary)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        cardTitle("Travail récent", icon: "list.bullet.rectangle")
+                        Spacer()
+                        Text(dashboardRelativeTimestamp(vm.todaySummary?.timeline.lastActivityAt))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Text("Résumé local construit depuis les signaux observés. Les commandes récentes sont dans Notifications.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if blocks.isEmpty {
                     emptyState("Aucun bloc de travail persistant aujourd’hui")
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(blocks) { block in
-                            productBlockRow(block)
+                        ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
+                            productBlockRow(
+                                block,
+                                isPrimary: index == 0,
+                                currentWindowId: currentWindowId
+                            )
                             if block.id != blocks.last?.id {
                                 Divider()
                                     .background(dashboardDivider)
                                     .padding(.leading, 88)
+                            }
+                        }
+                    }
+
+                    Divider()
+                        .background(dashboardDivider)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            cardTitle("Journée complète", icon: "calendar")
+                            Spacer()
+                            if allBlocks.count > dayBlocks.count {
+                                Text("\(dayBlocks.count) / \(allBlocks.count) blocs")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+
+                        Text("Vue compacte des blocs observés aujourd’hui.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+
+                        VStack(spacing: 0) {
+                            ForEach(dayBlocks) { block in
+                                productDayBlockRow(block)
+                                if block.id != dayBlocks.last?.id {
+                                    Divider()
+                                        .background(dashboardDivider)
+                                        .padding(.leading, 56)
+                                }
                             }
                         }
                     }
@@ -459,14 +503,21 @@ struct DashboardRootView: View {
         }
     }
 
-    private func productBlockRow(_ block: TodayWorkBlock) -> some View {
+    private func productBlockRow(
+        _ block: TodayWorkBlock,
+        isPrimary: Bool = false,
+        currentWindowId: String? = nil
+    ) -> some View {
         let visibleFiles = Array((block.topFiles ?? []).prefix(3))
         let hiddenFileCount = max((block.topFiles ?? []).count - visibleFiles.count, 0)
+        let primaryLabel = currentWindowId == block.id ? "Maintenant" : "Dernier signal"
+        let titleWeight: Font.Weight = isPrimary ? .semibold : .medium
+        let rowOpacity = isPrimary ? 1.0 : 0.68
 
         return HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(dashboardShortTime(block.startedAt))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: titleWeight, design: .rounded))
                     .foregroundStyle(.primary)
                 Text(dashboardMinutes(block.durationMin))
                     .font(.system(size: 10, weight: .medium))
@@ -477,13 +528,22 @@ struct DashboardRootView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(block.taskLabel)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13, weight: titleWeight))
                         .foregroundStyle(.primary)
                     if let project = block.project, !project.isEmpty {
                         Text("·")
                             .foregroundStyle(.tertiary)
                         Text(project)
                             .foregroundStyle(.secondary)
+                    }
+                    if isPrimary {
+                        Text(primaryLabel)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color(hex: currentWindowId == block.id ? gGreen : gGray))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color(hex: currentWindowId == block.id ? gGreen : gGray).opacity(0.12))
+                            .clipShape(Capsule())
                     }
                 }
                 .lineLimit(1)
@@ -512,7 +572,49 @@ struct DashboardRootView: View {
 
             Spacer(minLength: 0)
         }
+        .opacity(rowOpacity)
         .padding(.vertical, 10)
+    }
+
+    private func productDayBlockRow(_ block: TodayWorkBlock) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(dashboardShortTime(block.startedAt))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(width: 46, alignment: .leading)
+
+            Text(block.taskLabel)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            if let project = block.project, !project.isEmpty {
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                Text(project)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let file = block.topFiles?.first, !file.isEmpty {
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                Text(file)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(dashboardMinutes(block.durationMin))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+        }
+        .padding(.vertical, 7)
     }
 
     private var productNowCompactCard: some View {
