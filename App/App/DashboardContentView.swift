@@ -7,46 +7,36 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 10) {
             NowSummaryCard(vm: vm)
 
-            HStack(spacing: 8) {
-                Button(action: { vm.showResumeThreadPanel() }) {
-                    Label("Reprise", systemImage: "arrow.clockwise.circle")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(hex: "#5DCAA5").opacity(0.82))
-                        .labelStyle(.titleAndIcon)
+            Button(action: { vm.showResumeThreadPanel() }) {
+                HStack(spacing: 9) {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+
+                    Text("Reprise du fil")
+                        .font(.system(size: 12, weight: .semibold))
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .opacity(0.48)
                 }
-                .buttonStyle(.plain)
-
-                Divider()
-                    .background(Color.white.opacity(0.08))
-                    .frame(height: 16)
-
-                TextField("Demande…", text: $vm.inputText)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.75))
-                    .textFieldStyle(.plain)
-                    .onSubmit { vm.sendMessage() }
-
-                Button(action: { vm.sendMessage() }) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundColor(
-                            vm.inputText.isEmpty
-                                ? .white.opacity(0.18)
-                                : Color(hex: "#5DCAA5")
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(vm.inputText.isEmpty)
+                .foregroundColor(Color(hex: "#5DCAA5").opacity(0.92))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color(hex: "#5DCAA5").opacity(0.12))
+                .overlay(
+                    Capsule()
+                        .stroke(Color(hex: "#5DCAA5").opacity(0.20), lineWidth: 0.8)
+                )
+                .clipShape(Capsule())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(Color.white.opacity(0.08))
-            .clipShape(Capsule())
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 18)
         .padding(.top, 12)
-        .padding(.bottom, 10)
-        .frame(height: NotchWindow.dashboardHeight - .panelContentGap)
+        .padding(.bottom, 16)
+        .frame(height: NotchWindow.dashboardHeight - .panelContentGap, alignment: .top)
     }
 }
 
@@ -417,15 +407,6 @@ struct NowSummaryCard: View {
         }
     }
 
-    private var focusColor: Color {
-        switch vm.focusLevel {
-        case "deep": return Color(hex: "#5DCAA5")
-        case "scattered": return Color(hex: "#EF9F27")
-        case "idle": return Color(hex: "#7c7c80")
-        default: return Color(hex: "#5DCAA5")
-        }
-    }
-
     private var currentAppLabel: String {
         if let project = vm.activeProject, !project.isEmpty { return project }
         return vm.activeApp ?? (vm.isDaemonActive ? "Contexte non détecté" : "Inactif")
@@ -443,15 +424,6 @@ struct NowSummaryCard: View {
         case "writing":  return "Rédaction"
         case "exploration", "browsing": return "Exploration"
         default:         return "Général"
-        }
-    }
-
-    private var focusLabel: String {
-        switch vm.focusLevel {
-        case "deep": return "profond"
-        case "scattered": return "fragmenté"
-        case "idle": return "faible"
-        default: return "normal"
         }
     }
 
@@ -495,26 +467,24 @@ struct NowSummaryCard: View {
 
                     Spacer()
 
-                    if vm.frictionScore >= 0.3 {
-                        VStack(alignment: .trailing, spacing: 5) {
-                            Text("Friction")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.32))
+                    if vm.frictionScore >= 0.6 {
+                        HStack(spacing: 5) {
+                            Image(systemName: "exclamationmark.circle")
+                                .font(.system(size: 10, weight: .semibold))
                             Text(frictionLabel)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(frictionColor)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(frictionColor.opacity(0.14))
-                                .clipShape(Capsule())
+                                .font(.system(size: 10, weight: .medium))
                         }
+                        .foregroundColor(frictionColor.opacity(0.78))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(frictionColor.opacity(0.08))
+                        .clipShape(Capsule())
                     }
                 }
 
                 HStack(spacing: 8) {
                     if !isPresenceOnly {
                         summaryMetric(label: "Tâche", value: taskLabel, tint: taskColor)
-                        summaryMetric(label: "Focus", value: focusLabel, tint: focusColor)
                     }
                     summaryMetric(
                         label: isPresenceOnly ? "Présence" : "Session",
