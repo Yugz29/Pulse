@@ -67,7 +67,8 @@ def register_mcp_routes(
         tool_use_id = data.get("tool_use_id")
         decision = data.get("decision")
         ok = receive_decision(tool_use_id, decision)
-        bus.publish("mcp_decision", {"tool_use_id": tool_use_id, "decision": decision})
+        if ok:
+            bus.publish("mcp_decision", {"tool_use_id": tool_use_id, "decision": decision})
         return jsonify({"ok": ok})
 
     @app.route("/scoring/status")

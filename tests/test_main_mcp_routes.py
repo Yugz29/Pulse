@@ -114,7 +114,7 @@ class TestMainMcpRoutes(unittest.TestCase):
         receive.assert_called_once_with("tool-1", "deny")
         publish.assert_called_once()
 
-    def test_mcp_decision_publishes_event_even_when_decision_fails(self):
+    def test_mcp_decision_does_not_publish_event_when_decision_fails(self):
         with patch.object(daemon_main.bus, "publish") as publish, \
              patch("daemon.main.receive_decision", return_value=False) as receive:
             response = self.client.post(
@@ -125,10 +125,7 @@ class TestMainMcpRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.get_json()["ok"])
         receive.assert_called_once_with("missing", "allow")
-        publish.assert_called_once_with(
-            "mcp_decision",
-            {"tool_use_id": "missing", "decision": "allow"},
-        )
+        publish.assert_not_called()
 
     def test_e2e_intercept_pending_decision_flux(self):
         """
