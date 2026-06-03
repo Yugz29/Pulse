@@ -254,7 +254,7 @@ def test_build_state_payload_legacy_signals_contains_expected_fields():
     assert payload["signals"]["last_session_context"] == "last session for Pulse"
 
 
-def test_build_state_payload_keeps_task_confidence_out_of_present_boundary():
+def test_build_state_payload_keeps_present_task_confidence_nullable_without_value():
     present = PresentState(
         active_project="Pulse",
         active_file="/tmp/pulse.py",
@@ -273,8 +273,30 @@ def test_build_state_payload_keeps_task_confidence_out_of_present_boundary():
 
     assert payload["present"]["probable_task"] == "debug"
     assert payload["present"]["active_file_source"] == "unknown"
-    assert "task_confidence" not in payload["present"]
+    assert payload["present"]["task_confidence"] is None
     assert payload["signals"]["task_confidence"] == 0.82
+
+
+def test_build_state_payload_present_exposes_task_confidence_from_signals():
+    present = PresentState(
+        active_project="Pulse",
+        active_file="/tmp/pulse.py",
+        probable_task="coding",
+        task_confidence=0.82,
+        activity_level="editing",
+        focus_level="normal",
+        session_duration_min=12,
+    )
+
+    payload = build_state_payload(
+        store_state=StoreStub().to_dict(),
+        runtime_snapshot=_snapshot(signals=_signals(), present=present),
+        current_context_builder=CurrentContextBuilderStub(),
+        last_session_context_fn=lambda project: None,
+    )
+
+    assert payload["present"]["probable_task"] == "coding"
+    assert payload["present"]["task_confidence"] == 0.82
 
 
 def test_build_state_payload_documents_legacy_signals_exposed_by_default():

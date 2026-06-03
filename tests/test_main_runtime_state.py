@@ -56,6 +56,7 @@ class TestMainRuntimeState(unittest.TestCase):
             rename_delete_ratio_10m=0.25,
             dominant_file_mode="few_files",
             work_pattern_candidate="feature_candidate",
+            task_confidence=0.87,
         )
         decision = Decision(
             action="notify",
@@ -101,6 +102,7 @@ class TestMainRuntimeState(unittest.TestCase):
             "réduire les coûts cachés du modèle local",
         )
         self.assertEqual(payload["present"]["probable_task"], "coding")
+        self.assertEqual(payload["present"]["task_confidence"], 0.87)
         self.assertEqual(
             payload["present"]["active_file"],
             "/Users/yugz/Projets/Pulse/Pulse/App/App/PanelView.swift",
@@ -131,6 +133,7 @@ class TestMainRuntimeState(unittest.TestCase):
             recent_apps=["Xcode"],
             clipboard_context="text",
             activity_level="editing",
+            task_confidence=0.76,
         )
         decision = Decision("notify", 2, "ready")
 
@@ -165,6 +168,7 @@ class TestMainRuntimeState(unittest.TestCase):
             recent_apps=["Xcode"],
             clipboard_context="text",
             activity_level="editing",
+            task_confidence=0.76,
         )
 
         daemon_main.runtime_state.update_present(
@@ -182,6 +186,7 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(present.active_project, "Pulse")
         self.assertEqual(present.active_file, "/tmp/pulse/main.py")
         self.assertEqual(present.probable_task, "coding")
+        self.assertEqual(present.task_confidence, 0.76)
         self.assertEqual(present.activity_level, "editing")
         self.assertEqual(present.focus_level, "deep")
         self.assertEqual(present.session_duration_min, 42)

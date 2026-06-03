@@ -875,7 +875,7 @@ class TestRuntimeRoutes(unittest.TestCase):
 
         self.assertNotIn("debug", payload)
 
-    def test_state_present_boundary_omits_confidence_while_legacy_signals_expose_it(self):
+    def test_state_present_boundary_exposes_confidence_with_legacy_signals(self):
         signals = Signals(
             active_project="Pulse",
             active_file="/tmp/pulse.py",
@@ -907,7 +907,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         payload = response.get_json()
         self.assertNotIn("debug", payload)
         self.assertEqual(payload["present"]["probable_task"], "debug")
-        self.assertNotIn("task_confidence", payload["present"])
+        self.assertEqual(payload["present"]["task_confidence"], 0.32)
         self.assertEqual(payload["signals"]["probable_task"], "debug")
         self.assertEqual(payload["signals"]["task_confidence"], 0.32)
         self.assertEqual(payload["signals"]["terminal_summary"], "pytest failed")
@@ -1993,7 +1993,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(span["project"], "Pulse")
         self.assertEqual(span["activity_level"], "executing")
         self.assertEqual(span["probable_task"], "debug")
-        self.assertEqual(span["confidence"], 0.0)
+        self.assertEqual(span["confidence"], 0.91)
         self.assertEqual(span["buckets"], ["terminal_activity"])
         self.assertEqual(span["privacy"], "content_sensitive")
         self.assertEqual(span["duration_min"], 5)
@@ -2002,7 +2002,7 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(debug["policy"], {
             "privacy": "Content-sensitive span",
             "retention": "Session-scoped by default",
-            "confidence": "No confidence score",
+            "confidence": "High confidence",
         })
         self.assertEqual(debug["metadata_keys"], ["source"])
         self.assertNotIn("metadata", debug)

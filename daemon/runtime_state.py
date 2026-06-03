@@ -62,6 +62,7 @@ class PresentState:
     active_file_source: str | None = "unknown"
     active_project: str | None = None
     probable_task: str = "general"
+    task_confidence: float | None = None
     activity_level: str = "idle"
     focus_level: str = "normal"
     friction_score: float = 0.0
@@ -86,6 +87,7 @@ class PresentState:
             "active_file_source": self.active_file_source,
             "active_project": self.active_project,
             "probable_task": self.probable_task,
+            "task_confidence": self.task_confidence,
             "activity_level": self.activity_level,
             "focus_level": self.focus_level,
             "friction_score": self.friction_score,
@@ -207,6 +209,7 @@ class RuntimeState:
             active_file_source=getattr(signals, "active_file_source", "unknown"),
             active_project=getattr(signals, "active_project", None),
             probable_task=getattr(signals, "probable_task", "general"),
+            task_confidence=getattr(signals, "task_confidence", None),
             activity_level=getattr(signals, "activity_level", "idle"),
             focus_level=getattr(signals, "focus_level", "normal"),
             friction_score=getattr(signals, "friction_score", 0.0),
