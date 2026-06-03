@@ -78,6 +78,7 @@ def reset_cooldown_for_tests() -> None:
 MEMORY_DIR = Path.home() / ".pulse" / "memory"
 REPORT_COOLDOWN_MIN = 30
 MAX_SESSION_DURATION_MIN = 480
+MAX_LAST_SESSION_CONTEXT_AGE_DAYS = 6
 _COOLDOWN_FILE = Path.home() / ".pulse" / "cooldown.json"
 
 # Number of pending journal entries to enrich at once
@@ -632,7 +633,6 @@ def _entry_has_unresolved_commit_item_summaries(entry: Dict[str, Any]) -> bool:
 
 
 def last_session_context(project: str, memory_dir: Optional[Path] = None, today: Optional["date"] = None) -> Optional[str]:
-    from datetime import date as _date
     base_dir = Path(memory_dir) if memory_dir else MEMORY_DIR
     sections = _parse_project_sections(base_dir / "projects.md")
     entry = sections.get(project)
@@ -644,18 +644,32 @@ def last_session_context(project: str, memory_dir: Optional[Path] = None, today:
         delta = (ref_today - last_date).days
         if delta < 0:
             return None
+        if delta > MAX_LAST_SESSION_CONTEXT_AGE_DAYS:
+            return None
         elif delta == 0: age = "aujourd'hui"
         elif delta == 1: age = "hier"
         elif delta <= 6: age = f"il y a {delta} jours"
-        elif delta <= 13: age = "la semaine dernière"
-        else: age = f"il y a {delta // 7} semaine(s)"
         _task_labels = {"coding": "développement", "debug": "débogage", "writing": "rédaction", "exploration": "exploration", "browsing": "exploration"}
         raw_task = entry.get("last_task") or entry.get("task") or "general"
         task = _task_labels.get(raw_task, raw_task)
         duration = int(entry.get("last_duration") or 0)
-        return f"Dernière session {project} : {age} ({task}, {duration} min)"
+        duration_label = _last_session_duration_label(duration)
+        details = ", ".join(part for part in (task, duration_label) if part)
+        return f"Dernière session {project} : {age} ({details})"
     except (ValueError, TypeError, AttributeError):
         return None
+
+
+def _last_session_duration_label(duration_min: int) -> Optional[str]:
+    if duration_min <= 0 or duration_min > MAX_SESSION_DURATION_MIN:
+        return None
+    if duration_min < 60:
+        return f"{duration_min} min"
+    hours = duration_min // 60
+    minutes = duration_min % 60
+    if minutes:
+        return f"{hours} h {minutes:02d}"
+    return f"{hours} h"
 
 
 # ── Recent Journal Entries API ────────────────────────────────────────────────

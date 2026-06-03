@@ -77,7 +77,7 @@ class TestLastSessionContext(unittest.TestCase):
         self.assertIn("il y a 3 jours", result)
         self.assertIn("rédaction", result)
 
-    def test_retourne_la_semaine_derniere_pour_delta_7_a_13(self):
+    def test_retourne_none_pour_delta_7_a_13(self):
         eight_days_ago = self.today - timedelta(days=8)
         _write_projects_md(self.memory_dir, f"""# Projets
 
@@ -88,10 +88,9 @@ class TestLastSessionContext(unittest.TestCase):
 - Type de travail estimé : coding
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
-        self.assertIsNotNone(result)
-        self.assertIn("la semaine dernière", result)
+        self.assertIsNone(result)
 
-    def test_retourne_il_y_a_n_semaines_pour_delta_superieur_14(self):
+    def test_retourne_none_pour_delta_superieur_14(self):
         three_weeks_ago = self.today - timedelta(days=21)
         _write_projects_md(self.memory_dir, f"""# Projets
 
@@ -102,8 +101,38 @@ class TestLastSessionContext(unittest.TestCase):
 - Type de travail estimé : general
 """)
         result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
+        self.assertIsNone(result)
+
+    def test_omet_les_durees_brutes_trop_longues(self):
+        yesterday = self.today - timedelta(days=1)
+        _write_projects_md(self.memory_dir, f"""# Projets
+
+## Pulse
+
+- Première session : 2026-01-01
+- Dernière session : {yesterday.strftime('%Y-%m-%d')} (1244 min, writing)
+- Type de travail estimé : writing
+""")
+        result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
         self.assertIsNotNone(result)
-        self.assertIn("il y a 3 semaine(s)", result)
+        self.assertIn("hier", result)
+        self.assertIn("rédaction", result)
+        self.assertNotIn("1244", result)
+        self.assertNotIn("min", result)
+
+    def test_formate_les_durees_longues_acceptables_en_heures(self):
+        yesterday = self.today - timedelta(days=1)
+        _write_projects_md(self.memory_dir, f"""# Projets
+
+## Pulse
+
+- Première session : 2026-01-01
+- Dernière session : {yesterday.strftime('%Y-%m-%d')} (125 min, coding)
+- Type de travail estimé : coding
+""")
+        result = last_session_context("Pulse", memory_dir=self.memory_dir, today=self.today)
+        self.assertIsNotNone(result)
+        self.assertIn("2 h 05", result)
 
     def test_tache_inconnue_passee_telle_quelle(self):
         yesterday = self.today - timedelta(days=1)
