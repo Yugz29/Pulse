@@ -37,6 +37,7 @@ class CurrentContextBuilder:
                 find_workspace_root_fn=find_workspace_root_fn,
             ),
             active_file=present.active_file,
+            active_file_source=present.active_file_source,
             active_app=active_app,
             active_app_bundle_id=self._signal_attr(signals, "active_app_bundle_id"),
             active_app_system_category=self._signal_attr(signals, "active_app_system_category"),

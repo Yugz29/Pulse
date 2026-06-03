@@ -21,12 +21,14 @@ class StoreStub:
 
 class PresentStub:
     active_file = "/tmp/pulse.py"
+    active_file_source = "file_event"
     active_project = "Pulse"
     session_duration_min = 42
 
     def to_dict(self):
         return {
             "active_file": self.active_file,
+            "active_file_source": self.active_file_source,
             "active_project": self.active_project,
             "session_duration_min": self.session_duration_min,
             "session_status": "active",
@@ -39,6 +41,7 @@ class CurrentContextBuilderStub:
         return SimpleNamespace(
             active_project="Pulse",
             active_file="/tmp/pulse.py",
+            active_file_source=getattr(signals, "active_file_source", None),
             probable_task="coding",
             activity_level="editing",
             focus_level="deep",
@@ -90,6 +93,7 @@ def _signals():
         active_window_title_duration_sec=90,
         app_switch_count_10m=1,
         ai_app_switch_count_10m=0,
+        active_file_source="file_event",
         recent_files=["main.py", "test_main.py"],
         terminal_action_category="testing",
         terminal_project="Pulse",
@@ -127,6 +131,7 @@ def _sensitive_signals():
         active_window_title_duration_sec=90,
         app_switch_count_10m=1,
         ai_app_switch_count_10m=0,
+        active_file_source="file_event",
         terminal_action_category="testing",
         terminal_project="Pulse",
         terminal_cwd="/Users/yugz/Projets/Pulse/Pulse",
@@ -151,6 +156,7 @@ def test_present_state_product_projection_stays_minimal():
     present = PresentState(
         active_project="Pulse",
         active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
+        active_file_source="file_event",
         probable_task="testing",
         activity_level="executing",
         user_presence_state="active",
@@ -162,6 +168,7 @@ def test_present_state_product_projection_stays_minimal():
 
     assert payload["user_idle_seconds"] == 12
     assert payload["user_presence_source"] == "iokit"
+    assert payload["active_file_source"] == "file_event"
     assert "terminal_command" not in payload
     assert "command" not in payload
     assert "mcp_command" not in payload
@@ -204,6 +211,7 @@ def test_serialize_current_context_returns_expected_top_level_keys():
         started_at="2026-05-06T09:00:00",
         active_project="Pulse",
         active_file="/tmp/pulse.py",
+        active_file_source="file_event",
         probable_task="coding",
         activity_level="editing",
         focus_level="deep",
@@ -221,6 +229,7 @@ def test_serialize_current_context_returns_expected_top_level_keys():
     assert payload["session_id"] == "session-1"
     assert payload["active_project"] == "Pulse"
     assert payload["active_file"] == "/tmp/pulse.py"
+    assert payload["active_file_source"] == "file_event"
     assert payload["probable_task"] == "coding"
     assert payload["task_confidence"] == 0.8
     assert payload["work_intent"]["summary"] == "stabiliser le résumé journal"
@@ -238,6 +247,7 @@ def test_build_state_payload_legacy_signals_contains_expected_fields():
     assert payload["active_project"] == "Pulse"
     assert payload["signals"]["active_project"] == "Pulse"
     assert payload["signals"]["active_file"] == "/tmp/pulse.py"
+    assert payload["signals"]["active_file_source"] == "file_event"
     assert payload["signals"]["recent_files"] == ["main.py", "test_main.py"]
     assert payload["signals"]["task_confidence"] == 0.82
     assert payload["signals"]["terminal_command"] == "pytest"
@@ -262,6 +272,7 @@ def test_build_state_payload_keeps_task_confidence_out_of_present_boundary():
     )
 
     assert payload["present"]["probable_task"] == "debug"
+    assert payload["present"]["active_file_source"] == "unknown"
     assert "task_confidence" not in payload["present"]
     assert payload["signals"]["task_confidence"] == 0.82
 

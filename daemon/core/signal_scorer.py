@@ -31,6 +31,7 @@ class Signals:
     session_duration_min: int
     recent_apps: List[str]
     clipboard_context: Optional[str]
+    active_file_source: Optional[str] = "unknown"
     recent_files: List[str] = field(default_factory=list)
     edited_file_count_10m: int = 0
     file_type_mix_10m: Dict[str, int] = field(default_factory=dict)
@@ -144,6 +145,7 @@ class SignalScorer:
         else:
             active_file = self._last_file_path(recent_live_meaningful_file_events)
             active_project = self._extract_project(active_file)
+        active_file_source = "file_event" if active_file else "unknown"
 
         if not active_project:
             anchor_workspace_root = self._dominant_workspace_root(recent_project_anchor_file_events)
@@ -154,6 +156,8 @@ class SignalScorer:
                         recent_project_anchor_file_events,
                         anchor_workspace_root,
                     )
+                    if active_file:
+                        active_file_source = "file_event"
 
         # Fallback : si FSEvents n'a rien captué, extraire le fichier depuis
         # le titre de fenêtre (ex. "extractor.py — Pulse — VS Code").
@@ -180,6 +184,7 @@ class SignalScorer:
             )
             if file_from_title:
                 active_file = file_from_title
+                active_file_source = "window_title"
         latest_active_app = self._latest_active_app(app_events, now, minutes=5)
         latest_active_app_bundle_id = self._latest_app_bundle_id(
             app_events,
@@ -286,6 +291,7 @@ class SignalScorer:
             session_duration_min=int((now - effective_session_start).total_seconds() / 60),
             recent_apps=recent_apps,
             clipboard_context=clipboard_context,
+            active_file_source=active_file_source,
             recent_files=recent_files,
             edited_file_count_10m=edited_file_count_10m,
             file_type_mix_10m=file_type_mix_10m,

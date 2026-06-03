@@ -39,6 +39,7 @@ class CurrentContext:
     active_project: Optional[str]
     project_root: Optional[str]
     active_file: Optional[str]
+    active_file_source: Optional[str]
     active_app: Optional[str]
     active_app_bundle_id: Optional[str]
     active_app_system_category: Optional[str]

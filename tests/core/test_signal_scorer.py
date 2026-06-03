@@ -31,6 +31,7 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(signals.active_project, "acme-api")
         self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
+        self.assertEqual(signals.active_file_source, "file_event")
         self.assertEqual(signals.probable_task, "coding")
         self.assertEqual(signals.clipboard_context, "code")
         self.assertEqual(signals.edited_file_count_10m, 1)
@@ -88,6 +89,7 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.active_file_source, "unknown")
         self.assertEqual(signals.recent_files, ["generated.py"])
 
     def test_compute_peut_utiliser_un_now_observe_pour_la_duree_de_session(self):
@@ -247,6 +249,7 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertIsNone(signals.active_project)
         self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.active_file_source, "unknown")
         self.assertEqual(signals.probable_task, "general")
 
     def test_fichier_ancien_n_ancre_pas_le_projet_sans_confirmation_recente(self):
@@ -963,6 +966,7 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.window_title, "handler.py — Acme API — Visual Studio Code")
         self.assertEqual(signals.window_title_app, "Code")
         self.assertEqual(signals.active_file, "handler.py")
+        self.assertEqual(signals.active_file_source, "window_title")
 
     def test_window_title_seul_ne_confirme_pas_projet(self):
         self._push("app_activated", {
@@ -974,6 +978,7 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(signals.window_title, "Acme API — handler.py — Visual Studio Code")
         self.assertEqual(signals.active_file, "handler.py")
+        self.assertEqual(signals.active_file_source, "window_title")
         self.assertIsNone(signals.active_project)
         self.assertNotEqual(signals.probable_task, "coding")
 

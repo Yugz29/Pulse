@@ -59,6 +59,7 @@ class PresentState:
     awake: bool = True
     locked: bool = False
     active_file: str | None = None
+    active_file_source: str | None = "unknown"
     active_project: str | None = None
     probable_task: str = "general"
     activity_level: str = "idle"
@@ -82,6 +83,7 @@ class PresentState:
             "awake": self.awake,
             "locked": self.locked,
             "active_file": self.active_file,
+            "active_file_source": self.active_file_source,
             "active_project": self.active_project,
             "probable_task": self.probable_task,
             "activity_level": self.activity_level,
@@ -202,6 +204,7 @@ class RuntimeState:
             awake=awake,
             locked=locked,
             active_file=getattr(signals, "active_file", None),
+            active_file_source=getattr(signals, "active_file_source", "unknown"),
             active_project=getattr(signals, "active_project", None),
             probable_task=getattr(signals, "probable_task", "general"),
             activity_level=getattr(signals, "activity_level", "idle"),
