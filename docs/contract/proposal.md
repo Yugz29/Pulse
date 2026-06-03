@@ -145,11 +145,11 @@ Recoit `tool_use_id` et `decision`.
 Comportement actuel :
 
 - appelle `receive_decision(tool_use_id, decision)` ;
-- publie toujours un evenement `mcp_decision` sur le bus avec `tool_use_id` et `decision` ;
+- publie un evenement `mcp_decision` sur le bus seulement si `receive_decision()` retourne `True` ;
 - retourne `{"ok": true}` si une proposition pending a ete resolue ;
 - retourne `{"ok": false}` si l'id est inconnu, deja terminal ou si la decision est invalide.
 
-Limite importante : l'evenement `mcp_decision` peut donc etre publie meme quand `receive_decision()` retourne `False`. Cet evenement ne doit pas etre lu comme preuve d'approbation humaine.
+Correction post-R6 : l'evenement `mcp_decision` n'est plus publie quand `receive_decision()` retourne `False`. Un evenement `mcp_decision` indique donc qu'une decision MCP valide a ete acceptee par la route, mais il ne remplace toujours pas un champ d'audit explicite comme `decided_by`, `decision_source` ou `human_approved`.
 
 ### `/mcp/proposals`
 
@@ -238,7 +238,7 @@ Ces surfaces restent hors Core R6 tant qu'elles ne sont pas explicitement separe
 - `pending -> executed` est possible via `ProposalStore.resolve()`.
 - MCP n'utilise pas `executed` pour autoriser une commande ; il retourne `allowed: true` apres `accepted`.
 - `context_injection` reste `pending` en Core depuis R6d, mais l'auto-`executed` Lab/dev reste dangereux si on le confond avec une validation humaine.
-- `/mcp/decision` publie un evenement meme si `receive_decision()` retourne `False`.
+- `/mcp/decision` ne publie plus d'evenement si `receive_decision()` retourne `False`, mais `Proposal` n'a toujours pas de champ d'audit explicite pour prouver l'origine humaine de la decision.
 - `Proposal` n'a pas de champ `decided_by`, `decision_source` ou `human_approved`.
 - `accepted` ne prouve pas l'execution effective ; `executed` ne prouve pas l'approbation humaine.
 - Context probes, work intent, resume cards LLM/intelligentes et propositions intelligentes restent Lab / debug pendant R6.
