@@ -127,6 +127,12 @@ class TestFileSignalSignificance(unittest.TestCase):
             "meaningful",
         )
 
+    def test_markdown_projet_hors_tmp_reste_meaningful(self):
+        self.assertEqual(
+            file_signal_significance("/workspace/project/docs/recent-files-smoke.md"),
+            "meaningful",
+        )
+
     def test_test_file(self):
         self.assertEqual(
             file_signal_significance("/Users/yugz/Projets/Pulse/tests/test_main.py"),
@@ -311,6 +317,12 @@ class TestFileSignalSignificance(unittest.TestCase):
             file_signal_significance(
                 "/Users/yugz/.codex/.tmp/plugins-clone-abc123/SKILL.md"
             ),
+            "technical_noise",
+        )
+
+    def test_dossier_tmp_cache_est_bruit_technique(self):
+        self.assertEqual(
+            file_signal_significance("/workspace/project/.tmp/recent-files-smoke.md"),
             "technical_noise",
         )
 

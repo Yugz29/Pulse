@@ -264,7 +264,7 @@ class EventMeaningPolicy:
                 "/.git/", "/node_modules/", "/__pycache__/",
                 "/xcuserdata/", "/DerivedData/",
                 "/site-packages/", "/dist-packages/", "/.venv/", "/venv/",
-                "/.cache/", "/.codex/",
+                "/.cache/", "/.codex/", "/.tmp/",
                 "/opt/homebrew/Cellar/", "/opt/homebrew/lib/",
                 "/usr/local/lib/", "/usr/lib/", "/usr/share/",
                 "/System/Library/", "/private/var/",

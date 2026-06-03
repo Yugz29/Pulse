@@ -70,6 +70,15 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.active_file, "/tmp/acme-api/src/current.py")
         self.assertEqual(signals.recent_files, ["current.py"])
 
+    def test_ignore_les_fichiers_dans_dossier_tmp_cache(self):
+        self._push("file_modified", {"path": "/workspace/project/.tmp/recent-files-smoke.md"})
+
+        signals = self.scorer.compute()
+
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.recent_files, [])
+        self.assertEqual(signals.edited_file_count_10m, 0)
+
     def test_recent_files_ne_promeut_pas_un_fichier_en_active_file(self):
         self._push(
             "file_modified",
