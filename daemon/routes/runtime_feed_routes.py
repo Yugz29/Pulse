@@ -206,7 +206,7 @@ def register_feed_routes(
                     "resume_card": payload,
                 })
 
-        return jsonify(notable)
+        return jsonify(_dedupe_terminal_feed_items(notable))
 
 
 def _public_daydream_status(status: dict[str, Any]) -> dict[str, Any]:
@@ -216,3 +216,27 @@ def _public_daydream_status(status: dict[str, Any]) -> dict[str, Any]:
     if raw_error:
         public_status["error"] = "daydream_unavailable"
     return public_status
+
+
+def _dedupe_terminal_feed_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen_terminal_keys: set[tuple[Any, ...]] = set()
+
+    for item in items:
+        if item.get("kind") != "terminal":
+            deduped.append(item)
+            continue
+
+        key = (
+            item.get("kind"),
+            item.get("timestamp"),
+            item.get("command"),
+            item.get("label"),
+            item.get("success"),
+        )
+        if key in seen_terminal_keys:
+            continue
+        seen_terminal_keys.add(key)
+        deduped.append(item)
+
+    return deduped

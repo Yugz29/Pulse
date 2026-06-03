@@ -1444,6 +1444,44 @@ class TestRuntimeRoutes(unittest.TestCase):
         self.assertEqual(payload[0]["command"], "pytest tests/test_runtime_routes.py -q")
         self.bus.recent.assert_called_with(200)
 
+    def test_feed_deduplicates_strictly_identical_terminal_entries_only(self):
+        first = datetime(2026, 6, 3, 11, 55, 23)
+        second = datetime(2026, 6, 3, 11, 56, 23)
+        command = "source /Users/yugz/Projets/Pulse/Pulse/.venv/bin/activate"
+        terminal_payload = {
+            "terminal_command": command,
+            "terminal_command_base": "source",
+            "terminal_success": True,
+            "terminal_summary": "✓ Commande terminal",
+        }
+        self.bus.recent.return_value = [
+            Event("terminal_command_finished", dict(terminal_payload), first),
+            Event("terminal_command_finished", dict(terminal_payload), first),
+            Event("terminal_command_finished", dict(terminal_payload), second),
+            Event("resume_card", {"title": "Reprise disponible", "id": "same"}, first),
+            Event("resume_card", {"title": "Reprise disponible", "id": "same"}, first),
+            Event("llm_ready", {"model": "local"}, first),
+            Event("llm_ready", {"model": "local"}, first),
+        ]
+
+        response = self.client.get("/feed")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        terminal_items = [item for item in payload if item["kind"] == "terminal"]
+        resume_items = [item for item in payload if item["kind"] == "resume_card"]
+        llm_ready_items = [item for item in payload if item["kind"] == "llm_ready"]
+
+        self.assertEqual(len(terminal_items), 2)
+        self.assertEqual(
+            [item["timestamp"] for item in terminal_items],
+            [first.isoformat(), second.isoformat()],
+        )
+        self.assertEqual({item["command"] for item in terminal_items}, {command})
+        self.assertEqual(len(resume_items), 2)
+        self.assertEqual(len(llm_ready_items), 2)
+        self.bus.recent.assert_called_with(200)
+
     def test_health_core_ne_depend_pas_des_services_lab(self):
         with patch.dict("os.environ", {"PULSE_MODE": "core"}), \
              patch("daemon.memory.daydream.get_daydream_status") as daydream_status, \
