@@ -85,6 +85,7 @@ def current_context_to_legacy_signals_payload(
         "focus_level": context.focus_level,
         "session_duration_min": context.session_duration_min,
         "recent_apps": list(context.signal_summary.recent_apps),
+        "recent_files": list(getattr(context.signal_summary, "recent_files", []) or []),
         "clipboard_context": context.clipboard_context,
         "user_presence_state": getattr(signals, "user_presence_state", None),
         "user_idle_seconds": getattr(signals, "user_idle_seconds", None),

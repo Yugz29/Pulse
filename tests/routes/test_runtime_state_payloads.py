@@ -46,6 +46,7 @@ class CurrentContextBuilderStub:
             clipboard_context="code",
             signal_summary=SimpleNamespace(
                 recent_apps=["Xcode"],
+                recent_files=getattr(signals, "recent_files", []),
                 edited_file_count_10m=2,
                 file_type_mix_10m={"source": 2},
                 rename_delete_ratio_10m=0.0,
@@ -89,6 +90,7 @@ def _signals():
         active_window_title_duration_sec=90,
         app_switch_count_10m=1,
         ai_app_switch_count_10m=0,
+        recent_files=["main.py", "test_main.py"],
         terminal_action_category="testing",
         terminal_project="Pulse",
         terminal_cwd="/tmp/Pulse",
@@ -236,6 +238,7 @@ def test_build_state_payload_legacy_signals_contains_expected_fields():
     assert payload["active_project"] == "Pulse"
     assert payload["signals"]["active_project"] == "Pulse"
     assert payload["signals"]["active_file"] == "/tmp/pulse.py"
+    assert payload["signals"]["recent_files"] == ["main.py", "test_main.py"]
     assert payload["signals"]["task_confidence"] == 0.82
     assert payload["signals"]["terminal_command"] == "pytest"
     assert payload["signals"]["last_session_context"] == "last session for Pulse"

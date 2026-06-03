@@ -13,6 +13,7 @@ class SignalSummary:
     """
 
     recent_apps: list[str] = field(default_factory=list)
+    recent_files: list[str] = field(default_factory=list)
     recent_app_bundle_ids: list[str | None] = field(default_factory=list)
     recent_app_system_categories: list[str | None] = field(default_factory=list)
     edited_file_count_10m: int = 0

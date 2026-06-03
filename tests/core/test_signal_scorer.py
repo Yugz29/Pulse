@@ -36,6 +36,50 @@ class TestSignalScorer(unittest.TestCase):
         self.assertEqual(signals.edited_file_count_10m, 1)
         self.assertEqual(signals.file_type_mix_10m["source"], 1)
         self.assertEqual(signals.dominant_file_mode, "single_file")
+        self.assertEqual(signals.recent_files, ["main.py"])
+
+    def test_recent_files_retourne_les_fichiers_meaningful_recents_dedupliques(self):
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"}, minutes_ago=3)
+        self._push("file_modified", {"path": "/tmp/acme-api/tests/test_main.py"}, minutes_ago=2)
+        self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"}, minutes_ago=1)
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
+        self.assertEqual(signals.recent_files, ["main.py", "test_main.py"])
+
+    def test_recent_files_est_borne_a_cinq_fichiers(self):
+        for index in range(7):
+            self._push("file_modified", {"path": f"/tmp/acme-api/src/file_{index}.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(len(signals.recent_files), 5)
+        self.assertEqual(
+            signals.recent_files,
+            ["file_6.py", "file_5.py", "file_4.py", "file_3.py", "file_2.py"],
+        )
+
+    def test_recent_files_ignore_les_suppressions_et_fichiers_non_meaningful(self):
+        self._push("file_deleted", {"path": "/tmp/acme-api/src/deleted.py"})
+        self._push("file_modified", {"path": "/tmp/acme-api/build/models_cache.json"})
+        self._push("file_modified", {"path": "/tmp/acme-api/src/current.py"})
+
+        signals = self.scorer.compute()
+
+        self.assertEqual(signals.active_file, "/tmp/acme-api/src/current.py")
+        self.assertEqual(signals.recent_files, ["current.py"])
+
+    def test_recent_files_ne_promeut_pas_un_fichier_en_active_file(self):
+        self._push(
+            "file_modified",
+            {"path": "/tmp/acme-api/src/generated.py", "_actor": "system"},
+        )
+
+        signals = self.scorer.compute()
+
+        self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.recent_files, ["generated.py"])
 
     def test_compute_peut_utiliser_un_now_observe_pour_la_duree_de_session(self):
         observed_now = datetime(2026, 4, 23, 15, 0, 0)

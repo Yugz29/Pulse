@@ -31,6 +31,7 @@ class Signals:
     session_duration_min: int
     recent_apps: List[str]
     clipboard_context: Optional[str]
+    recent_files: List[str] = field(default_factory=list)
     edited_file_count_10m: int = 0
     file_type_mix_10m: Dict[str, int] = field(default_factory=dict)
     rename_delete_ratio_10m: float = 0.0
@@ -131,6 +132,7 @@ class SignalScorer:
         recent_meaningful_file_events = self._recent_file_events(meaningful_file_events, now)
         recent_live_meaningful_file_events = self._recent_file_events(live_meaningful_file_events, now)
         recent_project_anchor_file_events = self._recent_file_events(project_anchor_file_events, now)
+        recent_files = self._recent_file_basenames(recent_meaningful_file_events)
 
         dominant_workspace_root = self._dominant_workspace_root(recent_live_meaningful_file_events)
         if dominant_workspace_root:
@@ -284,6 +286,7 @@ class SignalScorer:
             session_duration_min=int((now - effective_session_start).total_seconds() / 60),
             recent_apps=recent_apps,
             clipboard_context=clipboard_context,
+            recent_files=recent_files,
             edited_file_count_10m=edited_file_count_10m,
             file_type_mix_10m=file_type_mix_10m,
             rename_delete_ratio_10m=rename_delete_ratio_10m,
@@ -550,6 +553,24 @@ class SignalScorer:
     def _recent_file_events(self, file_events: list, now: datetime) -> list:
         recent_window = now - timedelta(minutes=10)
         return [event for event in file_events if event.timestamp >= recent_window]
+
+    def _recent_file_basenames(self, file_events: list, limit: int = 5) -> List[str]:
+        names: list[str] = []
+        seen: set[str] = set()
+        for event in self._sort_events_by_timestamp(file_events, reverse=True):
+            if event.type == "file_deleted":
+                continue
+            path = event.payload.get("path")
+            if not path:
+                continue
+            name = Path(str(path)).name.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            names.append(name)
+            if len(names) >= limit:
+                break
+        return names
 
     def _edited_file_count_10m(self, recent_file_events: list) -> int:
         paths = {

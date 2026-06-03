@@ -80,6 +80,7 @@ class CurrentContextBuilder:
     def _build_signal_summary(self, signals: Any | None) -> SignalSummary:
         return SignalSummary(
             recent_apps=list(self._signal_attr(signals, "recent_apps", []) or []),
+            recent_files=list(self._signal_attr(signals, "recent_files", []) or []),
             recent_app_bundle_ids=list(self._signal_attr(signals, "recent_app_bundle_ids", []) or []),
             recent_app_system_categories=list(
                 self._signal_attr(signals, "recent_app_system_categories", []) or []
