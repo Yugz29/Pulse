@@ -61,6 +61,7 @@ class PresentState:
     active_file: str | None = None
     active_file_source: str | None = "unknown"
     active_project: str | None = None
+    active_project_source: str | None = "unknown"
     probable_task: str = "general"
     task_confidence: float | None = None
     activity_level: str = "idle"
@@ -86,6 +87,7 @@ class PresentState:
             "active_file": self.active_file,
             "active_file_source": self.active_file_source,
             "active_project": self.active_project,
+            "active_project_source": self.active_project_source,
             "probable_task": self.probable_task,
             "task_confidence": self.task_confidence,
             "activity_level": self.activity_level,
@@ -208,6 +210,7 @@ class RuntimeState:
             active_file=getattr(signals, "active_file", None),
             active_file_source=getattr(signals, "active_file_source", "unknown"),
             active_project=getattr(signals, "active_project", None),
+            active_project_source=getattr(signals, "active_project_source", "unknown"),
             probable_task=getattr(signals, "probable_task", "general"),
             task_confidence=getattr(signals, "task_confidence", None),
             activity_level=getattr(signals, "activity_level", "idle"),

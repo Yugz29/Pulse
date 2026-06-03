@@ -22,6 +22,7 @@ def serialize_current_context(current_context: Any) -> dict[str, Any]:
         "boundary_reason": getattr(current_context, "boundary_reason", None),
         "duration_sec": getattr(current_context, "duration_sec", None),
         "active_project": getattr(current_context, "active_project", None),
+        "active_project_source": getattr(current_context, "active_project_source", None),
         "active_file": getattr(current_context, "active_file", None),
         "active_file_source": getattr(current_context, "active_file_source", None),
         "active_app": getattr(current_context, "active_app", None),

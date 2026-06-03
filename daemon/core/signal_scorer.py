@@ -31,6 +31,7 @@ class Signals:
     session_duration_min: int
     recent_apps: List[str]
     clipboard_context: Optional[str]
+    active_project_source: Optional[str] = "unknown"
     active_file_source: Optional[str] = "unknown"
     recent_files: List[str] = field(default_factory=list)
     edited_file_count_10m: int = 0
@@ -145,12 +146,15 @@ class SignalScorer:
         else:
             active_file = self._last_file_path(recent_live_meaningful_file_events)
             active_project = self._extract_project(active_file)
+        active_project_source = "file_event" if active_project else "unknown"
         active_file_source = "file_event" if active_file else "unknown"
 
         if not active_project:
             anchor_workspace_root = self._dominant_workspace_root(recent_project_anchor_file_events)
             if anchor_workspace_root:
                 active_project = self._extract_project_from_workspace(anchor_workspace_root)
+                if active_project:
+                    active_project_source = "file_event"
                 if not active_file:
                     active_file = self._last_file_path_for_workspace(
                         recent_project_anchor_file_events,
@@ -213,6 +217,8 @@ class SignalScorer:
 
         if not active_project:
             active_project = (terminal_signal or {}).get("terminal_project")
+            if active_project:
+                active_project_source = "terminal_cwd"
         if not active_project and project_hint:
             if self._should_keep_project_hint(
                 latest_active_app=latest_active_app,
@@ -221,6 +227,7 @@ class SignalScorer:
                 terminal_signal=terminal_signal,
             ):
                 active_project = project_hint
+                active_project_source = "project_hint"
 
         # Seuls les events attribués à l'utilisateur (ou non attribués) alimentent
         # les comptages de scoring. Les events system/tool_assisted sont exclus pour
@@ -291,6 +298,7 @@ class SignalScorer:
             session_duration_min=int((now - effective_session_start).total_seconds() / 60),
             recent_apps=recent_apps,
             clipboard_context=clipboard_context,
+            active_project_source=active_project_source,
             active_file_source=active_file_source,
             recent_files=recent_files,
             edited_file_count_10m=edited_file_count_10m,

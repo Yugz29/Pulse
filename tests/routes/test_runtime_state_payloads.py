@@ -23,6 +23,7 @@ class PresentStub:
     active_file = "/tmp/pulse.py"
     active_file_source = "file_event"
     active_project = "Pulse"
+    active_project_source = "file_event"
     session_duration_min = 42
 
     def to_dict(self):
@@ -30,6 +31,7 @@ class PresentStub:
             "active_file": self.active_file,
             "active_file_source": self.active_file_source,
             "active_project": self.active_project,
+            "active_project_source": self.active_project_source,
             "session_duration_min": self.session_duration_min,
             "session_status": "active",
         }
@@ -40,6 +42,7 @@ class CurrentContextBuilderStub:
         signals = kwargs["signals"]
         return SimpleNamespace(
             active_project="Pulse",
+            active_project_source=getattr(signals, "active_project_source", None),
             active_file="/tmp/pulse.py",
             active_file_source=getattr(signals, "active_file_source", None),
             probable_task="coding",
@@ -93,6 +96,7 @@ def _signals():
         active_window_title_duration_sec=90,
         app_switch_count_10m=1,
         ai_app_switch_count_10m=0,
+        active_project_source="file_event",
         active_file_source="file_event",
         recent_files=["main.py", "test_main.py"],
         terminal_action_category="testing",
@@ -131,6 +135,7 @@ def _sensitive_signals():
         active_window_title_duration_sec=90,
         app_switch_count_10m=1,
         ai_app_switch_count_10m=0,
+        active_project_source="file_event",
         active_file_source="file_event",
         terminal_action_category="testing",
         terminal_project="Pulse",
@@ -155,6 +160,7 @@ def _sensitive_signals():
 def test_present_state_product_projection_stays_minimal():
     present = PresentState(
         active_project="Pulse",
+        active_project_source="file_event",
         active_file="/Users/yugz/Projets/Pulse/Pulse/daemon/main.py",
         active_file_source="file_event",
         probable_task="testing",
@@ -168,6 +174,7 @@ def test_present_state_product_projection_stays_minimal():
 
     assert payload["user_idle_seconds"] == 12
     assert payload["user_presence_source"] == "iokit"
+    assert payload["active_project_source"] == "file_event"
     assert payload["active_file_source"] == "file_event"
     assert "terminal_command" not in payload
     assert "command" not in payload
@@ -210,6 +217,7 @@ def test_serialize_current_context_returns_expected_top_level_keys():
         session_id="session-1",
         started_at="2026-05-06T09:00:00",
         active_project="Pulse",
+        active_project_source="file_event",
         active_file="/tmp/pulse.py",
         active_file_source="file_event",
         probable_task="coding",
@@ -228,6 +236,7 @@ def test_serialize_current_context_returns_expected_top_level_keys():
     assert payload["id"] == "ctx-1"
     assert payload["session_id"] == "session-1"
     assert payload["active_project"] == "Pulse"
+    assert payload["active_project_source"] == "file_event"
     assert payload["active_file"] == "/tmp/pulse.py"
     assert payload["active_file_source"] == "file_event"
     assert payload["probable_task"] == "coding"
@@ -246,6 +255,7 @@ def test_build_state_payload_legacy_signals_contains_expected_fields():
 
     assert payload["active_project"] == "Pulse"
     assert payload["signals"]["active_project"] == "Pulse"
+    assert payload["signals"]["active_project_source"] == "file_event"
     assert payload["signals"]["active_file"] == "/tmp/pulse.py"
     assert payload["signals"]["active_file_source"] == "file_event"
     assert payload["signals"]["recent_files"] == ["main.py", "test_main.py"]
@@ -272,6 +282,7 @@ def test_build_state_payload_keeps_present_task_confidence_nullable_without_valu
     )
 
     assert payload["present"]["probable_task"] == "debug"
+    assert payload["present"]["active_project_source"] == "unknown"
     assert payload["present"]["active_file_source"] == "unknown"
     assert payload["present"]["task_confidence"] is None
     assert payload["signals"]["task_confidence"] == 0.82

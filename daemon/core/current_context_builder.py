@@ -31,6 +31,7 @@ class CurrentContextBuilder:
 
         ctx = CurrentContext(
             active_project=present.active_project,
+            active_project_source=present.active_project_source,
             project_root=self._resolve_project_root(
                 present.active_file or terminal_cwd,
                 find_git_root_fn=find_git_root_fn,

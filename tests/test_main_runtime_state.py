@@ -56,6 +56,7 @@ class TestMainRuntimeState(unittest.TestCase):
             rename_delete_ratio_10m=0.25,
             dominant_file_mode="few_files",
             work_pattern_candidate="feature_candidate",
+            active_project_source="file_event",
             task_confidence=0.87,
         )
         decision = Decision(
@@ -97,6 +98,7 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertEqual(payload["present"]["session_status"], "active")
         self.assertFalse(payload["present"]["locked"])
         self.assertEqual(payload["present"]["active_project"], "Pulse")
+        self.assertEqual(payload["present"]["active_project_source"], "file_event")
         self.assertEqual(
             payload["present"]["work_intent"]["summary"],
             "réduire les coûts cachés du modèle local",
@@ -132,6 +134,7 @@ class TestMainRuntimeState(unittest.TestCase):
             session_duration_min=42,
             recent_apps=["Xcode"],
             clipboard_context="text",
+            active_project_source="file_event",
             activity_level="editing",
             task_confidence=0.76,
         )
@@ -150,6 +153,7 @@ class TestMainRuntimeState(unittest.TestCase):
         snapshot = daemon_main.runtime_state.get_runtime_snapshot()
 
         self.assertEqual(snapshot.present.active_project, "Pulse")
+        self.assertEqual(snapshot.present.active_project_source, "file_event")
         self.assertEqual(snapshot.present.active_file, "/tmp/pulse/main.py")
         self.assertEqual(snapshot.signals.active_project, "Pulse")
         self.assertEqual(snapshot.decision.reason, "ready")
@@ -167,6 +171,7 @@ class TestMainRuntimeState(unittest.TestCase):
             session_duration_min=42,
             recent_apps=["Xcode"],
             clipboard_context="text",
+            active_project_source="file_event",
             activity_level="editing",
             task_confidence=0.76,
         )
@@ -184,6 +189,7 @@ class TestMainRuntimeState(unittest.TestCase):
         self.assertFalse(present.awake)
         self.assertTrue(present.locked)
         self.assertEqual(present.active_project, "Pulse")
+        self.assertEqual(present.active_project_source, "file_event")
         self.assertEqual(present.active_file, "/tmp/pulse/main.py")
         self.assertEqual(present.probable_task, "coding")
         self.assertEqual(present.task_confidence, 0.76)

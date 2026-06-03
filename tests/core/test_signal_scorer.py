@@ -30,6 +30,7 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertEqual(signals.active_project, "acme-api")
+        self.assertEqual(signals.active_project_source, "file_event")
         self.assertEqual(signals.active_file, "/tmp/acme-api/src/main.py")
         self.assertEqual(signals.active_file_source, "file_event")
         self.assertEqual(signals.probable_task, "coding")
@@ -89,6 +90,7 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.active_project_source, "unknown")
         self.assertEqual(signals.active_file_source, "unknown")
         self.assertEqual(signals.recent_files, ["generated.py"])
 
@@ -233,6 +235,7 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute()
 
         self.assertEqual(signals.active_project, "acme-api")
+        self.assertEqual(signals.active_project_source, "file_event")
         self.assertEqual(
             signals.active_file,
             "/tmp/acme-api/src/runtime_orchestrator.py",
@@ -249,6 +252,7 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertIsNone(signals.active_project)
         self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.active_project_source, "unknown")
         self.assertEqual(signals.active_file_source, "unknown")
         self.assertEqual(signals.probable_task, "general")
 
@@ -264,6 +268,7 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertIsNone(signals.active_project)
         self.assertIsNone(signals.active_file)
+        self.assertEqual(signals.active_project_source, "unknown")
         self.assertEqual(signals.edited_file_count_10m, 0)
         self.assertEqual(signals.probable_task, "general")
 
@@ -659,6 +664,7 @@ class TestSignalScorer(unittest.TestCase):
             signals = self.scorer.compute()
 
             self.assertEqual(signals.active_project, "workspace-app")
+            self.assertEqual(signals.active_project_source, "file_event")
             self.assertEqual(signals.active_file, str(file_path))
 
     def test_active_project_reste_sur_workspace_dominant_malgre_un_fichier_isole_plus_recent(self):
@@ -730,6 +736,7 @@ class TestSignalScorer(unittest.TestCase):
             signals = self.scorer.compute()
 
             self.assertEqual(signals.active_project, "acme-api")
+            self.assertEqual(signals.active_project_source, "file_event")
             self.assertEqual(signals.active_file, str(file_path))
             self.assertEqual(signals.edited_file_count_10m, 0)
 
@@ -749,6 +756,7 @@ class TestSignalScorer(unittest.TestCase):
             signals = self.scorer.compute()
 
             self.assertIsNone(signals.active_project)
+            self.assertEqual(signals.active_project_source, "unknown")
             self.assertIsNone(signals.active_file)
             self.assertEqual(signals.edited_file_count_10m, 0)
 
@@ -758,6 +766,7 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute(project_hint="acme-api")
 
         self.assertEqual(signals.active_project, "acme-api")
+        self.assertEqual(signals.active_project_source, "project_hint")
         self.assertIsNone(signals.active_file)
         self.assertEqual(signals.activity_level, "navigating")
 
@@ -765,6 +774,7 @@ class TestSignalScorer(unittest.TestCase):
         signals = self.scorer.compute(project_hint="acme-api")
 
         self.assertIsNone(signals.active_project)
+        self.assertEqual(signals.active_project_source, "unknown")
 
     def test_active_file_choisit_le_plus_recent_par_timestamp_meme_hors_ordre(self):
         now = datetime(2026, 4, 23, 18, 0, 0)
@@ -832,6 +842,8 @@ class TestSignalScorer(unittest.TestCase):
 
         self.assertEqual(signals.terminal_action_category, "testing")
         self.assertEqual(signals.terminal_project, "acme-api")
+        self.assertEqual(signals.active_project, "acme-api")
+        self.assertEqual(signals.active_project_source, "terminal_cwd")
 
     def test_file_deleted_ne_devient_pas_le_fichier_actif(self):
         self._push("file_modified", {"path": "/tmp/acme-api/src/main.py"})

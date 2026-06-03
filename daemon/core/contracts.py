@@ -37,6 +37,7 @@ class CurrentContext:
     """
 
     active_project: Optional[str]
+    active_project_source: Optional[str]
     project_root: Optional[str]
     active_file: Optional[str]
     active_file_source: Optional[str]

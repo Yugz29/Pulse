@@ -77,6 +77,7 @@ def current_context_to_legacy_signals_payload(
 
     return {
         "active_project": context.active_project,
+        "active_project_source": getattr(context, "active_project_source", None),
         "active_file": context.active_file,
         "active_file_source": getattr(context, "active_file_source", None),
         "probable_task": context.probable_task,
