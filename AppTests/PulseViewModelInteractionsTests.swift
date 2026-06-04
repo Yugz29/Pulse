@@ -941,7 +941,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
     func testSignalsDataExpliqueQuandLaTacheEstAncreeDansLesFichiers() {
         let signals = SignalsData(
             activeProject: "Pulse",
+            activeProjectSource: "file_event",
             activeFile: "/tmp/main.py",
+            activeFileSource: "file_event",
             probableTask: "coding",
             activityLevel: "editing",
             taskConfidence: 0.92,
@@ -971,7 +973,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
     func testSignalsDataRendExplorationDeManiereCohérente() {
         let signals = SignalsData(
             activeProject: nil,
+            activeProjectSource: nil,
             activeFile: nil,
+            activeFileSource: nil,
             probableTask: "exploration",
             activityLevel: "reading",
             taskConfidence: 0.61,
@@ -995,7 +999,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
     func testSignalsDataMarqueUnContexteFaibleQuandLesIndicesRestentLegers() {
         let signals = SignalsData(
             activeProject: nil,
+            activeProjectSource: nil,
             activeFile: nil,
+            activeFileSource: nil,
             probableTask: "writing",
             activityLevel: "reading",
             taskConfidence: 0.3,
@@ -1103,7 +1109,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
     func testSignalsDataNExposePasOtherCommeLectureUtileQuandUnTypeConcretExiste() {
         let signals = SignalsData(
             activeProject: "Pulse",
+            activeProjectSource: "file_event",
             activeFile: "/tmp/main.py",
+            activeFileSource: "file_event",
             probableTask: "coding",
             activityLevel: "editing",
             taskConfidence: 0.9,
@@ -1129,7 +1137,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
     func testSignalsDataRetombeSurUnResumeSimpleQuandLeMixResteTropGenerique() {
         let signals = SignalsData(
             activeProject: "Pulse",
+            activeProjectSource: "file_event",
             activeFile: "/tmp/main.py",
+            activeFileSource: "file_event",
             probableTask: "general",
             activityLevel: "editing",
             taskConfidence: 0.22,
@@ -1217,8 +1227,11 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             "awake": true,
             "locked": false,
             "active_file": "/tmp/live.swift",
+            "active_file_source": "file_event",
             "active_project": "Pulse",
+            "active_project_source": "file_event",
             "probable_task": "debug",
+            "task_confidence": 0.77,
             "activity_level": "executing",
             "focus_level": "deep",
             "friction_score": 0.18,
@@ -1246,6 +1259,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
             "boundary_reason": null,
             "duration_sec": null,
             "active_project": "Pulse",
+            "active_project_source": "file_event",
+            "active_file": "/tmp/context.swift",
+            "active_file_source": "window_title",
             "probable_task": "debug",
             "activity_level": "executing",
             "task_confidence": 0.92
@@ -1266,7 +1282,9 @@ final class PulseViewModelInteractionsTests: XCTestCase {
           ],
           "signals": {
             "active_project": "SignalsProject",
+            "active_project_source": "terminal_cwd",
             "active_file": "/tmp/signals.swift",
+            "active_file_source": "file_event",
             "probable_task": "general",
             "activity_level": "reading",
             "task_confidence": 0.12,
@@ -1282,11 +1300,19 @@ final class PulseViewModelInteractionsTests: XCTestCase {
         let state = try JSONDecoder().decode(StateResponse.self, from: Data(json.utf8))
 
         XCTAssertEqual(state.present?.activeProject, "Pulse")
+        XCTAssertEqual(state.present?.activeProjectSource, "file_event")
+        XCTAssertEqual(state.present?.activeFileSource, "file_event")
+        XCTAssertEqual(state.present?.taskConfidence, 0.77)
         XCTAssertEqual(state.present?.probableTask, "debug")
         XCTAssertEqual(state.currentContext?.activeProject, "Pulse")
+        XCTAssertEqual(state.currentContext?.activeProjectSource, "file_event")
+        XCTAssertEqual(state.currentContext?.activeFile, "/tmp/context.swift")
+        XCTAssertEqual(state.currentContext?.activeFileSource, "window_title")
         XCTAssertEqual(state.currentContext?.probableTask, "debug")
         XCTAssertEqual(state.recentSessions?.first?.id, "session-recent")
         XCTAssertEqual(state.signals?.activeProject, "SignalsProject")
+        XCTAssertEqual(state.signals?.activeProjectSource, "terminal_cwd")
+        XCTAssertEqual(state.signals?.activeFileSource, "file_event")
     }
 
     func testStateResponseDefaultsMissingOrNullSessionDurationToZero() throws {

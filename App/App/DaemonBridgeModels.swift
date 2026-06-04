@@ -144,8 +144,11 @@ struct PresentData: Decodable {
     let awake: Bool
     let locked: Bool
     let activeFile: String?
+    let activeFileSource: String?
     let activeProject: String?
+    let activeProjectSource: String?
     let probableTask: String
+    let taskConfidence: Double?
     let activityLevel: String
     let focusLevel: String
     let frictionScore: Double
@@ -159,8 +162,11 @@ struct PresentData: Decodable {
         case awake
         case locked
         case activeFile = "active_file"
+        case activeFileSource = "active_file_source"
         case activeProject = "active_project"
+        case activeProjectSource = "active_project_source"
         case probableTask = "probable_task"
+        case taskConfidence = "task_confidence"
         case activityLevel = "activity_level"
         case focusLevel = "focus_level"
         case frictionScore = "friction_score"
@@ -316,7 +322,9 @@ struct SessionContextData: Decodable, Identifiable {
     let boundaryReason: String?
     let durationSec: Int?
     let activeProject: String?
+    let activeProjectSource: String?
     let activeFile: String?
+    let activeFileSource: String?
     let probableTask: String?
     let activityLevel: String?
     let focusLevel: String?
@@ -355,7 +363,9 @@ struct SessionContextData: Decodable, Identifiable {
         case boundaryReason = "boundary_reason"
         case durationSec = "duration_sec"
         case activeProject = "active_project"
+        case activeProjectSource = "active_project_source"
         case activeFile = "active_file"
+        case activeFileSource = "active_file_source"
         case probableTask = "probable_task"
         case activityLevel = "activity_level"
         case focusLevel = "focus_level"
@@ -440,7 +450,9 @@ struct SessionContextData: Decodable, Identifiable {
 
 struct SignalsData: Codable {
     let activeProject: String?
+    let activeProjectSource: String?
     let activeFile: String?
+    let activeFileSource: String?
     let probableTask: String?
     let activityLevel: String?
     let taskConfidence: Double?
@@ -458,7 +470,9 @@ struct SignalsData: Codable {
 
     enum CodingKeys: String, CodingKey {
         case activeProject = "active_project"
+        case activeProjectSource = "active_project_source"
         case activeFile = "active_file"
+        case activeFileSource = "active_file_source"
         case probableTask = "probable_task"
         case activityLevel = "activity_level"
         case taskConfidence = "task_confidence"
