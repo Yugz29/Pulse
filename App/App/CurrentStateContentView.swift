@@ -248,6 +248,13 @@ struct CurrentStateView: View {
                     .foregroundColor(.white.opacity(0.52))
                     .lineLimit(3)
 
+                if let evidenceLine = phaseCEvidenceLine(context: context, present: present, signals: signals) {
+                    Text(evidenceLine)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.32))
+                        .lineLimit(2)
+                }
+
                 if let signals {
                     Text(signals.taskEvidenceSummary)
                         .font(.system(size: 10))
@@ -286,5 +293,38 @@ struct CurrentStateView: View {
             return "Lecture live sur \(project) · \(present.taskLabel) · signal récent \(activity)"
         }
         return "Pas encore assez de contexte local."
+    }
+
+    private func phaseCEvidenceLine(
+        context: SessionContextData?,
+        present: PresentData?,
+        signals: SignalsData?
+    ) -> String? {
+        var parts: [String] = []
+        if let projectSource = firstNonEmpty(
+            context?.activeProjectSource,
+            present?.activeProjectSource,
+            signals?.activeProjectSource
+        ) {
+            parts.append("Projet \(projectSource)")
+        }
+        if let fileSource = firstNonEmpty(
+            context?.activeFileSource,
+            present?.activeFileSource,
+            signals?.activeFileSource
+        ) {
+            parts.append("Fichier \(fileSource)")
+        }
+        if let confidence = context?.taskConfidence ?? present?.taskConfidence ?? signals?.taskConfidence {
+            parts.append("Tâche \(Int((confidence * 100).rounded()))%")
+        }
+        guard !parts.isEmpty else { return nil }
+        return "Preuves : " + parts.joined(separator: " · ")
+    }
+
+    private func firstNonEmpty(_ values: String?...) -> String? {
+        values
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
     }
 }
