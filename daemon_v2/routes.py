@@ -49,6 +49,7 @@ def _build_status(trace):
         "date": trace["date"],
         "event_count": trace["activity_count"],
         "displayed_session_count": summary["session_count"],
+        "git_commit_count": summary["git_commit_count"],
         "last_event": last_event,
         "primary_workspace": primary_workspace(trace),
         "terminal_watcher": "external; source the Zsh script separately",

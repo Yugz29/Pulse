@@ -17,6 +17,7 @@ SUPPORTED_ACTIVITY_TYPES = {
     "app_activated",
     "file_changed",
     "terminal_finished",
+    "git_commit",
     *SYSTEM_ACTIVITY_TYPES,
 }
 

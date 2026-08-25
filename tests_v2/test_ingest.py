@@ -33,6 +33,85 @@ def test_rejects_unknown_activity_type():
         normalize_activity({"type": "browser_opened"})
 
 
+def test_normalizes_git_commit_activity():
+    activity = normalize_activity(
+        {
+            "type": "git_commit",
+            "occurred_at": "2026-07-03T10:00:00+02:00",
+            "commit_hash": "abc1234def5678",
+            "repository": "Pulse_Core",
+            "git_root": "/Users/yugz/Projets/Pulse/Pulse_Core",
+            "branch": "main",
+            "message": "Add git commit events\n\nCloses the VS Code gap.",
+            "files_changed": 3,
+            "insertions": 42,
+            "deletions": 5,
+        }
+    )
+
+    assert activity.source == "git"
+    assert activity.details == {
+        "commit_hash": "abc1234def5678",
+        "repository": "Pulse_Core",
+        "git_root": "/Users/yugz/Projets/Pulse/Pulse_Core",
+        "branch": "main",
+        "message": "Add git commit events\n\nCloses the VS Code gap.",
+        "files_changed": 3,
+        "insertions": 42,
+        "deletions": 5,
+    }
+    assert activity.summary == "Commit abc1234 on main: Add git commit events"
+
+
+def test_normalizes_git_commit_activity_without_optional_stats():
+    activity = normalize_activity(
+        {
+            "type": "git_commit",
+            "commit_hash": "abc1234def5678",
+            "repository": "Pulse_Core",
+            "git_root": "/Users/yugz/Projets/Pulse/Pulse_Core",
+            "branch": "main",
+            "message": "Fix typo",
+        }
+    )
+
+    assert "files_changed" not in activity.details
+    assert "insertions" not in activity.details
+    assert "deletions" not in activity.details
+
+
+@pytest.mark.parametrize("missing_field", ["commit_hash", "repository", "git_root", "branch", "message"])
+def test_rejects_git_commit_missing_required_field(missing_field):
+    payload = {
+        "type": "git_commit",
+        "commit_hash": "abc1234def5678",
+        "repository": "Pulse_Core",
+        "git_root": "/Users/yugz/Projets/Pulse/Pulse_Core",
+        "branch": "main",
+        "message": "Fix typo",
+    }
+    del payload[missing_field]
+
+    with pytest.raises(InvalidActivity):
+        normalize_activity(payload)
+
+
+@pytest.mark.parametrize("field", ["files_changed", "insertions", "deletions"])
+def test_rejects_git_commit_negative_optional_stats(field):
+    payload = {
+        "type": "git_commit",
+        "commit_hash": "abc1234def5678",
+        "repository": "Pulse_Core",
+        "git_root": "/Users/yugz/Projets/Pulse/Pulse_Core",
+        "branch": "main",
+        "message": "Fix typo",
+        field: -1,
+    }
+
+    with pytest.raises(InvalidActivity):
+        normalize_activity(payload)
+
+
 def test_normalizes_app_activated_activity():
     activity = normalize_activity(
         {

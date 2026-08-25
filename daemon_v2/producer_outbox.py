@@ -22,6 +22,8 @@ from .workspace_context import read_workspace_context
 
 DEFAULT_PRODUCER_NAME = "pulse-zsh"
 DEFAULT_PRODUCER_VERSION = "1.0"
+GIT_HOOK_PRODUCER_NAME = "pulse-git-hook"
+GIT_HOOK_PRODUCER_VERSION = "1.0"
 
 
 @dataclass(frozen=True)
@@ -325,6 +327,94 @@ def build_terminal_payload(
     )
 
 
+def build_git_commit_payload(
+    outbox: ProducerOutbox,
+    *,
+    commit_hash: str,
+    repository: str,
+    git_root: str,
+    branch: str,
+    message: str,
+    occurred_at: str,
+    files_changed: int | None = None,
+    insertions: int | None = None,
+    deletions: int | None = None,
+) -> str:
+    """Build the canonical git_commit event for durable outbox persistence.
+
+    Intended to run from a post-commit hook, so the source client (terminal,
+    an IDE, or any other Git porcelain) never matters: the commit object
+    itself is the evidence.
+    """
+    parsed_occurred_at = datetime.fromisoformat(occurred_at.replace("Z", "+00:00"))
+    if parsed_occurred_at.tzinfo is None:
+        raise ValueError("occurred_at must include a timezone")
+    details: dict[str, Any] = {
+        "commit_hash": commit_hash,
+        "repository": repository,
+        "git_root": git_root,
+        "branch": branch,
+        "message": message,
+    }
+    for key, value in (
+        ("files_changed", files_changed),
+        ("insertions", insertions),
+        ("deletions", deletions),
+    ):
+        if value is not None:
+            details[key] = value
+    event = CanonicalEvent(
+        event_id=str(uuid.uuid4()),
+        schema_version=1,
+        event_type="git_commit",
+        producer_name=GIT_HOOK_PRODUCER_NAME,
+        producer_version=GIT_HOOK_PRODUCER_VERSION,
+        producer_instance_id=outbox.producer_instance_id(),
+        occurred_at=parsed_occurred_at,
+        details=details,
+    )
+    payload: dict[str, Any] = {
+        "event_id": event.event_id,
+        "schema_version": event.schema_version,
+        "type": event.event_type,
+        "producer": {
+            "name": event.producer_name,
+            "version": event.producer_version,
+            "instance_id": event.producer_instance_id,
+        },
+        "occurred_at": event.occurred_at.isoformat(),
+        "details": event.details,
+    }
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def enqueue_git_commit_input(outbox: ProducerOutbox, raw_input: str) -> str:
+    request = _strict_json_object(raw_input)
+    required = ("commit_hash", "repository", "git_root", "branch", "message", "occurred_at")
+    missing = [key for key in required if key not in request]
+    if missing:
+        raise ValueError(f"missing git_commit fields: {', '.join(missing)}")
+    payload_json = build_git_commit_payload(
+        outbox,
+        commit_hash=str(request["commit_hash"]),
+        repository=str(request["repository"]),
+        git_root=str(request["git_root"]),
+        branch=str(request["branch"]),
+        message=str(request["message"]),
+        occurred_at=str(request["occurred_at"]),
+        files_changed=request.get("files_changed"),
+        insertions=request.get("insertions"),
+        deletions=request.get("deletions"),
+    )
+    return outbox.enqueue_payload(payload_json)
+
+
 def enqueue_terminal_input(
     outbox: ProducerOutbox,
     raw_input: str,
@@ -414,6 +504,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="validate and enqueue one canonical JSON object from stdin",
     )
     subparsers.add_parser(
+        "enqueue-git-commit",
+        help="read git commit observation JSON from stdin and enqueue it",
+    )
+    subparsers.add_parser(
         "instance-id",
         help="print the stable producer instance identifier",
     )
@@ -448,6 +542,9 @@ def main() -> None:
             return
         if args.command == "enqueue-json":
             print(enqueue_json_input(outbox, sys.stdin.read()))
+            return
+        if args.command == "enqueue-git-commit":
+            print(enqueue_git_commit_input(outbox, sys.stdin.read()))
             return
         if args.command == "instance-id":
             print(outbox.producer_instance_id())

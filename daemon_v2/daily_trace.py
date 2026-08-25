@@ -112,6 +112,14 @@ def build_session_summary(
                 if target is not None and display_path not in target:
                     target.append(display_path)
 
+        if activity["type"] == "git_commit":
+            git_commit_observed = True
+            message = details.get("message")
+            if isinstance(message, str) and message:
+                first_line = message.splitlines()[0]
+                if first_line not in commit_messages:
+                    commit_messages.append(first_line)
+
         if activity["type"] != "terminal_finished":
             continue
         command = details.get("command")
@@ -582,6 +590,7 @@ def build_daily_summary(
     terminal_count = 0
     terminal_label_counts = {label: 0 for label in TERMINAL_LABEL_ORDER}
     file_paths: set[str] = set()
+    git_commit_count = 0
 
     for session in trace["sessions"]:
         for activity in session["activities"]:
@@ -604,6 +613,8 @@ def build_daily_summary(
                     terminal_label_counts[label] += 1
             elif activity["type"] == "file_changed" and details.get("path"):
                 file_paths.add(details["path"])
+            elif activity["type"] == "git_commit":
+                git_commit_count += 1
             elif activity["type"] == "app_activated" and details.get("app"):
                 app = details["app"]
                 if app not in IGNORED_APP_NAMES_FOR_RENDERING:
@@ -638,6 +649,9 @@ def build_daily_summary(
         "terminal_count": terminal_count,
         "test_count": terminal_label_counts["test"],
         "git_count": terminal_label_counts["git"],
+        # Verified from dedicated git_commit events (post-commit hook), unlike
+        # git_count above which only infers a `git commit` shell command was run.
+        "git_commit_count": git_commit_count,
         "error_count": terminal_label_counts["erreur"],
         "pulse_count": terminal_label_counts["pulse"],
         "distinct_file_count": len(file_paths),

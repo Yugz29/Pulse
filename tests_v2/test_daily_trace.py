@@ -94,6 +94,35 @@ def test_builds_structured_daily_trace(tmp_path):
     ) in markdown
 
 
+def test_git_commit_events_are_counted_and_summarized(tmp_path):
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    at = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    store.append(
+        Activity(
+            "git_commit",
+            at,
+            "git",
+            "Commit abc1234 on main: Add git commit events",
+            {
+                "commit_hash": "abc1234def5678",
+                "repository": "Pulse_Core",
+                "git_root": "/project",
+                "branch": "main",
+                "message": "Add git commit events\n\nCloses the VS Code gap.",
+            },
+        )
+    )
+
+    trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
+    summary = build_daily_summary(trace)
+
+    assert summary["git_commit_count"] == 1
+    assert trace["activity_count"] == 1
+
+    markdown = render_daily_trace_markdown(trace)
+    assert "Commit abc1234 on main: Add git commit events" in markdown
+
+
 def test_renders_observed_session_durations(tmp_path):
     store = TraceStore(tmp_path / "pulse.sqlite3")
     zone = timezone.utc

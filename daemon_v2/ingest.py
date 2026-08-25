@@ -191,6 +191,32 @@ def normalize_activity(payload: Any) -> Activity:
         source = "terminal"
         status = "succeeded" if exit_code == 0 else f"failed ({exit_code})"
         summary = f"Command {status}: {command}"
+    elif activity_type == "git_commit":
+        commit_hash = _required_string(payload, "commit_hash")
+        repository = _required_string(payload, "repository")
+        git_root = _required_string(payload, "git_root")
+        branch = _required_string(payload, "branch")
+        message = _required_string(payload, "message")
+        details = {
+            "commit_hash": commit_hash,
+            "repository": repository,
+            "git_root": str(Path(git_root).expanduser()),
+            "branch": branch,
+            "message": message,
+        }
+        for key in ("files_changed", "insertions", "deletions"):
+            if key not in payload:
+                continue
+            value = payload[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise InvalidActivity(
+                    f"{key} must be a non-negative integer when provided",
+                    field=f"details.{key}",
+                )
+            details[key] = value
+        source = "git"
+        first_line = message.splitlines()[0]
+        summary = f"Commit {commit_hash[:7]} on {branch}: {first_line}"
     elif activity_type == "app_activated":
         app = _required_string(payload, "app")
         details = {"app": app}

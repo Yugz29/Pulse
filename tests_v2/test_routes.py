@@ -557,6 +557,29 @@ def test_status_reports_local_paths_and_today_activity(tmp_path):
     assert status["terminal_watcher"].startswith("external")
 
 
+def test_status_reports_git_commit_count(tmp_path):
+    app = create_app(tmp_path / "trace.db")
+    client = app.test_client()
+    response = client.post(
+        "/activities",
+        json={
+            "type": "git_commit",
+            "commit_hash": "abc1234def5678",
+            "repository": "Pulse_Core",
+            "git_root": "/project",
+            "branch": "main",
+            "message": "Fix typo",
+        },
+    )
+
+    assert response.status_code == 201
+
+    status = client.get("/status").get_json()
+
+    assert status["git_commit_count"] == 1
+    assert status["last_event"]["type"] == "git_commit"
+
+
 def test_status_and_today_json_accept_persisted_workspace_identity(tmp_path):
     database_path = tmp_path / "trace.db"
     app = create_app(database_path)

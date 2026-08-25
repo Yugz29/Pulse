@@ -138,7 +138,9 @@ def _ranked_apps(counts: dict[str, int], limit: int = 5) -> list[tuple[str, int]
 
 
 def _is_strong_work_activity(activity: dict[str, Any]) -> bool:
-    return activity["type"] in {"terminal_finished", "file_changed"}
+    # A git_commit event is verified evidence (the commit object itself),
+    # not an inference, so it counts as strong work signal like the others.
+    return activity["type"] in {"terminal_finished", "file_changed", "git_commit"}
 
 
 @dataclass(frozen=True)

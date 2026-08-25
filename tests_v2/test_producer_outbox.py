@@ -10,6 +10,7 @@ from daemon_v2.outbox_worker import HttpResult, OutboxWorker, TemporaryDeliveryE
 from daemon_v2.producer_outbox import (
     ProducerOutbox,
     build_terminal_payload,
+    enqueue_git_commit_input,
     enqueue_json_input,
     enqueue_terminal_input,
     main,
@@ -259,6 +260,112 @@ def test_terminal_payload_is_redacted_before_exact_json_is_enqueued(tmp_path):
     assert payload["producer"]["version"] == "1.0"
     assert payload["producer"]["instance_id"]
     assert payload["event_id"] == event_id
+
+
+def test_git_commit_payload_is_enqueued_regardless_of_client(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    raw_input = json.dumps(
+        {
+            "commit_hash": "abc1234def5678",
+            "repository": "Pulse_Core",
+            "git_root": "/Users/yugz/Projets/Pulse/Pulse_Core",
+            "branch": "main",
+            "message": "Add git commit events\n\nCloses the VS Code gap.",
+            "occurred_at": "2026-07-23T14:32:00+02:00",
+            "files_changed": 3,
+            "insertions": 42,
+            "deletions": 5,
+        }
+    )
+
+    event_id = enqueue_git_commit_input(outbox, raw_input)
+    pending = outbox.oldest()
+
+    assert event_id
+    assert pending is not None
+    payload = json.loads(pending.payload_json)
+    assert payload["type"] == "git_commit"
+    assert payload["event_id"] == event_id
+    assert payload["producer"]["name"] == "pulse-git-hook"
+    assert payload["details"] == {
+        "commit_hash": "abc1234def5678",
+        "repository": "Pulse_Core",
+        "git_root": "/Users/yugz/Projets/Pulse/Pulse_Core",
+        "branch": "main",
+        "message": "Add git commit events\n\nCloses the VS Code gap.",
+        "files_changed": 3,
+        "insertions": 42,
+        "deletions": 5,
+    }
+
+
+def test_git_commit_payload_omits_absent_optional_stats(tmp_path):
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    raw_input = json.dumps(
+        {
+            "commit_hash": "abc1234def5678",
+            "repository": "Pulse_Core",
+            "git_root": "/project",
+            "branch": "main",
+            "message": "Fix typo",
+            "occurred_at": "2026-07-23T14:32:00+02:00",
+        }
+    )
+
+    event_id = enqueue_git_commit_input(outbox, raw_input)
+    payload = json.loads(outbox.oldest().payload_json)
+
+    assert event_id
+    assert "files_changed" not in payload["details"]
+    assert "insertions" not in payload["details"]
+    assert "deletions" not in payload["details"]
+
+
+def test_git_commit_input_rejects_missing_fields(tmp_path):
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    raw_input = json.dumps(
+        {
+            "commit_hash": "abc1234def5678",
+            "repository": "Pulse_Core",
+            "git_root": "/project",
+            "branch": "main",
+            # message intentionally omitted
+            "occurred_at": "2026-07-23T14:32:00+02:00",
+        }
+    )
+
+    with pytest.raises(ValueError):
+        enqueue_git_commit_input(outbox, raw_input)
+
+
+def test_enqueue_git_commit_cli_reads_stdin_and_enqueues(tmp_path, monkeypatch, capsys):
+    database = tmp_path / "outbox.sqlite3"
+    raw_input = json.dumps(
+        {
+            "commit_hash": "abc1234def5678",
+            "repository": "Pulse_Core",
+            "git_root": "/project",
+            "branch": "main",
+            "message": "Fix typo",
+            "occurred_at": "2026-07-23T14:32:00+02:00",
+        }
+    )
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(raw_input))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["producer_outbox", "--database", str(database), "enqueue-git-commit"],
+    )
+
+    main()
+
+    event_id = capsys.readouterr().out.strip()
+    assert event_id
+    outbox = ProducerOutbox(database)
+    pending = outbox.oldest()
+    assert pending is not None
+    assert json.loads(pending.payload_json)["type"] == "git_commit"
 
 
 def test_producer_instance_id_is_stable_across_restarts(tmp_path):

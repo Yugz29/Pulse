@@ -73,12 +73,19 @@ def reconstruct(
     )
 
 
-@pytest.mark.parametrize("event_type", ["terminal_finished", "file_changed"])
+@pytest.mark.parametrize(
+    "event_type", ["terminal_finished", "file_changed", "git_commit"]
+)
 def test_real_work_starts_a_session(event_type):
     details = workspace(PULSE)
-    details["command" if event_type == "terminal_finished" else "path"] = (
-        "pytest -q" if event_type == "terminal_finished" else f"{PULSE}/main.py"
-    )
+    if event_type == "terminal_finished":
+        details["command"] = "pytest -q"
+    elif event_type == "file_changed":
+        details["path"] = f"{PULSE}/main.py"
+    else:
+        details["commit_hash"] = "abc1234def5678"
+        details["branch"] = "main"
+        details["message"] = "Fix typo"
 
     sessions, _passive = reconstruct(event(event_type, 0, details))
 

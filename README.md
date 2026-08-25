@@ -15,11 +15,15 @@ un adaptateur explicite `pulse-legacy`. Core leur attribue un nouvel
 fournit aucune idempotence entre deux requêtes legacy identiques**. Il est
 destiné à être supprimé après migration des producteurs.
 
-La version actuelle prend en charge trois signaux d’activité :
+La version actuelle prend en charge quatre signaux d’activité :
 
 - `terminal_finished` depuis le watcher Zsh du terminal ;
 - `file_changed` depuis le watcher de fichiers du workspace ;
-- `app_activated` depuis le watcher macOS de l’application active.
+- `app_activated` depuis le watcher macOS de l’application active ;
+- `git_commit` depuis un hook `post-commit` local (voir « Hook Git » plus bas),
+  déclenché quel que soit le client à l’origine du commit (terminal, VS Code,
+  ou tout autre outil Git), avec le hash, la branche, le message complet et
+  les statistiques de fichiers du commit réellement créé.
 
 Pulse complète ces signaux avec une lecture Git passive au rendu pour enrichir
 la reprise du projet courant, sans écrire ces informations dans SQLite.
@@ -73,10 +77,12 @@ de l’activité locale, comme le dernier test local observé, les derniers fich
 observés et un contexte Git local lu passivement au rendu.
 
 - Les prochaines limites connues de ce palier sont :
-  - les commandes Git restent observées via le terminal, mais le contexte Git
-    affiché dans `Reprise` vient de l’état réel du dépôt lu passivement ;
-  - les commits faits via VS Code ou un autre client Git sont visibles dans le
-    contexte Git local, mais ne créent pas encore d’événements Git dédiés ;
+  - les commandes Git restent aussi observées via le terminal (labellisées
+    `git` dans les résumés), mais le contexte Git affiché dans `Reprise` vient
+    de l’état réel du dépôt lu passivement ;
+  - un commit fait via un client sans hook installé (autre machine, dépôt non
+    équipé) reste invisible comme événement dédié tant que le hook n’y est
+    pas installé ;
 - le projet courant repose encore sur des heuristiques de workspace ;
 - Pulse ne produit pas encore de synthèse assistée par IA ;
 - l’interface HTML reste un prototype produit vivant, pas l’interface macOS
@@ -391,6 +397,24 @@ Lancer manuellement le watcher par polling avec un workspace explicite :
 ```
 
 Il envoie les fichiers créés, modifiés et supprimés au daemon local Pulse. Les chemins techniques comme `.git`, `.venv`, les caches, `*.pyc`, `*.db` et `.DS_Store` sont ignorés. Le watcher continue de tourner silencieusement si le daemon est indisponible. L’arrêter avec `Ctrl-C`.
+
+## Hook Git
+
+Installer le hook `post-commit` sur un dépôt suivi (idempotent, refuse
+d’écraser un hook existant qu’il n’a pas lui-même posé) :
+
+```bash
+./scripts/install_git_hook.sh /chemin/vers/le/depot
+```
+
+Le hook gagne sa fiabilité en s’appuyant sur l’objet commit lui-même plutôt
+que sur une commande shell observée : il lit `commit_hash`, `branch`, le
+message complet et les statistiques `--shortstat` directement depuis Git une
+fois le commit créé, donc il capte un commit fait depuis le terminal, VS Code
+ou tout autre client. Il envoie l’événement via l’outbox durable existante
+(`daemon_v2.producer_outbox enqueue-git-commit`), donc un daemon
+momentanément indisponible ne perd pas l’événement. Toute erreur reste
+best-effort : le hook ne bloque et ne fait jamais échouer un commit.
 
 ## Observateur d’application
 
