@@ -561,11 +561,11 @@ def reconstruct_session_views(
                 current is not None
                 and current["pending_interruption"] is None
             ):
-                current["activities"].append(activity)
                 current["pending_interruption"] = {
                     "type": activity_type,
                     "started_at": occurred_at,
                     "ended_at": None,
+                    "activities": [activity],
                 }
             continue
 
@@ -575,15 +575,17 @@ def reconstruct_session_views(
                 and current["pending_interruption"] is not None
             ):
                 pending = current["pending_interruption"]
-                pending["ended_at"] = occurred_at
-                current["activities"].append(activity)
-                interruption = completed_interruption(pending, occurred_at)
+                expected_resume = {
+                    "screen_locked": "screen_unlocked",
+                    "system_sleep": "system_wake",
+                }[pending["type"]]
                 if (
-                    timedelta(seconds=interruption["duration_seconds"])
-                    > interruption_threshold
+                    activity_type != expected_resume
+                    or pending["ended_at"] is not None
                 ):
-                    current["interruptions"].append(interruption)
-                    close_current(occurred_at, pending["type"])
+                    continue
+                pending["ended_at"] = occurred_at
+                pending["activities"].append(activity)
             continue
 
         if is_work:
@@ -606,19 +608,15 @@ def reconstruct_session_views(
                     timedelta(seconds=interruption["duration_seconds"])
                     > interruption_threshold
                 )
-                current["interruptions"].append(interruption)
                 if workspace_changed or interruption_is_long:
                     close_current(
-                        interruption_end
-                        if pending["ended_at"] is not None
-                        else pending["started_at"],
+                        current["last_work_at"],
                         "workspace_changed"
                         if workspace_changed
                         else pending["type"],
                     )
                     start_session(activity, occurred_at)
                     continue
-                current["pending_interruption"] = None
                 active_idle = (
                     occurred_at
                     - current["last_work_at"]
@@ -628,6 +626,9 @@ def reconstruct_session_views(
                     close_current(current["last_work_at"], "inactivity")
                     start_session(activity, occurred_at)
                     continue
+                current["activities"].extend(pending["activities"])
+                current["interruptions"].append(interruption)
+                current["pending_interruption"] = None
             if transition == "split":
                 close_current(occurred_at, "workspace_changed")
                 start_session(activity, occurred_at)
@@ -653,11 +654,7 @@ def reconstruct_session_views(
     if current is not None:
         pending = current["pending_interruption"]
         if pending is not None:
-            interruption_end = pending["ended_at"] or pending["started_at"]
-            current["interruptions"].append(
-                completed_interruption(pending, interruption_end)
-            )
-            close_current(interruption_end, pending["type"])
+            close_current(current["last_work_at"], pending["type"])
             current = None
     if current is not None:
         current_day = (now or datetime.now().astimezone()).date().isoformat()

@@ -105,7 +105,7 @@ def test_unlock_or_wake_alone_does_not_start_a_session():
 
 
 @pytest.mark.parametrize("end_type", ["screen_locked", "system_sleep"])
-def test_explicit_interruption_closes_session_immediately(end_type):
+def test_unconfirmed_interruption_does_not_extend_session(end_type):
     sessions, _passive = reconstruct(
         event("terminal_finished", 0, {**workspace(PULSE), "command": "make"}),
         event("file_changed", 10, {**workspace(PULSE), "path": f"{PULSE}/a.py"}, 2),
@@ -113,8 +113,9 @@ def test_explicit_interruption_closes_session_immediately(end_type):
     )
 
     assert len(sessions) == 1
-    assert sessions[0]["ended_at"] == (BASE + timedelta(minutes=20)).isoformat()
-    assert sessions[0]["duration_seconds"] == 20 * 60
+    assert sessions[0]["ended_at"] == (BASE + timedelta(minutes=10)).isoformat()
+    assert sessions[0]["duration_seconds"] == 10 * 60
+    assert sessions[0]["interruptions"] == []
     assert sessions[0]["end_reason"] == end_type
 
 
@@ -136,9 +137,9 @@ def test_resume_transition_waits_for_new_work(stop_type, resume_type):
     )
 
     assert len(sessions) == 2
-    assert sessions[0]["ended_at"] == (BASE + timedelta(minutes=50)).isoformat()
-    assert sessions[0]["active_duration_seconds"] == 20 * 60
-    assert sessions[0]["interruptions"][0]["duration_seconds"] == 30 * 60
+    assert sessions[0]["ended_at"] == BASE.isoformat()
+    assert sessions[0]["active_duration_seconds"] == 0
+    assert sessions[0]["interruptions"] == []
     assert sessions[1]["started_at"] == (BASE + timedelta(minutes=55)).isoformat()
 
 
@@ -166,6 +167,92 @@ def test_short_interruption_followed_by_same_workspace_keeps_session():
             "duration_seconds": 60,
         }
     ]
+
+
+def test_unlock_without_later_strong_work_is_not_a_session_boundary():
+    locked = event("screen_locked", 10, event_id=2)
+    unlocked = event("screen_unlocked", 11, event_id=3)
+    sessions, unresolved = reconstruct(
+        event("file_changed", 0, {**workspace(PULSE), "path": f"{PULSE}/a.py"}),
+        locked,
+        unlocked,
+        now=BASE + timedelta(minutes=20),
+    )
+
+    assert len(sessions) == 1
+    assert sessions[0]["ended_at"] == BASE.isoformat()
+    assert sessions[0]["interruptions"] == []
+    assert locked not in sessions[0]["activities"]
+    assert unlocked not in sessions[0]["activities"]
+    assert unresolved == []
+
+
+def test_isolated_system_wake_does_not_keep_old_session_open():
+    wake = event("system_wake", 60, event_id=2)
+    sessions, unresolved = reconstruct(
+        event("terminal_finished", 0, {**workspace(PULSE), "command": "make"}),
+        wake,
+        now=BASE + timedelta(minutes=70),
+    )
+
+    assert len(sessions) == 1
+    assert sessions[0]["ended_at"] == BASE.isoformat()
+    assert wake not in sessions[0]["activities"]
+    assert unresolved == []
+
+
+def test_duplicate_unlock_is_ignored_until_another_lock():
+    first_unlock = event("screen_unlocked", 2, event_id=3)
+    duplicate_unlock = event("screen_unlocked", 3, event_id=4)
+    sessions, unresolved = reconstruct(
+        event("terminal_finished", 0, {**workspace(PULSE), "command": "make"}),
+        event("screen_locked", 1, event_id=2),
+        first_unlock,
+        duplicate_unlock,
+        event(
+            "terminal_finished",
+            4,
+            {**workspace(PULSE), "command": "pytest"},
+            5,
+        ),
+    )
+
+    assert unresolved == []
+    assert first_unlock in sessions[0]["activities"]
+    assert duplicate_unlock not in sessions[0]["activities"]
+    assert sessions[0]["interruptions"][0]["ended_at"] == (
+        BASE + timedelta(minutes=2)
+    ).isoformat()
+
+
+def test_strong_work_after_long_system_interruption_starts_new_session():
+    first_work = event(
+        "file_changed",
+        0,
+        {**workspace(PULSE), "path": f"{PULSE}/main.py"},
+    )
+    later_work = event(
+        "terminal_finished",
+        89,
+        {**workspace(PULSE), "command": "git status"},
+        6,
+    )
+    sessions, unresolved = reconstruct(
+        first_work,
+        event("screen_locked", 23, event_id=2),
+        event("screen_unlocked", 24, event_id=3),
+        event("screen_unlocked", 25, event_id=4),
+        event("system_wake", 80, event_id=5),
+        later_work,
+        now=BASE + timedelta(minutes=90),
+    )
+
+    assert unresolved == []
+    assert len(sessions) == 2
+    assert sessions[0]["started_at"] == first_work["occurred_at"]
+    assert sessions[0]["ended_at"] == first_work["occurred_at"]
+    assert sessions[0]["interruptions"] == []
+    assert sessions[1]["started_at"] == later_work["occurred_at"]
 
 
 def test_workspace_change_after_short_interruption_splits_session():
@@ -557,11 +644,12 @@ def test_json_and_markdown_exports_include_session_metadata(tmp_path):
 
     assert trace["passive_sessions"] is trace["unresolved_sessions"]
     assert session["project_name"] == "Pulse_Core"
-    assert session["duration_seconds"] == 1200
+    assert session["duration_seconds"] == 0
+    assert session["interruptions"] == []
     assert session["end_reason"] == "screen_locked"
     assert "- Projet : Pulse\\_Core" in markdown
-    assert "- Durée calendaire : 20 min" in markdown
-    assert "- Durée active : 20 min" in markdown
+    assert "- Durée calendaire : 0 min" in markdown
+    assert "- Durée active : 0 min" in markdown
     assert "- Fin : écran verrouillé" in markdown
 
 
