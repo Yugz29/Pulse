@@ -462,6 +462,22 @@ Coexistence avec `scripts/dev.sh` : le worker porte un verrou (`flock`), une
 seconde instance s'éteint d'elle-même ; le daemon, lui, entrerait en conflit
 de port — désinstaller (ou `launchctl bootout`) avant de lancer `dev.sh`.
 
+## Bascule service ↔ dev
+
+`scripts/pulse_mode.sh` bascule proprement entre les deux modes :
+
+```bash
+make mode-dev       # décharge les services launchd, lance le hot reload
+make mode-service   # recharge les services (daemon + worker, KeepAlive)
+./scripts/pulse_mode.sh status
+```
+
+En mode dev, la sortie du hot reload (Ctrl-C compris) **recharge
+automatiquement les services** — impossible d'oublier de réinstaller. Le
+LaunchAgent horaire des producteurs n'est jamais touché : l'outbox durable
+vaut dans les deux modes. Visibilité : `make logs` (journaux des services)
+et `make status` (daemon, launchd, outbox).
+
 ## Exécution récurrente des producteurs agents
 
 Un LaunchAgent utilisateur exécute toutes les heures (et au chargement de la
