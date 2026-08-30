@@ -291,7 +291,7 @@ def test_short_terminal_and_file_sessions_remain_work_sessions(tmp_path):
     )
 
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
-    summary = build_daily_summary(trace, project_mode="archive")
+    summary = build_daily_summary(trace)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
     assert summary["session_count"] == 2
@@ -390,7 +390,7 @@ def test_strong_activity_every_ten_minutes_keeps_one_session(tmp_path):
         )
 
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
-    summary = build_daily_summary(trace, project_mode="archive")
+    summary = build_daily_summary(trace)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
     assert summary["session_count"] == 1
@@ -438,7 +438,7 @@ def test_weak_activity_does_not_join_strong_activity_across_long_pause(
         store.append(activity)
 
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
-    summary = build_daily_summary(trace, project_mode="archive")
+    summary = build_daily_summary(trace)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
     assert summary["session_count"] == 2
