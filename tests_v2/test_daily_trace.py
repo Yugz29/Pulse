@@ -2106,3 +2106,85 @@ def test_day_window_follows_dst_transitions(tmp_path, day, inside_utc, outside_u
         for activity in session["activities"]
     }
     assert stored_instants == set(inside_utc)
+
+
+def _cache_probe_activity(occurred_at, path="/work/repo/app.py"):
+    return Activity(
+        "file_changed",
+        occurred_at,
+        "filesystem",
+        f"Modified {path}",
+        {"path": path, "event": "modified", "workspace": "/work/repo"},
+    )
+
+
+def test_available_days_caches_past_days_and_invalidates_touched_day(
+    tmp_path, monkeypatch
+):
+    import daemon_v2.daily_trace as daily_trace_module
+
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    store.append(
+        _cache_probe_activity(datetime(2026, 7, 1, 10, 0, tzinfo=timezone.utc))
+    )
+    store.append(
+        _cache_probe_activity(datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc))
+    )
+    # Ancre fixe à midi : les deux jours sont passés, donc cachables.
+    now = datetime(2026, 7, 3, 12, 0, tzinfo=timezone.utc)
+
+    built = []
+    real_build = daily_trace_module._build_day_entry
+
+    def counting_build(store_arg, day, zone):
+        built.append(day)
+        return real_build(store_arg, day, zone)
+
+    monkeypatch.setattr(daily_trace_module, "_build_day_entry", counting_build)
+
+    first = build_available_days(store, timezone.utc, now=now)
+    assert built == [date(2026, 7, 2), date(2026, 7, 1)]
+
+    built.clear()
+    second = build_available_days(store, timezone.utc, now=now)
+    assert built == []
+    assert second == first
+
+    # Insertion rétro-datée (livraison en retard, dead-letter rejouée) :
+    # seul le jour touché est reconstruit.
+    store.append(
+        _cache_probe_activity(
+            datetime(2026, 7, 1, 13, 0, tzinfo=timezone.utc),
+            path="/work/repo/late.py",
+        )
+    )
+    built.clear()
+    third = build_available_days(store, timezone.utc, now=now)
+    assert built == [date(2026, 7, 1)]
+    assert third["days"][1]["event_count"] == 2
+    assert third["days"][0] == first["days"][0]
+
+
+def test_available_days_never_caches_the_current_day(tmp_path, monkeypatch):
+    import daemon_v2.daily_trace as daily_trace_module
+
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    store.append(
+        _cache_probe_activity(datetime(2026, 7, 3, 10, 0, tzinfo=timezone.utc))
+    )
+    now = datetime(2026, 7, 3, 12, 0, tzinfo=timezone.utc)
+
+    built = []
+    real_build = daily_trace_module._build_day_entry
+
+    def counting_build(store_arg, day, zone):
+        built.append(day)
+        return real_build(store_arg, day, zone)
+
+    monkeypatch.setattr(daily_trace_module, "_build_day_entry", counting_build)
+
+    build_available_days(store, timezone.utc, now=now)
+    build_available_days(store, timezone.utc, now=now)
+
+    # Le jour courant est reconstruit à chaque requête, jamais servi du cache.
+    assert built == [date(2026, 7, 3), date(2026, 7, 3)]

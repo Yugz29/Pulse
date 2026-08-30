@@ -12,7 +12,7 @@
 
 **Effort:** M
 **Priority:** P3
-**Depends on:** 10A (colonne occurred_at_utc) — livré le 2026-08-30 ; 11A (cache /days) — restant
+**Depends on:** 10A et 11A livrés le 2026-08-30 — chantier débloqué ; reste la décision produit (combien d'historique garder ? porte à sens unique)
 
 ### Remplacer le polling du file watcher par watchdog/FSEvents
 
@@ -27,6 +27,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) terminé
 
 ## Completed
+
+### Cache par jour de /days (11A)
+
+**What:** `/days` reconstruisait la trace complète de chaque jour de l'historique à chaque requête — O(historique).
+
+**Résolution:** Cache par jour dans `build_available_days` (corps extrait en `_build_day_entry`). Le store étant append-only, un jour passé ne change que si une ligne datée de ce jour arrive après coup : le watermark `MAX(id)` (`TraceStore.latest_activity_id`) détecte les nouvelles lignes (`occurred_at_since`) et évince exactement les jours touchés (livraison en retard, dead-letter rejouée). Le jour courant n'est jamais mis en cache (rendu dépendant de l'horloge — session en cours). Paramètre `now=` injectable pour les tests (ancrage midi). Avec 10A, le chantier rétention est techniquement débloqué. 373 tests.
+
+**Completed:** 2026-08-30
 
 ### Colonne occurred_at_utc normalisée + requêtes lexicales (10A)
 
