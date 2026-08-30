@@ -1,4 +1,4 @@
-.PHONY: dev dev-reload test status reset help
+.PHONY: dev dev-reload test status logs reset help
 
 dev:
 	./scripts/dev.sh
@@ -12,6 +12,12 @@ test:
 status:
 	./scripts/status.sh
 
+logs:
+	tail -n 20 -F \
+		~/.pulse_v2/logs/daemon.log \
+		~/.pulse_v2/logs/outbox_worker.log \
+		~/.pulse_v2/logs/agent_producers.log
+
 reset:
 	./scripts/reset-dev.sh
 
@@ -20,6 +26,7 @@ help:
 		'make dev     Lance le daemon et les watchers' \
 		'make dev-reload  Lance Pulse avec rechargement automatique' \
 		'make test    Exécute les tests' \
-		'make status  Affiche l’état local de Pulse' \
+		'make status  Affiche l’état local de Pulse (daemon, launchd, outbox)' \
+		'make logs    Suit les journaux des services launchd' \
 		'make reset   Réinitialise la trace de développement' \
 		'make help    Affiche cette aide'
