@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sqlite3
+from contextlib import closing
 import sys
 import uuid
 from dataclasses import dataclass
@@ -52,6 +53,9 @@ class ProducerOutbox:
         )
         self._initialize()
 
+    # Every caller wraps this in closing(...): relying on the garbage
+    # collector leaks one fd per operation and hits launchd's 256-fd
+    # limit in minutes (2026-08-30 outage: worker down, EMFILE).
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=5.0)
         connection.row_factory = sqlite3.Row
@@ -63,7 +67,7 @@ class ProducerOutbox:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -98,13 +102,13 @@ class ProducerOutbox:
         # Hot path (once per observed command): plain read, no write lock.
         # The write lock is only taken the very first time, and the re-read
         # inside BEGIN IMMEDIATE keeps concurrent first-runs single-valued.
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 "SELECT value FROM producer_metadata WHERE key = 'instance_id'"
             ).fetchone()
         if row is not None and str(row["value"]).strip():
             return str(row["value"])
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT value FROM producer_metadata WHERE key = 'instance_id'"
@@ -130,7 +134,7 @@ class ProducerOutbox:
         if not isinstance(event_id, str) or not event_id.strip():
             raise ValueError("payload event_id must be a non-empty string")
         timestamp = created_at or utc_now().isoformat()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 INSERT INTO events(event_id, payload_json, created_at)
@@ -141,7 +145,7 @@ class ProducerOutbox:
         return event_id
 
     def oldest(self) -> PendingEvent | None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 """
                 SELECT *
@@ -153,7 +157,7 @@ class ProducerOutbox:
         return _pending_from_row(row) if row is not None else None
 
     def delete(self, event_id: str) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 "DELETE FROM events WHERE event_id = ?",
                 (event_id,),
@@ -167,7 +171,7 @@ class ProducerOutbox:
         next_attempt_at: datetime,
         error: str,
     ) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 UPDATE events
@@ -194,7 +198,7 @@ class ProducerOutbox:
         response_body: str | None,
         failed_at: datetime,
     ) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             # OR REPLACE: a replayed event that fails again must overwrite its
             # previous dead-letter row, not crash the worker on the PK.
@@ -221,7 +225,7 @@ class ProducerOutbox:
             )
 
     def counts(self) -> tuple[int, int]:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             pending = connection.execute(
                 "SELECT COUNT(*) FROM events"
             ).fetchone()[0]
@@ -234,7 +238,7 @@ class ProducerOutbox:
         """Return recent dead letters without modifying or replaying them."""
         if limit <= 0:
             raise ValueError("limit must be a strictly positive integer")
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 """
                 SELECT event_id, payload_json, error, http_status
@@ -265,7 +269,7 @@ class ProducerOutbox:
 
     def clear_dead_letters(self, *, http_status: int | None = None) -> int:
         """Delete only dead letters, optionally restricted to one HTTP status."""
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             if http_status is None:
                 cursor = connection.execute("DELETE FROM dead_letters")
@@ -296,7 +300,7 @@ class ProducerOutbox:
             raise ValueError("event_id must be a non-empty string")
         selection = {"event_id": event_id, "http_status": http_status}
         replayed_at = utc_now().isoformat()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             # OR IGNORE: if the event is somehow already pending again, its
             # dead-letter row is a stale duplicate — dropping it is enough.
