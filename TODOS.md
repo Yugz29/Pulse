@@ -2,17 +2,33 @@
 
 ## Daemon V2
 
-### Politique de rétention / purge de trace.db
+### Ingestion des sessions agent (Claude Code / Codex) en événements dérivés
 
-**What:** Définir une rétention pour `trace.db` (archivage ou purge des jours anciens) — la base croît indéfiniment.
+**What:** Nouvelle source pour le journal : un événement `agent_session` par session (`~/.claude/projects/`, `~/.codex/sessions/`) — résumé calculé **une fois à l'ingestion** (versionné par le producteur, jamais recalculé : stabilité temporelle), métadonnées (projet, durée, fichiers touchés) et **pointeur vers le fichier source**. Le brut des transcripts n'entre JAMAIS dans `trace.db` (décision rétention du 2026-08-30 : un jour chargé de transcripts = 50–85 Mo, soit ~1 500× un jour Pulse).
 
-**Why:** Sans élagage, chaque mois ajoute du poids ; certaines opérations (audits, migrations) parcourent toute la base même une fois les lectures indexées.
+**Why:** Journal des journées de travail agent sans transformer le journal d'événements en entrepôt de corpus.
 
-**Context:** `trace_store.py` interdit UPDATE/DELETE par triggers (append-only). Une purge passerait par export vers archive + reconstruction, ou par partitionnement par fichier/période. Décision produit avant tout : combien d'historique Pulse promet-il de garder ? Porte à sens unique — supprimer de l'historique est irréversible. Les caches décidés en revue (10A/11A) réduisent la pression court terme.
+**Context:** Attention : Claude Code purge ses transcripts après ~30 jours par défaut (`cleanupPeriodDays`) — l'archivage compressé (item ci-dessous) doit précéder ou accompagner ce chantier pour que le pointeur ne devienne pas orphelin.
 
 **Effort:** M
+**Priority:** P2
+**Depends on:** None (politique tranchée le 2026-08-30)
+
+### Archivage compressé des transcripts agent
+
+**What:** Copie zstd des `.jsonl` de sessions (`~/.claude/projects/`, `~/.codex/sessions/`) vers un dossier d'archive avant leur purge par les outils sources — fenêtre de brut infinie côté fichiers compressés (~5:1 sur du JSONL ; ~800 Mo cumulés actuels ≈ 160 Mo).
+
+**Effort:** S
 **Priority:** P3
-**Depends on:** 10A et 11A livrés le 2026-08-30 — chantier débloqué ; reste la décision produit (combien d'historique garder ? porte à sens unique)
+**Depends on:** None — à livrer avant ou avec l'ingestion `agent_session`
+
+### Réexamen rétention trace.db — déclencheurs falsifiables
+
+**What:** La rétention infinie du brut (décision du 2026-08-30) se rouvre UNIQUEMENT si un de ces seuils mesurables est franchi : `trace.db` > 500 Mo ; ou latence de rendu d'une page > 1 s malgré le cache /days ; ou l'audit `scripts/audit_secrets.py` > 60 s. Premier levier si ça arrive : compaction des micro-événements `app_activated` (68 % des lignes, 20 octets pièce) — pas les résumés.
+
+**Effort:** —
+**Priority:** P4 (veille)
+**Depends on:** Aucun — item sentinelle, ne pas implémenter
 
 ### Remplacer le polling du file watcher par watchdog/FSEvents
 
@@ -27,6 +43,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### Politique de rétention / purge de trace.db — tranchée
+
+**What:** Décision produit sur la rétention de `trace.db` (porte à sens unique), à trancher avant l'ingestion des transcripts agent.
+
+**Résolution (décision du 2026-08-30, sur mesures réelles) :** `trace.db` = 3,1 Mo, ~45 Ko/jour actif (~1,5 Mo/mois) — le problème de rétention n'existe pas dans les données actuelles, et 10A/11A ont réglé les coûts de lecture. Politique : **rétention infinie du brut, aucune purge, aucun résumé** (le brut est la valeur du produit — mémoire fidèle ; un résumé n'est pas temporellement stable et « purger une fois le résumé fiable » a un critère de sortie invérifiable). Les transcripts agent (50–85 Mo/jour chargé) n'entrent jamais en brut : événement `agent_session` dérivé + archivage fichier zstd (voir items actifs). Réexamen uniquement sur seuils falsifiables (item sentinelle P4). Note de décision complète : artifact « Rétention trace.db » du 2026-08-30.
+
+**Completed:** 2026-08-30
 
 ### file_watcher via l'outbox + suppression d'app_watcher (2A-révisée)
 
