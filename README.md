@@ -2,6 +2,9 @@
 
 Pulse V2 observe l’activité locale de développement, conserve une trace locale en append-only, regroupe les événements en sessions et reconstruit une vue lisible de la journée en cours.
 
+L’historique des versions vit dans [CHANGELOG.md](CHANGELOG.md) ; le travail
+restant et les décisions différées dans [TODOS.md](TODOS.md).
+
 ## Contrat d’événement et compatibilité temporaire
 
 `POST /activities` accepte un contrat canonique versionné contenant
@@ -15,7 +18,7 @@ un adaptateur explicite `pulse-legacy`. Core leur attribue un nouvel
 fournit aucune idempotence entre deux requêtes legacy identiques**. Il est
 destiné à être supprimé après migration des producteurs.
 
-La version actuelle prend en charge quatre signaux d’activité :
+La version actuelle prend en charge cinq signaux d’activité :
 
 - `terminal_finished` depuis le watcher Zsh du terminal ;
 - `file_changed` depuis le watcher de fichiers du workspace ;
@@ -23,7 +26,10 @@ La version actuelle prend en charge quatre signaux d’activité :
 - `git_commit` depuis un hook `post-commit` local (voir « Hook Git » plus bas),
   déclenché quel que soit le client à l’origine du commit (terminal, VS Code,
   ou tout autre outil Git), avec le hash, la branche, le message complet et
-  les statistiques de fichiers du commit réellement créé.
+  les statistiques de fichiers du commit réellement créé ;
+- `agent_session` depuis le producteur horaire des sessions d’agents
+  (voir « Sessions d’agents » plus bas) : un événement dérivé par session
+  Claude Code / Codex terminée, jamais le transcript brut.
 
 Pulse complète ces signaux avec une lecture Git passive au rendu pour enrichir
 la reprise du projet courant, sans écrire ces informations dans SQLite.
@@ -40,8 +46,9 @@ Le projet fonctionne comme un prototype produit local :
 - les événements sont regroupés en sessions de travail ;
 - une vue HTML vivante, des archives HTML et des représentations JSON et
   Markdown sont produites depuis la même trace quotidienne ;
-- les watchers terminal, fichiers et application alimentent le daemon en
-  best-effort.
+- les watchers terminal, fichiers et application écrivent dans l’outbox
+  durable ; le worker livre ensuite au daemon, y compris après une
+  indisponibilité momentanée.
 
 
 L’interface HTML est conservée volontairement comme interface produit vivante.
@@ -148,11 +155,15 @@ Commandes de diagnostic :
   inspect-dead-letter --limit 10
 .venv/bin/python -m daemon_v2.producer_outbox \
   clear-dead-letter --http-status 403
+.venv/bin/python -m daemon_v2.producer_outbox \
+  replay-dead-letter --http-status 500
 ```
 
-La dernière commande supprime uniquement les dead-letters HTTP 403 ciblées.
-Elle ne touche jamais aux événements pending. Aucune dead-letter n’est
-supprimée ou rejouée automatiquement.
+`clear-dead-letter` supprime uniquement les dead-letters ciblées ;
+`replay-dead-letter` les re-enfile dans la file de livraison (sélection
+explicite obligatoire : `--event-id`, `--http-status` ou `--all`). Aucune des
+deux ne touche aux événements pending. Aucune dead-letter n’est supprimée ou
+rejouée automatiquement.
 
 Sémantique de livraison : les erreurs de connexion (daemon arrêté, machine
 hors ligne) sont réessayées indéfiniment — l’outbox survit à l’indisponibilité
@@ -200,8 +211,11 @@ d’application.
 ```bash
 make dev
 make dev-reload
+make mode-dev
+make mode-service
 make test
 make status
+make logs
 make reset
 make help
 ```
@@ -212,8 +226,12 @@ dépôt par polling et redémarre Pulse après un court debounce, sans utiliser 
 
 - `make dev` : lance Pulse localement ;
 - `make dev-reload` : lance Pulse et le redémarre lorsque les sources changent ;
+- `make mode-dev` : décharge les services launchd et lance le hot reload,
+  avec retour automatique au mode service en sortie ;
+- `make mode-service` : recharge les services launchd (daemon + worker) ;
 - `make test` : lance les tests ;
-- `make status` : affiche l’état local ;
+- `make status` : affiche l’état local (daemon, launchd, outbox) ;
+- `make logs` : suit les journaux des services launchd ;
 - `make reset` : réinitialise la trace de développement ;
 - `make help` : affiche les commandes disponibles.
 
@@ -240,7 +258,9 @@ http://127.0.0.1:8765/
 La page locale affiche les blocs `Maintenant`, `Reprise`, `Aujourd’hui` et
 `État système`, puis une timeline navigable. Elle regroupe les changements de
 fichiers par vague de modification, résume les sessions, marque les changements
-de projet et synthétise les applications actives. Le bloc `Reprise` complète la
+de projet et synthétise les applications actives. Un événement fort isolé
+(un `cd` nu, un commit seul) apparaît en une ligne dans la section
+« Activités isolées » au lieu d’ouvrir une session de 0 minute. Le bloc `Reprise` complète la
 trace enregistrée avec un contexte Git local lu passivement : état du dépôt,
 branche et commits du jour. Cette lecture Git est best-effort, limitée par un
 timeout court, et n’est pas écrite dans SQLite.
@@ -351,6 +371,7 @@ daemon_v2/
   renderers/
     html.py
     markdown.py
+  agent_sessions.py
   daily_trace.py
   file_watcher.py
   ingest.py
@@ -361,6 +382,8 @@ daemon_v2/
   trace_store.py
 ```
 
+- `agent_sessions.py` parse les transcripts Claude Code / Codex terminés et
+  émet les événements dérivés `agent_session` via l’outbox durable.
 - `main.py` crée l’application Flask et initialise le stockage.
 - `routes.py` expose l’ingestion, les vues et les traces.
 - `ingest.py` valide, normalise et masque les données sensibles des activités
@@ -564,8 +587,9 @@ grossir, mais elle n’est pas nécessaire dans l’architecture actuelle.
   dans le code, mais pas encore remplacées par une identité projet durable.
 - Les commandes reçoivent un masquage basique des secrets, sans parsing shell
   avancé.
-- Les watchers fonctionnent en best-effort : une indisponibilité momentanée du
-  daemon peut entraîner la perte d’un événement, sans interrompre le watcher.
+- Les watchers restent best-effort côté observation, mais la livraison passe
+  par l’outbox durable : un daemon momentanément indisponible retarde la
+  livraison sans perdre l’événement.
 - SQLite est local et mono-machine ; il n’y a pas encore de système de rétention ou de migration.
 - Les scans et agrégations SQLite restent adaptés au volume actuel ; leur coût
   devra être surveillé lorsque l’historique grandira.
