@@ -53,3 +53,22 @@ print(f"  Dernier événement  : {last_text}")
 print(f"  Workspace principal: {workspace}")
 print("  Watcher terminal   : {}".format(status["terminal_watcher"]))
 '
+
+echo ""
+echo "Services launchd"
+for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers; do
+  info="$(launchctl print "gui/$(id -u)/$label" 2>/dev/null)"
+  if [[ -z "$info" ]]; then
+    printf '  %-28s: non installé\n' "$label"
+    continue
+  fi
+  pid="$(printf '%s' "$info" | grep 'pid = ' | grep -o '[0-9]*' || true)"
+  state="$(printf '%s' "$info" | grep -m1 'state = ' | sed 's/.*state = //')"
+  printf '  %-28s: %s%s\n' "$label" "$state" "${pid:+ (pid $pid)}"
+done
+
+echo ""
+echo "Outbox"
+"$python" -m daemon_v2.producer_outbox status 2>/dev/null | grep -E "^(Pending|Dead-letter):" | sed 's/^/  /'
+echo ""
+echo "Journaux : ~/.pulse_v2/logs/ (make logs pour les suivre)"

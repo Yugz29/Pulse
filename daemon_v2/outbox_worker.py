@@ -204,6 +204,17 @@ def post_payload(
         raise TemporaryDeliveryError(str(exc)) from exc
 
 
+def _log(message: str) -> None:
+    """Timestamped service log line (launchd redirects stdout to a file).
+
+    Only meaningful outcomes are logged — never the once-per-second idle
+    cycles, or the log becomes unreadable exactly when it matters (the
+    2026-08-30 fd-leak outage produced 2400 identical undated lines).
+    """
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    print(f"{stamp} {message}", flush=True)
+
+
 def run_forever(worker: OutboxWorker, *, poll_interval: float = 1.0) -> None:
     while True:
         try:
@@ -213,9 +224,11 @@ def run_forever(worker: OutboxWorker, *, poll_interval: float = 1.0) -> None:
             # dead-letter) must not kill the delivery loop: the same event
             # would still be FIFO head after restart, guaranteeing a crash
             # loop that blocks the whole queue.
-            print(f"Pulse outbox worker: {exc}", flush=True)
+            _log(f"error: {exc}")
             time.sleep(poll_interval)
             continue
+        if outcome in {"sent", "ignored", "dead-letter"}:
+            _log(f"delivery: {outcome}")
         if outcome in {"empty", "waiting", "retry"}:
             time.sleep(poll_interval)
 
