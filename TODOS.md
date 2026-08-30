@@ -12,7 +12,7 @@
 
 **Effort:** M
 **Priority:** P3
-**Depends on:** 10A (colonne occurred_at_utc) et 11A (cache /days) livrés
+**Depends on:** 10A (colonne occurred_at_utc) — livré le 2026-08-30 ; 11A (cache /days) — restant
 
 ### Remplacer le polling du file watcher par watchdog/FSEvents
 
@@ -27,6 +27,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) terminé
 
 ## Completed
+
+### Colonne occurred_at_utc normalisée + requêtes lexicales (10A)
+
+**What:** Remplacer les requêtes `julianday(occurred_at)` de `trace_store.py` (expression → scan complet, index `occurred_at` inutilisé) par une colonne canonique indexée.
+
+**Résolution:** Colonne `occurred_at_utc` — UTC à largeur fixe (`isoformat(timespec="microseconds")`, helper `utc_lexical`) : l'ordre lexical EST l'ordre chronologique, les comparaisons de chaînes utilisent `idx_activities_occurred_at_utc`. Écrite à l'insert, backfillée dans la migration transactionnelle existante (triggers append-only levés puis recréés), `idx_activities_occurred_at` (mort) supprimé. `occurred_at` brut conservé avec son offset d'origine pour les lecteurs. Test de régression offsets mélangés (un `14:00+02:00` comparé brut à une borne `13:00+00:00` serait exclu à tort) + assertions de migration étendues. Débloque la moitié 10A du chantier rétention. 371 tests.
+
+**Completed:** 2026-08-30
 
 ### Divergence de qualification projet entre live et archive
 
