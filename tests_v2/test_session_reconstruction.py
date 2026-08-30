@@ -630,6 +630,15 @@ def test_json_and_markdown_exports_include_session_metadata(tmp_path):
     )
     store.append(
         Activity(
+            "file_changed",
+            BASE + timedelta(minutes=5),
+            "filesystem",
+            f"Modified {PULSE}/routes.py",
+            {**workspace(PULSE), "path": f"{PULSE}/routes.py"},
+        )
+    )
+    store.append(
+        Activity(
             "screen_locked",
             BASE + timedelta(minutes=20),
             "system",
@@ -644,12 +653,12 @@ def test_json_and_markdown_exports_include_session_metadata(tmp_path):
 
     assert trace["passive_sessions"] is trace["unresolved_sessions"]
     assert session["project_name"] == "Pulse_Core"
-    assert session["duration_seconds"] == 0
+    assert session["duration_seconds"] == 300
     assert session["interruptions"] == []
     assert session["end_reason"] == "screen_locked"
     assert "- Projet : Pulse\\_Core" in markdown
-    assert "- Durée calendaire : 0 min" in markdown
-    assert "- Durée active : 0 min" in markdown
+    assert "- Durée calendaire : 5 min" in markdown
+    assert "- Durée active : 5 min" in markdown
     assert "- Fin : écran verrouillé" in markdown
 
 

@@ -214,15 +214,16 @@ def test_moves_short_app_only_sessions_to_unresolved_activity(tmp_path):
                     {"app": app},
                 )
             )
-    store.append(
-        Activity(
-            "terminal_finished",
-            datetime(2026, 7, 3, 12, 30, tzinfo=timezone.utc),
-            "terminal",
-            "Command succeeded: make test",
-            {"command": "make test", "exit_code": 0, "cwd": "/project/Pulse"},
+    for minute, command in ((30, "make test"), (31, "echo done")):
+        store.append(
+            Activity(
+                "terminal_finished",
+                datetime(2026, 7, 3, 12, minute, tzinfo=timezone.utc),
+                "terminal",
+                f"Command succeeded: {command}",
+                {"command": command, "exit_code": 0, "cwd": "/project/Pulse"},
+            )
         )
-    )
 
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
@@ -231,7 +232,7 @@ def test_moves_short_app_only_sessions_to_unresolved_activity(tmp_path):
     assert "- Sessions de travail : 1" in markdown
     assert "- Activités non attribuées : 8" in markdown
     assert markdown.count("## Session ") == 1
-    assert "## Session 1 — 12:30–12:30 · 0 min" in markdown
+    assert "## Session 1 — 12:30–12:31 · 1 min" in markdown
     assert "- 01:42 · Safari, ChatGPT" in markdown
     assert "- 02:23 · Safari" in markdown
     assert "- 11:27 · ChatGPT, Pages, Google Chrome, Safari, Code" in markdown
@@ -265,7 +266,9 @@ def test_day_with_only_unresolved_activity_has_no_work_session(tmp_path):
     assert "<h2>Activité non attribuée</h2>" in html
 
 
-def test_short_terminal_and_file_sessions_remain_work_sessions(tmp_path):
+def test_isolated_strong_events_render_as_one_line_not_sessions(tmp_path):
+    # Retour du 2026-08-30 : un pwd nu et un fichier isolé ouvraient chacun
+    # un bloc « Session » de 0 min. Ils deviennent des activités isolées.
     store = TraceStore(tmp_path / "pulse.sqlite3")
     store.append(
         Activity(
@@ -294,9 +297,11 @@ def test_short_terminal_and_file_sessions_remain_work_sessions(tmp_path):
     summary = build_daily_summary(trace)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
-    assert summary["session_count"] == 2
-    assert summary["passive_activity_count"] == 0
-    assert markdown.count("## Session ") == 2
+    assert summary["session_count"] == 0
+    assert markdown.count("## Session ") == 0
+    assert "## Activités isolées" in markdown
+    assert "- 08:00 · pwd (Pulse)" in markdown
+    assert "- 09:00 · Modified app.py (Pulse)" in markdown
     assert "## Activité non attribuée" not in markdown
 
 
@@ -367,9 +372,12 @@ def test_weak_activity_does_not_extend_or_keep_work_session_open(tmp_path):
     html = render_daily_trace_html(trace)
 
     strong_time = strong_at.strftime("%H:%M")
-    assert summary["session_count"] == 1
+    # Nouveau contrat (2026-08-30) : l'événement fort isolé ne forme plus un
+    # bloc Session — et l'activité faible ne le maintient toujours pas ouvert.
+    assert summary["session_count"] == 0
     assert summary["passive_activity_count"] == 1
-    assert f"## Session 1 — {strong_time}–{strong_time} · 0 min" in markdown
+    assert "## Session " not in markdown
+    assert f"- {strong_time} · make test (Pulse)" in markdown
     assert "· en cours" not in markdown
     assert "· en cours</h2>" not in html
     assert "## Activité non attribuée" in markdown
@@ -441,10 +449,15 @@ def test_weak_activity_does_not_join_strong_activity_across_long_pause(
     summary = build_daily_summary(trace)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
-    assert summary["session_count"] == 2
+    # Nouveau contrat (2026-08-30) : les deux événements forts isolés ne
+    # forment plus des blocs Session de 0 min — mais la pause faible ne les
+    # relie toujours pas entre eux.
+    assert summary["session_count"] == 0
     assert summary["passive_activity_count"] == 1
-    assert "## Session 1 — 18:00–18:00 · 0 min" in markdown
-    assert "## Session 2 — 19:00–19:00 · 0 min" in markdown
+    assert "## Session " not in markdown
+    assert "## Activités isolées" in markdown
+    assert "- 18:00 · Modified app.py (Pulse)" in markdown
+    assert "- 19:00 · pytest (Pulse)" in markdown
     assert "## Activité non attribuée" in markdown
 
 
@@ -487,13 +500,23 @@ def test_renders_multiline_terminal_command_as_nested_list(tmp_path):
         )
     )
 
+    store.append(
+        Activity(
+            "terminal_finished",
+            occurred_at + timedelta(minutes=1),
+            "terminal",
+            "Command succeeded: echo done",
+            {"command": "echo done", "exit_code": 0, "cwd": "/project/Pulse_V2"},
+        )
+    )
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
 
     assert trace["sessions"][0]["activities"][0]["details"]["command"] == command
     markdown = render_daily_trace_markdown(trace)
-    assert "## Session 1 — 21:06–21:06" in markdown
+    assert "## Session 1 — 21:06–21:07" in markdown
     assert (
         "### Résumé de session\n"
+        "#### Pulse\\_V2\n"
         "- Git :\n"
         "  - filter multiline terminal noise\n"
         "  - remove Pulse command count"
@@ -533,12 +556,21 @@ def test_renders_file_path_relative_to_workspace(tmp_path):
         )
     )
 
+    store.append(
+        Activity(
+            "terminal_finished",
+            occurred_at + timedelta(minutes=1),
+            "terminal",
+            "Command succeeded: echo ok",
+            {"command": "echo ok", "exit_code": 0, "cwd": workspace},
+        )
+    )
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
 
     assert trace["sessions"][0]["activities"][0]["details"]["path"] == absolute_path
     markdown = render_daily_trace_markdown(trace)
     html = render_daily_trace_html(trace)
-    assert "## Session 1 — 21:20–21:20" in markdown
+    assert "## Session 1 — 21:20–21:21" in markdown
     assert (
         "### Résumé de session\n"
         "#### Pulse\\_V2\n"
@@ -599,18 +631,21 @@ def test_does_not_coalesce_same_file_across_sessions(tmp_path):
     path = "/project/a.py"
     details = {"path": path, "event": "modified", "workspace": "/project"}
     first_at = datetime(2026, 7, 3, 8, 0, tzinfo=timezone.utc)
-    store.append(
-        Activity("file_changed", first_at, "filesystem", f"Modified {path}", details)
-    )
-    store.append(
-        Activity(
-            "file_changed",
-            first_at + timedelta(hours=1),
-            "filesystem",
-            f"Modified {path}",
-            details,
+    for start in (first_at, first_at + timedelta(hours=1)):
+        store.append(
+            Activity(
+                "file_changed", start, "filesystem", f"Modified {path}", details
+            )
         )
-    )
+        store.append(
+            Activity(
+                "terminal_finished",
+                start + timedelta(minutes=1),
+                "terminal",
+                "Command succeeded: echo ok",
+                {"command": "echo ok", "exit_code": 0, "cwd": "/project"},
+            )
+        )
 
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
     markdown = render_daily_trace_markdown(trace)
@@ -786,6 +821,17 @@ def test_renders_deterministic_daily_summary_in_markdown_and_html(tmp_path):
             },
         ),
         Activity(
+            "file_changed",
+            first_at + timedelta(minutes=2, seconds=30),
+            "filesystem",
+            "Modified /other/d.py",
+            {
+                "path": "/other/d.py",
+                "event": "modified",
+                "workspace": "/other",
+            },
+        ),
+        Activity(
             "app_activated",
             first_at + timedelta(minutes=3),
             "application",
@@ -798,6 +844,17 @@ def test_renders_deterministic_daily_summary_in_markdown_and_html(tmp_path):
             "application",
             "Activated ChatGPT",
             {"app": "ChatGPT"},
+        ),
+        Activity(
+            "file_changed",
+            first_at + timedelta(minutes=4, seconds=30),
+            "filesystem",
+            "Modified /project/Pulse/e.py",
+            {
+                "path": "/project/Pulse/e.py",
+                "event": "modified",
+                "workspace": "/project/Pulse",
+            },
         ),
         Activity(
             "terminal_finished",
@@ -827,14 +884,14 @@ def test_renders_deterministic_daily_summary_in_markdown_and_html(tmp_path):
         "Workspace : /project/Pulse",
         "App active : Terminal",
         "Dernière commande : `git push`",
-        "Session active depuis : 10:05",
+        "Session active depuis : 10:04",
         "Dernière activité utile : terminal\\_finished — git push",
         "## Aujourd’hui",
         "Sessions de travail : 3",
         "Activités non attribuées : 3",
-        "Événements : 7",
+        "Événements : 9",
         "Commandes terminal : 1",
-        "Fichiers modifiés : 3",
+        "Fichiers modifiés : 5",
         "Apps principales : ChatGPT, Terminal",
     ]
     for line in markdown_lines:
@@ -845,14 +902,14 @@ def test_renders_deterministic_daily_summary_in_markdown_and_html(tmp_path):
         "<dt>Workspace</dt><dd>/project/Pulse</dd>",
         "<dt>App active</dt><dd>Terminal</dd>",
         "<dt>Dernière commande</dt><dd>git push</dd>",
-        "<dt>Session active depuis</dt><dd>10:05</dd>",
+        "<dt>Session active depuis</dt><dd>10:04</dd>",
         "<dt>Dernière activité utile</dt><dd>terminal_finished — git push</dd>",
         "<h2>Aujourd’hui</h2>",
         "<dt>Sessions de travail</dt><dd>3</dd>",
         "<dt>Activités non attribuées</dt><dd>3</dd>",
-        "<dt>Événements</dt><dd>7</dd>",
+        "<dt>Événements</dt><dd>9</dd>",
         "<dt>Commandes terminal</dt><dd>1</dd>",
-        "<dt>Fichiers modifiés</dt><dd>3</dd>",
+        "<dt>Fichiers modifiés</dt><dd>5</dd>",
         "<dt>Apps principales</dt><dd>ChatGPT, Terminal</dd>",
     ]
     for row in html_rows:
@@ -1166,6 +1223,21 @@ def test_inspection_only_sessions_hide_empty_project_summaries(tmp_path):
             {"command": without_apps, "exit_code": 0, "cwd": workspace},
         ),
     ]
+    # Un compagnon par groupe : une session pleine exige >=2 signaux forts.
+    activities.extend(
+        Activity(
+            "terminal_finished",
+            first_at + offset,
+            "terminal",
+            "Command succeeded: echo ok",
+            {"command": "echo ok", "exit_code": 0, "cwd": workspace},
+        )
+        for offset in (
+            timedelta(minutes=1),
+            timedelta(hours=1, minutes=2),
+            timedelta(hours=2, minutes=1),
+        )
+    )
     for activity in activities:
         store.append(activity)
 
@@ -1176,14 +1248,10 @@ def test_inspection_only_sessions_hide_empty_project_summaries(tmp_path):
     assert trace["session_count"] == 3
     assert markdown.count("#### Pulse") == 1
     assert html.count("<h4>Pulse</h4>") == 1
-    assert "- 10:01 · Code" in markdown
-    assert "<li>10:01 · Code</li>" in html
-    assert markdown.count(
-        "_Aucun signal significatif dans cette session._"
-    ) == 2
-    assert html.count(
-        "<p>Aucun signal significatif dans cette session.</p>"
-    ) == 2
+    assert "- Apps actives : Code" in markdown
+    assert "Apps actives" in html and "Code" in html
+    assert "_Aucun signal significatif dans cette session._" not in markdown
+    assert "<p>Aucun signal significatif dans cette session.</p>" not in html
     assert with_apps in markdown
     assert without_apps in markdown
 
@@ -1650,6 +1718,13 @@ def test_hides_ignored_app_only_sessions_in_markdown_and_html(tmp_path):
             "Command succeeded: git status",
             {"command": "git status", "exit_code": 0, "cwd": "/project"},
         ),
+        Activity(
+            "terminal_finished",
+            first_at + timedelta(hours=1, minutes=3),
+            "terminal",
+            "Command succeeded: echo ok",
+            {"command": "echo ok", "exit_code": 0, "cwd": "/project"},
+        ),
     ]
     for activity in activities:
         store.append(activity)
@@ -1659,7 +1734,7 @@ def test_hides_ignored_app_only_sessions_in_markdown_and_html(tmp_path):
     html = render_daily_trace_html(trace)
 
     assert trace["session_count"] == 2
-    assert trace["activity_count"] == 4
+    assert trace["activity_count"] == 5
     assert [activity["details"]["app"] for activity in trace["sessions"][0]["activities"]] == [
         "loginwindow"
     ]
@@ -1777,7 +1852,8 @@ def test_current_workspace_uses_latest_useful_event_and_today_lists_all_projects
     assert f'title="{workspaces[0]}">Pulse_V2</span>' in html
     assert f'title="{workspaces[2]}">Pulse_Sandbox</span>' in html
     assert f'title="{workspaces[1]}">TEST</span>' not in html
-    assert markdown.count("## Session ") == 2
+    assert markdown.count("## Session ") == 1
+    assert "- 10:00 · Created README.md (Pulse\\_Sandbox)" in markdown
 
 
 def test_timeline_marks_project_changes_but_keeps_weak_cwd_as_detail(tmp_path):
@@ -1822,6 +1898,13 @@ def test_timeline_marks_project_changes_but_keeps_weak_cwd_as_detail(tmp_path):
             "terminal",
             "Command succeeded: make test",
             {"command": "make test", "exit_code": 0, "cwd": pulse_v2},
+        ),
+        Activity(
+            "terminal_finished",
+            first_at + timedelta(minutes=16),
+            "terminal",
+            "Command succeeded: echo ok",
+            {"command": "echo ok", "exit_code": 0, "cwd": pulse_v2},
         ),
     ]
     for activity in activities:

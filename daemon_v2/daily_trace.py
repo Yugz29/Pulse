@@ -807,7 +807,13 @@ def build_daily_trace(
         trace,
         now=reference_now,
     )
-    trace["work_session_count"] = len(work_sessions)
+    trace["work_session_count"] = len(
+        [
+            session
+            for session in work_sessions
+            if session.get("activity_kind") != "isolated"
+        ]
+    )
     trace["work_sessions"] = work_sessions
     trace["unresolved_sessions"] = unresolved_sessions
     trace["unresolved_activity_count"] = sum(

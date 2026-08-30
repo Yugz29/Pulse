@@ -118,7 +118,9 @@ def test_nested_modules_are_grouped_under_logical_project(tmp_path):
     backend = "/Users/yugz/Projets/DevNote/DevNote/backend"
     frontend = "/Users/yugz/Projets/DevNote/DevNote/frontend"
     append_terminal(store, "python -m pytest", backend, minute=0)
-    append_terminal(store, "npm run build", frontend, minute=1)
+    append_terminal(store, "echo backend ok", backend, minute=1)
+    append_terminal(store, "npm run build", frontend, minute=2)
+    append_terminal(store, "echo frontend ok", frontend, minute=3)
 
     trace = trace_for(store)
     summary = build_daily_summary(trace)

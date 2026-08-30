@@ -2,16 +2,6 @@
 
 ## Daemon V2
 
-### Ne plus promouvoir un événement fort isolé en session pleine
-
-**What:** La reconstruction ouvre un bloc « Session » pour tout signal fort à >30 min du précédent, même seul — le 2026-08-30 affiche 6 sessions dont deux de 0 min (un `cd` nu, un commit isolé). Une session pleine devrait exiger ≥2 signaux forts ou une durée >0 ; l'événement isolé devient une « activité isolée » en une ligne, hors compteur de sessions.
-
-**Context:** Cohérent avec la qualification projet du jour (fichier explicite OU ≥2 signaux OU preuve git). Zone CRITICAL (reconstruction + renderers + tests de contrat à faire évoluer explicitement). Le gap de 30 min lui-même est sain — ne pas l'élargir.
-
-**Effort:** M
-**Priority:** P3
-**Depends on:** None (retour utilisateur du 2026-08-30)
-
 ### Limite connue : le raisonnement des conversations Claude.ai n'est pas capturable
 
 **What:** Le raisonnement le plus dense d'une journée peut vivre dans une conversation Claude.ai (web), hors de portée du pipeline local (`~/.claude/projects/` ne contient que les sessions Claude Code). Aucun correctif local ne peut combler ce trou — à décider consciemment plus tard si/comment le combler (export manuel périodique ? autre source ?).
@@ -41,6 +31,16 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### Ne plus promouvoir un événement fort isolé en session pleine
+
+**What:** La reconstruction ouvre un bloc « Session » pour tout signal fort à >30 min du précédent, même seul — le 2026-08-30 affiche 6 sessions dont deux de 0 min (un `cd` nu, un commit isolé). Une session pleine devrait exiger ≥2 signaux forts ou une durée >0 ; l'événement isolé devient une « activité isolée » en une ligne, hors compteur de sessions.
+
+**Context:** Cohérent avec la qualification projet du jour (fichier explicite OU ≥2 signaux OU preuve git). Zone CRITICAL (reconstruction + renderers + tests de contrat à faire évoluer explicitement). Le gap de 30 min lui-même est sain — ne pas l'élargir.
+
+**Résolution:** Rétrogradation à la clôture de session (`reconstruct_session_views.close_current`) : <2 signaux forts ET durée 0 ET raison ≠ « open » (une session qui vient de commencer n'est jamais rétrogradée) → `activity_kind: "isolated"`. `_displayed_sessions` filtre, nouveau `isolated_sessions`, section « Activités isolées » (une ligne : heure · description · projet) dans les deux renderers, gardes « Aucune activité » ajustées, `work_session_count`/`session_count` ne comptent que les vraies sessions. La reconstruction elle-même est inchangée (les compteurs RAW du store restent identiques). 14 tests de contrat mis à jour (fixtures enrichies quand le sujet était autre, 3 réécrits vers le nouveau contrat). Vérifié en réel : la journée du 2026-08-30 passe de 6 sessions (dont 2×0 min) à 4 + 2 activités isolées. Suite à 405.
+
+**Completed:** 2026-08-30
 
 ### Filtrer les transcripts de sous-agents (sidechains) du producteur agent_session
 

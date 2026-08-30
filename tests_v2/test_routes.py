@@ -24,6 +24,16 @@ def test_markdown_archive_omits_live_resume_and_does_not_read_git(
             "cwd": str(workspace),
         },
     )
+    client.post(
+        "/activities",
+        json={
+            "type": "terminal_finished",
+            "occurred_at": "2026-07-03T12:01:00+00:00",
+            "command": "echo ok",
+            "exit_code": 0,
+            "cwd": str(workspace),
+        },
+    )
     git_calls = []
 
     def fake_run(command, **kwargs):
@@ -338,7 +348,8 @@ def test_trace_days_lists_available_days_newest_first(tmp_path):
             {
                 "date": "2026-07-03",
                 "event_count": 1,
-                "session_count": 1,
+                # Événement fort isolé : plus promu en session (2026-08-30).
+                "session_count": 0,
                 "projects": ["Legacy"],
                 "summary": [
                     "Legacy — 1 fichier modifié · dossiers principaux : racine",
@@ -456,6 +467,17 @@ def test_dated_trace_routes_filter_day_and_handle_empty_or_invalid_dates(tmp_pat
                 "workspace": "/project",
             },
         ),
+        Activity(
+            "file_changed",
+            datetime(2026, 7, 4, 12, 1, tzinfo=timezone.utc),
+            "filesystem",
+            "Modified /project/day4b.py",
+            {
+                "path": "/project/day4b.py",
+                "event": "modified",
+                "workspace": "/project",
+            },
+        ),
     ]
     for activity in activities:
         store.append(activity)
@@ -465,7 +487,7 @@ def test_dated_trace_routes_filter_day_and_handle_empty_or_invalid_dates(tmp_pat
     trace = response.get_json()
     assert response.status_code == 200
     assert trace["date"] == "2026-07-04"
-    assert trace["activity_count"] == 1
+    assert trace["activity_count"] == 2
     assert trace["sessions"][0]["activities"][0]["details"]["path"].endswith(
         "day4.py"
     )
@@ -615,6 +637,33 @@ def test_status_and_today_json_accept_persisted_workspace_identity(tmp_path):
         },
     )
     assert response.status_code == 201
+    second = client.post(
+        "/activities",
+        json={
+            "event_id": "workspace-status-regression-2",
+            "schema_version": 1,
+            "type": "terminal_finished",
+            "producer": {
+                "name": "pulse-test",
+                "version": "1",
+                "instance_id": "status-regression",
+            },
+            "occurred_at": (today_noon + timedelta(minutes=1)).isoformat(),
+            "details": {
+                "command": "echo ok",
+                "exit_code": 0,
+                "cwd": "/project/Pulse_Core",
+                "workspace": {
+                    "project_name": "Pulse_Core",
+                    "workspace_root": "/project/Pulse_Core",
+                    "git_root": "/project/Pulse_Core",
+                    "resolution_method": "git",
+                    "resolution_confidence": "high",
+                },
+            },
+        },
+    )
+    assert second.status_code == 201
 
     trace = build_daily_trace(app.config["TRACE_STORE"], now=today_noon)
     assert trace["work_sessions"][0]["project_name"] == "Pulse_Core"

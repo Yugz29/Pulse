@@ -21,10 +21,13 @@ from ..analysis.timeline import (
     _session_observed_bounds,
     _trace_timezone,
     _unresolved_sessions,
+    _is_strong_work_activity,
+    isolated_sessions,
 )
 from ..daily_trace import (
     SummaryFact,
     _session_project_summaries,
+    _useful_activity_description,
     _terminal_labels,
     build_current_state,
     build_daily_summary,
@@ -152,7 +155,8 @@ def render_daily_trace_markdown(
         "",
         ]
     )
-    if not displayed_sessions and not unresolved_sessions:
+    isolated = isolated_sessions(trace)
+    if not displayed_sessions and not unresolved_sessions and not isolated:
         lines.extend(["_Aucune activité._", ""])
         return "\n".join(lines)
 
@@ -366,6 +370,31 @@ def render_daily_trace_markdown(
                 lines.append(f"  - CWD : {_markdown_text(cwd)}")
             if workspace:
                 lines.append(f"  - Workspace : {_markdown_text(workspace)}")
+        lines.append("")
+
+    if isolated:
+        lines.extend(["## Activités isolées", ""])
+        for session in isolated:
+            started_at, _ended_at = _session_observed_bounds(session)
+            first_strong = next(
+                (
+                    activity
+                    for activity in session["activities"]
+                    if _is_strong_work_activity(activity)
+                ),
+                None,
+            )
+            description = (
+                _markdown_text(_useful_activity_description(first_strong))
+                if first_strong
+                else ""
+            )
+            project = session.get("project_name")
+            suffix = f" ({_markdown_text(project)})" if project else ""
+            lines.append(
+                f"- {_display_time(started_at, trace_zone)} · "
+                f"{description}{suffix}"
+            )
         lines.append("")
 
     if unresolved_sessions:

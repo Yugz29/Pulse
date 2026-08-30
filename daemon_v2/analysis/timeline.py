@@ -333,27 +333,41 @@ def reconstruct_session_views(
                 activity.get("id", 0),
             ),
         )
-        work_sessions.append(
-            {
-                "id": f"work-{len(work_sessions) + 1}",
-                "activity_kind": "work",
-                "workspace_attribution": (
-                    "assigned"
-                    if current["workspace_root"] is not None
-                    else "unknown"
-                ),
-                **_session_metadata(
-                    session_activities,
-                    started_at=current["started_at"],
-                    ended_at=ended_at,
-                    workspace_root=current["workspace_root"],
-                    project_name=current["project_name"],
-                    end_reason=reason,
-                    zone=trace_zone,
-                    interruptions=current["interruptions"],
-                ),
-            }
+        session_view = {
+            "id": f"work-{len(work_sessions) + 1}",
+            "activity_kind": "work",
+            "workspace_attribution": (
+                "assigned"
+                if current["workspace_root"] is not None
+                else "unknown"
+            ),
+            **_session_metadata(
+                session_activities,
+                started_at=current["started_at"],
+                ended_at=ended_at,
+                workspace_root=current["workspace_root"],
+                project_name=current["project_name"],
+                end_reason=reason,
+                zone=trace_zone,
+                interruptions=current["interruptions"],
+            ),
+        }
+        # Un événement fort isolé (un cd nu, un commit seul) n'est pas une
+        # session de travail : ne pas le promouvoir en bloc « Session ».
+        # Une session encore ouverte n'est jamais rétrogradée — elle vient
+        # peut-être de commencer.
+        strong_count = sum(
+            1
+            for activity in session_activities
+            if _is_strong_work_activity(activity)
         )
+        if (
+            reason != "open"
+            and strong_count < 2
+            and current["started_at"] == ended_at
+        ):
+            session_view["activity_kind"] = "isolated"
+        work_sessions.append(session_view)
         assigned_ids.update(id(activity) for activity in session_activities)
         current = None
 
@@ -614,10 +628,27 @@ def _passive_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
     return _unresolved_sessions(trace)
 
 
-def _displayed_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
+def _work_session_views(trace: dict[str, Any]) -> list[dict[str, Any]]:
     if "work_sessions" in trace:
         return trace["work_sessions"]
     return reconstruct_session_views(trace)[0]
+
+
+def _displayed_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        session
+        for session in _work_session_views(trace)
+        if session.get("activity_kind") != "isolated"
+    ]
+
+
+def isolated_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    """Événements forts isolés, rendus en une ligne hors blocs Session."""
+    return [
+        session
+        for session in _work_session_views(trace)
+        if session.get("activity_kind") == "isolated"
+    ]
 
 
 def _session_has_recent_strong_activity(
