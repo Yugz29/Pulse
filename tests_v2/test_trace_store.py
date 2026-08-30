@@ -346,3 +346,31 @@ def test_store_uses_wal_and_survives_concurrent_writers(tmp_path):
     with sqlite3.connect(database) as connection:
         count = connection.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
     assert count == 20
+
+
+def test_every_store_operation_closes_its_connection(tmp_path, monkeypatch):
+    # Panne du 2026-08-30 : une connexion par opération jamais fermée →
+    # EMFILE sous launchd (limite 256 fd) en ~10 minutes de worker.
+    opened = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(
+        "daemon_v2.trace_store.sqlite3.connect", tracking_connect
+    )
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    moment = datetime(2026, 7, 3, 12, 0, tzinfo=timezone.utc)
+    store.append(activity(moment))
+    store.activities_between(moment - timedelta(hours=1), moment + timedelta(hours=1))
+    store.activity_dates(timezone.utc)
+    store.latest_activity_id()
+    store.occurred_at_since(0)
+
+    assert len(opened) >= 6
+    for connection in opened:
+        with pytest.raises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")

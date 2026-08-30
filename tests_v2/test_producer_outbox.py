@@ -1063,3 +1063,32 @@ def test_file_event_payload_is_canonical_and_delivered_fifo(tmp_path):
     worker = OutboxWorker(outbox, sender=lambda _: ack(event_id))
     assert worker.process_one() == "sent"
     assert outbox.counts() == (0, 0)
+
+
+def test_every_outbox_operation_closes_its_connection(tmp_path, monkeypatch):
+    # Même panne que côté store : le worker launchd saturait ses 256 fd.
+    opened = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(
+        "daemon_v2.producer_outbox.sqlite3.connect", tracking_connect
+    )
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    outbox.enqueue_payload(canonical_payload("fd-check"))
+    worker = OutboxWorker(outbox, sender=lambda _: ack("fd-check"))
+    assert worker.process_one() == "sent"
+    for _ in range(5):
+        assert worker.process_one() == "empty"
+    outbox.counts()
+    outbox.producer_instance_id()
+    outbox.inspect_dead_letters(limit=3)
+
+    assert len(opened) >= 10
+    for connection in opened:
+        with pytest.raises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")

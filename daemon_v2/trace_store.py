@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from contextlib import closing
 import uuid
 from datetime import date, datetime, timezone, tzinfo
 from pathlib import Path
@@ -90,6 +91,9 @@ class TraceStore:
         Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
+    # Every caller wraps this in closing(...): relying on the garbage
+    # collector leaks one fd per operation and hits launchd's 256-fd
+    # limit in minutes (2026-08-30 outage: worker down, EMFILE).
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=5.0)
         connection.row_factory = sqlite3.Row
@@ -109,7 +113,7 @@ class TraceStore:
         only one timestamp had existed, copying it to ``recorded_at`` would
         merely have been a documented migration approximation.
         """
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(CREATE_ACTIVITIES_TABLE)
             columns = {
@@ -196,7 +200,7 @@ class TraceStore:
             ensure_ascii=False,
         )
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 "SELECT * FROM activities WHERE event_id = ?",
@@ -310,7 +314,7 @@ class TraceStore:
         ]
 
     def activities_between(self, start: datetime, end: datetime) -> list[StoredActivity]:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 """
                 SELECT * FROM activities
@@ -323,7 +327,7 @@ class TraceStore:
         return [self._row_to_stored_activity(row) for row in rows]
 
     def activity_dates(self, local_timezone: tzinfo) -> list[date]:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 "SELECT occurred_at FROM activities"
             ).fetchall()
@@ -339,13 +343,13 @@ class TraceStore:
 
     def latest_activity_id(self) -> int:
         """Watermark for append-only caches: MAX(id), 0 on an empty store."""
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute("SELECT MAX(id) FROM activities").fetchone()
         return int(row[0]) if row[0] is not None else 0
 
     def occurred_at_since(self, rowid: int) -> list[datetime]:
         """Timestamps of rows appended after the given watermark id."""
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 "SELECT occurred_at FROM activities WHERE id > ?",
                 (rowid,),
