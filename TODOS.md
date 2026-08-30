@@ -14,14 +14,6 @@
 **Priority:** P2
 **Depends on:** None (politique tranchée le 2026-08-30)
 
-### Archivage compressé des transcripts agent
-
-**What:** Copie zstd des `.jsonl` de sessions (`~/.claude/projects/`, `~/.codex/sessions/`) vers un dossier d'archive avant leur purge par les outils sources — fenêtre de brut infinie côté fichiers compressés (~5:1 sur du JSONL ; ~800 Mo cumulés actuels ≈ 160 Mo).
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** None — à livrer avant ou avec l'ingestion `agent_session`
-
 ### Réexamen rétention trace.db — déclencheurs falsifiables
 
 **What:** La rétention infinie du brut (décision du 2026-08-30) se rouvre UNIQUEMENT si un de ces seuils mesurables est franchi : `trace.db` > 500 Mo ; ou latence de rendu d'une page > 1 s malgré le cache /days ; ou l'audit `scripts/audit_secrets.py` > 60 s. Premier levier si ça arrive : compaction des micro-événements `app_activated` (68 % des lignes, 20 octets pièce) — pas les résumés.
@@ -43,6 +35,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### Archivage compressé des transcripts agent
+
+**What:** Copie zstd des `.jsonl` de sessions vers un dossier d'archive avant leur purge par les outils sources — préalable à l'ingestion `agent_session`.
+
+**Résolution:** `scripts/archive_transcripts.py` — `compression.zstd` stdlib (Python 3.14, zéro dépendance), lecture seule sur les sources, écritures atomiques, reruns idempotents via manifeste (taille + mtime_ns), garde anti-troncature (une source rétrécie n'écrase jamais une archive plus complète — un transcript est append-only par nature), manifeste corrompu = erreur d'infrastructure exit 2 (convention audit_secrets). Archive : `~/.pulse_v2/transcript_archive` (`PULSE_TRANSCRIPT_ARCHIVE_PATH`). Premier archivage réel : 174 fichiers, 839 Mo → 220 Mo (26 %) en 8,6 s ; idempotence vérifiée sur données réelles. 8 tests. Reste à planifier l'exécution récurrente (cron/launchd) — trivial, à brancher avec l'ingestion `agent_session`.
+
+**Completed:** 2026-08-30
 
 ### Politique de rétention / purge de trace.db — tranchée
 

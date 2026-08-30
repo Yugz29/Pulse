@@ -413,6 +413,22 @@ momentanément indisponible ne perd plus d’événements. Les chemins technique
 comme `.git`, `.venv`, les caches, `*.pyc`, `*.db` et `.DS_Store` sont
 ignorés. L’arrêter avec `Ctrl-C`.
 
+## Archivage des transcripts d'agents
+
+Copie compressée (zstd, stdlib Python 3.14) des sessions Claude Code et
+Codex avant leur purge par les outils sources — préalable à l'ingestion
+`agent_session` (décision de rétention du 2026-08-30) :
+
+```bash
+.venv/bin/python -m scripts.archive_transcripts [--dry-run]
+```
+
+Lecture seule sur les sources, reruns idempotents (seuls les fichiers
+nouveaux ou qui ont grossi sont réarchivés), une source rétrécie n'écrase
+jamais une archive plus complète. Archive dans
+`~/.pulse_v2/transcript_archive` (surcharge : `PULSE_TRANSCRIPT_ARCHIVE_PATH`).
+Codes de sortie : 0 = terminé, 2 = erreur d'infrastructure.
+
 ## Hook Git
 
 Installer le hook `post-commit` sur un dépôt suivi (idempotent, refuse
