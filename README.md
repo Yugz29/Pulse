@@ -447,6 +447,22 @@ session déjà émise qui regrossit est signalée mais jamais ré-émise ;
 Passe par l'outbox durable, comme tous les producteurs. Codes de sortie :
 0 = terminé, 2 = erreur d'infrastructure.
 
+## Exécution récurrente des producteurs agents
+
+Un LaunchAgent utilisateur exécute toutes les heures (et au chargement de la
+session) `scripts/pulse_agent_producers.sh` : l'archivage zstd D'ABORD, puis
+l'émission `agent_session` — un pointeur n'est jamais émis si l'archivage a
+échoué. Installation (idempotente, refuse d'écraser un plist non géré) :
+
+```bash
+./scripts/install_agent_producers_launchd.sh            # installe + charge
+./scripts/install_agent_producers_launchd.sh --uninstall
+```
+
+Journal : `~/.pulse_v2/logs/agent_producers.log`. Le daemon n'a pas besoin de
+tourner : les événements patientent dans l'outbox durable jusqu'à la
+prochaine livraison par le worker.
+
 ## Hook Git
 
 Installer le hook `post-commit` sur un dépôt suivi (idempotent, refuse

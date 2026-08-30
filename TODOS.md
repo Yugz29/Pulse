@@ -2,14 +2,6 @@
 
 ## Daemon V2
 
-### Exécution récurrente des producteurs agent (launchd/cron)
-
-**What:** Brancher l'exécution récurrente de `archive_transcripts` PUIS `agent_sessions`, dans cet ordre (l'archive d'abord, le pointeur ensuite). Le backfill initial est fait (2026-08-30) : 152 sessions sur 74 jours livrées, 0 dead-letter.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** None
-
 ### Réexamen rétention trace.db — déclencheurs falsifiables
 
 **What:** La rétention infinie du brut (décision du 2026-08-30) se rouvre UNIQUEMENT si un de ces seuils mesurables est franchi : `trace.db` > 500 Mo ; ou latence de rendu d'une page > 1 s malgré le cache /days ; ou l'audit `scripts/audit_secrets.py` > 60 s. Premier levier si ça arrive : compaction des micro-événements `app_activated` (68 % des lignes, 20 octets pièce) — pas les résumés.
@@ -31,6 +23,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### Exécution récurrente des producteurs agent (launchd)
+
+**What:** Brancher l'exécution horaire de `archive_transcripts` PUIS `agent_sessions` (l'archive d'abord, le pointeur ensuite).
+
+**Résolution:** `scripts/pulse_agent_producers.sh` (wrapper séquentiel — émission ANNULÉE si l'archivage échoue, exit 2 ; sources surchargeables par env pour les tests) + `scripts/install_agent_producers_launchd.sh` (génère et charge `com.pulse.agent-producers.plist` : StartInterval 3600, RunAtLoad, logs `~/.pulse_v2/logs/agent_producers.log`, `plutil -lint`, marqueur « managed », refus d'écraser un plist étranger, `--uninstall`). Installé et vérifié en réel le 2026-08-30 : premier passage exit 0. Le daemon peut être éteint : l'outbox durable porte les événements jusqu'à la prochaine livraison. 2 tests wrapper (ordre + annulation), suite à 401.
+
+**Completed:** 2026-08-30
 
 ### Ingestion des sessions agent (Claude Code / Codex) en événements dérivés
 
