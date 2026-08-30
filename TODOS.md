@@ -2,16 +2,6 @@
 
 ## Daemon V2
 
-### Exclure les interruptions volontaires (exit 130) du signal d'erreur
-
-**What:** `build_resume` traite tout `exit_code != 0` comme « Erreur terminal récente » et le label « erreur » compte pareil — or 5/8 commandes du 2026-08-30 étaient des Ctrl-C volontaires sur `make dev` (exit 130 = 128+SIGINT), qui écrasent les vrais signaux de reprise.
-
-**Context:** Prédicat partagé `is_interrupted_exit` (130 seul ; 143/SIGTERM à n'ajouter que sur données observées), exclu du candidat erreur-récente (`daily_trace.py:469-477`) ET du label « erreur » (`analysis/terminal.py:187-189`). Ne pas toucher au statut des tests interrompus (« Échec (130) » reste juste pour un test non terminé).
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** None (retour utilisateur du 2026-08-30)
-
 ### Ne plus promouvoir un événement fort isolé en session pleine
 
 **What:** La reconstruction ouvre un bloc « Session » pour tout signal fort à >30 min du précédent, même seul — le 2026-08-30 affiche 6 sessions dont deux de 0 min (un `cd` nu, un commit isolé). Une session pleine devrait exiger ≥2 signaux forts ou une durée >0 ; l'événement isolé devient une « activité isolée » en une ligne, hors compteur de sessions.
@@ -61,6 +51,16 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### Exclure les interruptions volontaires (exit 130) du signal d'erreur
+
+**What:** `build_resume` traite tout `exit_code != 0` comme « Erreur terminal récente » et le label « erreur » compte pareil — or 5/8 commandes du 2026-08-30 étaient des Ctrl-C volontaires sur `make dev` (exit 130 = 128+SIGINT), qui écrasent les vrais signaux de reprise.
+
+**Context:** Prédicat partagé `is_interrupted_exit` (130 seul ; 143/SIGTERM à n'ajouter que sur données observées), exclu du candidat erreur-récente (`daily_trace.py:469-477`) ET du label « erreur » (`analysis/terminal.py:187-189`). Ne pas toucher au statut des tests interrompus (« Échec (130) » reste juste pour un test non terminé).
+
+**Résolution:** Prédicat `is_interrupted_exit` (130 seul) dans `analysis/terminal.py`, exclu de 4 points : label « erreur » (`terminal_labels`), candidat « Erreur terminal récente » (`build_resume`), compteur du résumé compact (`_build_compact_activity_summary`) et faits « Erreurs terminal » par session (`build_session_summary`). Les tests interrompus restent « Échec (130) » (un test coupé n'est pas vert). 2 tests. Suite à 403.
+
+**Completed:** 2026-08-30
 
 ### Services daemon + worker en continu (launchd)
 

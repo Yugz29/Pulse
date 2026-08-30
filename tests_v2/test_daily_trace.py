@@ -2188,3 +2188,40 @@ def test_available_days_never_caches_the_current_day(tmp_path, monkeypatch):
 
     # Le jour courant est reconstruit à chaque requête, jamais servi du cache.
     assert built == [date(2026, 7, 3), date(2026, 7, 3)]
+
+
+def test_voluntary_interruption_never_reaches_the_resume_error_fact(tmp_path):
+    from daemon_v2.daily_trace import build_resume
+
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    first_at = datetime(2026, 7, 3, 10, 0, tzinfo=timezone.utc)
+    store.append(
+        Activity(
+            "terminal_finished",
+            first_at,
+            "terminal",
+            "Command failed (1): flask run",
+            {"command": "flask run", "exit_code": 1, "cwd": "/project/Pulse"},
+        )
+    )
+    store.append(
+        Activity(
+            "terminal_finished",
+            first_at + timedelta(minutes=5),
+            "terminal",
+            "Command failed (130): make dev",
+            {"command": "make dev", "exit_code": 130, "cwd": "/project/Pulse"},
+        )
+    )
+
+    trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
+    resume = [fact for fact in build_resume(trace) if isinstance(fact, str)]
+    summary = build_daily_summary(trace)
+    markdown = render_daily_trace_markdown(trace, archive_mode=True)
+
+    # Le vrai échec reste le signal ; le Ctrl-C plus récent ne l'écrase pas
+    # et ne compte ni dans le badge erreur ni dans les faits de session.
+    assert any("flask run — code 1" in fact for fact in resume)
+    assert not any("code 130" in fact for fact in resume)
+    assert summary["error_count"] == 1
+    assert "make dev" not in markdown.split("Erreurs terminal")[-1].split("\n")[0]

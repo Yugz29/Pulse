@@ -173,6 +173,20 @@ def is_pasted_prompt_command(command: str) -> bool:
     )
 
 
+def is_interrupted_exit(exit_code: Any) -> bool:
+    """Volontairement interrompu (Ctrl-C), pas un échec.
+
+    130 = 128+SIGINT : geste routinier (couper `make dev` pour enchaîner),
+    observé 5 fois sur 8 commandes le 2026-08-30 — il polluait le signal
+    « erreur ». 143/SIGTERM n'est ajouté qu'avec des données observées.
+    """
+    return (
+        isinstance(exit_code, int)
+        and not isinstance(exit_code, bool)
+        and exit_code == 130
+    )
+
+
 def useful_command_lines(command: Any) -> list[str]:
     if not isinstance(command, str):
         return []
@@ -210,6 +224,11 @@ def terminal_labels(activity: dict[str, Any]) -> list[str]:
         ):
             labels.add("pulse")
     exit_code = details.get("exit_code")
-    if isinstance(exit_code, int) and not isinstance(exit_code, bool) and exit_code != 0:
+    if (
+        isinstance(exit_code, int)
+        and not isinstance(exit_code, bool)
+        and exit_code != 0
+        and not is_interrupted_exit(exit_code)
+    ):
         labels.add("erreur")
     return [label for label in TERMINAL_LABEL_ORDER if label in labels]

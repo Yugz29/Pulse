@@ -17,6 +17,7 @@ from .analysis.projects import (
 )
 from .analysis.terminal import (
     TERMINAL_LABEL_ORDER,
+    is_interrupted_exit,
     is_pasted_prompt_command,
     is_pulse_inspection_command,
     is_test_command,
@@ -38,6 +39,7 @@ from .trace_store import TraceStore
 
 
 # Temporary private aliases preserve existing internal and renderer imports.
+_is_interrupted_exit = is_interrupted_exit
 _is_test_command = is_test_command
 _is_pulse_inspection_command = is_pulse_inspection_command
 _is_pasted_prompt_command = is_pasted_prompt_command
@@ -146,6 +148,7 @@ def build_session_summary(
             isinstance(exit_code, int)
             and not isinstance(exit_code, bool)
             and exit_code != 0
+            and not _is_interrupted_exit(exit_code)
         ):
             for line in command_lines:
                 if line not in errors:
@@ -470,6 +473,7 @@ def build_resume(trace: dict[str, Any]) -> list[ResumeFact]:
                 isinstance(exit_code, int)
                 and not isinstance(exit_code, bool)
                 and exit_code != 0
+                and not _is_interrupted_exit(exit_code)
                 and command_lines
             ):
                 error_command = test_lines[-1] if test_lines else command_lines[-1]
@@ -971,7 +975,9 @@ def _build_compact_activity_summary(
             saw_test = True
             failed_test = failed_test or exit_code != 0
         if isinstance(exit_code, int) and not isinstance(exit_code, bool):
-            saw_error = saw_error or exit_code != 0
+            saw_error = saw_error or (
+                exit_code != 0 and not _is_interrupted_exit(exit_code)
+            )
         for line in command_lines:
             git_command = parse_git_command(line)
             if git_command.action == "commit":
