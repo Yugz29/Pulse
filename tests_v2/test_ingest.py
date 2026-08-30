@@ -207,6 +207,85 @@ def test_normalizes_and_redacts_terminal_activity():
     assert activity.summary == "Command succeeded: deploy --token=[REDACTED]"
 
 
+_PASTED_PROMPT = (
+    "Pulse_V2 — refonte ingestion\n"
+    "Contexte : conserver le comportement actuel.\n"
+    "Objectif : déplacer les fonctions pures.\n"
+    "À faire : adapter les imports."
+)
+
+
+def test_failed_pasted_prompt_is_stored_as_placeholder_only():
+    activity = normalize_activity(
+        {
+            "type": "terminal_finished",
+            "occurred_at": "2026-07-03T10:00:00+02:00",
+            "command": _PASTED_PROMPT,
+            "exit_code": 127,
+            "cwd": "~/project",
+        }
+    )
+
+    expected = f"[prompt collé : 4 lignes, {len(_PASTED_PROMPT)} caractères]"
+    assert activity.details["command"] == expected
+    assert "Contexte" not in activity.summary
+    assert activity.summary == f"Command failed (127): {expected}"
+
+
+def test_interrupted_pasted_prompt_is_also_stored_as_placeholder_only():
+    # Ctrl-C on a mis-paste ends with a signal exit (130): any non-zero
+    # exit code — not just command-not-found — must trigger the policy.
+    activity = normalize_activity(
+        {
+            "type": "terminal_finished",
+            "occurred_at": "2026-07-03T12:00:00+02:00",
+            "command": _PASTED_PROMPT,
+            "exit_code": 130,
+            "cwd": "~/project",
+        }
+    )
+
+    assert activity.details["command"] == (
+        f"[prompt collé : 4 lignes, {len(_PASTED_PROMPT)} caractères]"
+    )
+    assert "Contexte" not in activity.summary
+
+
+def test_placeholder_from_producer_is_not_replaced_again():
+    # The producer applies the policy before enqueueing; delivery then runs
+    # the same command through normalize_activity with the same failed
+    # exit_code. Without idempotence the real counts would be destroyed
+    # ("[prompt collé : 4 lignes, 120 caractères]" → "… 1 ligne, 41 …").
+    placeholder = "[prompt collé : 4 lignes, 120 caractères]"
+    activity = normalize_activity(
+        {
+            "type": "terminal_finished",
+            "occurred_at": "2026-07-03T10:00:00+02:00",
+            "command": placeholder,
+            "exit_code": 127,
+            "cwd": "~/project",
+        }
+    )
+
+    assert activity.details["command"] == placeholder
+
+
+def test_successful_prompt_shaped_command_keeps_full_text():
+    # A prompt-shaped command that succeeded (e.g. a heredoc feeding a tool)
+    # is real work, not a mis-paste: its text must be preserved.
+    activity = normalize_activity(
+        {
+            "type": "terminal_finished",
+            "occurred_at": "2026-07-03T10:00:00+02:00",
+            "command": _PASTED_PROMPT,
+            "exit_code": 0,
+            "cwd": "~/project",
+        }
+    )
+
+    assert activity.details["command"] == _PASTED_PROMPT
+
+
 def test_rejects_unknown_activity_type():
     with pytest.raises(InvalidActivity):
         normalize_activity({"type": "browser_opened"})

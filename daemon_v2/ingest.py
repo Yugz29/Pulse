@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .analysis.terminal import (
+    is_pasted_prompt_command,
+    pasted_prompt_placeholder,
+)
 from .models import (
     Activity,
     CanonicalEvent,
@@ -288,6 +292,12 @@ def normalize_activity(payload: Any) -> Activity:
                 "exit_code must be an integer",
                 field="details.exit_code",
             )
+        # Storage policy (decided 2026-08-30): a prompt-shaped paste is never
+        # rendered, so only its occurrence is kept, not its text. Gated on a
+        # failed exit so a successful prompt-shaped command (e.g. a heredoc)
+        # keeps its full text — a real mis-paste at the shell prompt fails.
+        if exit_code != 0 and is_pasted_prompt_command(command):
+            command = pasted_prompt_placeholder(command)
         cwd = _required_string(payload, "cwd")
         details = {"command": command, "exit_code": exit_code, "cwd": str(Path(cwd).expanduser())}
         for key in ("started_at", "finished_at"):

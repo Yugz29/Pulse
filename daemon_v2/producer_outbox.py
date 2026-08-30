@@ -13,6 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .analysis.terminal import (
+    is_pasted_prompt_command,
+    pasted_prompt_placeholder,
+)
 from .git_context import read_git_context
 from .ingest import filter_terminal_command, normalize_event, redact_command
 from .models import CanonicalEvent
@@ -296,6 +300,10 @@ def build_terminal_payload(
     if filtered_command is None:
         return None
     redacted_command = redact_command(filtered_command)
+    # Same storage policy as ingestion, applied before SQLite persistence so
+    # the full text of a mis-pasted prompt never reaches outbox.db either.
+    if exit_code != 0 and is_pasted_prompt_command(redacted_command):
+        redacted_command = pasted_prompt_placeholder(redacted_command)
     occurred_at = datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
     if occurred_at.tzinfo is None:
         raise ValueError("finished_at must include a timezone")

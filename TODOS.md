@@ -14,18 +14,6 @@
 **Priority:** P2
 **Depends on:** None
 
-### Politique de stockage des prompts collés
-
-**What:** Appliquer une politique de stockage aux « prompts collés » détectés par `is_pasted_prompt_command` — aujourd'hui exclus du rendu mais persistés intégralement en clair.
-
-**Why:** Ces textes collés (specs, contextes, parfois secrets/PII) dorment dans `trace.db` alors qu'ils ne servent jamais à l'affichage.
-
-**Context:** `analysis/terminal.py:92` détecte les prompts collés, `useful_command_lines` les filtre du rendu, mais l'ingestion stocke la commande complète. Décider : tronquer à la première ligne ? hacher ? garder un extrait ? À trancher après le chantier de rédaction élargie des secrets (décision N1-A de la revue eng du 2026-08-29), qui fournit l'infrastructure de rédaction.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** Chantier rédaction élargie (N1-A)
-
 ### Politique de rétention / purge de trace.db
 
 **What:** Définir une rétention pour `trace.db` (archivage ou purge des jours anciens) — la base croît indéfiniment.
@@ -63,6 +51,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) terminé
 
 ## Completed
+
+### Politique de stockage des prompts collés
+
+**What:** Appliquer une politique de stockage aux « prompts collés » détectés par `is_pasted_prompt_command` — jusqu'ici exclus du rendu mais persistés intégralement en clair.
+
+**Résolution (décision du 2026-08-30) :** placeholder seul — aucun texte conservé. Un collage en forme de prompt qui **échoue** (`exit_code != 0`, un vrai collage raté à l'invite échoue quasi toujours) est remplacé par `[prompt collé : N lignes, M caractères]` avant persistance, côté producteur (`build_terminal_payload`, le texte n'atteint jamais `outbox.db`) et à l'ingestion (`normalize_activity`, défense en profondeur pour les producteurs directs). Une commande en forme de prompt qui **réussit** (heredoc légitime) garde son texte intégral. Le placeholder est reconnu par `is_pasted_prompt_command` et reste exclu du rendu comme les prompts complets. Historique : laissé tel quel (append-only) — sera traité par le chantier rétention/purge. Tests : 349.
+
+**Completed:** 2026-08-30
 
 ### Nettoyage des 5 lignes historiques à motif secret
 
