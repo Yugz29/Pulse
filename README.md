@@ -2,6 +2,9 @@
 
 Pulse V2 observe l’activité locale de développement, conserve une trace locale en append-only, regroupe les événements en sessions et reconstruit une vue lisible de la journée en cours.
 
+L’historique des versions vit dans [CHANGELOG.md](CHANGELOG.md) ; le travail
+restant et les décisions différées dans [TODOS.md](TODOS.md).
+
 ## Contrat d’événement et compatibilité temporaire
 
 `POST /activities` accepte un contrat canonique versionné contenant
@@ -15,7 +18,7 @@ un adaptateur explicite `pulse-legacy`. Core leur attribue un nouvel
 fournit aucune idempotence entre deux requêtes legacy identiques**. Il est
 destiné à être supprimé après migration des producteurs.
 
-La version actuelle prend en charge quatre signaux d’activité :
+La version actuelle prend en charge cinq signaux d’activité :
 
 - `terminal_finished` depuis le watcher Zsh du terminal ;
 - `file_changed` depuis le watcher de fichiers du workspace ;
@@ -23,7 +26,10 @@ La version actuelle prend en charge quatre signaux d’activité :
 - `git_commit` depuis un hook `post-commit` local (voir « Hook Git » plus bas),
   déclenché quel que soit le client à l’origine du commit (terminal, VS Code,
   ou tout autre outil Git), avec le hash, la branche, le message complet et
-  les statistiques de fichiers du commit réellement créé.
+  les statistiques de fichiers du commit réellement créé ;
+- `agent_session` depuis le producteur horaire des sessions d’agents
+  (voir « Sessions d’agents » plus bas) : un événement dérivé par session
+  Claude Code / Codex terminée, jamais le transcript brut.
 
 Pulse complète ces signaux avec une lecture Git passive au rendu pour enrichir
 la reprise du projet courant, sans écrire ces informations dans SQLite.
@@ -40,8 +46,10 @@ Le projet fonctionne comme un prototype produit local :
 - les événements sont regroupés en sessions de travail ;
 - une vue HTML vivante, des archives HTML et des représentations JSON et
   Markdown sont produites depuis la même trace quotidienne ;
-- les watchers terminal, fichiers et application alimentent le daemon en
-  best-effort.
+- les watchers terminal, fichiers et application — comme le hook Git et les
+  producteurs de sessions d’agents — écrivent dans l’outbox durable ; le
+  worker livre ensuite au daemon, y compris après une indisponibilité
+  momentanée.
 
 
 L’interface HTML est conservée volontairement comme interface produit vivante.
@@ -134,6 +142,10 @@ Depuis la racine du dépôt :
 make dev
 ```
 
+Si les services launchd sont installés, le daemon `com.pulse.daemon` occupe
+déjà le port : utiliser `make mode-dev` plutôt que `make dev` (voir
+« Bascule service ↔ dev »).
+
 Cette commande effectue les préflight, démarre Pulse Core, attend que
 `GET /status` identifie réellement Pulse, puis lance le worker outbox, le
 watcher fichiers et l’observateur macOS Swift. Le watcher fichiers observe le
@@ -148,11 +160,15 @@ Commandes de diagnostic :
   inspect-dead-letter --limit 10
 .venv/bin/python -m daemon_v2.producer_outbox \
   clear-dead-letter --http-status 403
+.venv/bin/python -m daemon_v2.producer_outbox \
+  replay-dead-letter --http-status 500
 ```
 
-La dernière commande supprime uniquement les dead-letters HTTP 403 ciblées.
-Elle ne touche jamais aux événements pending. Aucune dead-letter n’est
-supprimée ou rejouée automatiquement.
+`clear-dead-letter` supprime uniquement les dead-letters ciblées ;
+`replay-dead-letter` les re-enfile dans la file de livraison (sélection
+explicite obligatoire : `--event-id`, `--http-status` ou `--all`). Aucune des
+deux ne touche aux événements pending. Aucune dead-letter n’est supprimée ou
+rejouée automatiquement.
 
 Sémantique de livraison : les erreurs de connexion (daemon arrêté, machine
 hors ligne) sont réessayées indéfiniment — l’outbox survit à l’indisponibilité
@@ -200,8 +216,11 @@ d’application.
 ```bash
 make dev
 make dev-reload
+make mode-dev
+make mode-service
 make test
 make status
+make logs
 make reset
 make help
 ```
@@ -212,8 +231,13 @@ dépôt par polling et redémarre Pulse après un court debounce, sans utiliser 
 
 - `make dev` : lance Pulse localement ;
 - `make dev-reload` : lance Pulse et le redémarre lorsque les sources changent ;
+- `make mode-dev` : décharge les services launchd et lance le hot reload,
+  avec retour automatique au mode service en sortie ;
+- `make mode-service` : recharge les services launchd (daemon + worker) ;
 - `make test` : lance les tests ;
-- `make status` : affiche l’état local ;
+- `make status` : affiche l’état local (daemon, launchd, outbox) ;
+- `make logs` : suit les journaux des services launchd et du passage horaire
+  des producteurs (`agent_producers.log`) ;
 - `make reset` : réinitialise la trace de développement ;
 - `make help` : affiche les commandes disponibles.
 
@@ -229,7 +253,9 @@ Les bases (`trace.db` et l’outbox) fonctionnent en mode WAL : les écritures
 concurrentes (producteurs, worker, daemon) ne se bloquent plus entre elles.
 Conséquence pour les sauvegardes : copier uniquement le fichier `.db` peut
 perdre les dernières écritures — copier aussi les fichiers `-wal` et `-shm`,
-ou passer par `sqlite3 trace.db ".backup"` qui les intègre.
+ou passer par `sqlite3 trace.db ".backup"` qui les intègre. Les archives de
+transcripts (`~/.pulse_v2/transcript_archive`) font aussi partie des données
+à sauvegarder : les événements `agent_session` pointent vers elles.
 
 Ouvrir la page locale de l’activité du jour :
 
@@ -240,7 +266,12 @@ http://127.0.0.1:8765/
 La page locale affiche les blocs `Maintenant`, `Reprise`, `Aujourd’hui` et
 `État système`, puis une timeline navigable. Elle regroupe les changements de
 fichiers par vague de modification, résume les sessions, marque les changements
-de projet et synthétise les applications actives. Le bloc `Reprise` complète la
+de projet et synthétise les applications actives. Un événement fort isolé
+(un `cd` nu, un commit seul) apparaît en une ligne dans la section
+« Activités isolées » au lieu d’ouvrir une session de 0 minute. Côté JSON,
+ces activités restent dans `work_sessions` avec `activity_kind: "isolated"` ;
+`work_session_count` ne compte que les vraies sessions — ne pas compter
+`len(work_sessions)`. Le bloc `Reprise` complète la
 trace enregistrée avec un contexte Git local lu passivement : état du dépôt,
 branche et commits du jour. Cette lecture Git est best-effort, limitée par un
 timeout court, et n’est pas écrite dans SQLite.
@@ -261,7 +292,10 @@ Pulse :
 ```
 
 Le script cible `~/.pulse_v2/trace.db`, respecte `PULSE_V2_DB_PATH`, demande
-confirmation et refuse tout chemin situé sous `~/.pulse`.
+confirmation et refuse tout chemin situé sous `~/.pulse`. En mode service
+(`KeepAlive`), le daemon relancé répond en permanence et le reset est
+refusé : décharger d’abord les services
+(`./scripts/install_daemon_launchd.sh --uninstall` ou `launchctl bootout`).
 
 ## Envoyer une activité
 
@@ -335,10 +369,10 @@ termine par `Fin du jour`.
 
 Les vues datées HTML et Markdown sont temporellement stables : elles n’affichent
 pas `Maintenant` ni `Reprise`, et ne consultent pas l’état Git courant. La
-qualification des projets distingue également le mode live du mode archive : la
-vue live peut utiliser l’existence actuelle de `.git` comme preuve de projet,
-tandis que les archives et `/days` se basent uniquement sur les signaux stockés
-de la journée.
+qualification des projets suit la même règle dans les deux modes : fichier
+explicite, au moins deux signaux, ou preuve git persistée dans les détails
+d’événement. L’état actuel du disque n’est jamais consulté au rendu — un dépôt
+déplacé ne réécrit donc pas les journées passées.
 
 ## Structure du code
 
@@ -351,16 +385,40 @@ daemon_v2/
   renderers/
     html.py
     markdown.py
+  agent_sessions.py
   daily_trace.py
+  dev_environment.py
+  event_logger.py
   file_watcher.py
+  git_context.py
   ingest.py
   main.py
   models.py
+  outbox_worker.py
+  producer_outbox.py
   routes.py
+  runtime_config.py
   session_tracker.py
   trace_store.py
+  workspace_context.py
 ```
 
+- `agent_sessions.py` parse les transcripts Claude Code / Codex terminés et
+  émet les événements dérivés `agent_session` via l’outbox durable.
+- `producer_outbox.py` est l’outbox SQLite durable des producteurs locaux
+  (file pending, dead-letters, CLI de diagnostic et de rejeu).
+- `outbox_worker.py` est le worker de livraison FIFO synchrone de l’outbox
+  vers le daemon.
+- `git_context.py` lit le contexte Git en tolérance de panne et porte
+  l’unique parseur `git status --branch` (`PorcelainStatus`).
+- `runtime_config.py` centralise l’endpoint local et les chemins de stockage
+  partagés (sans dépendance Flask).
+- `workspace_context.py` résout le workspace côté producteur pour enrichir
+  les événements.
+- `event_logger.py` fournit la journalisation console opt-in des événements
+  acceptés.
+- `dev_environment.py` regroupe les préflights et healthchecks testables de
+  `scripts/dev.sh`.
 - `main.py` crée l’application Flask et initialise le stockage.
 - `routes.py` expose l’ingestion, les vues et les traces.
 - `ingest.py` valide, normalise et masque les données sensibles des activités
@@ -427,7 +485,8 @@ Lecture seule sur les sources, reruns idempotents (seuls les fichiers
 nouveaux ou qui ont grossi sont réarchivés), une source rétrécie n'écrase
 jamais une archive plus complète. Archive dans
 `~/.pulse_v2/transcript_archive` (surcharge : `PULSE_TRANSCRIPT_ARCHIVE_PATH`).
-Codes de sortie : 0 = terminé, 2 = erreur d'infrastructure.
+Codes de sortie : 0 = terminé, 2 = erreur d'infrastructure. Options :
+`--source` (répétable), `--archive-root`, `--level`.
 
 ## Sessions d'agents (agent_session)
 
@@ -445,7 +504,16 @@ Une session n'est émise que stable (silence d'une heure par défaut). Une
 session déjà émise qui regrossit est signalée mais jamais ré-émise ;
 `event_id` déterministe : une ré-émission accidentelle est un duplicate.
 Passe par l'outbox durable, comme tous les producteurs. Codes de sortie :
-0 = terminé, 2 = erreur d'infrastructure.
+0 = terminé, 2 = erreur d'infrastructure. Options supplémentaires :
+`--claude-dir`, `--codex-dir`, `--outbox-database`, `--manifest` (surcharge
+d'environnement : `PULSE_AGENT_SESSIONS_MANIFEST_PATH`).
+
+Contrat `POST /activities` du type `agent_session` (champs de `details`) :
+requis `source_tool`, `session_id`, `transcript_path`, `summary_version`
+(entier ≥ 1) ; optionnels `started_at`/`ended_at`,
+`user_messages`/`assistant_messages`, `archive_hint`, `git_branch`,
+`tool_version` et `first_prompt` (re-rédigé à l'ingestion, défense en
+profondeur).
 
 ## Services daemon + worker (launchd)
 
@@ -492,7 +560,9 @@ l'émission `agent_session` — un pointeur n'est jamais émis si l'archivage a
 
 Journal : `~/.pulse_v2/logs/agent_producers.log`. Le daemon n'a pas besoin de
 tourner : les événements patientent dans l'outbox durable jusqu'à la
-prochaine livraison par le worker.
+prochaine livraison par le worker. Surcharges de test :
+`PULSE_AGENT_CLAUDE_DIR` / `PULSE_AGENT_CODEX_DIR` (répercutées à la fois sur
+l'archivage et sur l'émission).
 
 ## Hook Git
 
@@ -554,21 +624,27 @@ grossir, mais elle n’est pas nécessaire dans l’architecture actuelle.
 
 ## Limites actuelles
 
-- Les entrées sont acceptées via l’API HTTP locale et les watchers optionnels terminal, fichiers et application.
+- Les entrées sont acceptées via l’API HTTP locale, les watchers optionnels
+  terminal, fichiers et application, le hook Git `post-commit` et le
+  producteur horaire de sessions d’agents.
 - Les sessions utilisent une coupure fixe après 30 minutes d’inactivité.
-- Les commandes Git restent observées via le terminal ; les commits effectués
-  depuis VS Code ou un autre client Git sont visibles via la lecture Git passive,
-  mais ne créent pas encore d’événements Git dédiés.
+- Les commandes Git restent observées via le terminal ; un commit crée un
+  événement `git_commit` dédié partout où le hook `post-commit` est installé,
+  et reste sinon visible via la lecture Git passive.
 - Le projet courant repose encore sur des heuristiques de workspace ; les notions
   de workspace observé, workspace explicite et projet qualifié sont séparées
   dans le code, mais pas encore remplacées par une identité projet durable.
 - Les commandes reçoivent un masquage basique des secrets, sans parsing shell
   avancé.
-- Les watchers fonctionnent en best-effort : une indisponibilité momentanée du
-  daemon peut entraîner la perte d’un événement, sans interrompre le watcher.
-- SQLite est local et mono-machine ; il n’y a pas encore de système de rétention ou de migration.
-- Les scans et agrégations SQLite restent adaptés au volume actuel ; leur coût
-  devra être surveillé lorsque l’historique grandira.
+- Les watchers restent best-effort côté observation, mais la livraison passe
+  par l’outbox durable : un daemon momentanément indisponible retarde la
+  livraison sans perdre l’événement.
+- SQLite est local et mono-machine ; la politique de rétention est tranchée
+  (conservation infinie du brut, réexamen sur seuils mesurables, voir
+  [TODOS.md](TODOS.md)) et le schéma évolue par migrations transactionnelles.
+- Les lectures d’historique s’appuient sur la colonne indexée
+  `occurred_at_utc` et le cache par jour de `/days` ; le coût des autres
+  agrégations reste à surveiller lorsque l’historique grandira.
 - Les archives datées évitent les lectures live de Git et de `Reprise`, mais les
   règles de résumé restent des projections déterministes de la trace, pas des
   faits métier persistés.

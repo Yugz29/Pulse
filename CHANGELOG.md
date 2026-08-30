@@ -4,6 +4,63 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.2.0.0] - 2026-08-31
+
+Le journal s'étend aux sessions d'agents IA et devient un service autonome.
+Politique de rétention tranchée : conservation infinie du brut de `trace.db`,
+les transcripts d'agents n'y entrent jamais en brut (dérivés + archives zstd).
+
+### Ajouté
+- Événements `agent_session` : une entrée par session Claude Code / Codex
+  terminée — résumé déterministe versionné, bornes, compteurs de messages,
+  premier prompt (rédigé), pointeur vers le transcript. Backfill initial :
+  152 sessions uniques sur 74 jours (173 transcripts traités, doublons de
+  reprise absorbés), réparties dans les journées passées.
+- Archivage compressé des transcripts d'agents (`scripts/archive_transcripts.py`,
+  zstd de la stdlib) : copie pérenne avant la purge des outils sources
+  (839 Mo → 220 Mo), idempotent, garde anti-troncature.
+- Fonctionnement en continu : LaunchAgents `KeepAlive` pour le daemon et le
+  worker, passage horaire des producteurs (archive puis émission), bascule
+  `make mode-dev` / `make mode-service` avec retour au mode service garanti
+  à la sortie du hot reload.
+- Visibilité services : `make logs`, `make status` enrichi (état launchd,
+  compteurs outbox), livraisons du worker horodatées dans le journal.
+- Section « Activités isolées » : un `cd` nu ou un commit isolé apparaît en
+  une ligne au lieu d'ouvrir une fausse session de 0 minute.
+- Commande `replay-dead-letter` : re-enfile les événements en échec définitif
+  dans la file de livraison (par événement, par statut HTTP, ou tous).
+- Colonne `occurred_at_utc` canonique indexée et cache par jour de `/days` :
+  les pages d'historique ne reparcourent plus toute la base.
+
+### Modifié
+- Qualification des projets du jour identique en vue live et archive : la
+  preuve git vient des détails persistés, plus jamais de l'état du disque au
+  rendu — un dépôt déplacé ne réécrit plus les journées passées.
+- Résolveur de workspace unique et parseur `git status` unique, partagés par
+  tout le pipeline (décision 5A).
+- Le watcher de fichiers passe par l'outbox durable : un daemon arrêté ne
+  perd plus d'événements.
+- Prompts collés par erreur au shell : stockés en placeholder
+  (`[prompt collé : N lignes, M caractères]`), jamais en clair.
+
+### Corrigé
+- Fuite d'un descripteur de fichier par opération SQLite : le worker en
+  service launchd saturait ses 256 descripteurs en ~10 minutes (panne
+  silencieuse) — fermeture déterministe partout, tests de régression.
+- Un Ctrl-C (exit 130) n'est plus compté comme erreur : ni badge, ni
+  « Erreur terminal récente » dans la reprise.
+- Les transcripts de sous-agents (sidechains) n'émettent plus de fausse
+  session d'agent (les émissions antérieures au filtre restent en base,
+  figées — conforme à la politique de rétention).
+- Deux transcripts partageant un même identifiant de session (reprise/fork)
+  n'écrasent plus l'émission : la première gagne, le doublon est tracé.
+
+### Supprimé
+- `app_watcher.py` (déprécié, doublon de l'observateur Swift) et le
+  paramètre `project_mode` des rendus (plus de divergence à piloter).
+
+Suite portée à 407 tests.
+
 ## [0.1.0.0] - 2026-08-30
 
 Premier jalon versionné de Pulse V2 : durcissement de la rédaction des secrets,
