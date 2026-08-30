@@ -78,6 +78,7 @@ class EmitReport:
     still_active: int = 0
     grown_after_emit: int = 0
     unparseable: int = 0
+    duplicate_sessions: int = 0
 
 
 def _parse_timestamp(value: Any) -> datetime | None:
@@ -344,65 +345,104 @@ def emit_agent_sessions(
     emitted = _load_manifest(manifest_file)
     report = EmitReport()
     resolved_outbox = outbox
+    manifest_dirty = False
+    # Des transcripts distincts peuvent porter le même sessionId interne
+    # (session reprise/forkée : Claude Code copie les lignes d'origine).
+    # Le premier fichier émis porte l'identité ; les suivants sont des
+    # doublons de session — le résumé est calculé une fois (décision
+    # 2026-08-30), donc la première émission prime.
+    emitted_event_ids = {
+        str(entry.get("event_id"))
+        for entry in emitted.values()
+        if entry.get("event_id")
+    }
 
     sources = (("claude-code", claude_dir), ("codex", codex_dir))
-    for source_tool, directory in sources:
-        directory = directory.expanduser()
-        if not directory.is_dir():
-            continue
-        for transcript in sorted(directory.rglob("*.jsonl")):
-            try:
-                stat = transcript.stat()
-            except OSError:
+    try:
+        for source_tool, directory in sources:
+            directory = directory.expanduser()
+            if not directory.is_dir():
                 continue
-            key = str(transcript)
-            recorded = emitted.get(key)
-            if recorded is not None:
-                if stat.st_size > int(recorded["size"]):
-                    # Session reprise après émission : le résumé est figé
-                    # (décision : calculé une fois) — signalé, pas ré-émis.
-                    report.grown_after_emit += 1
-                else:
-                    report.already_emitted += 1
-                continue
-            modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
-            if moment - modified < quiet:
-                report.still_active += 1
-                continue
-            try:
-                lines = transcript.read_text(
-                    encoding="utf-8", errors="replace"
-                ).splitlines()
-            except OSError:
-                continue
-            summary = _PARSERS[source_tool](lines, transcript.stem)
-            if summary is None:
-                report.unparseable += 1
-                continue
-            if not dry_run:
-                if resolved_outbox is None:
-                    resolved_outbox = ProducerOutbox()
+            for transcript in sorted(directory.rglob("*.jsonl")):
                 try:
+                    stat = transcript.stat()
+                except OSError:
+                    continue
+                key = str(transcript)
+                recorded = emitted.get(key)
+                if recorded is not None:
+                    if stat.st_size > int(recorded["size"]):
+                        # Session reprise après émission : le résumé est figé
+                        # (décision : calculé une fois) — signalé, pas ré-émis.
+                        report.grown_after_emit += 1
+                    else:
+                        report.already_emitted += 1
+                    continue
+                modified = datetime.fromtimestamp(
+                    stat.st_mtime, tz=timezone.utc
+                )
+                if moment - modified < quiet:
+                    report.still_active += 1
+                    continue
+                try:
+                    lines = transcript.read_text(
+                        encoding="utf-8", errors="replace"
+                    ).splitlines()
+                except OSError:
+                    continue
+                summary = _PARSERS[source_tool](lines, transcript.stem)
+                if summary is None:
+                    report.unparseable += 1
+                    continue
+                event_id = session_event_id(
+                    summary.source_tool, summary.session_id
+                )
+                if event_id in emitted_event_ids:
+                    report.duplicate_sessions += 1
+                    if not dry_run:
+                        emitted[key] = {
+                            "size": stat.st_size,
+                            "mtime_ns": stat.st_mtime_ns,
+                            "event_id": event_id,
+                            "emitted_at": moment.isoformat(),
+                            "duplicate_of_session": summary.session_id,
+                        }
+                        manifest_dirty = True
+                    continue
+                if not dry_run:
+                    if resolved_outbox is None:
+                        resolved_outbox = ProducerOutbox()
                     payload = build_agent_session_payload(
                         resolved_outbox, summary, transcript_path=key
                     )
-                    enqueue_json_input(resolved_outbox, payload)
-                except sqlite3.Error as exc:
-                    raise AgentSessionInfrastructureError(
-                        f"cannot enqueue: {exc}"
-                    ) from exc
-                emitted[key] = {
-                    "size": stat.st_size,
-                    "mtime_ns": stat.st_mtime_ns,
-                    "event_id": session_event_id(
-                        summary.source_tool, summary.session_id
-                    ),
-                    "emitted_at": moment.isoformat(),
-                }
-            report.emitted += 1
-
-    if not dry_run and report.emitted:
-        _write_manifest(manifest_file, emitted)
+                    try:
+                        enqueue_json_input(resolved_outbox, payload)
+                    except sqlite3.IntegrityError:
+                        # Déjà en file (passe précédente interrompue avant
+                        # l'écriture du manifeste) : duplicate bénin.
+                        report.duplicate_sessions += 1
+                    except sqlite3.Error as exc:
+                        raise AgentSessionInfrastructureError(
+                            f"cannot enqueue: {exc}"
+                        ) from exc
+                    else:
+                        report.emitted += 1
+                    emitted[key] = {
+                        "size": stat.st_size,
+                        "mtime_ns": stat.st_mtime_ns,
+                        "event_id": event_id,
+                        "emitted_at": moment.isoformat(),
+                    }
+                    manifest_dirty = True
+                else:
+                    report.emitted += 1
+                emitted_event_ids.add(event_id)
+    finally:
+        # Même si une passe s'interrompt, ce qui a été enfilé est tracé :
+        # sans cela, un re-run ré-émettrait les mêmes sessions (duplicates
+        # inoffensifs grâce à l'event_id déterministe, mais bruyants).
+        if manifest_dirty:
+            _write_manifest(manifest_file, emitted)
     return report
 
 
@@ -443,6 +483,8 @@ def main() -> None:
         print(f"Grown after emit (summary frozen): {report.grown_after_emit}")
     if report.unparseable:
         print(f"Unparseable sessions: {report.unparseable}")
+    if report.duplicate_sessions:
+        print(f"Duplicate sessions (first emission wins): {report.duplicate_sessions}")
     raise SystemExit(0)
 
 

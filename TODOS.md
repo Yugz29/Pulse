@@ -2,13 +2,13 @@
 
 ## Daemon V2
 
-### Backfill initial + exécution récurrente des producteurs agent
+### Exécution récurrente des producteurs agent (launchd/cron)
 
-**What:** (1) Premier passage réel de `daemon_v2.agent_sessions` (~173 sessions historiques → les jours passés s'enrichissent dans le journal, daemon démarré requis) — déclenchement à la main de l'utilisateur, c'est visible et append-only. (2) Brancher l'exécution récurrente (launchd/cron) de `archive_transcripts` PUIS `agent_sessions`, dans cet ordre (l'archive d'abord, le pointeur ensuite).
+**What:** Brancher l'exécution récurrente de `archive_transcripts` PUIS `agent_sessions`, dans cet ordre (l'archive d'abord, le pointeur ensuite). Le backfill initial est fait (2026-08-30) : 152 sessions sur 74 jours livrées, 0 dead-letter.
 
 **Effort:** S
 **Priority:** P2
-**Depends on:** Ingestion agent_session livrée le 2026-08-30
+**Depends on:** None
 
 ### Réexamen rétention trace.db — déclencheurs falsifiables
 

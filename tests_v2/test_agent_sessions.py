@@ -224,6 +224,74 @@ def test_grown_session_is_flagged_but_never_reemitted(tmp_path):
     assert report.grown_after_emit == 1
 
 
+def test_two_transcripts_sharing_a_session_id_emit_once(tmp_path):
+    # Régression du backfill réel du 2026-08-30 : une session reprise/forkée
+    # copie ses lignes d'origine — deux fichiers, même sessionId interne,
+    # donc même event_id. La première émission porte l'identité ; le doublon
+    # est tracé au manifeste, jamais une erreur d'infrastructure.
+    _write_transcript(
+        tmp_path / "claude", "proj/abc-123.jsonl", claude_lines(), age_hours=3
+    )
+    _write_transcript(
+        tmp_path / "claude", "proj/fork-of-abc.jsonl", claude_lines(), age_hours=2
+    )
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+
+    report = emit(tmp_path, outbox=outbox)
+
+    assert report.emitted == 1
+    assert report.duplicate_sessions == 1
+    assert outbox.counts() == (1, 0)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert len(manifest["emitted"]) == 2
+
+    # Re-run : les deux fichiers sont connus, plus rien à faire.
+    second = emit(tmp_path, outbox=outbox)
+    assert second.emitted == 0
+    assert second.already_emitted == 2
+
+
+def test_interrupted_pass_still_records_emitted_files(tmp_path, monkeypatch):
+    import daemon_v2.agent_sessions as module
+
+    _write_transcript(
+        tmp_path / "claude", "proj/a-first.jsonl", claude_lines(), age_hours=3
+    )
+    lines_b = [
+        line.replace("abc-123", "def-456") for line in claude_lines()
+    ]
+    _write_transcript(
+        tmp_path / "claude", "proj/b-second.jsonl", lines_b, age_hours=2
+    )
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+
+    import sqlite3
+
+    real_enqueue = module.enqueue_json_input
+    calls = {"n": 0}
+
+    def failing_second(outbox_arg, raw):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise sqlite3.OperationalError("disk I/O error")
+        return real_enqueue(outbox_arg, raw)
+
+    monkeypatch.setattr(module, "enqueue_json_input", failing_second)
+
+    with pytest.raises(AgentSessionInfrastructureError):
+        emit(tmp_path, outbox=outbox)
+
+    # La première émission est tracée malgré l'interruption : le manifeste
+    # est écrit en finally, le re-run ne ré-émet pas la première session.
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert len(manifest["emitted"]) == 1
+
+    monkeypatch.setattr(module, "enqueue_json_input", real_enqueue)
+    report = emit(tmp_path, outbox=outbox)
+    assert report.emitted == 1
+    assert report.already_emitted == 1
+
+
 def test_recent_session_waits_for_the_quiet_window(tmp_path):
     _write_transcript(
         tmp_path / "claude", "proj/live.jsonl", claude_lines(), age_hours=0.1
