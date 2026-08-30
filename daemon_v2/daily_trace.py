@@ -697,9 +697,13 @@ def build_daily_trace(
     store: TraceStore,
     day: date | None = None,
     local_timezone: tzinfo | None = None,
+    *,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
+    """Build the day view; ``now`` is injectable so tests stay deterministic."""
     zone = local_timezone or datetime.now().astimezone().tzinfo or timezone.utc
-    selected_day = day or datetime.now(zone).date()
+    reference_now = now if now is not None else datetime.now(zone)
+    selected_day = day or reference_now.date()
     start = datetime.combine(selected_day, time.min, zone)
     end = start + timedelta(days=1)
     activities = store.activities_between(start, end)
@@ -795,7 +799,7 @@ def build_daily_trace(
     }
     work_sessions, unresolved_sessions = reconstruct_session_views(
         trace,
-        now=datetime.now(zone),
+        now=reference_now,
     )
     trace["work_session_count"] = len(work_sessions)
     trace["work_sessions"] = work_sessions

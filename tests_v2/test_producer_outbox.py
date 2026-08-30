@@ -2,13 +2,20 @@ import json
 import sqlite3
 import subprocess
 import sys
+import threading
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from daemon_v2.outbox_worker import HttpResult, OutboxWorker, TemporaryDeliveryError
+from daemon_v2.outbox_worker import (
+    HttpResult,
+    MAX_DELIVERY_ATTEMPTS,
+    OutboxWorker,
+    TemporaryDeliveryError,
+)
 from daemon_v2.producer_outbox import (
     ProducerOutbox,
+    build_git_commit_payload,
     build_terminal_payload,
     enqueue_git_commit_input,
     enqueue_json_input,
@@ -121,6 +128,125 @@ def test_success_and_duplicate_ack_delete_event(tmp_path):
     assert outbox.counts() == (0, 0)
 
 
+def test_toxic_event_expires_after_retry_limit_and_unblocks_queue(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    toxic = canonical_payload("toxic")
+    healthy = canonical_payload("healthy", path="/project/other.py")
+    outbox.enqueue_payload(toxic, created_at="2026-07-23T12:00:00+00:00")
+    outbox.enqueue_payload(healthy, created_at="2026-07-23T12:00:01+00:00")
+    clock = Clock()
+
+    def sender(raw):
+        if raw == toxic:
+            return HttpResult(500, "boom")
+        return ack("healthy")
+
+    worker = OutboxWorker(outbox, sender=sender, now=clock)
+    outcomes = []
+    for _ in range(MAX_DELIVERY_ATTEMPTS):
+        outcomes.append(worker.process_one())
+        clock.advance(600)  # au-delà du backoff maximal (300 s)
+
+    assert outcomes[:-1] == ["retry"] * (MAX_DELIVERY_ATTEMPTS - 1)
+    assert outcomes[-1] == "dead-letter"
+    dead = read_dead_letter(database, "toxic")
+    assert dead is not None
+    assert "retry limit reached" in dead[1]
+    assert dead[2] == 500
+
+    # La file n'est plus bloquée : l'événement suivant part immédiatement.
+    assert worker.process_one() == "sent"
+    assert outbox.counts() == (0, 1)
+
+
+def test_network_errors_never_expire_events(tmp_path):
+    # Un daemon éteint (connexion refusée) n'est PAS un événement toxique :
+    # l'outbox promet de survivre à l'indisponibilité du consommateur, donc
+    # les erreurs réseau ne comptent jamais vers le plafond de tentatives.
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    outbox.enqueue_payload(canonical_payload("unreachable"))
+    clock = Clock()
+
+    def sender(raw):
+        raise TemporaryDeliveryError("connection refused")
+
+    worker = OutboxWorker(outbox, sender=sender, now=clock)
+    for _ in range(MAX_DELIVERY_ATTEMPTS + 5):
+        assert worker.process_one() == "retry"
+        clock.advance(600)
+
+    assert read_dead_letter(database, "unreachable") is None
+    pending = read_pending(database, "unreachable")
+    assert pending is not None
+    assert pending[1] == MAX_DELIVERY_ATTEMPTS + 5
+
+    # Le daemon revient : l'événement est livré normalement.
+    worker = OutboxWorker(outbox, sender=lambda _: ack("unreachable"), now=clock)
+    assert worker.process_one() == "sent"
+    assert outbox.counts() == (0, 0)
+
+
+def test_server_204_deletes_event_without_dead_letter(tmp_path):
+    # 204 = livré-et-ignoré volontairement par le serveur (commande filtrée) :
+    # un succès, pas un échec — la dead-letter reste un signal d'erreur pur.
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    outbox.enqueue_payload(canonical_payload("filtered"))
+    worker = OutboxWorker(outbox, sender=lambda _: HttpResult(204, ""))
+
+    assert worker.process_one() == "ignored"
+    assert outbox.counts() == (0, 0)
+
+
+def test_replayed_dead_letter_overwrites_previous_row(tmp_path):
+    # Un événement rejoué qui échoue à nouveau doit ÉCRASER sa dead-letter
+    # précédente, pas lever IntegrityError (crash loop du worker).
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    for attempt in range(2):
+        outbox.enqueue_payload(canonical_payload("replayed"))
+        worker = OutboxWorker(
+            outbox,
+            sender=lambda _: HttpResult(400, "bad request"),
+        )
+        assert worker.process_one() == "dead-letter"
+    assert outbox.counts() == (0, 1)
+
+
+def test_git_commit_payload_redacts_message(tmp_path):
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    payload = build_git_commit_payload(
+        outbox,
+        commit_hash="abc1234",
+        repository="Pulse",
+        git_root="/project/Pulse",
+        branch="main",
+        message="rotate key: old was AKIAIOSFODNN7EXAMPLE",
+        occurred_at="2026-07-23T14:32:10+02:00",
+    )
+    assert "AKIA" not in payload
+    assert "[REDACTED]" in payload
+
+
+def test_concurrent_first_instance_id_is_single_valued(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    results = []
+
+    def worker():
+        results.append(ProducerOutbox(database).producer_instance_id())
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(results) == 4
+    assert len(set(results)) == 1
+
+
 def test_conflict_and_bad_request_move_to_dead_letter(tmp_path):
     database = tmp_path / "outbox.sqlite3"
     outbox = ProducerOutbox(database)
@@ -184,11 +310,12 @@ def test_server_error_and_timeout_retry_without_changing_payload(tmp_path):
 
 def test_protocol_errors_dead_letter_even_on_2xx(tmp_path):
     outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    # 204 n'est plus un cas d'erreur : livré-et-ignoré, testé séparément
+    # dans test_server_204_deletes_event_without_dead_letter.
     cases = [
         ("invalid-json", HttpResult(201, "not-json")),
         ("not-accepted", HttpResult(201, '{"accepted":false,"event_id":"not-accepted"}')),
         ("wrong-id", HttpResult(200, '{"accepted":true,"event_id":"other"}')),
-        ("no-content", HttpResult(204, "")),
     ]
 
     for event_id, result in cases:
@@ -196,7 +323,7 @@ def test_protocol_errors_dead_letter_even_on_2xx(tmp_path):
         worker = OutboxWorker(outbox, sender=lambda _, response=result: response)
         assert worker.process_one() == "dead-letter"
 
-    assert outbox.counts() == (0, 4)
+    assert outbox.counts() == (0, 3)
 
 
 def test_multiple_events_are_delivered_fifo(tmp_path):
@@ -662,3 +789,28 @@ def test_clear_dead_letter_cli_validates_selection(tmp_path, arguments):
     )
 
     assert result.returncode != 0
+
+
+def test_outbox_uses_wal_and_survives_concurrent_enqueues(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+    def enqueue_batch(prefix):
+        for index in range(10):
+            outbox.enqueue_payload(
+                canonical_payload(f"{prefix}-{index}", path=f"/p/{prefix}/{index}.py")
+            )
+
+    threads = [
+        threading.Thread(target=enqueue_batch, args=(name,))
+        for name in ("zsh", "git-hook")
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert outbox.counts() == (20, 0)

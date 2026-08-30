@@ -1,12 +1,25 @@
-"""Shared local endpoint configuration for Pulse Core development."""
+"""Shared local endpoint and storage configuration for Pulse Core."""
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 
 DEFAULT_CORE_HOST = "127.0.0.1"
 DEFAULT_CORE_PORT = 8765
+
+
+def select_database_path(database_path: str | Path | None = None) -> Path:
+    """Resolve the trace database path (Flask-free, usable by CLI tools)."""
+    if database_path is not None:
+        return Path(database_path).expanduser()
+
+    configured_path = os.environ.get("PULSE_V2_DB_PATH")
+    if configured_path:
+        return Path(configured_path).expanduser()
+
+    return Path.home() / ".pulse_v2" / "trace.db"
 
 
 def parse_port(value: str | int | None) -> int:

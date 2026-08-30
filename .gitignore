@@ -8,3 +8,7 @@ data/
 *.sqlite3
 .DS_Store
 cortex-snapshot.json
+.claude
+.gitnexus
+AGENTS.md
+CLAUDE.md

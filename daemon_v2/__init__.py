@@ -1,5 +1,6 @@
-"""Pulse V0 daemon: local activity to durable daily trace."""
+"""Pulse V0 daemon: local activity to durable daily trace.
 
-from .main import create_app
-
-__all__ = ["create_app"]
+Volontairement sans import : les outils CLI (audit, outbox) importent des
+sous-modules sans Flask ; un import eager de main ici forcerait Flask pour
+tout le package.
+"""

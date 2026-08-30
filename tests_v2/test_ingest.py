@@ -3,9 +3,188 @@ import pytest
 from daemon_v2.ingest import (
     IgnoredActivity,
     InvalidActivity,
+    command_has_secret,
+    filter_terminal_command,
     normalize_activity,
     normalize_event,
+    redact_command,
 )
+
+
+def test_command_has_secret_ignores_continuation_folding():
+    # Une commande multiligne innocente (continuations \) n'est PAS un secret :
+    # seul le repli de normalisation la distingue de sa forme rédigée.
+    innocent = "git add a.py \\\n  b.py \\\n  c.py"
+    assert not command_has_secret(innocent)
+    assert command_has_secret("mysql --password \\\n  hunter2secret")
+    assert command_has_secret("export API_TOKEN=abc123")
+    assert not command_has_secret("git status")
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "mysql -u root -psup3rSecret -h localhost",
+            "mysql -u root -p[REDACTED] -h localhost",
+        ),
+        (
+            'curl -H "Authorization: Bearer sk-abc123XYZ789abcd" https://api.example.com',
+            'curl -H "Authorization: Bearer [REDACTED]" https://api.example.com',
+        ),
+        (
+            "psql postgres://user:hunter2@localhost/db",
+            "psql postgres://user:[REDACTED]@localhost/db",
+        ),
+        (
+            "git remote add origin https://user:ghp_abcdefghij1234567890@github.com/x/y.git",
+            "git remote add origin https://user:[REDACTED]@github.com/x/y.git",
+        ),
+        (
+            "aws configure set aws_secret_access_key AKIAIOSFODNN7EXAMPLE",
+            "aws configure set aws_secret_access_key [REDACTED]",
+        ),
+        (
+            "DATABASE_URL=postgres://u:p@h/db python app.py",
+            "DATABASE_URL=postgres://u:[REDACTED]@h/db python app.py",
+        ),
+        (
+            "openssl rsa -in key.pem -passin pass:secretpw",
+            "openssl rsa -in key.pem -passin=[REDACTED]",
+        ),
+        (
+            "curl -u admin:hunter2 http://localhost:8765/x",
+            "curl -u [REDACTED] http://localhost:8765/x",
+        ),
+        # Secret entre guillemets avec espaces : masqué EN ENTIER (pas de
+        # rédaction partielle qui laisserait fuir la fin du secret).
+        (
+            'export API_TOKEN="alpha bravo charlie"',
+            "export API_TOKEN=[REDACTED]",
+        ),
+        (
+            'tool --password "my secret phrase"',
+            "tool --password=[REDACTED]",
+        ),
+        # Continuation de ligne : le repli \<newline> empêche le contournement.
+        (
+            "mysql --password \\\n  hunter2secret",
+            "mysql --password=[REDACTED]",
+        ),
+        # Variante CRLF : sans le \r? du repli, le backslash seul serait
+        # masqué et le secret resterait en clair sur la ligne suivante.
+        (
+            "mysql --password \\\r\n  hunter2secret",
+            "mysql --password=[REDACTED]",
+        ),
+        # Invocations enveloppées (docker/ssh) : l'ancre (^|\s) les couvre.
+        (
+            "docker exec -it db mysql -u root -psup3rSecret",
+            "docker exec -it db mysql -u root -p[REDACTED]",
+        ),
+        (
+            "gpg --passphrase secret file.gpg",
+            "gpg --passphrase=[REDACTED] file.gpg",
+        ),
+        (
+            "sshpass -p hunter2 ssh host",
+            "sshpass -p [REDACTED] ssh host",
+        ),
+        (
+            'curl -H "X-Api-Key: abcd1234efgh" https://api.example.com',
+            'curl -H "X-Api-Key: [REDACTED]" https://api.example.com',
+        ),
+        # Mot de passe contenant @ : masqué jusqu'au dernier @ avant l'hôte.
+        (
+            "psql postgres://user:p@ss@host/db",
+            "psql postgres://user:[REDACTED]@host/db",
+        ),
+        (
+            "export MY_PASSWD=abc && run",
+            "export MY_PASSWD=[REDACTED] && run",
+        ),
+        (
+            "slack-cli --token xoxb-1234567890-abcdef post",
+            "slack-cli --token=[REDACTED] post",
+        ),
+    ],
+)
+def test_redacts_common_secret_shapes(command, expected):
+    assert redact_command(command) == expected
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'git commit -m "fix passing tests"',
+        "grep -p pattern file.txt",
+        "python -m pytest tests_v2 -p no:cacheprovider",
+        "curl http://127.0.0.1:8765/trace/today",
+        "git push origin main",
+        "mysql -u root -p",
+        # Prose contenant basic/bearer/pass: — jamais touchée (faux positifs
+        # attrapés par la revue : corrompaient l'historique ET faisaient
+        # sortir l'audit en code 1 sur des lignes innocentes).
+        'git commit -m "add basic logging support"',
+        "echo pass:through",
+        "echo bearer results.txt",
+        # -u ailleurs que sur une commande à credentials : intouché.
+        "rsync -u remote:path .",
+        "docker run -u 1000:1000 image",
+        "sudo -u www:data cmd",
+        # mysql -P majuscule = PORT, pas mot de passe.
+        "mysql -u root -P3306 -h host",
+        # Chemin de fichier après un nom de clé : pas un secret.
+        "grep aws_secret_access_key ~/.aws/credentials",
+        # Sentinelles openssl non secrètes.
+        "openssl req -passout stdin",
+        "openssl rsa -passin env:MYPASS",
+        "openssl rsa -passin file:/tmp/key.txt",
+    ],
+)
+def test_redaction_leaves_ordinary_commands_untouched(command):
+    assert redact_command(command) == command
+
+
+def test_git_commit_message_is_redacted_at_ingest():
+    activity = normalize_activity(
+        {
+            "type": "git_commit",
+            "occurred_at": "2026-07-03T10:00:00+02:00",
+            "commit_hash": "abc1234def",
+            "repository": "Pulse",
+            "git_root": "/project/Pulse",
+            "branch": "main",
+            "message": "rotate key: old was AKIAIOSFODNN7EXAMPLE",
+        }
+    )
+    assert activity.details["message"] == "rotate key: old was [REDACTED]"
+    assert "AKIA" not in activity.summary
+
+
+def test_internal_pulse_curl_is_ignored_only_on_pulse_ports():
+    # Ports Pulse : configuré + défaut 8765 + historique 5000.
+    for port in (5000, 8765):
+        multiline = (
+            f"curl -X POST http://127.0.0.1:{port}/activities \\\n"
+            '  -H "Content-Type: application/json" \\\n'
+            '  -d \'{"type": "app_activated"}\''
+        )
+        assert filter_terminal_command(multiline) is None
+    assert filter_terminal_command(
+        "curl -X POST http://localhost:8765/activities -d '{}'"
+    ) is None
+    # Un dev qui teste SA propre API /activities garde sa commande.
+    assert filter_terminal_command(
+        "curl -X POST http://localhost:3000/activities -d '{}'"
+    ) is not None
+    # Chemin non exact : jamais filtré.
+    assert filter_terminal_command(
+        "curl http://127.0.0.1:8765/activities/123"
+    ) is not None
+    assert filter_terminal_command(
+        "curl -X POST http://example.com/activities -d '{}'"
+    ) is not None
 
 
 def test_normalizes_and_redacts_terminal_activity():
