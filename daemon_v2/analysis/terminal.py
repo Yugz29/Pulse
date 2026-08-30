@@ -104,10 +104,35 @@ def is_pulse_inspection_command(line: str) -> bool:
     )
 
 
+# Stored form of a pasted prompt after the ingestion storage policy replaced
+# its body. Recognized here so placeholders stay excluded from rendering and
+# labels exactly like the full prompts they replace.
+_PASTED_PROMPT_PLACEHOLDER = re.compile(
+    r"\[prompt collé : \d+ ligne(?:s)?, \d+ caractère(?:s)?\]"
+)
+
+
+def pasted_prompt_placeholder(command: str) -> str:
+    stripped = command.strip()
+    if _PASTED_PROMPT_PLACEHOLDER.fullmatch(stripped):
+        # Idempotence: a placeholder coming back through ingestion (the
+        # producer already applied the policy before enqueueing) must keep
+        # its original counts, not be re-summarized as "1 ligne".
+        return stripped
+    line_count = len(command.splitlines())
+    char_count = len(command)
+    return (
+        f"[prompt collé : {line_count} ligne{'s' if line_count > 1 else ''}, "
+        f"{char_count} caractère{'s' if char_count > 1 else ''}]"
+    )
+
+
 def is_pasted_prompt_command(command: str) -> bool:
     lines = [line.strip() for line in command.splitlines() if line.strip()]
     if not lines:
         return False
+    if _PASTED_PROMPT_PLACEHOLDER.fullmatch(lines[0]) and len(lines) == 1:
+        return True
 
     try:
         first_parts = shlex.split(lines[0])

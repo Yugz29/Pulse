@@ -5,6 +5,7 @@ from daemon_v2.analysis.terminal import (
     is_pulse_inspection_command,
     is_test_command,
     parse_git_command,
+    pasted_prompt_placeholder,
     terminal_labels,
     useful_command_lines,
 )
@@ -59,6 +60,47 @@ def test_recognizes_pasted_prompt_but_keeps_legitimate_single_marker():
 
     assert is_pasted_prompt_command(prompt)
     assert not is_pasted_prompt_command("echo 'Contexte : build local'")
+
+
+def test_pasted_prompt_placeholder_reports_size_and_stays_excluded():
+    prompt = (
+        "Pulse_V2 — extraction terminal\n"
+        "Contexte : conserver le comportement actuel.\n"
+        "Objectif : déplacer les fonctions pures."
+    )
+
+    placeholder = pasted_prompt_placeholder(prompt)
+
+    assert placeholder == f"[prompt collé : 3 lignes, {len(prompt)} caractères]"
+    # A stored placeholder must stay out of rendering and labels exactly
+    # like the full prompt it replaced.
+    assert is_pasted_prompt_command(placeholder)
+    assert useful_command_lines(placeholder) == []
+
+
+def test_pasted_prompt_placeholder_uses_singular_forms():
+    assert pasted_prompt_placeholder("x") == "[prompt collé : 1 ligne, 1 caractère]"
+
+
+def test_singular_placeholder_is_recognized_and_stays_excluded():
+    # The singular stored form must round-trip exactly like the plural one:
+    # recognized as a placeholder and kept out of rendering.
+    placeholder = "[prompt collé : 1 ligne, 1 caractère]"
+
+    assert is_pasted_prompt_command(placeholder)
+    assert useful_command_lines(placeholder) == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo '[prompt collé : 3 lignes, 120 caractères]'",
+        "[prompt collé : 3 lignes, 120 caractères]\nmake test",
+        "[prompt collé : quelques lignes]",
+    ],
+)
+def test_placeholder_recognition_requires_exact_single_line(command):
+    assert not is_pasted_prompt_command(command)
 
 
 def test_keeps_useful_lines_from_multiline_inspection_command():
