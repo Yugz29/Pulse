@@ -184,7 +184,7 @@ def test_emit_end_to_end_enqueues_canonical_event_once(tmp_path):
     assert payload["type"] == "agent_session"
     assert payload["event_id"] == session_event_id("claude-code", "abc-123")
     assert payload["producer"]["name"] == "pulse-agent-sessions"
-    assert payload["details"]["summary_version"] == 1
+    assert payload["details"]["summary_version"] == 2
     assert payload["details"]["workspace"] == "/Users/dev/Projets/Pulse/Pulse_Core"
     assert "sk-abcdef" not in pending.payload_json
     # Le payload enfilé traverse l'ingestion canonique telle quelle.
@@ -290,6 +290,51 @@ def test_interrupted_pass_still_records_emitted_files(tmp_path, monkeypatch):
     report = emit(tmp_path, outbox=outbox)
     assert report.emitted == 1
     assert report.already_emitted == 1
+
+
+def test_sidechain_transcript_is_never_emitted(tmp_path):
+    # Régression du retour du 2026-08-30 : le seul agent_session du jour
+    # était le prompt d'un SOUS-AGENT (revue de code). Un transcript dont
+    # toutes les lignes portent isSidechain n'est pas une session de
+    # l'utilisateur — filtré, tracé au manifeste, jamais émis.
+    sidechain_lines = [
+        line.replace('"type": "user"', '"isSidechain": true, "type": "user"')
+        .replace('"type": "assistant"', '"isSidechain": true, "type": "assistant"')
+        for line in claude_lines()
+    ]
+    _write_transcript(
+        tmp_path / "claude", "proj/subagent.jsonl", sidechain_lines, age_hours=2
+    )
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+
+    report = emit(tmp_path, outbox=outbox)
+
+    assert report.emitted == 0
+    assert report.sidechain_skipped == 1
+    assert outbox.counts() == (0, 0)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert list(manifest["emitted"].values())[0]["sidechain"] is True
+
+    # Re-run : reconnu via le manifeste, sans re-parser.
+    second = emit(tmp_path, outbox=outbox)
+    assert second.sidechain_skipped == 1
+    assert second.emitted == 0
+
+
+def test_mainline_transcript_with_explicit_false_flag_still_emits(tmp_path):
+    lines = [
+        line.replace('"type": "user"', '"isSidechain": false, "type": "user"')
+        for line in claude_lines()
+    ]
+    _write_transcript(
+        tmp_path / "claude", "proj/mainline.jsonl", lines, age_hours=2
+    )
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+
+    report = emit(tmp_path, outbox=outbox)
+
+    assert report.emitted == 1
+    assert report.sidechain_skipped == 0
 
 
 def test_recent_session_waits_for_the_quiet_window(tmp_path):

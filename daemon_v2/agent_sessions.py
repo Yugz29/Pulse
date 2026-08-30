@@ -39,7 +39,7 @@ from .ingest import redact_command
 from .producer_outbox import ProducerOutbox, enqueue_json_input
 
 
-SUMMARY_VERSION = 1
+SUMMARY_VERSION = 2
 PRODUCER_NAME = "pulse-agent-sessions"
 PRODUCER_VERSION = "1.0"
 DEFAULT_QUIET = timedelta(minutes=60)
@@ -69,6 +69,7 @@ class AgentSessionSummary:
     git_branch: str | None = None
     tool_version: str | None = None
     first_prompt: str | None = None
+    sidechain: bool = False
 
 
 @dataclass
@@ -79,6 +80,7 @@ class EmitReport:
     grown_after_emit: int = 0
     unparseable: int = 0
     duplicate_sessions: int = 0
+    sidechain_skipped: int = 0
 
 
 def _parse_timestamp(value: Any) -> datetime | None:
@@ -120,6 +122,7 @@ def parse_claude_session(
     cwd = git_branch = tool_version = first_prompt = None
     started = ended = None
     user_messages = assistant_messages = 0
+    saw_sidechain = saw_mainline = False
 
     for line in lines:
         try:
@@ -135,6 +138,10 @@ def parse_claude_session(
         if moment is not None:
             started = moment if started is None else min(started, moment)
             ended = moment if ended is None else max(ended, moment)
+        if entry.get("isSidechain") is True:
+            saw_sidechain = True
+        else:
+            saw_mainline = True
         raw_session = entry.get("sessionId")
         if isinstance(raw_session, str) and raw_session:
             session_id = raw_session
@@ -172,6 +179,9 @@ def parse_claude_session(
         return None
     return AgentSessionSummary(
         source_tool="claude-code",
+        # Transcript de sous-agent (Task/revue) : toutes les lignes portent
+        # isSidechain — pas une session de travail de l'utilisateur.
+        sidechain=saw_sidechain and not saw_mainline,
         session_id=session_id,
         started_at=started,
         ended_at=ended,
@@ -371,6 +381,9 @@ def emit_agent_sessions(
                 key = str(transcript)
                 recorded = emitted.get(key)
                 if recorded is not None:
+                    if recorded.get("sidechain"):
+                        report.sidechain_skipped += 1
+                        continue
                     if stat.st_size > int(recorded["size"]):
                         # Session reprise après émission : le résumé est figé
                         # (décision : calculé une fois) — signalé, pas ré-émis.
@@ -393,6 +406,17 @@ def emit_agent_sessions(
                 summary = _PARSERS[source_tool](lines, transcript.stem)
                 if summary is None:
                     report.unparseable += 1
+                    continue
+                if summary.sidechain:
+                    report.sidechain_skipped += 1
+                    if not dry_run:
+                        emitted[key] = {
+                            "size": stat.st_size,
+                            "mtime_ns": stat.st_mtime_ns,
+                            "sidechain": True,
+                            "emitted_at": moment.isoformat(),
+                        }
+                        manifest_dirty = True
                     continue
                 event_id = session_event_id(
                     summary.source_tool, summary.session_id
@@ -485,6 +509,8 @@ def main() -> None:
         print(f"Unparseable sessions: {report.unparseable}")
     if report.duplicate_sessions:
         print(f"Duplicate sessions (first emission wins): {report.duplicate_sessions}")
+    if report.sidechain_skipped:
+        print(f"Sidechain transcripts (skipped): {report.sidechain_skipped}")
     raise SystemExit(0)
 
 
