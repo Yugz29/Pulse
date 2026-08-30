@@ -155,6 +155,129 @@ def is_weak_workspace(workspace: str) -> bool:
     return path == home or path in _generic_workspace_containers(home)
 
 
+@dataclass(frozen=True)
+class WorkspaceIdentity:
+    root: str | None
+    project_name: str | None
+    method: str | None
+    confidence: str | None
+
+
+def is_generic_workspace_path(root: str) -> bool:
+    path = Path(root).expanduser()
+    generic_names = {
+        "build",
+        "dist",
+        "home",
+        "project",
+        "projects",
+        "test",
+        "tmp",
+        "unqualified",
+        "users",
+    }
+    generic_paths = {
+        Path("/"),
+        Path("/tmp"),
+        Path("/private/tmp"),
+        Path("/var/tmp"),
+        Path.home(),
+        Path.home() / "Projets",
+    }
+    return (
+        path in generic_paths
+        or is_weak_workspace(str(path))
+        or path.name.casefold() in generic_names
+    )
+
+
+def persisted_workspace_identity(
+    activity: dict[str, Any],
+) -> WorkspaceIdentity:
+    """Resolve a project only from persisted event details.
+
+    Single workspace resolver (decision 5A): every reader that needs a
+    project identity from stored event details goes through this function.
+    """
+    details = activity.get("details", {})
+    workspace = details.get("workspace")
+    if isinstance(workspace, dict):
+        root = workspace.get("workspace_root")
+        name = workspace.get("project_name")
+        method = workspace.get("resolution_method")
+        confidence = workspace.get("resolution_confidence")
+        if isinstance(root, str) and root.strip():
+            normalized_method = (
+                method if isinstance(method, str) and method else "workspace"
+            )
+            normalized_confidence = (
+                confidence
+                if confidence in {"low", "medium", "high"}
+                else (
+                    "high"
+                    if normalized_method == "git"
+                    else "medium"
+                    if normalized_method == "marker"
+                    else "low"
+                    if normalized_method == "cwd"
+                    else "medium"
+                )
+            )
+            if (
+                normalized_confidence == "low"
+                and normalized_method == "cwd"
+                and is_generic_workspace_path(root)
+            ):
+                return WorkspaceIdentity(
+                    None,
+                    None,
+                    normalized_method,
+                    normalized_confidence,
+                )
+            return WorkspaceIdentity(
+                root,
+                name if isinstance(name, str) and name.strip() else Path(root).name,
+                normalized_method,
+                normalized_confidence,
+            )
+    elif isinstance(workspace, str) and workspace.strip():
+        return WorkspaceIdentity(
+            workspace,
+            Path(workspace).name,
+            "workspace",
+            "medium",
+        )
+
+    git = details.get("git")
+    if isinstance(git, dict):
+        root = git.get("git_root")
+        name = git.get("repository")
+        if isinstance(root, str) and root.strip():
+            return WorkspaceIdentity(
+                root,
+                name if isinstance(name, str) and name.strip() else Path(root).name,
+                "git",
+                "high",
+            )
+    git_root = details.get("git_root")
+    if isinstance(git_root, str) and git_root.strip():
+        root = git_root.strip()
+        return WorkspaceIdentity(
+            root,
+            Path(root).name or None,
+            "git",
+            "high",
+        )
+
+    cwd = details.get("cwd")
+    if isinstance(cwd, str) and cwd.strip():
+        root = cwd.strip()
+        if is_generic_workspace_path(root):
+            return WorkspaceIdentity(None, None, "cwd", "low")
+        return WorkspaceIdentity(root, Path(root).name, "cwd", "low")
+    return WorkspaceIdentity(None, None, None, None)
+
+
 def last_observed_workspace(trace: dict[str, Any]) -> str | None:
     workspace = None
     for session in trace["sessions"]:

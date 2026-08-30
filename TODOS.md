@@ -24,7 +24,7 @@
 
 **Effort:** S
 **Priority:** P3
-**Depends on:** Chantier résolveur unique (5A)
+**Depends on:** Chantier résolveur unique (5A) — livré le 2026-08-30, débloqué
 
 ### Remplacer le polling du file watcher par watchdog/FSEvents
 
@@ -39,6 +39,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) terminé
 
 ## Completed
+
+### Résolveur workspace unique + parseur porcelain unique (5A)
+
+**What:** Résorber les 3 implémentations parallèles de résolution workspace et le double parseur `git status` (T14 de la revue eng du 2026-08-29).
+
+**Résolution:** Refactor structurel pur, comportement inchangé. `WorkspaceIdentity`, `persisted_workspace_identity` et `is_generic_workspace_path` promus dans `analysis/projects.py` (résolveur unique) ; `timeline.py` délègue via alias. `git_context.py` gagne `PorcelainStatus`/`parse_status_output`, seul parseur d'en-tête/codes `git status --branch` ; `_parse_branch`/`_parse_status_counts` et `_git_local_snapshot` (daily_trace) en dérivent leurs propres comptages, sorties identiques. Nouveau `tests_v2/test_projects.py` + tests du parseur. C'est le véhicule prévu pour persister la preuve `.git` à l'ingestion (chantier divergence live/archive, maintenant débloqué). 369 tests.
+
+**Completed:** 2026-08-30
 
 ### Commande replay-dead-letter
 
