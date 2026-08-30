@@ -71,6 +71,12 @@ def test_command_has_secret_ignores_continuation_folding():
             "mysql --password \\\n  hunter2secret",
             "mysql --password=[REDACTED]",
         ),
+        # Variante CRLF : sans le \r? du repli, le backslash seul serait
+        # masqué et le secret resterait en clair sur la ligne suivante.
+        (
+            "mysql --password \\\r\n  hunter2secret",
+            "mysql --password=[REDACTED]",
+        ),
         # Invocations enveloppées (docker/ssh) : l'ancre (^|\s) les couvre.
         (
             "docker exec -it db mysql -u root -psup3rSecret",

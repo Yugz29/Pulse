@@ -24,7 +24,9 @@ _SECRET_VALUE = r"(?:\"[^\"]*\"|'[^']*'|\S+)"
 _PASS_SENTINEL = r"(?:stdin|env:\S+|file:\S+|fd:\d+)(?=\s|$)"
 # Shell line continuations hide option/value pairs from single-line patterns
 # (`--password \<newline> secret`), so they are folded before matching.
-_LINE_CONTINUATION = re.compile(r"\\\n[ \t]*")
+# \r? : a CRLF continuation would otherwise leave the secret unfolded on the
+# next line while the lone backslash gets masked — partial redaction.
+_LINE_CONTINUATION = re.compile(r"\\\r?\n[ \t]*")
 
 _SENSITIVE_OPTION = re.compile(
     r"(?i)(--?(?:pass(?:word|wd|in|out|phrase)?|token|secret|api[-_]?key|apikey"
