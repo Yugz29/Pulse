@@ -274,6 +274,50 @@ class ProducerOutbox:
                 )
             return int(cursor.rowcount)
 
+    def replay_dead_letters(
+        self,
+        *,
+        event_id: str | None = None,
+        http_status: int | None = None,
+    ) -> int:
+        """Move selected dead letters back to the pending queue.
+
+        The replayed event starts a fresh delivery cycle: attempts back to 0,
+        no next_attempt_at, and created_at set to now so a replay joins the
+        FIFO tail instead of jumping ahead of already-pending events. A
+        replay → re-failure cycle is safe: move_to_dead_letter overwrites the
+        previous dead-letter row (INSERT OR REPLACE).
+        """
+        if event_id is not None and http_status is not None:
+            raise ValueError("event_id and http_status are mutually exclusive")
+        if event_id is not None and not event_id.strip():
+            raise ValueError("event_id must be a non-empty string")
+        selection = {"event_id": event_id, "http_status": http_status}
+        replayed_at = utc_now().isoformat()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            # OR IGNORE: if the event is somehow already pending again, its
+            # dead-letter row is a stale duplicate — dropping it is enough.
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO events(event_id, payload_json, created_at)
+                SELECT event_id, payload_json, :replayed_at
+                FROM dead_letters
+                WHERE (:event_id IS NULL OR event_id = :event_id)
+                  AND (:http_status IS NULL OR http_status = :http_status)
+                """,
+                {**selection, "replayed_at": replayed_at},
+            )
+            cursor = connection.execute(
+                """
+                DELETE FROM dead_letters
+                WHERE (:event_id IS NULL OR event_id = :event_id)
+                  AND (:http_status IS NULL OR http_status = :http_status)
+                """,
+                selection,
+            )
+            return int(cursor.rowcount)
+
 
 def default_outbox_path() -> Path:
     configured = os.environ.get("PULSE_CORE_OUTBOX_PATH")
@@ -556,6 +600,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="delete every dead letter",
     )
+    replay_parser = subparsers.add_parser(
+        "replay-dead-letter",
+        help="move selected dead letters back to the pending queue",
+    )
+    replay_selection = replay_parser.add_mutually_exclusive_group(required=True)
+    replay_selection.add_argument("--event-id")
+    replay_selection.add_argument("--http-status", type=_http_status)
+    replay_selection.add_argument(
+        "--all",
+        action="store_true",
+        help="replay every dead letter",
+    )
     subparsers.add_parser("status", help="show pending and dead-letter counts")
     return parser
 
@@ -594,6 +650,13 @@ def main() -> None:
                 http_status=None if args.all else args.http_status
             )
             print(f"Deleted dead-letters: {deleted}")
+            return
+        if args.command == "replay-dead-letter":
+            replayed = outbox.replay_dead_letters(
+                event_id=args.event_id,
+                http_status=args.http_status,
+            )
+            print(f"Replayed dead-letters: {replayed}")
             return
     except Exception as exc:
         print(f"Pulse outbox: {exc}", file=sys.stderr)

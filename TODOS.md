@@ -2,18 +2,6 @@
 
 ## Daemon V2
 
-### Commande replay-dead-letter
-
-**What:** Ajouter `python -m daemon_v2.producer_outbox replay-dead-letter [--event-id X | --http-status N]` pour re-enfiler des dead-letters dans la file pending.
-
-**Why:** Depuis la revue du 2026-08-29 seuls les échecs HTTP répétés (~1 h) dead-lettrent, mais ces événements restent irrécupérables sans re-fabrication manuelle du payload via `enqueue-json`. `move_to_dead_letter` fait déjà `INSERT OR REPLACE`, donc un cycle replay → re-échec est sûr.
-
-**Context:** Déplacer la ligne de `dead_letters` vers `events` (transaction unique), remettre `attempts` à 0. Le worker la reprendra en FIFO.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** None
-
 ### Politique de rétention / purge de trace.db
 
 **What:** Définir une rétention pour `trace.db` (archivage ou purge des jours anciens) — la base croît indéfiniment.
@@ -51,6 +39,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) terminé
 
 ## Completed
+
+### Commande replay-dead-letter
+
+**What:** Ajouter `python -m daemon_v2.producer_outbox replay-dead-letter [--event-id X | --http-status N | --all]` pour re-enfiler des dead-letters dans la file pending.
+
+**Résolution:** `ProducerOutbox.replay_dead_letters(event_id=, http_status=)` — transaction unique (`BEGIN IMMEDIATE`), `INSERT OR IGNORE` vers `events` (attempts remis à 0, `created_at` = maintenant : le rejeu rejoint la queue FIFO sans doubler les événements déjà en attente), suppression des lignes `dead_letters` sélectionnées. Un événement déjà pending garde sa ligne, sa dead-letter obsolète est purgée. Sélection explicite obligatoire côté CLI (`--event-id` | `--http-status` | `--all`, groupe mutuellement exclusif comme `clear-dead-letter`). Cycle replay → re-échec → replay testé. 8 tests ajoutés.
+
+**Completed:** 2026-08-30
 
 ### Politique de stockage des prompts collés
 

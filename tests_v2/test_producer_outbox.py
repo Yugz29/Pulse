@@ -215,6 +215,131 @@ def test_replayed_dead_letter_overwrites_previous_row(tmp_path):
     assert outbox.counts() == (0, 1)
 
 
+def test_replay_dead_letter_restarts_a_fresh_delivery_cycle(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    outbox.enqueue_payload(canonical_payload("failed"))
+    pending = outbox.oldest()
+    assert pending is not None
+    outbox.move_to_dead_letter(
+        pending,
+        error="HTTP 400",
+        http_status=400,
+        response_body="bad request",
+        failed_at=datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc),
+    )
+    assert outbox.counts() == (0, 1)
+
+    assert outbox.replay_dead_letters(event_id="failed") == 1
+
+    assert outbox.counts() == (1, 0)
+    payload_json, attempts, last_error = read_pending(database, "failed")
+    assert payload_json == canonical_payload("failed")
+    assert attempts == 0
+    assert last_error is None
+    worker = OutboxWorker(outbox, sender=lambda _: ack("failed"))
+    assert worker.process_one() == "sent"
+    assert outbox.counts() == (0, 0)
+
+
+def test_replay_then_refail_then_replay_again_is_safe(tmp_path):
+    # Cycle complet replay → re-échec → replay : la dead-letter est écrasée
+    # (INSERT OR REPLACE) puis rejouable à nouveau, sans perte de payload.
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    outbox.enqueue_payload(canonical_payload("cycling"))
+    for _ in range(2):
+        worker = OutboxWorker(
+            outbox,
+            sender=lambda _: HttpResult(400, "bad request"),
+        )
+        assert worker.process_one() == "dead-letter"
+        assert outbox.counts() == (0, 1)
+        assert outbox.replay_dead_letters(event_id="cycling") == 1
+        assert outbox.counts() == (1, 0)
+    payload_json, attempts, _ = read_pending(database, "cycling")
+    assert payload_json == canonical_payload("cycling")
+    assert attempts == 0
+
+
+def test_replay_by_http_status_leaves_other_failures_dead(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    for event_id, status in (("airplay", 403), ("invalid", 400)):
+        outbox.enqueue_payload(app_activated_payload(event_id))
+        pending = outbox.oldest()
+        assert pending is not None
+        outbox.move_to_dead_letter(
+            pending,
+            error=f"HTTP {status}",
+            http_status=status,
+            response_body="",
+            failed_at=datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc),
+        )
+
+    assert outbox.replay_dead_letters(http_status=403) == 1
+
+    assert outbox.counts() == (1, 1)
+    assert read_pending(database, "airplay") is not None
+    assert read_dead_letter(database, "invalid") is not None
+
+
+def test_replayed_event_joins_the_fifo_tail(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    outbox.enqueue_payload(canonical_payload("boom"))
+    pending = outbox.oldest()
+    assert pending is not None
+    outbox.move_to_dead_letter(
+        pending,
+        error="HTTP 400",
+        http_status=400,
+        response_body="",
+        failed_at=datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc),
+    )
+    # Enfilé AVANT le replay : doit rester en tête de file après.
+    outbox.enqueue_payload(
+        canonical_payload("first"),
+        created_at="2026-07-23T10:00:00+00:00",
+    )
+
+    assert outbox.replay_dead_letters(event_id="boom") == 1
+
+    assert outbox.counts() == (2, 0)
+    assert outbox.oldest().event_id == "first"
+
+
+def test_replay_already_pending_event_drops_stale_dead_letter(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    outbox.enqueue_payload(canonical_payload("dup"))
+    pending = outbox.oldest()
+    assert pending is not None
+    outbox.move_to_dead_letter(
+        pending,
+        error="HTTP 400",
+        http_status=400,
+        response_body="",
+        failed_at=datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc),
+    )
+    # Re-enfilé pendant que la dead-letter existe encore : les deux tables
+    # portent le même event_id.
+    outbox.enqueue_payload(canonical_payload("dup"))
+
+    assert outbox.replay_dead_letters(event_id="dup") == 1
+
+    assert outbox.counts() == (1, 0)
+    assert read_dead_letter(database, "dup") is None
+
+
+def test_replay_rejects_conflicting_or_empty_selectors(tmp_path):
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    with pytest.raises(ValueError):
+        outbox.replay_dead_letters(event_id="x", http_status=400)
+    with pytest.raises(ValueError):
+        outbox.replay_dead_letters(event_id="   ")
+
+
 def test_git_commit_payload_redacts_message(tmp_path):
     outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
     payload = build_git_commit_payload(
@@ -819,6 +944,39 @@ def test_clear_dead_letter_by_http_status_preserves_pending_and_other_failures(
     assert read_dead_letter(database, "airplay") is None
     assert read_dead_letter(database, "invalid") is not None
     assert outbox.oldest().event_id == "still-pending"
+
+
+def test_replay_dead_letter_cli_moves_event_back_to_pending(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    outbox.enqueue_payload(app_activated_payload("boom"))
+    pending = outbox.oldest()
+    assert pending is not None
+    outbox.move_to_dead_letter(
+        pending,
+        error="HTTP 400",
+        http_status=400,
+        response_body="",
+        failed_at=datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc),
+    )
+
+    result = run_outbox_cli(
+        database,
+        "replay-dead-letter",
+        "",
+        extra_arguments=["--event-id", "boom"],
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "Replayed dead-letters: 1\n"
+    assert outbox.counts() == (1, 0)
+
+
+def test_replay_dead_letter_cli_requires_an_explicit_selection(tmp_path):
+    result = run_outbox_cli(tmp_path / "outbox.sqlite3", "replay-dead-letter", "")
+
+    assert result.returncode == 2
+    assert "required" in result.stderr
 
 
 def test_clear_all_dead_letters_is_explicit_and_reports_zero_when_empty(tmp_path):
