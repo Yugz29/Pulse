@@ -28,6 +28,8 @@ DEFAULT_PRODUCER_NAME = "pulse-zsh"
 DEFAULT_PRODUCER_VERSION = "1.0"
 GIT_HOOK_PRODUCER_NAME = "pulse-git-hook"
 GIT_HOOK_PRODUCER_VERSION = "1.0"
+FILE_WATCHER_PRODUCER_NAME = "pulse-file-watcher"
+FILE_WATCHER_PRODUCER_VERSION = "1.0"
 
 
 @dataclass(frozen=True)
@@ -396,6 +398,71 @@ def build_terminal_payload(
         ensure_ascii=False,
         allow_nan=False,
     )
+
+
+def build_file_event_payload(
+    outbox: ProducerOutbox,
+    *,
+    path: str,
+    event: str,
+    workspace: str,
+    occurred_at: datetime,
+) -> str:
+    """Build the canonical file_changed event for durable outbox persistence.
+
+    Transport decision 2A-révisée: the file watcher enqueues here instead of
+    POSTing straight to the daemon, so a stopped daemon no longer loses
+    events — same durability contract as the terminal and git producers.
+    """
+    if occurred_at.tzinfo is None:
+        raise ValueError("occurred_at must include a timezone")
+    canonical = CanonicalEvent(
+        event_id=str(uuid.uuid4()),
+        schema_version=1,
+        event_type="file_changed",
+        producer_name=FILE_WATCHER_PRODUCER_NAME,
+        producer_version=FILE_WATCHER_PRODUCER_VERSION,
+        producer_instance_id=outbox.producer_instance_id(),
+        occurred_at=occurred_at,
+        details={"path": path, "event": event, "workspace": workspace},
+    )
+    payload: dict[str, Any] = {
+        "event_id": canonical.event_id,
+        "schema_version": canonical.schema_version,
+        "type": canonical.event_type,
+        "producer": {
+            "name": canonical.producer_name,
+            "version": canonical.producer_version,
+            "instance_id": canonical.producer_instance_id,
+        },
+        "occurred_at": canonical.occurred_at.isoformat(),
+        "details": canonical.details,
+    }
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def enqueue_file_event(
+    outbox: ProducerOutbox,
+    *,
+    path: str,
+    event: str,
+    workspace: str,
+    occurred_at: datetime | None = None,
+) -> str:
+    payload = build_file_event_payload(
+        outbox,
+        path=path,
+        event=event,
+        workspace=workspace,
+        occurred_at=occurred_at or utc_now(),
+    )
+    return outbox.enqueue_payload(payload)
 
 
 def build_git_commit_payload(

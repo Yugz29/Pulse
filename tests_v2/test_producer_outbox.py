@@ -1036,3 +1036,30 @@ def test_outbox_uses_wal_and_survives_concurrent_enqueues(tmp_path):
         thread.join()
 
     assert outbox.counts() == (20, 0)
+
+
+def test_file_event_payload_is_canonical_and_delivered_fifo(tmp_path):
+    from daemon_v2.producer_outbox import enqueue_file_event
+
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    occurred_at = datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc)
+
+    event_id = enqueue_file_event(
+        outbox,
+        path="/work/repo/app.py",
+        event="deleted",
+        workspace="/work/repo",
+        occurred_at=occurred_at,
+    )
+
+    pending = outbox.oldest()
+    assert pending is not None
+    payload = json.loads(pending.payload_json)
+    assert payload["event_id"] == event_id
+    assert payload["occurred_at"] == "2026-07-23T12:00:00+00:00"
+    assert payload["producer"]["name"] == "pulse-file-watcher"
+    assert payload["producer"]["instance_id"]
+    worker = OutboxWorker(outbox, sender=lambda _: ack(event_id))
+    assert worker.process_one() == "sent"
+    assert outbox.counts() == (0, 0)

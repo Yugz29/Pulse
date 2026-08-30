@@ -65,3 +65,56 @@ def test_compare_snapshots_reports_created_modified_and_deleted(tmp_path):
         ("modified", modified),
         ("deleted", deleted),
     ]
+
+
+def test_record_file_event_enqueues_canonical_event(tmp_path):
+    from daemon_v2.file_watcher import record_file_event
+    from daemon_v2.ingest import normalize_event
+    from daemon_v2.producer_outbox import ProducerOutbox
+    import json
+
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    workspace = tmp_path / "repo"
+    path = workspace / "daemon_v2" / "main.py"
+
+    # Aucun daemon ne tourne : l'enqueue réussit quand même (décision
+    # 2A-révisée — la durabilité vient de l'outbox, plus du POST direct).
+    assert record_file_event(outbox, "modified", path, workspace) is True
+
+    pending = outbox.oldest()
+    assert pending is not None
+    payload = json.loads(pending.payload_json)
+    assert payload["type"] == "file_changed"
+    assert payload["producer"]["name"] == "pulse-file-watcher"
+    assert payload["details"] == {
+        "path": str(path),
+        "event": "modified",
+        "workspace": str(workspace),
+    }
+    # Le payload enfilé est accepté tel quel par l'ingestion canonique.
+    ingested = normalize_event(json.loads(pending.payload_json))
+    assert ingested.activity.details["workspace"] == str(workspace)
+
+
+def test_record_file_event_survives_storage_failure(tmp_path, monkeypatch):
+    import sqlite3
+
+    import daemon_v2.file_watcher as file_watcher_module
+    from daemon_v2.file_watcher import record_file_event
+    from daemon_v2.producer_outbox import ProducerOutbox
+
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+
+    def failing_enqueue(*args, **kwargs):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(
+        file_watcher_module, "enqueue_file_event", failing_enqueue
+    )
+
+    # Le watcher ne doit jamais crasher sur une erreur de stockage : il
+    # signale l'échec et la boucle de polling continue.
+    assert (
+        record_file_event(outbox, "created", tmp_path / "a.py", tmp_path)
+        is False
+    )
