@@ -14,7 +14,8 @@ les transcripts d'agents n'y entrent jamais en brut (dérivés + archives zstd).
 - Événements `agent_session` : une entrée par session Claude Code / Codex
   terminée — résumé déterministe versionné, bornes, compteurs de messages,
   premier prompt (rédigé), pointeur vers le transcript. Backfill initial :
-  152 sessions sur 74 jours, réparties dans les journées passées.
+  152 sessions uniques sur 74 jours (173 transcripts traités, doublons de
+  reprise absorbés), réparties dans les journées passées.
 - Archivage compressé des transcripts d'agents (`scripts/archive_transcripts.py`,
   zstd de la stdlib) : copie pérenne avant la purge des outils sources
   (839 Mo → 220 Mo), idempotent, garde anti-troncature.
@@ -49,13 +50,16 @@ les transcripts d'agents n'y entrent jamais en brut (dérivés + archives zstd).
 - Un Ctrl-C (exit 130) n'est plus compté comme erreur : ni badge, ni
   « Erreur terminal récente » dans la reprise.
 - Les transcripts de sous-agents (sidechains) n'émettent plus de fausse
-  session d'agent.
+  session d'agent (les émissions antérieures au filtre restent en base,
+  figées — conforme à la politique de rétention).
 - Deux transcripts partageant un même identifiant de session (reprise/fork)
   n'écrasent plus l'émission : la première gagne, le doublon est tracé.
 
 ### Supprimé
 - `app_watcher.py` (déprécié, doublon de l'observateur Swift) et le
   paramètre `project_mode` des rendus (plus de divergence à piloter).
+
+Suite portée à 407 tests.
 
 ## [0.1.0.0] - 2026-08-30
 
