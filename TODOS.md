@@ -2,6 +2,44 @@
 
 ## Daemon V2
 
+### Exclure les interruptions volontaires (exit 130) du signal d'erreur
+
+**What:** `build_resume` traite tout `exit_code != 0` comme « Erreur terminal récente » et le label « erreur » compte pareil — or 5/8 commandes du 2026-08-30 étaient des Ctrl-C volontaires sur `make dev` (exit 130 = 128+SIGINT), qui écrasent les vrais signaux de reprise.
+
+**Context:** Prédicat partagé `is_interrupted_exit` (130 seul ; 143/SIGTERM à n'ajouter que sur données observées), exclu du candidat erreur-récente (`daily_trace.py:469-477`) ET du label « erreur » (`analysis/terminal.py:187-189`). Ne pas toucher au statut des tests interrompus (« Échec (130) » reste juste pour un test non terminé).
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** None (retour utilisateur du 2026-08-30)
+
+### Ne plus promouvoir un événement fort isolé en session pleine
+
+**What:** La reconstruction ouvre un bloc « Session » pour tout signal fort à >30 min du précédent, même seul — le 2026-08-30 affiche 6 sessions dont deux de 0 min (un `cd` nu, un commit isolé). Une session pleine devrait exiger ≥2 signaux forts ou une durée >0 ; l'événement isolé devient une « activité isolée » en une ligne, hors compteur de sessions.
+
+**Context:** Cohérent avec la qualification projet du jour (fichier explicite OU ≥2 signaux OU preuve git). Zone CRITICAL (reconstruction + renderers + tests de contrat à faire évoluer explicitement). Le gap de 30 min lui-même est sain — ne pas l'élargir.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** None (retour utilisateur du 2026-08-30)
+
+### Filtrer les transcripts de sous-agents (sidechains) du producteur agent_session
+
+**What:** Le seul `agent_session` du 2026-08-30 est le prompt d'un sous-agent de revue de code : les transcripts sidechain (`isSidechain: true`) vivent dans les mêmes dossiers que les sessions principales et `parse_claude_session` ne les distingue pas. Les exclure (ou les marquer `sidechain: true` sans les émettre) pour que le signal reflète les vraies sessions.
+
+**Context:** `summary_version` passe à 2 pour les nouvelles émissions (résumés déjà émis figés, décision rétention). Les sessions déjà émises en v1 restent telles quelles.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** None (retour utilisateur du 2026-08-30)
+
+### Limite connue : le raisonnement des conversations Claude.ai n'est pas capturable
+
+**What:** Le raisonnement le plus dense d'une journée peut vivre dans une conversation Claude.ai (web), hors de portée du pipeline local (`~/.claude/projects/` ne contient que les sessions Claude Code). Aucun correctif local ne peut combler ce trou — à décider consciemment plus tard si/comment le combler (export manuel périodique ? autre source ?).
+
+**Effort:** —
+**Priority:** P4 (veille — item sentinelle, ne pas implémenter sans décision)
+**Depends on:** Décision produit
+
 ### Réexamen rétention trace.db — déclencheurs falsifiables
 
 **What:** La rétention infinie du brut (décision du 2026-08-30) se rouvre UNIQUEMENT si un de ces seuils mesurables est franchi : `trace.db` > 500 Mo ; ou latence de rendu d'une page > 1 s malgré le cache /days ; ou l'audit `scripts/audit_secrets.py` > 60 s. Premier levier si ça arrive : compaction des micro-événements `app_activated` (68 % des lignes, 20 octets pièce) — pas les résumés.
