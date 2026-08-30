@@ -193,3 +193,20 @@ def test_failed_git_command_remains_an_observed_command():
     assert parsed.action == "commit"
     assert parsed.commit_message == "observed failure"
     assert terminal_labels(activity) == ["git", "erreur"]
+
+
+def test_ctrl_c_interruption_is_not_an_error_label():
+    from daemon_v2.analysis.terminal import is_interrupted_exit
+
+    # Ctrl-C (130 = 128+SIGINT) est un geste volontaire, pas un échec —
+    # retour utilisateur du 2026-08-30 : 5/8 commandes du jour en 130.
+    assert is_interrupted_exit(130)
+    assert not is_interrupted_exit(1)
+    assert not is_interrupted_exit(0)
+    assert not is_interrupted_exit(True)
+    assert not is_interrupted_exit(None)
+
+    interrupted = {"details": {"command": "make dev", "exit_code": 130}}
+    failed = {"details": {"command": "make dev", "exit_code": 1}}
+    assert "erreur" not in terminal_labels(interrupted)
+    assert "erreur" in terminal_labels(failed)
