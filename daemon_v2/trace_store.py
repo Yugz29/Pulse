@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS activities (
     producer_version TEXT NULL,
     producer_instance_id TEXT NULL,
     occurred_at TEXT NOT NULL,
+    occurred_at_utc TEXT NOT NULL,
     recorded_at TEXT NOT NULL,
     details_json TEXT NOT NULL,
     event_fingerprint TEXT NULL,
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS activities (
 
 INDEX_STATEMENTS = (
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_event_id ON activities(event_id)",
-    "CREATE INDEX IF NOT EXISTS idx_activities_occurred_at ON activities(occurred_at)",
+    "CREATE INDEX IF NOT EXISTS idx_activities_occurred_at_utc ON activities(occurred_at_utc)",
     "CREATE INDEX IF NOT EXISTS idx_activities_session_id ON activities(session_id)",
 )
 
@@ -59,6 +60,18 @@ TRIGGER_STATEMENTS = (
     END
     """,
 )
+
+
+def utc_lexical(moment: datetime) -> str:
+    """Canonical UTC form whose lexical order IS the chronological order.
+
+    Fixed offset (+00:00) and fixed microsecond width: plain string
+    comparisons on occurred_at_utc are correct and use the column index,
+    unlike julianday(occurred_at) which forces a full scan. Naive legacy
+    timestamps take the system timezone, exactly like every reader that
+    calls .astimezone() on them.
+    """
+    return moment.astimezone(timezone.utc).isoformat(timespec="microseconds")
 
 
 class EventConflictError(ValueError):
@@ -117,6 +130,7 @@ class TraceStore:
                 "producer_version": "TEXT",
                 "producer_instance_id": "TEXT",
                 "event_fingerprint": "TEXT",
+                "occurred_at_utc": "TEXT",
             }
             for name, sql_type in additions.items():
                 if name not in columns:
@@ -148,6 +162,24 @@ class TraceStore:
                 WHERE producer_name IS NULL OR producer_name = ''
                 """
             )
+            # Backfill the lexical UTC column in Python: only fromisoformat
+            # understands every historical offset form, and the canonical
+            # fixed-width rendering must match what append_event writes.
+            pending_utc = connection.execute(
+                """
+                SELECT id, occurred_at FROM activities
+                WHERE occurred_at_utc IS NULL OR occurred_at_utc = ''
+                """
+            ).fetchall()
+            for row in pending_utc:
+                connection.execute(
+                    "UPDATE activities SET occurred_at_utc = ? WHERE id = ?",
+                    (
+                        utc_lexical(datetime.fromisoformat(row["occurred_at"])),
+                        row["id"],
+                    ),
+                )
+            connection.execute("DROP INDEX IF EXISTS idx_activities_occurred_at")
 
             for statement in INDEX_STATEMENTS:
                 connection.execute(statement)
@@ -197,9 +229,9 @@ class TraceStore:
                 INSERT INTO activities (
                     session_id, event_id, schema_version, type,
                     producer_name, producer_version, producer_instance_id,
-                    occurred_at, recorded_at, details_json, event_fingerprint,
-                    activity_type, source, summary
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    occurred_at, occurred_at_utc, recorded_at, details_json,
+                    event_fingerprint, activity_type, source, summary
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session_id,
@@ -210,6 +242,7 @@ class TraceStore:
                     event.producer_version,
                     event.producer_instance_id,
                     event.occurred_at.isoformat(),
+                    utc_lexical(event.occurred_at),
                     recorded_at.isoformat(),
                     details_json,
                     ingested.fingerprint,
@@ -258,7 +291,7 @@ class TraceStore:
             """
             SELECT session_id, occurred_at
             FROM activities
-            ORDER BY julianday(occurred_at) ASC, id ASC
+            ORDER BY occurred_at_utc ASC, id ASC
             """
         ).fetchall()
         grouped: dict[str, list[datetime]] = {}
@@ -281,14 +314,11 @@ class TraceStore:
             rows = connection.execute(
                 """
                 SELECT * FROM activities
-                WHERE julianday(occurred_at) >= julianday(?)
-                  AND julianday(occurred_at) < julianday(?)
-                ORDER BY julianday(occurred_at) ASC, id ASC
+                WHERE occurred_at_utc >= ?
+                  AND occurred_at_utc < ?
+                ORDER BY occurred_at_utc ASC, id ASC
                 """,
-                (
-                    start.astimezone(timezone.utc).isoformat(),
-                    end.astimezone(timezone.utc).isoformat(),
-                ),
+                (utc_lexical(start), utc_lexical(end)),
             ).fetchall()
         return [self._row_to_stored_activity(row) for row in rows]
 

@@ -36,10 +36,11 @@ def _raw_insert_unredacted(database: Path, command: str) -> None:
             """
             INSERT INTO activities (
                 session_id, event_id, schema_version, type, producer_name,
-                occurred_at, recorded_at, details_json, activity_type,
-                source, summary
+                occurred_at, occurred_at_utc, recorded_at, details_json,
+                activity_type, source, summary
             ) VALUES ('s', 'raw-' || ?, 1, 'terminal_finished', 'test',
-                      '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00+00:00',
+                      '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00.000000+00:00',
+                      '2026-07-03T12:00:00+00:00',
                       ?, 'terminal_finished', 'terminal', ?)
             """,
             (command[:8], json.dumps({"command": command}), f"Command: {command}"),
@@ -68,10 +69,11 @@ def test_audit_scans_git_commit_messages(tmp_path):
             """
             INSERT INTO activities (
                 session_id, event_id, schema_version, type, producer_name,
-                occurred_at, recorded_at, details_json, activity_type,
-                source, summary
+                occurred_at, occurred_at_utc, recorded_at, details_json,
+                activity_type, source, summary
             ) VALUES ('s', 'msg-1', 1, 'git_commit', 'test',
-                      '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00+00:00',
+                      '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00.000000+00:00',
+                      '2026-07-03T12:00:00+00:00',
                       ?, 'git_commit', 'git', 'Commit abc1234')
             """,
             (json.dumps({"message": "rotate key AKIAIOSFODNN7EXAMPLE"}),),
@@ -105,10 +107,11 @@ def test_audit_tolerates_malformed_json_rows(tmp_path):
             """
             INSERT INTO activities (
                 session_id, event_id, schema_version, type, producer_name,
-                occurred_at, recorded_at, details_json, activity_type,
-                source, summary
+                occurred_at, occurred_at_utc, recorded_at, details_json,
+                activity_type, source, summary
             ) VALUES ('s', 'bad-json', 1, 'terminal_finished', 'test',
-                      '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00+00:00',
+                      '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00.000000+00:00',
+                      '2026-07-03T12:00:00+00:00',
                       'not json{{{', 'terminal_finished', 'terminal', 'ok')
             """
         )

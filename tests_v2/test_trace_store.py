@@ -221,11 +221,50 @@ def test_migrates_historical_schema_without_loss_and_is_idempotent(tmp_path):
         "producer_version",
         "producer_instance_id",
         "occurred_at",
+        "occurred_at_utc",
         "recorded_at",
         "details_json",
     } <= columns
     assert indexes["idx_activities_event_id"] == 1
+    assert "idx_activities_occurred_at_utc" in indexes
+    # L'index sur la colonne brute est mort (les requêtes sont lexicales UTC).
+    assert "idx_activities_occurred_at" not in indexes
     assert count == 1
+
+    with sqlite3.connect(database) as connection:
+        backfilled = connection.execute(
+            "SELECT occurred_at_utc FROM activities WHERE id = 1"
+        ).fetchone()[0]
+    assert backfilled == "2026-07-22T10:00:00.000000+00:00"
+
+
+def test_occurred_at_utc_is_canonical_and_orders_mixed_offsets(tmp_path):
+    # "14:00+02:00" (12:00Z) précède lexicalement... rien du tout : comparé
+    # brut à "13:00+00:00" il serait exclu à tort d'une fenêtre finissant à
+    # 13:00Z. La colonne canonique rend l'ordre lexical == chronologique.
+    database = tmp_path / "pulse.sqlite3"
+    store = TraceStore(database)
+    paris = timezone(timedelta(hours=2))
+    later = store.append(activity(datetime(2026, 7, 3, 14, 0, tzinfo=paris)))
+    earlier = store.append(
+        activity(datetime(2026, 7, 3, 11, 30, tzinfo=timezone.utc))
+    )
+
+    rows = store.activities_between(
+        datetime(2026, 7, 3, 11, 0, tzinfo=timezone.utc),
+        datetime(2026, 7, 3, 13, 0, tzinfo=timezone.utc),
+    )
+
+    assert [row.id for row in rows] == [earlier.id, later.id]
+    with sqlite3.connect(database) as connection:
+        raw, canonical = connection.execute(
+            "SELECT occurred_at, occurred_at_utc FROM activities WHERE id = ?",
+            (later.id,),
+        ).fetchone()
+    # La colonne brute garde l'offset d'origine ; la canonique est UTC à
+    # largeur fixe (microsecondes explicites).
+    assert raw == "2026-07-03T14:00:00+02:00"
+    assert canonical == "2026-07-03T12:00:00.000000+00:00"
 
 
 def test_same_event_id_with_different_payload_raises_conflict(tmp_path):
