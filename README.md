@@ -154,6 +154,12 @@ La dernière commande supprime uniquement les dead-letters HTTP 403 ciblées.
 Elle ne touche jamais aux événements pending. Aucune dead-letter n’est
 supprimée ou rejouée automatiquement.
 
+Sémantique de livraison : les erreurs de connexion (daemon arrêté, machine
+hors ligne) sont réessayées indéfiniment — l’outbox survit à l’indisponibilité
+du daemon. Seuls les échecs HTTP répétés (le serveur répond mais échoue)
+finissent en dead-letter, après ~1 h de tentatives. Une réponse 204
+(commande volontairement filtrée) supprime l’événement sans dead-letter.
+
 Test manuel :
 
 1. lancer `make dev` et attendre les quatre messages `started` ;
@@ -218,6 +224,12 @@ Pour lancer uniquement le daemon :
 ```
 
 La base SQLite V2 est créée dans `~/.pulse_v2/trace.db`. Elle n’est ni migrée depuis Pulse V1, ni partagée avec les anciennes bases situées dans `~/.pulse`. Le chemin peut être surchargé avec `PULSE_V2_DB_PATH=/chemin/vers/trace.db`.
+
+Les bases (`trace.db` et l’outbox) fonctionnent en mode WAL : les écritures
+concurrentes (producteurs, worker, daemon) ne se bloquent plus entre elles.
+Conséquence pour les sauvegardes : copier uniquement le fichier `.db` peut
+perdre les dernières écritures — copier aussi les fichiers `-wal` et `-shm`,
+ou passer par `sqlite3 trace.db ".backup"` qui les intègre.
 
 Ouvrir la page locale de l’activité du jour :
 
