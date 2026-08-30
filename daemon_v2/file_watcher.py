@@ -1,18 +1,15 @@
 """Small polling file watcher for one explicitly selected workspace."""
 
 import argparse
-import json
 import os
+import sqlite3
 import time
 from pathlib import Path
 from typing import TypeAlias
-from urllib.error import URLError
-from urllib.request import Request, urlopen
 
-from .runtime_config import activities_url
+from .producer_outbox import ProducerOutbox, enqueue_file_event
 
 
-ACTIVITIES_URL = activities_url()
 IGNORED_DIRECTORY_NAMES = {
     ".build",
     ".git",
@@ -79,29 +76,37 @@ def compare_snapshots(previous: Snapshot, current: Snapshot) -> list[tuple[str, 
     return events
 
 
-def post_file_event(event: str, path: Path, workspace: Path) -> bool:
-    payload = json.dumps(
-        {
-            "type": "file_changed",
-            "path": str(path),
-            "event": event,
-            "workspace": str(workspace),
-        }
-    ).encode()
-    request = Request(
-        ACTIVITIES_URL,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+def record_file_event(
+    outbox: ProducerOutbox,
+    event: str,
+    path: Path,
+    workspace: Path,
+) -> bool:
+    """Enqueue one observed change into the durable producer outbox.
+
+    Transport only (decision 2A-révisée): detection stays the polling
+    snapshot. A stopped daemon no longer loses events — the outbox worker
+    delivers them when it comes back, like every other producer.
+    """
     try:
-        with urlopen(request, timeout=0.5):
-            return True
-    except (OSError, URLError):
+        enqueue_file_event(
+            outbox,
+            path=str(path),
+            event=event,
+            workspace=str(workspace),
+        )
+        return True
+    except (sqlite3.Error, ValueError, OSError):
         return False
 
 
-def watch(workspace: Path, interval: float = 1.0) -> None:
+def watch(
+    workspace: Path,
+    interval: float = 1.0,
+    *,
+    outbox: ProducerOutbox | None = None,
+) -> None:
+    outbox = outbox or ProducerOutbox()
     previous = take_snapshot(workspace)
     print(f"Watching files in {workspace}", flush=True)
     try:
@@ -109,7 +114,7 @@ def watch(workspace: Path, interval: float = 1.0) -> None:
             time.sleep(interval)
             current = take_snapshot(workspace)
             for event, path in compare_snapshots(previous, current):
-                post_file_event(event, path, workspace)
+                record_file_event(outbox, event, path, workspace)
             previous = current
     except KeyboardInterrupt:
         pass

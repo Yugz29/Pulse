@@ -24,9 +24,17 @@
 
 **Effort:** M
 **Priority:** P4
-**Depends on:** Chantier 2A-révisée (file_watcher via outbox) terminé
+**Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### file_watcher via l'outbox + suppression d'app_watcher (2A-révisée)
+
+**What:** Le watcher fichiers POSTait en HTTP direct (timeout 0,5 s — événement perdu si daemon indisponible) ; `app_watcher.py` déprécié doublonnait l'observateur Swift.
+
+**Résolution:** Changement de transport uniquement (détection par polling inchangée — FSEvents séparé, règle de Beck). `build_file_event_payload`/`enqueue_file_event` dans `producer_outbox` (producteur `pulse-file-watcher`, événement canonique `file_changed`), `record_file_event` remplace `post_file_event` — un daemon arrêté ne perd plus d'événements, le worker livre au retour ; une erreur de stockage ne crashe jamais la boucle. `app_watcher.py` + son test supprimés (0 appelant, doublon de `PulseApplicationObserver`) ; le préfixe de label `python -m daemon_v2.app_watcher` reste dans `analysis/terminal.py` pour l'étiquetage des traces historiques. README mis à jour. 374 tests.
+
+**Completed:** 2026-08-30
 
 ### Cache par jour de /days (11A)
 

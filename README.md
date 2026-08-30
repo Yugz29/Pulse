@@ -351,7 +351,6 @@ daemon_v2/
   renderers/
     html.py
     markdown.py
-  app_watcher.py
   daily_trace.py
   file_watcher.py
   ingest.py
@@ -378,8 +377,8 @@ daemon_v2/
   pour préparer les timelines.
 - `renderers/html.py` et `renderers/markdown.py` produisent les représentations
   finales sans template engine.
-- `file_watcher.py` collecte les changements de fichiers ; le
-  watcher terminal reste un script Zsh externe.
+- `file_watcher.py` collecte les changements de fichiers et les enfile
+  dans l'outbox durable ; le watcher terminal reste un script Zsh externe.
 
 ## Watcher terminal
 
@@ -408,7 +407,11 @@ Lancer manuellement le watcher par polling avec un workspace explicite :
 .venv/bin/python -m daemon_v2.file_watcher /Users/yugz/Projets/Pulse/Pulse_Core
 ```
 
-Il envoie les fichiers créés, modifiés et supprimés au daemon local Pulse. Les chemins techniques comme `.git`, `.venv`, les caches, `*.pyc`, `*.db` et `.DS_Store` sont ignorés. Le watcher continue de tourner silencieusement si le daemon est indisponible. L’arrêter avec `Ctrl-C`.
+Il enfile les fichiers créés, modifiés et supprimés dans l’outbox durable
+(décision 2A-révisée) ; le worker les livre ensuite au daemon, donc un daemon
+momentanément indisponible ne perd plus d’événements. Les chemins techniques
+comme `.git`, `.venv`, les caches, `*.pyc`, `*.db` et `.DS_Store` sont
+ignorés. L’arrêter avec `Ctrl-C`.
 
 ## Hook Git
 
@@ -430,8 +433,8 @@ best-effort : le hook ne bloque et ne fait jamais échouer un commit.
 
 ## Observateur d’application
 
-`daemon_v2.app_watcher` est l’ancien observateur par polling. Il ne doit plus
-être lancé : il envoyait des payloads legacy directement à Core et doublonnait
+L’ancien observateur Python par polling (`daemon_v2.app_watcher`) est
+supprimé : il envoyait des payloads legacy directement à Core et doublonnait
 les activations produites par l’observateur Swift. `make dev` lance uniquement
 `PulseApplicationObserver`.
 
