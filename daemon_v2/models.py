@@ -14,6 +14,7 @@ SYSTEM_ACTIVITY_TYPES = {
     "system_wake",
 }
 SUPPORTED_ACTIVITY_TYPES = {
+    "agent_session",
     "app_activated",
     "file_changed",
     "terminal_finished",
