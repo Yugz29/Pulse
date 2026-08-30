@@ -334,12 +334,21 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
         started_at = _display_time(observed_start, trace_zone)
         ended_at = _display_time(observed_end, trace_zone)
         duration = _session_duration(session)
+        # end_reason == "open" carries the decision already made by the
+        # reconstruction (with its injectable clock); re-deriving it here
+        # from wall-clock would contradict deterministic traces.
+        if "end_reason" in session:
+            session_is_open = session["end_reason"] == "open"
+        else:
+            session_is_open = (
+                trace["date"] == current_day
+                and _session_has_recent_strong_activity(session, now)
+            )
         in_progress = (
             " · en cours"
             if not archive_mode
-            and trace["date"] == current_day
             and index == len(displayed_sessions)
-            and _session_has_recent_strong_activity(session, now)
+            and session_is_open
             else ""
         )
         project_summaries = _session_project_summaries(

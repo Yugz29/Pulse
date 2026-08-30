@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from types import SimpleNamespace
 
 from daemon_v2.daily_trace import build_daily_trace
@@ -584,7 +584,10 @@ def test_status_and_today_json_accept_persisted_workspace_identity(tmp_path):
     database_path = tmp_path / "trace.db"
     app = create_app(database_path)
     client = app.test_client()
-    occurred_at = datetime.now().astimezone().isoformat()
+    # Midi du jour courant : les routes lisent l'horloge réelle (non
+    # injectable), on réduit la fenêtre minuit au minimum structurel.
+    today_noon = datetime.combine(date.today(), time(12, 0)).astimezone()
+    occurred_at = today_noon.isoformat()
     response = client.post(
         "/activities",
         json={
@@ -613,7 +616,7 @@ def test_status_and_today_json_accept_persisted_workspace_identity(tmp_path):
     )
     assert response.status_code == 201
 
-    trace = build_daily_trace(app.config["TRACE_STORE"])
+    trace = build_daily_trace(app.config["TRACE_STORE"], now=today_noon)
     assert trace["work_sessions"][0]["project_name"] == "Pulse_Core"
     assert trace["work_sessions"][0]["workspace_root"] == "/project/Pulse_Core"
 

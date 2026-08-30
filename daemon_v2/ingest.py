@@ -16,11 +16,73 @@ from .models import (
 )
 
 
+# A secret value may be a quoted span (spaces included) or a bare token.
+# Capturing the whole quoted span prevents partial redaction like
+# `TOKEN=[REDACTED] bravo charlie"` on `TOKEN="alpha bravo charlie"`.
+_SECRET_VALUE = r"(?:\"[^\"]*\"|'[^']*'|\S+)"
+# OpenSSL-style non-secret sentinels for -passin/-passout: never redact them.
+_PASS_SENTINEL = r"(?:stdin|env:\S+|file:\S+|fd:\d+)(?=\s|$)"
+# Shell line continuations hide option/value pairs from single-line patterns
+# (`--password \<newline> secret`), so they are folded before matching.
+_LINE_CONTINUATION = re.compile(r"\\\n[ \t]*")
+
 _SENSITIVE_OPTION = re.compile(
-    r"(?i)(--?(?:password|passwd|token|secret|api[-_]?key))(?:=|\s+)(\S+)"
+    r"(?i)(--?(?:pass(?:word|wd|in|out|phrase)?|token|secret|api[-_]?key|apikey"
+    r"|auth[-_]?token|access[-_]?token|private[-_]?key))(?:=|\s+)"
+    r"(?!" + _PASS_SENTINEL + r")(" + _SECRET_VALUE + r")"
 )
 _ENV_SECRET = re.compile(
-    r"(?i)\b([A-Z0-9_]*(?:PASSWORD|TOKEN|SECRET|API_KEY)[A-Z0-9_]*)=(\S+)"
+    r"(?i)\b([A-Z0-9_]*(?:PASSWORD|PASSWD|TOKEN|SECRET|API_KEY|ACCESS_KEY"
+    r"|CREDENTIALS)[A-Z0-9_]*)=(" + _SECRET_VALUE + r")"
+)
+# Credentials embedded in URLs. Greedy up to the LAST @ before the host, so a
+# password containing @ is fully masked (user:p@ss@host, not just p).
+_URL_USERINFO = re.compile(
+    r"(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@]+):([^\s/]+)@"
+)
+# HTTP auth header values, anchored to an explicit header name so that prose
+# like "add basic logging" is never touched.
+_AUTH_HEADER_VALUE = re.compile(
+    r"(?i)\b((?:authorization|x-api-key)\s*:\s*(?:(?:bearer|basic|token)\s+)?)"
+    r"(?!(?:bearer|basic|token)\b)[A-Za-z0-9._~+/=-]{6,}"
+)
+# Bare bearer/basic outside a header: only when the value looks like a token
+# (contains a digit or token punctuation), so "basic logging" stays intact.
+_BARE_BEARER_TOKEN = re.compile(
+    r"(?i)\b((?:bearer|basic)\s+)"
+    r"(?=[A-Za-z0-9._~+/=-]*[0-9=+/_-])[A-Za-z0-9._~+/=-]{6,}\b"
+)
+# -u/--user credentials, anchored to credential-taking commands so that
+# `rsync -u host:path`, `docker run -u 1000:1000` or `sudo -u www:x` are
+# never rewritten. The whole user:password value is masked.
+_USER_COLON_PASSWORD = re.compile(
+    r"(?m)((?:^|\s)(?:\S*/)?(?:curl|wget|httpie|http|ftp)\b[^\n]*?"
+    r"\s(?:-u|--user)(?:=|\s+))"
+    r"(\"[^\"]*:[^\"]*\"|'[^']*:[^']*'|[^:\s]+:\S+)"
+)
+# MySQL-family glued short option: mysql -psecret (but not bare -p prompt).
+# Case-SENSITIVE on purpose: mysql -P3306 is the port, not a password.
+# (^|\s) anchor so wrapped invocations (docker exec … mysql -pX) match too.
+_DB_SHORT_PASSWORD = re.compile(
+    r"(?m)((?:^|\s)(?:\S*/)?(?:mysql|mysqladmin|mysqldump|mariadb)\b[^\n]*?\s-p)"
+    r"([^\s-]\S*)"
+)
+# sshpass positional password
+_SSHPASS_PASSWORD = re.compile(
+    r"(?m)((?:^|\s)sshpass\s+-p\s*)(" + _SECRET_VALUE + r")"
+)
+# AWS CLI credential writes, anchored to `aws … configure set` so that e.g.
+# `grep aws_secret_access_key ~/.aws/credentials` keeps its filename.
+_AWS_POSITIONAL = re.compile(
+    r"(?i)\b(aws\b[^\n]*?\bconfigure\s+set\s+"
+    r"aws_(?:secret_access_key|session_token|access_key_id)\s+)(\S+)"
+)
+# Well-known credential prefixes, wherever they appear
+_KNOWN_TOKEN = re.compile(
+    r"\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}"
+    r"|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}"
+    r"|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}"
+    r"|glpat-[A-Za-z0-9_-]{20,})\b"
 )
 _IGNORED_TERMINAL_COMMANDS = {
     "clear",
@@ -92,16 +154,58 @@ def _copy_persisted_context(
         details["git_root"] = git_root.strip()
 
 
+def command_has_secret(command: str) -> bool:
+    """True si la rédaction masquerait une valeur.
+
+    Le simple repli des continuations ``\\``+retour-ligne est une
+    normalisation, pas un secret : un texte historique qui ne diffère que
+    par ce repli est propre. Source de vérité unique pour l'audit.
+    """
+    return redact_command(command) != _LINE_CONTINUATION.sub(" ", command)
+
+
 def redact_command(command: str) -> str:
-    redacted = _SENSITIVE_OPTION.sub(r"\1=[REDACTED]", command)
+    # Folding backslash-newline continuations is a deliberate normalization:
+    # the stored command loses its continuation layout, but a secret split
+    # across continued lines can no longer escape the patterns below.
+    redacted = _LINE_CONTINUATION.sub(" ", command)
+    redacted = _KNOWN_TOKEN.sub("[REDACTED]", redacted)
+    redacted = _URL_USERINFO.sub(r"\1:[REDACTED]@", redacted)
+    redacted = _AUTH_HEADER_VALUE.sub(r"\1[REDACTED]", redacted)
+    redacted = _BARE_BEARER_TOKEN.sub(r"\1[REDACTED]", redacted)
+    redacted = _USER_COLON_PASSWORD.sub(r"\1[REDACTED]", redacted)
+    redacted = _DB_SHORT_PASSWORD.sub(r"\1[REDACTED]", redacted)
+    redacted = _SSHPASS_PASSWORD.sub(r"\1[REDACTED]", redacted)
+    redacted = _AWS_POSITIONAL.sub(r"\1[REDACTED]", redacted)
+    redacted = _SENSITIVE_OPTION.sub(r"\1=[REDACTED]", redacted)
     return _ENV_SECRET.sub(r"\1=[REDACTED]", redacted)
 
 
+# Exact /activities path (never /activities/123 or /activities-export) and
+# only on Pulse's own ports: the configured one, the 8765 default, and the
+# historical 5000 — a dev testing their own localhost:3000/activities API
+# must keep that command in their trace.
+_INTERNAL_PULSE_CURL_URL = re.compile(
+    r"https?://(?:127\.0\.0\.1|localhost):(\d+)/activities(?=$|[\s\"'?])"
+)
+
+
+def _pulse_ports() -> set[int]:
+    from .runtime_config import DEFAULT_CORE_PORT, core_port
+
+    ports = {5000, DEFAULT_CORE_PORT}
+    try:
+        ports.add(core_port())
+    except ValueError:
+        pass
+    return ports
+
+
 def _is_internal_pulse_curl(command: str) -> bool:
-    return (
-        command.startswith("curl ")
-        and "http://127.0.0.1:5000/activities" in command
-    )
+    if not command.startswith("curl "):
+        return False
+    match = _INTERNAL_PULSE_CURL_URL.search(command)
+    return match is not None and int(match.group(1)) in _pulse_ports()
 
 
 def filter_terminal_command(command: str) -> str | None:
@@ -196,7 +300,9 @@ def normalize_activity(payload: Any) -> Activity:
         repository = _required_string(payload, "repository")
         git_root = _required_string(payload, "git_root")
         branch = _required_string(payload, "branch")
-        message = _required_string(payload, "message")
+        # Commit messages carry the same secret shapes as commands
+        # ("rotate key: old was AKIA…") and end up in summary + renderings.
+        message = redact_command(_required_string(payload, "message"))
         details = {
             "commit_hash": commit_hash,
             "repository": repository,

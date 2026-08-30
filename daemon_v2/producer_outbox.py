@@ -49,6 +49,11 @@ class ProducerOutbox:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=5.0)
         connection.row_factory = sqlite3.Row
+        # WAL : 3 producteurs (hook zsh, hook git, observateur Swift) et le
+        # worker écrivent ce fichier en parallèle ; en journal DELETE un
+        # SQLITE_BUSY à l'enqueue = événement perdu avant la file durable.
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=5000")
         return connection
 
     def _initialize(self) -> None:
@@ -84,6 +89,15 @@ class ProducerOutbox:
             )
 
     def producer_instance_id(self) -> str:
+        # Hot path (once per observed command): plain read, no write lock.
+        # The write lock is only taken the very first time, and the re-read
+        # inside BEGIN IMMEDIATE keeps concurrent first-runs single-valued.
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM producer_metadata WHERE key = 'instance_id'"
+            ).fetchone()
+        if row is not None and str(row["value"]).strip():
+            return str(row["value"])
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
@@ -92,9 +106,11 @@ class ProducerOutbox:
             if row is not None and str(row["value"]).strip():
                 return str(row["value"])
             instance_id = str(uuid.uuid4())
+            # OR REPLACE: a blank stored value (schema allows it) would make a
+            # plain INSERT hit the PK forever, failing every enqueue.
             connection.execute(
                 """
-                INSERT INTO producer_metadata(key, value)
+                INSERT OR REPLACE INTO producer_metadata(key, value)
                 VALUES ('instance_id', ?)
                 """,
                 (instance_id,),
@@ -174,9 +190,12 @@ class ProducerOutbox:
     ) -> None:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            # OR REPLACE: a replayed event that fails again must overwrite its
+            # previous dead-letter row, not crash the worker on the PK.
+            # The body is capped — it is diagnostic context, not a payload.
             connection.execute(
                 """
-                INSERT INTO dead_letters(
+                INSERT OR REPLACE INTO dead_letters(
                     event_id, payload_json, error,
                     http_status, response_body, failed_at
                 ) VALUES (?, ?, ?, ?, ?, ?)
@@ -186,7 +205,7 @@ class ProducerOutbox:
                     pending.payload_json,
                     error,
                     http_status,
-                    response_body,
+                    response_body[:4096] if response_body else response_body,
                     failed_at.isoformat(),
                 ),
             )
@@ -354,7 +373,9 @@ def build_git_commit_payload(
         "repository": repository,
         "git_root": git_root,
         "branch": branch,
-        "message": message,
+        # Same secret shapes as terminal commands; redacted before the
+        # payload ever reaches durable storage.
+        "message": redact_command(message),
     }
     for key, value in (
         ("files_changed", files_changed),

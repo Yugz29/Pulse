@@ -11,6 +11,17 @@ from urllib.parse import urlsplit
 TERMINAL_LABEL_ORDER = ("test", "git", "pulse", "erreur")
 
 
+def _pulse_inspection_ports() -> set[int]:
+    from ..runtime_config import DEFAULT_CORE_PORT, core_port
+
+    ports = {5000, DEFAULT_CORE_PORT}
+    try:
+        ports.add(core_port())
+    except ValueError:
+        pass
+    return ports
+
+
 @dataclass(frozen=True)
 class ObservedGitCommand:
     is_git: bool
@@ -71,10 +82,14 @@ def is_pulse_inspection_command(line: str) -> bool:
         return False
     parsed = urlsplit(match.group(0))
     try:
+        # Restricted to Pulse's own ports (configured + default 8765 +
+        # historical 5000): `curl http://localhost:3000/` is a routine
+        # dev-server smoke test, not Pulse noise — misclassifying it would
+        # retroactively demote real work in every stored trace.
         is_local_pulse = (
             parsed.scheme in {"http", "https"}
-            and parsed.hostname == "127.0.0.1"
-            and parsed.port == 5000
+            and parsed.hostname in {"127.0.0.1", "localhost"}
+            and parsed.port in _pulse_inspection_ports()
         )
     except ValueError:
         return False

@@ -19,6 +19,13 @@ from .runtime_config import activities_url
 
 
 MAX_BACKOFF_SECONDS = 300
+# FIFO strict : un événement toxique (le serveur répond mais échoue) bloquerait
+# TOUTE la file. Au-delà de ce nombre de tentatives HTTP (~1 h : 2^0..2^8 puis
+# 10×300 s ≈ 3 511 s de backoff cumulé), il part en dead-letter et la file
+# repart. Les erreurs de CONNEXION (daemon éteint, machine hors ligne) ne
+# comptent JAMAIS vers ce plafond : un consommateur indisponible n'est pas un
+# événement toxique, et l'outbox promet de survivre à son indisponibilité.
+MAX_DELIVERY_ATTEMPTS = 20
 
 
 @dataclass(frozen=True)
@@ -57,16 +64,20 @@ class OutboxWorker:
         try:
             result = self.sender(pending.payload_json)
         except (TemporaryDeliveryError, TimeoutError, OSError) as exc:
+            # Connection-level failure: no HTTP response, so nothing proves
+            # the event itself is at fault. Retry indefinitely — expiring here
+            # would drain the whole queue after ~19 min of daemon downtime.
             self._retry(pending, attempted_at, str(exc))
             return "retry"
 
         if result.status in {408, 429} or 500 <= result.status <= 599:
-            self._retry(
+            return self._retry_or_expire(
                 pending,
                 attempted_at,
-                f"HTTP {result.status}",
+                error=f"HTTP {result.status}",
+                http_status=result.status,
+                response_body=result.body,
             )
-            return "retry"
 
         if result.status in {200, 201}:
             error = validate_ack(result, pending.event_id)
@@ -76,7 +87,14 @@ class OutboxWorker:
             self._dead_letter(pending, attempted_at, result, error)
             return "dead-letter"
 
-        if result.status in {204, 400, 409}:
+        if result.status == 204:
+            # Delivered and intentionally ignored by the server (filtered
+            # command) — a success, not a failure. Kept out of dead-letters
+            # so inspect-dead-letter stays a pure error signal.
+            self.outbox.delete(pending.event_id)
+            return "ignored"
+
+        if result.status in {400, 409}:
             self._dead_letter(
                 pending,
                 attempted_at,
@@ -92,6 +110,27 @@ class OutboxWorker:
             f"unexpected HTTP {result.status}",
         )
         return "dead-letter"
+
+    def _retry_or_expire(
+        self,
+        pending: PendingEvent,
+        attempted_at: datetime,
+        *,
+        error: str,
+        http_status: int | None,
+        response_body: str | None,
+    ) -> str:
+        if pending.attempts + 1 >= MAX_DELIVERY_ATTEMPTS:
+            self.outbox.move_to_dead_letter(
+                pending,
+                error=f"retry limit reached ({MAX_DELIVERY_ATTEMPTS}): {error}",
+                http_status=http_status,
+                response_body=response_body,
+                failed_at=attempted_at,
+            )
+            return "dead-letter"
+        self._retry(pending, attempted_at, error)
+        return "retry"
 
     def _retry(
         self,
@@ -167,7 +206,16 @@ def post_payload(
 
 def run_forever(worker: OutboxWorker, *, poll_interval: float = 1.0) -> None:
     while True:
-        outcome = worker.process_one()
+        try:
+            outcome = worker.process_one()
+        except Exception as exc:  # noqa: BLE001 — the worker must survive
+            # A storage error (locked DB, integrity violation on a replayed
+            # dead-letter) must not kill the delivery loop: the same event
+            # would still be FIFO head after restart, guaranteeing a crash
+            # loop that blocks the whole queue.
+            print(f"Pulse outbox worker: {exc}", flush=True)
+            time.sleep(poll_interval)
+            continue
         if outcome in {"empty", "waiting", "retry"}:
             time.sleep(poll_interval)
 

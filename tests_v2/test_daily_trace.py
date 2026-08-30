@@ -1,6 +1,9 @@
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
+
+import pytest
 
 from daemon_v2.daily_trace import (
     _is_pasted_prompt_command,
@@ -29,11 +32,25 @@ def test_classifies_only_local_pulse_inspection_commands():
     ]
 
     assert all(_is_pulse_inspection_command(command) for command in commands)
+    # Ports Pulse uniquement (configuré + 8765 + historique 5000) : la racine
+    # d'un serveur de dev local (localhost:3000/) est du vrai travail, pas du
+    # bruit d'inspection Pulse.
+    assert _is_pulse_inspection_command("curl http://127.0.0.1:8765/trace/today")
+    assert _is_pulse_inspection_command("curl -s http://localhost:8765/")
+    assert not _is_pulse_inspection_command("curl http://127.0.0.1:9876/days")
+    assert not _is_pulse_inspection_command("curl http://localhost:3000/")
+    assert not _is_pulse_inspection_command("curl http://127.0.0.1:99999/days")
     assert not _is_pulse_inspection_command(
         "curl -X POST http://127.0.0.1:5000/activities"
     )
     assert not _is_pulse_inspection_command(
+        "curl -X POST http://127.0.0.1:8765/activities"
+    )
+    assert not _is_pulse_inspection_command(
         "curl https://example.com/trace/today"
+    )
+    assert not _is_pulse_inspection_command(
+        "curl http://192.168.1.10:8765/trace/today"
     )
 
 
@@ -285,7 +302,8 @@ def test_short_terminal_and_file_sessions_remain_work_sessions(tmp_path):
 
 def test_marks_current_day_last_session_in_progress(tmp_path):
     store = TraceStore(tmp_path / "pulse.sqlite3")
-    now = datetime.now().astimezone()
+    # Fixed noon anchor: deterministic at any wall-clock time (issue 8A).
+    now = datetime(2026, 7, 3, 12, 0, tzinfo=timezone.utc)
     zone = now.tzinfo
     first_at = now - timedelta(minutes=17)
     for occurred_at in (first_at, now):
@@ -303,7 +321,7 @@ def test_marks_current_day_last_session_in_progress(tmp_path):
             )
         )
 
-    trace = build_daily_trace(store, now.date(), zone)
+    trace = build_daily_trace(store, now.date(), zone, now=now)
     markdown = render_daily_trace_markdown(trace)
     html = render_daily_trace_html(trace)
     archive_html = render_daily_trace_html(trace, archive_mode=True)
@@ -319,7 +337,9 @@ def test_marks_current_day_last_session_in_progress(tmp_path):
 
 def test_weak_activity_does_not_extend_or_keep_work_session_open(tmp_path):
     store = TraceStore(tmp_path / "pulse.sqlite3")
-    now = datetime.now().astimezone().replace(second=0, microsecond=0)
+    # Fixed mid-day anchor: strong_at - 3h must stay inside the same day
+    # whatever the wall-clock time is (issue 8A: flaky between 00:00-03:00).
+    now = datetime(2026, 7, 3, 15, 0, tzinfo=timezone.utc)
     strong_at = now - timedelta(hours=3)
     store.append(
         Activity(
@@ -341,7 +361,7 @@ def test_weak_activity_does_not_extend_or_keep_work_session_open(tmp_path):
             )
         )
 
-    trace = build_daily_trace(store, now.date(), now.tzinfo)
+    trace = build_daily_trace(store, now.date(), now.tzinfo, now=now)
     summary = build_daily_summary(trace)
     markdown = render_daily_trace_markdown(trace)
     html = render_daily_trace_html(trace)
@@ -2024,3 +2044,65 @@ def test_session_summary_reports_projects_files_tests_and_git(tmp_path):
         "python -m pytest tests_v2/test_daily_trace.py"
     ) in html
     assert "Git : show project changes" in html
+
+
+# ---------------------------------------------------------------------------
+# Frontière de jour et changement d'heure (DST) — tests DOCUMENTAIRES.
+#
+# build_daily_trace utilise datetime.combine(day, time.min, zone) puis
+# + timedelta(days=1) : grâce à la résolution paresseuse d'offset de
+# zoneinfo, la fenêtre locale fait bien 23 h le jour du passage à l'heure
+# d'été et 25 h au retour à l'heure d'hiver. Ce comportement est CORRECT —
+# ces tests existent pour empêcher qu'un futur refactor le « corrige »
+# en fenêtre fixe de 24 h.
+#
+#   29/03/2026 (Paris, +01:00 → +02:00)  fenêtre UTC 28/03 23:00Z → 29/03 22:00Z (23 h)
+#   25/10/2026 (Paris, +02:00 → +01:00)  fenêtre UTC 24/10 22:00Z → 25/10 23:00Z (25 h)
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("day", "inside_utc", "outside_utc"),
+    [
+        (
+            date(2026, 3, 29),
+            [
+                datetime(2026, 3, 28, 23, 30, tzinfo=timezone.utc),
+                datetime(2026, 3, 29, 21, 30, tzinfo=timezone.utc),
+            ],
+            datetime(2026, 3, 29, 22, 30, tzinfo=timezone.utc),
+        ),
+        (
+            date(2026, 10, 25),
+            [
+                datetime(2026, 10, 24, 22, 30, tzinfo=timezone.utc),
+                datetime(2026, 10, 25, 22, 30, tzinfo=timezone.utc),
+            ],
+            datetime(2026, 10, 25, 23, 30, tzinfo=timezone.utc),
+        ),
+    ],
+    ids=["passage-heure-ete-23h", "retour-heure-hiver-25h"],
+)
+def test_day_window_follows_dst_transitions(tmp_path, day, inside_utc, outside_utc):
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    zone = ZoneInfo("Europe/Paris")
+    for occurred_at in (*inside_utc, outside_utc):
+        store.append(
+            Activity(
+                "terminal_finished",
+                occurred_at,
+                "terminal",
+                "Command succeeded: pwd",
+                {"command": "pwd", "exit_code": 0, "cwd": "/project/Pulse"},
+            )
+        )
+
+    # now= ancré : la reconstruction ne dépend jamais de l'horloge réelle.
+    anchored_now = datetime.combine(day, time(12, 0), zone)
+    trace = build_daily_trace(store, day, zone, now=anchored_now)
+
+    assert trace["activity_count"] == len(inside_utc)
+    stored_instants = {
+        datetime.fromisoformat(activity["occurred_at"]).astimezone(timezone.utc)
+        for session in trace["sessions"]
+        for activity in session["activities"]
+    }
+    assert stored_instants == set(inside_utc)

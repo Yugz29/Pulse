@@ -80,6 +80,10 @@ class TraceStore:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=5.0)
         connection.row_factory = sqlite3.Row
+        # WAL: Flask (lectures) et le worker (écritures) partagent ce fichier
+        # sans se bloquer. busy_timeout explicite en plus du timeout=5.0.
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=5000")
         return connection
 
     def _initialize(self) -> None:

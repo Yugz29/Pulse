@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
@@ -272,3 +273,33 @@ def test_unique_new_event_and_concurrent_retry_create_one_row(tmp_path):
     assert count == 1
     assert sorted(item.duplicate for item in results) == [False, True]
     assert results[0].recorded_at == results[1].recorded_at
+
+
+def test_store_uses_wal_and_survives_concurrent_writers(tmp_path):
+    database = tmp_path / "pulse.sqlite3"
+    store = TraceStore(database)
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+    def append_batch(offset):
+        for index in range(10):
+            store.append(
+                Activity(
+                    "terminal_finished",
+                    datetime(2026, 7, 3, 12, offset, index, tzinfo=timezone.utc),
+                    "terminal",
+                    "Command succeeded: pwd",
+                    {"command": "pwd", "exit_code": 0, "cwd": "/project"},
+                )
+            )
+
+    threads = [threading.Thread(target=append_batch, args=(m,)) for m in (0, 1)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    with sqlite3.connect(database) as connection:
+        count = connection.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
+    assert count == 20
