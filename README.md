@@ -447,6 +447,21 @@ session déjà émise qui regrossit est signalée mais jamais ré-émise ;
 Passe par l'outbox durable, comme tous les producteurs. Codes de sortie :
 0 = terminé, 2 = erreur d'infrastructure.
 
+## Services daemon + worker (launchd)
+
+Deux LaunchAgents `KeepAlive` font tourner Pulse en continu — relancés au
+login et après un crash :
+
+```bash
+./scripts/install_daemon_launchd.sh              # com.pulse.daemon + com.pulse.outbox-worker
+./scripts/install_daemon_launchd.sh --uninstall
+```
+
+Journaux : `~/.pulse_v2/logs/daemon.log` et `~/.pulse_v2/logs/outbox_worker.log`.
+Coexistence avec `scripts/dev.sh` : le worker porte un verrou (`flock`), une
+seconde instance s'éteint d'elle-même ; le daemon, lui, entrerait en conflit
+de port — désinstaller (ou `launchctl bootout`) avant de lancer `dev.sh`.
+
 ## Exécution récurrente des producteurs agents
 
 Un LaunchAgent utilisateur exécute toutes les heures (et au chargement de la

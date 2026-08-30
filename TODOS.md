@@ -24,6 +24,14 @@
 
 ## Completed
 
+### Services daemon + worker en continu (launchd)
+
+**What:** Faire tourner le daemon et le worker outbox en continu, même patron que le LaunchAgent des producteurs, pour que le journal se remplisse sans lancer `dev.sh`.
+
+**Résolution:** `scripts/install_daemon_launchd.sh` — deux LaunchAgents `KeepAlive` (`com.pulse.daemon`, `com.pulse.outbox-worker`), un par service longue durée (vs `StartInterval` pour les passages ponctuels des producteurs), RunAtLoad, logs séparés, marqueur « managed », `--uninstall`. Coexistence dev.sh : verrou `flock` déjà présent côté worker ; conflit de port documenté côté daemon. Installé et vérifié en réel le 2026-08-30 : les deux services actifs, outbox à 0/0, et contrat KeepAlive prouvé (daemon tué → relancé par launchd, nouveau pid, /status répond).
+
+**Completed:** 2026-08-30
+
 ### Exécution récurrente des producteurs agent (launchd)
 
 **What:** Brancher l'exécution horaire de `archive_transcripts` PUIS `agent_sessions` (l'archive d'abord, le pointeur ensuite).
