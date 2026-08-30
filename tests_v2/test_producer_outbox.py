@@ -389,6 +389,70 @@ def test_terminal_payload_is_redacted_before_exact_json_is_enqueued(tmp_path):
     assert payload["event_id"] == event_id
 
 
+def test_failed_pasted_prompt_never_reaches_outbox_in_full(tmp_path):
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    prompt = (
+        "Pulse_V2 — refonte ingestion\n"
+        "Contexte : conserver le comportement actuel.\n"
+        "Objectif : déplacer les fonctions pures.\n"
+        "À faire : adapter les imports."
+    )
+    raw_input = json.dumps(
+        {
+            "command": prompt,
+            "cwd": "/project",
+            "exit_code": 127,
+            "started_at": "2026-07-23T14:31:00+02:00",
+            "finished_at": "2026-07-23T14:32:00+02:00",
+        }
+    )
+
+    event_id = enqueue_terminal_input(outbox, raw_input)
+    pending = outbox.oldest()
+
+    assert event_id
+    assert pending is not None
+    assert "Contexte" not in pending.payload_json
+    payload = json.loads(pending.payload_json)
+    assert payload["details"]["command"] == (
+        f"[prompt collé : 4 lignes, {len(prompt)} caractères]"
+    )
+    assert payload["details"]["exit_code"] == 127
+
+
+def test_successful_prompt_shaped_command_reaches_outbox_in_full(tmp_path):
+    # Mirror of the ingest-side gate: a prompt-shaped command that succeeded
+    # (e.g. a heredoc feeding a tool) is real work — the producer must keep
+    # its full text, exactly like normalize_activity does.
+    database = tmp_path / "outbox.sqlite3"
+    outbox = ProducerOutbox(database)
+    prompt = (
+        "Pulse_V2 — refonte ingestion\n"
+        "Contexte : conserver le comportement actuel.\n"
+        "Objectif : déplacer les fonctions pures.\n"
+        "À faire : adapter les imports."
+    )
+    raw_input = json.dumps(
+        {
+            "command": prompt,
+            "cwd": "/project",
+            "exit_code": 0,
+            "started_at": "2026-07-23T14:31:00+02:00",
+            "finished_at": "2026-07-23T14:32:00+02:00",
+        }
+    )
+
+    event_id = enqueue_terminal_input(outbox, raw_input)
+    pending = outbox.oldest()
+
+    assert event_id
+    assert pending is not None
+    payload = json.loads(pending.payload_json)
+    assert payload["details"]["command"] == prompt
+    assert payload["details"]["exit_code"] == 0
+
+
 def test_git_commit_payload_is_enqueued_regardless_of_client(tmp_path):
     database = tmp_path / "outbox.sqlite3"
     outbox = ProducerOutbox(database)
