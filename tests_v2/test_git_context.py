@@ -2,7 +2,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from daemon_v2.git_context import read_git_context
+from daemon_v2.git_context import parse_status_output, read_git_context
 from daemon_v2.producer_outbox import ProducerOutbox, build_terminal_payload
 
 
@@ -151,3 +151,33 @@ def test_terminal_payload_outside_git_has_no_git_details(tmp_path):
 
     assert payload_json is not None
     assert "git" not in json.loads(payload_json)["details"]
+
+
+def test_parse_status_output_splits_header_and_codes():
+    parsed = parse_status_output(
+        "## main...origin/main [ahead 1]\n"
+        " M daemon_v2/app.py\n"
+        "M  staged.py\n"
+        "?? new_file.py\n"
+        "x\n"
+    )
+
+    assert parsed.branch_description == "main...origin/main [ahead 1]"
+    # Lines shorter than an XY code are ignored, like both historical parsers.
+    assert parsed.codes == (" M", "M ", "??")
+
+
+def test_parse_status_output_without_header_keeps_all_codes():
+    parsed = parse_status_output(" M only.py\n?? other.py")
+
+    assert parsed.branch_description is None
+    assert parsed.codes == (" M", "??")
+    assert parse_status_output("").branch_description is None
+    assert parse_status_output("").codes == ()
+
+
+def test_parse_status_output_detached_head_description():
+    parsed = parse_status_output("## HEAD (no branch)\n M x.py")
+
+    assert parsed.branch_description == "HEAD (no branch)"
+    assert parsed.codes == (" M",)

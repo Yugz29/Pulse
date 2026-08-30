@@ -32,6 +32,7 @@ from .analysis.timeline import (
     _trace_timezone,
     reconstruct_session_views,
 )
+from .git_context import parse_status_output
 from .trace_store import TraceStore
 
 
@@ -335,21 +336,20 @@ def _git_local_snapshot(
     if status_result.returncode != 0:
         return None
 
-    status_lines = status_result.stdout.splitlines()
+    parsed = parse_status_output(status_result.stdout)
     branch = None
-    if status_lines and status_lines[0].startswith("## "):
-        branch_value = status_lines.pop(0)[3:].split("...", 1)[0]
+    if parsed.branch_description is not None:
+        branch_value = parsed.branch_description.split("...", 1)[0]
         if branch_value and branch_value != "HEAD (no branch)":
             branch = branch_value
 
     counts = {"modified": 0, "untracked": 0, "deleted": 0}
-    for line in status_lines:
-        if len(line) < 2 or line.startswith("!!"):
+    for code in parsed.codes:
+        if code.startswith("!!"):
             continue
-        status = line[:2]
-        if status == "??":
+        if code == "??":
             counts["untracked"] += 1
-        elif "D" in status:
+        elif "D" in code:
             counts["deleted"] += 1
         else:
             counts["modified"] += 1

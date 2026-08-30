@@ -98,31 +98,51 @@ def _run_git(args: list[str], *, cwd: Path) -> str | None:
     return result.stdout.strip()
 
 
+@dataclass(frozen=True)
+class PorcelainStatus:
+    """Parsed `git status --branch` output shared by every consumer.
+
+    Single porcelain parser (decision 5A): header detection and XY-code
+    extraction live here; each consumer derives its own counts from `codes`.
+    """
+
+    branch_description: str | None
+    codes: tuple[str, ...]
+
+
+def parse_status_output(output: str) -> PorcelainStatus:
+    lines = output.splitlines()
+    branch_description = None
+    if lines and lines[0].startswith("## "):
+        branch_description = lines[0][3:]
+        lines = lines[1:]
+    codes = tuple(
+        line[:2]
+        for line in lines
+        if len(line) >= 2 and not line.startswith("## ")
+    )
+    return PorcelainStatus(branch_description=branch_description, codes=codes)
+
+
 def _parse_status_counts(output: str) -> tuple[int, int, int]:
     staged = 0
     unstaged = 0
     untracked = 0
-    for line in output.splitlines():
-        if line.startswith("## "):
-            continue
-        if len(line) < 2:
-            continue
-        status = line[:2]
-        if status == "??":
+    for code in parse_status_output(output).codes:
+        if code == "??":
             untracked += 1
             continue
-        if status[0] not in {" ", "?"}:
+        if code[0] not in {" ", "?"}:
             staged += 1
-        if status[1] not in {" ", "?"}:
+        if code[1] not in {" ", "?"}:
             unstaged += 1
     return staged, unstaged, untracked
 
 
 def _parse_branch(output: str, head: str) -> str | None:
-    first_line = output.splitlines()[0] if output else ""
-    if not first_line.startswith("## "):
+    description = parse_status_output(output).branch_description
+    if description is None:
         return None
-    description = first_line[3:]
     if description.startswith("HEAD "):
         return f"detached:{head}"
     branch = description.split("...", 1)[0].split(" ", 1)[0].strip()
