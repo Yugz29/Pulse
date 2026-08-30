@@ -337,6 +337,21 @@ class TraceStore:
             reverse=True,
         )
 
+    def latest_activity_id(self) -> int:
+        """Watermark for append-only caches: MAX(id), 0 on an empty store."""
+        with self._connect() as connection:
+            row = connection.execute("SELECT MAX(id) FROM activities").fetchone()
+        return int(row[0]) if row[0] is not None else 0
+
+    def occurred_at_since(self, rowid: int) -> list[datetime]:
+        """Timestamps of rows appended after the given watermark id."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT occurred_at FROM activities WHERE id > ?",
+                (rowid,),
+            ).fetchall()
+        return [datetime.fromisoformat(row["occurred_at"]) for row in rows]
+
     @staticmethod
     def _row_to_stored_activity(row: sqlite3.Row) -> StoredActivity:
         event_type = row["type"] or row["activity_type"]

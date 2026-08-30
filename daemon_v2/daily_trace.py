@@ -814,54 +814,87 @@ def build_daily_trace(
     return trace
 
 
+# Per-day cache for /days (decision 11A). The store is append-only, so a
+# past day's entry only changes when a row dated that day is inserted later
+# (out-of-order delivery, replayed dead letter): the MAX(id) watermark
+# detects new rows and evicts exactly the days they touch. The current day
+# is never cached — its rendering depends on the clock (session in
+# progress). Cached entries are treated as immutable by every consumer.
+_available_days_cache: dict[tuple[str, str], dict[str, Any]] = {}
+
+
 def build_available_days(
     store: TraceStore,
     local_timezone: tzinfo | None = None,
+    *,
+    now: datetime | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     zone = local_timezone or datetime.now().astimezone().tzinfo or timezone.utc
+    today = (now or datetime.now(zone)).astimezone(zone).date()
+    cache = _available_days_cache.setdefault(
+        (store.database_path, str(zone)),
+        {"max_id": 0, "entries": {}},
+    )
+    watermark = store.latest_activity_id()
+    if watermark != cache["max_id"]:
+        for moment in store.occurred_at_since(cache["max_id"]):
+            cache["entries"].pop(moment.astimezone(zone).date(), None)
+        cache["max_id"] = watermark
+
     days = []
     for day in store.activity_dates(zone):
-        trace = build_daily_trace(store, day, zone)
-        summary = build_daily_summary(trace)
-        projects = [
-            resolve_project_context(workspace).project_name
-            for workspace in summary["workspaces"]
-        ]
-        activities = [
-            activity
-            for session in trace["sessions"]
-            for activity in session["activities"]
-        ]
-        project_summaries = []
-        for workspace in summary["workspaces"]:
-            project_activities = [
-                activity
-                for activity in activities
-                if activity_project_root(activity) == workspace
-            ]
-            if project_activities:
-                project_summaries.append(
-                    {
-                        "project": resolve_project_context(workspace).project_name,
-                        "workspace": workspace,
-                        "event_count": len(project_activities),
-                        "summary": _build_compact_activity_summary(
-                            project_activities,
-                            include_event_count=False,
-                        ),
-                    }
-                )
-        days.append(
-            {
-                "date": day.isoformat(),
-                "event_count": trace["activity_count"],
-                "session_count": summary["session_count"],
-                "projects": projects,
-                "summary": _build_short_day_summary(trace, projects),
-                "project_summaries": project_summaries,
-            }
-        )
+        entry = cache["entries"].get(day) if day != today else None
+        if entry is None:
+            entry = _build_day_entry(store, day, zone)
+            if day != today:
+                cache["entries"][day] = entry
+        days.append(entry)
     return {"days": days}
+
+
+def _build_day_entry(
+    store: TraceStore,
+    day: date,
+    zone: tzinfo,
+) -> dict[str, Any]:
+    trace = build_daily_trace(store, day, zone)
+    summary = build_daily_summary(trace)
+    projects = [
+        resolve_project_context(workspace).project_name
+        for workspace in summary["workspaces"]
+    ]
+    activities = [
+        activity
+        for session in trace["sessions"]
+        for activity in session["activities"]
+    ]
+    project_summaries = []
+    for workspace in summary["workspaces"]:
+        project_activities = [
+            activity
+            for activity in activities
+            if activity_project_root(activity) == workspace
+        ]
+        if project_activities:
+            project_summaries.append(
+                {
+                    "project": resolve_project_context(workspace).project_name,
+                    "workspace": workspace,
+                    "event_count": len(project_activities),
+                    "summary": _build_compact_activity_summary(
+                        project_activities,
+                        include_event_count=False,
+                    ),
+                }
+            )
+    return {
+        "date": day.isoformat(),
+        "event_count": trace["activity_count"],
+        "session_count": summary["session_count"],
+        "projects": projects,
+        "summary": _build_short_day_summary(trace, projects),
+        "project_summaries": project_summaries,
+    }
 
 
 def _build_short_day_summary(
