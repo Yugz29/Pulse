@@ -2,17 +2,13 @@
 
 ## Daemon V2
 
-### Ingestion des sessions agent (Claude Code / Codex) en événements dérivés
+### Backfill initial + exécution récurrente des producteurs agent
 
-**What:** Nouvelle source pour le journal : un événement `agent_session` par session (`~/.claude/projects/`, `~/.codex/sessions/`) — résumé calculé **une fois à l'ingestion** (versionné par le producteur, jamais recalculé : stabilité temporelle), métadonnées (projet, durée, fichiers touchés) et **pointeur vers le fichier source**. Le brut des transcripts n'entre JAMAIS dans `trace.db` (décision rétention du 2026-08-30 : un jour chargé de transcripts = 50–85 Mo, soit ~1 500× un jour Pulse).
+**What:** (1) Premier passage réel de `daemon_v2.agent_sessions` (~173 sessions historiques → les jours passés s'enrichissent dans le journal, daemon démarré requis) — déclenchement à la main de l'utilisateur, c'est visible et append-only. (2) Brancher l'exécution récurrente (launchd/cron) de `archive_transcripts` PUIS `agent_sessions`, dans cet ordre (l'archive d'abord, le pointeur ensuite).
 
-**Why:** Journal des journées de travail agent sans transformer le journal d'événements en entrepôt de corpus.
-
-**Context:** Attention : Claude Code purge ses transcripts après ~30 jours par défaut (`cleanupPeriodDays`) — l'archivage compressé (item ci-dessous) doit précéder ou accompagner ce chantier pour que le pointeur ne devienne pas orphelin.
-
-**Effort:** M
+**Effort:** S
 **Priority:** P2
-**Depends on:** None (politique tranchée le 2026-08-30)
+**Depends on:** Ingestion agent_session livrée le 2026-08-30
 
 ### Réexamen rétention trace.db — déclencheurs falsifiables
 
@@ -35,6 +31,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### Ingestion des sessions agent (Claude Code / Codex) en événements dérivés
+
+**What:** Nouvelle source pour le journal : un événement `agent_session` par session terminée, sans que le brut des transcripts n'entre jamais dans `trace.db`.
+
+**Résolution:** Producteur `daemon_v2/agent_sessions.py` — parseurs déterministes des deux formats (Claude Code : lignes typées user/assistant ; Codex : enveloppe timestamp/type/payload), résumé versionné `summary_version: 1` calculé UNE fois (une session qui regrossit après émission est signalée, jamais ré-émise), premier prompt rédigé par `redact_command` (producteur ET ingestion, défense en profondeur), `event_id` uuid5 déterministe (ré-émission = duplicate), fenêtre de silence 60 min avant émission, manifeste producteur, payload canonique via `enqueue_json_input` (chemin de l'observateur Swift, validation incluse). Côté daemon : type `agent_session` supporté, branche `normalize_activity` (validation stricte), `workspace` lu par le résolveur 5A, et activité « forte » dans la timeline (preuve = transcript réel sur disque) — les sessions agent forment de vraies sessions de travail attribuées au projet, changement additif (aucune donnée historique de ce type). Dry-run réel : 173 sessions émissibles, 1 active retenue par la fenêtre. 15 tests, suite à 397.
+
+**Completed:** 2026-08-30
 
 ### Archivage compressé des transcripts agent
 

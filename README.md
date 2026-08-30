@@ -429,6 +429,24 @@ jamais une archive plus complète. Archive dans
 `~/.pulse_v2/transcript_archive` (surcharge : `PULSE_TRANSCRIPT_ARCHIVE_PATH`).
 Codes de sortie : 0 = terminé, 2 = erreur d'infrastructure.
 
+## Sessions d'agents (agent_session)
+
+Un événement dérivé par session Claude Code / Codex terminée — le brut des
+transcripts n'entre jamais dans `trace.db` (décision de rétention du
+2026-08-30). Résumé déterministe calculé une seule fois (versionné
+`summary_version`), métadonnées (bornes, compteurs de messages, workspace,
+branche), premier prompt rédigé, pointeur vers le fichier source :
+
+```bash
+.venv/bin/python -m daemon_v2.agent_sessions [--dry-run] [--quiet-minutes N]
+```
+
+Une session n'est émise que stable (silence d'une heure par défaut). Une
+session déjà émise qui regrossit est signalée mais jamais ré-émise ;
+`event_id` déterministe : une ré-émission accidentelle est un duplicate.
+Passe par l'outbox durable, comme tous les producteurs. Codes de sortie :
+0 = terminé, 2 = erreur d'infrastructure.
+
 ## Hook Git
 
 Installer le hook `post-commit` sur un dépôt suivi (idempotent, refuse

@@ -286,6 +286,49 @@ def test_successful_prompt_shaped_command_keeps_full_text():
     assert activity.details["command"] == _PASTED_PROMPT
 
 
+def test_normalizes_agent_session_and_redacts_first_prompt():
+    activity = normalize_activity(
+        {
+            "type": "agent_session",
+            "occurred_at": "2026-07-03T09:00:00+00:00",
+            "source_tool": "claude-code",
+            "session_id": "abc-123",
+            "transcript_path": "/Users/dev/.claude/projects/x/abc-123.jsonl",
+            "summary_version": 1,
+            "started_at": "2026-07-03T09:00:00+00:00",
+            "ended_at": "2026-07-03T09:30:00+00:00",
+            "user_messages": 4,
+            "assistant_messages": 9,
+            "git_branch": "main",
+            "first_prompt": "déploie avec le token sk-abcdef1234567890XYZ",
+            "workspace": "/Users/dev/Projets/Pulse",
+        }
+    )
+
+    assert activity.source == "agent"
+    assert activity.details["summary_version"] == 1
+    assert activity.details["workspace"] == "/Users/dev/Projets/Pulse"
+    # Défense en profondeur : rédigé à l'ingestion même si le producteur rédige.
+    assert activity.details["first_prompt"] == "déploie avec le token [REDACTED]"
+    assert activity.summary == (
+        "Agent session (claude-code): déploie avec le token [REDACTED]"
+    )
+
+
+@pytest.mark.parametrize("bad_version", [0, -1, True, "1", None])
+def test_agent_session_requires_a_positive_summary_version(bad_version):
+    payload = {
+        "type": "agent_session",
+        "occurred_at": "2026-07-03T09:00:00+00:00",
+        "source_tool": "codex",
+        "session_id": "s",
+        "transcript_path": "/tmp/s.jsonl",
+        "summary_version": bad_version,
+    }
+    with pytest.raises(InvalidActivity):
+        normalize_activity(payload)
+
+
 def test_rejects_unknown_activity_type():
     with pytest.raises(InvalidActivity):
         normalize_activity({"type": "browser_opened"})

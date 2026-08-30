@@ -335,6 +335,58 @@ def normalize_activity(payload: Any) -> Activity:
         source = "git"
         first_line = message.splitlines()[0]
         summary = f"Commit {commit_hash[:7]} on {branch}: {first_line}"
+    elif activity_type == "agent_session":
+        # Dérivé d'un transcript d'agent (décision rétention 2026-08-30) :
+        # seul le résumé versionné entre en base, jamais le brut.
+        source_tool = _required_string(payload, "source_tool")
+        session_id = _required_string(payload, "session_id")
+        transcript_path = _required_string(payload, "transcript_path")
+        summary_version = payload.get("summary_version")
+        if (
+            isinstance(summary_version, bool)
+            or not isinstance(summary_version, int)
+            or summary_version < 1
+        ):
+            raise InvalidActivity(
+                "summary_version must be a positive integer",
+                field="details.summary_version",
+            )
+        details = {
+            "source_tool": source_tool,
+            "session_id": session_id,
+            "transcript_path": transcript_path,
+            "summary_version": summary_version,
+        }
+        for key in ("started_at", "ended_at"):
+            if key in payload:
+                details[key] = _parse_occurred_at(payload[key]).isoformat()
+        for key in ("user_messages", "assistant_messages"):
+            value = payload.get(key)
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise InvalidActivity(
+                    f"{key} must be a non-negative integer when provided",
+                    field=f"details.{key}",
+                )
+            details[key] = value
+        for key in ("archive_hint", "git_branch", "tool_version"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                details[key] = value.strip()
+        first_prompt = payload.get("first_prompt")
+        if isinstance(first_prompt, str) and first_prompt.strip():
+            # Défense en profondeur : le producteur rédige déjà, l'ingestion
+            # re-rédige comme pour les commandes et messages de commit.
+            details["first_prompt"] = redact_command(first_prompt.strip())
+        _copy_persisted_context(payload, details)
+        source = "agent"
+        headline = details.get("first_prompt")
+        summary = (
+            f"Agent session ({source_tool}): {headline}"
+            if headline
+            else f"Agent session ({source_tool})"
+        )
     elif activity_type == "app_activated":
         app = _required_string(payload, "app")
         details = {"app": app}
