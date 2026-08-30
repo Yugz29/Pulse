@@ -90,8 +90,12 @@ def test_out_of_order_activity_reuses_session_containing_its_timestamp(tmp_path)
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
     markdown = render_daily_trace_markdown(trace)
     assert trace["session_count"] == 1
-    assert "## Session 1 — 12:28–12:28 · 0 min" in markdown
-    assert "## Session 2 — 13:10–13:10 · 0 min" in markdown
+    # Nouveau contrat (2026-08-30) : les deux événements forts isolés ne
+    # forment plus des blocs Session — la session RAW du store, elle, reste une.
+    assert "## Session " not in markdown
+    assert "## Activités isolées" in markdown
+    assert "- 12:28 ·" in markdown
+    assert "- 13:10 · pytest tests\\_v2" in markdown
     assert "## Activité non attribuée" in markdown
     assert "- 12:50 · Code" in markdown
     assert "Apps actives : Terminal, Code" not in markdown

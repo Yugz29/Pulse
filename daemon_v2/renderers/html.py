@@ -23,8 +23,11 @@ from ..analysis.timeline import (
     _session_project_sequence,
     _trace_timezone,
     _unresolved_sessions,
+    _is_strong_work_activity,
+    isolated_sessions,
 )
 from ..daily_trace import (
+    _useful_activity_description,
     _session_project_summaries,
     _terminal_labels,
     build_current_state,
@@ -321,7 +324,8 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
             ]
         )
 
-    if not displayed_sessions and not unresolved_sessions:
+    isolated = isolated_sessions(trace)
+    if not displayed_sessions and not unresolved_sessions and not isolated:
         body.append("<p>Aucune activité pour cette journée.</p>")
 
     now = datetime.now(trace_zone)
@@ -505,6 +509,46 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 f'<div class="content">{content}{detail_html}</div></li>'
             )
         body.extend(["</ul>", "</section>"])
+
+    if isolated:
+        isolated_items = []
+        for session in isolated:
+            isolated_started_at, _isolated_ended_at = _session_observed_bounds(
+                session
+            )
+            first_strong = next(
+                (
+                    activity
+                    for activity in session["activities"]
+                    if _is_strong_work_activity(activity)
+                ),
+                None,
+            )
+            description = (
+                escape(_useful_activity_description(first_strong))
+                if first_strong
+                else ""
+            )
+            project = session.get("project_name")
+            suffix = f" ({escape(str(project))})" if project else ""
+            isolated_items.append(
+                "<li>"
+                f"<span class=\"time\">"
+                f"{escape(_display_time(isolated_started_at, trace_zone))}"
+                "</span> "
+                f"{description}{suffix}"
+                "</li>"
+            )
+        body.extend(
+            [
+                "<section>",
+                "<h2>Activités isolées</h2>",
+                "<ul>",
+                *isolated_items,
+                "</ul>",
+                "</section>",
+            ]
+        )
 
     if unresolved_sessions:
         unresolved_items = []
