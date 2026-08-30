@@ -4,7 +4,7 @@ from collections import OrderedDict
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from pathlib import Path
 import subprocess
-from typing import Any, Literal
+from typing import Any
 
 from .analysis.projects import (
     activity_project_root,
@@ -12,6 +12,7 @@ from .analysis.projects import (
     is_weak_workspace,
     last_observed_workspace,
     most_frequent_explicit_workspace,
+    persisted_workspace_identity,
     resolve_project_context,
 )
 from .analysis.terminal import (
@@ -46,7 +47,6 @@ _terminal_labels = terminal_labels
 SummaryFact = str | tuple[str, list[str]]
 ResumeGroup = tuple[str, list[tuple[str, str | list[str]]]]
 ResumeFact = str | ResumeGroup
-ProjectQualificationMode = Literal["live", "archive"]
 
 
 def _file_summary_fact(
@@ -578,15 +578,12 @@ def build_resume(trace: dict[str, Any]) -> list[ResumeFact]:
     return facts[:9]
 
 
-def build_daily_summary(
-    trace: dict[str, Any],
-    *,
-    project_mode: ProjectQualificationMode = "live",
-) -> dict[str, Any]:
+def build_daily_summary(trace: dict[str, Any]) -> dict[str, Any]:
     app_counts: dict[str, int] = {}
     workspace_order: list[str] = []
     workspace_counts: dict[str, int] = {}
     explicit_file_workspaces: set[str] = set()
+    git_proven_workspaces: set[str] = set()
     terminal_count = 0
     terminal_label_counts = {label: 0 for label in TERMINAL_LABEL_ORDER}
     file_paths: set[str] = set()
@@ -607,6 +604,11 @@ def build_daily_summary(
                 workspace_counts[workspace] += 1
                 if activity["type"] == "file_changed" and details.get("workspace"):
                     explicit_file_workspaces.add(workspace)
+            if (
+                workspace
+                and persisted_workspace_identity(activity).method == "git"
+            ):
+                git_proven_workspaces.add(workspace)
             if activity["type"] == "terminal_finished":
                 terminal_count += 1
                 for label in _terminal_labels(activity):
@@ -620,6 +622,9 @@ def build_daily_summary(
                 if app not in IGNORED_APP_NAMES_FOR_RENDERING:
                     app_counts[app] = app_counts.get(app, 0) + 1
 
+    # Git proof comes from persisted event details only (resolver 5A), never
+    # from the disk at render time: live and archive qualify identically, and
+    # a repo later moved or deleted cannot rewrite how a past day renders.
     workspaces = [
         workspace
         for workspace in workspace_order
@@ -627,10 +632,7 @@ def build_daily_summary(
         and (
             workspace in explicit_file_workspaces
             or workspace_counts[workspace] >= 2
-            or (
-                project_mode == "live"
-                and (Path(workspace) / ".git").exists()
-            )
+            or workspace in git_proven_workspaces
         )
     ]
 
@@ -820,7 +822,7 @@ def build_available_days(
     days = []
     for day in store.activity_dates(zone):
         trace = build_daily_trace(store, day, zone)
-        summary = build_daily_summary(trace, project_mode="archive")
+        summary = build_daily_summary(trace)
         projects = [
             resolve_project_context(workspace).project_name
             for workspace in summary["workspaces"]

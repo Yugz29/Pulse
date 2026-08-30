@@ -121,7 +121,7 @@ def test_nested_modules_are_grouped_under_logical_project(tmp_path):
     append_terminal(store, "npm run build", frontend, minute=1)
 
     trace = trace_for(store)
-    summary = build_daily_summary(trace, project_mode="archive")
+    summary = build_daily_summary(trace)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
     assert summary["workspaces"] == ["/Users/yugz/Projets/DevNote"]
@@ -250,43 +250,60 @@ def test_session_propagation_differs_from_exact_days_attribution(tmp_path):
     assert "Tests OK" in available_day["summary"][1]
 
 
-def test_current_git_directory_only_changes_live_project_qualification(tmp_path):
+def test_project_qualification_ignores_current_disk_state_in_every_mode(tmp_path):
+    # Convergence live/archive : la preuve git vient des détails persistés,
+    # jamais du disque au rendu — créer .git après coup ne change RIEN, ni en
+    # live ni en archive. Régression sur l'ancienne règle live `.git` disque.
     workspace = tmp_path / "repo"
     workspace.mkdir()
     store = TraceStore(tmp_path / "trace.db")
     append_terminal(store, "echo one observation", str(workspace), minute=0)
-    archive_trace = trace_for(store)
+    trace = trace_for(store)
 
-    archive_summary_before = build_daily_summary(
-        archive_trace, project_mode="archive"
-    )
-    archive_markdown_before = render_daily_trace_markdown(
-        archive_trace, archive_mode=True
-    )
-    archive_html_before = render_daily_trace_html(
-        archive_trace, archive_mode=True
-    )
+    summary_before = build_daily_summary(trace)
+    live_markdown_before = render_daily_trace_markdown(trace)
+    archive_markdown_before = render_daily_trace_markdown(trace, archive_mode=True)
+    archive_html_before = render_daily_trace_html(trace, archive_mode=True)
     days_before = build_available_days(store, timezone.utc)
 
     (workspace / ".git").mkdir()
 
-    live_summary = build_daily_summary(archive_trace, project_mode="live")
-    live_markdown = render_daily_trace_markdown(archive_trace)
-    archive_summary_after = build_daily_summary(
-        archive_trace, project_mode="archive"
+    assert build_daily_summary(trace) == summary_before
+    assert render_daily_trace_markdown(trace) == live_markdown_before
+    assert (
+        render_daily_trace_markdown(trace, archive_mode=True)
+        == archive_markdown_before
     )
-    archive_markdown_after = render_daily_trace_markdown(
-        archive_trace, archive_mode=True
-    )
-    archive_html_after = render_daily_trace_html(
-        archive_trace, archive_mode=True
-    )
-    days_after = build_available_days(store, timezone.utc)
+    assert render_daily_trace_html(trace, archive_mode=True) == archive_html_before
+    assert build_available_days(store, timezone.utc) == days_before
+    # Sans preuve persistée ni second signal, l'observation unique ne qualifie
+    # pas le projet du jour — même règle dans les deux modes.
+    assert summary_before["workspaces"] == []
 
-    assert live_summary["workspaces"] == [str(workspace)]
-    assert "- Projets : repo" in live_markdown
-    assert archive_summary_before["workspaces"] == []
-    assert archive_summary_after == archive_summary_before
-    assert archive_markdown_after == archive_markdown_before
-    assert archive_html_after == archive_html_before
-    assert days_after == days_before
+
+def test_persisted_git_proof_qualifies_single_observation_in_both_modes(tmp_path):
+    workspace = "/work/solo-repo"
+    store = TraceStore(tmp_path / "trace.db")
+    store.append(
+        Activity(
+            "terminal_finished",
+            START,
+            "terminal",
+            "Command succeeded: echo one observation",
+            {
+                "command": "echo one observation",
+                "exit_code": 0,
+                "cwd": workspace,
+                "git": {"git_root": workspace, "repository": "solo-repo"},
+            },
+        )
+    )
+    trace = trace_for(store)
+
+    summary = build_daily_summary(trace)
+    live_markdown = render_daily_trace_markdown(trace)
+    archive_markdown = render_daily_trace_markdown(trace, archive_mode=True)
+
+    assert summary["workspaces"] == [workspace]
+    assert "- Projets : solo-repo" in live_markdown
+    assert "- Projets : solo-repo" in archive_markdown

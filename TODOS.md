@@ -14,18 +14,6 @@
 **Priority:** P3
 **Depends on:** 10A (colonne occurred_at_utc) et 11A (cache /days) livrés
 
-### Divergence de qualification projet entre live et archive
-
-**What:** Trancher la divergence de `build_daily_summary` (`daily_trace.py:626-635`) : en mode live un workspace est retenu si `(workspace/.git)` existe sur disque, règle absente en mode archive — le même jour peut afficher des projets différents selon le mode.
-
-**Why:** La vue archive est la mémoire fidèle de la journée ; une divergence live/archive mine la confiance dans l'outil. Le check live fait aussi un `stat()` filesystem par workspace à chaque rendu.
-
-**Context:** Les commits « archives temporellement stables » (cbc5913, f6f...) ont délibérément figé l'archive : la divergence est en partie un choix. Options : l'assumer et la documenter, ou la résorber en persistant la preuve `.git` dans les détails d'événement à l'ingestion (bon véhicule : le chantier résolveur unique, décision 5A). 
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Chantier résolveur unique (5A) — livré le 2026-08-30, débloqué
-
 ### Remplacer le polling du file watcher par watchdog/FSEvents
 
 **What:** Migrer `file_watcher.py` du re-scan complet par seconde (`os.walk` + `stat`) vers la bibliothèque `watchdog` (FSEvents natif macOS).
@@ -39,6 +27,14 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) terminé
 
 ## Completed
+
+### Divergence de qualification projet entre live et archive
+
+**What:** Trancher la divergence de `build_daily_summary` : en live un workspace à observation unique était retenu si `(workspace/.git)` existait sur disque au rendu, règle absente en archive.
+
+**Résolution (option « résorber », 2026-08-30) :** la preuve git vient désormais exclusivement des détails d'événement persistés, lus par le résolveur 5A (`persisted_workspace_identity(...).method == "git"` → `details.workspace.resolution_method`, `details.git.git_root` ou `details.git_root` historique). Règle unique dans les deux modes : fichier explicite OU ≥2 signaux OU preuve git persistée. Le paramètre `project_mode`/`ProjectQualificationMode` est supprimé (plus de mode), le `stat()` disque par workspace au rendu disparaît, et l'état actuel du disque ne peut plus réécrire le rendu d'un jour passé (stabilité temporelle étendue au live). Test de contrat réécrit (`test_project_qualification_ignores_current_disk_state_in_every_mode`) + test de qualification par preuve persistée dans les deux modes. 370 tests.
+
+**Completed:** 2026-08-30
 
 ### Résolveur workspace unique + parseur porcelain unique (5A)
 
