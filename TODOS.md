@@ -12,16 +12,6 @@
 **Priority:** P3
 **Depends on:** None (retour utilisateur du 2026-08-30)
 
-### Filtrer les transcripts de sous-agents (sidechains) du producteur agent_session
-
-**What:** Le seul `agent_session` du 2026-08-30 est le prompt d'un sous-agent de revue de code : les transcripts sidechain (`isSidechain: true`) vivent dans les mêmes dossiers que les sessions principales et `parse_claude_session` ne les distingue pas. Les exclure (ou les marquer `sidechain: true` sans les émettre) pour que le signal reflète les vraies sessions.
-
-**Context:** `summary_version` passe à 2 pour les nouvelles émissions (résumés déjà émis figés, décision rétention). Les sessions déjà émises en v1 restent telles quelles.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** None (retour utilisateur du 2026-08-30)
-
 ### Limite connue : le raisonnement des conversations Claude.ai n'est pas capturable
 
 **What:** Le raisonnement le plus dense d'une journée peut vivre dans une conversation Claude.ai (web), hors de portée du pipeline local (`~/.claude/projects/` ne contient que les sessions Claude Code). Aucun correctif local ne peut combler ce trou — à décider consciemment plus tard si/comment le combler (export manuel périodique ? autre source ?).
@@ -51,6 +41,16 @@
 **Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
 
 ## Completed
+
+### Filtrer les transcripts de sous-agents (sidechains) du producteur agent_session
+
+**What:** Le seul `agent_session` du 2026-08-30 est le prompt d'un sous-agent de revue de code : les transcripts sidechain (`isSidechain: true`) vivent dans les mêmes dossiers que les sessions principales et `parse_claude_session` ne les distingue pas. Les exclure (ou les marquer `sidechain: true` sans les émettre) pour que le signal reflète les vraies sessions.
+
+**Context:** `summary_version` passe à 2 pour les nouvelles émissions (résumés déjà émis figés, décision rétention). Les sessions déjà émises en v1 restent telles quelles.
+
+**Résolution:** `parse_claude_session` marque `sidechain=True` quand toutes les lignes user/assistant portent `isSidechain` (un transcript mixte reste mainline, conservateur) ; `emit_agent_sessions` les trace au manifeste sans émettre (`sidechain_skipped`), reconnus au re-run sans re-parsing. `SUMMARY_VERSION` → 2 pour les nouvelles émissions ; les résumés v1 déjà en base restent figés (décision rétention) — y compris la session sidechain du 2026-08-30 18:10, assumée. 2 tests. Suite à 405.
+
+**Completed:** 2026-08-30
 
 ### Exclure les interruptions volontaires (exit 130) du signal d'erreur
 
