@@ -20,16 +20,6 @@
 **Priority:** P3
 **Depends on:** Retour d'usage du hook SessionEnd
 
-### Couverture d'observation en mode service (watcher fichiers + observateur d'apps sous launchd)
-
-**What:** Le watcher fichiers et `PulseApplicationObserver` ne tournent que sous `make dev` ; en mode service (launchd), le journal est aveugle aux fichiers et aux apps — le 2026-08-31 : `files_changed` 0, `applications` [] sur les deux sessions de la journée. Chantier : rendre ces deux observateurs résidents sous launchd, avec une liste de workspaces configurée à la place du cwd implicite de `make dev`.
-
-**Context:** Chantier majeur à cadrer avant d'implémenter (configuration des workspaces, cycle de vie launchd, coexistence avec `make dev`). Conséquence à assumer : le watcher FSEvents résident verrait alors les écritures de Claude Code comme n'importe quel `file_changed`.
-
-**Effort:** L
-**Priority:** P2
-**Depends on:** Cadrage (liste de workspaces, patron launchd existant : KeepAlive comme daemon/worker)
-
 ### Kind `renamed` sémantique pour le watcher fichiers
 
 **What:** Émettre un vrai signal de renommage au lieu de la paire `deleted(src)` + `created(dest)`. C'est un changement de vocabulaire d'événement : ingestion + aval (timeline, renderers) n'ont aucun concept de rename aujourd'hui. watchdog fournit src+dest via `on_moved` — l'information que le poller n'a jamais eue, donc le chantier est devenu possible depuis la migration FSEvents (PR #23).
@@ -67,6 +57,14 @@
 **Depends on:** Aucun — item sentinelle, ne pas implémenter
 
 ## Completed
+
+### Couverture d'observation en mode service (watcher fichiers + observateur d'apps sous launchd)
+
+**What:** Le watcher fichiers et `PulseApplicationObserver` ne tournaient que sous `make dev` ; en mode service (launchd), le journal était aveugle aux fichiers et aux apps — le 2026-08-31 : `files_changed` 0, `applications` [] sur les deux sessions de la journée.
+
+**Résolution:** Deux LaunchAgents `KeepAlive` supplémentaires (`scripts/install_observers_launchd.sh`, même patron managé : marqueur, refus d'écraser un plist étranger, `plutil -lint`, `--uninstall`). `com.pulse.file-watcher` : `daemon_v2.file_watcher --config ~/.pulse_v2/watched_workspaces` — le watcher passe au multi-workspaces (un collecteur + snapshot par workspace, un seul observer FSEvents, une seule boucle), liste **déclarée** (un chemin par ligne, entrée disparue ignorée avec avertissement — n'aveugle pas les autres, fichier absent = erreur, lue au démarrage → `launchctl kickstart -k` après édition). `com.pulse.app-observer` : binaire release copié dans `~/.pulse_v2/bin` (hors `.build`), `PULSE_CORE_REPO_ROOT` au plist. Les deux écrivent dans l'outbox durable (le pont Swift passe par `enqueue-json`) — daemon éteint, rien de perdu. Coexistence : `pulse_mode.sh` décharge les deux agents en mode dev (dev.sh lance ses propres watcher/observateur — sinon doublons, les event_id fichiers sont des uuid4) et les recharge en sortie s'ils sont installés ; `status.sh` affiche les 5 labels. Conséquence assumée : le watcher résident voit les écritures des agents (Claude Code compris) comme n'importe quel `file_changed`. Vérifié en réel : services running sous launchd, créé/supprimé dans Pulse_Core arrivés en base en ~6 s, second workspace ajouté à la liste + kickstart → événement attribué au bon workspace, `Activated Claude` émis par l'observateur résident. 3 tests (`read_watched_workspaces`), suite à 428.
+
+**Completed:** 2026-08-31
 
 ### Hook SessionEnd Claude Code → émission agent_session immédiate
 

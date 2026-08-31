@@ -1,4 +1,8 @@
-"""FSEvents-backed file watcher for one explicitly selected workspace.
+"""FSEvents-backed file watcher for explicitly selected workspaces.
+
+Deux modes : un workspace positionnel (dev.sh, historique) ou ``--config``
+(mode résident launchd : liste de workspaces déclarée dans un fichier —
+le cwd implicite de make dev ne décide plus de ce qui est observé).
 
 Detection change only (backlog FSEvents, après 2A-révisée) : watchdog
 remplace le re-scan os.walk par seconde, le transport outbox est inchangé.
@@ -197,33 +201,74 @@ def record_file_event(
         return False
 
 
+def read_watched_workspaces(config_path: Path) -> tuple[list[Path], list[str]]:
+    """Liste des workspaces à observer en mode résident (launchd).
+
+    Un chemin absolu par ligne (``~`` accepté), ``#`` commentaires. Une
+    entrée inexistante est signalée mais n'empêche pas les autres d'être
+    observées (un workspace supprimé ne doit pas aveugler le service).
+    Fichier absent = erreur : le service résident ne doit jamais tourner
+    sans savoir quoi observer.
+    """
+    try:
+        raw_lines = config_path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ValueError(f"unreadable workspace list: {config_path} ({exc})")
+    workspaces: list[Path] = []
+    warnings: list[str] = []
+    seen: set[Path] = set()
+    for line in raw_lines:
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        workspace = Path(entry).expanduser()
+        try:
+            workspace = workspace.resolve()
+        except OSError:
+            warnings.append(f"unresolvable workspace ignored: {entry}")
+            continue
+        if workspace in seen:
+            continue
+        seen.add(workspace)
+        if not workspace.is_dir():
+            warnings.append(f"missing workspace ignored: {workspace}")
+            continue
+        workspaces.append(workspace)
+    return workspaces, warnings
+
+
 def watch(
-    workspace: Path,
+    workspaces: list[Path],
     interval: float = 1.0,
     *,
     outbox: ProducerOutbox | None = None,
 ) -> None:
     outbox = outbox or ProducerOutbox()
-    snapshot = take_snapshot(workspace)
-    collector = DirtyPathCollector(workspace)
+    watched: list[tuple[Path, DirtyPathCollector, Snapshot]] = []
     observer = Observer()
-    observer.schedule(collector, str(workspace), recursive=True)
+    for workspace in workspaces:
+        collector = DirtyPathCollector(workspace)
+        watched.append((workspace, collector, take_snapshot(workspace)))
+        observer.schedule(collector, str(workspace), recursive=True)
     observer.start()
-    print(f"Watching files in {workspace}", flush=True)
+    for workspace, _collector, _snapshot in watched:
+        print(f"Watching files in {workspace}", flush=True)
     try:
         while True:
             time.sleep(interval)
             observer_alive = observer.is_alive()
-            dirty_files, dirty_directories = collector.drain()
-            events = resolve_dirty_paths(
-                snapshot, dirty_files, dirty_directories, workspace
-            )
-            for event, path in events:
-                record_file_event(outbox, event, path, workspace)
+            for workspace, collector, snapshot in watched:
+                dirty_files, dirty_directories = collector.drain()
+                events = resolve_dirty_paths(
+                    snapshot, dirty_files, dirty_directories, workspace
+                )
+                for event, path in events:
+                    record_file_event(outbox, event, path, workspace)
             if not observer_alive:
                 # Un observer mort = plus aucune détection : mourir
-                # bruyamment pour que le superviseur (dev.sh) le voie,
-                # après avoir livré les derniers événements collectés.
+                # bruyamment pour que le superviseur (dev.sh ou launchd
+                # KeepAlive) le relance, après avoir livré les derniers
+                # événements collectés.
                 raise RuntimeError("file watcher observer stopped unexpectedly")
     except KeyboardInterrupt:
         pass
@@ -233,8 +278,16 @@ def watch(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Watch one workspace for file changes")
-    parser.add_argument("workspace", type=Path)
+    parser = argparse.ArgumentParser(
+        description="Watch one workspace (or a configured list) for file changes"
+    )
+    parser.add_argument("workspace", type=Path, nargs="?")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="resident mode: file listing one workspace path per line",
+    )
     parser.add_argument(
         "--interval",
         type=float,
@@ -243,12 +296,28 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    workspace = args.workspace.expanduser().resolve()
-    if not workspace.is_dir():
-        parser.error(f"workspace is not a directory: {workspace}")
     if args.interval <= 0:
         parser.error("--interval must be greater than zero")
-    watch(workspace, args.interval)
+    if (args.workspace is None) == (args.config is None):
+        parser.error("exactly one of <workspace> or --config is required")
+
+    if args.config is not None:
+        try:
+            workspaces, warnings = read_watched_workspaces(
+                args.config.expanduser()
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        for warning in warnings:
+            print(f"[file-watcher] {warning}", flush=True)
+        if not workspaces:
+            parser.error(f"no watchable workspace in {args.config}")
+    else:
+        workspace = args.workspace.expanduser().resolve()
+        if not workspace.is_dir():
+            parser.error(f"workspace is not a directory: {workspace}")
+        workspaces = [workspace]
+    watch(workspaces, args.interval)
 
 
 if __name__ == "__main__":

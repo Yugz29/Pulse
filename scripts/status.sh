@@ -56,7 +56,8 @@ print("  Watcher terminal   : {}".format(status["terminal_watcher"]))
 
 echo ""
 echo "Services launchd"
-for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers; do
+for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers \
+             com.pulse.file-watcher com.pulse.app-observer; do
   info="$(launchctl print "gui/$(id -u)/$label" 2>/dev/null)"
   if [[ -z "$info" ]]; then
     printf '  %-28s: non installé\n' "$label"
