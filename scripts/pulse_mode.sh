@@ -18,10 +18,24 @@ set -u
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(dirname "$script_dir")"
 services=("com.pulse.daemon" "com.pulse.outbox-worker")
+# Observateurs résidents (install_observers_launchd.sh), optionnels :
+# déchargés en mode dev — dev.sh lance ses propres watcher + observateur,
+# sinon événements en double — puis rechargés s'ils sont installés.
+observer_services=("com.pulse.file-watcher" "com.pulse.app-observer")
 plist_dir="$HOME/Library/LaunchAgents"
 
 services_loaded() {
   launchctl print "gui/$(id -u)/com.pulse.daemon" >/dev/null 2>&1
+}
+
+load_observer_services() {
+  for label in "${observer_services[@]}"; do
+    if [[ -f "$plist_dir/$label.plist" ]]; then
+      launchctl bootout "gui/$(id -u)/$label" 2>/dev/null
+      launchctl bootstrap "gui/$(id -u)" "$plist_dir/$label.plist" || return 1
+      echo "[pulse-mode] observateur rechargé : $label"
+    fi
+  done
 }
 
 load_services() {
@@ -30,18 +44,20 @@ load_services() {
     [[ -f "$plist_dir/$label.plist" ]] || missing=1
   done
   if [[ $missing -eq 1 ]]; then
-    "$script_dir/install_daemon_launchd.sh"
+    "$script_dir/install_daemon_launchd.sh" || return 1
+    load_observer_services
     return $?
   fi
   for label in "${services[@]}"; do
     launchctl bootout "gui/$(id -u)/$label" 2>/dev/null
     launchctl bootstrap "gui/$(id -u)" "$plist_dir/$label.plist" || return 1
   done
-  echo "[pulse-mode] mode service : daemon + worker rechargés (KeepAlive)"
+  load_observer_services || return 1
+  echo "[pulse-mode] mode service : daemon + worker + observateurs rechargés (KeepAlive)"
 }
 
 unload_services() {
-  for label in "${services[@]}"; do
+  for label in "${services[@]}" "${observer_services[@]}"; do
     launchctl bootout "gui/$(id -u)/$label" 2>/dev/null
   done
 }

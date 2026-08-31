@@ -296,3 +296,51 @@ def test_record_file_event_survives_storage_failure(tmp_path, monkeypatch):
         record_file_event(outbox, "created", tmp_path / "a.py", tmp_path)
         is False
     )
+
+
+def test_read_watched_workspaces_parses_comments_tilde_and_duplicates(tmp_path, monkeypatch):
+    from daemon_v2.file_watcher import read_watched_workspaces
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    first = tmp_path / "Projets" / "alpha"
+    second = tmp_path / "beta"
+    first.mkdir(parents=True)
+    second.mkdir()
+    config = tmp_path / "watched"
+    config.write_text(
+        "# workspaces observés\n"
+        "~/Projets/alpha\n"
+        f"{second}\n"
+        "\n"
+        f"{first}\n",  # doublon (via ~) : gardé une seule fois
+        encoding="utf-8",
+    )
+
+    workspaces, warnings = read_watched_workspaces(config)
+
+    assert workspaces == [first.resolve(), second.resolve()]
+    assert warnings == []
+
+
+def test_read_watched_workspaces_skips_missing_entries_with_warning(tmp_path):
+    from daemon_v2.file_watcher import read_watched_workspaces
+
+    alive = tmp_path / "alive"
+    alive.mkdir()
+    config = tmp_path / "watched"
+    config.write_text(f"{tmp_path / 'gone'}\n{alive}\n", encoding="utf-8")
+
+    workspaces, warnings = read_watched_workspaces(config)
+
+    # Un workspace supprimé n'aveugle pas le service pour les autres.
+    assert workspaces == [alive.resolve()]
+    assert len(warnings) == 1 and "gone" in warnings[0]
+
+
+def test_read_watched_workspaces_missing_file_is_an_error(tmp_path):
+    import pytest
+
+    from daemon_v2.file_watcher import read_watched_workspaces
+
+    with pytest.raises(ValueError):
+        read_watched_workspaces(tmp_path / "absent")

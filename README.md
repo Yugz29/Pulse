@@ -459,10 +459,12 @@ worker qui livre ensuite ces événements.
 
 ## Watcher de fichiers
 
-Lancer manuellement le watcher avec un workspace explicite :
+Lancer manuellement le watcher avec un workspace explicite, ou avec la
+liste déclarée du mode résident :
 
 ```bash
 .venv/bin/python -m daemon_v2.file_watcher /Users/yugz/Projets/Pulse/Pulse_Core
+.venv/bin/python -m daemon_v2.file_watcher --config ~/.pulse_v2/watched_workspaces
 ```
 
 La détection s’appuie sur `watchdog` (FSEvents natif sur macOS) : coût quasi
@@ -551,6 +553,34 @@ Journaux : `~/.pulse_v2/logs/daemon.log` et `~/.pulse_v2/logs/outbox_worker.log`
 Coexistence avec `scripts/dev.sh` : le worker porte un verrou (`flock`), une
 seconde instance s'éteint d'elle-même ; le daemon, lui, entrerait en conflit
 de port — désinstaller (ou `launchctl bootout`) avant de lancer `dev.sh`.
+
+## Observateurs résidents (launchd)
+
+Sans eux, le journal est aveugle aux fichiers et aux applications dès que
+`make dev` ne tourne pas. Deux LaunchAgents `KeepAlive` supplémentaires :
+
+```bash
+./scripts/install_observers_launchd.sh           # com.pulse.file-watcher + com.pulse.app-observer
+./scripts/install_observers_launchd.sh --uninstall
+```
+
+- `com.pulse.file-watcher` lance `daemon_v2.file_watcher --config
+  ~/.pulse_v2/watched_workspaces` : la liste des workspaces observés est
+  **déclarée** (un chemin par ligne, `~` accepté, `#` commentaires) au lieu
+  d'hériter du dossier de lancement de `make dev`. La liste est lue au
+  démarrage — après édition : `launchctl kickstart -k
+  gui/$(id -u)/com.pulse.file-watcher`. Une entrée disparue est ignorée
+  avec un avertissement, elle n'aveugle pas les autres workspaces.
+- `com.pulse.app-observer` fait tourner `PulseApplicationObserver` (build
+  release copié dans `~/.pulse_v2/bin`, hors de `.build`).
+
+Les deux écrivent dans l'outbox durable : un daemon éteint ne perd rien.
+Conséquence assumée : le watcher résident voit les écritures des agents
+(Claude Code compris) comme n'importe quel `file_changed`. Journaux :
+`~/.pulse_v2/logs/file_watcher.log` et `~/.pulse_v2/logs/app_observer.log`.
+Coexistence : `make mode-dev` décharge ces agents (dev.sh lance ses propres
+watcher et observateur — sinon événements en double) et les recharge en
+sortie s'ils sont installés.
 
 ## Bascule service ↔ dev
 
