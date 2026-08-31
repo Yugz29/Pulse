@@ -331,6 +331,33 @@ def _load_manifest(path: Path) -> dict[str, dict[str, Any]]:
         ) from exc
 
 
+def count_grown_sessions(manifest_path: Path | None = None) -> int | None:
+    """Sessions émises dont le transcript a regrossi depuis (résumé figé).
+
+    Miroir exact de la règle du passage d'émission (grown_after_emit) :
+    entrée non-sidechain dont la taille disque dépasse la taille enregistrée.
+    C'est le déclencheur mesurable de l'item « Segments de reprise » du
+    backlog — exposé par /status et l'État système. Manifeste illisible =
+    None (un zéro signifierait « rien à signaler », pas « non-vu ») ; un
+    transcript purgé par l'outil source n'a pas regrossi.
+    """
+    try:
+        emitted = _load_manifest(manifest_path or default_manifest_path())
+    except AgentSessionInfrastructureError:
+        return None
+    grown = 0
+    for path, entry in emitted.items():
+        if entry.get("sidechain"):
+            continue
+        try:
+            size = Path(path).stat().st_size
+        except OSError:
+            continue
+        if size > int(entry["size"]):
+            grown += 1
+    return grown
+
+
 def _write_manifest(path: Path, emitted: dict[str, dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".json.tmp")
