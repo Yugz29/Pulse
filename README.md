@@ -101,7 +101,7 @@ observés et un contexte Git local lu passivement au rendu.
 ```bash
 cd /Users/yugz/Projets/Pulse/Pulse_Core
 python3 -m venv .venv
-.venv/bin/pip install Flask pytest
+.venv/bin/pip install Flask pytest watchdog
 ```
 
 ## Tests
@@ -459,11 +459,18 @@ worker qui livre ensuite ces événements.
 
 ## Watcher de fichiers
 
-Lancer manuellement le watcher par polling avec un workspace explicite :
+Lancer manuellement le watcher avec un workspace explicite :
 
 ```bash
 .venv/bin/python -m daemon_v2.file_watcher /Users/yugz/Projets/Pulse/Pulse_Core
 ```
+
+La détection s’appuie sur `watchdog` (FSEvents natif sur macOS) : coût quasi
+nul au repos, plus de re-scan complet par seconde. FSEvents coalesce et
+qualifie mal ses événements, donc watchdog ne sert que de notificateur de
+chemins touchés — les types `created`/`modified`/`deleted` sont établis en
+comparant chaque chemin signalé au snapshot interne, et `--interval`
+(1 s par défaut) devient la fenêtre de coalescence entre deux purges.
 
 Il enfile les fichiers créés, modifiés et supprimés dans l’outbox durable
 (décision 2A-révisée) ; le worker les livre ensuite au daemon, donc un daemon
