@@ -2,15 +2,23 @@
 
 ## Daemon V2
 
-### Hook SessionEnd Claude Code → émission agent_session immédiate
+### Segments de reprise pour agent_session
 
-**What:** Brancher un hook `SessionEnd` de Claude Code (`~/.claude/settings.json`) qui, à la fin d'une session, archive SON transcript puis émet SON événement `agent_session` en ciblé — au lieu d'attendre le passage horaire launchd + la fenêtre de silence de 60 min (la session de 7h30 du 30/08 n'aurait été émise qu'à 02:36 ; elle a en fait été masquée — cas rejoué le 2026-08-31).
+**What:** Émettre la continuation d'une session reprise après émission comme un **segment** supplémentaire (nouvel événement borné, même `session_id`, `segment: 2`), au lieu du statu quo « résumé figé, reprise invisible » (`grown_after_emit`). Conséquence assumée de la décision (a) du 2026-08-31 : l'émission immédiate à SessionEnd fige le résumé à la première fin de session.
 
-**Context:** Nécessite un mode ciblé dans le producteur (`--transcript PATH`, fenêtre de silence contournée pour ce seul fichier) + script hook rapide et fail-safe (ne jamais bloquer la fermeture ; l'outbox absorbe un daemon éteint). Portée : Claude Code seulement (Codex n'a pas de hooks) — le passage horaire launchd reste le filet de sécurité pour Codex et les hooks ratés. Décision à trancher avant d'implémenter : une reprise rapide (`claude --continue` sur le même transcript) après émission donne un résumé figé trop tôt (`grown_after_emit`) — la fenêtre de 60 min protégeait contre ça. Options : (a) accepter (le résumé couvre la session jusqu'à sa première fin ; une reprise forke souvent vers un nouveau fichier de toute façon) ; (b) filtrer sur la `reason` du hook ; (c) délai court au lieu d'émission immédiate.
+**Déclencheur:** quand `grown_after_emit` devient récurrent dans `agent_producers.log` / le log du hook (la reprise rapide sur un même transcript devient un vrai usage), ou quand une continuation substantielle manque visiblement au journal. Ne pas implémenter avant.
 
-**Effort:** S
-**Priority:** P2
-**Depends on:** Décision reprise-après-émission (a/b/c)
+**Effort:** M
+**Priority:** P3
+**Depends on:** Cas réel observé
+
+### Hook PostToolUse Claude Code (second étage)
+
+**What:** Second étage du chantier hooks (le premier, SessionEnd, est livré) : un hook `PostToolUse` pour donner à Pulse un signal d'activité agent en quasi-temps réel pendant la session — aujourd'hui le journal ne voit une session qu'à sa fin. À cadrer avant d'implémenter : quel événement dérivé (heartbeat de session active ? activité outil agrégée ?), quel débit acceptable (un hook par appel d'outil est fréquent — il faudra agréger côté hook), et ce que le rendu en ferait.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Retour d'usage du hook SessionEnd
 
 ### Couverture d'observation en mode service (watcher fichiers + observateur d'apps sous launchd)
 
@@ -59,6 +67,14 @@
 **Depends on:** Aucun — item sentinelle, ne pas implémenter
 
 ## Completed
+
+### Hook SessionEnd Claude Code → émission agent_session immédiate
+
+**What:** Brancher un hook `SessionEnd` de Claude Code (`~/.claude/settings.json`) qui, à la fin d'une session, archive SON transcript puis émet SON événement `agent_session` en ciblé — au lieu d'attendre le passage horaire launchd + la fenêtre de silence de 60 min.
+
+**Résolution (décision (a) — émission immédiate, résumé figé à la première fin assumé ; item « Segments de reprise » porte le réexamen) :** mode ciblé dans le producteur (`emit_agent_sessions(transcript=...)` / CLI `--transcript` : seul CE fichier est traité, fenêtre de silence contournée, toutes les autres règles inchangées — déjà émis, sidechain, doublon, résumé figé ; transcript hors sources ou absent = erreur d'infrastructure). `scripts/pulse_session_end_hook.sh` : garde-fou 1 — exit 0 inconditionnel, tout va au log `~/.pulse_v2/logs/session_end_hook.log`, jamais d'échec visible pour Claude Code ; garde-fou 2 — archive zstd AVANT le pointeur, archivage en échec = émission annulée (le passage horaire launchd rattrape, il reste aussi le filet pour Codex, sans hooks). Course hook/passage horaire bénigne (event_id déterministe → duplicate inoffensif). Hook installé (`SessionEnd`, timeout 30 s, marqueur `_pulse_source`). **Mesuré sur la plus grosse session réelle Claude Code (50 Mo)** : 0,73 s à froid (archive+parse+émission), 0,16 s en rerun idempotent, scan réel des 177 fichiers sources 0,08 s — synchrone sans risque. 8 tests (5 mode ciblé, 3 script), suite à 425.
+
+**Completed:** 2026-08-31
 
 ### Remplacer le polling du file watcher par watchdog/FSEvents
 

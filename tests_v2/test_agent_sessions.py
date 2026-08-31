@@ -383,3 +383,68 @@ def test_agent_session_renders_in_the_daily_trace(tmp_path):
 
     assert trace["activity_count"] == 1
     assert "Agent session (claude-code)" in markdown
+
+
+def _sidechain_lines():
+    lines = []
+    for line in claude_lines():
+        entry = json.loads(line)
+        if entry.get("type") in {"user", "assistant"}:
+            entry["isSidechain"] = True
+        lines.append(json.dumps(entry))
+    return lines
+
+
+def test_targeted_transcript_bypasses_the_quiet_window(tmp_path):
+    # Le hook SessionEnd sait que la session vient de finir : un transcript
+    # encore « chaud » (mtime dans la fenêtre) est émis immédiatement.
+    transcript = _write_transcript(
+        tmp_path / "claude", "proj/abc-123.jsonl", claude_lines(), age_hours=0
+    )
+
+    held = emit(tmp_path)
+    report = emit(tmp_path, transcript=transcript)
+
+    assert held.still_active == 1 and held.emitted == 0
+    assert report.emitted == 1
+    assert report.still_active == 0
+
+
+def test_targeted_transcript_already_emitted_is_not_reemitted(tmp_path):
+    transcript = _write_transcript(
+        tmp_path / "claude", "proj/abc-123.jsonl", claude_lines(), age_hours=0
+    )
+
+    emit(tmp_path, transcript=transcript)
+    report = emit(tmp_path, transcript=transcript)
+
+    assert report.emitted == 0
+    assert report.already_emitted == 1
+
+
+def test_targeted_sidechain_transcript_is_skipped(tmp_path):
+    transcript = _write_transcript(
+        tmp_path / "claude", "proj/side.jsonl", _sidechain_lines(), age_hours=0
+    )
+
+    report = emit(tmp_path, transcript=transcript)
+
+    assert report.emitted == 0
+    assert report.sidechain_skipped == 1
+
+
+def test_targeted_transcript_outside_sources_is_an_infrastructure_error(tmp_path):
+    (tmp_path / "claude").mkdir()
+    stray = _write_transcript(
+        tmp_path / "elsewhere", "abc.jsonl", claude_lines(), age_hours=0
+    )
+
+    with pytest.raises(AgentSessionInfrastructureError):
+        emit(tmp_path, transcript=stray)
+
+
+def test_targeted_missing_transcript_is_an_infrastructure_error(tmp_path):
+    (tmp_path / "claude").mkdir()
+
+    with pytest.raises(AgentSessionInfrastructureError):
+        emit(tmp_path, transcript=tmp_path / "claude" / "absent.jsonl")

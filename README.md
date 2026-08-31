@@ -513,7 +513,22 @@ session déjà émise qui regrossit est signalée mais jamais ré-émise ;
 Passe par l'outbox durable, comme tous les producteurs. Codes de sortie :
 0 = terminé, 2 = erreur d'infrastructure. Options supplémentaires :
 `--claude-dir`, `--codex-dir`, `--outbox-database`, `--manifest` (surcharge
-d'environnement : `PULSE_AGENT_SESSIONS_MANIFEST_PATH`).
+d'environnement : `PULSE_AGENT_SESSIONS_MANIFEST_PATH`), `--transcript`
+(mode ciblé : seul ce transcript est traité, fenêtre de silence contournée).
+
+### Hook SessionEnd Claude Code
+
+`scripts/pulse_session_end_hook.sh`, branché sur l'événement `SessionEnd`
+dans `~/.claude/settings.json`, émet la session **immédiatement** à sa fin
+(archive zstd d'abord, puis émission ciblée `--transcript`) au lieu
+d'attendre le passage horaire launchd + la fenêtre de silence. Le hook ne
+fait jamais échouer la fermeture d'une session (exit 0 inconditionnel,
+journal : `~/.pulse_v2/logs/session_end_hook.log`) et annule l'émission si
+l'archivage échoue — le passage horaire launchd rattrape, et reste le
+chemin d'émission pour Codex (pas de hooks). Décision (a) du 2026-08-31 :
+une reprise sur le même transcript après émission laisse le résumé figé
+(`grown_after_emit`). Mesuré sur la plus grosse session réelle (50 Mo) :
+0,73 s à froid, 0,16 s en rerun.
 
 Contrat `POST /activities` du type `agent_session` (champs de `details`) :
 requis `source_tool`, `session_id`, `transcript_path`, `summary_version`

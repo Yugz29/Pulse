@@ -18,6 +18,7 @@ d'écriture attend le prochain passage.
 
 Usage :
     python -m daemon_v2.agent_sessions [--dry-run] [--quiet-minutes N]
+        [--transcript PATH]   # mode ciblé (hook SessionEnd), fenêtre contournée
 
 Codes de sortie : 0 = passage terminé ; 2 = erreur d'infrastructure
 (manifeste corrompu, outbox inécrivable).
@@ -349,7 +350,16 @@ def emit_agent_sessions(
     quiet: timedelta = DEFAULT_QUIET,
     dry_run: bool = False,
     now: datetime | None = None,
+    transcript: Path | None = None,
 ) -> EmitReport:
+    """Emit derived events; ``transcript`` switches to targeted mode.
+
+    Mode ciblé (hook SessionEnd, décision (a) du 2026-08-31) : seul CE
+    transcript est traité et la fenêtre de silence est contournée — la
+    session vient de se terminer, c'est le hook qui le dit. Toutes les
+    autres règles (déjà émis, sidechain, doublon de session, résumé figé)
+    restent identiques au passage périodique.
+    """
     moment = now or datetime.now(timezone.utc)
     manifest_file = manifest_path or default_manifest_path()
     emitted = _load_manifest(manifest_file)
@@ -368,17 +378,41 @@ def emit_agent_sessions(
     }
 
     sources = (("claude-code", claude_dir), ("codex", codex_dir))
-    try:
+    if transcript is None:
+        selected: list[tuple[str, list[Path]]] = []
         for source_tool, directory in sources:
             directory = directory.expanduser()
-            if not directory.is_dir():
-                continue
-            for transcript in sorted(directory.rglob("*.jsonl")):
+            if directory.is_dir():
+                selected.append((source_tool, sorted(directory.rglob("*.jsonl"))))
+    else:
+        target = transcript.expanduser().resolve()
+        if not target.is_file():
+            raise AgentSessionInfrastructureError(
+                f"targeted transcript not found: {target}"
+            )
+        matched_tool = next(
+            (
+                source_tool
+                for source_tool, directory in sources
+                if directory.expanduser().is_dir()
+                and target.is_relative_to(directory.expanduser().resolve())
+            ),
+            None,
+        )
+        if matched_tool is None:
+            raise AgentSessionInfrastructureError(
+                f"targeted transcript outside known sources: {target}"
+            )
+        selected = [(matched_tool, [target])]
+
+    try:
+        for source_tool, transcripts in selected:
+            for candidate in transcripts:
                 try:
-                    stat = transcript.stat()
+                    stat = candidate.stat()
                 except OSError:
                     continue
-                key = str(transcript)
+                key = str(candidate)
                 recorded = emitted.get(key)
                 if recorded is not None:
                     if recorded.get("sidechain"):
@@ -394,16 +428,16 @@ def emit_agent_sessions(
                 modified = datetime.fromtimestamp(
                     stat.st_mtime, tz=timezone.utc
                 )
-                if moment - modified < quiet:
+                if transcript is None and moment - modified < quiet:
                     report.still_active += 1
                     continue
                 try:
-                    lines = transcript.read_text(
+                    lines = candidate.read_text(
                         encoding="utf-8", errors="replace"
                     ).splitlines()
                 except OSError:
                     continue
-                summary = _PARSERS[source_tool](lines, transcript.stem)
+                summary = _PARSERS[source_tool](lines, candidate.stem)
                 if summary is None:
                     report.unparseable += 1
                     continue
@@ -480,6 +514,12 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=None)
     parser.add_argument("--quiet-minutes", type=float, default=60.0)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--transcript",
+        type=Path,
+        default=None,
+        help="targeted mode: emit only this transcript, quiet window bypassed",
+    )
     args = parser.parse_args()
 
     try:
@@ -494,6 +534,7 @@ def main() -> None:
             manifest_path=args.manifest,
             quiet=timedelta(minutes=args.quiet_minutes),
             dry_run=args.dry_run,
+            transcript=args.transcript,
         )
     except AgentSessionInfrastructureError as exc:
         print(f"Pulse agent sessions: {exc}")
