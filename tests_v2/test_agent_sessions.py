@@ -448,3 +448,53 @@ def test_targeted_missing_transcript_is_an_infrastructure_error(tmp_path):
 
     with pytest.raises(AgentSessionInfrastructureError):
         emit(tmp_path, transcript=tmp_path / "claude" / "absent.jsonl")
+
+
+def test_count_grown_sessions_mirrors_the_emit_rule(tmp_path):
+    from daemon_v2.agent_sessions import count_grown_sessions
+
+    grown = _write_transcript(
+        tmp_path / "claude", "grown.jsonl", claude_lines(), age_hours=2
+    )
+    stable = _write_transcript(
+        tmp_path / "claude", "stable.jsonl", claude_lines(), age_hours=2
+    )
+    side = _write_transcript(
+        tmp_path / "claude", "side.jsonl", claude_lines(), age_hours=2
+    )
+    purged = tmp_path / "claude" / "purged.jsonl"
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "emitted": {
+                    str(grown): {"size": grown.stat().st_size - 10, "event_id": "e1"},
+                    str(stable): {"size": stable.stat().st_size, "event_id": "e2"},
+                    # Un sidechain qui regrossit n'a pas de résumé figé.
+                    str(side): {"size": 1, "sidechain": True},
+                    # Purgé par l'outil source : pas regrossi.
+                    str(purged): {"size": 1, "event_id": "e4"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert count_grown_sessions(manifest) == 1
+
+
+def test_count_grown_sessions_unreadable_manifest_is_none(tmp_path):
+    from daemon_v2.agent_sessions import count_grown_sessions
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("broken{{", encoding="utf-8")
+
+    # Illisible = non-vu : jamais un faux zéro.
+    assert count_grown_sessions(manifest) is None
+
+
+def test_count_grown_sessions_missing_manifest_is_zero(tmp_path):
+    from daemon_v2.agent_sessions import count_grown_sessions
+
+    # Aucune session émise : zéro regrossie est la vérité.
+    assert count_grown_sessions(tmp_path / "absent.json") == 0

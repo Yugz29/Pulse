@@ -6,6 +6,7 @@ import re
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
+from .agent_sessions import count_grown_sessions
 from .daily_trace import (
     build_available_days,
     build_daily_summary,
@@ -53,6 +54,11 @@ def _build_status(trace):
         "last_event": last_event,
         "primary_workspace": primary_workspace(trace),
         "terminal_watcher": "external; source the Zsh script separately",
+        # Déclencheur mesurable de l'item « Segments de reprise » : None =
+        # manifeste illisible (non-vu), jamais transformé en faux zéro.
+        "grown_agent_sessions": count_grown_sessions(
+            current_app.config.get("AGENT_SESSIONS_MANIFEST_PATH")
+        ),
     }
 
 

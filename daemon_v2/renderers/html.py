@@ -49,6 +49,12 @@ def _html_summary_facts(facts: list[str | tuple[str, list[str]]]) -> str:
     return f"<ul>{''.join(items)}</ul>"
 
 
+def _format_grown_sessions(count: int | None) -> str:
+    # None = manifeste producteur illisible : afficher l'incertitude,
+    # jamais un faux zéro.
+    return "inconnu (manifeste illisible)" if count is None else str(count)
+
+
 def render_daily_trace_html(
     trace: dict[str, Any],
     system_status: dict[str, Any] | None = None,
@@ -319,6 +325,11 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 (
                     "<dt>Watcher terminal</dt><dd>"
                     f"{escape(system_status['terminal_watcher'])}</dd>"
+                ),
+                (
+                    "<dt>Sessions agent regrossies (résumé figé)</dt><dd>"
+                    f"{_format_grown_sessions(system_status.get('grown_agent_sessions'))}"
+                    "</dd>"
                 ),
                 "</dl></section>",
             ]

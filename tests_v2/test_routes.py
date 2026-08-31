@@ -964,3 +964,25 @@ def test_legacy_route_response_and_export_are_explicit(tmp_path):
     assert len(events) == 2
     assert all(event["producer"]["name"] == "pulse-legacy" for event in events)
     assert all(event["occurred_at"].endswith("+02:00") for event in events)
+
+
+def test_status_and_home_report_grown_agent_sessions(tmp_path):
+    import json as json_module
+
+    transcript = tmp_path / "claude" / "abc.jsonl"
+    transcript.parent.mkdir()
+    transcript.write_text("x" * 100, encoding="utf-8")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json_module.dumps({"emitted": {str(transcript): {"size": 10, "event_id": "e1"}}}),
+        encoding="utf-8",
+    )
+    app = create_app(tmp_path / "trace.db")
+    app.config["AGENT_SESSIONS_MANIFEST_PATH"] = manifest
+    client = app.test_client()
+
+    status = client.get("/status").get_json()
+    assert status["grown_agent_sessions"] == 1
+
+    home = client.get("/").get_data(as_text=True)
+    assert "Sessions agent regrossies" in home
