@@ -172,6 +172,26 @@ def test_resolve_atomic_save_reports_modified_not_created(tmp_path):
     assert set(snapshot) == {target}
 
 
+def test_resolve_rename_reports_created_and_deleted_pair(tmp_path):
+    # mv ou git mv d'un fichier suivi : watchdog marque src+dest sales,
+    # la résolution rend created(dest) + deleted(src) dans la même fenêtre
+    # — même sémantique que l'ancien poller, le vocabulaire canonique n'a
+    # pas de kind « renamed ». Vérifié en réel sur FSEvents le 2026-08-31.
+    workspace = tmp_path
+    source = workspace / "before.py"
+    destination = workspace / "after.py"
+    destination.write_text("same content")
+    snapshot = {source: (1, 1)}
+
+    events = resolve_dirty_paths(snapshot, {source, destination}, set(), workspace)
+
+    assert events == [
+        ("created", destination),
+        ("deleted", source),
+    ]
+    assert set(snapshot) == {destination}
+
+
 def test_resolve_expands_deleted_directory_to_known_children(tmp_path):
     # FSEvents peut coalescer la suppression d'un arbre en un seul événement
     # répertoire : les enfants connus du snapshot doivent sortir en deleted.
