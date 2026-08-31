@@ -1,0 +1,5 @@
+# Chemins exclus du scan pre-push gstack-redact (pathspecs git, un par ligne).
+# Consenti par commit + revue : exclure un chemin est un diff visible.
+# Les fixtures de la suite de tests contiennent des credentials VOLONTAIREMENT
+# faux (chantier rédaction N1-A) — le scanner les prendrait pour des vrais.
+tests_v2/
