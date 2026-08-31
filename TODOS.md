@@ -2,6 +2,16 @@
 
 ## Daemon V2
 
+### Hook SessionEnd Claude Code → émission agent_session immédiate
+
+**What:** Brancher un hook `SessionEnd` de Claude Code (`~/.claude/settings.json`) qui, à la fin d'une session, archive SON transcript puis émet SON événement `agent_session` en ciblé — au lieu d'attendre le passage horaire launchd + la fenêtre de silence de 60 min (la session de 7h30 du 30/08 n'aurait été émise qu'à 02:36 ; elle a en fait été masquée — cas rejoué le 2026-08-31).
+
+**Context:** Nécessite un mode ciblé dans le producteur (`--transcript PATH`, fenêtre de silence contournée pour ce seul fichier) + script hook rapide et fail-safe (ne jamais bloquer la fermeture ; l'outbox absorbe un daemon éteint). Portée : Claude Code seulement (Codex n'a pas de hooks) — le passage horaire launchd reste le filet de sécurité pour Codex et les hooks ratés. Décision à trancher avant d'implémenter : une reprise rapide (`claude --continue` sur le même transcript) après émission donne un résumé figé trop tôt (`grown_after_emit`) — la fenêtre de 60 min protégeait contre ça. Options : (a) accepter (le résumé couvre la session jusqu'à sa première fin ; une reprise forke souvent vers un nouveau fichier de toute façon) ; (b) filtrer sur la `reason` du hook ; (c) délai court au lieu d'émission immédiate.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Décision reprise-après-émission (a/b/c)
+
 ### Couverture d'observation en mode service (watcher fichiers + observateur d'apps sous launchd)
 
 **What:** Le watcher fichiers et `PulseApplicationObserver` ne tournent que sous `make dev` ; en mode service (launchd), le journal est aveugle aux fichiers et aux apps — le 2026-08-31 : `files_changed` 0, `applications` [] sur les deux sessions de la journée. Chantier : rendre ces deux observateurs résidents sous launchd, avec une liste de workspaces configurée à la place du cwd implicite de `make dev`.
