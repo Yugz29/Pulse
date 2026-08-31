@@ -18,19 +18,17 @@
 **Priority:** P4 (veille)
 **Depends on:** Aucun — item sentinelle, ne pas implémenter
 
+## Completed
+
 ### Remplacer le polling du file watcher par watchdog/FSEvents
 
 **What:** Migrer `file_watcher.py` du re-scan complet par seconde (`os.walk` + `stat`) vers la bibliothèque `watchdog` (FSEvents natif macOS).
 
 **Why:** Le scan par seconde coûte CPU/batterie en continu sur un gros workspace ; FSEvents est le mécanisme éprouvé [Layer 1] exact pour ce besoin, avec un coût quasi nul au repos et sans la fenêtre d'1 s où création+suppression rapide passe inaperçue.
 
-**Context:** Introduit une dépendance externe (le projet n'en a que Flask) et watchdog a ses propres pièges (événements groupés, renames). À faire APRÈS le chantier outbox du file watcher (décision 2A-révisée) — ne jamais mélanger changement de transport et changement de mécanisme de détection dans le même diff (règle de Beck : structurel et comportemental séparés).
+**Résolution:** Changement de détection uniquement (transport outbox intact — symétrique de 2A-révisée). Les pièges watchdog (coalescence FSEvents, types d'événements devinés, renames) sont neutralisés par design : watchdog (6.0.0, backend FSEvents vérifié) n'est qu'un notificateur de chemins sales (`DirtyPathCollector`, filtrage à la source), la vérité `created`/`modified`/`deleted` vient du snapshot (`resolve_dirty_paths` — stat des seuls chemins signalés, signature `(mtime_ns, taille)` inchangée → aucun événement, un save atomique reste `modified`, jamais `created`). Un événement répertoire coalescé s'étend aux enfants connus du snapshot + re-scan borné du répertoire s'il existe (mv d'arbres entiers couvert). `--interval` devient la fenêtre de coalescence ; observer mort = sortie bruyante pour dev.sh, après livraison des derniers événements. `compare_snapshots` supprimé (remplacé). Vérifié en réel sur FSEvents : créé/modifié/supprimé/save atomique/bruit `.git` — sémantique identique à l'ancien poller. 10 tests ajoutés, suite à 416.
 
-**Effort:** M
-**Priority:** P4
-**Depends on:** Chantier 2A-révisée (file_watcher via outbox) — livré le 2026-08-30, débloqué
-
-## Completed
+**Completed:** 2026-08-31
 
 ### Ne plus promouvoir un événement fort isolé en session pleine
 
