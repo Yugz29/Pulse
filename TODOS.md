@@ -2,6 +2,36 @@
 
 ## Daemon V2
 
+### Couverture d'observation en mode service (watcher fichiers + observateur d'apps sous launchd)
+
+**What:** Le watcher fichiers et `PulseApplicationObserver` ne tournent que sous `make dev` ; en mode service (launchd), le journal est aveugle aux fichiers et aux apps — le 2026-08-31 : `files_changed` 0, `applications` [] sur les deux sessions de la journée. Chantier : rendre ces deux observateurs résidents sous launchd, avec une liste de workspaces configurée à la place du cwd implicite de `make dev`.
+
+**Context:** Chantier majeur à cadrer avant d'implémenter (configuration des workspaces, cycle de vie launchd, coexistence avec `make dev`). Conséquence à assumer : le watcher FSEvents résident verrait alors les écritures de Claude Code comme n'importe quel `file_changed`.
+
+**Effort:** L
+**Priority:** P2
+**Depends on:** Cadrage (liste de workspaces, patron launchd existant : KeepAlive comme daemon/worker)
+
+### Kind `renamed` sémantique pour le watcher fichiers
+
+**What:** Émettre un vrai signal de renommage au lieu de la paire `deleted(src)` + `created(dest)`. C'est un changement de vocabulaire d'événement : ingestion + aval (timeline, renderers) n'ont aucun concept de rename aujourd'hui. watchdog fournit src+dest via `on_moved` — l'information que le poller n'a jamais eue, donc le chantier est devenu possible depuis la migration FSEvents (PR #23).
+
+**Déclencheur:** quand les paires delete+create rendent la reprise trompeuse — typiquement un refactor Claude Code avec renommages en masse.
+
+**Effort:** M
+**Priority:** P4
+**Depends on:** Cas réel observé (ne pas implémenter avant)
+
+### Enqueue outbox par lot pour le watcher fichiers
+
+**What:** Une transaction SQLite par fenêtre de coalescence au lieu d'une par événement (~3 ms/événement mesuré en run vivant, PR #23). Changement de transport pur — à ne jamais mélanger avec un changement de détection (règle de Beck).
+
+**Déclencheur:** rafale réelle non bornée par les ignore, ou latence d'enqueue mesurable dans le journal. Non-sujet tant que `node_modules`/`.venv`/`dist`/`build` restent exclus.
+
+**Effort:** S
+**Priority:** P4
+**Depends on:** Cas réel observé (ne pas implémenter avant)
+
 ### Limite connue : le raisonnement des conversations Claude.ai n'est pas capturable
 
 **What:** Le raisonnement le plus dense d'une journée peut vivre dans une conversation Claude.ai (web), hors de portée du pipeline local (`~/.claude/projects/` ne contient que les sessions Claude Code). Aucun correctif local ne peut combler ce trou — à décider consciemment plus tard si/comment le combler (export manuel périodique ? autre source ?).
