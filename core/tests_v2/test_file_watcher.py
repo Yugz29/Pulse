@@ -45,6 +45,28 @@ def test_snapshot_ignores_technical_paths(tmp_path):
     assert all(should_ignore(path, workspace) for path in ignored_paths)
 
 
+def test_gitnexus_index_churn_is_ignored_at_every_level(tmp_path):
+    workspace = tmp_path
+    tracked = workspace / "core" / "daemon_v2" / "routes.py"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("tracked")
+    index_paths = [
+        workspace / ".gitnexus" / "lbug",
+        workspace / ".gitnexus" / "csv" / "section.csv",
+        workspace / ".gitnexus" / "parse-cache" / "abc.json",
+    ]
+    for path in index_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("index")
+
+    snapshot = take_snapshot(workspace)
+
+    assert set(snapshot) == {tracked}
+    assert all(should_ignore(path, workspace) for path in index_paths)
+    assert should_ignore_directory(workspace / ".gitnexus", workspace)
+    assert should_ignore_directory(workspace / ".gitnexus" / "csv", workspace)
+
+
 def test_macos_swift_build_artifacts_never_enter_snapshot(tmp_path):
     workspace = tmp_path
     artifact = (

@@ -660,7 +660,8 @@ les activations produites par l’observateur Swift. `make dev` lance uniquement
 `PulseApplicationObserver`.
 
 Le watcher fichiers exclut les répertoires techniques `.build`, `.git`,
-`.venv`, `__pycache__`, `.pytest_cache`, `node_modules`, `dist` et `build`.
+`.gitnexus`, `.venv`, `__pycache__`, `.pytest_cache`, `node_modules`, `dist`
+et `build`.
 Ils ne produisent donc pas d’événements `file_changed`.
 
 La reconstruction considère les verrouillages et mises en veille comme des
