@@ -2,6 +2,8 @@
 
 Pas 2 de la roadmap V3 (voir `docs/VISION.md`). Seul changement autorisé dans Core depuis le gel 0.2.0.
 
+> Livré le 2026-09-02 dans Core 0.3.0 (branche `ship/context-api`). Ce document décrit **ce qui est livré** : les décisions d'implémentation prises pendant le chantier sont intégrées au contrat (§3) et récapitulées en §9, les limites connues en §10.
+
 ## 1. Objectif
 
 Exposer, en JSON et sans aucun modèle, une réponse à la question **« que se passe-t-il en ce moment ? »**, calculée à partir de `trace.db`. C'est le contrat stable entre Core et la couche Intelligence : Intelligence ne connaîtra jamais les tables SQLite, elle connaîtra ce JSON.
@@ -55,7 +57,7 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
   },
 
   "current_session": {
-    "id": "…",
+    "id": "2026-09-02/work-3",
     "started_at": "2026-09-02T13:40:00+00:00",
     "last_activity_at": "2026-09-02T15:51:48+00:00",
     "duration_minutes": 132,
@@ -89,7 +91,7 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
 
   "recent_sessions": [
     {
-      "id": "…",
+      "id": "2026-09-02/work-2",
       "started_at": "…",
       "ended_at": "…",
       "duration_minutes": 47,
@@ -108,7 +110,7 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
   ],
 
   "last_agent_session": {
-    "agent": "claude_code",
+    "agent": "claude-code",
     "started_at": "…",
     "ended_at": "…",
     "workspace": "/Users/yugz/Projets/Pulse",
@@ -125,16 +127,17 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
 | `schema_version` | Entier, `1`. Toute modification incompatible incrémente. Ajout de champ optionnel = compatible. |
 | `reference_at` | `at` si fourni, sinon `now` en UTC. Tout le calcul est relatif à cet instant. |
 | `timezone` | Celle de `_trace_timezone()`, informative seulement — **tous les timestamps sont en UTC ISO 8601 avec offset**. |
-| `workspace` | Résolu par le résolveur unique existant (`analysis/projects.py`). `resolution` ∈ `session` (workspace dominant de la session courante), `last_observed` (pas de session courante, dernier workspace vu dans la fenêtre), `none`. Quand `none`, `workspace` vaut `null`. |
-| `workspace.git` | Repris des détails **persistés** des événements (règle du 2026-08-30 : jamais l'état du disque au moment du rendu). `null` si aucun événement de la fenêtre ne porte d'info git pour ce workspace. |
-| `current_session` | La session dont `last_activity_at` est la plus récente **et** postérieure à `reference_at − session_gap` (le gap déjà utilisé par `session_tracker`). `is_open` = `true` dans ce cas. Si aucune session ne satisfait ça, `current_session` vaut `null`. On ne met **pas** la dernière session fermée à la place : « rien en cours » est une information. |
+| `workspace` | Résolu par le résolveur unique existant (`analysis/projects.py`, `persisted_workspace_identity`), jamais par `resolve_project_context` qui lit le disque. `resolution` ∈ `session` (workspace dominant de la session courante : le plus observé, égalité tranchée par le workspace attribué à la session puis par le chemin le plus petit), `last_observed` (pas de session courante, dernier workspace utile vu dans la fenêtre). Quand rien n'est résolu, `workspace` vaut `null` tout court : il n'y a pas de champ `resolution: "none"` orphelin. |
+| `workspace.git` | Repris des détails **persistés** des événements (règle du 2026-08-30 : jamais l'état du disque au moment du rendu). Le périmètre suit la résolution : `resolution == "session"` → calculé sur les activités de la session courante (une fenêtre de 5 min sur une session de 3 h connaît toujours le commit de la première heure) ; `last_observed` → sur la fenêtre. `branch` vient du dernier événement porteur (contexte git du producteur terminal ou `git_commit`), `dirty` du dernier contexte git terminal et vaut `null` si aucune commande de la période n'en portait (un `git_commit` ne renseigne pas l'état de l'arbre), `last_commit` du dernier événement `git_commit` (hash court, première ligne du message, instant). `null` si aucun événement du périmètre ne porte d'info git pour ce workspace. |
+| `current_session` | La session de travail (jamais une activité isolée) dont `last_activity_at` est la plus récente **et** postérieure à `reference_at − session_gap` (`DEFAULT_SESSION_GAP` de `session_tracker`, 30 min). `is_open` = `true` dans ce cas. Si aucune session ne satisfait ça, `current_session` vaut `null`. On ne met **pas** la dernière session fermée à la place : « rien en cours » est une information. Les sessions sont reconstruites jour local par jour local, comme la trace quotidienne, sur la journée entière jusqu'à `reference_at` : une session commencée avant la fenêtre garde ses vraies bornes. Identifiants de la forme `YYYY-MM-DD/work-N` (les identifiants de Core sont par jour). |
 | `current_session.apps` | Triées par activations décroissantes puis nom. `IGNORED_APP_NAMES_FOR_RENDERING` s'applique. Max 5. |
 | `current_session.files` | Chemins relatifs au workspace quand possible (même logique que `_display_file_path`). Dédupliqués, ordre de première apparition. Max 20 par catégorie, `truncated: true` si coupé. |
-| `current_session.terminal` | Réutilise `useful_command_lines`, `terminal_labels`, `is_interrupted_exit`, `is_pasted_prompt_command`. Une commande interrompue n'est pas une erreur. Max 10 par liste. |
+| `current_session.terminal` | Réutilise `useful_command_lines`, `is_test_command`, `is_interrupted_exit` (les prompts collés sont exclus par `useful_command_lines`). Une commande interrompue n'est pas une erreur. Max 10 par liste, `truncated: true` si une liste est coupée. |
+| `current_session.git` | `commits` ne compte que les événements `git_commit` du hook (preuve vérifiée, hash disponible) ; un `git commit` tapé sans hook ne produit pas d'entrée. `push_observed` vient des commandes `git push` observées au terminal. |
 | `current_session.signals` | Types d'activité présents dans la session, ordre fixe = ordre de `SUPPORTED_ACTIVITY_TYPES` trié. Pas de doublon. |
 | `recent_sessions` | Les sessions **fermées** dont `ended_at` ≥ `reference_at − window`, hors session courante, les plus récentes d'abord, max 3. Forme compacte uniquement. |
-| `isolated_signals` | Les activités isolées (règle du 2026-08-30 : un signal fort seul ne crée pas de session) dans la fenêtre, max 10, plus récentes d'abord. |
-| `last_agent_session` | Le dernier événement `agent_session` **sans limite de fenêtre** (une reprise a besoin du dernier résumé même s'il date d'hier). `null` si aucun. `summary` = le résumé figé de l'événement, jamais le transcript. |
+| `isolated_signals` | Les activités isolées (règle du 2026-08-30 : un signal fort seul ne crée pas de session) dans la fenêtre, max 10, plus récentes d'abord. `summary` : dernière ligne utile pour une commande, `Événement chemin-relatif` pour un fichier, le résumé stocké sinon. Un signal isolé dont le seul contenu est un prompt collé est écarté. |
+| `last_agent_session` | Le dernier événement `agent_session` **sans limite de fenêtre** (une reprise a besoin du dernier résumé même s'il date d'hier), mais borné par `reference_at` pour rester déterministe. `null` si aucun. `agent` = la valeur stockée de `source_tool` (`claude-code`, `codex`), telle quelle. `summary` = le résumé figé de l'événement, jamais le transcript. `age_minutes` compté depuis `ended_at`. |
 
 ### Ce que la réponse ne contient jamais
 
@@ -163,10 +166,12 @@ def build_context_snapshot(
     *,
     reference_at: datetime,
     window_minutes: int = 120,
+    local_timezone: tzinfo | None = None,
 ) -> dict[str, Any]: ...
 ```
 
-- Entrée : le store + un instant + une fenêtre. Sortie : un dict JSON-sérialisable.
+- Entrée : le store + un instant (avec fuseau, sinon `ValueError`) + une fenêtre. Sortie : un dict JSON-sérialisable.
+- `local_timezone` (ajout additif) ne décide que du début des jours locaux, comme `build_daily_trace` ; défaut = fuseau de la machine. Les tests passent UTC pour être indépendants de la machine ; la route n'y touche pas.
 - Réutilise `reconstruct_session_views`, le résolveur de workspace, `parse_status_output`, et les helpers de `analysis/terminal.py`. **Aucune duplication** de logique de classification : si un helper manque, il est ajouté dans `analysis/` et utilisé par les deux consommateurs.
 - Ne connaît ni Flask, ni le rendu.
 
@@ -181,7 +186,7 @@ Parse `window` et `at`, appelle `build_context_snapshot`, retourne `jsonify` ave
 
 ### Statut : `scripts/status.sh` et `/status`
 
-Ajoute une ligne `Contexte : session en cours depuis 2 h 12 · Pulse` (ou `aucune session en cours`) alimentée par `/context`. C'est la preuve d'usage minimale : le status consomme le contrat.
+`scripts/status.sh` affiche une ligne `Contexte : session en cours depuis 2 h 12 · Pulse` (ou `aucune session en cours`) lue sur `GET /context`. C'est la preuve d'usage minimale : le status consomme le contrat. `/status` expose en plus un bloc `context` compact (`session_open`, `duration_minutes`, `projects`, `workspace`) dérivé de `build_context_snapshot`.
 
 ### Ce qui ne change pas
 
@@ -204,18 +209,25 @@ Style existant : fixtures SQLite en mémoire, pas de mocks de Flask.
 - Base vide → `current_session`, `workspace`, `last_agent_session` à `null`, listes vides, 200.
 - Dernière activité plus vieille que le gap → `current_session: null`, `workspace.resolution: last_observed` si une activité est dans la fenêtre.
 - Activités présentes mais toutes hors fenêtre, sauf un `agent_session` ancien → `last_agent_session` rempli, le reste `null`/vide.
-- Session sans workspace résolu (que des `app_activated`) → `workspace: null`, `resolution: none`, session quand même retournée.
+- Session sans workspace résolu (cwd générique, fichiers hors projet) → `workspace: null`, session quand même retournée avec `projects: []`.
 - Deux workspaces dans la session → `projects` en contient deux, `workspace` = le dominant.
 - Signal fort isolé dans la fenêtre → dans `isolated_signals`, pas dans `current_session`.
 - Commande interrompue (exit 130) → absente de `terminal.errors`.
 - Prompt collé au shell → jamais dans la réponse.
 - 25 fichiers modifiés → 20 retournés, `truncated: true`.
+- Fenêtre de 5 min sur une session de 3 h avec un commit à la première heure → `workspace.git.last_commit` rempli (git suit la session).
+- Pas de session courante, commit dans la fenêtre et un autre avant → `workspace.git.last_commit` = celui de la fenêtre (git suit la fenêtre).
+- Apps triées par activations puis nom, bornées à 5.
+- Des lignes datées après `at` ajoutées à la base ne changent pas la réponse.
 
 **Route**
 - `GET /context` → 200, `schema_version: 1`.
 - `window=0`, `window=abc`, `window=99999` → 400.
 - `at=2026-09-02T14:00:00Z` → `reference_at` renvoyé à l'identique en UTC.
-- `at=hier` → 400.
+- `at=hier`, `at` sans fuseau, `at` non calendaire → 400.
+
+**Statut**
+- `/status` expose `context` (session ouverte, durée, projets, workspace) ; base vide → `session_open: false`.
 
 ## 7. Critères d'acceptation
 
@@ -231,3 +243,23 @@ Style existant : fixtures SQLite en mémoire, pas de mocks de Flask.
 - Toute forme de résumé textuel généré.
 - WebSocket / streaming / push : `/context` est pull, point.
 - Historique multi-jours : `window` max 24 h. Au-delà, c'est `/trace/<date>`.
+
+## 9. Décisions d'implémentation (2026-09-02)
+
+Prises pendant le chantier, relues et acceptées, intégrées au contrat ci-dessus :
+
+1. `workspace.git.dirty` est `bool | null` : `null` quand aucune commande terminal du périmètre n'a porté de contexte git.
+2. Rien de résolu → `workspace: null`, sans champ `resolution` orphelin.
+3. `workspace.git` suit la résolution du workspace (session courante entière si `session`, fenêtre si `last_observed`), pas la fenêtre seule.
+4. `current_session.git.commits` ne compte que les événements `git_commit` du hook ; `push_observed` vient du terminal.
+5. `last_agent_session.agent` = valeur stockée de `source_tool`, sans renommage.
+6. Identifiants de session `YYYY-MM-DD/work-N`.
+7. `build_context_snapshot` accepte `local_timezone` (additif) pour des tests indépendants de la machine.
+8. La session courante suit la règle du gap littéralement, sans tenir compte de la clôture `day_boundary` de la trace quotidienne (voir §10).
+
+Plus deux choix de robustesse : un signal isolé réduit à un prompt collé est écarté, et `/status` expose un bloc `context`.
+
+## 10. Limites connues
+
+- **Minuit local.** La trace quotidienne ferme toute session à minuit (`day_boundary`). `/context` applique le gap de 30 min tel quel : entre 00:00 et 00:30, une session de la veille encore dans le gap est rapportée comme courante alors que le HTML l'affiche fermée. Cas rare, assumé ; à réconcilier si un consommateur en souffre.
+- **Fuseau machine.** Les bornes de jour dépendent du fuseau de la machine qui sert la route (comme la trace quotidienne). Le JSON est déterministe pour une machine donnée.
