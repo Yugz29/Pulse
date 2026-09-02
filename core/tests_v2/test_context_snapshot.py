@@ -286,6 +286,55 @@ def test_window_keeps_the_closed_session_out_of_the_current_one(tmp_path):
     }
 
 
+def test_workspace_git_follows_the_session_not_the_window(tmp_path):
+    # Three hours of continuous work, one commit in the first hour, and a
+    # five-minute window: the workspace comes from the session, so its git
+    # facts do too.
+    activities = [terminal(-180, "pytest -q", git={
+        "branch": "main", "dirty": True, "git_root": PULSE, "head": "0000000",
+        "repository": "Pulse", "staged": 0, "unstaged": 2, "untracked": 0,
+    })]
+    activities.append(commit(-150, "abc1234ffffffff", "feat: première heure"))
+    activities += [
+        file_changed(minute, f"src/step_{minute}.py")
+        for minute in range(-160, 0, 20)
+    ]
+    activities.append(file_changed(-2, "src/last.py"))
+    store = make_store(tmp_path, *activities)
+
+    result = snapshot(store, window_minutes=5)
+
+    assert result["current_session"]["duration_minutes"] == 178
+    assert result["workspace"]["resolution"] == "session"
+    assert result["workspace"]["git"] == {
+        "branch": "main",
+        "dirty": True,
+        "last_commit": {
+            "hash": "abc1234",
+            "message": "feat: première heure",
+            "occurred_at": "2026-09-02T11:30:00+00:00",
+        },
+    }
+
+
+def test_workspace_git_uses_the_window_when_last_observed(tmp_path):
+    store = make_store(
+        tmp_path,
+        commit(-200, "1234567aaaaaaaa", "hors fenêtre"),
+        terminal(-190, "pytest -q"),
+        file_changed(-185, "a.py"),
+        file_changed(-100, "b.py"),
+        commit(-95, "7654321bbbbbbbb", "dans la fenêtre"),
+        file_changed(-90, "c.py"),
+    )
+
+    result = snapshot(store)
+
+    assert result["current_session"] is None
+    assert result["workspace"]["resolution"] == "last_observed"
+    assert result["workspace"]["git"]["last_commit"]["hash"] == "7654321"
+
+
 def test_recent_sessions_are_bounded_to_three_most_recent_first(tmp_path):
     activities = []
     for index, start in enumerate((-1000, -800, -600, -400)):

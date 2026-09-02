@@ -93,11 +93,19 @@ def build_context_snapshot(
     )
     workspace = None
     if workspace_root is not None:
+        # Git facts follow the resolution: the whole current session when the
+        # workspace comes from it (a 5-minute window on a 3-hour session must
+        # still know the session's last commit), the window otherwise.
+        git_scope = (
+            current["activities"]
+            if resolution == "session" and current is not None
+            else windowed
+        )
         workspace = {
             "path": workspace_root,
             "project": workspace_name,
             "resolution": resolution,
-            "git": _workspace_git(workspace_root, windowed),
+            "git": _workspace_git(workspace_root, git_scope),
         }
 
     return {
@@ -312,20 +320,20 @@ def _resolve_workspace(
 
 def _workspace_git(
     workspace_root: str,
-    windowed: list[dict[str, Any]],
+    activities: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    """Git facts persisted in the window's events for this workspace.
+    """Git facts persisted in the given events for this workspace.
 
     Never the disk at render time (decision of 2026-08-30): branch and
     dirtiness come from the terminal producer's git context, the last
     commit from git_commit events. ``dirty`` is null when no terminal
-    event carried a status.
+    event carried a status. ``None`` when no event carries git facts.
     """
     branch: str | None = None
     dirty: bool | None = None
     last_commit: dict[str, Any] | None = None
     observed = False
-    for activity in windowed:
+    for activity in activities:
         details = activity.get("details", {})
         if activity["type"] == "terminal_finished":
             git = details.get("git")
