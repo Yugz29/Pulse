@@ -341,6 +341,34 @@ class TraceStore:
             reverse=True,
         )
 
+    def latest_activity_of_type(
+        self,
+        activity_type: str,
+        *,
+        before: datetime,
+    ) -> StoredActivity | None:
+        """Most recent activity of ``activity_type`` occurred at or before ``before``.
+
+        Read-only lookup without a window: the Context API needs the last
+        ``agent_session`` even when it predates the requested window. The
+        upper bound keeps the answer deterministic for a fixed reference
+        instant — rows appended later, dated after it, never change it.
+        """
+        with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                """
+                SELECT * FROM activities
+                WHERE type = ?
+                  AND occurred_at_utc <= ?
+                ORDER BY occurred_at_utc DESC, id DESC
+                LIMIT 1
+                """,
+                (activity_type, utc_lexical(before)),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_stored_activity(row)
+
     def latest_activity_id(self) -> int:
         """Watermark for append-only caches: MAX(id), 0 on an empty store."""
         with closing(self._connect()) as connection, connection:
