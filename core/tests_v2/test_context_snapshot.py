@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from daemon_v2.context_snapshot import build_context_snapshot
+from daemon_v2.main import create_app
 from daemon_v2.models import Activity
 from daemon_v2.trace_store import TraceStore
 
@@ -527,3 +528,58 @@ def test_invalid_inputs_are_rejected(tmp_path):
         build_context_snapshot(
             store, reference_at=REFERENCE.replace(tzinfo=None)
         )
+
+
+# --- Route ------------------------------------------------------------------
+
+
+def test_route_returns_schema_version_one_with_sorted_keys(tmp_path):
+    app_ = create_app(tmp_path / "trace.db")
+    client = app_.test_client()
+
+    response = client.get("/context")
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/json"
+    body = response.get_json()
+    assert body["schema_version"] == 1
+    assert body["window_minutes"] == 120
+    ordered = json.loads(
+        response.get_data(as_text=True),
+        object_pairs_hook=lambda pairs: [key for key, _ in pairs],
+    )
+    assert ordered == sorted(ordered)
+
+
+@pytest.mark.parametrize("window", ["0", "abc", "99999", "4", "1441"])
+def test_route_rejects_invalid_window(tmp_path, window):
+    client = create_app(tmp_path / "trace.db").test_client()
+
+    response = client.get(f"/context?window={window}")
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()
+
+
+def test_route_echoes_the_reference_instant_in_utc(tmp_path):
+    client = create_app(tmp_path / "trace.db").test_client()
+
+    response = client.get("/context?at=2026-09-02T14:00:00Z&window=30")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["reference_at"] == "2026-09-02T14:00:00+00:00"
+    assert body["window_minutes"] == 30
+
+    offset = client.get("/context?at=2026-09-02T16:00:00%2B02:00").get_json()
+    assert offset["reference_at"] == "2026-09-02T14:00:00+00:00"
+
+
+@pytest.mark.parametrize("value", ["hier", "2026-09-02T14:00:00", "2026-13-01T00:00:00Z"])
+def test_route_rejects_invalid_reference_instant(tmp_path, value):
+    client = create_app(tmp_path / "trace.db").test_client()
+
+    response = client.get(f"/context?at={value}")
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()
