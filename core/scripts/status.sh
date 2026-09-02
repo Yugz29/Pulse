@@ -54,6 +54,28 @@ print(f"  Workspace principal: {workspace}")
 print("  Watcher terminal   : {}".format(status["terminal_watcher"]))
 '
 
+# Preuve d'usage minimale du Context API : le status consomme le contrat.
+context_url="${url%/status}/context"
+if context="$(curl --silent --fail --max-time 2 "$context_url")"; then
+  printf '%s' "$context" | "$python" -c '
+import json
+import sys
+
+snapshot = json.load(sys.stdin)
+session = snapshot["current_session"]
+if session is None:
+    print("  Contexte           : aucune session en cours")
+else:
+    minutes = session["duration_minutes"]
+    hours, remaining = divmod(minutes, 60)
+    since = f"{hours} h {remaining:02d}" if hours else f"{minutes} min"
+    projects = ", ".join(session["projects"]) or "projet non résolu"
+    print(f"  Contexte           : session en cours depuis {since} · {projects}")
+'
+else
+  echo "  Contexte           : indisponible (${context_url})"
+fi
+
 echo ""
 echo "Services launchd"
 for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers \

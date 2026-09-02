@@ -64,8 +64,24 @@ def _parse_reference_at(value: str | None) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _status_context(snapshot: dict) -> dict:
+    """Compact view of the Context API for /status: the first consumer."""
+    session = snapshot["current_session"]
+    workspace = snapshot["workspace"]
+    return {
+        "session_open": session is not None,
+        "duration_minutes": session["duration_minutes"] if session else None,
+        "projects": session["projects"] if session else [],
+        "workspace": workspace["path"] if workspace else None,
+    }
+
+
 def _build_status(trace):
     summary = build_daily_summary(trace)
+    snapshot = build_context_snapshot(
+        current_app.config["TRACE_STORE"],
+        reference_at=datetime.now(timezone.utc),
+    )
     last_event = None
     if trace["sessions"]:
         activity = trace["sessions"][-1]["activities"][-1]
@@ -92,6 +108,7 @@ def _build_status(trace):
         "grown_agent_sessions": count_grown_sessions(
             current_app.config.get("AGENT_SESSIONS_MANIFEST_PATH")
         ),
+        "context": _status_context(snapshot),
     }
 
 

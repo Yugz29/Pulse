@@ -583,3 +583,47 @@ def test_route_rejects_invalid_reference_instant(tmp_path, value):
 
     assert response.status_code == 400
     assert "error" in response.get_json()
+
+
+# --- Statut : premier consommateur du contrat ------------------------------
+
+
+def test_status_exposes_a_compact_context_block(tmp_path):
+    app_ = create_app(tmp_path / "trace.db")
+    client = app_.test_client()
+    now = datetime.now(timezone.utc)
+    for activity in (
+        Activity(
+            "terminal_finished", now - timedelta(minutes=12), "terminal",
+            "Command succeeded: pytest -q",
+            {"command": "pytest -q", "exit_code": 0, "cwd": PULSE, **workspace_details(PULSE)},
+        ),
+        Activity(
+            "file_changed", now - timedelta(minutes=2), "filesystem",
+            f"Modified {PULSE}/a.py",
+            {"path": f"{PULSE}/a.py", "event": "modified", "workspace": PULSE},
+        ),
+    ):
+        app_.config["TRACE_STORE"].append(activity)
+
+    status = client.get("/status").get_json()
+
+    assert status["context"] == {
+        "session_open": True,
+        "duration_minutes": 10,
+        "projects": ["Pulse"],
+        "workspace": PULSE,
+    }
+
+
+def test_status_reports_no_open_session_on_an_empty_store(tmp_path):
+    client = create_app(tmp_path / "trace.db").test_client()
+
+    status = client.get("/status").get_json()
+
+    assert status["context"] == {
+        "session_open": False,
+        "duration_minutes": None,
+        "projects": [],
+        "workspace": None,
+    }
