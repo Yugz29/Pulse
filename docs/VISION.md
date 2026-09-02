@@ -83,12 +83,12 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, gelé en 0.2.0** (`core/`). Daemon Flask et SQLite
-append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers (FSEvents),
-applications (Swift), hook Git, sessions d'agents Claude Code / Codex en
-événements dérivés, services résidents sous launchd, vue HTML locale. 432 tests.
-Le Context API manque encore : c'est le pas 2 de la roadmap, le seul
-changement prévu dans Core.
+**État actuel : existe, gelé, version 0.3.0** (`core/`). Daemon Flask et
+SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
+(FSEvents), applications (Swift), hook Git, sessions d'agents Claude Code /
+Codex en événements dérivés, services résidents sous launchd, vue HTML locale.
+462 tests. Le Context API (`GET /context`, pas 2 de la roadmap) est livré en
+0.3.0 : c'était le seul changement prévu dans Core, qui est de nouveau gelé.
 
 ### Intelligence — transformer les faits en contexte
 
@@ -148,7 +148,8 @@ résumés à indexer, pas avant.
    2026-08-31. Core ne bouge plus, sauf pour le pas 2.
 2. **Context API.** `GET /context` déterministe, sans LLM : activité courante,
    projet, session, historique récent. C'est le contrat stable que les couches
-   supérieures consomment.
+   supérieures consomment. Livré le 2026-09-02 (Core 0.3.0), spec dans
+   [`specs/2026-09-02-context-api.md`](specs/2026-09-02-context-api.md).
 3. **Première boucle IA.** Résumé de session par un modèle local, stocké comme
    événement dérivé, même patron que `agent_session`. Le résumé alimente la
    reprise et servira de matière à la mémoire.
