@@ -1,3 +1,5 @@
+# Racine du repo unique Pulse. Le .gitignore de core/ reste en place et
+# s'applique sous core/ ; aucun motif n'est ancré, donc tout est couvert.
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -6,9 +8,8 @@ __pycache__/
 .swiftpm/
 data/
 *.sqlite3
+*.db
 .DS_Store
 cortex-snapshot.json
-.claude
-.gitnexus
-AGENTS.md
-CLAUDE.md
+.claude/
+.gitnexus/
