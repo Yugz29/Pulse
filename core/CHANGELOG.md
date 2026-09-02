@@ -4,6 +4,30 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.3.0.0] - 2026-09-02
+
+Pas 2 de la roadmap V3 : le Context API. Seul changement prévu dans Core
+depuis le gel ; Core est de nouveau gelé après cette version.
+
+### Ajouté
+- Route `GET /context` : réponse JSON déterministe, sans modèle, à « que se
+  passe-t-il en ce moment ? » — workspace (résolveur unique, git persisté
+  uniquement), session courante bornée (apps, fichiers, commits, tests,
+  erreurs, signaux), sessions récentes, signaux isolés, dernier
+  `agent_session` sans limite de fenêtre. Paramètres `window` (5–1440 min,
+  défaut 120) et `at` (instant de référence, défaut maintenant). Même base +
+  même `at` + même `window` → même JSON, `generated_at` excepté. Contrat
+  `schema_version: 1`, spec dans `docs/specs/2026-09-02-context-api.md`.
+- Module pur `daemon_v2/context_snapshot.py` : ne connaît ni Flask ni le
+  rendu, réutilise la reconstruction des sessions et les helpers d'analyse.
+- Lecture `TraceStore.latest_activity_of_type`, bornée par un instant.
+- `/status` expose un bloc `context` compact et `scripts/status.sh` affiche
+  une ligne « Contexte : session en cours depuis … · projet » lue sur
+  `/context` : premier consommateur du contrat.
+
+Suite portée à 462 tests. `daily_trace.py`, `trace_store.py` (hors lecture
+ajoutée), `session_tracker.py`, `models.py` et les renderers sont inchangés.
+
 ## [0.2.0.0] - 2026-08-31
 
 Le journal s'étend aux sessions d'agents IA et devient un service autonome.

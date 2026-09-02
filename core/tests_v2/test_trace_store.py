@@ -374,3 +374,55 @@ def test_every_store_operation_closes_its_connection(tmp_path, monkeypatch):
     for connection in opened:
         with pytest.raises(sqlite3.ProgrammingError):
             connection.execute("SELECT 1")
+
+
+def test_latest_activity_of_type_is_bounded_by_reference_instant(tmp_path):
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    base = datetime(2026, 9, 2, 8, 0, tzinfo=timezone.utc)
+
+    def agent_session(moment, session_id):
+        return Activity(
+            "agent_session",
+            moment,
+            "agent",
+            f"Agent session (claude-code): {session_id}",
+            {"source_tool": "claude-code", "session_id": session_id},
+        )
+
+    store.append(activity(base))
+    older = store.append(agent_session(base + timedelta(minutes=5), "older"))
+    newer = store.append(agent_session(base + timedelta(hours=3), "newer"))
+
+    assert store.latest_activity_of_type("agent_session", before=base) is None
+    assert store.latest_activity_of_type("git_commit", before=base + timedelta(days=1)) is None
+
+    bounded = store.latest_activity_of_type(
+        "agent_session", before=base + timedelta(hours=1)
+    )
+    assert bounded is not None and bounded.id == older.id
+
+    inclusive = store.latest_activity_of_type(
+        "agent_session", before=base + timedelta(hours=3)
+    )
+    assert inclusive is not None and inclusive.id == newer.id
+
+
+def test_latest_activity_of_type_prefers_highest_id_on_equal_instants(tmp_path):
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    moment = datetime(2026, 9, 2, 8, 0, tzinfo=timezone.utc)
+    store.append(
+        Activity(
+            "agent_session", moment, "agent", "first",
+            {"source_tool": "codex", "session_id": "a"},
+        )
+    )
+    second = store.append(
+        Activity(
+            "agent_session", moment, "agent", "second",
+            {"source_tool": "codex", "session_id": "b"},
+        )
+    )
+
+    latest = store.latest_activity_of_type("agent_session", before=moment)
+
+    assert latest is not None and latest.id == second.id

@@ -62,9 +62,9 @@ Direction, architecture, roadmap et décisions : `docs/VISION.md` (canonique).
 
 ## Jamais
 
-- **Core est gelé en 0.2.0.** Ne pas modifier `core/daemon_v2/`,
-  `core/tests_v2/`, `core/scripts/`, `core/macos_observer/` hors du pas 2 de
-  la roadmap (Context API), explicitement demandé.
+- **Core est gelé (0.3.0, pas 2 Context API livré).** Ne pas modifier
+  `core/daemon_v2/`, `core/tests_v2/`, `core/scripts/`, `core/macos_observer/`
+  sans demande explicite de l'utilisateur.
 - Pas de `git push` sans accord explicite de l'utilisateur.
 - Aucune suppression de fichier sans accord explicite ; préférer l'archive.
 - Pas de refactor opportuniste de `core/TODOS.md`, `core/CHANGELOG.md` ni des

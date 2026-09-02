@@ -1,7 +1,7 @@
 # Pulse Core
 
-> **Core est gelé en 0.2** — aucune évolution fonctionnelle n'est prévue dans
-> cette couche. La direction du projet, les couches à construire et la roadmap
+> **Core est gelé** (version 0.3.0, après le pas 2 « Context API ») — aucune
+> autre évolution fonctionnelle n'est prévue dans cette couche. La direction du projet, les couches à construire et la roadmap
 > sont dans [`../docs/VISION.md`](../docs/VISION.md).
 
 Pulse V2 observe l’activité locale de développement, conserve une trace locale en append-only, regroupe les événements en sessions et reconstruit une vue lisible de la journée en cours.
@@ -328,6 +328,7 @@ curl -X POST http://127.0.0.1:8765/activities \
 | --- | --- | --- |
 | `/` | HTML | Vue vivante de la journée en cours |
 | `/status` | JSON | État local du daemon et de la trace du jour |
+| `/context` | JSON | Context API : le présent, déterministe et sans modèle |
 | `/activities` | JSON | Ingestion d’une activité par `POST` |
 | `/trace/today` | JSON | Trace structurée de la journée en cours |
 | `/trace/today.md` | Markdown | Trace lisible de la journée en cours |
@@ -348,6 +349,25 @@ Pour une trace Markdown lisible, regroupée par session :
 ```bash
 curl http://127.0.0.1:8765/trace/today.md
 ```
+
+### Context API (`/context`)
+
+`GET /context` répond à « que se passe-t-il en ce moment ? » à partir de
+`trace.db` uniquement : aucun modèle, aucune lecture du disque ni de Git au
+rendu. La réponse (`schema_version: 1`) contient le workspace résolu et ses
+faits git persistés, la session courante (durée, projets, apps, fichiers,
+commits, tests, erreurs, signaux), les sessions récentes fermées, les signaux
+isolés et le dernier `agent_session`. C'est le contrat stable que la couche
+Intelligence consomme (voir `../docs/specs/2026-09-02-context-api.md`).
+
+```bash
+curl -s http://127.0.0.1:8765/context | jq .current_session.projects
+curl -s 'http://127.0.0.1:8765/context?window=30&at=2026-09-02T14:00:00Z'
+```
+
+`window` (minutes, défaut 120, de 5 à 1440) et `at` (instant de référence
+ISO 8601 avec fuseau, défaut maintenant) invalides renvoient 400. Même base,
+même `at`, même `window` → même JSON, `generated_at` excepté.
 
 ### Vue vivante et vue archive
 

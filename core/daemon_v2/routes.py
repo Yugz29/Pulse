@@ -1,12 +1,18 @@
 """HTTP routes for activity ingestion and daily trace retrieval."""
 
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 import re
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
 from .agent_sessions import count_grown_sessions
+from .context_snapshot import (
+    DEFAULT_WINDOW_MINUTES,
+    MAX_WINDOW_MINUTES,
+    MIN_WINDOW_MINUTES,
+    build_context_snapshot,
+)
 from .daily_trace import (
     build_available_days,
     build_daily_summary,
@@ -31,8 +37,51 @@ def _parse_trace_date(value: str) -> date:
     return date.fromisoformat(value)
 
 
+def _parse_window(value: str | None) -> int:
+    if value is None:
+        return DEFAULT_WINDOW_MINUTES
+    try:
+        window = int(value)
+    except ValueError:
+        window = -1
+    if not MIN_WINDOW_MINUTES <= window <= MAX_WINDOW_MINUTES:
+        raise ValueError(
+            "window must be an integer number of minutes between "
+            f"{MIN_WINDOW_MINUTES} and {MAX_WINDOW_MINUTES}"
+        )
+    return window
+
+
+def _parse_reference_at(value: str | None) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.tzinfo is None:
+        raise ValueError("at must be an ISO 8601 timestamp with a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def _status_context(snapshot: dict) -> dict:
+    """Compact view of the Context API for /status: the first consumer."""
+    session = snapshot["current_session"]
+    workspace = snapshot["workspace"]
+    return {
+        "session_open": session is not None,
+        "duration_minutes": session["duration_minutes"] if session else None,
+        "projects": session["projects"] if session else [],
+        "workspace": workspace["path"] if workspace else None,
+    }
+
+
 def _build_status(trace):
     summary = build_daily_summary(trace)
+    snapshot = build_context_snapshot(
+        current_app.config["TRACE_STORE"],
+        reference_at=datetime.now(timezone.utc),
+    )
     last_event = None
     if trace["sessions"]:
         activity = trace["sessions"][-1]["activities"][-1]
@@ -59,6 +108,7 @@ def _build_status(trace):
         "grown_agent_sessions": count_grown_sessions(
             current_app.config.get("AGENT_SESSIONS_MANIFEST_PATH")
         ),
+        "context": _status_context(snapshot),
     }
 
 
@@ -75,6 +125,23 @@ def get_home():
 def get_status():
     trace = build_daily_trace(current_app.config["TRACE_STORE"])
     return jsonify(_build_status(trace))
+
+
+@api.get("/context")
+def get_context():
+    """Context API (pas 2 de la roadmap V3): the present, without a model."""
+    try:
+        window = _parse_window(request.args.get("window"))
+        reference_at = _parse_reference_at(request.args.get("at"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(
+        build_context_snapshot(
+            current_app.config["TRACE_STORE"],
+            reference_at=reference_at,
+            window_minutes=window,
+        )
+    )
 
 
 @api.post("/activities")
