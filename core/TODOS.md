@@ -2,6 +2,16 @@
 
 ## Daemon V2
 
+### Rendre publics les helpers de timeline importés par deux consommateurs
+
+**What:** Rendre publics `_app_activation_counts`, `_display_file_path` et `_is_strong_work_activity` dans `analysis/timeline.py` — ils sont maintenant importés par deux consommateurs (`daily_trace.py` et `context_snapshot.py`, Context API 0.3.0). Renommage sans underscore, alias privés conservés le temps de migrer les imports, comme pour les alias de `daily_trace.py`.
+
+**Déclencheur:** prochaine modification de `analysis/timeline.py`. Ne pas ouvrir un chantier dédié.
+
+**Effort:** S
+**Priority:** P4
+**Depends on:** Aucun
+
 ### Segments de reprise pour agent_session
 
 **What:** Émettre la continuation d'une session reprise après émission comme un **segment** supplémentaire (nouvel événement borné, même `session_id`, `segment: 2`), au lieu du statu quo « résumé figé, reprise invisible » (`grown_after_emit`). Conséquence assumée de la décision (a) du 2026-08-31 : l'émission immédiate à SessionEnd fige le résumé à la première fin de session.
