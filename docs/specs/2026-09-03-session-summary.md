@@ -77,7 +77,9 @@ Venv séparée de Core. Python identique.
   "summary": "<première ligne de la reprise>",
   "workspace": "<workspace_root de la session, s'il existe>",
   "details": {
-    "session_id": "2026-09-02/work-3",
+    "session_id": "3f9c2a1b7e4d5c60",
+    "source_event_ids_hash": "3f9c2a1b7e4d5c60",
+    "session_label": "work-3",
     "session_started_at": "…",
     "session_ended_at": "…",
     "prompt_version": "v1",
@@ -110,7 +112,9 @@ Règles :
 - `structured.intents` : 0 à 3 entrées. `central_files` : 0 à 5, chemins relatifs. `blockers` : 0 à 3.
 - Aucun contenu de commande, aucun prompt collé, aucun transcript ne transite : l'entrée du modèle est `GET /context`, qui applique déjà ces règles.
 
-Validation Core (`ingest.py`) : `session_id`, `prompt_version`, `model_id` chaînes non vides ; `reprise` dict avec les trois clés chaînes ; `structured` dict avec `project` chaîne ou null et `confidence` dans l'énumération. Le reste est passé tel quel.
+`session_id` est l'**identité stable** de la session (Core 0.5.0) : le sha256 tronqué à 16 hex des `event_id` de ses activités, triés, tel que `GET /context/sessions` l'expose — jamais l'ordinal `work-N`, qui bouge dès qu'un événement tardif s'insère dans la journée. `source_event_ids_hash` est requis et égal à `session_id` (il rend explicite que la clé est un hash de composition). `session_label` (optionnel) porte l'ordinal pour l'affichage.
+
+Validation Core (`ingest.py`) : `session_id` chaîne de 16 hex (400 avec `field` sinon), `source_event_ids_hash` égal à `session_id`, `session_label` chaîne non vide si présent, `prompt_version`, `model_id` chaînes non vides ; `reprise` dict avec les trois clés chaînes ; `structured` dict avec `project` chaîne ou null et `confidence` dans l'énumération. Le reste est passé tel quel.
 
 ## 7. Sélection, entrée du modèle, prompt
 

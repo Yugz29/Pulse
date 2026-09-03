@@ -4,6 +4,41 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.5.0.0] - 2026-09-03
+
+Identité stable des sessions de travail. Bloqueur trouvé en relecture du
+pas 3 : l'ordinal `work-N` est recalculé à chaque reconstruction, un
+événement tardif (rejeu d'outbox, `agent_session` émis après coup) décale la
+numérotation, et un résumé attaché à `work-1` désignait une autre session
+le lendemain. On ne bâtit pas la mémoire sur une clé instable.
+
+### Modifié
+- L'`id` d'une session de travail est le sha256 tronqué à 16 hex des
+  `event_id` de ses activités, triés : déterministe, sans état, correct par
+  construction. `work-N` reste comme `label`. Chaque session porte
+  `source_event_ids` (triés) et `reconstruction_version` (constante de
+  `analysis/timeline.py`, 1, à incrémenter à chaque changement des règles
+  de sessionnisation).
+- Context API `schema_version` 2 (incompatible : l'ancien `id` change de
+  sens) : `current_session` et `recent_sessions` exposent `id`, `label`,
+  `source_event_ids`, `reconstruction_version` ; `last_session_summary`
+  expose `id` et `label`.
+- `session_summary` : `details.session_id` doit être le hash de 16 hex
+  (400 avec `field` sinon), `details.source_event_ids_hash` requis et égal à
+  `session_id`, `details.session_label` optionnel.
+- Rendu HTML/Markdown inchangé : aucun renderer ne lisait l'`id`.
+
+### Ajouté
+- Route `GET /context/sessions?date=YYYY-MM-DD` (défaut aujourd'hui, `at`
+  optionnel) : les sessions de travail closes de la journée locale dans la
+  forme exacte de `current_session` (même code, mêmes bornes 20/10/5), plus
+  `is_open`. Un consommateur qui mémorise des sessions lit cette route et
+  ne reconstruit rien.
+
+Suite portée à 492 tests, dont celui qui démontre le bug : deux événements
+à 14 h font une session ; un événement inséré à 10 h déplace les labels,
+l'identité de la session de 14 h ne bouge pas.
+
 ## [0.4.0.0] - 2026-09-03
 
 Pas 3 de la roadmap V3, côté Core : le type d'événement `session_summary`.
