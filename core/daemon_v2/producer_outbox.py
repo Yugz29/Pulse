@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sqlite3
+import time
 from contextlib import closing
 import sys
 import uuid
@@ -49,6 +50,14 @@ class PendingEvent:
     last_error: str | None
 
 
+# Attente du busy handler SQLite (connexion et pragma) : 5 s.
+_BUSY_TIMEOUT_MS = 5000
+# Passage en WAL d'une base neuve sous contention : 20 × 50 ms = 1 s au pire
+# (hors attente du busy handler quand un verrou est réellement tenu).
+_WAL_SWITCH_ATTEMPTS = 20
+_WAL_SWITCH_RETRY_DELAY_S = 0.05
+
+
 class ProducerOutbox:
     def __init__(self, database_path: str | Path | None = None) -> None:
         self.database_path = str(database_path or default_outbox_path())
@@ -60,13 +69,30 @@ class ProducerOutbox:
     # collector leaks one fd per operation and hits launchd's 256-fd
     # limit in minutes (2026-08-30 outage: worker down, EMFILE).
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path, timeout=5.0)
+        connection = sqlite3.connect(
+            self.database_path, timeout=_BUSY_TIMEOUT_MS / 1000
+        )
         connection.row_factory = sqlite3.Row
+        connection.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
         # WAL : 3 producteurs (hook zsh, hook git, observateur Swift) et le
         # worker écrivent ce fichier en parallèle ; en journal DELETE un
         # SQLITE_BUSY à l'enqueue = événement perdu avant la file durable.
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA busy_timeout=5000")
+        #
+        # Le passage en WAL réclame un verrou exclusif et ne passe pas par le
+        # busy handler : sur une base NEUVE, deux premiers connecteurs
+        # simultanés (make reset puis dev.sh qui lance ses producteurs d'un
+        # coup) se le disputent — « database is locked », 13 fois sur 40 en
+        # local le 2026-09-03. On réessaie brièvement au lieu de faire
+        # échouer le producteur ; une base déjà en WAL ne repasse jamais ici.
+        for attempt in range(1, _WAL_SWITCH_ATTEMPTS + 1):
+            try:
+                connection.execute("PRAGMA journal_mode=WAL")
+                break
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() or attempt == _WAL_SWITCH_ATTEMPTS:
+                    connection.close()
+                    raise
+                time.sleep(_WAL_SWITCH_RETRY_DELAY_S)
         return connection
 
     def _initialize(self) -> None:

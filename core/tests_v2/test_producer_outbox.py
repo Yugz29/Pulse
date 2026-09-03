@@ -1107,3 +1107,56 @@ def test_new_outbox_is_private_regardless_of_the_ambient_umask(tmp_path):
 
     assert stat.S_IMODE((tmp_path / "private").stat().st_mode) == 0o700
     assert stat.S_IMODE(Path(outbox.database_path).stat().st_mode) == 0o600
+
+
+def test_four_producers_creating_the_same_fresh_outbox_agree_on_one_instance_id(tmp_path):
+    # Course observée le 2026-09-03 : sur une base NEUVE, le PRAGMA
+    # journal_mode=WAL de deux premiers connecteurs simultanés échouait en
+    # « database is locked » (13 fois sur 40). Quatre créateurs lâchés au
+    # même instant, dix bases neuves : zéro exception, un seul instance_id.
+    for round_index in range(10):
+        database = tmp_path / f"outbox-{round_index}.sqlite3"
+        barrier = threading.Barrier(4)
+        results, errors = [], []
+
+        def worker():
+            try:
+                barrier.wait(timeout=5)
+                results.append(ProducerOutbox(database).producer_instance_id())
+            except Exception as exc:  # noqa: BLE001 — le test veut zéro exception
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        assert errors == [], errors
+        assert len(results) == 4
+        assert len(set(results)) == 1
+
+
+def test_wal_switch_gives_up_on_a_lock_held_beyond_the_retries(tmp_path, monkeypatch):
+    from daemon_v2 import producer_outbox as module
+
+    database = tmp_path / "outbox.sqlite3"
+    # Une base neuve en journal DELETE, verrouillée en exclusif par ailleurs :
+    # le passage en WAL ne peut pas aboutir.
+    holder = sqlite3.connect(database)
+    holder.execute("CREATE TABLE t(x)")
+    holder.execute("BEGIN EXCLUSIVE")
+    monkeypatch.setattr(module, "_WAL_SWITCH_ATTEMPTS", 3)
+    monkeypatch.setattr(module, "_WAL_SWITCH_RETRY_DELAY_S", 0.01)
+    monkeypatch.setattr(module, "_BUSY_TIMEOUT_MS", 50)  # sinon 5 s par tentative
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            ProducerOutbox(database)
+    finally:
+        holder.rollback()
+        holder.close()
+
+    # Verrou levé : la création aboutit et la base est bien en WAL.
+    outbox = ProducerOutbox(database)
+    with sqlite3.connect(outbox.database_path) as probe:
+        assert probe.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
