@@ -1,6 +1,6 @@
 # Pulse
 
-[![core](https://github.com/Yugz29/Pulse/actions/workflows/core.yml/badge.svg)](https://github.com/Yugz29/Pulse/actions/workflows/core.yml)
+[![core](https://github.com/Yugz29/Pulse/actions/workflows/core.yml/badge.svg)](https://github.com/Yugz29/Pulse/actions/workflows/core.yml) [![intelligence](https://github.com/Yugz29/Pulse/actions/workflows/intelligence.yml/badge.svg)](https://github.com/Yugz29/Pulse/actions/workflows/intelligence.yml)
 
 Pulse est une IA personnelle locale : elle observe l'activité de développement
 sur le Mac, en garde une trace fidèle, reconstruit le contexte courant et, plus

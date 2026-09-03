@@ -1,0 +1,29 @@
+# CI de Pulse Intelligence : la suite pytest d'intelligence/, sans l'extra mlx.
+#
+# Fichier séparé de core.yml : les deux couches ont leur propre cycle de vie
+# (versions, venv, dépendances), Intelligence n'a rien de spécifique à macOS
+# tant que le modèle n'est pas là (ubuntu-latest suffit et démarre plus
+# vite), et un badge par composant dit lequel casse. Le jour où MLX entre
+# dans la suite, ce job passera sur macos-latest sans toucher à core.yml.
+name: intelligence
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: intelligence
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Dépendances (sans l'extra mlx)
+        run: pip install -e '.[dev]'
+      - name: Tests
+        run: python -m pytest -q

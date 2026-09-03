@@ -4,11 +4,11 @@ Couche Intelligence de Pulse (pas 3 de la roadmap, voir `../docs/VISION.md`).
 Premier composant : le résumé de session, spec v2 dans
 `../docs/specs/2026-09-03-session-summary.md`.
 
-État : **squelette** (étape 1 du §12). Sélection des sessions closes,
-entrée du modèle, parsing et validation de sa sortie, construction de
-l'événement `session_summary`, CLI `list` et `summarize --dry-run` avec un
-faux modèle. Pas encore de modèle MLX, de prompt, de job résident ni d'API :
-étapes 2 à 5.
+État : **CLI complète avec faux modèle** (étapes 1 et 2 du §12). Sélection
+des sessions closes, entrée du modèle, parsing et validation de sa sortie,
+événement `session_summary`, émission idempotente avec état local, CLI
+`list`, `summarize`, `run`, `show`. Pas encore de modèle MLX ni de prompt
+(étape 3), ni de service résident (étape 5).
 
 ## Principes (spec §3)
 
@@ -34,7 +34,8 @@ pulse_intelligence/
   session_input.py     # vue de session → entrée du modèle (+ annexes)
   session_summary.py   # parsing, validation, événement, summarize_session()
   state.py             # état local (~/.pulse_intelligence/state.json, 0700/0600)
-  cli.py               # pulse-intel list | summarize
+  cli.py               # pulse-intel list | summarize | run | show
+scripts/fix_permissions.sh   # ~/.pulse_intelligence en 0700/0600, idempotent
 tests/                 # faux Core Flask + faux modèle, aucun test ne charge MLX
 ```
 
@@ -47,13 +48,22 @@ python3.14 -m venv .venv
 .venv/bin/python -m pytest -q
 ```
 
-## Usage (étape 1)
+## Usage (étapes 1 et 2)
 
 ```bash
 pulse-intel list                                          # sessions closes d'aujourd'hui et d'hier
 pulse-intel list --date 2026-09-02 --json
 pulse-intel summarize <id> --dry-run --fake sortie.json   # tout sauf l'émission
+pulse-intel run --once --fake sortie.json                 # toutes les candidates, un passage
+pulse-intel show latest --md                              # la dernière reprise, trois lignes
+pulse-intel show <id>                                     # l'événement émis (copie locale)
 ```
+
+`--fake FICHIER` est obligatoire pour `summarize` et `run` tant qu'il n'y a
+pas de vrai modèle. L'état local `~/.pulse_intelligence/state.json` retient
+ce qui a été résumé et ce qui a échoué trois fois : ces sessions ne sont plus
+candidates, le modèle n'est jamais recontacté pour elles. `run` sans
+`--once` refait un passage toutes les `tick_minutes` jusqu'à Ctrl-C.
 
 Core arrêté : message et code de sortie 2. Un Core en `schema_version` ≠ 2
 est refusé (Core ≥ 0.5.0 requis).
