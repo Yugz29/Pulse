@@ -218,17 +218,48 @@ def _is_internal_pulse_curl(command: str) -> bool:
     return match is not None and int(match.group(1)) in _pulse_ports()
 
 
+def _shell_continuation_state(
+    line: str,
+    open_quote: str | None,
+) -> tuple[str | None, bool]:
+    escaped = False
+    for character in line:
+        if open_quote == "'":
+            if character == "'":
+                open_quote = None
+            continue
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\":
+            escaped = True
+        elif open_quote == '"':
+            if character == '"':
+                open_quote = None
+        elif character in {"'", '"'}:
+            open_quote = character
+    return open_quote, escaped
+
+
 def filter_terminal_command(command: str) -> str | None:
     useful_lines = []
     ignoring_internal_curl = False
+    open_curl_quote: str | None = None
     for line in command.splitlines():
         stripped_line = line.strip()
         normalized_line = " ".join(stripped_line.split())
         if ignoring_internal_curl:
+            open_curl_quote, continued = _shell_continuation_state(
+                line,
+                open_curl_quote,
+            )
+            ignoring_internal_curl = open_curl_quote is not None or continued
             continue
         if _is_internal_pulse_curl(normalized_line):
-            # Remaining lines may be curl options or a multiline JSON body.
-            ignoring_internal_curl = True
+            # Ignore only the physical lines belonging to this curl: an
+            # explicit continuation or a still-open quoted body.
+            open_curl_quote, continued = _shell_continuation_state(line, None)
+            ignoring_internal_curl = open_curl_quote is not None or continued
             continue
         if normalized_line and normalized_line not in _IGNORED_TERMINAL_COMMANDS:
             useful_lines.append(stripped_line)
