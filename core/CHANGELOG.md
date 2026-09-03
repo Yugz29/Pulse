@@ -4,6 +4,36 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.5.3.0] - 2026-09-03
+
+Deux corrections issues de l'audit externe du pas 3 (PR #35), livrées avec
+la correction jumelle côté Intelligence (PR #36 : payload de résumé gelé
+dans l'état local avant le POST vers Core, rejoué octet pour octet tant que
+Core n'a pas confirmé). Note de décision
+`docs/decisions/2026-09-03-agent-session-hors-identite.md`.
+
+### Corrigé
+- `agent_session` hors identité des sessions : émis après coup (hook
+  `SessionEnd`, passage horaire launchd) avec un `occurred_at` au milieu
+  d'une session déjà reconstruite, il en changeait l'`id` (hash des sources)
+  et les bornes, donc un résumé attaché désignait un ensemble d'événements
+  disparu. Il n'est plus un signal fort et ne compose plus ni
+  `source_event_ids` ni `started_at`/`ended_at` ; il reste exposé par
+  `/context.last_agent_session`. Effet de bord accepté : il ne fait plus
+  pont entre deux grappes à moins de 30 min de lui.
+- Watcher fichiers : `resolve_dirty_paths` avançait le snapshot avant
+  l'enqueue dans l'outbox, un refus (verrou, disque) perdait le changement
+  pour de bon. Détection pure (`detect_changes`), snapshot avancé sur succès
+  seulement, chemins refusés re-signalés au passage suivant jusqu'à succès.
+
+### Ajouté
+- Trace journalière : section « Sessions d'agent » (HTML et Markdown), hors
+  Session et hors « Activité non attribuée », avec les bornes stockées et le
+  résumé figé de chaque `agent_session`. Affichage seulement, rien n'est
+  recalculé.
+
+Suite portée à 521 tests.
+
 ## [0.5.2.0] - 2026-09-03
 
 ### Corrigé
