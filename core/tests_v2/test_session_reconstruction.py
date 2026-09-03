@@ -747,3 +747,89 @@ def test_mixed_offsets_use_journal_timezone_in_json_markdown_and_html(tmp_path):
     assert "<time>11:01</time>" in html
     assert "<time>11:02</time>" in html
     assert "<time>11:03</time>" in html
+
+
+# --- Identité stable des sessions (Core 0.5.0) ------------------------------
+
+
+def _stored(store: TraceStore, event_type: str, moment: datetime, details: dict):
+    summaries = {
+        "terminal_finished": f"Command succeeded: {details.get('command', '')}",
+        "file_changed": f"Modified {details.get('path', '')}",
+        "git_commit": "Commit",
+    }
+    return store.append(
+        Activity(event_type, moment, "test", summaries[event_type], details)
+    )
+
+
+def test_late_event_moves_labels_but_never_the_session_identity(tmp_path):
+    # Le bug : l'ordinal work-N est recalculé à chaque reconstruction. Un
+    # événement tardif (rejeu d'outbox, agent_session émis après coup) inséré
+    # plus tôt dans la journée décale la numérotation, donc un résumé attaché
+    # à « work-1 » désignait une autre session le lendemain.
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    afternoon = datetime(2026, 9, 2, 14, 0, tzinfo=zone)
+    details = {**workspace(PULSE)}
+    _stored(store, "terminal_finished", afternoon, {**details, "command": "pytest -q", "exit_code": 0, "cwd": PULSE})
+    _stored(store, "file_changed", afternoon + timedelta(minutes=5), {**details, "path": f"{PULSE}/a.py", "event": "modified"})
+    now = afternoon + timedelta(hours=3)
+
+    before = build_daily_trace(store, day, zone, now=now)["work_sessions"]
+    assert [s["label"] for s in before] == ["work-1"]
+    afternoon_id = before[0]["id"]
+    assert len(afternoon_id) == 16 and int(afternoon_id, 16) >= 0
+    assert before[0]["reconstruction_version"] == 1
+    assert len(before[0]["source_event_ids"]) == 2
+
+    # Un événement arrive après coup, daté du matin.
+    _stored(store, "git_commit", datetime(2026, 9, 2, 10, 0, tzinfo=zone),
+            {**details, "commit_hash": "abc1234def5678", "branch": "main", "message": "fix"})
+
+    after = build_daily_trace(store, day, zone, now=now)["work_sessions"]
+    assert [s["label"] for s in after] == ["work-1", "work-2"]
+    morning, moved = after
+    assert moved["id"] == afternoon_id
+    assert moved["label"] == "work-2"
+    assert morning["id"] != afternoon_id
+    assert morning["activity_kind"] == "isolated"
+    assert morning["source_event_ids"] != moved["source_event_ids"]
+
+
+def test_session_identity_is_order_independent_and_composition_sensitive():
+    from daemon_v2.analysis.timeline import session_identity
+
+    a = {"id": 1, "event_id": "evt-a"}
+    b = {"id": 2, "event_id": "evt-b"}
+    c = {"id": 3, "event_id": "evt-c"}
+
+    identity_ab, sources_ab = session_identity([a, b])
+    identity_ba, sources_ba = session_identity([b, a])
+    identity_abc, _ = session_identity([a, b, c])
+
+    assert identity_ab == identity_ba
+    assert sources_ab == sources_ba == ["evt-a", "evt-b"]
+    assert identity_abc != identity_ab
+    assert len(identity_ab) == 16
+    # Sans event_id (fixtures, lignes historiques) : la clé de ligne sert de repli.
+    fallback, sources = session_identity([{"id": 7}, {"id": 5}])
+    assert sources == ["id:5", "id:7"] and len(fallback) == 16
+
+
+def test_reconstructed_sessions_carry_identity_and_label():
+    sessions, _unresolved = reconstruct(
+        event("terminal_finished", 0, {**workspace(PULSE), "command": "make"}),
+        event("file_changed", 5, {**workspace(PULSE), "path": f"{PULSE}/a.py"}, 2),
+    )
+
+    assert sessions[0]["label"] == "work-1"
+    assert sessions[0]["source_event_ids"] == ["id:1", "id:2"]
+    assert sessions[0]["id"] == session_identity_of(sessions[0])
+
+
+def session_identity_of(session: dict) -> str:
+    from daemon_v2.analysis.timeline import session_identity
+
+    return session_identity(session["activities"])[0]

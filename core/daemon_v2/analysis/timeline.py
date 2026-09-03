@@ -3,6 +3,7 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,33 @@ WORK_SESSION_GAP = timedelta(minutes=30)
 WEAK_CONTEXT_WINDOW = timedelta(minutes=15)
 DEFAULT_INTERRUPTION_THRESHOLD = timedelta(minutes=5)
 WORKSPACE_PROMOTION_WINDOW = timedelta(minutes=5)
+
+# Incrémenter à chaque changement des règles de sessionnisation (gap,
+# promotion de workspace, rétrogradation en isolé…) : un consommateur qui a
+# mémorisé une session sait alors que sa composition peut avoir changé.
+RECONSTRUCTION_VERSION = 1
+SESSION_IDENTITY_HEX_LENGTH = 16
+
+
+def session_identity(activities: list[dict[str, Any]]) -> tuple[str, list[str]]:
+    """Identité stable d'une session : sha256 tronqué des event_id triés.
+
+    Déterministe et sans état : deux reconstructions qui regroupent les mêmes
+    événements donnent le même id, quel que soit l'ordre des lignes ou ce qui
+    s'est passé ailleurs dans la journée. Si la composition change (un
+    événement tardif rejoint la session), c'est une autre session — c'est
+    correct par construction. Le label ordinal ``work-N``, lui, bouge dès
+    qu'un événement tardif s'insère plus tôt dans la journée : il sert à
+    l'affichage, jamais comme clé.
+    """
+    keys = sorted(
+        activity["event_id"]
+        if isinstance(activity.get("event_id"), str) and activity["event_id"]
+        else f"id:{activity.get('id')}"
+        for activity in activities
+    )
+    digest = hashlib.sha256("\n".join(keys).encode("utf-8")).hexdigest()
+    return digest[:SESSION_IDENTITY_HEX_LENGTH], keys
 
 # Temporary aliases preserve the renderer-facing timeline API.
 _activity_workspace = activity_workspace
@@ -342,8 +370,12 @@ def reconstruct_session_views(
                 activity.get("id", 0),
             ),
         )
+        identity, source_event_ids = session_identity(session_activities)
         session_view = {
-            "id": f"work-{len(work_sessions) + 1}",
+            "id": identity,
+            "label": f"work-{len(work_sessions) + 1}",
+            "source_event_ids": source_event_ids,
+            "reconstruction_version": RECONSTRUCTION_VERSION,
             "activity_kind": "work",
             "workspace_attribution": (
                 "assigned"
