@@ -2,6 +2,16 @@
 
 ## Daemon V2
 
+### TraceStore._connect : même ordre pragma-puis-busy_timeout que l'outbox avant correctif
+
+**What:** `TraceStore._connect` exécute `PRAGMA journal_mode=WAL` avant `PRAGMA busy_timeout`, exactement l'ordre que `ProducerOutbox._connect` avait avant le correctif 0.5.2 (course au passage en WAL d'une base neuve, « database is locked »). Non corrigé : un seul processus crée `trace.db` en pratique. Le jour venu, reprendre le même patron (busy_timeout d'abord, retry borné sur « locked », constantes de module, test à plusieurs créateurs bouclé).
+
+**Déclencheur:** si un jour deux daemons démarrent sur une base `trace.db` neuve, ou si la stratégie de connexion change. Ne pas implémenter avant.
+
+**Effort:** S
+**Priority:** P4
+**Depends on:** Cas réel observé
+
 ### Segments de reprise pour agent_session
 
 **What:** Émettre la continuation d'une session reprise après émission comme un **segment** supplémentaire (nouvel événement borné, même `session_id`, `segment: 2`), au lieu du statu quo « résumé figé, reprise invisible » (`grown_after_emit`). Conséquence assumée de la décision (a) du 2026-08-31 : l'émission immédiate à SessionEnd fige le résumé à la première fin de session.
