@@ -14,6 +14,7 @@ from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .private_files import apply_private_umask, ensure_private_directory
 from .producer_outbox import PendingEvent, ProducerOutbox, default_outbox_path
 from .runtime_config import activities_url
 
@@ -242,10 +243,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    apply_private_umask()
     args = _build_parser().parse_args()
     outbox = ProducerOutbox(args.database)
     lock_path = Path(str(args.database) + ".worker.lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(lock_path.parent)
     with lock_path.open("a+") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

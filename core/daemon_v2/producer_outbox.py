@@ -18,6 +18,11 @@ from .analysis.terminal import (
     is_pasted_prompt_command,
     pasted_prompt_placeholder,
 )
+from .private_files import (
+    apply_private_umask,
+    ensure_private_directory,
+    restrict_private_file,
+)
 from .git_context import read_git_context
 from .ingest import filter_terminal_command, normalize_event, redact_command
 from .models import CanonicalEvent
@@ -47,11 +52,9 @@ class PendingEvent:
 class ProducerOutbox:
     def __init__(self, database_path: str | Path | None = None) -> None:
         self.database_path = str(database_path or default_outbox_path())
-        Path(self.database_path).expanduser().parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        ensure_private_directory(Path(self.database_path).expanduser().parent)
         self._initialize()
+        restrict_private_file(Path(self.database_path).expanduser())
 
     # Every caller wraps this in closing(...): relying on the garbage
     # collector leaks one fd per operation and hits launchd's 256-fd
@@ -688,6 +691,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    apply_private_umask()
     args = _build_parser().parse_args()
     outbox = ProducerOutbox(args.database)
     try:

@@ -41,6 +41,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from daemon_v2.private_files import apply_private_umask, ensure_private_directory
+
 
 DEFAULT_SOURCES = (
     Path.home() / ".claude" / "projects",
@@ -116,7 +118,7 @@ def _archive_one(
 ) -> int:
     data = source_file.read_bytes()
     compressed = zstd.compress(data, level)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(destination.parent)
     temporary = destination.with_suffix(destination.suffix + ".tmp")
     temporary.write_bytes(compressed)
     os.replace(temporary, destination)
@@ -137,7 +139,7 @@ def archive_transcripts(
 
     if not dry_run:
         try:
-            root.mkdir(parents=True, exist_ok=True)
+            ensure_private_directory(root)
         except OSError as exc:
             raise ArchiveInfrastructureError(
                 f"cannot create archive root: {root} ({exc})"
@@ -202,6 +204,7 @@ def archive_transcripts(
 
 
 def main() -> None:
+    apply_private_umask()
     parser = argparse.ArgumentParser(
         description="Archive agent transcripts as zstd copies (read-only)"
     )

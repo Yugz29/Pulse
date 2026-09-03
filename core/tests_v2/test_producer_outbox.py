@@ -1092,3 +1092,18 @@ def test_every_outbox_operation_closes_its_connection(tmp_path, monkeypatch):
     for connection in opened:
         with pytest.raises(sqlite3.ProgrammingError):
             connection.execute("SELECT 1")
+
+
+def test_new_outbox_is_private_regardless_of_the_ambient_umask(tmp_path):
+    import os
+    import stat
+    from pathlib import Path
+
+    previous = os.umask(0o022)
+    try:
+        outbox = ProducerOutbox(tmp_path / "private" / "outbox.sqlite3")
+    finally:
+        os.umask(previous)
+
+    assert stat.S_IMODE((tmp_path / "private").stat().st_mode) == 0o700
+    assert stat.S_IMODE(Path(outbox.database_path).stat().st_mode) == 0o600

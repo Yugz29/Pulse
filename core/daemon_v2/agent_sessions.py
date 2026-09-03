@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from .ingest import redact_command
+from .private_files import apply_private_umask, ensure_private_directory
 from .producer_outbox import ProducerOutbox, enqueue_json_input
 
 
@@ -359,7 +360,7 @@ def count_grown_sessions(manifest_path: Path | None = None) -> int | None:
 
 
 def _write_manifest(path: Path, emitted: dict[str, dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(path.parent)
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(
         json.dumps({"emitted": emitted}, sort_keys=True, indent=1, ensure_ascii=False),
@@ -532,6 +533,7 @@ def emit_agent_sessions(
 
 
 def main() -> None:
+    apply_private_umask()
     parser = argparse.ArgumentParser(
         description="Emit one derived agent_session event per finished session"
     )
