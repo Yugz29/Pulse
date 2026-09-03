@@ -124,6 +124,7 @@ class FakeCore:
     posts: list[dict[str, Any]] = field(default_factory=list)
     requested_dates: list[str] = field(default_factory=list)
     seen_event_ids: set[str] = field(default_factory=set)
+    context_requests: int = 0
     url: str = ""
 
     def add_sessions(self, day: str, *views: dict[str, Any]) -> None:
@@ -141,6 +142,7 @@ class FakeCore:
 
         @app.get("/context")
         def context():
+            self.context_requests += 1
             key = request.args.get("at")
             body = self.contexts_by_at.get(key) if key else None
             if body is None:

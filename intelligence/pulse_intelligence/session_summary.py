@@ -18,8 +18,8 @@ from typing import Any
 
 from . import PRODUCER_NAME, __version__
 from .config import Config
-from .core_client import CoreClient
-from .selection import SessionView
+from .core_client import CoreClient, CoreUnavailable
+from .selection import SessionView, select_candidates
 from .session_input import (
     build_model_input,
     input_hash,
@@ -271,7 +271,66 @@ def summarize_session(
         prompt_version=config.prompt_version,
         model_id=model_id,
         at=generated_at.isoformat(),
+        event=event,
     )
     return Outcome(
         session.id, "duplicate" if result.duplicate else "created", event_id, event=event
     )
+
+
+# --- Un passage : toutes les candidates ------------------------------------------
+
+
+@dataclass(frozen=True)
+class PassReport:
+    candidates: int
+    outcomes: list[Outcome]
+    error: str | None = None
+
+    def count(self, status: str) -> int:
+        return sum(1 for outcome in self.outcomes if outcome.status == status)
+
+
+def run_pass(
+    client: CoreClient,
+    summarizer: Summarizer,
+    config: Config,
+    state: JobState,
+    *,
+    now: datetime | None = None,
+) -> PassReport:
+    """Toutes les candidates, une session à la fois, séquentiellement.
+
+    Une session déjà résumée ou abandonnée n'est plus candidate (état local),
+    donc le modèle n'est jamais recontacté pour elle. Un Core qui tombe en
+    cours de passage arrête le passage proprement, le suivant reprendra.
+    """
+    moment = now or datetime.now(timezone.utc)
+    try:
+        candidates = select_candidates(
+            client, now=moment, config=config, model_id=summarizer.model_id, state=state
+        )
+    except CoreUnavailable as exc:
+        return PassReport(candidates=0, outcomes=[], error=str(exc))
+    outcomes: list[Outcome] = []
+    for session in candidates:
+        if state.is_failed(session.id):
+            outcomes.append(
+                Outcome(
+                    session.id,
+                    "given_up",
+                    summary_event_id(session.id, config.prompt_version, summarizer.model_id),
+                    detail=state.failed[session.id],
+                )
+            )
+            continue
+        try:
+            outcomes.append(
+                summarize_session(
+                    session, client=client, summarizer=summarizer, config=config,
+                    state=state, now=moment,
+                )
+            )
+        except CoreUnavailable as exc:
+            return PassReport(candidates=len(candidates), outcomes=outcomes, error=str(exc))
+    return PassReport(candidates=len(candidates), outcomes=outcomes)
