@@ -42,6 +42,21 @@ def test_runtime_urls_are_built_from_one_port(monkeypatch):
     assert status_url() == "http://127.0.0.1:9123/status"
 
 
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("::1", "http://[::1]:8765"),
+        ("::", "http://[::]:8765"),
+        ("127.0.0.1", "http://127.0.0.1:8765"),
+        ("[::1]", "http://[::1]:8765"),
+    ],
+)
+def test_runtime_urls_bracket_ipv6_hosts(host, expected):
+    assert core_base_url(host=host) == expected
+    assert activities_url(host=host) == f"{expected}/activities"
+    assert status_url(host=host) == f"{expected}/status"
+
+
 def test_core_and_worker_use_the_same_configured_endpoint(monkeypatch, tmp_path):
     monkeypatch.setenv("PULSE_CORE_HOST", "127.0.0.1")
     monkeypatch.setenv("PULSE_CORE_PORT", "9876")

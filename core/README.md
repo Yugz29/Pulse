@@ -1,6 +1,6 @@
 # Pulse Core
 
-> **Core est gelé** (version 0.5.0 : Context API au pas 2, type
+> **Core est gelé** (version 0.5.4 : Context API au pas 2, type
 > `session_summary` et identité stable des sessions au pas 3) — aucune autre évolution fonctionnelle n'est
 > prévue dans cette couche. La direction du projet, les couches à construire et la roadmap
 > sont dans [`../docs/VISION.md`](../docs/VISION.md).
@@ -132,7 +132,7 @@ source /Users/yugz/Projets/Pulse_V2/scripts/pulse_terminal_watcher.zsh
 et la remplacer par :
 
 ```zsh
-source /Users/yugz/Projets/Pulse/Pulse_Core/scripts/pulse_terminal_watcher.zsh
+source /Users/yugz/Projets/Pulse/core/scripts/pulse_terminal_watcher.zsh
 ```
 
 Le hook construit et écrit les événements terminal dans l’outbox. Il ne lance
@@ -311,7 +311,7 @@ curl -X POST http://127.0.0.1:8765/activities \
     "occurred_at": "2026-07-03T19:30:00+02:00",
     "command": "pytest tests_v2",
     "exit_code": 0,
-    "cwd": "/Users/yugz/Projets/Pulse/Pulse_Core"
+    "cwd": "/Users/yugz/Projets/Pulse/core"
   }'
 ```
 
@@ -322,9 +322,9 @@ curl -X POST http://127.0.0.1:8765/activities \
   -H 'Content-Type: application/json' \
   -d '{
     "type": "file_changed",
-    "path": "/Users/yugz/Projets/Pulse/Pulse_Core/daemon_v2/daily_trace.py",
+    "path": "/Users/yugz/Projets/Pulse/core/daemon_v2/daily_trace.py",
     "event": "modified",
-    "workspace": "/Users/yugz/Projets/Pulse/Pulse_Core"
+    "workspace": "/Users/yugz/Projets/Pulse/core"
   }'
 ```
 
@@ -361,7 +361,7 @@ curl http://127.0.0.1:8765/trace/today.md
 
 `GET /context` répond à « que se passe-t-il en ce moment ? » à partir de
 `trace.db` uniquement : aucun modèle, aucune lecture du disque ni de Git au
-rendu. La réponse (`schema_version: 1`) contient le workspace résolu et ses
+rendu. La réponse (`schema_version: 2`) contient le workspace résolu et ses
 faits git persistés, la session courante (durée, projets, apps, fichiers,
 commits, tests, erreurs, signaux), les sessions récentes fermées, les signaux
 isolés, le dernier `agent_session` et le dernier `session_summary`. C'est le contrat stable que la couche
@@ -468,13 +468,13 @@ daemon_v2/
 Sourcer le watcher depuis chaque session Zsh interactive :
 
 ```bash
-source /Users/yugz/Projets/Pulse/Pulse_Core/scripts/pulse_terminal_watcher.zsh
+source /Users/yugz/Projets/Pulse/core/scripts/pulse_terminal_watcher.zsh
 ```
 
 Pour le charger dans les futures sessions Zsh, ajouter soi-même cette ligne dans `~/.zshrc` :
 
 ```zsh
-source /Users/yugz/Projets/Pulse/Pulse_Core/scripts/pulse_terminal_watcher.zsh
+source /Users/yugz/Projets/Pulse/core/scripts/pulse_terminal_watcher.zsh
 ```
 
 Le watcher enregistre la commande, le dossier courant, les heures de début et
@@ -488,7 +488,7 @@ Lancer manuellement le watcher avec un workspace explicite, ou avec la
 liste déclarée du mode résident :
 
 ```bash
-.venv/bin/python -m daemon_v2.file_watcher /Users/yugz/Projets/Pulse/Pulse_Core
+.venv/bin/python -m daemon_v2.file_watcher /Users/yugz/Projets/Pulse/core
 .venv/bin/python -m daemon_v2.file_watcher --config ~/.pulse_v2/watched_workspaces
 ```
 

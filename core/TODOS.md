@@ -2,6 +2,13 @@
 
 ## Daemon V2
 
+### Coût de reconstruction de TraceStore à grande échelle
+
+`TraceStore.append_event` recharge toute la table à chaque écriture (coût
+mesuré : ~50ms à 50k lignes, ~14 mois au rythme actuel). Déclencheur :
+surveiller à l'approche de 50k événements, envisager un index ou une stratégie
+incrémentale vers 100k.
+
 ### TraceStore._connect : même ordre pragma-puis-busy_timeout que l'outbox avant correctif
 
 **What:** `TraceStore._connect` exécute `PRAGMA journal_mode=WAL` avant `PRAGMA busy_timeout`, exactement l'ordre que `ProducerOutbox._connect` avait avant le correctif 0.5.2 (course au passage en WAL d'une base neuve, « database is locked »). Non corrigé : un seul processus crée `trace.db` en pratique. Le jour venu, reprendre le même patron (busy_timeout d'abord, retry borné sur « locked », constantes de module, test à plusieurs créateurs bouclé).
