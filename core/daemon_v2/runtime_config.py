@@ -52,7 +52,12 @@ def core_port() -> int:
 def core_base_url(*, host: str | None = None, port: int | None = None) -> str:
     selected_host = host if host is not None else core_host()
     selected_port = parse_port(port if port is not None else core_port())
-    return f"http://{selected_host}:{selected_port}"
+    url_host = selected_host
+    if ":" in selected_host and not (
+        selected_host.startswith("[") and selected_host.endswith("]")
+    ):
+        url_host = f"[{selected_host}]"
+    return f"http://{url_host}:{selected_port}"
 
 
 def activities_url(*, host: str | None = None, port: int | None = None) -> str:
