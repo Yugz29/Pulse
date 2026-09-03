@@ -1,0 +1,21 @@
+[project]
+name = "pulse-intelligence"
+version = "0.1.0"
+description = "Couche Intelligence de Pulse : résumé de session (pas 3 de la roadmap V3, spec v2)"
+requires-python = ">=3.14"
+dependencies = [
+    "requests>=2.32",
+]
+
+[project.optional-dependencies]
+# Étape 3 du spec : le vrai modèle. Non installé dans le squelette.
+mlx = ["mlx-lm"]
+# Tests : le faux Core est un serveur Flask de test rejouant des fixtures.
+dev = ["pytest>=8", "flask>=3"]
+
+[project.scripts]
+pulse-intel = "pulse_intelligence.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
