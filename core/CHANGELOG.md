@@ -4,6 +4,41 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.5.4.0] - 2026-09-03
+
+Bloqueur P0 de l'audit externe du pas 3 (PR #37). Note de décision
+`docs/decisions/2026-09-03-fermeture-monotone.md`. `reconstruction_version`
+passe à 2 : un consommateur qui a mémorisé des sessions sait que leur
+composition peut avoir changé.
+
+### Corrigé
+- Fermeture de session monotone : un `screen_locked` ou un `system_sleep`
+  ouvrait une interruption « en attente » sans rien fermer, et la même
+  session sortait fermée ou rouverte par fusion selon les données
+  disponibles au calcul ; une activité forte sans déverrouillage vu passait
+  pour une reprise. Désormais le verrouillage ou la veille ferme la session
+  ouverte sur-le-champ, sur son dernier travail observé, avec ce motif, et
+  rien ne la rouvre — `is_open: false` ne se défait jamais. La reprise du
+  bon type prouve seulement le retour de l'utilisateur ; l'activité forte
+  suivante démarre une nouvelle session. Seuil de fusion
+  `PULSE_SESSION_INTERRUPTION_MINUTES` retiré ; `interruptions` et
+  `active_duration_seconds` conservés dans le JSON, toujours vides.
+
+### Ajouté
+- Vue `activity_kind: background` : l'activité forte observée entre un
+  verrouillage et sa reprise (un agent qui tourne seul) est regroupée par
+  fenêtre de verrouillage, avec son propre hash, `lock_type`, `locked_at`,
+  `resumed_at`, hors identité et bornes de session de travail, hors
+  `/context`. Rendue à part dans la trace journalière (HTML et Markdown)
+  sous « Activité en arrière-plan (écran verrouillé) », distincte des
+  sessions d'agent.
+
+### Limite connue
+- Reconstruction journalière : un verrouillage de la veille sans
+  déverrouillage vu le jour même n'est pas connu du jour suivant.
+
+Suite portée à 532 tests.
+
 ## [0.5.3.0] - 2026-09-03
 
 Deux corrections issues de l'audit externe du pas 3 (PR #35), livrées avec
