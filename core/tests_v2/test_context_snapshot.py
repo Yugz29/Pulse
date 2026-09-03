@@ -225,7 +225,7 @@ def test_open_session_fills_every_block_with_bounded_facts(tmp_path):
 
     result = snapshot(store)
 
-    assert result["schema_version"] == 1
+    assert result["schema_version"] == 2
     assert result["reference_at"] == "2026-09-02T14:00:00+00:00"
     assert result["window_minutes"] == 120
     assert result["timezone"] == "UTC"
@@ -247,6 +247,12 @@ def test_open_session_fills_every_block_with_bounded_facts(tmp_path):
 
     session = result["current_session"]
     assert session["is_open"] is True
+    # Identité stable (Core 0.5.0) : hash des event_id, label ordinal.
+    assert len(session["id"]) == 16 and int(session["id"], 16) >= 0
+    assert session["label"] == "work-1"
+    assert session["source_event_ids"] == sorted(session["source_event_ids"])
+    assert len(session["source_event_ids"]) == session["activity_count"]
+    assert session["reconstruction_version"] == 1
     assert session["started_at"] == "2026-09-02T13:02:00+00:00"
     assert session["last_activity_at"] == "2026-09-02T13:55:00+00:00"
     assert session["duration_minutes"] == 53
@@ -299,6 +305,10 @@ def test_window_keeps_the_closed_session_out_of_the_current_one(tmp_path):
     assert result["current_session"]["started_at"] == "2026-09-02T13:02:00+00:00"
     assert len(result["recent_sessions"]) == 1
     recent = result["recent_sessions"][0]
+    assert recent["label"] == "work-1" and result["current_session"]["label"] == "work-2"
+    assert recent["id"] != result["current_session"]["id"]
+    assert len(recent["source_event_ids"]) == 5
+    assert recent["reconstruction_version"] == 1
     assert recent["started_at"] == "2026-09-02T12:10:00+00:00"
     assert recent["ended_at"] == "2026-09-02T12:30:00+00:00"
     assert recent["duration_minutes"] == 20
@@ -641,7 +651,7 @@ def test_route_returns_schema_version_one_with_sorted_keys(tmp_path):
     assert response.status_code == 200
     assert response.mimetype == "application/json"
     body = response.get_json()
-    assert body["schema_version"] == 1
+    assert body["schema_version"] == 2
     assert body["window_minutes"] == 120
     ordered = json.loads(
         response.get_data(as_text=True),
@@ -726,3 +736,15 @@ def test_status_reports_no_open_session_on_an_empty_store(tmp_path):
         "projects": [],
         "workspace": None,
     }
+
+
+def test_session_identity_in_context_survives_a_late_earlier_event(tmp_path):
+    store = make_store(tmp_path, *working_session())
+    before = snapshot(store)["current_session"]
+
+    store.append(commit(-300, "0000000aaaaaaaa", "commit du matin, arrivé tard"))
+    after = snapshot(store, window_minutes=1440)["current_session"]
+
+    assert before["label"] == "work-1" and after["label"] == "work-2"
+    assert after["id"] == before["id"]
+    assert after["source_event_ids"] == before["source_event_ids"]

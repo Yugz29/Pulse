@@ -25,6 +25,7 @@ from .analysis.terminal import (
     useful_command_lines,
 )
 from .analysis.timeline import (
+    RECONSTRUCTION_VERSION,
     app_activation_counts,
     display_file_path,
     is_strong_work_activity,
@@ -35,7 +36,8 @@ from .session_tracker import DEFAULT_SESSION_GAP
 from .trace_store import TraceStore
 
 
-SCHEMA_VERSION = 1
+# 2 depuis Core 0.5.0 : l'id de session est un hash stable, plus un ordinal.
+SCHEMA_VERSION = 2
 DEFAULT_WINDOW_MINUTES = 120
 MIN_WINDOW_MINUTES = 5
 MAX_WINDOW_MINUTES = 1440
@@ -157,6 +159,7 @@ def _zone_name(zone: tzinfo, at: datetime) -> str:
 def _activity_view(stored: StoredActivity) -> dict[str, Any]:
     return {
         "id": stored.id,
+        "event_id": stored.event_id,
         "type": stored.type,
         "occurred_at": stored.occurred_at.isoformat(),
         "summary": stored.activity.summary,
@@ -181,36 +184,49 @@ def _reconstruct_days(
     """
     sessions: list[dict[str, Any]] = []
     activities: list[dict[str, Any]] = []
-    zone_name = _zone_name(zone, reference_at)
-    local_now = reference_at.astimezone(zone)
     day: date = window_start.astimezone(zone).date()
-    last_day = local_now.date()
+    last_day = reference_at.astimezone(zone).date()
     while day <= last_day:
-        day_start = datetime.combine(day, time.min, zone)
-        day_end = min(
-            day_start + timedelta(days=1),
-            reference_at + timedelta(microseconds=1),
+        day_sessions, day_activities = _reconstruct_day(
+            store, day=day, reference_at=reference_at, zone=zone
         )
-        views = [
-            _activity_view(stored)
-            for stored in store.activities_between(day_start, day_end)
-        ]
-        activities.extend(views)
-        if views:
-            trace = {
-                "date": day.isoformat(),
-                "timezone": zone_name,
-                "sessions": [{"activities": views}],
-            }
-            work_sessions, _unresolved = reconstruct_session_views(
-                trace,
-                now=local_now,
-            )
-            for session in work_sessions:
-                session["id"] = f"{day.isoformat()}/{session['id']}"
-                sessions.append(session)
+        sessions.extend(day_sessions)
+        activities.extend(day_activities)
         day += timedelta(days=1)
     return sessions, activities
+
+
+def _reconstruct_day(
+    store: TraceStore,
+    *,
+    day: date,
+    reference_at: datetime,
+    zone: tzinfo,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """One local day, reconstructed like the daily trace, up to reference_at."""
+    day_start = datetime.combine(day, time.min, zone)
+    day_end = min(
+        day_start + timedelta(days=1),
+        reference_at + timedelta(microseconds=1),
+    )
+    if day_end <= day_start:
+        return [], []
+    views = [
+        _activity_view(stored)
+        for stored in store.activities_between(day_start, day_end)
+    ]
+    if not views:
+        return [], []
+    trace = {
+        "date": day.isoformat(),
+        "timezone": _zone_name(zone, reference_at),
+        "sessions": [{"activities": views}],
+    }
+    work_sessions, _unresolved = reconstruct_session_views(
+        trace,
+        now=reference_at.astimezone(zone),
+    )
+    return work_sessions, views
 
 
 def _session_end(session: dict[str, Any]) -> datetime:
@@ -452,7 +468,21 @@ def _bounded(values: list[str], limit: int) -> tuple[list[str], bool]:
     return values[:limit], len(values) > limit
 
 
-def _current_session_view(session: dict[str, Any]) -> dict[str, Any]:
+def _identity_fields(session: dict[str, Any]) -> dict[str, Any]:
+    """Stable identity (Core 0.5.0): the hash is the key, the label is display."""
+    return {
+        "id": session["id"],
+        "label": session["label"],
+        "source_event_ids": list(session["source_event_ids"]),
+        "reconstruction_version": RECONSTRUCTION_VERSION,
+    }
+
+
+def _current_session_view(
+    session: dict[str, Any],
+    *,
+    is_open: bool = True,
+) -> dict[str, Any]:
     activities = session["activities"]
     apps = sorted(
         app_activation_counts(session).items(),
@@ -484,11 +514,11 @@ def _current_session_view(session: dict[str, Any]) -> dict[str, Any]:
     ]
     present_types = {activity["type"] for activity in activities}
     return {
-        "id": session["id"],
+        **_identity_fields(session),
         "started_at": _utc(session["started_at"]),
         "last_activity_at": _utc(session["ended_at"]),
         "duration_minutes": _duration_minutes(session),
-        "is_open": True,
+        "is_open": is_open,
         "activity_count": len(activities),
         "projects": [name for _root, name, _count in _session_projects(session)],
         "apps": [{"name": name, "activations": count} for name, count in apps],
@@ -516,7 +546,7 @@ def _recent_session_view(session: dict[str, Any]) -> dict[str, Any]:
         1 for activity in activities if activity["type"] == "git_commit"
     )
     return {
-        "id": session["id"],
+        **_identity_fields(session),
         "started_at": _utc(session["started_at"]),
         "ended_at": _utc(session["ended_at"]),
         "duration_minutes": _duration_minutes(session),
