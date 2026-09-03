@@ -702,7 +702,8 @@ def _last_session_summary(
     structured = details.get("structured", {})
     age_seconds = (reference_at - ended.astimezone(timezone.utc)).total_seconds()
     return {
-        "session_id": details.get("session_id"),
+        "id": details.get("session_id"),
+        "label": details.get("session_label"),
         "session_ended_at": _utc(ended),
         "reprise": {
             key: reprise.get(key) for key in ("doing", "stopped_at", "open")

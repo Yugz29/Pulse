@@ -715,7 +715,9 @@ def session_summary_payload(**overrides):
     payload = {
         "type": "session_summary",
         "occurred_at": "2026-09-02T15:55:00+00:00",
-        "session_id": "2026-09-02/work-3",
+        "session_id": "0123456789abcdef",
+        "source_event_ids_hash": "0123456789abcdef",
+        "session_label": "work-3",
         "session_started_at": "2026-09-02T13:02:00+00:00",
         "session_ended_at": "2026-09-02T15:55:00+00:00",
         "prompt_version": "v1",
@@ -747,7 +749,9 @@ def test_normalizes_session_summary_and_keeps_the_rest_as_is():
     assert activity.source == "intelligence"
     # Le summary de l'Activity est la première ligne de la reprise.
     assert activity.summary == "Tu implémentais le Context API de Core."
-    assert activity.details["session_id"] == "2026-09-02/work-3"
+    assert activity.details["session_id"] == "0123456789abcdef"
+    assert activity.details["source_event_ids_hash"] == "0123456789abcdef"
+    assert activity.details["session_label"] == "work-3"
     assert activity.details["prompt_version"] == "v1"
     assert activity.details["model_id"] == "mlx-community/test-model"
     assert activity.details["workspace"] == "/Users/dev/Projets/Pulse"
@@ -781,6 +785,11 @@ def test_session_summary_reprise_is_redacted_in_depth():
     ("overrides", "field"),
     [
         ({"session_id": ""}, "session_id"),
+        ({"session_id": "2026-09-02/work-3"}, "details.session_id"),
+        ({"session_id": "0123456789ABCDEF"}, "details.session_id"),
+        ({"source_event_ids_hash": None}, "source_event_ids_hash"),
+        ({"source_event_ids_hash": "fedcba9876543210"}, "details.source_event_ids_hash"),
+        ({"session_label": ""}, "details.session_label"),
         ({"prompt_version": None}, "prompt_version"),
         ({"model_id": "  "}, "model_id"),
         ({"reprise": "texte"}, "details.reprise"),

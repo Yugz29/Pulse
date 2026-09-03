@@ -132,6 +132,7 @@ def session_summary(
     session_id: str,
     prompt_version: str = "v1",
     doing: str = "Tu implémentais le Context API.",
+    label: str = "work-1",
 ) -> Activity:
     return Activity(
         "session_summary",
@@ -140,6 +141,8 @@ def session_summary(
         doing,
         {
             "session_id": session_id,
+            "source_event_ids_hash": session_id,
+            "session_label": label,
             "session_started_at": at(minutes - 60).isoformat(),
             "session_ended_at": at(minutes).isoformat(),
             "prompt_version": prompt_version,
@@ -407,20 +410,21 @@ def test_empty_store_returns_nulls_and_empty_lists(tmp_path):
 def test_last_session_summary_ignores_the_window_and_prefers_the_latest(tmp_path):
     store = make_store(
         tmp_path,
-        session_summary(-3000, session_id="2026-08-31/work-1", doing="Ancien."),
-        session_summary(-1500, session_id="2026-09-01/work-2", doing="Hier, v1."),
+        session_summary(-3000, session_id="aaaaaaaaaaaaaaaa", doing="Ancien."),
+        session_summary(-1500, session_id="bbbbbbbbbbbbbbbb", label="work-2", doing="Hier, v1."),
         session_summary(
-            -1500, session_id="2026-09-01/work-2", prompt_version="v2",
+            -1500, session_id="bbbbbbbbbbbbbbbb", label="work-2", prompt_version="v2",
             doing="Hier, régénéré en v2.",
         ),
-        session_summary(+30, session_id="2026-09-02/work-9", doing="Après at."),
+        session_summary(+30, session_id="cccccccccccccccc", doing="Après at."),
     )
 
     result = snapshot(store)
 
     assert result["current_session"] is None
     assert result["last_session_summary"] == {
-        "session_id": "2026-09-01/work-2",
+        "id": "bbbbbbbbbbbbbbbb",
+        "label": "work-2",
         "session_ended_at": "2026-09-01T13:00:00+00:00",
         "reprise": {"doing": "Hier, régénéré en v2.", "stopped_at": "—", "open": "—"},
         "confidence": "medium",

@@ -2334,7 +2334,8 @@ def test_session_summary_is_never_an_unattributed_activity(tmp_path):
             "session_summary", base + timedelta(minutes=5), "intelligence",
             "Tu testais le parseur.",
             {
-                "session_id": "2026-09-02/work-1",
+                "session_id": "0123456789abcdef",
+                "source_event_ids_hash": "0123456789abcdef",
                 "prompt_version": "v1",
                 "model_id": "mlx-community/test-model",
                 "reprise": {"doing": "Tu testais le parseur.", "stopped_at": "—", "open": "—"},
