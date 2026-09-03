@@ -31,6 +31,9 @@ from ..daily_trace import (
     _terminal_labels,
     agent_session_time_label,
     agent_session_views,
+    background_activity_label,
+    background_lock_label,
+    background_session_views,
     build_current_state,
     build_daily_summary,
     build_resume,
@@ -159,11 +162,13 @@ def render_daily_trace_markdown(
     )
     isolated = isolated_sessions(trace)
     agent_views = agent_session_views(trace)
+    background_views = background_session_views(trace)
     if (
         not displayed_sessions
         and not unresolved_sessions
         and not isolated
         and not agent_views
+        and not background_views
     ):
         lines.extend(["_Aucune activité._", ""])
         return "\n".join(lines)
@@ -393,6 +398,30 @@ def render_daily_trace_markdown(
             lines.append(
                 f"- {agent_session_time_label(view, trace_zone)} · "
                 f"{_markdown_text(view['summary'])}{suffix}"
+            )
+        lines.append("")
+
+    if background_views:
+        # Catégorie à part, distincte des sessions d'agent : des faits
+        # observés pendant un verrouillage, jamais une session de travail.
+        lines.extend(
+            [
+                "## Activité en arrière-plan (écran verrouillé)",
+                (
+                    "Signaux forts observés entre un verrouillage et la reprise "
+                    "suivante : des faits (un agent qui tourne seul), pas une "
+                    "reprise — hors sessions de travail."
+                ),
+            ]
+        )
+        for view in background_views:
+            project = view["project_name"]
+            suffix = f" ({_markdown_text(project)})" if project else ""
+            lines.append(
+                f"- {_display_time(view['started_at'], trace_zone)}–"
+                f"{_display_time(view['ended_at'], trace_zone)} · "
+                f"{_markdown_text(background_activity_label(view))}{suffix} — "
+                f"{_markdown_text(background_lock_label(view, trace_zone))}"
             )
         lines.append("")
 

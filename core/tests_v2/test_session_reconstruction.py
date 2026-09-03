@@ -1127,3 +1127,68 @@ def test_agent_session_during_a_lock_keeps_its_own_treatment():
     assert sessions[1]["source_event_ids"] == ["id:5"]
     assert all(agent not in s["activities"] for s in sessions)
     assert unresolved == []
+
+
+def test_background_activity_renders_apart_from_work_sessions(tmp_path):
+    # Rendu : un verrouillage à 09:10 ferme la session ; les modifications
+    # à 09:12 et 09:20 (agent seul) sortent dans « Activité en arrière-plan »
+    # avec leurs bornes, leurs comptes et le verrouillage d'origine — hors
+    # Session, hors « Activité non attribuée » qui reste vide.
+    from daemon_v2.daily_trace import build_daily_summary
+
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    morning = datetime(2026, 9, 2, 9, 0, tzinfo=zone)
+    details = {**workspace(PULSE)}
+    _stored(store, "terminal_finished", morning, {**details, "command": "pytest -q", "exit_code": 0, "cwd": PULSE})
+    _stored(store, "file_changed", morning + timedelta(minutes=5), {**details, "path": f"{PULSE}/a.py", "event": "modified"})
+    store.append(Activity("screen_locked", morning + timedelta(minutes=10), "system", "screen_locked", {}))
+    _stored(store, "file_changed", morning + timedelta(minutes=12), {**details, "path": f"{PULSE}/b.py", "event": "modified"})
+    _stored(store, "file_changed", morning + timedelta(minutes=20), {**details, "path": f"{PULSE}/c.py", "event": "modified"})
+
+    trace = build_daily_trace(store, day, zone, now=morning + timedelta(hours=3))
+    markdown = render_daily_trace_markdown(trace, archive_mode=True)
+    html = render_daily_trace_html(trace, archive_mode=True)
+
+    kinds = [s["activity_kind"] for s in trace["work_sessions"]]
+    assert kinds == ["work", "background"]
+    assert trace["work_session_count"] == 1
+    assert build_daily_summary(trace)["session_count"] == 1
+    assert trace["unresolved_sessions"] == []
+    assert "## Session 1 — 09:00–09:05" in markdown
+    assert "- Fin : écran verrouillé" in markdown
+    assert "## Session 2" not in markdown
+    assert "## Activité en arrière-plan (écran verrouillé)" in markdown
+    assert (
+        "- 09:12–09:20 · 2 fichiers modifiés (Pulse\\_Core) — "
+        "écran verrouillé à 09:10, sans reprise vue"
+    ) in markdown
+    assert "## Activité non attribuée" not in markdown
+    assert "<h2>Activité en arrière-plan (écran verrouillé)</h2>" in html
+    assert (
+        '<span class="time">09:12–09:20</span> 2 fichiers modifiés (Pulse_Core) — '
+        "écran verrouillé à 09:10, sans reprise vue"
+    ) in html
+    assert '<a class="nav-main" href="#arriere-plan">Arrière-plan</a>' in html
+    assert "<h2>Session 2" not in html
+
+
+def test_background_activity_alone_is_not_an_empty_day(tmp_path):
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    morning = datetime(2026, 9, 2, 9, 0, tzinfo=zone)
+    store.append(Activity("system_sleep", morning, "system", "system_sleep", {}))
+    _stored(store, "git_commit", morning + timedelta(minutes=30),
+            {**workspace(PULSE), "commit_hash": "abc1234def5678", "branch": "main", "message": "wip"})
+    store.append(Activity("system_wake", morning + timedelta(minutes=40), "system", "system_wake", {}))
+
+    trace = build_daily_trace(store, day, zone, now=morning + timedelta(hours=3))
+    markdown = render_daily_trace_markdown(trace, archive_mode=True)
+
+    assert [s["activity_kind"] for s in trace["work_sessions"]] == ["background"]
+    assert "_Aucune activité._" not in markdown
+    assert (
+        "- 09:30–09:30 · 1 commit (Pulse\\_Core) — mise en veille à 09:00, reprise à 09:40"
+    ) in markdown
