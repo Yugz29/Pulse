@@ -4,6 +4,19 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.5.2.0] - 2026-09-03
+
+### Corrigé
+- Course au passage en WAL d'une outbox neuve : deux premiers connecteurs
+  simultanés se disputaient le verrou exclusif du `PRAGMA journal_mode=WAL`,
+  qui ne passe pas par le busy handler (« database is locked », 13 fois sur
+  40 en local ; `make reset` puis `dev.sh` relançant ses producteurs d'un
+  coup reproduit le cas). `ProducerOutbox._connect` pose `busy_timeout`
+  avant le pragma et réessaie jusqu'à 20 fois à 50 ms. Test à quatre
+  créateurs sur dix bases neuves, bouclé 20 fois en local sans échec.
+
+Suite portée à 511 tests.
+
 ## [0.5.1.0] - 2026-09-03
 
 Hardening après relecture externe : cinq corrections indépendantes et la CI,
