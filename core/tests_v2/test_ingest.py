@@ -781,6 +781,27 @@ def test_session_summary_reprise_is_redacted_in_depth():
     assert activity.summary == "Tu testais l'API avec le jeton [REDACTED]."
 
 
+def test_session_summary_structured_lists_are_redacted_element_by_element():
+    activity = normalize_activity(
+        session_summary_payload(
+            structured={
+                "project": "Pulse",
+                "intents": ["déployer avec le jeton sk-abcdef1234567890XYZ", "tester"],
+                "central_files": ["core/daemon_v2/ingest.py", "docs/VISION.md"],
+                "blockers": ["export API_TOKEN=abc123 refusé par la CI"],
+                "confidence": "medium",
+            }
+        )
+    )
+
+    structured = activity.details["structured"]
+    assert structured["intents"] == ["déployer avec le jeton [REDACTED]", "tester"]
+    assert structured["blockers"] == ["export API_TOKEN=[REDACTED] refusé par la CI"]
+    # Un chemin normal reste intact.
+    assert structured["central_files"] == ["core/daemon_v2/ingest.py", "docs/VISION.md"]
+    assert structured["project"] == "Pulse" and structured["confidence"] == "medium"
+
+
 @pytest.mark.parametrize(
     ("overrides", "field"),
     [
