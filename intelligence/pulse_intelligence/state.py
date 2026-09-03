@@ -84,15 +84,39 @@ class JobState:
         prompt_version: str,
         model_id: str,
         at: str,
+        event: dict[str, Any] | None = None,
     ) -> None:
-        self.emitted[event_id] = {
+        entry: dict[str, Any] = {
             "session_id": session_id,
             "prompt_version": prompt_version,
             "model_id": model_id,
             "at": at,
         }
+        if event is not None:
+            # Copie locale de ce qui a été émis : `show <id>` lit ici, Core
+            # reste la vérité (`show latest` lit /context).
+            entry["event"] = event
+        self.emitted[event_id] = entry
         self.failures.pop(session_id, None)
         self.save()
+
+    def events_for(self, session_id: str) -> list[dict[str, Any]]:
+        """Les événements émis pour une session, du plus ancien au plus récent."""
+        entries = [
+            entry
+            for entry in self.emitted.values()
+            if entry.get("session_id") == session_id and isinstance(entry.get("event"), dict)
+        ]
+        entries.sort(key=lambda entry: str(entry.get("at", "")))
+        return [entry["event"] for entry in entries]
+
+    def latest_event(self) -> dict[str, Any] | None:
+        entries = [
+            entry for entry in self.emitted.values() if isinstance(entry.get("event"), dict)
+        ]
+        if not entries:
+            return None
+        return max(entries, key=lambda entry: str(entry.get("at", "")))["event"]
 
     def record_failure(self, session_id: str, reason: str) -> int:
         count = self.failures.get(session_id, 0) + 1

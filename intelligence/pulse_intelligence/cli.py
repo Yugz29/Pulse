@@ -1,25 +1,31 @@
-"""pulse-intel : la commande avant le service (spec v2 §8, étape 1).
+"""pulse-intel : la commande avant le service (spec v2 §8, étapes 1 et 2).
 
     pulse-intel list [--date YYYY-MM-DD] [--json]
-    pulse-intel summarize <id> [--date YYYY-MM-DD] --dry-run --fake FICHIER
+    pulse-intel summarize <id> [--date YYYY-MM-DD] [--dry-run] --fake FICHIER
+    pulse-intel run [--once] --fake FICHIER
+    pulse-intel show <id>|latest [--md]
 
 Le vrai modèle arrive à l'étape 3 ; d'ici là ``--fake`` lit la sortie du
-modèle dans un fichier. Un Core arrêté donne un message et le code 2.
+modèle dans un fichier et reste obligatoire pour ``summarize`` et ``run``.
+Un Core arrêté donne un message et le code 2. Tout ce que la commande écrit
+sous ``~/.pulse_intelligence`` est privé (umask 077).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from .config import Config, ConfigError, config_home, load_config
 from .core_client import CoreClient, CoreError, CoreUnavailable
 from .selection import Classified, classify_sessions, find_session
-from .session_summary import summarize_session
+from .session_summary import run_pass, summarize_session
 from .state import JobState
 from .summarizer import FakeSummarizer, Summarizer
 
@@ -27,6 +33,7 @@ from .summarizer import FakeSummarizer, Summarizer
 EXIT_OK = 0
 EXIT_USAGE = 1
 EXIT_INFRASTRUCTURE = 2
+PRIVATE_UMASK = 0o077
 
 
 def _parse_day(value: str | None) -> date | None:
@@ -54,16 +61,21 @@ def _build_parser() -> argparse.ArgumentParser:
     listing.add_argument("--date", type=_parse_day, default=None)
     listing.add_argument("--json", action="store_true")
 
+    fake_help = "sortie du modèle lue dans ce fichier (pas de modèle réel avant l'étape 3)"
+
     summarize = commands.add_parser("summarize", help="résumer une session")
     summarize.add_argument("session_id")
     summarize.add_argument("--date", type=_parse_day, default=None)
     summarize.add_argument("--dry-run", action="store_true", help="tout sauf l'émission")
-    summarize.add_argument(
-        "--fake",
-        type=Path,
-        default=None,
-        help="sortie du modèle lue dans ce fichier (pas de modèle réel avant l'étape 3)",
-    )
+    summarize.add_argument("--fake", type=Path, default=None, help=fake_help)
+
+    run = commands.add_parser("run", help="résumer toutes les candidates")
+    run.add_argument("--once", action="store_true", help="un seul passage (sinon un passage toutes les tick_minutes)")
+    run.add_argument("--fake", type=Path, default=None, help=fake_help)
+
+    show = commands.add_parser("show", help="afficher un résumé")
+    show.add_argument("target", help="identifiant de session, ou « latest »")
+    show.add_argument("--md", action="store_true", help="la reprise seule, en trois lignes")
     return parser
 
 
@@ -169,14 +181,81 @@ def run_summarize(
     return EXIT_OK if outcome.status in {"dry_run", "created", "duplicate", "already_known"} else EXIT_USAGE
 
 
+def run_run(args: argparse.Namespace, config: Config, client: CoreClient, state: JobState) -> int:
+    summarizer = _summarizer(args, config)
+    while True:
+        report = run_pass(client, summarizer, config, state)
+        stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        print(
+            f"[{stamp}] candidates={report.candidates} created={report.count('created')} "
+            f"duplicate={report.count('duplicate')} failed={report.count('failed')} "
+            f"given_up={report.count('given_up')}"
+        )
+        for outcome in report.outcomes:
+            line = f"  {outcome.status} {outcome.session_id} event_id={outcome.event_id}"
+            if outcome.detail:
+                line += f" — {outcome.detail}"
+            print(line)
+        if report.error:
+            print(f"Core injoignable : {report.error}", file=sys.stderr)
+            return EXIT_INFRASTRUCTURE
+        if args.once:
+            return EXIT_OK
+        try:
+            time.sleep(max(1, config.tick_minutes) * 60)
+        except KeyboardInterrupt:
+            return EXIT_OK
+
+
+def _reprise_markdown(reprise: dict[str, Any]) -> str:
+    return "\n".join(str(reprise.get(key, "—")) for key in ("doing", "stopped_at", "open"))
+
+
+def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state: JobState) -> int:
+    if args.target == "latest":
+        # Core est la vérité : le dernier résumé qu'il connaît, quel que soit
+        # le processus qui l'a produit.
+        latest = client.get_context().get("last_session_summary")
+        if not isinstance(latest, dict):
+            print("aucun résumé de session dans Core", file=sys.stderr)
+            return EXIT_USAGE
+        if args.md:
+            print(_reprise_markdown(latest.get("reprise", {})))
+        else:
+            print(json.dumps(latest, ensure_ascii=False, indent=2, sort_keys=True))
+        return EXIT_OK
+
+    events = state.events_for(args.target)
+    if events:
+        event = events[-1]
+        reprise = event.get("details", {}).get("reprise", {})
+    else:
+        latest = client.get_context().get("last_session_summary")
+        if not isinstance(latest, dict) or latest.get("id") != args.target:
+            print(f"aucun résumé connu pour la session {args.target}", file=sys.stderr)
+            return EXIT_USAGE
+        event = latest
+        reprise = latest.get("reprise", {})
+    if args.md:
+        print(_reprise_markdown(reprise))
+    else:
+        print(json.dumps(event, ensure_ascii=False, indent=2, sort_keys=True))
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    os.umask(PRIVATE_UMASK)
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
         config, client, state = _load(args)
         if args.command == "list":
             return run_list(args, config, client, state)
-        return run_summarize(args, config, client, state)
+        if args.command == "summarize":
+            return run_summarize(args, config, client, state)
+        if args.command == "run":
+            return run_run(args, config, client, state)
+        return run_show(args, config, client, state)
     except ConfigError as exc:
         print(f"configuration : {exc}", file=sys.stderr)
         return EXIT_USAGE

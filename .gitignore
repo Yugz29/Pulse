@@ -13,3 +13,4 @@ data/
 cortex-snapshot.json
 .claude/
 .gitnexus/
+*.egg-info/
