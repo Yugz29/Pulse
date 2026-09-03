@@ -1,7 +1,7 @@
 # Pulse Core
 
-> **Core est gelé** (version 0.4.0 : Context API au pas 2, type
-> `session_summary` au pas 3) — aucune autre évolution fonctionnelle n'est
+> **Core est gelé** (version 0.5.0 : Context API au pas 2, type
+> `session_summary` et identité stable des sessions au pas 3) — aucune autre évolution fonctionnelle n'est
 > prévue dans cette couche. La direction du projet, les couches à construire et la roadmap
 > sont dans [`../docs/VISION.md`](../docs/VISION.md).
 
@@ -335,6 +335,7 @@ curl -X POST http://127.0.0.1:8765/activities \
 | `/` | HTML | Vue vivante de la journée en cours |
 | `/status` | JSON | État local du daemon et de la trace du jour |
 | `/context` | JSON | Context API : le présent, déterministe et sans modèle |
+| `/context/sessions` | JSON | Sessions de travail closes d’une journée, forme de `current_session` |
 | `/activities` | JSON | Ingestion d’une activité par `POST` |
 | `/trace/today` | JSON | Trace structurée de la journée en cours |
 | `/trace/today.md` | Markdown | Trace lisible de la journée en cours |
