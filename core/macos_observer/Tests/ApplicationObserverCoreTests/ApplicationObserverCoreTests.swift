@@ -62,6 +62,40 @@ func initialApplicationIsRecordedAndFirstNotificationIsDeduplicated() {
 }
 
 @Test
+func failedApplicationEnqueueDoesNotPoisonDeduplication() throws {
+    enum EnqueueFailure: Error {
+        case simulated
+    }
+
+    final class FailingBridge: @unchecked Sendable {
+        var attempts = 0
+
+        func enqueue(_ payload: Data) throws {
+            attempts += 1
+            if attempts == 1 {
+                throw EnqueueFailure.simulated
+            }
+        }
+    }
+
+    let bridge = FailingBridge()
+    var recorder = try ApplicationEventRecorder(
+        builder: CanonicalEventBuilder(instanceID: "stable-instance"),
+        enqueue: bridge.enqueue
+    )
+    let context = ApplicationContext(
+        name: "Terminal",
+        bundleID: "com.apple.Terminal"
+    )!
+
+    #expect(throws: EnqueueFailure.simulated) {
+        try recorder.record(context)
+    }
+    #expect(try recorder.record(context))
+    #expect(bridge.attempts == 2)
+}
+
+@Test
 func onlyTheActuallyFrontmostActivationIsAccepted() {
     let filter = ApplicationActivationFilter()
 

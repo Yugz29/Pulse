@@ -6,16 +6,16 @@ import Foundation
 // executable also owns/stops this observer from that queue.
 final class ApplicationObserver: @unchecked Sendable {
     private let notificationCenter = NSWorkspace.shared.notificationCenter
-    private let bridge: OutboxBridge
-    private let builder: CanonicalEventBuilder
     private let activationFilter = ApplicationActivationFilter()
-    private var deduplicator = ApplicationDeduplicator()
+    private var recorder: ApplicationEventRecorder
     private var activationToken: NSObjectProtocol?
 
     init(repositoryRoot: URL) throws {
         let bridge = OutboxBridge(repositoryRoot: repositoryRoot)
-        self.bridge = bridge
-        self.builder = try CanonicalEventBuilder(instanceID: bridge.instanceID())
+        self.recorder = try ApplicationEventRecorder(
+            builder: CanonicalEventBuilder(instanceID: bridge.instanceID()),
+            enqueue: bridge.enqueue
+        )
     }
 
     func start() {
@@ -56,14 +56,8 @@ final class ApplicationObserver: @unchecked Sendable {
         ) else {
             return
         }
-        guard !deduplicator.isDuplicate(context) else {
-            return
-        }
-        deduplicator.record(context)
-
         do {
-            let payload = try builder.build(context: context)
-            try bridge.enqueue(payload: payload)
+            try recorder.record(context)
         } catch {
             FileHandle.standardError.write(
                 Data("Pulse ApplicationObserver: \(error)\n".utf8)
