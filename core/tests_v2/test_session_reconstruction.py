@@ -923,3 +923,50 @@ def test_agent_session_alone_starts_nothing():
 
     assert sessions == []
     assert unresolved == []
+
+
+def test_agent_session_renders_apart_without_joining_any_work_session(tmp_path):
+    # Affichage seulement : listé sous « Sessions d’agent » avec l'heure et
+    # le résumé stocké, alors qu'il ne rejoint aucune session de travail et
+    # que « Activité non attribuée » reste vide.
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    moment = datetime(2026, 9, 2, 14, 2, tzinfo=zone)
+    _agent_session_row(store, moment, PULSE)
+
+    trace = build_daily_trace(store, day, zone, now=moment + timedelta(hours=3))
+    markdown = render_daily_trace_markdown(trace, archive_mode=True)
+    html = render_daily_trace_html(trace, archive_mode=True)
+
+    assert trace["work_sessions"] == [] and trace["unresolved_sessions"] == []
+    assert (
+        "- 14:01–14:03 · Agent session (claude-code): "
+        "Implémente le Context API (Pulse\\_Core)"
+    ) in markdown
+    assert "## Activité non attribuée" not in markdown
+    assert (
+        '<span class="time">14:01–14:03</span> '
+        "Agent session (claude-code): Implémente le Context API (Pulse_Core)"
+    ) in html
+    assert '<a class="nav-main" href="#sessions-agent">Sessions d’agent</a>' in html
+
+
+def test_agent_session_next_to_a_work_session_is_listed_apart_from_it(tmp_path):
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    afternoon = datetime(2026, 9, 2, 14, 0, tzinfo=zone)
+    details = {**workspace(PULSE)}
+    _stored(store, "terminal_finished", afternoon, {**details, "command": "pytest -q", "exit_code": 0, "cwd": PULSE})
+    _stored(store, "file_changed", afternoon + timedelta(minutes=5), {**details, "path": f"{PULSE}/a.py", "event": "modified"})
+    _agent_session_row(store, afternoon + timedelta(minutes=2), PULSE)
+
+    trace = build_daily_trace(store, day, zone, now=afternoon + timedelta(hours=3))
+    markdown = render_daily_trace_markdown(trace, archive_mode=True)
+
+    assert len(trace["work_sessions"]) == 1
+    assert len(trace["work_sessions"][0]["source_event_ids"]) == 2
+    session_block = markdown.split("## Sessions d’agent")[0]
+    assert "Agent session (claude-code)" not in session_block
+    assert "- 14:01–14:03 · Agent session (claude-code)" in markdown

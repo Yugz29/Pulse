@@ -12,7 +12,10 @@ sessions de travail dans `core/daemon_v2/analysis/timeline.py` : il n'est
 plus un signal fort, ne fait jamais partie des `event_id` qui composent
 l'identité d'une session (`source_event_ids`, hash `id`) et n'influence plus
 ses bornes `started_at` / `ended_at`. Il n'est pas non plus rendu comme
-activité isolée ou non attribuée.
+activité isolée ou non attribuée : la trace journalière (HTML et Markdown)
+le liste dans une catégorie d'affichage à part, « Sessions d'agent », avec
+ses bornes et le résumé figé de l'événement — affichage seulement, sans
+recalcul, indépendant de la session de travail dont il est proche.
 
 Il reste accessible exactement comme prévu par la spec du résumé de session :
 
@@ -39,9 +42,9 @@ seule session. Ce n'est plus le cas : deux grappes séparées de plus de
 30 minutes restent deux sessions, quoi qu'un agent ait fait entre les deux.
 Documenté par `test_agent_session_no_longer_bridges_two_clusters_within_the_gap`.
 
-Conséquence visible : la ligne « Agent session (claude-code) » disparaît de la
-trace journalière (HTML et Markdown). Le nombre d'événements du jour la compte
-toujours.
+Conséquence visible : la ligne « Agent session (claude-code) » quitte les
+blocs Session et « Activités isolées » pour la section « Sessions d'agent ».
+Le nombre d'événements du jour la compte toujours.
 
 ## Réexamen
 
