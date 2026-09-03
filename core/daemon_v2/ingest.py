@@ -15,6 +15,7 @@ from .models import (
     CanonicalEvent,
     IngestedEvent,
     SUPPORTED_ACTIVITY_TYPES,
+    SUPPORTED_SCHEMA_VERSIONS,
     SYSTEM_ACTIVITY_TYPES,
     canonical_event_fingerprint,
 )
@@ -530,6 +531,12 @@ def _normalize_canonical_event(payload: dict[str, Any]) -> IngestedEvent:
     ):
         raise InvalidActivity(
             "schema_version must be a strictly positive integer",
+            field="schema_version",
+        )
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        raise InvalidActivity(
+            "schema_version must be one of: "
+            + ", ".join(str(version) for version in sorted(SUPPORTED_SCHEMA_VERSIONS)),
             field="schema_version",
         )
 

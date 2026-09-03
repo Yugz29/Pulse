@@ -7,6 +7,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+# Versions du contrat canonique que Core sait interpréter. Une version
+# inconnue est refusée à l'ingestion (400) au lieu d'être lue avec les
+# règles courantes comme si c'était une version 1.
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1})
+
 SYSTEM_ACTIVITY_TYPES = {
     "screen_locked",
     "screen_unlocked",

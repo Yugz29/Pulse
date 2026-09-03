@@ -833,3 +833,23 @@ def test_session_summary_rejects_incomplete_contract(overrides, field):
         normalize_activity(session_summary_payload(**overrides))
 
     assert raised.value.field == field
+
+
+def test_unknown_schema_version_is_rejected_not_read_as_version_one():
+    with pytest.raises(InvalidActivity) as raised:
+        normalize_event(canonical_payload(schema_version=2))
+
+    assert raised.value.field == "schema_version"
+    assert "one of: 1" in str(raised.value)
+
+    accepted = normalize_event(canonical_payload(schema_version=1))
+    assert accepted.event.schema_version == 1
+
+    legacy = normalize_event(
+        {
+            "type": "file_changed",
+            "occurred_at": "2026-07-03T09:00:00+00:00",
+            "path": "/project/main.py",
+        }
+    )
+    assert legacy.legacy is True and legacy.event.schema_version == 1
