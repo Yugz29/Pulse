@@ -27,7 +27,7 @@ from .analysis.terminal import (
 )
 from .analysis.timeline import (
     IGNORED_APP_NAMES_FOR_RENDERING,
-    _display_file_path,
+    display_file_path,
     _display_time,
     _displayed_sessions,
     _unresolved_sessions,
@@ -106,7 +106,7 @@ def build_session_summary(
             path = details.get("path")
             event = details.get("event", details.get("change"))
             if path and event:
-                display_path = _display_file_path(path, details.get("workspace"))
+                display_path = display_file_path(path, details.get("workspace"))
                 target = {
                     "created": created_files,
                     "modified": modified_files,
@@ -235,7 +235,7 @@ def _useful_activity_description(activity: dict[str, Any]) -> str:
         path = details.get("path", "")
         return (
             f"{str(event).capitalize()} "
-            f"{_display_file_path(path, details.get('workspace'))}"
+            f"{display_file_path(path, details.get('workspace'))}"
         )
     return activity["summary"]
 
@@ -258,7 +258,7 @@ def build_current_state(trace: dict[str, Any]) -> dict[str, Any]:
             recent_files.append(
                 {
                     "event": details.get("event", details.get("change", "changed")),
-                    "path": _display_file_path(path, details.get("workspace")),
+                    "path": display_file_path(path, details.get("workspace")),
                 }
             )
             if len(recent_files) == 5:
@@ -955,7 +955,7 @@ def _build_compact_activity_summary(
             if event in file_paths and path:
                 file_paths[event].add(path)
                 display_path = Path(
-                    _display_file_path(path, details.get("workspace"))
+                    display_file_path(path, details.get("workspace"))
                 )
                 folder = (
                     display_path.parts[0]

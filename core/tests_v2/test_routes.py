@@ -986,3 +986,44 @@ def test_status_and_home_report_grown_agent_sessions(tmp_path):
 
     home = client.get("/").get_data(as_text=True)
     assert "Sessions agent regrossies" in home
+
+
+def test_activities_accepts_session_summary_and_rejects_incomplete_reprise(tmp_path):
+    client = create_app(tmp_path / "trace.db").test_client()
+    payload = {
+        "event_id": "6f1c2c2e-0000-5000-8000-000000000001",
+        "schema_version": 1,
+        "type": "session_summary",
+        "producer": {"name": "pulse-intelligence", "version": "0.1.0"},
+        "occurred_at": "2026-09-02T15:55:00+00:00",
+        "details": {
+            "session_id": "2026-09-02/work-3",
+            "prompt_version": "v1",
+            "model_id": "mlx-community/test-model",
+            "reprise": {
+                "doing": "Tu implémentais le Context API.",
+                "stopped_at": "Tu venais de pousser la branche.",
+                "open": "La PR attend ta relecture.",
+            },
+            "structured": {"project": "Pulse", "confidence": "high"},
+            "workspace": "/Users/dev/Projets/Pulse",
+        },
+    }
+
+    created = client.post("/activities", json=payload)
+    assert created.status_code == 201
+    assert client.post("/activities", json=payload).status_code == 200
+
+    payload["event_id"] = "6f1c2c2e-0000-5000-8000-000000000002"
+    payload["details"]["reprise"] = {"doing": "Tu implémentais."}
+    rejected = client.post("/activities", json=payload)
+    assert rejected.status_code == 400
+    assert rejected.get_json()["error"]["field"] == "details.reprise.stopped_at"
+
+    stored = client.get("/trace/2026-09-02").get_json()
+    kinds = [
+        activity["type"]
+        for session in stored["sessions"]
+        for activity in session["activities"]
+    ]
+    assert kinds == ["session_summary"]

@@ -4,6 +4,32 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.4.0.0] - 2026-09-03
+
+Pas 3 de la roadmap V3, côté Core : le type d'événement `session_summary`.
+Seul changement de Core pour ce pas (spec `docs/specs/2026-09-03-session-summary.md`, §4).
+
+### Ajouté
+- Type `session_summary` accepté par `POST /activities` : résumé de session
+  dérivé, produit par la couche Intelligence. Validation minimale du contrat
+  (`session_id`, `prompt_version`, `model_id`, `reprise.doing/stopped_at/open`,
+  `structured.project` et `structured.confidence`), le reste passé tel quel,
+  reprise rédigée en profondeur comme `first_prompt`. Le `summary` de
+  l'activité est la première ligne de la reprise.
+- `GET /context` expose `last_session_summary` (dernier résumé sans limite de
+  fenêtre, même règle que `last_agent_session`) ; `schema_version` reste 1,
+  ajout optionnel.
+- Aucun rendu : le type est stocké et exposé par `/context`, pas affiché dans
+  le HTML. `analysis/timeline.py` l'exclut explicitement des activités non
+  attribuées (sans cela, chaque résumé aurait ajouté une ligne vide et
+  incrémenté le compteur du journal).
+
+### Interne
+- `analysis/timeline.py` : `display_file_path`, `app_activation_counts` et
+  `is_strong_work_activity` deviennent publics (importés par `daily_trace`,
+  `context_snapshot` et les renderers) ; les anciens noms restent comme alias
+  dépréciés.
+
 ## [0.3.1.0] - 2026-09-03
 
 ### Corrigé

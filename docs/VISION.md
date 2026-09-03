@@ -83,12 +83,13 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, gelé, version 0.3.0** (`core/`). Daemon Flask et
+**État actuel : existe, gelé, version 0.4.0** (`core/`). Daemon Flask et
 SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
 (FSEvents), applications (Swift), hook Git, sessions d'agents Claude Code /
 Codex en événements dérivés, services résidents sous launchd, vue HTML locale.
-462 tests. Le Context API (`GET /context`, pas 2 de la roadmap) est livré en
-0.3.0 : c'était le seul changement prévu dans Core, qui est de nouveau gelé.
+Le Context API (`GET /context`, pas 2 de la roadmap) est livré en 0.3.0 ; le
+type d'événement `session_summary` (0.4.0) est le seul ajout du pas 3 côté
+Core, qui reste gelé.
 
 ### Intelligence — transformer les faits en contexte
 

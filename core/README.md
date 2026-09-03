@@ -1,7 +1,8 @@
 # Pulse Core
 
-> **Core est gelé** (version 0.3.0, après le pas 2 « Context API ») — aucune
-> autre évolution fonctionnelle n'est prévue dans cette couche. La direction du projet, les couches à construire et la roadmap
+> **Core est gelé** (version 0.4.0 : Context API au pas 2, type
+> `session_summary` au pas 3) — aucune autre évolution fonctionnelle n'est
+> prévue dans cette couche. La direction du projet, les couches à construire et la roadmap
 > sont dans [`../docs/VISION.md`](../docs/VISION.md).
 
 Pulse V2 observe l’activité locale de développement, conserve une trace locale en append-only, regroupe les événements en sessions et reconstruit une vue lisible de la journée en cours.
@@ -22,7 +23,8 @@ un adaptateur explicite `pulse-legacy`. Core leur attribue un nouvel
 fournit aucune idempotence entre deux requêtes legacy identiques**. Il est
 destiné à être supprimé après migration des producteurs.
 
-La version actuelle prend en charge cinq signaux d’activité :
+La version actuelle prend en charge cinq signaux d’activité et un événement
+dérivé de la couche Intelligence :
 
 - `terminal_finished` depuis le watcher Zsh du terminal ;
 - `file_changed` depuis le watcher de fichiers du workspace ;
@@ -33,7 +35,11 @@ La version actuelle prend en charge cinq signaux d’activité :
   les statistiques de fichiers du commit réellement créé ;
 - `agent_session` depuis le producteur horaire des sessions d’agents
   (voir « Sessions d’agents » plus bas) : un événement dérivé par session
-  Claude Code / Codex terminée, jamais le transcript brut.
+  Claude Code / Codex terminée, jamais le transcript brut ;
+- `session_summary` depuis la couche Intelligence (`intelligence/`, pas 3 de
+  la roadmap) : la reprise figée d’une session close, versionnée par prompt et
+  modèle. Core la valide, la stocke et l’expose par `/context`, sans la
+  rendre dans le HTML.
 
 Pulse complète ces signaux avec une lecture Git passive au rendu pour enrichir
 la reprise du projet courant, sans écrire ces informations dans SQLite.
@@ -357,7 +363,7 @@ curl http://127.0.0.1:8765/trace/today.md
 rendu. La réponse (`schema_version: 1`) contient le workspace résolu et ses
 faits git persistés, la session courante (durée, projets, apps, fichiers,
 commits, tests, erreurs, signaux), les sessions récentes fermées, les signaux
-isolés et le dernier `agent_session`. C'est le contrat stable que la couche
+isolés, le dernier `agent_session` et le dernier `session_summary`. C'est le contrat stable que la couche
 Intelligence consomme (voir `../docs/specs/2026-09-02-context-api.md`).
 
 ```bash

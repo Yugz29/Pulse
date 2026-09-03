@@ -59,7 +59,7 @@ def _session_observed_bounds(session: dict[str, Any]) -> tuple[str, str]:
     strong_activities = [
         activity
         for activity in session["activities"]
-        if _is_strong_work_activity(activity)
+        if is_strong_work_activity(activity)
     ]
     if strong_activities:
         return (
@@ -68,13 +68,13 @@ def _session_observed_bounds(session: dict[str, Any]) -> tuple[str, str]:
         )
 
     file_change_groups = _file_change_groups(session)
-    app_activation_counts = _app_activation_counts(session)
+    activation_counts = app_activation_counts(session)
     rendered_app_activations = False
     rendered_activities = []
     for activity in session["activities"]:
         details = activity.get("details", {})
         if activity["type"] == "app_activated":
-            if details.get("app") not in app_activation_counts:
+            if details.get("app") not in activation_counts:
                 continue
             if rendered_app_activations:
                 continue
@@ -120,7 +120,7 @@ def _session_duration_seconds(session: dict[str, Any]) -> float:
     )
 
 
-def _display_file_path(path: str, workspace: Any) -> str:
+def display_file_path(path: str, workspace: Any) -> str:
     display_path = Path(path)
     if isinstance(workspace, dict):
         workspace = workspace.get("workspace_root")
@@ -132,7 +132,7 @@ def _display_file_path(path: str, workspace: Any) -> str:
     return str(display_path)
 
 
-def _app_activation_counts(session: dict[str, Any]) -> dict[str, int]:
+def app_activation_counts(session: dict[str, Any]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for activity in session["activities"]:
         if activity["type"] == "app_activated":
@@ -146,7 +146,7 @@ def _ranked_apps(counts: dict[str, int], limit: int = 5) -> list[tuple[str, int]
     return sorted(counts.items(), key=lambda item: -item[1])[:limit]
 
 
-def _is_strong_work_activity(activity: dict[str, Any]) -> bool:
+def is_strong_work_activity(activity: dict[str, Any]) -> bool:
     # A git_commit event is verified evidence (the commit object itself),
     # not an inference, so it counts as strong work signal like the others.
     # An agent_session is likewise derived from a real transcript on disk.
@@ -156,6 +156,15 @@ def _is_strong_work_activity(activity: dict[str, Any]) -> bool:
         "git_commit",
         "agent_session",
     }
+
+
+# Deprecated aliases (2026-09-03): display_file_path, app_activation_counts
+# and is_strong_work_activity are imported by several consumers
+# (daily_trace, context_snapshot, the renderers) — use the public names.
+# Kept until every import has migrated; no new caller should use them.
+_display_file_path = display_file_path
+_app_activation_counts = app_activation_counts
+_is_strong_work_activity = is_strong_work_activity
 
 
 def configured_interruption_threshold() -> timedelta:
@@ -359,7 +368,7 @@ def reconstruct_session_views(
         strong_count = sum(
             1
             for activity in session_activities
-            if _is_strong_work_activity(activity)
+            if is_strong_work_activity(activity)
         )
         if (
             reason != "open"
@@ -457,7 +466,7 @@ def reconstruct_session_views(
     for activity in activities:
         occurred_at = datetime.fromisoformat(activity["occurred_at"])
         activity_type = activity["type"]
-        is_work = _is_strong_work_activity(activity)
+        is_work = is_strong_work_activity(activity)
 
         if (
             current is not None
@@ -588,6 +597,9 @@ def reconstruct_session_views(
             "screen_unlocked",
             "system_sleep",
             "system_wake",
+            # Résumé dérivé (couche Intelligence) : stocké et exposé par
+            # /context, jamais rendu — ni session, ni activité non attribuée.
+            "session_summary",
         }
         and not (
             activity["type"] == "app_activated"
@@ -660,7 +672,7 @@ def _session_has_recent_strong_activity(
     strong_times = [
         datetime.fromisoformat(activity["occurred_at"])
         for activity in session["activities"]
-        if _is_strong_work_activity(activity)
+        if is_strong_work_activity(activity)
     ]
     return bool(strong_times) and now - strong_times[-1] <= WORK_SESSION_GAP
 

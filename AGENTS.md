@@ -47,7 +47,7 @@ This project is indexed by GitNexus as **Pulse_Core** (1 435 nodes, 4 763 edges,
 # Pulse — règles du repo unique
 
 Voir `CLAUDE.md` (même contenu, référence unique) et `docs/VISION.md`.
-En bref : `core/` (Pulse Core) est gelé (0.3.0) — ne pas toucher à
+En bref : `core/` (Pulse Core) est gelé (0.4.0) — ne pas toucher à
 `core/daemon_v2/`, `core/tests_v2/`, `core/scripts/`, `core/macos_observer/` ;
 pas de `git push` ni de suppression sans accord explicite ; le nouveau code va
 dans `intelligence/`.

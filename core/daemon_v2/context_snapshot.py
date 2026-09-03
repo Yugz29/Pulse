@@ -25,9 +25,9 @@ from .analysis.terminal import (
     useful_command_lines,
 )
 from .analysis.timeline import (
-    _app_activation_counts,
-    _display_file_path,
-    _is_strong_work_activity,
+    app_activation_counts,
+    display_file_path,
+    is_strong_work_activity,
     reconstruct_session_views,
 )
 from .models import SUPPORTED_ACTIVITY_TYPES, StoredActivity
@@ -123,6 +123,7 @@ def build_context_snapshot(
         ),
         "isolated_signals": _isolated_signals(sessions, window_start),
         "last_agent_session": _last_agent_session(store, reference_utc),
+        "last_session_summary": _last_session_summary(store, reference_utc),
     }
 
 
@@ -441,7 +442,7 @@ def _file_facts(
         if not isinstance(path, str) or not path or event not in files:
             continue
         distinct.add(path)
-        display_path = _display_file_path(path, details.get("workspace"))
+        display_path = display_file_path(path, details.get("workspace"))
         if display_path not in files[event]:
             files[event].append(display_path)
     return files, len(distinct)
@@ -454,7 +455,7 @@ def _bounded(values: list[str], limit: int) -> tuple[list[str], bool]:
 def _current_session_view(session: dict[str, Any]) -> dict[str, Any]:
     activities = session["activities"]
     apps = sorted(
-        _app_activation_counts(session).items(),
+        app_activation_counts(session).items(),
         key=lambda item: (-item[1], item[0]),
     )[:MAX_APPS]
     files, _distinct = _file_facts(activities)
@@ -562,7 +563,7 @@ def _isolated_signals(
             (
                 candidate
                 for candidate in session["activities"]
-                if _is_strong_work_activity(candidate)
+                if is_strong_work_activity(candidate)
             ),
             session["activities"][0],
         )
@@ -594,9 +595,50 @@ def _signal_summary(activity: dict[str, Any]) -> str | None:
             return None
         return (
             f"{str(event).capitalize()} "
-            f"{_display_file_path(path, details.get('workspace'))}"
+            f"{display_file_path(path, details.get('workspace'))}"
         )
     return activity["summary"]
+
+
+# --- Derived events without a window ----------------------------------------
+
+
+def _last_session_summary(
+    store: TraceStore,
+    reference_at: datetime,
+) -> dict[str, Any] | None:
+    """The most recent session_summary, same window-free rule as agent sessions.
+
+    Ordered by occurred_at (the summarized session's end) then by row id,
+    which follows generated_at for a regenerated summary of the same session.
+    """
+    stored = store.latest_activity_of_type("session_summary", before=reference_at)
+    if stored is None:
+        return None
+    details = stored.details
+    ended_at = details.get("session_ended_at")
+    try:
+        ended = (
+            _instant(ended_at)
+            if isinstance(ended_at, str) and ended_at
+            else stored.occurred_at
+        )
+    except ValueError:
+        ended = stored.occurred_at
+    if ended.tzinfo is None:
+        ended = stored.occurred_at
+    reprise = details.get("reprise", {})
+    structured = details.get("structured", {})
+    age_seconds = (reference_at - ended.astimezone(timezone.utc)).total_seconds()
+    return {
+        "session_id": details.get("session_id"),
+        "session_ended_at": _utc(ended),
+        "reprise": {
+            key: reprise.get(key) for key in ("doing", "stopped_at", "open")
+        },
+        "confidence": structured.get("confidence"),
+        "age_minutes": max(0, int(age_seconds // 60)),
+    }
 
 
 # --- Agent sessions ---------------------------------------------------------

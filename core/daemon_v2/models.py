@@ -19,6 +19,9 @@ SUPPORTED_ACTIVITY_TYPES = {
     "file_changed",
     "terminal_finished",
     "git_commit",
+    # Dérivé par la couche Intelligence (pas 3) : Core l'accepte, le stocke
+    # et l'expose par /context, sans le rendre.
+    "session_summary",
     *SYSTEM_ACTIVITY_TYPES,
 }
 
