@@ -122,6 +122,10 @@ class FakeCore:
     contexts_by_at: dict[str, dict[str, Any]] = field(default_factory=dict)
     default_context: dict[str, Any] | None = None
     posts: list[dict[str, Any]] = field(default_factory=list)
+    # Panne simulée : les N prochains POST /activities répondent 503 sans
+    # rien enregistrer ; le payload refusé est gardé pour comparaison.
+    fail_posts: int = 0
+    refused: list[dict[str, Any]] = field(default_factory=list)
     requested_dates: list[str] = field(default_factory=list)
     seen_event_ids: set[str] = field(default_factory=set)
     context_requests: int = 0
@@ -169,6 +173,10 @@ class FakeCore:
         @app.post("/activities")
         def activities():
             payload = request.get_json(silent=True) or {}
+            if self.fail_posts > 0:
+                self.fail_posts -= 1
+                self.refused.append(payload)
+                return jsonify({"error": {"code": "unavailable"}}), 503
             details = payload.get("details", {})
             for field_name in ("event_id", "type", "occurred_at"):
                 if not payload.get(field_name):

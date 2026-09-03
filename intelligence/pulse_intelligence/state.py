@@ -1,4 +1,12 @@
-"""État local du job : ce qui a été émis, ce qui a échoué. Jamais dans trace.db.
+"""État local du job : ce qui a été émis, ce qui attend Core, ce qui a
+échoué. Jamais dans trace.db.
+
+``pending`` porte le payload canonique d'un résumé validé, gelé *avant* le
+POST vers Core : si le POST échoue ou que la confirmation se perd, le tick
+suivant renvoie ces octets exacts — jamais un payload recalculé avec un
+nouveau ``generated_at``. Seule une régénération volontaire (autre
+``prompt_version`` ou ``model_id``, donc autre ``event_id``) produit un
+nouveau payload.
 
 ``~/.pulse_intelligence/`` suit la même politique de permissions que Core
 après hardening : dossier ``0700``, fichiers ``0600``.
@@ -34,6 +42,7 @@ def ensure_private_home(path: Path) -> Path:
 class JobState:
     path: Path
     emitted: dict[str, dict[str, Any]] = field(default_factory=dict)
+    pending: dict[str, dict[str, Any]] = field(default_factory=dict)
     failures: dict[str, int] = field(default_factory=dict)
     failed: dict[str, str] = field(default_factory=dict)
 
@@ -43,6 +52,7 @@ class JobState:
         if path.exists():
             raw = json.loads(path.read_text(encoding="utf-8"))
             state.emitted = dict(raw.get("emitted", {}))
+            state.pending = dict(raw.get("pending", {}))
             state.failures = {k: int(v) for k, v in raw.get("failures", {}).items()}
             state.failed = dict(raw.get("failed", {}))
         return state
@@ -51,6 +61,7 @@ class JobState:
         ensure_private_home(self.path.parent)
         payload = {
             "emitted": self.emitted,
+            "pending": self.pending,
             "failures": self.failures,
             "failed": self.failed,
         }
@@ -76,6 +87,33 @@ class JobState:
             for entry in self.emitted.values()
         }
 
+    def record_pending(
+        self,
+        event_id: str,
+        *,
+        session_id: str,
+        prompt_version: str,
+        model_id: str,
+        at: str,
+        event: dict[str, Any],
+    ) -> None:
+        """Gèle le payload validé avant le POST. Sur disque avant tout envoi."""
+        self.pending[event_id] = {
+            "session_id": session_id,
+            "prompt_version": prompt_version,
+            "model_id": model_id,
+            "at": at,
+            "event": event,
+        }
+        self.save()
+
+    def pending_event(self, event_id: str) -> dict[str, Any] | None:
+        """Le payload gelé qui attend encore la confirmation de Core."""
+        entry = self.pending.get(event_id)
+        if entry is None or not isinstance(entry.get("event"), dict):
+            return None
+        return entry["event"]
+
     def record_emitted(
         self,
         event_id: str,
@@ -97,6 +135,7 @@ class JobState:
             # reste la vérité (`show latest` lit /context).
             entry["event"] = event
         self.emitted[event_id] = entry
+        self.pending.pop(event_id, None)
         self.failures.pop(session_id, None)
         self.save()
 
