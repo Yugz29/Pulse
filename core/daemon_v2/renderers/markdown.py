@@ -29,6 +29,8 @@ from ..daily_trace import (
     _session_project_summaries,
     _useful_activity_description,
     _terminal_labels,
+    agent_session_time_label,
+    agent_session_views,
     build_current_state,
     build_daily_summary,
     build_resume,
@@ -156,7 +158,13 @@ def render_daily_trace_markdown(
         ]
     )
     isolated = isolated_sessions(trace)
-    if not displayed_sessions and not unresolved_sessions and not isolated:
+    agent_views = agent_session_views(trace)
+    if (
+        not displayed_sessions
+        and not unresolved_sessions
+        and not isolated
+        and not agent_views
+    ):
         lines.extend(["_Aucune activité._", ""])
         return "\n".join(lines)
 
@@ -370,6 +378,22 @@ def render_daily_trace_markdown(
                 lines.append(f"  - CWD : {_markdown_text(cwd)}")
             if workspace:
                 lines.append(f"  - Workspace : {_markdown_text(workspace)}")
+        lines.append("")
+
+    if agent_views:
+        # Catégorie à part : ni session, ni activité isolée ou non attribuée.
+        lines.extend(["## Sessions d’agent", ""])
+        for view in agent_views:
+            project = (
+                resolve_project_context(view["workspace"]).project_name
+                if view["workspace"]
+                else None
+            )
+            suffix = f" ({_markdown_text(project)})" if project else ""
+            lines.append(
+                f"- {agent_session_time_label(view, trace_zone)} · "
+                f"{_markdown_text(view['summary'])}{suffix}"
+            )
         lines.append("")
 
     if isolated:

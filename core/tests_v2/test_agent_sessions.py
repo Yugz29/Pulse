@@ -368,7 +368,14 @@ def test_corrupt_manifest_is_an_infrastructure_error(tmp_path):
         emit(tmp_path)
 
 
-def test_agent_session_renders_in_the_daily_trace(tmp_path):
+def test_agent_session_is_listed_apart_in_the_daily_trace(tmp_path):
+    # Décision 2026-09-03 : l'agent_session est émis après coup et ne
+    # participe plus au regroupement (ni session, ni activité isolée, ni
+    # activité non attribuée). Il reste rendu, dans sa propre catégorie,
+    # avec le résumé figé de l'événement — même sans session de travail.
+    from daemon_v2.daily_trace import render_daily_trace_html
+    from daemon_v2.renderers.markdown import _markdown_text
+
     outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
     _write_transcript(
         tmp_path / "claude", "proj/abc-123.jsonl", claude_lines(), age_hours=2
@@ -380,9 +387,19 @@ def test_agent_session_renders_in_the_daily_trace(tmp_path):
     store.append_event(normalize_event(payload))
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
+    html = render_daily_trace_html(trace, archive_mode=True)
 
     assert trace["activity_count"] == 1
-    assert "Agent session (claude-code)" in markdown
+    assert trace["work_sessions"] == []
+    assert trace["unresolved_sessions"] == []
+    stored_summary = trace["sessions"][0]["activities"][0]["summary"]
+    assert stored_summary.startswith("Agent session (claude-code)")
+    assert "## Sessions d’agent" in markdown
+    assert f"· {_markdown_text(stored_summary)}" in markdown
+    assert "_Aucune activité._" not in markdown
+    assert "<h2>Sessions d’agent</h2>" in html
+    assert stored_summary in html
+    assert "Aucune activité pour cette journée" not in html
 
 
 def _sidechain_lines():

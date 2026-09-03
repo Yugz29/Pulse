@@ -214,6 +214,12 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   comme politique, versions de schéma explicites, rédaction complète des
   résumés, verrous sur l'archivage et l'émission, dépendances épinglées, CI.
   Authentification des producteurs locaux reportée.
+- **2026-09-03** — `agent_session` hors identité des sessions : émis après
+  coup, il ne compose plus les `source_event_ids` ni les bornes d'une session ;
+  accessible via `last_agent_session` et l'entrée du modèle seulement. Deux
+  grappes qu'il aurait reliées restent deux sessions. Réexamen si un autre
+  type d'événement montre le même pattern d'arrivée tardive
+  ([note](decisions/2026-09-03-agent-session-hors-identite.md)).
 - **2026-09-02** — Restructuration en repo unique : Core déplacé dans `core/`
   avec son historique, Lab archivé dans `~/Projets/ARCHIVE/Pulse_Lab` sous le
   tag `archive/lab-2026-09`, `CLAUDE.md` et `AGENTS.md` désormais suivis par

@@ -30,6 +30,8 @@ from ..daily_trace import (
     _useful_activity_description,
     _session_project_summaries,
     _terminal_labels,
+    agent_session_time_label,
+    agent_session_views,
     build_current_state,
     build_daily_summary,
     build_resume,
@@ -67,6 +69,7 @@ def render_daily_trace_html(
     resume = build_resume(trace) if not archive_mode else []
     displayed_sessions = _displayed_sessions(trace)
     unresolved_sessions = _unresolved_sessions(trace)
+    agent_views = agent_session_views(trace)
     trace_zone = _trace_timezone(trace)
     apps = [escape(str(app)) for app, _count in _ranked_apps(summary["apps"])]
     projects = [
@@ -122,6 +125,10 @@ def render_daily_trace_html(
                 f'href="#session-{index}-projet-{project_index}">'
                 f"{escape(resolve_project_context(workspace).project_name)}</a>"
             )
+    if agent_views:
+        navigation.append(
+            '<a class="nav-main" href="#sessions-agent">Sessions d’agent</a>'
+        )
     end_anchor = "timeline-end" if archive_mode else "timeline-live"
     end_label = "Fin du jour" if archive_mode else "Direct"
     navigation.append(
@@ -336,7 +343,12 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
         )
 
     isolated = isolated_sessions(trace)
-    if not displayed_sessions and not unresolved_sessions and not isolated:
+    if (
+        not displayed_sessions
+        and not unresolved_sessions
+        and not isolated
+        and not agent_views
+    ):
         body.append("<p>Aucune activité pour cette journée.</p>")
 
     now = datetime.now(trace_zone)
@@ -520,6 +532,32 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 f'<div class="content">{content}{detail_html}</div></li>'
             )
         body.extend(["</ul>", "</section>"])
+
+    if agent_views:
+        # Catégorie à part : ni session, ni activité isolée ou non attribuée.
+        agent_items = []
+        for view in agent_views:
+            project = (
+                resolve_project_context(view["workspace"]).project_name
+                if view["workspace"]
+                else None
+            )
+            suffix = f" ({escape(str(project))})" if project else ""
+            agent_items.append(
+                "<li>"
+                f'<span class="time">'
+                f"{escape(agent_session_time_label(view, trace_zone))}"
+                "</span> "
+                f"{escape(str(view['summary']))}{suffix}"
+                "</li>"
+            )
+        body.append(
+            '<section class="summary" id="sessions-agent">'
+            "<h2>Sessions d’agent</h2>"
+            "<p>Résumés figés des sessions d’agents de la journée, listés "
+            "à part : ils ne composent aucune session de travail.</p>"
+            f"<ul>{''.join(agent_items)}</ul></section>"
+        )
 
     if isolated:
         isolated_items = []

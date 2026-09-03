@@ -240,6 +240,63 @@ def _useful_activity_description(activity: dict[str, Any]) -> str:
     return activity["summary"]
 
 
+def agent_session_views(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    """Sessions d'agent de la journée, catégorie d'affichage à part.
+
+    Un agent_session ne compose ni l'identité ni les bornes d'une session
+    de travail (décision 2026-09-03) et n'est pas une activité non
+    attribuée : il est listé pour la journée, indépendamment de la session
+    dont il est temporellement proche. Le résumé rendu est celui figé dans
+    l'événement — rien n'est recalculé.
+    """
+    views = []
+    for session in trace["sessions"]:
+        for activity in session["activities"]:
+            if activity["type"] != "agent_session":
+                continue
+            details = activity.get("details", {})
+            workspace = details.get("workspace")
+            if isinstance(workspace, dict):
+                workspace = workspace.get("workspace_root")
+            views.append(
+                {
+                    "occurred_at": activity["occurred_at"],
+                    "started_at": _optional_instant(details.get("started_at")),
+                    "ended_at": _optional_instant(details.get("ended_at")),
+                    "agent": details.get("source_tool"),
+                    "summary": activity["summary"],
+                    "workspace": (
+                        workspace
+                        if isinstance(workspace, str) and workspace
+                        else None
+                    ),
+                }
+            )
+    views.sort(key=lambda view: datetime.fromisoformat(view["occurred_at"]))
+    return views
+
+
+def _optional_instant(value: Any) -> str | None:
+    """ISO string with a timezone, or None — never a naive or broken stamp."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return value if parsed.tzinfo is not None else None
+
+
+def agent_session_time_label(view: dict[str, Any], zone: tzinfo) -> str:
+    """``HH:MM–HH:MM`` from the stored bounds, else the event's own time."""
+    if view["started_at"] and view["ended_at"]:
+        return (
+            f"{_display_time(view['started_at'], zone)}–"
+            f"{_display_time(view['ended_at'], zone)}"
+        )
+    return _display_time(view["occurred_at"], zone)
+
+
 def build_current_state(trace: dict[str, Any]) -> dict[str, Any]:
     displayed_sessions = _displayed_sessions(trace)
     current_session = displayed_sessions[-1] if displayed_sessions else None
