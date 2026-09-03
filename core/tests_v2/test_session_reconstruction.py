@@ -833,3 +833,93 @@ def session_identity_of(session: dict) -> str:
     from daemon_v2.analysis.timeline import session_identity
 
     return session_identity(session["activities"])[0]
+
+
+# --- agent_session hors identité des sessions (décision 2026-09-03) --------
+
+
+def _agent_session_row(store: TraceStore, moment: datetime, root: str) -> None:
+    store.append(
+        Activity(
+            "agent_session",
+            moment,
+            "agent",
+            "Agent session (claude-code): Implémente le Context API",
+            {
+                "source_tool": "claude-code",
+                "session_id": "session-1",
+                "transcript_path": "/transcripts/session.jsonl",
+                "summary_version": 2,
+                "started_at": (moment - timedelta(minutes=1)).isoformat(),
+                "ended_at": (moment + timedelta(minutes=1)).isoformat(),
+                "first_prompt": "Implémente le Context API",
+                **workspace(root),
+            },
+        )
+    )
+
+
+def test_late_agent_session_inside_a_session_never_moves_its_identity(tmp_path):
+    # Cas relevé par l'audit externe : un agent_session est émis après coup
+    # (hook SessionEnd, passage horaire launchd) avec un occurred_at qui tombe
+    # au milieu d'une session déjà reconstruite — et peut-être déjà résumée.
+    # Il ne doit ni rejoindre source_event_ids ni déplacer les bornes.
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    afternoon = datetime(2026, 9, 2, 14, 0, tzinfo=zone)
+    details = {**workspace(PULSE)}
+    _stored(store, "terminal_finished", afternoon, {**details, "command": "pytest -q", "exit_code": 0, "cwd": PULSE})
+    _stored(store, "file_changed", afternoon + timedelta(minutes=5), {**details, "path": f"{PULSE}/a.py", "event": "modified"})
+    now = afternoon + timedelta(hours=3)
+    identity_keys = ("id", "label", "source_event_ids", "started_at", "ended_at", "activity_count")
+
+    before = build_daily_trace(store, day, zone, now=now)
+    assert len(before["work_sessions"]) == 1
+    reference = {key: before["work_sessions"][0][key] for key in identity_keys}
+    assert len(reference["source_event_ids"]) == 2
+
+    # L'agent_session arrive après coup, daté du milieu de la session.
+    _agent_session_row(store, afternoon + timedelta(minutes=2), PULSE)
+
+    after = build_daily_trace(store, day, zone, now=now)
+    assert len(after["work_sessions"]) == 1
+    assert {key: after["work_sessions"][0][key] for key in identity_keys} == reference
+    assert all(
+        activity["type"] != "agent_session"
+        for activity in after["work_sessions"][0]["activities"]
+    )
+    # Ni session, ni activité non attribuée : il n'est visible que par
+    # /context.last_agent_session, sans fenêtre.
+    assert after["unresolved_sessions"] == []
+
+
+def test_agent_session_no_longer_bridges_two_clusters_within_the_gap():
+    # Effet de bord accepté (décision 2026-09-03) : comme signal fort, un
+    # agent_session à moins de 30 min de deux grappes de travail les reliait
+    # en une seule session. Il ne fusionne plus rien : deux sessions.
+    details = {**workspace(PULSE)}
+    sessions, unresolved = reconstruct(
+        event("terminal_finished", 0, {**details, "command": "make"}, 1),
+        event("file_changed", 5, {**details, "path": f"{PULSE}/a.py"}, 2),
+        event("agent_session", 25, {**details, "source_tool": "claude-code"}, 3),
+        event("terminal_finished", 45, {**details, "command": "make test"}, 4),
+        event("file_changed", 50, {**details, "path": f"{PULSE}/b.py"}, 5),
+        now=BASE + timedelta(minutes=60),
+    )
+
+    assert [session["source_event_ids"] for session in sessions] == [
+        ["id:1", "id:2"],
+        ["id:4", "id:5"],
+    ]
+    assert sessions[0]["end_reason"] == "inactivity"
+    assert unresolved == []
+
+
+def test_agent_session_alone_starts_nothing():
+    sessions, unresolved = reconstruct(
+        event("agent_session", 0, {**workspace(PULSE), "source_tool": "codex"}),
+    )
+
+    assert sessions == []
+    assert unresolved == []

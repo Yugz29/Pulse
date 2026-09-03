@@ -177,12 +177,16 @@ def _ranked_apps(counts: dict[str, int], limit: int = 5) -> list[tuple[str, int]
 def is_strong_work_activity(activity: dict[str, Any]) -> bool:
     # A git_commit event is verified evidence (the commit object itself),
     # not an inference, so it counts as strong work signal like the others.
-    # An agent_session is likewise derived from a real transcript on disk.
+    # An agent_session is derived from a real transcript too, but it is
+    # emitted after the fact (SessionEnd hook, hourly launchd pass) with an
+    # occurred_at that lands inside an already reconstructed session: letting
+    # it join would change the session's identity and bounds after a summary
+    # may have been attached (decision 2026-09-03-agent-session-hors-identite).
+    # It stays reachable through /context.last_agent_session, never here.
     return activity["type"] in {
         "terminal_finished",
         "file_changed",
         "git_commit",
-        "agent_session",
     }
 
 
@@ -632,6 +636,9 @@ def reconstruct_session_views(
             # Résumé dérivé (couche Intelligence) : stocké et exposé par
             # /context, jamais rendu — ni session, ni activité non attribuée.
             "session_summary",
+            # Événement dérivé émis après coup : hors identité des sessions
+            # (voir is_strong_work_activity), exposé par /context seulement.
+            "agent_session",
         }
         and not (
             activity["type"] == "app_activated"

@@ -368,7 +368,11 @@ def test_corrupt_manifest_is_an_infrastructure_error(tmp_path):
         emit(tmp_path)
 
 
-def test_agent_session_renders_in_the_daily_trace(tmp_path):
+def test_agent_session_is_stored_but_never_grouped_in_the_daily_trace(tmp_path):
+    # Décision 2026-09-03 : l'agent_session est émis après coup et ne
+    # participe plus au regroupement (ni session, ni activité isolée, ni
+    # activité non attribuée). Il reste compté comme événement du jour et
+    # exposé par /context.last_agent_session.
     outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
     _write_transcript(
         tmp_path / "claude", "proj/abc-123.jsonl", claude_lines(), age_hours=2
@@ -382,7 +386,9 @@ def test_agent_session_renders_in_the_daily_trace(tmp_path):
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
     assert trace["activity_count"] == 1
-    assert "Agent session (claude-code)" in markdown
+    assert trace["work_sessions"] == []
+    assert trace["unresolved_sessions"] == []
+    assert "Agent session (claude-code)" not in markdown
 
 
 def _sidechain_lines():
