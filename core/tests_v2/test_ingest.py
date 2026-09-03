@@ -187,6 +187,22 @@ def test_internal_pulse_curl_is_ignored_only_on_pulse_ports():
     ) is not None
 
 
+def test_internal_pulse_curl_does_not_hide_following_command():
+    command = "curl http://127.0.0.1:8765/activities\npytest -q"
+
+    assert filter_terminal_command(command) == "pytest -q"
+
+
+def test_internal_pulse_curl_preserves_useful_lines_on_both_sides():
+    command = (
+        "echo before\n"
+        "curl http://127.0.0.1:8765/activities\n"
+        "echo after"
+    )
+
+    assert filter_terminal_command(command) == "echo before\necho after"
+
+
 def test_normalizes_and_redacts_terminal_activity():
     activity = normalize_activity(
         {

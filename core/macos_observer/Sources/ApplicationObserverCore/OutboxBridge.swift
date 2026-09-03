@@ -1,5 +1,18 @@
 import Foundation
 
+private final class PipeCapture: @unchecked Sendable {
+    private let fileHandle: FileHandle
+    private(set) var data = Data()
+
+    init(_ fileHandle: FileHandle) {
+        self.fileHandle = fileHandle
+    }
+
+    func drain() {
+        data = fileHandle.readDataToEndOfFile()
+    }
+}
+
 public struct OutboxBridge: Sendable {
     private let repositoryRoot: URL
     private let pythonExecutable: URL
@@ -54,19 +67,36 @@ public struct OutboxBridge: Sendable {
         process.standardError = standardError
 
         try process.run()
+
+        let outputCapture = PipeCapture(standardOutput.fileHandleForReading)
+        let errorCapture = PipeCapture(standardError.fileHandleForReading)
+        let drainGroup = DispatchGroup()
+        let drainQueue = DispatchQueue(
+            label: "com.pulse.outbox-bridge.pipe-drain",
+            attributes: .concurrent
+        )
+        for capture in [outputCapture, errorCapture] {
+            drainGroup.enter()
+            drainQueue.async {
+                capture.drain()
+                drainGroup.leave()
+            }
+        }
+
         if let input {
             standardInput.fileHandleForWriting.write(input)
         }
         try standardInput.fileHandleForWriting.close()
         process.waitUntilExit()
 
-        let output = standardOutput.fileHandleForReading.readDataToEndOfFile()
-        let error = standardError.fileHandleForReading.readDataToEndOfFile()
+        drainGroup.wait()
+
         guard process.terminationStatus == 0 else {
-            let message = String(data: error, encoding: .utf8) ?? "unknown error"
+            let message = String(data: errorCapture.data, encoding: .utf8)
+                ?? "unknown error"
             throw BridgeError.commandFailed(message)
         }
-        return String(data: output, encoding: .utf8) ?? ""
+        return String(data: outputCapture.data, encoding: .utf8) ?? ""
     }
 
     public enum BridgeError: Error {
