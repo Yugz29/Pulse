@@ -1,0 +1,32 @@
+# CI de Pulse Core : la suite pytest sur macOS, avec le Python de la venv.
+#
+# Le build Swift de core/macos_observer/ n'est PAS dans la CI pour l'instant :
+# il demande la toolchain Xcode du runner et n'a pas de test qui ne passe
+# pas déjà localement (`swift test`). À ajouter quand un changement Swift
+# le justifiera.
+name: core
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Dépendances
+        run: pip install -r requirements-dev.txt
+      # Même forme que le Makefile (`python -m pytest tests_v2`) : `python -m`
+      # met core/ sur sys.path, ce que le script console `pytest` ne fait pas
+      # — sans cela, 23 erreurs de collecte « No module named daemon_v2 »,
+      # exit 2 (premier run, 2026-09-03).
+      - name: Tests
+        run: python -m pytest -q tests_v2
