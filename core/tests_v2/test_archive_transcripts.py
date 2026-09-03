@@ -157,3 +157,50 @@ def test_cli_reports_summary_and_exit_codes(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit) as excinfo:
         main()
     assert excinfo.value.code == 2
+
+
+def test_concurrent_passes_on_the_same_transcript_are_serialized(tmp_path):
+    # Hook SessionEnd et passage horaire lancés en même temps : une archive,
+    # une entrée de manifeste, zéro exception. Le verrou sérialise, les
+    # temporaires uniques couvrent le reste.
+    import threading
+
+    source = make_source(tmp_path, files={"proj/s.jsonl": '{"a":1}\n' * 200})
+    archive_root = tmp_path / "archive"
+    barrier = threading.Barrier(2)
+    reports, errors = [], []
+
+    def run():
+        try:
+            barrier.wait(timeout=5)
+            reports.append(archive_transcripts([source], archive_root, now=NOW))
+        except Exception as exc:  # noqa: BLE001 — le test veut zéro exception
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert errors == []
+    assert sum(report.archived for report in reports) == 1
+    assert sum(report.unchanged for report in reports) == 1
+    assert archived_file(archive_root, source, "proj/s.jsonl").exists()
+    manifest = json.loads((archive_root / "manifest.json").read_text())
+    assert len(manifest["files"]) == 1
+    leftovers = [p for p in archive_root.rglob("*.tmp")]
+    assert leftovers == []
+
+
+def test_lock_held_elsewhere_is_a_clean_infrastructure_error(tmp_path):
+    from daemon_v2.file_lock import exclusive_lock
+    from scripts.archive_transcripts import LOCK_NAME
+
+    source = make_source(tmp_path)
+    archive_root = tmp_path / "archive"
+    archive_root.mkdir()
+
+    with exclusive_lock(archive_root / LOCK_NAME):
+        with pytest.raises(ArchiveInfrastructureError, match="verrou occupé"):
+            archive_transcripts([source], archive_root, now=NOW, lock_timeout_s=0.2)
