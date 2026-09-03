@@ -4,6 +4,29 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.5.5.0] - 2026-09-03
+
+Durcissement secondaire issu de l'audit externe (PR #38 et #39), sans ajout
+fonctionnel.
+
+### Corrigé
+- L'observateur d'applications ne déduplique une activation qu'après son
+  enqueue confirmé ; un échec temporaire ne masque plus l'activation suivante.
+- `OutboxBridge` draine `stdout` et `stderr` pendant l'exécution du processus,
+  sans deadlock quand un enfant remplit les deux pipes.
+- Le hook terminal signale un échec d'enqueue après contention SQLite sans
+  afficher le contenu de la commande.
+- Le filtre des `curl` internes vers `/activities` s'arrête à la fin réelle de
+  la commande shell et ne masque plus les commandes suivantes.
+- Les adresses IPv6 sont entourées de crochets dans les URLs des producteurs.
+
+### Documentation
+- Politique d'écoute locale, versions, `schema_version`, chemins du repo unique
+  et seuil de vigilance du coût de reconstruction réalignés avec l'état livré.
+
+Suite portée à 540 tests Core et 14 tests Swift. Suite Intelligence inchangée :
+62 tests.
+
 ## [0.5.4.0] - 2026-09-03
 
 Bloqueur P0 de l'audit externe du pas 3 (PR #37). Note de décision
