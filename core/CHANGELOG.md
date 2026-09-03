@@ -4,6 +4,13 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.3.1.0] - 2026-09-03
+
+### Corrigé
+- Le watcher fichiers exclut `.gitnexus/` : l'index GitNexus (base et CSV
+  régénérés à chaque analyse) produisait des rafales de `file_changed` qui
+  remplissaient `/context` jusqu'à la troncature des listes de fichiers.
+
 ## [0.3.0.0] - 2026-09-02
 
 Pas 2 de la roadmap V3 : le Context API. Seul changement prévu dans Core

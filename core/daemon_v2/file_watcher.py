@@ -30,6 +30,10 @@ from .producer_outbox import ProducerOutbox, enqueue_file_event
 IGNORED_DIRECTORY_NAMES = {
     ".build",
     ".git",
+    # Index GitNexus (base lbug + CSV régénérés à chaque analyse) : du churn
+    # d'outillage, pas du travail — il remplissait /context jusqu'à la
+    # troncature des fichiers.
+    ".gitnexus",
     ".pytest_cache",
     ".swiftpm",
     ".venv",
