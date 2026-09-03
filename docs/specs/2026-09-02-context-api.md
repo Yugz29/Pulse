@@ -63,7 +63,7 @@ GET /context/sessions?date=2026-09-02  # d'une journée donnée ; at optionnel c
     "id": "3f9c2a1b7e4d5c60",
     "label": "work-3",
     "source_event_ids": ["…", "…"],
-    "reconstruction_version": 1,
+    "reconstruction_version": 2,
     "started_at": "2026-09-02T13:40:00+00:00",
     "last_activity_at": "2026-09-02T15:51:48+00:00",
     "duration_minutes": 132,
@@ -100,7 +100,7 @@ GET /context/sessions?date=2026-09-02  # d'une journée donnée ; at optionnel c
       "id": "a81d0e7f2c93b415",
       "label": "work-2",
       "source_event_ids": ["…"],
-      "reconstruction_version": 1,
+      "reconstruction_version": 2,
       "started_at": "…",
       "ended_at": "…",
       "duration_minutes": 47,
@@ -148,7 +148,7 @@ GET /context/sessions?date=2026-09-02  # d'une journée donnée ; at optionnel c
 | `timezone` | Celle de `_trace_timezone()`, informative seulement — **tous les timestamps sont en UTC ISO 8601 avec offset**. |
 | `workspace` | Résolu par le résolveur unique existant (`analysis/projects.py`, `persisted_workspace_identity`), jamais par `resolve_project_context` qui lit le disque. `resolution` ∈ `session` (workspace dominant de la session courante : le plus observé, égalité tranchée par le workspace attribué à la session puis par le chemin le plus petit), `last_observed` (pas de session courante, dernier workspace utile vu dans la fenêtre). Quand rien n'est résolu, `workspace` vaut `null` tout court : il n'y a pas de champ `resolution: "none"` orphelin. |
 | `workspace.git` | Repris des détails **persistés** des événements (règle du 2026-08-30 : jamais l'état du disque au moment du rendu). Le périmètre suit la résolution : `resolution == "session"` → calculé sur les activités de la session courante (une fenêtre de 5 min sur une session de 3 h connaît toujours le commit de la première heure) ; `last_observed` → sur la fenêtre. `branch` vient du dernier événement porteur (contexte git du producteur terminal ou `git_commit`), `dirty` du dernier contexte git terminal et vaut `null` si aucune commande de la période n'en portait (un `git_commit` ne renseigne pas l'état de l'arbre), `last_commit` du dernier événement `git_commit` (hash court, première ligne du message, instant). `null` si aucun événement du périmètre ne porte d'info git pour ce workspace. |
-| `current_session` | La session de travail (jamais une activité isolée) dont `last_activity_at` est la plus récente **et** postérieure à `reference_at − session_gap` (`DEFAULT_SESSION_GAP` de `session_tracker`, 30 min). `is_open` = `true` dans ce cas. Si aucune session ne satisfait ça, `current_session` vaut `null`. On ne met **pas** la dernière session fermée à la place : « rien en cours » est une information. Les sessions sont reconstruites jour local par jour local, comme la trace quotidienne, sur la journée entière jusqu'à `reference_at` : une session commencée avant la fenêtre garde ses vraies bornes. Identifiant : le hash stable (voir la ligne suivante) ; `label` porte l'ordinal `work-N`. |
+| `current_session` | La session de travail (jamais une activité isolée) dont `last_activity_at` est la plus récente **et** postérieure à `reference_at − session_gap` (`DEFAULT_SESSION_GAP` de `session_tracker`, 30 min). `is_open` = `true` dans ce cas. Si aucune session ne satisfait ça, `current_session` vaut `null`. On ne met **pas** la dernière session fermée à la place : « rien en cours » est une information. Les sessions sont reconstruites jour local par jour local, comme la trace quotidienne, sur la journée entière jusqu'à `reference_at` : une session commencée avant la fenêtre garde ses vraies bornes. Identifiant : le hash stable (voir la ligne suivante) ; `label` porte l'ordinal `work-N`. **Fermeture monotone** (décision du 2026-09-03, `reconstruction_version` 2) : un `screen_locked` ou un `system_sleep` ferme la session sur-le-champ, sur son dernier travail observé, avec ce motif, et rien ne la rouvre — `is_open: false` ne se défait jamais avec plus de données. L'activité forte observée avant la reprise correspondante (`screen_unlocked` / `system_wake`) est une vue `activity_kind: background`, jamais `current_session`, `recent_sessions` ni une entrée de `/context/sessions`. |
 | `current_session.apps` | Triées par activations décroissantes puis nom. `IGNORED_APP_NAMES_FOR_RENDERING` s'applique. Max 5. |
 | `current_session.files` | Chemins relatifs au workspace quand possible (même logique que `_display_file_path`). Dédupliqués, ordre de première apparition. Max 20 par catégorie, `truncated: true` si coupé. |
 | `current_session.terminal` | Réutilise `useful_command_lines`, `is_test_command`, `is_interrupted_exit` (les prompts collés sont exclus par `useful_command_lines`). Une commande interrompue n'est pas une erreur. Max 10 par liste, `truncated: true` si une liste est coupée. |
@@ -232,6 +232,7 @@ Style existant : fixtures SQLite en mémoire, pas de mocks de Flask.
 - Session sans workspace résolu (cwd générique, fichiers hors projet) → `workspace: null`, session quand même retournée avec `projects: []`.
 - Deux workspaces dans la session → `projects` en contient deux, `workspace` = le dominant.
 - Signal fort isolé dans la fenêtre → dans `isolated_signals`, pas dans `current_session`.
+- Verrouillage puis travail sans déverrouillage vu → `current_session: null`, la session fermée reste identique dans `recent_sessions` et `/context/sessions` (`is_open: false`), le travail en arrière-plan n'apparaît nulle part dans `/context`.
 - Commande interrompue (exit 130) → absente de `terminal.errors`.
 - Prompt collé au shell → jamais dans la réponse.
 - 25 fichiers modifiés → 20 retournés, `truncated: true`.

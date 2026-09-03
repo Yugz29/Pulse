@@ -671,10 +671,18 @@ Le watcher fichiers exclut les répertoires techniques `.build`, `.git`,
 et `build`.
 Ils ne produisent donc pas d’événements `file_changed`.
 
-La reconstruction considère les verrouillages et mises en veille comme des
-interruptions candidates. Une reprise dans le même workspace conserve la
-session lorsque l’interruption ne dépasse pas cinq minutes. Ce seuil peut être
-adapté avec `PULSE_SESSION_INTERRUPTION_MINUTES`.
+Un verrouillage d’écran ou une mise en veille ferme la session ouverte
+sur-le-champ, sur son dernier travail observé, avec ce motif (`end_reason`
+`screen_locked` ou `system_sleep`), et rien ne la rouvre : une fermeture est
+monotone, quelle que soit la quantité de données disponible au calcul
+(décision du 2026-09-03, `reconstruction_version` 2). Le déverrouillage ou
+le réveil du bon type prouve seulement que l’utilisateur est de retour ;
+l’activité forte suivante démarre une nouvelle session. Entre un verrouillage
+et sa reprise, l’activité forte observée (un agent qui tourne seul) va dans
+une vue `activity_kind: background`, rendue à part sous « Activité en
+arrière-plan (écran verrouillé) » : elle ne compose ni identité ni bornes de
+session de travail et n’atteint pas `/context`. L’ancien seuil
+`PULSE_SESSION_INTERRUPTION_MINUTES` n’existe plus.
 
 Les activations d’application représentent une présence utilisateur, pas une
 preuve de projet. Celles qui ne sont pas confirmées par une activité de travail

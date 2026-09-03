@@ -826,3 +826,51 @@ def test_day_sessions_route(tmp_path):
     empty = client.get("/context/sessions?date=2026-01-01").get_json()
     assert empty["sessions"] == []
     assert client.get("/context/sessions").status_code == 200
+
+
+# --- Fermeture monotone (décision 2026-09-03) --------------------------------
+
+
+def _system(minutes: int, event_type: str) -> Activity:
+    return Activity(event_type, at(minutes), "system", event_type, {})
+
+
+def test_a_session_closed_by_a_lock_never_reopens_for_the_context_api(tmp_path):
+    # Le contrat que le pas 3 consomme : is_open == false ne se défait pas.
+    # Verrouillage à −30, puis travail sans déverrouillage vu (agent seul) :
+    # rien en cours, la session fermée reste identique, et le travail en
+    # arrière-plan n'atteint ni /context ni /context/sessions.
+    store = make_store(
+        tmp_path,
+        terminal(-60, "pytest -q"),
+        file_changed(-50, "a.py"),
+        _system(-30, "screen_locked"),
+    )
+    listed_before = build_day_sessions(
+        store, day=REFERENCE.date(), reference_at=REFERENCE, local_timezone=timezone.utc
+    )["sessions"]
+
+    store.append(file_changed(-20, "b.py"))
+    store.append(file_changed(-2, "c.py"))
+    result = snapshot(store)
+    listed_after = build_day_sessions(
+        store, day=REFERENCE.date(), reference_at=REFERENCE, local_timezone=timezone.utc
+    )["sessions"]
+
+    assert result["current_session"] is None
+    assert [s["id"] for s in result["recent_sessions"]] == [listed_before[0]["id"]]
+    assert result["recent_sessions"][0]["ended_at"] == at(-50).isoformat()
+    assert result["isolated_signals"] == []
+    assert listed_after == listed_before
+    assert listed_after[0]["is_open"] is False
+    assert listed_after[0]["reconstruction_version"] == 2
+
+    # Après un vrai déverrouillage, le travail suivant est une autre session,
+    # et la première ne bouge toujours pas.
+    store.append(_system(-1, "screen_unlocked"))
+    store.append(terminal(0, "make test"))
+    reopened = snapshot(store)
+
+    assert reopened["current_session"]["started_at"] == at(0).isoformat()
+    assert reopened["current_session"]["id"] != listed_before[0]["id"]
+    assert [s["id"] for s in reopened["recent_sessions"]] == [listed_before[0]["id"]]
