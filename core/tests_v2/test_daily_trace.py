@@ -2308,3 +2308,50 @@ def test_voluntary_interruption_never_reaches_the_resume_error_fact(tmp_path):
     assert not any("code 130" in fact for fact in resume)
     assert summary["error_count"] == 1
     assert "make dev" not in markdown.split("Erreurs terminal")[-1].split("\n")[0]
+
+
+def test_session_summary_is_never_an_unattributed_activity(tmp_path):
+    # Résumé dérivé (Core 0.4.0) : stocké et exposé par /context, il ne doit
+    # ni ouvrir une session, ni compter comme activité non attribuée.
+    store = TraceStore(tmp_path / "trace.db")
+    base = datetime(2026, 9, 2, 10, 0, tzinfo=timezone.utc)
+    workspace = "/workspace/Pulse"
+    store.append(
+        Activity(
+            "terminal_finished", base, "terminal", "Command succeeded: pytest -q",
+            {"command": "pytest -q", "exit_code": 0, "cwd": workspace, "workspace": workspace},
+        )
+    )
+    store.append(
+        Activity(
+            "file_changed", base + timedelta(minutes=5), "filesystem",
+            f"Modified {workspace}/a.py",
+            {"path": f"{workspace}/a.py", "event": "modified", "workspace": workspace},
+        )
+    )
+    store.append(
+        Activity(
+            "session_summary", base + timedelta(minutes=5), "intelligence",
+            "Tu testais le parseur.",
+            {
+                "session_id": "2026-09-02/work-1",
+                "prompt_version": "v1",
+                "model_id": "mlx-community/test-model",
+                "reprise": {"doing": "Tu testais le parseur.", "stopped_at": "—", "open": "—"},
+                "structured": {"project": "Pulse", "confidence": "low"},
+            },
+        )
+    )
+
+    trace = build_daily_trace(
+        store, base.date(), timezone.utc, now=base + timedelta(hours=3)
+    )
+    summary = build_daily_summary(trace)
+
+    assert summary["session_count"] == 1
+    assert summary["unresolved_session_count"] == 0
+    assert summary["unresolved_activity_count"] == 0
+    assert trace["activity_count"] == 3
+    markdown = render_daily_trace_markdown(trace)
+    assert "Activités non attribuées : 0" in markdown
+    assert "## Session 2" not in markdown

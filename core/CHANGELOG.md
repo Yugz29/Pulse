@@ -20,7 +20,15 @@ Seul changement de Core pour ce pas (spec `docs/specs/2026-09-03-session-summary
   fenêtre, même règle que `last_agent_session`) ; `schema_version` reste 1,
   ajout optionnel.
 - Aucun rendu : le type est stocké et exposé par `/context`, pas affiché dans
-  le HTML.
+  le HTML. `analysis/timeline.py` l'exclut explicitement des activités non
+  attribuées (sans cela, chaque résumé aurait ajouté une ligne vide et
+  incrémenté le compteur du journal).
+
+### Interne
+- `analysis/timeline.py` : `display_file_path`, `app_activation_counts` et
+  `is_strong_work_activity` deviennent publics (importés par `daily_trace`,
+  `context_snapshot` et les renderers) ; les anciens noms restent comme alias
+  dépréciés.
 
 ## [0.3.1.0] - 2026-09-03
 

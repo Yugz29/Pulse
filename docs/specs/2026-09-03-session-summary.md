@@ -36,7 +36,8 @@ Core est gelé. Ce chantier y touche à un seul endroit, justifié par le contra
 - `models.py` : `"session_summary"` ajouté à `SUPPORTED_ACTIVITY_TYPES`.
 - `ingest.py` : validation minimale des `details` (voir §6). Le `summary` de l'`Activity` est la première ligne de la reprise.
 - `context_snapshot.py` : `last_session_summary` ajouté à la réponse de `GET /context` (voir §8), `schema_version` reste 1 (ajout optionnel).
-- **Aucun rendu** : `daily_trace.py` et les renderers ne changent pas. Le type est stocké, exposé par `/context`, pas affiché dans le HTML. L'affichage est un chantier ultérieur.
+- `analysis/timeline.py` : `session_summary` exclu explicitement de la collecte des activités non attribuées. Trou trouvé à l'implémentation : la reconstruction ne connaît pas ce type (ni signal fort, ni activation d'app, ni type système), donc sans cette ligne chaque résumé aurait ajouté une ligne vide dans la section « non attribuées » du HTML et du Markdown et incrémenté son compteur. Ce n'est pas un rendu, c'est la garantie du « aucun rendu ». Au passage, les trois helpers de ce module importés par plusieurs consommateurs (`display_file_path`, `app_activation_counts`, `is_strong_work_activity`) deviennent publics, anciens noms conservés en alias dépréciés.
+- **Aucun rendu** : `daily_trace.py` et les renderers ne changent pas (`daily_trace.py` ne fait que suivre les noms publics des helpers). Le type est stocké, exposé par `/context`, pas affiché dans le HTML. L'affichage est un chantier ultérieur.
 
 PR séparée sur Core (`ship/session-summary-type`), mergée **avant** le premier commit d'`intelligence/`. Version Core 0.4.0.
 
