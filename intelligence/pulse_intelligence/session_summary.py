@@ -204,6 +204,41 @@ class Outcome:
     detail: str | None = None
 
 
+def _emit(
+    session: SessionView,
+    event_id: str,
+    event: dict[str, Any],
+    *,
+    client: CoreClient,
+    config: Config,
+    model_id: str,
+    state: JobState,
+) -> Outcome:
+    """POST du payload gelé, puis passage de ``pending`` à ``emitted``.
+
+    Un Core injoignable lève CoreUnavailable : le payload reste ``pending``
+    et sera renvoyé tel quel au tick suivant.
+    """
+    result = client.post_activity(event)
+    if not result.accepted:
+        count = state.record_failure(session.id, f"Core {result.status_code}: {result.error}")
+        status = "given_up" if state.is_failed(session.id) else "failed"
+        return Outcome(
+            session.id, status, event_id, detail=f"tentative {count}: Core {result.status_code}"
+        )
+    state.record_emitted(
+        event_id,
+        session_id=session.id,
+        prompt_version=config.prompt_version,
+        model_id=model_id,
+        at=event["details"]["generated_at"],
+        event=event,
+    )
+    return Outcome(
+        session.id, "duplicate" if result.duplicate else "created", event_id, event=event
+    )
+
+
 def summarize_session(
     session: SessionView,
     *,
@@ -214,8 +249,11 @@ def summarize_session(
     dry_run: bool = False,
     now: datetime | None = None,
 ) -> Outcome:
-    """Construit l'entrée, appelle le modèle, valide, émet. Idempotent.
+    """Construit l'entrée, appelle le modèle, valide, gèle, émet. Idempotent.
 
+    Le payload validé est persisté dans l'état local *avant* le POST : un
+    envoi qui échoue ou dont la confirmation se perd est rejoué octet pour
+    octet, sans rappeler le modèle ni recalculer ``generated_at``.
     ``dry_run`` fait tout sauf l'émission et ne touche pas à l'état local.
     """
     model_id = summarizer.model_id
@@ -225,6 +263,12 @@ def summarize_session(
             return Outcome(session.id, "already_known", event_id)
         if state.is_failed(session.id):
             return Outcome(session.id, "given_up", event_id, detail=state.failed[session.id])
+        pending = state.pending_event(event_id)
+        if pending is not None:
+            return _emit(
+                session, event_id, pending,
+                client=client, config=config, model_id=model_id, state=state,
+            )
 
     context = client.get_context(at=session.ended_at)
     model_input = build_model_input(session, context)
@@ -258,23 +302,17 @@ def summarize_session(
     if dry_run:
         return Outcome(session.id, "dry_run", event_id, event=event)
 
-    result = client.post_activity(event)
-    if not result.accepted:
-        count = state.record_failure(session.id, f"Core {result.status_code}: {result.error}")
-        status = "given_up" if state.is_failed(session.id) else "failed"
-        return Outcome(
-            session.id, status, event_id, detail=f"tentative {count}: Core {result.status_code}"
-        )
-    state.record_emitted(
+    state.record_pending(
         event_id,
         session_id=session.id,
         prompt_version=config.prompt_version,
         model_id=model_id,
-        at=generated_at.isoformat(),
+        at=event["details"]["generated_at"],
         event=event,
     )
-    return Outcome(
-        session.id, "duplicate" if result.duplicate else "created", event_id, event=event
+    return _emit(
+        session, event_id, event,
+        client=client, config=config, model_id=model_id, state=state,
     )
 
 

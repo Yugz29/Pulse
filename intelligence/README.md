@@ -62,8 +62,11 @@ pulse-intel show <id>                                     # l'événement émis 
 `--fake FICHIER` est obligatoire pour `summarize` et `run` tant qu'il n'y a
 pas de vrai modèle. L'état local `~/.pulse_intelligence/state.json` retient
 ce qui a été résumé et ce qui a échoué trois fois : ces sessions ne sont plus
-candidates, le modèle n'est jamais recontacté pour elles. `run` sans
-`--once` refait un passage toutes les `tick_minutes` jusqu'à Ctrl-C.
+candidates, le modèle n'est jamais recontacté pour elles. Il retient aussi,
+gelé avant le POST, le payload d'un résumé que Core n'a pas encore confirmé :
+le passage suivant le renvoie octet pour octet, sans rappeler le modèle.
+`run` sans `--once` refait un passage toutes les `tick_minutes` jusqu'à
+Ctrl-C.
 
 Core arrêté : message et code de sortie 2. Un Core en `schema_version` ≠ 2
 est refusé (Core ≥ 0.5.0 requis).
