@@ -109,6 +109,14 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
     {"type": "git_commit", "occurred_at": "…", "summary": "…"}
   ],
 
+  "last_session_summary": {
+    "session_id": "2026-09-01/work-2",
+    "session_ended_at": "…",
+    "reprise": {"doing": "…", "stopped_at": "…", "open": "…"},
+    "confidence": "high",
+    "age_minutes": 930
+  },
+
   "last_agent_session": {
     "agent": "claude-code",
     "started_at": "…",
@@ -137,6 +145,7 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
 | `current_session.signals` | Types d'activité présents dans la session, ordre fixe = ordre de `SUPPORTED_ACTIVITY_TYPES` trié. Pas de doublon. |
 | `recent_sessions` | Les sessions **fermées** dont `ended_at` ≥ `reference_at − window`, hors session courante, les plus récentes d'abord, max 3. Forme compacte uniquement. |
 | `isolated_signals` | Les activités isolées (règle du 2026-08-30 : un signal fort seul ne crée pas de session) dans la fenêtre, max 10, plus récentes d'abord. `summary` : dernière ligne utile pour une commande, `Événement chemin-relatif` pour un fichier, le résumé stocké sinon. Un signal isolé dont le seul contenu est un prompt collé est écarté. |
+| `last_session_summary` | Ajouté en Core 0.4.0 (pas 3, spec du 2026-09-03 §8) : le dernier événement `session_summary` **sans limite de fenêtre**, borné par `reference_at`, ordonné par `occurred_at` (fin de la session résumée) puis par ligne (un résumé régénéré de la même session gagne). `null` si aucun. Ajout optionnel, `schema_version` reste 1. |
 | `last_agent_session` | Le dernier événement `agent_session` **sans limite de fenêtre** (une reprise a besoin du dernier résumé même s'il date d'hier), mais borné par `reference_at` pour rester déterministe. `null` si aucun. `agent` = la valeur stockée de `source_tool` (`claude-code`, `codex`), telle quelle. `summary` = le résumé figé de l'événement, jamais le transcript. `age_minutes` compté depuis `ended_at`. |
 
 ### Ce que la réponse ne contient jamais
