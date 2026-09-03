@@ -4,6 +4,40 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.5.1.0] - 2026-09-03
+
+Hardening après relecture externe : cinq corrections indépendantes et la CI,
+aucune feature, aucun changement de comportement visible. Note de décision
+`docs/decisions/2026-09-03-hardening.md`.
+
+### Sécurité
+- Permissions locales : `umask 077` dans chaque point d'entrée Python,
+  `~/.pulse_v2/` et `~/.pulse_core/` (l'outbox durable) créés en `0700`,
+  bases SQLite en `0600`, chmod correctif sous ces racines seulement.
+  `scripts/fix_permissions.sh` migre l'existant, idempotent, appelé par les
+  installateurs launchd, liste ce qu'il change.
+- `session_summary` : `structured.intents`, `blockers` et `central_files`
+  passent par `redact_command` élément par élément, comme la reprise.
+- `schema_version` : seules les versions de `SUPPORTED_SCHEMA_VERSIONS`
+  (`{1}`) sont acceptées ; une version inconnue est refusée (400,
+  `field: schema_version`) au lieu d'être lue comme une version 1. Le chemin
+  legacy sans version ne change pas.
+
+### Corrigé
+- Course entre le hook SessionEnd et le passage horaire : l'archivage des
+  transcripts et l'émission des `agent_session` prennent chacun un verrou
+  `flock` (60 s puis abandon propre, exit 2) et écrivent par temporaire
+  unique puis `os.replace` — plus de `FileNotFoundError` au renommage.
+  Le hook et le wrapper shell ne changent pas.
+
+### Interne
+- `core/requirements.txt` et `requirements-dev.txt` épinglés sur la venv ;
+  le README installe par `pip install -r`.
+- CI GitHub `.github/workflows/core.yml` : pytest sur `macos-latest`,
+  Python 3.14 ; le build Swift de `macos_observer/` n'y est pas encore.
+
+Suite portée à 509 tests.
+
 ## [0.5.0.0] - 2026-09-03
 
 Identité stable des sessions de travail. Bloqueur trouvé en relecture du
