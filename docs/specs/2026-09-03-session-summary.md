@@ -40,6 +40,7 @@ Ce que ce chantier attend de Core, sans y toucher :
 
 - `GET /context` `schema_version: 2` : `current_session.id` = sha256 tronqué (16 hex) des `event_id` triés, `label` = `work-N`, `source_event_ids`, `reconstruction_version` ; `last_session_summary` avec `id` et `label`.
 - `GET /context/sessions?date=YYYY-MM-DD` : sessions de travail de la journée locale, forme exacte de `current_session`, champ `is_open`. C'est **la seule source** de sessions closes pour Intelligence.
+- `is_open == false` est **monotone** (décision du 2026-09-03, `reconstruction_version` 2) : une session fermée par un verrouillage ou une mise en veille ne rouvre jamais, quelle que soit la quantité de données arrivée ensuite. Intelligence peut résumer une session close sans risque que Core la « rouvre » deux minutes plus tard. L'activité forte observée pendant un verrouillage (`activity_kind: background`) n'est jamais une session à résumer.
 - `POST /activities` accepte `session_summary` avec `details.session_id` (16 hex) et `details.source_event_ids_hash` égal ; rejette sinon avec `field`.
 - Core rédige (`redact_command`) **toutes** les chaînes libres de `details` d'un `session_summary` : `reprise.*`, `structured.intents[]`, `structured.blockers[]`, `structured.central_files[]`.
 - `schema_version` d'événement inconnu → 400.

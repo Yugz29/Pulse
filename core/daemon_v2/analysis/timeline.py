@@ -4,7 +4,6 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 import hashlib
-import os
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -22,13 +21,23 @@ from .projects import (
 IGNORED_APP_NAMES_FOR_RENDERING = {"CleanMyMac Menu", "Finder", "loginwindow"}
 WORK_SESSION_GAP = timedelta(minutes=30)
 WEAK_CONTEXT_WINDOW = timedelta(minutes=15)
-DEFAULT_INTERRUPTION_THRESHOLD = timedelta(minutes=5)
 WORKSPACE_PROMOTION_WINDOW = timedelta(minutes=5)
+
+# Fermeture monotone (décision 2026-09-03) : un verrouillage ou une mise en
+# veille ferme la session ouverte sur-le-champ et ne se défait jamais ; la
+# reprise attendue prouve seulement que l'utilisateur est de retour.
+LOCK_RESUME_TYPES = {
+    "screen_locked": "screen_unlocked",
+    "system_sleep": "system_wake",
+}
+RESUME_LOCK_TYPES = {resume: lock for lock, resume in LOCK_RESUME_TYPES.items()}
 
 # Incrémenter à chaque changement des règles de sessionnisation (gap,
 # promotion de workspace, rétrogradation en isolé…) : un consommateur qui a
 # mémorisé une session sait alors que sa composition peut avoir changé.
-RECONSTRUCTION_VERSION = 1
+# 2 (2026-09-03) : fermeture monotone sur verrouillage/veille, activité forte
+# pendant un verrouillage rangée en arrière-plan hors session de travail.
+RECONSTRUCTION_VERSION = 2
 SESSION_IDENTITY_HEX_LENGTH = 16
 
 
@@ -199,19 +208,6 @@ _app_activation_counts = app_activation_counts
 _is_strong_work_activity = is_strong_work_activity
 
 
-def configured_interruption_threshold() -> timedelta:
-    raw = os.environ.get("PULSE_SESSION_INTERRUPTION_MINUTES")
-    if raw is None:
-        return DEFAULT_INTERRUPTION_THRESHOLD
-    try:
-        minutes = float(raw)
-    except ValueError:
-        return DEFAULT_INTERRUPTION_THRESHOLD
-    if minutes < 0:
-        return DEFAULT_INTERRUPTION_THRESHOLD
-    return timedelta(minutes=minutes)
-
-
 def _session_metadata(
     activities: list[dict[str, Any]],
     *,
@@ -221,7 +217,6 @@ def _session_metadata(
     project_name: str | None,
     end_reason: str,
     zone: tzinfo,
-    interruptions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     files: set[str] = set()
     commands_executed = 0
@@ -245,39 +240,15 @@ def _session_metadata(
                 applications.append(app)
 
     calendar_duration = max(0, int((ended_at - started_at).total_seconds()))
-    interruption_rows = interruptions or []
-    interrupted_seconds = 0
-    for interruption in interruption_rows:
-        interruption_start = datetime.fromisoformat(interruption["started_at"])
-        interruption_end = datetime.fromisoformat(interruption["ended_at"])
-        overlap_start = max(started_at, interruption_start)
-        overlap_end = min(ended_at, interruption_end)
-        if overlap_end > overlap_start:
-            interrupted_seconds += int(
-                (overlap_end - overlap_start).total_seconds()
-            )
-
-    localized_interruptions = [
-        {
-            **interruption,
-            "started_at": datetime.fromisoformat(
-                interruption["started_at"]
-            ).astimezone(zone).isoformat(),
-            "ended_at": datetime.fromisoformat(
-                interruption["ended_at"]
-            ).astimezone(zone).isoformat(),
-        }
-        for interruption in interruption_rows
-    ]
 
     return {
         "started_at": started_at.astimezone(zone).isoformat(),
         "ended_at": ended_at.astimezone(zone).isoformat(),
         "duration_seconds": calendar_duration,
-        "active_duration_seconds": max(
-            0,
-            calendar_duration - interrupted_seconds,
-        ),
+        # Depuis la fermeture monotone (reconstruction 2), une session ne
+        # contient plus d'interruption : les deux champs restent pour la
+        # forme JSON, toujours vide et égal à la durée calendaire.
+        "active_duration_seconds": calendar_duration,
         "project_name": project_name,
         "workspace_root": workspace_root,
         "event_count": len(activities),
@@ -285,7 +256,7 @@ def _session_metadata(
         "files_changed": len(files),
         "commands_executed": commands_executed,
         "applications": applications,
-        "interruptions": localized_interruptions,
+        "interruptions": [],
         "end_reason": end_reason,
         "activities": activities,
     }
@@ -335,13 +306,16 @@ def reconstruct_session_views(
     trace: dict[str, Any],
     *,
     now: datetime | None = None,
-    interruption_threshold: timedelta | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    interruption_threshold = (
-        interruption_threshold
-        if interruption_threshold is not None
-        else configured_interruption_threshold()
-    )
+    """Sessions de travail (et vues « isolated » / « background ») du jour.
+
+    Fermeture monotone : ``screen_locked`` et ``system_sleep`` ferment la
+    session ouverte immédiatement, avec ce motif, et rien ne la rouvre.
+    Tant que la reprise correspondante n'a pas été vue, toute activité forte
+    tombe dans une vue ``activity_kind == "background"`` — des faits observés
+    pendant un verrouillage (un agent qui tourne seul), jamais une reprise
+    humaine — qui ne compose ni identité ni bornes de session de travail.
+    """
     trace_zone = _trace_timezone(trace)
     activities = sorted(
         (
@@ -357,27 +331,38 @@ def reconstruct_session_views(
     work_sessions: list[dict[str, Any]] = []
     assigned_ids: set[int] = set()
     current: dict[str, Any] | None = None
+    work_label_count = 0
+    # Verrouillages / mises en veille sans reprise vue : type → instant.
+    open_locks: dict[str, datetime] = {}
+    background: dict[str, Any] | None = None
+    background_count = 0
 
-    def close_current(ended_at: datetime, reason: str) -> None:
-        nonlocal current
-        assert current is not None
-        session_activities = sorted(
-            (
-                activity
-                for activity in current["activities"]
-                if current["started_at"]
-                <= datetime.fromisoformat(activity["occurred_at"])
-                <= ended_at
-            ),
+    def sorted_activities(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(
+            rows,
             key=lambda activity: (
                 datetime.fromisoformat(activity["occurred_at"]),
                 activity.get("id", 0),
             ),
         )
+
+    def close_current(ended_at: datetime, reason: str) -> None:
+        nonlocal current, work_label_count
+        assert current is not None
+        session_activities = sorted_activities(
+            [
+                activity
+                for activity in current["activities"]
+                if current["started_at"]
+                <= datetime.fromisoformat(activity["occurred_at"])
+                <= ended_at
+            ]
+        )
         identity, source_event_ids = session_identity(session_activities)
+        work_label_count += 1
         session_view = {
             "id": identity,
-            "label": f"work-{len(work_sessions) + 1}",
+            "label": f"work-{work_label_count}",
             "source_event_ids": source_event_ids,
             "reconstruction_version": RECONSTRUCTION_VERSION,
             "activity_kind": "work",
@@ -394,7 +379,6 @@ def reconstruct_session_views(
                 project_name=current["project_name"],
                 end_reason=reason,
                 zone=trace_zone,
-                interruptions=current["interruptions"],
             ),
         }
         # Un événement fort isolé (un cd nu, un commit seul) n'est pas une
@@ -416,6 +400,45 @@ def reconstruct_session_views(
         assigned_ids.update(id(activity) for activity in session_activities)
         current = None
 
+    def close_background(resumed_at: datetime | None) -> None:
+        nonlocal background, background_count
+        assert background is not None
+        rows = sorted_activities(background["activities"])
+        identity, source_event_ids = session_identity(rows)
+        workspace = _persisted_workspace(rows[0])
+        background_count += 1
+        first_at = datetime.fromisoformat(rows[0]["occurred_at"])
+        last_at = datetime.fromisoformat(rows[-1]["occurred_at"])
+        view = {
+            "id": identity,
+            "label": f"background-{background_count}",
+            "source_event_ids": source_event_ids,
+            "reconstruction_version": RECONSTRUCTION_VERSION,
+            "activity_kind": "background",
+            "workspace_attribution": (
+                "assigned" if workspace.root is not None else "unknown"
+            ),
+            "lock_type": background["lock_type"],
+            "locked_at": background["locked_at"].astimezone(trace_zone).isoformat(),
+            "resumed_at": (
+                resumed_at.astimezone(trace_zone).isoformat()
+                if resumed_at is not None
+                else None
+            ),
+            **_session_metadata(
+                rows,
+                started_at=first_at,
+                ended_at=last_at,
+                workspace_root=workspace.root,
+                project_name=workspace.project_name,
+                end_reason="resumed" if resumed_at is not None else "still_locked",
+                zone=trace_zone,
+            ),
+        }
+        work_sessions.append(view)
+        assigned_ids.update(id(activity) for activity in rows)
+        background = None
+
     def start_session(activity: dict[str, Any], occurred_at: datetime) -> None:
         nonlocal current
         workspace = _persisted_workspace(activity)
@@ -429,8 +452,6 @@ def reconstruct_session_views(
             "workspace_observed_at": occurred_at,
             "activities": [activity],
             "pending_unresolved": [],
-            "interruptions": [],
-            "pending_interruption": None,
         }
 
     def workspace_transition(
@@ -485,20 +506,6 @@ def reconstruct_session_views(
         current["activities"].extend(current["pending_unresolved"])
         current["pending_unresolved"] = []
 
-    def completed_interruption(
-        pending: dict[str, Any],
-        ended_at: datetime,
-    ) -> dict[str, Any]:
-        return {
-            "type": pending["type"],
-            "started_at": pending["started_at"].isoformat(),
-            "ended_at": ended_at.isoformat(),
-            "duration_seconds": max(
-                0,
-                int((ended_at - pending["started_at"]).total_seconds()),
-            ),
-        }
-
     for activity in activities:
         occurred_at = datetime.fromisoformat(activity["occurred_at"])
         activity_type = activity["type"]
@@ -506,84 +513,50 @@ def reconstruct_session_views(
 
         if (
             current is not None
-            and current["pending_interruption"] is None
             and occurred_at - current["last_work_at"] > WORK_SESSION_GAP
         ):
             close_current(current["last_work_at"], "inactivity")
 
-        if activity_type in {"screen_locked", "system_sleep"}:
-            if (
-                current is not None
-                and current["pending_interruption"] is None
-            ):
-                current["pending_interruption"] = {
-                    "type": activity_type,
-                    "started_at": occurred_at,
-                    "ended_at": None,
-                    "activities": [activity],
-                }
+        if activity_type in LOCK_RESUME_TYPES:
+            # Frontière dure : la session se ferme maintenant, sur son dernier
+            # travail observé, et ne rouvrira jamais. Un second verrouillage
+            # du même type (doublon) garde l'instant du premier.
+            if current is not None:
+                close_current(current["last_work_at"], activity_type)
+            open_locks.setdefault(activity_type, occurred_at)
             continue
 
-        if activity_type in {"screen_unlocked", "system_wake"}:
-            if (
-                current is not None
-                and current["pending_interruption"] is not None
-            ):
-                pending = current["pending_interruption"]
-                expected_resume = {
-                    "screen_locked": "screen_unlocked",
-                    "system_sleep": "system_wake",
-                }[pending["type"]]
-                if (
-                    activity_type != expected_resume
-                    or pending["ended_at"] is not None
-                ):
-                    continue
-                pending["ended_at"] = occurred_at
-                pending["activities"].append(activity)
+        if activity_type in RESUME_LOCK_TYPES:
+            # Seule la reprise du bon type lève son verrouillage ; une reprise
+            # orpheline ou du mauvais type est ignorée en silence. Elle ne
+            # rouvre rien : la prochaine activité forte démarrera une session.
+            lock_type = RESUME_LOCK_TYPES[activity_type]
+            if lock_type in open_locks:
+                del open_locks[lock_type]
+                if not open_locks and background is not None:
+                    close_background(occurred_at)
             continue
 
         if is_work:
+            if open_locks:
+                # Entre un verrouillage et sa reprise : des faits, pas une
+                # reprise humaine. Visibles à part, hors session de travail.
+                if background is None:
+                    lock_type, locked_at = min(
+                        open_locks.items(), key=lambda item: item[1]
+                    )
+                    background = {
+                        "lock_type": lock_type,
+                        "locked_at": locked_at,
+                        "activities": [],
+                    }
+                background["activities"].append(activity)
+                continue
             workspace = _persisted_workspace(activity)
             if current is None:
                 start_session(activity, occurred_at)
                 continue
             transition = workspace_transition(workspace, occurred_at)
-            pending = current["pending_interruption"]
-            if pending is not None:
-                interruption_end = pending["ended_at"] or occurred_at
-                interruption = completed_interruption(
-                    pending,
-                    interruption_end,
-                )
-                workspace_changed = (
-                    transition == "split"
-                )
-                interruption_is_long = (
-                    timedelta(seconds=interruption["duration_seconds"])
-                    > interruption_threshold
-                )
-                if workspace_changed or interruption_is_long:
-                    close_current(
-                        current["last_work_at"],
-                        "workspace_changed"
-                        if workspace_changed
-                        else pending["type"],
-                    )
-                    start_session(activity, occurred_at)
-                    continue
-                active_idle = (
-                    occurred_at
-                    - current["last_work_at"]
-                    - timedelta(seconds=interruption["duration_seconds"])
-                )
-                if active_idle > WORK_SESSION_GAP:
-                    close_current(current["last_work_at"], "inactivity")
-                    start_session(activity, occurred_at)
-                    continue
-                current["activities"].extend(pending["activities"])
-                current["interruptions"].append(interruption)
-                current["pending_interruption"] = None
             if transition == "split":
                 close_current(occurred_at, "workspace_changed")
                 start_session(activity, occurred_at)
@@ -598,19 +571,10 @@ def reconstruct_session_views(
         if activity_type == "app_activated":
             if (
                 current is not None
-                and (
-                    current["pending_interruption"] is not None
-                    or occurred_at - current["last_work_at"]
-                    <= WEAK_CONTEXT_WINDOW
-                )
+                and occurred_at - current["last_work_at"] <= WEAK_CONTEXT_WINDOW
             ):
                 current["pending_unresolved"].append(activity)
 
-    if current is not None:
-        pending = current["pending_interruption"]
-        if pending is not None:
-            close_current(current["last_work_at"], pending["type"])
-            current = None
     if current is not None:
         current_day = (now or datetime.now().astimezone()).date().isoformat()
         if trace["date"] != current_day:
@@ -622,6 +586,8 @@ def reconstruct_session_views(
         else:
             reason = "inactivity"
         close_current(current["last_work_at"], reason)
+    if background is not None:
+        close_background(None)
 
     unresolved_activities = [
         activity
@@ -689,7 +655,16 @@ def _displayed_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         session
         for session in _work_session_views(trace)
-        if session.get("activity_kind") != "isolated"
+        if session.get("activity_kind") not in {"isolated", "background"}
+    ]
+
+
+def background_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    """Activité forte observée pendant un verrouillage, rendue à part."""
+    return [
+        session
+        for session in _work_session_views(trace)
+        if session.get("activity_kind") == "background"
     ]
 
 

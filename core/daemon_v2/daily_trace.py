@@ -32,6 +32,7 @@ from .analysis.timeline import (
     _displayed_sessions,
     _unresolved_sessions,
     _trace_timezone,
+    background_sessions,
     reconstruct_session_views,
 )
 from .git_context import parse_status_output
@@ -285,6 +286,71 @@ def _optional_instant(value: Any) -> str | None:
     except ValueError:
         return None
     return value if parsed.tzinfo is not None else None
+
+
+BACKGROUND_LOCK_LABELS = {
+    "screen_locked": "écran verrouillé",
+    "system_sleep": "mise en veille",
+}
+
+
+def background_session_views(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    """Activité forte observée pendant un verrouillage, pour l'affichage.
+
+    Catégorie à part, même esprit que les sessions d'agent : des faits
+    survenus entre un verrouillage et sa reprise (un agent qui tourne seul,
+    un build qui finit) qui ne composent ni identité ni bornes de session de
+    travail (décision 2026-09-03, fermeture monotone). Un groupe par
+    fenêtre de verrouillage, comptes tirés des activités stockées.
+    """
+    views = []
+    for session in background_sessions(trace):
+        commits = sum(
+            1 for activity in session["activities"] if activity["type"] == "git_commit"
+        )
+        views.append(
+            {
+                "started_at": session["started_at"],
+                "ended_at": session["ended_at"],
+                "lock_type": session.get("lock_type"),
+                "locked_at": session.get("locked_at"),
+                "resumed_at": session.get("resumed_at"),
+                "workspace_root": session.get("workspace_root"),
+                "project_name": session.get("project_name"),
+                "activity_count": session.get("activity_count", 0),
+                "files_changed": session.get("files_changed", 0),
+                "commands_executed": session.get("commands_executed", 0),
+                "commits": commits,
+            }
+        )
+    return views
+
+
+def _plural(count: int, singular: str, plural: str) -> str:
+    return f"{count} {singular if count == 1 else plural}"
+
+
+def background_activity_label(view: dict[str, Any]) -> str:
+    """« 2 fichiers modifiés, 1 commande, 1 commit » — jamais vide."""
+    parts = []
+    if view["files_changed"]:
+        parts.append(_plural(view["files_changed"], "fichier modifié", "fichiers modifiés"))
+    if view["commands_executed"]:
+        parts.append(_plural(view["commands_executed"], "commande", "commandes"))
+    if view["commits"]:
+        parts.append(_plural(view["commits"], "commit", "commits"))
+    if not parts:
+        parts.append(_plural(view["activity_count"], "signal fort", "signaux forts"))
+    return ", ".join(parts)
+
+
+def background_lock_label(view: dict[str, Any], zone: tzinfo) -> str:
+    """« écran verrouillé à 09:10, reprise à 09:41 » ou « …, sans reprise vue »."""
+    lock = BACKGROUND_LOCK_LABELS.get(str(view["lock_type"]), str(view["lock_type"]))
+    label = f"{lock} à {_display_time(view['locked_at'], zone)}"
+    if view["resumed_at"]:
+        return f"{label}, reprise à {_display_time(view['resumed_at'], zone)}"
+    return f"{label}, sans reprise vue"
 
 
 def agent_session_time_label(view: dict[str, Any], zone: tzinfo) -> str:
@@ -868,7 +934,7 @@ def build_daily_trace(
         [
             session
             for session in work_sessions
-            if session.get("activity_kind") != "isolated"
+            if session.get("activity_kind") not in {"isolated", "background"}
         ]
     )
     trace["work_sessions"] = work_sessions

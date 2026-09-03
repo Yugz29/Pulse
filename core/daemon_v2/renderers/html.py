@@ -32,6 +32,9 @@ from ..daily_trace import (
     _terminal_labels,
     agent_session_time_label,
     agent_session_views,
+    background_activity_label,
+    background_lock_label,
+    background_session_views,
     build_current_state,
     build_daily_summary,
     build_resume,
@@ -70,6 +73,7 @@ def render_daily_trace_html(
     displayed_sessions = _displayed_sessions(trace)
     unresolved_sessions = _unresolved_sessions(trace)
     agent_views = agent_session_views(trace)
+    background_views = background_session_views(trace)
     trace_zone = _trace_timezone(trace)
     apps = [escape(str(app)) for app, _count in _ranked_apps(summary["apps"])]
     projects = [
@@ -128,6 +132,10 @@ def render_daily_trace_html(
     if agent_views:
         navigation.append(
             '<a class="nav-main" href="#sessions-agent">Sessions d’agent</a>'
+        )
+    if background_views:
+        navigation.append(
+            '<a class="nav-main" href="#arriere-plan">Arrière-plan</a>'
         )
     end_anchor = "timeline-end" if archive_mode else "timeline-live"
     end_label = "Fin du jour" if archive_mode else "Direct"
@@ -348,6 +356,7 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
         and not unresolved_sessions
         and not isolated
         and not agent_views
+        and not background_views
     ):
         body.append("<p>Aucune activité pour cette journée.</p>")
 
@@ -557,6 +566,32 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
             "<p>Résumés figés des sessions d’agents de la journée, listés "
             "à part : ils ne composent aucune session de travail.</p>"
             f"<ul>{''.join(agent_items)}</ul></section>"
+        )
+
+    if background_views:
+        # Catégorie à part, distincte des sessions d'agent : des faits
+        # observés pendant un verrouillage, jamais une session de travail.
+        background_items = []
+        for view in background_views:
+            project = view["project_name"]
+            suffix = f" ({escape(str(project))})" if project else ""
+            background_items.append(
+                "<li>"
+                '<span class="time">'
+                f"{escape(_display_time(view['started_at'], trace_zone))}–"
+                f"{escape(_display_time(view['ended_at'], trace_zone))}"
+                "</span> "
+                f"{escape(background_activity_label(view))}{suffix} — "
+                f"{escape(background_lock_label(view, trace_zone))}"
+                "</li>"
+            )
+        body.append(
+            '<section class="summary" id="arriere-plan">'
+            "<h2>Activité en arrière-plan (écran verrouillé)</h2>"
+            "<p>Signaux forts observés entre un verrouillage et la reprise "
+            "suivante : des faits (un agent qui tourne seul), pas une reprise "
+            "— hors sessions de travail.</p>"
+            f"<ul>{''.join(background_items)}</ul></section>"
         )
 
     if isolated:

@@ -214,6 +214,12 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   comme politique, versions de schéma explicites, rédaction complète des
   résumés, verrous sur l'archivage et l'émission, dépendances épinglées, CI.
   Authentification des producteurs locaux reportée.
+- **2026-09-03** — Fermeture de session monotone : un verrouillage ou une
+  mise en veille ferme la session ouverte sur-le-champ et rien ne la rouvre ;
+  l'activité forte observée avant la reprise correspondante devient une
+  catégorie d'affichage à part, « Activité en arrière-plan (écran
+  verrouillé) », hors identité et bornes de session. `reconstruction_version`
+  passe à 2 ([note](decisions/2026-09-03-fermeture-monotone.md)).
 - **2026-09-03** — `agent_session` hors identité des sessions : émis après
   coup, il ne compose plus les `source_event_ids` ni les bornes d'une session ;
   accessible via `last_agent_session` et l'entrée du modèle seulement. Deux

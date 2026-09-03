@@ -4,8 +4,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from daemon_v2.analysis.timeline import reconstruct_session_views
-from daemon_v2.analysis.timeline import configured_interruption_threshold
+from daemon_v2.analysis.timeline import (
+    LOCK_RESUME_TYPES,
+    background_sessions,
+    reconstruct_session_views,
+)
 from daemon_v2.daily_trace import (
     build_daily_trace,
     render_daily_trace_html,
@@ -143,7 +146,10 @@ def test_resume_transition_waits_for_new_work(stop_type, resume_type):
     assert sessions[1]["started_at"] == (BASE + timedelta(minutes=55)).isoformat()
 
 
-def test_short_interruption_followed_by_same_workspace_keeps_session():
+def test_short_lock_followed_by_same_workspace_never_merges_back():
+    # Fermeture monotone (2026-09-03) : avant, une interruption de moins de
+    # cinq minutes était fusionnée et la session continuait. Un verrouillage
+    # ferme, point ; le travail suivant est une autre session.
     sessions, _passive = reconstruct(
         event("terminal_finished", 0, {**workspace(PULSE), "command": "make"}),
         event("screen_locked", 10, event_id=2),
@@ -156,17 +162,10 @@ def test_short_interruption_followed_by_same_workspace_keeps_session():
         ),
     )
 
-    assert len(sessions) == 1
-    assert sessions[0]["duration_seconds"] == 12 * 60
-    assert sessions[0]["active_duration_seconds"] == 11 * 60
-    assert sessions[0]["interruptions"] == [
-        {
-            "type": "screen_locked",
-            "started_at": (BASE + timedelta(minutes=10)).isoformat(),
-            "ended_at": (BASE + timedelta(minutes=11)).isoformat(),
-            "duration_seconds": 60,
-        }
-    ]
+    assert [s["end_reason"] for s in sessions] == ["screen_locked", "open"]
+    assert sessions[0]["interruptions"] == []
+    assert sessions[0]["active_duration_seconds"] == sessions[0]["duration_seconds"]
+    assert sessions[1]["started_at"] == (BASE + timedelta(minutes=12)).isoformat()
 
 
 def test_unlock_without_later_strong_work_is_not_a_session_boundary():
@@ -218,11 +217,12 @@ def test_duplicate_unlock_is_ignored_until_another_lock():
     )
 
     assert unresolved == []
-    assert first_unlock in sessions[0]["activities"]
-    assert duplicate_unlock not in sessions[0]["activities"]
-    assert sessions[0]["interruptions"][0]["ended_at"] == (
-        BASE + timedelta(minutes=2)
-    ).isoformat()
+    assert [s["end_reason"] for s in sessions] == ["screen_locked", "open"]
+    # Les transitions système ne sont ni des activités de session, ni du
+    # non attribué : elles bornent, elles n'appartiennent à rien.
+    for session in sessions:
+        assert first_unlock not in session["activities"]
+        assert duplicate_unlock not in session["activities"]
 
 
 def test_strong_work_after_long_system_interruption_starts_new_session():
@@ -269,7 +269,9 @@ def test_workspace_change_after_short_interruption_splits_session():
     )
 
     assert len(sessions) == 2
-    assert sessions[0]["end_reason"] == "workspace_changed"
+    # Le verrouillage a déjà fermé la première session ; le changement de
+    # workspace n'a plus rien à couper.
+    assert sessions[0]["end_reason"] == "screen_locked"
     assert sessions[1]["project_name"] == "DevNote"
 
 
@@ -284,12 +286,6 @@ def test_application_context_never_starts_work_session():
 
     assert sessions == []
     assert len(unresolved) == 1
-
-
-def test_interruption_threshold_is_configurable(monkeypatch):
-    monkeypatch.setenv("PULSE_SESSION_INTERRUPTION_MINUTES", "2.5")
-
-    assert configured_interruption_threshold() == timedelta(minutes=2.5)
 
 
 def test_direct_historical_git_root_resolves_workspace():
@@ -327,9 +323,13 @@ def test_events_are_ordered_by_instant_not_iso_string():
 
     sessions, _passive = reconstruct(terminal, unlocked, locked, first)
 
-    assert len(sessions) == 1
+    # Trié par instant, le verrouillage (19:10 UTC) tombe entre les deux
+    # travaux et ferme le premier ; trié par chaîne ISO il passerait avant
+    # et les deux travaux formeraient une seule session.
+    assert len(sessions) == 2
     assert sessions[0]["started_at"] == "2026-07-23T18:59:00+00:00"
-    assert sessions[0]["interruptions"][0]["duration_seconds"] == 19
+    assert sessions[0]["end_reason"] == "screen_locked"
+    assert sessions[1]["started_at"] == "2026-07-23T19:11:55+00:00"
 
 
 def test_inactivity_separates_sessions_without_inventing_work_time():
@@ -547,7 +547,7 @@ def test_unresolved_applications_are_not_assigned_across_workspace_change():
     ("stop_type", "resume_type"),
     [("screen_locked", "screen_unlocked"), ("system_sleep", "system_wake")],
 )
-def test_system_transitions_are_interruptions_not_unresolved_activity(
+def test_system_transitions_are_boundaries_not_unresolved_activity(
     stop_type,
     resume_type,
 ):
@@ -564,10 +564,11 @@ def test_system_transitions_are_interruptions_not_unresolved_activity(
     )
 
     assert unresolved == []
-    assert sessions[0]["interruptions"][0]["type"] == stop_type
+    assert [s["end_reason"] for s in sessions] == [stop_type, "open"]
+    assert all(s["interruptions"] == [] for s in sessions)
 
 
-def test_interruption_durations_and_activity_bounds_remain_coherent():
+def test_session_bounds_stay_coherent_around_a_lock():
     trailing = event("app_activated", 13, {"app": "Safari"}, 5)
     sessions, _passive = reconstruct(
         event("terminal_finished", 0, {**workspace(PULSE), "command": "make"}),
@@ -582,17 +583,16 @@ def test_interruption_durations_and_activity_bounds_remain_coherent():
         trailing,
     )
 
-    session = sessions[0]
-    assert session["duration_seconds"] == 12 * 60
-    assert session["active_duration_seconds"] == 11 * 60
-    assert session["interruptions"][0]["duration_seconds"] == 60
-    assert trailing not in session["activities"]
-    assert all(
-        datetime.fromisoformat(session["started_at"])
-        <= datetime.fromisoformat(activity["occurred_at"])
-        <= datetime.fromisoformat(session["ended_at"])
-        for activity in session["activities"]
-    )
+    assert len(sessions) == 2
+    for session in sessions:
+        assert session["active_duration_seconds"] == session["duration_seconds"]
+        assert trailing not in session["activities"]
+        assert all(
+            datetime.fromisoformat(session["started_at"])
+            <= datetime.fromisoformat(activity["occurred_at"])
+            <= datetime.fromisoformat(session["ended_at"])
+            for activity in session["activities"]
+        )
 
 
 def test_recent_session_is_open_with_fixed_now():
@@ -709,44 +709,40 @@ def test_mixed_offsets_use_journal_timezone_in_json_markdown_and_html(tmp_path):
         date(2026, 7, 24),
         ZoneInfo("Europe/Paris"),
     )
-    session = trace["work_sessions"][0]
+    session, after_lock = trace["work_sessions"]
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
     html = render_daily_trace_html(trace, archive_mode=True)
 
+    # Le verrouillage (09:01 UTC) ferme la session ; le travail après le
+    # déverrouillage est un signal isolé. Les instants restent ceux du
+    # producteur dans le JSON, les bornes sont projetées dans le fuseau du
+    # journal, comme les rendus.
     assert [
         activity["occurred_at"]
         for activity in session["activities"]
     ] == [
         "2026-07-24T11:00:36+02:00",
         "2026-07-24T09:00:55+00:00",
-        "2026-07-24T09:01:10+00:00",
-        "2026-07-24T09:02:15+00:00",
-        "2026-07-24T11:03:44+02:00",
     ]
     assert session["started_at"] == "2026-07-24T11:00:36+02:00"
-    assert session["ended_at"] == "2026-07-24T11:03:44+02:00"
-    assert session["interruptions"][0]["started_at"] == (
-        "2026-07-24T11:01:10+02:00"
-    )
-    assert session["interruptions"][0]["ended_at"] == (
-        "2026-07-24T11:02:15+02:00"
-    )
+    assert session["ended_at"] == "2026-07-24T11:00:55+02:00"
+    assert session["end_reason"] == "screen_locked"
+    assert after_lock["activity_kind"] == "isolated"
+    assert after_lock["started_at"] == "2026-07-24T11:03:44+02:00"
 
-    assert "## Session 1 — 11:00–11:03" in markdown
+    assert "## Session 1 — 11:00–11:00" in markdown
     for expected in (
         "- 11:00 · **terminal\\_finished**",
         "- 11:00 · **file\\_changed**",
-        "- 11:01 · **screen\\_locked**",
-        "- 11:02 · **screen\\_unlocked**",
-        "- 11:03 · **terminal\\_finished**",
+        "- Fin : écran verrouillé",
+        "- 11:03 · pytest -q",
     ):
         assert expected in markdown
+    assert "screen\\_locked**" not in markdown
 
-    assert "<h2>Session 1 · 11:00–11:03" in html
+    assert "<h2>Session 1 · 11:00–11:00" in html
     assert html.count("<time>11:00</time>") == 2
-    assert "<time>11:01</time>" in html
-    assert "<time>11:02</time>" in html
-    assert "<time>11:03</time>" in html
+    assert "11:03" in html
 
 
 # --- Identité stable des sessions (Core 0.5.0) ------------------------------
@@ -781,7 +777,7 @@ def test_late_event_moves_labels_but_never_the_session_identity(tmp_path):
     assert [s["label"] for s in before] == ["work-1"]
     afternoon_id = before[0]["id"]
     assert len(afternoon_id) == 16 and int(afternoon_id, 16) >= 0
-    assert before[0]["reconstruction_version"] == 1
+    assert before[0]["reconstruction_version"] == 2
     assert len(before[0]["source_event_ids"]) == 2
 
     # Un événement arrive après coup, daté du matin.
@@ -970,3 +966,229 @@ def test_agent_session_next_to_a_work_session_is_listed_apart_from_it(tmp_path):
     session_block = markdown.split("## Sessions d’agent")[0]
     assert "Agent session (claude-code)" not in session_block
     assert "- 14:01–14:03 · Agent session (claude-code)" in markdown
+
+
+# --- Fermeture monotone sur verrouillage / veille (décision 2026-09-03) ----
+
+
+def _work(minutes: int, event_id: int, command: str = "make") -> dict:
+    return event(
+        "terminal_finished", minutes, {**workspace(PULSE), "command": command}, event_id
+    )
+
+
+def _edit(minutes: int, event_id: int, name: str = "a.py") -> dict:
+    return event(
+        "file_changed", minutes, {**workspace(PULSE), "path": f"{PULSE}/{name}"}, event_id
+    )
+
+
+@pytest.mark.parametrize("lock_type", sorted(LOCK_RESUME_TYPES))
+def test_lock_closes_the_session_at_once_on_its_last_work(lock_type):
+    # Scénario 1 de l'audit : travail, verrouillage, rien après. Fermée avec
+    # le motif du verrouillage, bornée sur le dernier travail observé (le
+    # verrouillage est le motif, pas une borne : les minutes d'inactivité
+    # avant lui ne sont pas du travail, comme pour « inactivity »).
+    sessions, unresolved = reconstruct(
+        _work(0, 1), _edit(5, 2), event(lock_type, 10, event_id=3),
+        now=BASE + timedelta(minutes=11),
+    )
+
+    assert len(sessions) == 1
+    session = sessions[0]
+    assert session["activity_kind"] == "work"
+    assert session["end_reason"] == lock_type
+    assert session["started_at"] == BASE.isoformat()
+    assert session["ended_at"] == (BASE + timedelta(minutes=5)).isoformat()
+    assert session["source_event_ids"] == ["id:1", "id:2"]
+    assert session["reconstruction_version"] == 2
+    assert unresolved == []
+
+
+def test_closure_is_monotonic_more_data_never_reopens_the_session():
+    # Scénario 2 : la même session, recalculée avec le déverrouillage et le
+    # travail qui suivent, garde son id, ses bornes et son motif. Le travail
+    # à 09:12 est une seconde session, sans fusion.
+    before, _ = reconstruct(
+        _work(0, 1), _edit(5, 2), event("screen_locked", 10, event_id=3),
+        now=BASE + timedelta(minutes=11),
+    )
+    after, unresolved = reconstruct(
+        _work(0, 1), _edit(5, 2), event("screen_locked", 10, event_id=3),
+        event("screen_unlocked", 11, event_id=4), _work(12, 5, "pytest"),
+        now=BASE + timedelta(minutes=13),
+    )
+
+    assert len(before) == 1 and len(after) == 2
+    keys = ("id", "source_event_ids", "started_at", "ended_at", "end_reason", "label")
+    assert {k: after[0][k] for k in keys} == {k: before[0][k] for k in keys}
+    assert after[1]["started_at"] == (BASE + timedelta(minutes=12)).isoformat()
+    assert after[1]["end_reason"] == "open"
+    assert after[1]["source_event_ids"] == ["id:5"]
+    assert unresolved == []
+
+
+@pytest.mark.parametrize("minutes", [12, 20])
+def test_strong_work_while_locked_is_background_not_a_session(minutes):
+    # Scénarios 3 et 4 : sans déverrouillage vu, une activité forte pendant
+    # le verrouillage (un agent qui tourne seul) ne rouvre ni ne crée de
+    # session de travail, quel que soit le délai. Elle reste visible, à part.
+    sessions, unresolved = reconstruct(
+        _work(0, 1), _edit(5, 2), event("screen_locked", 10, event_id=3),
+        _edit(minutes, 4, "b.py"),
+        now=BASE + timedelta(minutes=minutes + 1),
+    )
+
+    work = [s for s in sessions if s["activity_kind"] == "work"]
+    assert len(work) == 1 and work[0]["end_reason"] == "screen_locked"
+    assert work[0]["source_event_ids"] == ["id:1", "id:2"]
+    background = background_sessions({"work_sessions": sessions})
+    assert len(background) == 1
+    assert background[0]["source_event_ids"] == ["id:4"]
+    assert background[0]["lock_type"] == "screen_locked"
+    assert background[0]["locked_at"] == (BASE + timedelta(minutes=10)).isoformat()
+    assert background[0]["resumed_at"] is None
+    assert background[0]["end_reason"] == "still_locked"
+    assert background[0]["project_name"] == "Pulse_Core"
+    assert unresolved == []
+
+
+def test_background_window_closes_on_resume_and_work_restarts_a_session():
+    sessions, unresolved = reconstruct(
+        _work(0, 1), event("screen_locked", 10, event_id=2),
+        _edit(12, 3, "b.py"), _edit(30, 4, "c.py"),
+        event("screen_unlocked", 40, event_id=5), _work(41, 6, "pytest"),
+        now=BASE + timedelta(minutes=42),
+    )
+
+    kinds = [s["activity_kind"] for s in sessions]
+    assert kinds == ["isolated", "background", "work"]
+    background = sessions[1]
+    assert background["source_event_ids"] == ["id:3", "id:4"]
+    assert background["started_at"] == (BASE + timedelta(minutes=12)).isoformat()
+    assert background["ended_at"] == (BASE + timedelta(minutes=30)).isoformat()
+    assert background["resumed_at"] == (BASE + timedelta(minutes=40)).isoformat()
+    assert background["end_reason"] == "resumed"
+    assert background["files_changed"] == 2
+    assert sessions[2]["started_at"] == (BASE + timedelta(minutes=41)).isoformat()
+    # Les labels work-N ne comptent pas les groupes d'arrière-plan.
+    assert [s["label"] for s in sessions] == ["work-1", "background-1", "work-2"]
+    assert unresolved == []
+
+
+def test_wrong_resume_type_or_orphan_resume_is_ignored_silently():
+    # Scénario 5 : un system_wake ne lève pas un screen_locked ; un
+    # déverrouillage sans verrouillage ne change rien. Comportement de rejet
+    # silencieux conservé — et, tant que le bon déverrouillage manque, le
+    # travail reste en arrière-plan.
+    sessions, unresolved = reconstruct(
+        event("screen_unlocked", 0),
+        _work(1, 2), _edit(2, 3), event("screen_locked", 10, event_id=4),
+        event("system_wake", 11, event_id=5), _edit(12, 6, "b.py"),
+        now=BASE + timedelta(minutes=13),
+    )
+
+    assert [s["activity_kind"] for s in sessions] == ["work", "background"]
+    assert sessions[0]["end_reason"] == "screen_locked"
+    assert sessions[1]["end_reason"] == "still_locked"
+    assert unresolved == []
+
+
+def test_lock_then_sleep_needs_both_resumes_before_work_counts_again():
+    # Verrouillage puis veille : le réveil seul ne prouve pas le retour,
+    # l'écran est encore verrouillé. Le déverrouillage lève tout.
+    sessions, _ = reconstruct(
+        _work(0, 1), _edit(1, 2),
+        event("screen_locked", 10, event_id=3), event("system_sleep", 12, event_id=4),
+        event("system_wake", 30, event_id=5), _edit(31, 6, "b.py"),
+        event("screen_unlocked", 32, event_id=7), _edit(33, 8, "c.py"),
+        now=BASE + timedelta(minutes=34),
+    )
+
+    assert [s["activity_kind"] for s in sessions] == ["work", "background", "work"]
+    assert sessions[1]["source_event_ids"] == ["id:6"]
+    assert sessions[1]["lock_type"] == "screen_locked"
+    assert sessions[2]["source_event_ids"] == ["id:8"]
+
+
+def test_agent_session_during_a_lock_keeps_its_own_treatment():
+    # Scénario 6 : les deux corrections coexistent. Un agent_session pendant
+    # la fenêtre de verrouillage n'est ni session, ni arrière-plan, ni non
+    # attribué ; seuls les signaux forts du même moment vont en arrière-plan.
+    agent = event("agent_session", 15, {**workspace(PULSE), "source_tool": "claude-code"}, 4)
+    sessions, unresolved = reconstruct(
+        _work(0, 1), _edit(1, 2), event("screen_locked", 10, event_id=3),
+        agent, _edit(16, 5, "b.py"),
+        now=BASE + timedelta(minutes=17),
+    )
+
+    assert [s["activity_kind"] for s in sessions] == ["work", "background"]
+    assert sessions[0]["source_event_ids"] == ["id:1", "id:2"]
+    assert sessions[1]["source_event_ids"] == ["id:5"]
+    assert all(agent not in s["activities"] for s in sessions)
+    assert unresolved == []
+
+
+def test_background_activity_renders_apart_from_work_sessions(tmp_path):
+    # Rendu : un verrouillage à 09:10 ferme la session ; les modifications
+    # à 09:12 et 09:20 (agent seul) sortent dans « Activité en arrière-plan »
+    # avec leurs bornes, leurs comptes et le verrouillage d'origine — hors
+    # Session, hors « Activité non attribuée » qui reste vide.
+    from daemon_v2.daily_trace import build_daily_summary
+
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    morning = datetime(2026, 9, 2, 9, 0, tzinfo=zone)
+    details = {**workspace(PULSE)}
+    _stored(store, "terminal_finished", morning, {**details, "command": "pytest -q", "exit_code": 0, "cwd": PULSE})
+    _stored(store, "file_changed", morning + timedelta(minutes=5), {**details, "path": f"{PULSE}/a.py", "event": "modified"})
+    store.append(Activity("screen_locked", morning + timedelta(minutes=10), "system", "screen_locked", {}))
+    _stored(store, "file_changed", morning + timedelta(minutes=12), {**details, "path": f"{PULSE}/b.py", "event": "modified"})
+    _stored(store, "file_changed", morning + timedelta(minutes=20), {**details, "path": f"{PULSE}/c.py", "event": "modified"})
+
+    trace = build_daily_trace(store, day, zone, now=morning + timedelta(hours=3))
+    markdown = render_daily_trace_markdown(trace, archive_mode=True)
+    html = render_daily_trace_html(trace, archive_mode=True)
+
+    kinds = [s["activity_kind"] for s in trace["work_sessions"]]
+    assert kinds == ["work", "background"]
+    assert trace["work_session_count"] == 1
+    assert build_daily_summary(trace)["session_count"] == 1
+    assert trace["unresolved_sessions"] == []
+    assert "## Session 1 — 09:00–09:05" in markdown
+    assert "- Fin : écran verrouillé" in markdown
+    assert "## Session 2" not in markdown
+    assert "## Activité en arrière-plan (écran verrouillé)" in markdown
+    assert (
+        "- 09:12–09:20 · 2 fichiers modifiés (Pulse\\_Core) — "
+        "écran verrouillé à 09:10, sans reprise vue"
+    ) in markdown
+    assert "## Activité non attribuée" not in markdown
+    assert "<h2>Activité en arrière-plan (écran verrouillé)</h2>" in html
+    assert (
+        '<span class="time">09:12–09:20</span> 2 fichiers modifiés (Pulse_Core) — '
+        "écran verrouillé à 09:10, sans reprise vue"
+    ) in html
+    assert '<a class="nav-main" href="#arriere-plan">Arrière-plan</a>' in html
+    assert "<h2>Session 2" not in html
+
+
+def test_background_activity_alone_is_not_an_empty_day(tmp_path):
+    store = TraceStore(tmp_path / "trace.db")
+    day = date(2026, 9, 2)
+    zone = timezone.utc
+    morning = datetime(2026, 9, 2, 9, 0, tzinfo=zone)
+    store.append(Activity("system_sleep", morning, "system", "system_sleep", {}))
+    _stored(store, "git_commit", morning + timedelta(minutes=30),
+            {**workspace(PULSE), "commit_hash": "abc1234def5678", "branch": "main", "message": "wip"})
+    store.append(Activity("system_wake", morning + timedelta(minutes=40), "system", "system_wake", {}))
+
+    trace = build_daily_trace(store, day, zone, now=morning + timedelta(hours=3))
+    markdown = render_daily_trace_markdown(trace, archive_mode=True)
+
+    assert [s["activity_kind"] for s in trace["work_sessions"]] == ["background"]
+    assert "_Aucune activité._" not in markdown
+    assert (
+        "- 09:30–09:30 · 1 commit (Pulse\\_Core) — mise en veille à 09:00, reprise à 09:40"
+    ) in markdown
