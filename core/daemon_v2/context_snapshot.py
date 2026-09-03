@@ -129,6 +129,47 @@ def build_context_snapshot(
     }
 
 
+def build_day_sessions(
+    store: TraceStore,
+    *,
+    day: date,
+    reference_at: datetime,
+    local_timezone: tzinfo | None = None,
+) -> dict[str, Any]:
+    """Closed work sessions of one local day, in the exact current_session form.
+
+    Same code and same bounds (20 files, 10 terminal lines, 5 apps) as
+    ``current_session``: a consumer that stores session ids reads this route
+    and never reconstructs anything itself. Rows dated after ``reference_at``
+    are excluded, so the answer for a fixed instant is stable.
+    """
+    if reference_at.tzinfo is None:
+        raise ValueError("reference_at must include a timezone")
+    zone = local_timezone or datetime.now().astimezone().tzinfo or timezone.utc
+    reference_utc = reference_at.astimezone(timezone.utc)
+    sessions, _activities = _reconstruct_day(
+        store, day=day, reference_at=reference_utc, zone=zone
+    )
+    closed = [
+        session
+        for session in sessions
+        if session.get("activity_kind") == "work"
+        and session.get("end_reason") != "open"
+    ]
+    closed.sort(key=lambda s: (_instant(s["started_at"]), s["id"]))
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "reference_at": reference_utc.isoformat(),
+        "date": day.isoformat(),
+        "timezone": _zone_name(zone, reference_utc),
+        "reconstruction_version": RECONSTRUCTION_VERSION,
+        "sessions": [
+            _current_session_view(session, is_open=False) for session in closed
+        ],
+    }
+
+
 # --- Loading and reconstruction -------------------------------------------
 
 

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from daemon_v2.context_snapshot import build_context_snapshot
+from daemon_v2.context_snapshot import build_context_snapshot, build_day_sessions
 from daemon_v2.main import create_app
 from daemon_v2.models import Activity
 from daemon_v2.trace_store import TraceStore
@@ -748,3 +748,77 @@ def test_session_identity_in_context_survives_a_late_earlier_event(tmp_path):
     assert before["label"] == "work-1" and after["label"] == "work-2"
     assert after["id"] == before["id"]
     assert after["source_event_ids"] == before["source_event_ids"]
+
+
+# --- GET /context/sessions : les sessions closes d'une journée ----------------
+
+
+def test_day_sessions_match_the_current_session_form_and_exclude_open_ones(tmp_path):
+    earlier = [
+        terminal(-110, "pytest -q"),
+        file_changed(-105, "a.py"),
+        commit(-95, "1111111aaaaaaaa", "feat: a"),
+    ]
+    store = make_store(tmp_path, *earlier, *working_session())
+
+    day = build_day_sessions(
+        store, day=REFERENCE.date(), reference_at=REFERENCE, local_timezone=timezone.utc
+    )
+    context_at_end = build_context_snapshot(
+        store, reference_at=at(-95), local_timezone=timezone.utc
+    )
+
+    assert day["schema_version"] == 2
+    assert day["date"] == "2026-09-02"
+    assert day["reconstruction_version"] == 1
+    assert [s["label"] for s in day["sessions"]] == ["work-1"]
+    closed = day["sessions"][0]
+    assert closed["is_open"] is False
+    # Même code, même forme : la session vue depuis /context à l'instant de sa
+    # fin est identique, au flag is_open près.
+    expected = dict(context_at_end["current_session"])
+    expected["is_open"] = False
+    assert closed == expected
+    assert closed["id"] == expected["id"]
+
+
+def test_day_sessions_of_a_past_day_are_all_closed(tmp_path):
+    store = make_store(
+        tmp_path,
+        terminal(-1500, "pytest -q"),
+        file_changed(-1495, "a.py"),
+        *working_session(),
+    )
+
+    yesterday = build_day_sessions(
+        store, day=REFERENCE.date() - timedelta(days=1), reference_at=REFERENCE,
+        local_timezone=timezone.utc,
+    )
+
+    assert [s["label"] for s in yesterday["sessions"]] == ["work-1"]
+    assert yesterday["sessions"][0]["is_open"] is False
+    assert yesterday["sessions"][0]["started_at"] == "2026-09-01T13:00:00+00:00"
+
+
+def test_day_sessions_route(tmp_path):
+    app_ = create_app(tmp_path / "trace.db")
+    client = app_.test_client()
+    store = app_.config["TRACE_STORE"]
+    for activity in (terminal(-200, "pytest -q"), file_changed(-190, "a.py")):
+        store.append(activity)
+
+    response = client.get("/context/sessions?date=2026-09-02&at=2026-09-02T14:00:00Z")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["date"] == "2026-09-02" and body["schema_version"] == 2
+    assert len(body["sessions"]) == 1
+    assert body["sessions"][0]["is_open"] is False
+    assert len(body["sessions"][0]["id"]) == 16
+
+    assert client.get("/context/sessions?date=hier").status_code == 400
+    assert client.get("/context/sessions?date=2026-02-30").status_code == 400
+    assert client.get("/context/sessions?at=hier").status_code == 400
+    empty = client.get("/context/sessions?date=2026-01-01").get_json()
+    assert empty["sessions"] == []
+    assert client.get("/context/sessions").status_code == 200
