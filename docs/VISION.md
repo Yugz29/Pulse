@@ -214,6 +214,10 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   comme politique, versions de schéma explicites, rédaction complète des
   résumés, verrous sur l'archivage et l'émission, dépendances épinglées, CI.
   Authentification des producteurs locaux reportée.
+- **2026-09-03** — L'écoute réseau supportée de Pulse reste limitée à la
+  boucle locale. Une écoute élargie n'est pas un objectif à court terme et
+  nécessiterait authentification, TLS et limites de taille avant d'être
+  envisagée.
 - **2026-09-03** — Fermeture de session monotone : un verrouillage ou une
   mise en veille ferme la session ouverte sur-le-champ et rien ne la rouvre ;
   l'activité forte observée avant la reprise correspondante devient une
