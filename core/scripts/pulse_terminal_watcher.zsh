@@ -43,9 +43,12 @@ _pulse_terminal_precmd() {
   payload="{\"type\":\"terminal_finished\",\"occurred_at\":\"$finished_at\",\"started_at\":\"$_PULSE_TERMINAL_STARTED_AT\",\"finished_at\":\"$finished_at\",\"command\":\"$command\",\"exit_code\":$exit_code,\"cwd\":\"$cwd\"}"
 
   unset _PULSE_TERMINAL_ACTIVE
-  print -rn -- "$payload" |
+  if ! print -rn -- "$payload" |
     PYTHONPATH="$_PULSE_TERMINAL_REPO_ROOT" "$_PULSE_TERMINAL_PYTHON" \
-      -m daemon_v2.producer_outbox enqueue-terminal >/dev/null 2>&1
+      -m daemon_v2.producer_outbox enqueue-terminal >/dev/null 2>&1; then
+    print -u2 -r -- \
+      "Pulse : commande non enregistrée (outbox temporairement indisponible)."
+  fi
 }
 
 # Removing first makes sourcing this file repeatedly idempotent.
