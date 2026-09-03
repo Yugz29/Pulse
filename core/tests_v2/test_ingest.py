@@ -709,3 +709,97 @@ def test_rejects_nan_in_canonical_details():
 
     assert raised.value.field == "details"
     assert "strictly valid JSON" in str(raised.value)
+
+
+def session_summary_payload(**overrides):
+    payload = {
+        "type": "session_summary",
+        "occurred_at": "2026-09-02T15:55:00+00:00",
+        "session_id": "2026-09-02/work-3",
+        "session_started_at": "2026-09-02T13:02:00+00:00",
+        "session_ended_at": "2026-09-02T15:55:00+00:00",
+        "prompt_version": "v1",
+        "model_id": "mlx-community/test-model",
+        "generated_at": "2026-09-02T16:30:00+00:00",
+        "generation_ms": 4210,
+        "input_context_hash": "abc123",
+        "reprise": {
+            "doing": "Tu implémentais le Context API de Core.\nDeuxième ligne.",
+            "stopped_at": "Tu venais de pousser la branche ship/context-api.",
+            "open": "La PR attend ta relecture.",
+        },
+        "structured": {
+            "project": "Pulse",
+            "intents": ["livrer le pas 2"],
+            "central_files": ["core/daemon_v2/context_snapshot.py"],
+            "blockers": [],
+            "confidence": "high",
+        },
+        "workspace": "/Users/dev/Projets/Pulse",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_normalizes_session_summary_and_keeps_the_rest_as_is():
+    activity = normalize_activity(session_summary_payload())
+
+    assert activity.source == "intelligence"
+    # Le summary de l'Activity est la première ligne de la reprise.
+    assert activity.summary == "Tu implémentais le Context API de Core."
+    assert activity.details["session_id"] == "2026-09-02/work-3"
+    assert activity.details["prompt_version"] == "v1"
+    assert activity.details["model_id"] == "mlx-community/test-model"
+    assert activity.details["workspace"] == "/Users/dev/Projets/Pulse"
+    assert activity.details["reprise"]["open"] == "La PR attend ta relecture."
+    assert activity.details["structured"]["confidence"] == "high"
+    # Le reste passe tel quel.
+    assert activity.details["generation_ms"] == 4210
+    assert activity.details["input_context_hash"] == "abc123"
+    assert activity.details["session_ended_at"] == "2026-09-02T15:55:00+00:00"
+    assert "type" not in activity.details and "occurred_at" not in activity.details
+
+
+def test_session_summary_reprise_is_redacted_in_depth():
+    activity = normalize_activity(
+        session_summary_payload(
+            reprise={
+                "doing": "Tu testais l'API avec le jeton sk-abcdef1234567890XYZ.",
+                "stopped_at": "—",
+                "open": "—",
+            }
+        )
+    )
+
+    assert activity.details["reprise"]["doing"] == (
+        "Tu testais l'API avec le jeton [REDACTED]."
+    )
+    assert activity.summary == "Tu testais l'API avec le jeton [REDACTED]."
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field"),
+    [
+        ({"session_id": ""}, "session_id"),
+        ({"prompt_version": None}, "prompt_version"),
+        ({"model_id": "  "}, "model_id"),
+        ({"reprise": "texte"}, "details.reprise"),
+        (
+            {"reprise": {"doing": "x", "stopped_at": "y"}},
+            "details.reprise.open",
+        ),
+        (
+            {"reprise": {"doing": "", "stopped_at": "y", "open": "z"}},
+            "details.reprise.doing",
+        ),
+        ({"structured": None}, "details.structured"),
+        ({"structured": {"project": 3, "confidence": "high"}}, "details.structured.project"),
+        ({"structured": {"project": None, "confidence": "sure"}}, "details.structured.confidence"),
+        ({"structured": {"project": "Pulse"}}, "details.structured.confidence"),
+    ],
+)
+def test_session_summary_rejects_incomplete_contract(overrides, field):
+    with pytest.raises(InvalidActivity) as raised:
+        normalize_activity(session_summary_payload(**overrides))
+
+    assert raised.value.field == field

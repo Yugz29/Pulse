@@ -387,6 +387,64 @@ def normalize_activity(payload: Any) -> Activity:
             if headline
             else f"Agent session ({source_tool})"
         )
+    elif activity_type == "session_summary":
+        # Résumé de session produit par la couche Intelligence (spec du
+        # 2026-09-03, §6). Core valide le contrat de données minimal et passe
+        # le reste tel quel : il ne connaît ni le modèle ni le prompt.
+        session_id = _required_string(payload, "session_id")
+        prompt_version = _required_string(payload, "prompt_version")
+        model_id = _required_string(payload, "model_id")
+        reprise = payload.get("reprise")
+        if not isinstance(reprise, dict):
+            raise InvalidActivity(
+                "reprise must be an object",
+                field="details.reprise",
+            )
+        normalized_reprise = {}
+        for key in ("doing", "stopped_at", "open"):
+            value = reprise.get(key)
+            if not isinstance(value, str) or not value.strip():
+                raise InvalidActivity(
+                    f"reprise.{key} must be a non-empty string",
+                    field=f"details.reprise.{key}",
+                )
+            # Défense en profondeur, comme first_prompt et les messages de
+            # commit : un texte libre n'entre jamais en base sans rédaction.
+            normalized_reprise[key] = redact_command(value.strip())
+        structured = payload.get("structured")
+        if not isinstance(structured, dict):
+            raise InvalidActivity(
+                "structured must be an object",
+                field="details.structured",
+            )
+        project = structured.get("project")
+        if project is not None and not isinstance(project, str):
+            raise InvalidActivity(
+                "structured.project must be a string or null",
+                field="details.structured.project",
+            )
+        if structured.get("confidence") not in {"high", "medium", "low"}:
+            raise InvalidActivity(
+                "structured.confidence must be high, medium or low",
+                field="details.structured.confidence",
+            )
+        details = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"type", "occurred_at", "timestamp", "workspace", "git", "git_root"}
+        }
+        details.update(
+            {
+                "session_id": session_id,
+                "prompt_version": prompt_version,
+                "model_id": model_id,
+                "reprise": {**reprise, **normalized_reprise},
+                "structured": dict(structured),
+            }
+        )
+        _copy_persisted_context(payload, details)
+        source = "intelligence"
+        summary = normalized_reprise["doing"].splitlines()[0]
     elif activity_type == "app_activated":
         app = _required_string(payload, "app")
         details = {"app": app}
