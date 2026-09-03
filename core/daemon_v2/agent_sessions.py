@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import tempfile
 import os
 import sqlite3
 import uuid
@@ -37,6 +38,8 @@ from pathlib import Path
 from typing import Any
 
 from .ingest import redact_command
+from .file_lock import DEFAULT_LOCK_TIMEOUT_S, LockTimeout, exclusive_lock
+from .private_files import apply_private_umask, ensure_private_directory
 from .producer_outbox import ProducerOutbox, enqueue_json_input
 
 
@@ -359,13 +362,26 @@ def count_grown_sessions(manifest_path: Path | None = None) -> int | None:
 
 
 def _write_manifest(path: Path, emitted: dict[str, dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(
-        json.dumps({"emitted": emitted}, sort_keys=True, indent=1, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    os.replace(temporary, path)
+    ensure_private_directory(path.parent)
+    # Temporaire unique dans le même dossier : un nom fixe était une course
+    # entre le hook SessionEnd et le passage horaire (FileNotFoundError).
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent,
+        prefix=f".{path.name}.", suffix=".tmp", delete=False,
+    ) as handle:
+        handle.write(
+            json.dumps({"emitted": emitted}, sort_keys=True, indent=1, ensure_ascii=False)
+        )
+        temporary = Path(handle.name)
+    try:
+        os.replace(temporary, path)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def manifest_lock_path(manifest_path: Path) -> Path:
+    return manifest_path.parent / f".{manifest_path.name}.lock"
 
 
 def emit_agent_sessions(
@@ -378,6 +394,7 @@ def emit_agent_sessions(
     dry_run: bool = False,
     now: datetime | None = None,
     transcript: Path | None = None,
+    lock_timeout_s: float = DEFAULT_LOCK_TIMEOUT_S,
 ) -> EmitReport:
     """Emit derived events; ``transcript`` switches to targeted mode.
 
@@ -387,8 +404,40 @@ def emit_agent_sessions(
     autres règles (déjà émis, sidechain, doublon de session, résumé figé)
     restent identiques au passage périodique.
     """
-    moment = now or datetime.now(timezone.utc)
     manifest_file = manifest_path or default_manifest_path()
+    if dry_run:
+        return _emit_pass(
+            claude_dir=claude_dir, codex_dir=codex_dir, outbox=outbox,
+            manifest_file=manifest_file, quiet=quiet, dry_run=True, now=now,
+            transcript=transcript,
+        )
+    # Lecture du manifeste, émissions et réécriture sous un même verrou :
+    # le hook SessionEnd et le passage horaire ne se marchent plus dessus.
+    try:
+        with exclusive_lock(
+            manifest_lock_path(manifest_file), timeout_s=lock_timeout_s
+        ):
+            return _emit_pass(
+                claude_dir=claude_dir, codex_dir=codex_dir, outbox=outbox,
+                manifest_file=manifest_file, quiet=quiet, dry_run=False,
+                now=now, transcript=transcript,
+            )
+    except LockTimeout as exc:
+        raise AgentSessionInfrastructureError(str(exc)) from exc
+
+
+def _emit_pass(
+    *,
+    claude_dir: Path,
+    codex_dir: Path,
+    outbox: ProducerOutbox | None,
+    manifest_file: Path,
+    quiet: timedelta,
+    dry_run: bool,
+    now: datetime | None,
+    transcript: Path | None,
+) -> EmitReport:
+    moment = now or datetime.now(timezone.utc)
     emitted = _load_manifest(manifest_file)
     report = EmitReport()
     resolved_outbox = outbox
@@ -532,6 +581,7 @@ def emit_agent_sessions(
 
 
 def main() -> None:
+    apply_private_umask()
     parser = argparse.ArgumentParser(
         description="Emit one derived agent_session event per finished session"
     )

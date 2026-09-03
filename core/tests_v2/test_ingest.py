@@ -781,6 +781,27 @@ def test_session_summary_reprise_is_redacted_in_depth():
     assert activity.summary == "Tu testais l'API avec le jeton [REDACTED]."
 
 
+def test_session_summary_structured_lists_are_redacted_element_by_element():
+    activity = normalize_activity(
+        session_summary_payload(
+            structured={
+                "project": "Pulse",
+                "intents": ["déployer avec le jeton sk-abcdef1234567890XYZ", "tester"],
+                "central_files": ["core/daemon_v2/ingest.py", "docs/VISION.md"],
+                "blockers": ["export API_TOKEN=abc123 refusé par la CI"],
+                "confidence": "medium",
+            }
+        )
+    )
+
+    structured = activity.details["structured"]
+    assert structured["intents"] == ["déployer avec le jeton [REDACTED]", "tester"]
+    assert structured["blockers"] == ["export API_TOKEN=[REDACTED] refusé par la CI"]
+    # Un chemin normal reste intact.
+    assert structured["central_files"] == ["core/daemon_v2/ingest.py", "docs/VISION.md"]
+    assert structured["project"] == "Pulse" and structured["confidence"] == "medium"
+
+
 @pytest.mark.parametrize(
     ("overrides", "field"),
     [
@@ -812,3 +833,23 @@ def test_session_summary_rejects_incomplete_contract(overrides, field):
         normalize_activity(session_summary_payload(**overrides))
 
     assert raised.value.field == field
+
+
+def test_unknown_schema_version_is_rejected_not_read_as_version_one():
+    with pytest.raises(InvalidActivity) as raised:
+        normalize_event(canonical_payload(schema_version=2))
+
+    assert raised.value.field == "schema_version"
+    assert "one of: 1" in str(raised.value)
+
+    accepted = normalize_event(canonical_payload(schema_version=1))
+    assert accepted.event.schema_version == 1
+
+    legacy = normalize_event(
+        {
+            "type": "file_changed",
+            "occurred_at": "2026-07-03T09:00:00+00:00",
+            "path": "/project/main.py",
+        }
+    )
+    assert legacy.legacy is True and legacy.event.schema_version == 1

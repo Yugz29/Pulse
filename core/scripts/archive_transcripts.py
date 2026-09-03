@@ -36,10 +36,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import tempfile
 from compression import zstd
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+from daemon_v2.file_lock import DEFAULT_LOCK_TIMEOUT_S, LockTimeout, exclusive_lock
+from daemon_v2.private_files import apply_private_umask, ensure_private_directory
 
 
 DEFAULT_SOURCES = (
@@ -48,6 +52,7 @@ DEFAULT_SOURCES = (
 )
 COMPRESSION_LEVEL = 9
 MANIFEST_NAME = "manifest.json"
+LOCK_NAME = ".lock"
 
 
 class ArchiveInfrastructureError(RuntimeError):
@@ -96,16 +101,34 @@ def _load_manifest(archive_root: Path) -> dict[str, dict[str, int | str]]:
         ) from exc
 
 
+def _write_atomically(destination: Path, data: bytes) -> None:
+    """Temporaire unique dans le même dossier, puis rename atomique.
+
+    Un nom de temporaire fixe (``x.tmp``) est une course entre deux passages
+    concurrents (FileNotFoundError au rename du perdant) ; le verrou l'évite
+    déjà, le temporaire unique est la ceinture avec les bretelles.
+    """
+    with tempfile.NamedTemporaryFile(
+        mode="wb", dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp", delete=False
+    ) as handle:
+        handle.write(data)
+        temporary = Path(handle.name)
+    try:
+        os.replace(temporary, destination)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def _write_manifest(
     archive_root: Path, files: dict[str, dict[str, int | str]]
 ) -> None:
-    manifest_path = archive_root / MANIFEST_NAME
-    temporary = manifest_path.with_suffix(".json.tmp")
-    temporary.write_text(
-        json.dumps({"files": files}, sort_keys=True, indent=1, ensure_ascii=False),
-        encoding="utf-8",
+    _write_atomically(
+        archive_root / MANIFEST_NAME,
+        json.dumps(
+            {"files": files}, sort_keys=True, indent=1, ensure_ascii=False
+        ).encode("utf-8"),
     )
-    os.replace(temporary, manifest_path)
 
 
 def _archive_one(
@@ -116,10 +139,8 @@ def _archive_one(
 ) -> int:
     data = source_file.read_bytes()
     compressed = zstd.compress(data, level)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_bytes(compressed)
-    os.replace(temporary, destination)
+    ensure_private_directory(destination.parent)
+    _write_atomically(destination, compressed)
     return len(compressed)
 
 
@@ -130,18 +151,40 @@ def archive_transcripts(
     dry_run: bool = False,
     level: int = COMPRESSION_LEVEL,
     now: datetime | None = None,
+    lock_timeout_s: float = DEFAULT_LOCK_TIMEOUT_S,
 ) -> ArchiveReport:
     root = (archive_root or default_archive_root()).expanduser()
+    if dry_run:
+        return _archive_pass(
+            sources, root, dry_run=True, level=level, now=now
+        )
+    try:
+        ensure_private_directory(root)
+    except OSError as exc:
+        raise ArchiveInfrastructureError(
+            f"cannot create archive root: {root} ({exc})"
+        ) from exc
+    # Un seul passage écrit à la fois (hook SessionEnd vs passage horaire) :
+    # archives ET manifeste sous le même verrou, le second appelant attend.
+    try:
+        with exclusive_lock(root / LOCK_NAME, timeout_s=lock_timeout_s):
+            return _archive_pass(
+                sources, root, dry_run=False, level=level, now=now
+            )
+    except LockTimeout as exc:
+        raise ArchiveInfrastructureError(str(exc)) from exc
+
+
+def _archive_pass(
+    sources: list[Path] | tuple[Path, ...],
+    root: Path,
+    *,
+    dry_run: bool,
+    level: int,
+    now: datetime | None,
+) -> ArchiveReport:
     archived_at = (now or datetime.now(timezone.utc)).isoformat()
     report = ArchiveReport()
-
-    if not dry_run:
-        try:
-            root.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            raise ArchiveInfrastructureError(
-                f"cannot create archive root: {root} ({exc})"
-            ) from exc
     manifest = _load_manifest(root)
 
     for source in sources:
@@ -202,6 +245,7 @@ def archive_transcripts(
 
 
 def main() -> None:
+    apply_private_umask()
     parser = argparse.ArgumentParser(
         description="Archive agent transcripts as zstd copies (read-only)"
     )

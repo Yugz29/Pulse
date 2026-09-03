@@ -41,6 +41,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
 fi
 
 mkdir -p -- "$plist_dir" "$log_dir"
+"$script_dir/fix_permissions.sh"
 
 for i in 0 1; do
   label="${labels[$i]}"

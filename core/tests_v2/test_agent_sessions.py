@@ -498,3 +498,37 @@ def test_count_grown_sessions_missing_manifest_is_zero(tmp_path):
 
     # Aucune session émise : zéro regrossie est la vérité.
     assert count_grown_sessions(tmp_path / "absent.json") == 0
+
+
+def test_concurrent_emission_passes_on_the_same_transcript_emit_once(tmp_path):
+    # Hook SessionEnd et passage horaire au même instant : un événement, une
+    # entrée de manifeste, zéro exception (verrou + temporaire unique).
+    import threading
+
+    _write_transcript(
+        tmp_path / "claude", "proj/abc-123.jsonl", claude_lines(), age_hours=2
+    )
+    outbox = ProducerOutbox(tmp_path / "outbox.sqlite3")
+    barrier = threading.Barrier(2)
+    reports, errors = [], []
+
+    def run():
+        try:
+            barrier.wait(timeout=5)
+            reports.append(emit(tmp_path, outbox=outbox))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert errors == []
+    assert sum(report.emitted for report in reports) == 1
+    assert sum(report.already_emitted for report in reports) == 1
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert len(manifest["emitted"]) == 1
+    assert [p for p in tmp_path.glob(".manifest.json.*.tmp")] == []
+    assert outbox.oldest() is not None

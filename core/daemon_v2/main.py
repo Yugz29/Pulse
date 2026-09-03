@@ -11,6 +11,7 @@ from .runtime_config import (
     core_port,
     select_database_path,
 )
+from .private_files import apply_private_umask
 from .trace_store import TraceStore
 
 
@@ -25,6 +26,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
 
 
 def main() -> None:
+    apply_private_umask()
     app = create_app()
     print(f"Pulse V2 database: {app.config['DATABASE_PATH']}", flush=True)
     app.run(host=core_host(), port=core_port(), debug=False)

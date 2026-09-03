@@ -15,6 +15,7 @@ from .models import (
     CanonicalEvent,
     IngestedEvent,
     SUPPORTED_ACTIVITY_TYPES,
+    SUPPORTED_SCHEMA_VERSIONS,
     SYSTEM_ACTIVITY_TYPES,
     canonical_event_fingerprint,
 )
@@ -450,6 +451,16 @@ def normalize_activity(payload: Any) -> Activity:
                 "structured.confidence must be high, medium or low",
                 field="details.structured.confidence",
             )
+        # Texte libre produit par un modèle, même règle que la reprise :
+        # chaque élément des listes est rédigé avant d'entrer en base.
+        normalized_structured = dict(structured)
+        for key in ("intents", "central_files", "blockers"):
+            values = structured.get(key)
+            if isinstance(values, list):
+                normalized_structured[key] = [
+                    redact_command(item) if isinstance(item, str) else item
+                    for item in values
+                ]
         details = {
             key: value
             for key, value in payload.items()
@@ -462,7 +473,7 @@ def normalize_activity(payload: Any) -> Activity:
                 "prompt_version": prompt_version,
                 "model_id": model_id,
                 "reprise": {**reprise, **normalized_reprise},
-                "structured": dict(structured),
+                "structured": normalized_structured,
             }
         )
         _copy_persisted_context(payload, details)
@@ -520,6 +531,12 @@ def _normalize_canonical_event(payload: dict[str, Any]) -> IngestedEvent:
     ):
         raise InvalidActivity(
             "schema_version must be a strictly positive integer",
+            field="schema_version",
+        )
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        raise InvalidActivity(
+            "schema_version must be one of: "
+            + ", ".join(str(version) for version in sorted(SUPPORTED_SCHEMA_VERSIONS)),
             field="schema_version",
         )
 

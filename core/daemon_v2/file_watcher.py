@@ -24,6 +24,7 @@ from typing import TypeAlias
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
+from .private_files import apply_private_umask
 from .producer_outbox import ProducerOutbox, enqueue_file_event
 
 
@@ -282,6 +283,7 @@ def watch(
 
 
 def main() -> None:
+    apply_private_umask()
     parser = argparse.ArgumentParser(
         description="Watch one workspace (or a configured list) for file changes"
     )

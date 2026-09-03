@@ -36,6 +36,7 @@ if [[ -e "$plist_path" ]] && ! grep -qF "$marker" "$plist_path" 2>/dev/null; the
 fi
 
 mkdir -p -- "$plist_dir" "$log_dir"
+"$script_dir/fix_permissions.sh"
 
 cat > "$plist_path" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

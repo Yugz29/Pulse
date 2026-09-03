@@ -51,6 +51,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
 fi
 
 mkdir -p -- "$plist_dir" "$log_dir" "$bin_dir"
+"$script_dir/fix_permissions.sh"
 
 if [[ ! -f "$workspaces_file" ]]; then
   cat > "$workspaces_file" <<EOF

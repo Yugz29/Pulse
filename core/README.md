@@ -105,7 +105,7 @@ observés et un contexte Git local lu passivement au rendu.
 ```bash
 cd ~/Projets/Pulse/core
 python3 -m venv .venv
-.venv/bin/pip install Flask pytest watchdog
+.venv/bin/pip install -r requirements-dev.txt   # ou requirements.txt sans les tests
 ```
 
 ## Tests

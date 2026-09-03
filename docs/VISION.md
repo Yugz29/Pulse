@@ -177,6 +177,8 @@ problème réel.
 - **Sources d'observation supplémentaires** présentes dans Lab et absentes de
   Core : presse-papiers, titre de fenêtre active via Accessibility, inactivité
   via IOKit. À reconsidérer si un besoin de contexte les réclame.
+- **Authentification des producteurs locaux** : reportée, déclencheur =
+  première action de la couche Agent (décision du 2026-09-03).
 
 ## Décisions prises
 
@@ -208,6 +210,10 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   indépendant du runtime ; Cortex, DevNote et Quest hors périmètre ; composer
   avec des briques mais construire le cœur soi-même ; Pulse = le système,
   Pulse Core = la couche observation.
+- **2026-09-03** — Hardening de Core (0.5.1) : permissions `0700`/`0600`
+  comme politique, versions de schéma explicites, rédaction complète des
+  résumés, verrous sur l'archivage et l'émission, dépendances épinglées, CI.
+  Authentification des producteurs locaux reportée.
 - **2026-09-02** — Restructuration en repo unique : Core déplacé dans `core/`
   avec son historique, Lab archivé dans `~/Projets/ARCHIVE/Pulse_Lab` sous le
   tag `archive/lab-2026-09`, `CLAUDE.md` et `AGENTS.md` désormais suivis par

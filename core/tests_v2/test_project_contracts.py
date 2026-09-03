@@ -68,7 +68,10 @@ def trace_for(store: TraceStore) -> dict:
     return build_daily_trace(store, DAY, timezone.utc)
 
 
-def test_resolves_known_project_roots_and_modules():
+def test_resolves_known_project_roots_and_modules(monkeypatch):
+    # Le résolveur reconnaît un conteneur de projets par Path.home()/Projets :
+    # les chemins ci-dessous supposent ce foyer, quel que soit celui du runner.
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path("/Users/yugz")))
     cases = [
         (
             "/Users/yugz/Projets/DevNote/DevNote/backend",
@@ -113,7 +116,8 @@ def test_unknown_isolated_directory_keeps_existing_identity(tmp_path):
     assert context.module is None
 
 
-def test_nested_modules_are_grouped_under_logical_project(tmp_path):
+def test_nested_modules_are_grouped_under_logical_project(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path("/Users/yugz")))
     store = TraceStore(tmp_path / "trace.db")
     backend = "/Users/yugz/Projets/DevNote/DevNote/backend"
     frontend = "/Users/yugz/Projets/DevNote/DevNote/frontend"

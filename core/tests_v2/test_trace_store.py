@@ -2,6 +2,7 @@ import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -489,3 +490,19 @@ def test_fresh_schema_declares_event_id_not_null(tmp_path):
             row[1]: row[3] for row in connection.execute("PRAGMA table_info(activities)")
         }
     assert columns["event_id"] == 1  # notnull
+
+
+def test_new_store_is_private_regardless_of_the_ambient_umask(tmp_path):
+    import os
+    import stat
+
+    previous = os.umask(0o022)
+    try:
+        store = TraceStore(tmp_path / "private" / "trace.db")
+    finally:
+        os.umask(previous)
+
+    directory_mode = stat.S_IMODE((tmp_path / "private").stat().st_mode)
+    file_mode = stat.S_IMODE(Path(store.database_path).stat().st_mode)
+    assert directory_mode == 0o700
+    assert file_mode == 0o600

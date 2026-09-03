@@ -9,6 +9,7 @@ import time
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from .private_files import apply_private_umask
 from .runtime_config import core_base_url, parse_port, status_url
 
 
@@ -61,6 +62,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    apply_private_umask()  # hérité par les processus lancés par dev.sh
     args = _build_parser().parse_args()
     if args.command == "check-port":
         if not port_is_available(args.host, args.port):

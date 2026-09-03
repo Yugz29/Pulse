@@ -15,6 +15,7 @@ from .models import (
     StoredActivity,
     canonical_event_fingerprint,
 )
+from .private_files import ensure_private_directory, restrict_private_file
 from .session_tracker import select_session
 
 
@@ -88,8 +89,11 @@ class EventConflictError(ValueError):
 class TraceStore:
     def __init__(self, database_path: str | Path) -> None:
         self.database_path = str(database_path)
-        Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(Path(self.database_path).parent)
         self._initialize()
+        # La base contient des commandes et des messages de commit : 0600,
+        # même si le processus appelant n'a pas posé l'umask 077.
+        restrict_private_file(Path(self.database_path))
 
     # Every caller wraps this in closing(...): relying on the garbage
     # collector leaks one fd per operation and hits launchd's 256-fd
