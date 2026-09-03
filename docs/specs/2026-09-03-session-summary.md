@@ -1,74 +1,81 @@
-# Spec — Résumé de session (`intelligence/`)
+# Spec — Résumé de session (`intelligence/`) — v2
 
 Pas 3 de la roadmap V3 (voir `docs/VISION.md`). Premier code de la couche Intelligence, premier événement de mémoire de niveau 2.
+
+**v2 du 2026-09-03** — réécrit après relecture externe. Changements par rapport à la v1 : identité de session stable (hash des sources) à la place de l'ordinal `work-N` ; Intelligence lit `GET /context/sessions` et ne reconstruit rien ; rédaction de tout le texte libre produit par le modèle ; livraison en CLI batch avant tout service résident ; corpus d'évaluation gelé dès le premier prototype. Dépend de Core ≥ 0.5.0 (`ship/session-identity`) et de la PR `hardening`.
 
 ## 1. Objectif
 
 Produire, pour chaque session de travail close, un **résumé figé** en deux parties :
 
 - une **reprise** en langage naturel — ce que tu faisais, où tu t'es arrêté, ce qui restait ouvert — lisible en dix secondes le lendemain matin ;
-- un **bloc structuré** — projet, intentions déduites, fichiers centraux, blocages — destiné à l'indexation future (mémoire sémantique, hors périmètre ici).
+- un **bloc structuré** — projet, intentions déduites, fichiers centraux, blocages — destiné à l'indexation future (hors périmètre ici).
 
-Le résumé est stocké comme événement dérivé dans `trace.db`, via l'ingestion normale de Core, exactement comme `agent_session` : versionné, jamais régénéré en silence, jamais le brut.
+Le résumé est stocké comme événement dérivé dans `trace.db`, via l'ingestion normale de Core : versionné, jamais régénéré en silence, jamais le brut.
 
 Usage prioritaire : la reprise. Le bloc structuré est produit dans le même appel mais n'est consommé par rien dans ce chantier.
 
 ## 2. Non-objectifs
 
-- Aucune proactivité : rien ne notifie, rien n'interrompt. Le résumé se lit quand on le demande.
+- Aucune proactivité, aucune notification, aucune interruption.
 - Aucune mémoire sémantique, aucun embedding, aucune recherche.
-- Un seul modèle, un seul prompt. Pas de routeur, pas de fallback vers un modèle distant.
-- Pas de résumé de la session en cours : on résume ce qui est clos, avec ses vraies bornes.
-- Pas d'interface : la reprise est exposée en JSON et en Markdown brut, l'affichage HTML viendra plus tard.
+- Un seul modèle, un seul prompt. Pas de routeur, pas de fallback distant.
+- Pas de résumé de la session en cours.
+- Pas d'interface : JSON et Markdown brut. L'affichage HTML viendra plus tard.
+- Pas d'authentification des producteurs locaux : question à rouvrir quand la couche Agent agira sur ces données (noté dans la Vision, « Plus tard »).
 
 ## 3. Principes
 
-1. **Core ne sait pas qu'Intelligence existe.** Intelligence lit Core par `GET /context` et écrit par `POST /activities`. Aucun import Python de `daemon_v2` depuis `intelligence/`. Si `intelligence/` est absent ou arrêté, Core ne remarque rien.
-2. **Le modèle est un détail d'implémentation.** Une interface `Summarizer` avec une seule implémentation (`MLXSummarizer`), dont le nom du modèle est une valeur de configuration. Changer de modèle ne modifie aucune ligne hors config et incrémente `prompt_version` si le prompt change.
-3. **Un résumé est immuable.** Une session close a au plus un résumé par `(prompt_version, model_id)`. Regénérer = un nouvel événement avec une nouvelle version, l'ancien reste. Le plus récent fait foi.
-4. **Deux déclencheurs, une fonction.** Le job périodique et la route HTTP appellent la même `summarize_session(session_id)`.
-5. **Le texte est jugé par toi, pas par un test.** Les tests couvrent le pipeline (sélection, prompt, parsing, émission, idempotence). La justesse de la reprise se vérifie en dogfooding.
+1. **Core ne sait pas qu'Intelligence existe.** Intelligence lit Core par HTTP (`GET /context`, `GET /context/sessions`) et écrit par `POST /activities`. Aucun import de `daemon_v2` depuis `intelligence/`, vérifié par un test.
+2. **Intelligence ne reconstruit rien.** Les sessions closes arrivent de Core déjà bornées, avec leur identité stable. Toute règle de sessionnisation ou de bornage vit dans Core et nulle part ailleurs.
+3. **Le modèle est un détail d'implémentation.** Interface `Summarizer`, une implémentation `MLXSummarizer`, `model_id` en configuration. Changer de modèle ne modifie aucune ligne hors config.
+4. **Un résumé est immuable et vérifiable.** Une session a au plus un résumé par `(prompt_version, model_id)`. Il porte le hash de ses événements sources et la version de reconstruction : on peut dire, dans six mois, de quoi exactement il est le résumé.
+5. **Tout ce que le modèle écrit est non fiable.** Validé par schéma, rédigé par Core à l'ingestion, jamais affiché sans passer par ces deux barrières. Un chemin cité qui n'existe pas dans l'entrée invalide le résumé.
+6. **Batch avant résident.** La première version est une commande. Le service, l'API et le job périodique n'arrivent que quand la reprise est jugée utile.
+7. **Le texte est jugé par toi, pas par un test** — mais sur un corpus gelé, pour que deux prompts ou deux modèles soient comparables.
 
-## 4. Le seul changement dans Core
+## 4. Contrat Core consommé (fourni par 0.5.0 et hardening)
 
-Core est gelé. Ce chantier y touche à un seul endroit, justifié par le contrat de données : Core doit **accepter et stocker** un nouveau type d'événement, sinon Intelligence n'a nulle part où écrire.
+Ce que ce chantier attend de Core, sans y toucher :
 
-- `models.py` : `"session_summary"` ajouté à `SUPPORTED_ACTIVITY_TYPES`.
-- `ingest.py` : validation minimale des `details` (voir §6). Le `summary` de l'`Activity` est la première ligne de la reprise.
-- `context_snapshot.py` : `last_session_summary` ajouté à la réponse de `GET /context` (voir §8), `schema_version` reste 1 (ajout optionnel).
-- `analysis/timeline.py` : `session_summary` exclu explicitement de la collecte des activités non attribuées. Trou trouvé à l'implémentation : la reconstruction ne connaît pas ce type (ni signal fort, ni activation d'app, ni type système), donc sans cette ligne chaque résumé aurait ajouté une ligne vide dans la section « non attribuées » du HTML et du Markdown et incrémenté son compteur. Ce n'est pas un rendu, c'est la garantie du « aucun rendu ». Au passage, les trois helpers de ce module importés par plusieurs consommateurs (`display_file_path`, `app_activation_counts`, `is_strong_work_activity`) deviennent publics, anciens noms conservés en alias dépréciés.
-- **Aucun rendu** : `daily_trace.py` et les renderers ne changent pas (`daily_trace.py` ne fait que suivre les noms publics des helpers). Le type est stocké, exposé par `/context`, pas affiché dans le HTML. L'affichage est un chantier ultérieur.
+- `GET /context` `schema_version: 2` : `current_session.id` = sha256 tronqué (16 hex) des `event_id` triés, `label` = `work-N`, `source_event_ids`, `reconstruction_version` ; `last_session_summary` avec `id` et `label`.
+- `GET /context/sessions?date=YYYY-MM-DD` : sessions de travail de la journée locale, forme exacte de `current_session`, champ `is_open`. C'est **la seule source** de sessions closes pour Intelligence.
+- `POST /activities` accepte `session_summary` avec `details.session_id` (16 hex) et `details.source_event_ids_hash` égal ; rejette sinon avec `field`.
+- Core rédige (`redact_command`) **toutes** les chaînes libres de `details` d'un `session_summary` : `reprise.*`, `structured.intents[]`, `structured.blockers[]`, `structured.central_files[]`.
+- `schema_version` d'événement inconnu → 400.
 
-PR séparée sur Core (`ship/session-summary-type`), mergée **avant** le premier commit d'`intelligence/`. Version Core 0.4.0.
+Si l'un de ces points manque, ce chantier s'arrête et Core reçoit d'abord la correction.
 
 ## 5. Structure d'`intelligence/`
 
 ```
 intelligence/
   README.md
-  pyproject.toml                 # dépendances : mlx-lm, requests, pytest ; rien de Core
+  pyproject.toml                    # mlx-lm (extra optionnel), requests, pytest ; rien de Core
+  requirements.lock
   pulse_intelligence/
     __init__.py
-    config.py                    # PULSE_CORE_URL, MODEL_ID, PROMPT_VERSION, tick, timeouts
-    core_client.py               # GET /context, GET /trace/<date>, POST /activities
-    summarizer.py                # interface Summarizer + MLXSummarizer
-    prompts/
-      session_summary_v1.md      # le prompt, versionné comme du code
-    session_summary.py           # summarize_session(), parsing, construction de l'événement
-    job.py                       # summarize-closed-sessions : boucle périodique
-    api.py                       # POST /summaries/<session_id>, GET /summaries/<session_id>
-    main.py                      # point d'entrée : job + api dans un process, port 8767
+    config.py                       # lecture config.toml + défauts + validation
+    core_client.py                  # GET /context, GET /context/sessions, POST /activities
+    summarizer.py                   # Summarizer (interface), FakeSummarizer, MLXSummarizer
+    prompts/session_summary_v1.md
+    session_input.py                # vue de session → entrée du modèle (+ contexte adjacent)
+    session_summary.py              # summarize_session(), parsing, validation, événement
+    selection.py                    # sessions candidates
+    state.py                        # état local du job (~/.pulse_intelligence/state.json)
+    cli.py                          # pulse-intel : list, summarize, run, show, eval
   tests/
+  eval/
+    corpus/                         # 10 entrées gelées + reprise attendue, voir §11
   scripts/
-    install_launchd.sh           # com.pulse.intelligence, KeepAlive, même style que Core
-    status.sh
+    install_launchd.sh              # étape 5 seulement
 ```
 
-Venv séparée de Core. Python identique.
+Venv séparée de Core, même Python. `mlx-lm` est un extra (`pip install -e '.[mlx]'`) : le paquet s'installe et se teste sans lui.
 
 ## 6. L'événement `session_summary`
 
-Émis via `POST /activities` avec le format producteur existant (`schema_version`, `producer`, `occurred_at`, `details`). `producer.name = "pulse-intelligence"`, `producer.version` = version du paquet.
+Émis via `POST /activities`, format producteur existant. `producer.name = "pulse-intelligence"`, `producer.version` = version du paquet.
 
 ```json
 {
@@ -77,16 +84,19 @@ Venv séparée de Core. Python identique.
   "summary": "<première ligne de la reprise>",
   "workspace": "<workspace_root de la session, s'il existe>",
   "details": {
-    "session_id": "3f9c2a1b7e4d5c60",
-    "source_event_ids_hash": "3f9c2a1b7e4d5c60",
+    "session_id": "3f9a1c0be2d47a58",
     "session_label": "work-3",
+    "session_date": "2026-09-02",
     "session_started_at": "…",
     "session_ended_at": "…",
+    "source_event_ids_hash": "3f9a1c0be2d47a58",
+    "source_event_count": 214,
+    "reconstruction_version": 1,
     "prompt_version": "v1",
-    "model_id": "<valeur de config, ex. mlx-community/…>",
+    "model_id": "<config>",
     "generated_at": "…",
     "generation_ms": 4210,
-    "input_context_hash": "sha256 du JSON d'entrée",
+    "input_hash": "sha256 de l'entrée sérialisée",
     "reprise": {
       "doing": "…",
       "stopped_at": "…",
@@ -105,77 +115,74 @@ Venv séparée de Core. Python identique.
 
 Règles :
 
-- `occurred_at` = fin de la session, pas l'instant de génération. Le résumé se range à sa place dans la journée. `generated_at` garde la vérité de production.
-- `event_id` déterministe côté producteur : uuid5 de `(session_id, prompt_version, model_id)`. Rejouer le job n'écrit rien de nouveau ; Core répond `duplicate`.
-- `input_context_hash` permet de savoir si le contexte a changé depuis (une session close ne devrait pas bouger ; si le hash diffère, c'est un bug ou un nouveau pas de Core à signaler).
-- `reprise.*` : trois chaînes, une phrase chacune, en français, jamais vides. Si le modèle ne peut rien dire, `stopped_at` et `open` valent `"—"` et `confidence = "low"`.
-- `structured.intents` : 0 à 3 entrées. `central_files` : 0 à 5, chemins relatifs. `blockers` : 0 à 3.
-- Aucun contenu de commande, aucun prompt collé, aucun transcript ne transite : l'entrée du modèle est `GET /context`, qui applique déjà ces règles.
+- `occurred_at` = fin de la session ; `generated_at` garde la vérité de production.
+- `event_id` déterministe côté producteur : uuid5 de `session_id + prompt_version + model_id`. Rejouer n'écrit rien ; Core répond `duplicate`.
+- `session_id == source_event_ids_hash`, toujours. La redondance est volontaire : le champ dit explicitement ce qu'est l'identifiant.
+- `reconstruction_version` : celle renvoyée par Core au moment de la génération. Si Core l'incrémente plus tard, les anciens résumés restent valides pour leur version, et les sessions changées auront de nouveaux ids donc de nouveaux résumés — rien à migrer.
+- `reprise.*` : trois chaînes, une phrase chacune, en français, jamais vides. Si le modèle ne peut rien dire : `"—"` et `confidence = "low"`.
+- `structured.intents` 0–3, `central_files` 0–5 chemins relatifs **présents dans l'entrée**, `blockers` 0–3.
+- Rien de brut ne transite : l'entrée est la vue Core, déjà rédigée ; la sortie est rédigée à nouveau par Core.
 
-`session_id` est l'**identité stable** de la session (Core 0.5.0) : le sha256 tronqué à 16 hex des `event_id` de ses activités, triés, tel que `GET /context/sessions` l'expose — jamais l'ordinal `work-N`, qui bouge dès qu'un événement tardif s'insère dans la journée. `source_event_ids_hash` est requis et égal à `session_id` (il rend explicite que la clé est un hash de composition). `session_label` (optionnel) porte l'ordinal pour l'affichage.
+## 7. Sélection et entrée du modèle
 
-Validation Core (`ingest.py`) : `session_id` chaîne de 16 hex (400 avec `field` sinon), `source_event_ids_hash` égal à `session_id`, `session_label` chaîne non vide si présent, `prompt_version`, `model_id` chaînes non vides ; `reprise` dict avec les trois clés chaînes ; `structured` dict avec `project` chaîne ou null et `confidence` dans l'énumération. Le reste est passé tel quel.
+### Candidates
 
-## 7. Sélection, entrée du modèle, prompt
+Lues par `GET /context/sessions?date=` pour aujourd'hui et hier (`lookback_days = 1`). Une session est candidate si :
 
-### Quelle session résumer
+- `is_open == false` ;
+- `duration_minutes >= 10` ou `activity_count >= 30` ;
+- aucun `session_summary` connu pour `(id, prompt_version, model_id)` — connu = présent dans l'état local, ou `GET /context/sessions` le signale (champ `summaries: [{prompt_version, model_id}]` si Core l'expose ; sinon l'état local fait foi et Core dédoublonne par `event_id`).
 
-Une session est **candidate** si :
-- `activity_kind == "work"` ;
-- elle est close : `ended_at` + `DEFAULT_SESSION_GAP` < maintenant (Intelligence lit le gap via `/status` ou le duplique en config — dupliqué, avec un test qui compare à la valeur exposée) ;
-- `duration_minutes >= 10` ou `activity_count >= 30` (une session de deux minutes n'a pas de reprise) ;
-- aucun `session_summary` avec `(prompt_version, model_id)` courants n'existe pour son `session_id`.
-
-Les sessions sont lues par `GET /trace/<date>` pour la journée courante et la veille. Pas plus loin : un résumé produit trois jours après n'a plus d'usage de reprise.
+Une session dont l'`id` a disparu de `/context/sessions` entre deux ticks (composition changée par un événement tardif) est simplement oubliée : son résumé, s'il existait, reste dans `trace.db` comme résumé d'un ensemble d'événements qui a existé.
 
 ### Entrée du modèle
 
-Pas `GET /context` directement — il décrit le présent. Intelligence construit une **vue de session** de même forme que `current_session` du Context API, depuis `/trace/<date>`, en réutilisant les mêmes règles de bornage (20 fichiers, 10 lignes terminal, 5 apps). Le JSON sérialisé (`sort_keys`) est l'entrée unique ; son sha256 est `input_context_hash`.
+La vue de session renvoyée par Core, telle quelle, sérialisée `sort_keys`. Son sha256 est `input_hash`. Intelligence n'y retire ni n'y ajoute de faits.
 
-Y sont ajoutés, s'ils existent :
-- la reprise du **résumé précédent** de la même journée (pour la continuité : « tu avais repris le parseur, puis… ») ;
-- le résumé du dernier `agent_session` dont l'intervalle chevauche la session.
+Y sont **annexés**, sous des clés séparées, s'ils existent :
+
+- `previous_summary` : la `reprise` du résumé précédent de la même journée (continuité) ;
+- `agent_session` : le résumé du dernier `agent_session` dont l'intervalle chevauche la session (via `/context.last_agent_session` si l'intervalle correspond, sinon rien — pas de lecture de `/trace`).
 
 ### Prompt `session_summary_v1.md`
 
-Structure imposée, contenu à écrire dans l'implémentation :
+Structure imposée :
 
 - Rôle : « tu écris la note de reprise d'un développeur pour lui-même ». Deuxième personne, français, présent.
 - Interdits explicites : inventer un fichier, une commande ou une intention absents de l'entrée ; commenter la qualité du travail ; féliciter ; conseiller.
-- Format de sortie : JSON seul, schéma de `reprise` + `structured`, aucun texte autour.
+- Sortie : JSON seul, schéma `reprise` + `structured`, rien autour.
 - `confidence` : `high` si commits + tests + fichiers cohérents, `medium` si fichiers sans commit, `low` si surtout des activations d'apps.
-- Deux exemples courts dans le prompt (un `high`, un `low`), construits à la main depuis des sessions réelles anonymisées de toi.
+- Deux exemples courts (un `high`, un `low`) tirés du corpus §11.
 
-Le parsing tolère les clôtures ```` ```json ```` mais rejette toute sortie qui ne valide pas le schéma : on n'écrit pas un résumé bancal, on log et on réessaie au tick suivant, trois fois maximum, puis on marque la session en `failed` dans l'état local du job (fichier JSON dans `~/.pulse_intelligence/`), jamais dans `trace.db`.
+### Parsing et validation
+
+Tolère les clôtures ```` ```json ````. Rejette : schéma invalide, `reprise.*` vide, `confidence` hors énumération, tout `central_files[]` absent des chemins de l'entrée, toute chaîne > 300 caractères. Un rejet = pas d'émission, compteur d'échec dans l'état local, nouvelle tentative au tick suivant, trois maximum puis `failed`. Jamais rien dans `trace.db` avant validation.
 
 ## 8. Exposition
 
-### Dans Core — `GET /context`
+### Étapes 1–3 : CLI seulement
 
-Champ ajouté : `last_session_summary`, le `session_summary` le plus récent (par `occurred_at`, puis `generated_at`) **sans limite de fenêtre**, même règle que `last_agent_session`. Forme : `session_id`, `session_ended_at`, `reprise` (les trois chaînes), `confidence`, `age_minutes`. `null` si aucun.
+```
+pulse-intel list [--date]          # sessions closes, candidates ou non, avec raison
+pulse-intel summarize <id>         # une session, affiche le résultat, --dry-run sans émission
+pulse-intel run [--once]           # toutes les candidates
+pulse-intel show [<id>|latest]     # le résumé, --md pour la reprise seule en trois lignes
+pulse-intel eval                   # §11
+```
 
-### Dans Intelligence — port 8767
+`pulse-intel show latest --md` est le `curl` du matin, en attendant le service.
 
-- `POST /summaries/<session_id>` → force la génération, même hors fenêtre de deux jours. 202 avec `{"status": "queued"}` ; le job traite au tick suivant. 409 si un résumé existe déjà pour `(prompt_version, model_id)` sauf `?force=1`, qui produit un nouvel événement avec `prompt_version` suffixé `-manual-<n>`. À utiliser rarement.
-- `GET /summaries/<session_id>` → le dernier résumé, JSON, ou 404.
-- `GET /summaries/latest.md` → la dernière reprise en Markdown brut, trois lignes. C'est le `curl` du matin.
-- `GET /status` → modèle chargé, `prompt_version`, sessions en attente, dernier succès, derniers échecs.
+### Étape 5 : service résident (conditionné, voir §12)
 
-## 9. Le job `summarize-closed-sessions`
+Port 8767. `POST /summaries/<id>` (202, 409, `?force=1`), `GET /summaries/<id>`, `GET /summaries/latest.md`, `GET /status`, `POST /summaries/tick`. Même code que la CLI, launchd `com.pulse.intelligence`, `KeepAlive`, journaux dans `~/.pulse_intelligence/logs/`. Chargement du modèle une fois au démarrage ; échec = `/status` le dit, le job ne tourne pas, Core n'est pas concerné.
 
-- Un process résident (`main.py`) : API Flask + boucle de job dans un thread, tick toutes les 10 minutes, déclenchable à la main (`POST /summaries/tick`).
-- Charge le modèle **une fois** au démarrage. Si le chargement échoue, `/status` le dit et le job ne tourne pas ; Core, lui, n'est pas concerné.
-- À chaque tick : candidates → pour chacune, construction de l'entrée, appel modèle, parsing, `POST /activities`. Une session à la fois, séquentiellement. Timeout par génération : 120 s.
-- launchd `com.pulse.intelligence`, `KeepAlive`, journal dans `~/.pulse_intelligence/logs/`. Installé et retiré par ses propres scripts, jamais par ceux de Core.
-- Le job ne tourne pas pendant `system_sleep`/`screen_locked` ? **Non** : au contraire, la fin de session arrive souvent quand tu quittes l'écran. Le job tourne quand la machine est éveillée, c'est launchd qui gère.
+## 9. Configuration
 
-## 10. Configuration
-
-`~/.pulse_intelligence/config.toml`, avec des valeurs par défaut dans `config.py` :
+`~/.pulse_intelligence/config.toml`, défauts dans `config.py` :
 
 ```toml
 core_url = "http://127.0.0.1:8765"
-model_id = ""            # obligatoire ; vide = le service refuse de démarrer
+model_id = ""              # obligatoire ; vide = refus de démarrer
 prompt_version = "v1"
 tick_minutes = 10
 generation_timeout_s = 120
@@ -184,58 +191,48 @@ min_session_activities = 30
 lookback_days = 1
 ```
 
-`model_id` vide est une erreur explicite au démarrage, pas un défaut silencieux : le choix du modèle est une décision, il doit être écrit quelque part.
+Le dossier `~/.pulse_intelligence/` est créé en `0700`, ses fichiers en `0600` — même politique que Core après hardening.
 
-## 11. Tests — `intelligence/tests/`
+## 10. Tests — `intelligence/tests/`
 
-Le modèle est remplacé par un `FakeSummarizer` qui rend une sortie fixée ; Core est remplacé par un serveur Flask de test qui rejoue des fixtures JSON de `/trace/<date>` et enregistre les `POST /activities`. Aucun test ne charge MLX.
+`FakeSummarizer` rend une sortie fixée ou programmée ; un Flask de test rejoue des fixtures de `/context` et `/context/sessions` et enregistre les `POST /activities`. Aucun test ne charge MLX.
 
-**Sélection**
-- Session ouverte → pas candidate. Session de 4 minutes / 12 activités → pas candidate. Session avec résumé existant même version → pas candidate ; version différente → candidate.
-- Deux journées de lookback, pas trois.
+**Isolation** — un test grep les imports : rien de `daemon_v2`, rien de `core/`.
 
-**Entrée**
-- La vue de session est bornée comme le Context API (20/10/5). Le hash est stable entre deux constructions.
-- Le résumé précédent de la journée est injecté ; absent sinon.
+**Sélection** — ouverte → non ; 4 min / 12 activités → non ; résumé existant même version → non, version différente → oui ; deux journées de lookback, pas trois ; id disparu entre deux ticks → oubliée sans erreur.
 
-**Prompt et parsing**
-- Sortie valide → événement construit avec les bons champs, `occurred_at = ended_at`, `event_id` = uuid5 attendu.
-- Sortie avec clôtures markdown → acceptée. Sortie sans `reprise.doing` → rejetée, aucun POST, compteur d'échec incrémenté. Trois échecs → `failed`, plus de tentative.
-- Sortie contenant un chemin absent de l'entrée → **rejetée** (garde-fou anti-hallucination sur `central_files` : chaque chemin doit apparaître dans l'entrée).
+**Entrée** — hash stable entre deux constructions ; annexes présentes ou absentes selon les fixtures ; la vue Core n'est jamais modifiée.
 
-**Émission et idempotence**
-- Premier tick → un POST par candidate. Second tick identique → zéro POST (Core simulé répond `duplicate`, et le job n'appelle même pas le modèle si l'état local connaît déjà le `event_id`).
+**Parsing** — sortie valide → événement avec `session_id == source_event_ids_hash`, `occurred_at = ended_at`, `event_id` uuid5 attendu ; clôtures markdown acceptées ; `reprise.doing` manquant → rejet ; chemin absent de l'entrée → rejet ; chaîne de 301 caractères → rejet ; trois rejets → `failed`.
 
-**API**
-- `POST /summaries/<id>` → 202 ; puis 409 ; `?force=1` → 202 et `prompt_version` suffixée.
-- `GET /summaries/latest.md` → trois lignes, dernière session.
+**Émission** — premier `run` → un POST par candidate ; second `run` → zéro POST et zéro appel au modèle.
 
-**Core (dans `core/tests_v2`)**
-- `session_summary` accepté par `/activities`, refusé si `reprise` incomplète (400 avec `field`).
-- `/context.last_session_summary` rempli sans fenêtre, `null` si absent.
+**CLI** — `list` marque les candidates avec raison ; `summarize --dry-run` n'émet rien ; `show latest --md` sort trois lignes.
 
-## 12. Critères d'acceptation
+## 11. Corpus d'évaluation — `intelligence/eval/`
 
-1. Tu arrives le matin, `curl -s :8767/summaries/latest.md`, et la reprise de la veille est **juste** — tu la reconnais. C'est le critère qui compte ; il se vérifie sur cinq jours de suite avant de considérer le pas 3 terminé.
-2. Tous les tests ci-dessus passent ; Core reste vert.
-3. `intelligence/` n'importe rien de `core/` (vérifié par un test qui grep les imports).
-4. Core arrêté → Intelligence log une erreur de connexion à chaque tick et ne plante pas. Intelligence arrêté → Core ne change en rien.
-5. `docs/VISION.md` : couche Intelligence passée de « à construire » à « premier composant livré : résumé de session » ; `docs/decisions/` : note datée avec le modèle retenu et pourquoi.
+Constitué à l'étape 3, avant le premier vrai résumé :
+
+- dix vues de sessions réelles à toi, exportées par `pulse-intel list --export`, relues et gelées (fichiers JSON commités, chemins anonymisés si besoin) ;
+- pour chacune, ta **reprise attendue** écrite à la main, trois phrases, dans `expected.md` ;
+- `pulse-intel eval` fait tourner le modèle courant sur les dix et écrit un `report.md` : entrée, attendu, obtenu, côte à côte. Pas de score automatique — un regard.
+
+Règle : tout changement de prompt ou de modèle passe par `eval` avant d'être activé, et le rapport est joint à la PR.
+
+## 12. Ordre de livraison et critères
+
+1. **Squelette** (`ship/intelligence-skeleton`, reprise de la branche existante si compatible, sinon repartir) : config, `core_client`, `Summarizer` + `FakeSummarizer`, sélection, entrée, parsing, émission, CLI `list`/`summarize --dry-run`/`run`. Tout le §10 sauf MLX. Vérifiable de bout en bout avec le faux Core.
+2. **CLI complète** : `show`, `run --once` contre le vrai Core, état local, permissions.
+3. **Modèle** (`ship/intelligence-mlx`) : `MLXSummarizer`, prompt v1, corpus §11 et `eval`. Premier vrai résumé à la main. Attend le benchmark.
+4. **Dogfooding** : `pulse-intel run` chaque soir ou via un `StartInterval` launchd minimal (une commande, pas un service), `show latest --md` chaque matin. Cinq jours.
+5. **Service résident** — **uniquement si** au terme des cinq jours, quatre reprises sur cinq sont jugées justes et utiles. Sinon on itère sur le prompt ou le modèle avec `eval`, et le service attend.
+
+Critères d'acceptation du pas 3 : (a) le 5 est atteint ; (b) tous les tests passent, Core reste vert ; (c) `intelligence/` n'importe rien de Core ; (d) Core arrêté → Intelligence log et s'arrête proprement ; Intelligence absent → Core ne change en rien ; (e) `VISION.md` mis à jour, note de décision sur le modèle avec le rapport `eval` en lien.
 
 ## 13. Hors périmètre, explicitement
 
-- Affichage définitif des résumés dans le HTML de Core — l'aperçu actuel via `build_current_state` (le résumé peut apparaître comme « Dernière activité utile » dans « Maintenant » et « Reprise », seulement quand rien de plus récent n'existe) est accepté en attendant.
-- Résumé de journée (agrégat des résumés de sessions) — chantier suivant naturel, pas celui-ci.
-- Toute forme de recherche, embedding ou mémoire sémantique.
-- Fine-tuning, LoRA, évaluation automatique de la qualité des reprises.
+- Affichage définitif des résumés dans le HTML de Core — l'aperçu actuel via `build_current_state` est accepté en attendant.
+- Résumé de journée, mémoire sémantique, recherche.
+- Fine-tuning, LoRA, LLM-as-judge.
+- Authentification des producteurs locaux.
 - Notification, menu bar, interruption.
-
-## 14. Ordre de livraison
-
-1. PR Core `ship/session-summary-type` : type + validation + `last_session_summary` dans `/context`. Petite, mergée d'abord.
-2. `intelligence/` squelette : config, `core_client`, `Summarizer` + `FakeSummarizer`, tests de sélection et d'émission. **Sans MLX.** Vérifiable de bout en bout avec le faux modèle.
-3. `MLXSummarizer` + prompt v1 + parsing. Premier vrai résumé sur ta machine, à la main via `POST /summaries/<id>`.
-4. Job + launchd + `/summaries/latest.md`. Cinq jours de dogfooding.
-5. Note de décision sur le modèle, mise à jour de la Vision.
-
-Les étapes 1 et 2 peuvent commencer avant le choix du modèle. L'étape 3 attend le benchmark.
