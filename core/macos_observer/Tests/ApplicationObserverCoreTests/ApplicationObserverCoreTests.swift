@@ -96,6 +96,44 @@ func failedApplicationEnqueueDoesNotPoisonDeduplication() throws {
 }
 
 @Test
+func outboxBridgeDrainsLargeChildOutputWithoutDeadlocking() throws {
+    let fileManager = FileManager.default
+    let temporaryDirectory = fileManager.temporaryDirectory.appendingPathComponent(
+        "pulse-outbox-bridge-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try fileManager.createDirectory(
+        at: temporaryDirectory,
+        withIntermediateDirectories: true
+    )
+    defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+    let executable = temporaryDirectory.appendingPathComponent("large-output.sh")
+    let script = """
+        #!/bin/sh
+        yes x | head -c 1048576
+        yes e | head -c 1048576 >&2
+        printf stable-instance
+        """
+    try Data(script.utf8).write(to: executable)
+    try fileManager.setAttributes(
+        [.posixPermissions: 0o700],
+        ofItemAtPath: executable.path
+    )
+
+    let bridge = OutboxBridge(
+        repositoryRoot: temporaryDirectory,
+        pythonExecutable: executable
+    )
+    let startedAt = Date()
+    let instanceID = try bridge.instanceID()
+
+    #expect(Date().timeIntervalSince(startedAt) < 5)
+    #expect(instanceID.hasSuffix("stable-instance"))
+    #expect(instanceID.utf8.count >= 1_048_576)
+}
+
+@Test
 func onlyTheActuallyFrontmostActivationIsAccepted() {
     let filter = ApplicationActivationFilter()
 
