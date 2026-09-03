@@ -83,7 +83,7 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, gelé, version 0.5.0** (`core/`). Daemon Flask et
+**État actuel : existe, gelé, version 0.5.4** (`core/`). Daemon Flask et
 SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
 (FSEvents), applications (Swift), hook Git, sessions d'agents Claude Code /
 Codex en événements dérivés, services résidents sous launchd, vue HTML locale.
@@ -101,9 +101,11 @@ courante, projet actif, résumés de sessions, liens avec l'historique.
 events → sessions → context snapshots → summaries
 ```
 
-**État actuel : à construire** (`intelligence/`). Un seul modèle local pour
-commencer, servi par MLX sur Apple Silicon. Pulse ne dépend d'aucun runtime
-d'inférence spécifique : le runtime est une brique remplaçable.
+**État actuel : squelette livré** (`intelligence/`) : CLI complète avec faux
+modèle, sélection, validation, émission idempotente et état local. Le modèle
+MLX, le prompt réel et le service résident restent à construire. Un seul modèle
+local pour commencer, servi par MLX sur Apple Silicon. Pulse ne dépend d'aucun
+runtime d'inférence spécifique : le runtime est une brique remplaçable.
 
 ### Agent — décider et utiliser des outils
 
@@ -127,8 +129,8 @@ Deux types de mémoire pour commencer :
 - **Événementiel et sessions** : existe, c'est `trace.db`. Brut conservé
   indéfiniment, aucune purge. Les transcripts d'agents n'y entrent jamais en
   brut : événement dérivé `agent_session` plus archive zstd séparée.
-- **Résumés** : à construire, stockés comme événements dérivés sur le même
-  patron que `agent_session`.
+- **Résumés** : contrat, CLI et stockage comme événements dérivés livrés sur le
+  même patron que `agent_session` ; génération par le vrai modèle à construire.
 
 Les mémoires sémantique, épisodique et long terme viendront quand il y aura des
 résumés à indexer, pas avant.

@@ -36,6 +36,9 @@ GET /context/sessions?date=2026-09-02  # d'une journée donnée ; at optionnel c
 
 ### Réponse — `200 application/json`
 
+> Exemple historique, supersédé par `schema_version: 2`. La forme ci-dessous
+> conserve le contrat initial de Core 0.3.0.
+
 ```json
 {
   "schema_version": 1,
@@ -156,7 +159,7 @@ GET /context/sessions?date=2026-09-02  # d'une journée donnée ; at optionnel c
 | `current_session.signals` | Types d'activité présents dans la session, ordre fixe = ordre de `SUPPORTED_ACTIVITY_TYPES` trié. Pas de doublon. |
 | `recent_sessions` | Les sessions **fermées** dont `ended_at` ≥ `reference_at − window`, hors session courante, les plus récentes d'abord, max 3. Forme compacte uniquement. |
 | `isolated_signals` | Les activités isolées (règle du 2026-08-30 : un signal fort seul ne crée pas de session) dans la fenêtre, max 10, plus récentes d'abord. `summary` : dernière ligne utile pour une commande, `Événement chemin-relatif` pour un fichier, le résumé stocké sinon. Un signal isolé dont le seul contenu est un prompt collé est écarté. |
-| `last_session_summary` | Ajouté en Core 0.4.0 (pas 3, spec du 2026-09-03 §8), forme 0.5.0 : `id` (hash stable), `label`, `session_ended_at`, `reprise`, `confidence`, `age_minutes` — le dernier événement `session_summary` **sans limite de fenêtre**, borné par `reference_at`, ordonné par `occurred_at` (fin de la session résumée) puis par ligne (un résumé régénéré de la même session gagne). `null` si aucun. Ajout optionnel, `schema_version` reste 1. |
+| `last_session_summary` | Ajouté en Core 0.4.0 (pas 3, spec du 2026-09-03 §8), forme 0.5.0 : `id` (hash stable), `label`, `session_ended_at`, `reprise`, `confidence`, `age_minutes` — le dernier événement `session_summary` **sans limite de fenêtre**, borné par `reference_at`, ordonné par `occurred_at` (fin de la session résumée) puis par ligne (un résumé régénéré de la même session gagne). `null` si aucun. La mention historique « `schema_version` reste 1 » est supersédée par le schema 2. |
 | `last_agent_session` | Le dernier événement `agent_session` **sans limite de fenêtre** (une reprise a besoin du dernier résumé même s'il date d'hier), mais borné par `reference_at` pour rester déterministe. `null` si aucun. `agent` = la valeur stockée de `source_tool` (`claude-code`, `codex`), telle quelle. `summary` = le résumé figé de l'événement, jamais le transcript. `age_minutes` compté depuis `ended_at`. |
 
 ### Ce que la réponse ne contient jamais
@@ -241,7 +244,7 @@ Style existant : fixtures SQLite en mémoire, pas de mocks de Flask.
 - Apps triées par activations puis nom, bornées à 5.
 - Des lignes datées après `at` ajoutées à la base ne changent pas la réponse.
 
-**Route**
+**Route — critères historiques, supersédés par `schema_version: 2`**
 - `GET /context` → 200, `schema_version: 1`.
 - `window=0`, `window=abc`, `window=99999` → 400.
 - `at=2026-09-02T14:00:00Z` → `reference_at` renvoyé à l'identique en UTC.
