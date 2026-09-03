@@ -18,6 +18,8 @@ import sqlite3
 import stat as stat_module
 import threading
 import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeAlias
 
@@ -48,6 +50,8 @@ IGNORED_FILE_SUFFIXES = {".pyc", ".db"}
 
 FileSignature: TypeAlias = tuple[int, int]
 Snapshot: TypeAlias = dict[Path, FileSignature]
+# Transport d'un changement observé ; True = pris en charge durablement.
+Enqueue: TypeAlias = Callable[[str, Path], bool]
 
 
 def should_ignore(path: Path, workspace: Path) -> bool:
@@ -139,13 +143,22 @@ def _current_signature(path: Path) -> FileSignature | None:
     return (stat.st_mtime_ns, stat.st_size)
 
 
-def resolve_dirty_paths(
+@dataclass(frozen=True)
+class DetectedChange:
+    """Un écart entre le disque et le snapshot, pas encore appliqué."""
+
+    event: str  # created | modified | deleted
+    path: Path
+    signature: FileSignature | None  # None = le fichier a disparu
+
+
+def detect_changes(
     snapshot: Snapshot,
     dirty_files: set[Path],
     dirty_directories: set[Path],
     workspace: Path,
-) -> list[tuple[str, Path]]:
-    """Compare dirty paths against the snapshot and update it in place.
+) -> list[DetectedChange]:
+    """Compare dirty paths against the snapshot without touching it.
 
     A dirty directory (coalesced FSEvents on deletes, moves of whole trees)
     expands to its known snapshot children plus a scoped re-scan when it
@@ -161,9 +174,9 @@ def resolve_dirty_paths(
         if directory.is_dir():
             candidates.update(take_snapshot(workspace, root=directory))
 
-    created: list[tuple[str, Path]] = []
-    modified: list[tuple[str, Path]] = []
-    deleted: list[tuple[str, Path]] = []
+    created: list[DetectedChange] = []
+    modified: list[DetectedChange] = []
+    deleted: list[DetectedChange] = []
     for path in sorted(candidates):
         if should_ignore(path, workspace):
             continue
@@ -171,15 +184,52 @@ def resolve_dirty_paths(
         known = snapshot.get(path)
         if signature is None:
             if known is not None:
-                del snapshot[path]
-                deleted.append(("deleted", path))
+                deleted.append(DetectedChange("deleted", path, None))
         elif known is None:
-            snapshot[path] = signature
-            created.append(("created", path))
+            created.append(DetectedChange("created", path, signature))
         elif known != signature:
-            snapshot[path] = signature
-            modified.append(("modified", path))
+            modified.append(DetectedChange("modified", path, signature))
     return created + modified + deleted
+
+
+def apply_change(snapshot: Snapshot, change: DetectedChange) -> None:
+    if change.signature is None:
+        snapshot.pop(change.path, None)
+    else:
+        snapshot[change.path] = change.signature
+
+
+@dataclass(frozen=True)
+class ResolvedPaths:
+    events: list[tuple[str, Path]]  # transmis, snapshot avancé
+    deferred: list[Path]  # refusés par le transport, snapshot intact
+
+
+def resolve_dirty_paths(
+    snapshot: Snapshot,
+    dirty_files: set[Path],
+    dirty_directories: set[Path],
+    workspace: Path,
+    enqueue: Enqueue,
+) -> ResolvedPaths:
+    """Detect, hand each change to the transport, advance the snapshot on
+    success only.
+
+    Le snapshot est la mémoire de ce qui a été *transmis*, pas de ce qui a
+    été *vu* : l'avancer avant la confirmation de l'enqueue perdait le
+    changement pour de bon dès que l'outbox refusait (verrou, disque). Un
+    chemin refusé ressort dans ``deferred`` pour être re-signalé au passage
+    suivant, et sera redétecté tel quel puisque le snapshot n'a pas bougé.
+    """
+    events: list[tuple[str, Path]] = []
+    deferred: list[Path] = []
+    for change in detect_changes(snapshot, dirty_files, dirty_directories, workspace):
+        if enqueue(change.event, change.path):
+            apply_change(snapshot, change)
+            events.append((change.event, change.path))
+        else:
+            deferred.append(change.path)
+    return ResolvedPaths(events=events, deferred=deferred)
 
 
 def record_file_event(
@@ -242,6 +292,39 @@ def read_watched_workspaces(config_path: Path) -> tuple[list[Path], list[str]]:
     return workspaces, warnings
 
 
+@dataclass
+class WatchedWorkspace:
+    workspace: Path
+    collector: DirtyPathCollector
+    snapshot: Snapshot
+    # Chemins dont l'enqueue a échoué : re-signalés au passage suivant, sans
+    # attendre que watchdog les revoie (il ne le fera pas sans nouvel accès).
+    deferred: set[Path] = field(default_factory=set)
+
+
+def flush_workspace(watched: WatchedWorkspace, enqueue: Enqueue) -> ResolvedPaths:
+    """One pass: fresh dirty paths plus the ones deferred last time."""
+    dirty_files, dirty_directories = watched.collector.drain()
+    dirty_files |= watched.deferred
+    result = resolve_dirty_paths(
+        watched.snapshot, dirty_files, dirty_directories, watched.workspace, enqueue
+    )
+    had_deferred = bool(watched.deferred)
+    watched.deferred = set(result.deferred)
+    if watched.deferred and not had_deferred:
+        print(
+            f"[file-watcher] {len(watched.deferred)} change(s) deferred in "
+            f"{watched.workspace}: outbox refused, will retry",
+            flush=True,
+        )
+    elif had_deferred and not watched.deferred:
+        print(
+            f"[file-watcher] deferred changes delivered for {watched.workspace}",
+            flush=True,
+        )
+    return result
+
+
 def watch(
     workspaces: list[Path],
     interval: float = 1.0,
@@ -249,26 +332,28 @@ def watch(
     outbox: ProducerOutbox | None = None,
 ) -> None:
     outbox = outbox or ProducerOutbox()
-    watched: list[tuple[Path, DirtyPathCollector, Snapshot]] = []
+    watched: list[WatchedWorkspace] = []
     observer = Observer()
     for workspace in workspaces:
         collector = DirtyPathCollector(workspace)
-        watched.append((workspace, collector, take_snapshot(workspace)))
+        watched.append(
+            WatchedWorkspace(workspace, collector, take_snapshot(workspace))
+        )
         observer.schedule(collector, str(workspace), recursive=True)
     observer.start()
-    for workspace, _collector, _snapshot in watched:
-        print(f"Watching files in {workspace}", flush=True)
+    for entry in watched:
+        print(f"Watching files in {entry.workspace}", flush=True)
     try:
         while True:
             time.sleep(interval)
             observer_alive = observer.is_alive()
-            for workspace, collector, snapshot in watched:
-                dirty_files, dirty_directories = collector.drain()
-                events = resolve_dirty_paths(
-                    snapshot, dirty_files, dirty_directories, workspace
+            for entry in watched:
+                flush_workspace(
+                    entry,
+                    lambda event, path, workspace=entry.workspace: record_file_event(
+                        outbox, event, path, workspace
+                    ),
                 )
-                for event, path in events:
-                    record_file_event(outbox, event, path, workspace)
             if not observer_alive:
                 # Un observer mort = plus aucune détection : mourir
                 # bruyamment pour que le superviseur (dev.sh ou launchd

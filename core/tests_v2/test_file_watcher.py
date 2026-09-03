@@ -9,11 +9,20 @@ from watchdog.events import (
 
 from daemon_v2.file_watcher import (
     DirtyPathCollector,
+    ResolvedPaths,
+    WatchedWorkspace,
+    detect_changes,
+    flush_workspace,
     resolve_dirty_paths,
     should_ignore,
     should_ignore_directory,
     take_snapshot,
 )
+
+
+def accepted(_event: str, _path) -> bool:
+    """Transport qui prend tout : le snapshot avance à chaque changement."""
+    return True
 
 
 def test_snapshot_ignores_technical_paths(tmp_path):
@@ -143,8 +152,8 @@ def test_resolve_reports_created_modified_and_deleted(tmp_path):
     }
 
     events = resolve_dirty_paths(
-        snapshot, {created, modified, deleted}, set(), workspace
-    )
+        snapshot, {created, modified, deleted}, set(), workspace, accepted
+    ).events
 
     assert events == [
         ("created", created),
@@ -163,7 +172,7 @@ def test_resolve_ignores_spurious_notifications(tmp_path):
     steady.write_text("same")
     snapshot = take_snapshot(workspace)
 
-    events = resolve_dirty_paths(snapshot, {steady}, set(), workspace)
+    events = resolve_dirty_paths(snapshot, {steady}, set(), workspace, accepted).events
 
     assert events == []
     assert set(snapshot) == {steady}
@@ -173,7 +182,7 @@ def test_resolve_drops_deletion_of_unknown_path(tmp_path):
     workspace = tmp_path
     never_seen = workspace / "ephemeral.py"
 
-    events = resolve_dirty_paths({}, {never_seen}, set(), workspace)
+    events = resolve_dirty_paths({}, {never_seen}, set(), workspace, accepted).events
 
     assert events == []
 
@@ -188,7 +197,7 @@ def test_resolve_atomic_save_reports_modified_not_created(tmp_path):
     temp = workspace / "document.py.tmp1234"
     snapshot = {target: (1, 1)}
 
-    events = resolve_dirty_paths(snapshot, {temp, target}, set(), workspace)
+    events = resolve_dirty_paths(snapshot, {temp, target}, set(), workspace, accepted).events
 
     assert events == [("modified", target)]
     assert set(snapshot) == {target}
@@ -205,7 +214,7 @@ def test_resolve_rename_reports_created_and_deleted_pair(tmp_path):
     destination.write_text("same content")
     snapshot = {source: (1, 1)}
 
-    events = resolve_dirty_paths(snapshot, {source, destination}, set(), workspace)
+    events = resolve_dirty_paths(snapshot, {source, destination}, set(), workspace, accepted).events
 
     assert events == [
         ("created", destination),
@@ -229,7 +238,7 @@ def test_resolve_expands_deleted_directory_to_known_children(tmp_path):
         survivor: (1, 4),
     }
 
-    events = resolve_dirty_paths(snapshot, set(), {removed_dir}, workspace)
+    events = resolve_dirty_paths(snapshot, set(), {removed_dir}, workspace, accepted).events
 
     assert events == [
         ("deleted", child_a),
@@ -251,7 +260,7 @@ def test_resolve_scans_directory_moved_in_with_contents(tmp_path):
     ignored.write_text("cache")
     snapshot = {}
 
-    events = resolve_dirty_paths(snapshot, set(), {arrived}, workspace)
+    events = resolve_dirty_paths(snapshot, set(), {arrived}, workspace, accepted).events
 
     assert events == [("created", inner)]
     assert set(snapshot) == {inner}
@@ -262,7 +271,7 @@ def test_resolve_never_reports_a_directory_as_a_file(tmp_path):
     directory = workspace / "daemon_v2"
     directory.mkdir()
 
-    events = resolve_dirty_paths({}, {directory}, set(), workspace)
+    events = resolve_dirty_paths({}, {directory}, set(), workspace, accepted).events
 
     assert events == []
 
@@ -366,3 +375,127 @@ def test_read_watched_workspaces_missing_file_is_an_error(tmp_path):
 
     with pytest.raises(ValueError):
         read_watched_workspaces(tmp_path / "absent")
+
+
+# --- Snapshot avancé sur enqueue confirmé seulement (audit 2026-09-03) -----
+
+
+class FlakyTransport:
+    """Refuse tant que ``failing`` est vrai ; journalise chaque tentative."""
+
+    def __init__(self, failing: bool = True) -> None:
+        self.failing = failing
+        self.attempts: list[tuple[str, object]] = []
+
+    def __call__(self, event: str, path) -> bool:
+        self.attempts.append((event, path))
+        return not self.failing
+
+
+def test_detect_changes_never_touches_the_snapshot(tmp_path):
+    workspace = tmp_path
+    created = workspace / "created.py"
+    created.write_text("new")
+    snapshot = {}
+
+    changes = detect_changes(snapshot, {created}, set(), workspace)
+
+    assert [(c.event, c.path) for c in changes] == [("created", created)]
+    assert changes[0].signature is not None
+    assert snapshot == {}
+
+
+def test_failed_enqueue_leaves_the_file_detected_until_it_succeeds(tmp_path):
+    # Le bug : le snapshot était avancé avant l'enqueue, donc un refus de
+    # l'outbox (verrou, disque) perdait le changement pour de bon. Le
+    # fichier doit rester détecté tant que l'échec persiste.
+    workspace = tmp_path
+    created = workspace / "created.py"
+    created.write_text("new")
+    snapshot = {}
+    transport = FlakyTransport(failing=True)
+
+    first = resolve_dirty_paths(snapshot, {created}, set(), workspace, transport)
+    second = resolve_dirty_paths(snapshot, {created}, set(), workspace, transport)
+
+    assert first == ResolvedPaths(events=[], deferred=[created])
+    assert second == ResolvedPaths(events=[], deferred=[created])
+    assert snapshot == {}
+
+    transport.failing = False
+    third = resolve_dirty_paths(snapshot, {created}, set(), workspace, transport)
+    fourth = resolve_dirty_paths(snapshot, {created}, set(), workspace, transport)
+
+    assert third == ResolvedPaths(events=[("created", created)], deferred=[])
+    assert set(snapshot) == {created}
+    # Transmis une fois : plus rien à signaler pour ce chemin.
+    assert fourth == ResolvedPaths(events=[], deferred=[])
+    assert [event for event, _path in transport.attempts] == ["created"] * 3
+
+
+def test_failed_enqueue_of_a_deletion_keeps_the_path_in_the_snapshot(tmp_path):
+    workspace = tmp_path
+    gone = workspace / "gone.py"
+    snapshot = {gone: (1, 1)}
+    transport = FlakyTransport(failing=True)
+
+    result = resolve_dirty_paths(snapshot, {gone}, set(), workspace, transport)
+
+    assert result == ResolvedPaths(events=[], deferred=[gone])
+    assert snapshot == {gone: (1, 1)}
+
+    transport.failing = False
+    result = resolve_dirty_paths(snapshot, {gone}, set(), workspace, transport)
+
+    assert result == ResolvedPaths(events=[("deleted", gone)], deferred=[])
+    assert snapshot == {}
+
+
+def test_partial_failure_advances_only_the_confirmed_changes(tmp_path):
+    workspace = tmp_path
+    accepted_path = workspace / "a.py"
+    refused_path = workspace / "b.py"
+    accepted_path.write_text("a")
+    refused_path.write_text("b")
+    snapshot = {}
+
+    def transport(event: str, path) -> bool:
+        return path == accepted_path
+
+    result = resolve_dirty_paths(
+        snapshot, {accepted_path, refused_path}, set(), workspace, transport
+    )
+
+    assert result == ResolvedPaths(
+        events=[("created", accepted_path)], deferred=[refused_path]
+    )
+    assert set(snapshot) == {accepted_path}
+
+
+def test_flush_carries_deferred_paths_to_the_next_pass_without_watchdog(tmp_path, capsys):
+    # watchdog ne re-signale pas un chemin sans nouvel accès disque : le
+    # passage suivant doit ré-examiner de lui-même ce qui a été refusé.
+    workspace = tmp_path
+    created = workspace / "created.py"
+    created.write_text("new")
+    watched = WatchedWorkspace(workspace, DirtyPathCollector(workspace), {})
+    watched.collector.dispatch(FileCreatedEvent(str(created)))
+    transport = FlakyTransport(failing=True)
+
+    first = flush_workspace(watched, transport)
+    second = flush_workspace(watched, transport)  # aucun nouvel événement watchdog
+
+    assert first.deferred == [created] and second.deferred == [created]
+    assert watched.snapshot == {}
+    assert watched.deferred == {created}
+    assert len(transport.attempts) == 2
+
+    transport.failing = False
+    third = flush_workspace(watched, transport)
+    fourth = flush_workspace(watched, transport)
+
+    assert third.events == [("created", created)]
+    assert fourth == ResolvedPaths(events=[], deferred=[])
+    assert watched.deferred == set() and set(watched.snapshot) == {created}
+    output = capsys.readouterr().out
+    assert output.count("deferred in") == 1 and output.count("delivered") == 1
