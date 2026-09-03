@@ -90,6 +90,9 @@ _KNOWN_TOKEN = re.compile(
     r"|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}"
     r"|glpat-[A-Za-z0-9_-]{20,})\b"
 )
+# Identité stable d'une session de travail (Core 0.5.0) : sha256 tronqué à
+# 16 hex des event_id sources. Un résumé ne s'attache jamais à un ordinal.
+_SESSION_IDENTITY = re.compile(r"[0-9a-f]{16}")
 _IGNORED_TERMINAL_COMMANDS = {
     "clear",
     "source ~/.zshrc",
@@ -392,6 +395,25 @@ def normalize_activity(payload: Any) -> Activity:
         # 2026-09-03, §6). Core valide le contrat de données minimal et passe
         # le reste tel quel : il ne connaît ni le modèle ni le prompt.
         session_id = _required_string(payload, "session_id")
+        if not _SESSION_IDENTITY.fullmatch(session_id):
+            raise InvalidActivity(
+                "session_id must be the 16-hex stable session identity",
+                field="details.session_id",
+            )
+        source_hash = _required_string(payload, "source_event_ids_hash")
+        if source_hash != session_id:
+            raise InvalidActivity(
+                "source_event_ids_hash must equal session_id",
+                field="details.source_event_ids_hash",
+            )
+        session_label = payload.get("session_label")
+        if session_label is not None and (
+            not isinstance(session_label, str) or not session_label.strip()
+        ):
+            raise InvalidActivity(
+                "session_label must be a non-empty string when provided",
+                field="details.session_label",
+            )
         prompt_version = _required_string(payload, "prompt_version")
         model_id = _required_string(payload, "model_id")
         reprise = payload.get("reprise")
@@ -436,6 +458,7 @@ def normalize_activity(payload: Any) -> Activity:
         details.update(
             {
                 "session_id": session_id,
+                "source_event_ids_hash": source_hash,
                 "prompt_version": prompt_version,
                 "model_id": model_id,
                 "reprise": {**reprise, **normalized_reprise},

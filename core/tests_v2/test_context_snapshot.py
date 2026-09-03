@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from daemon_v2.context_snapshot import build_context_snapshot
+from daemon_v2.context_snapshot import build_context_snapshot, build_day_sessions
 from daemon_v2.main import create_app
 from daemon_v2.models import Activity
 from daemon_v2.trace_store import TraceStore
@@ -132,6 +132,7 @@ def session_summary(
     session_id: str,
     prompt_version: str = "v1",
     doing: str = "Tu implémentais le Context API.",
+    label: str = "work-1",
 ) -> Activity:
     return Activity(
         "session_summary",
@@ -140,6 +141,8 @@ def session_summary(
         doing,
         {
             "session_id": session_id,
+            "source_event_ids_hash": session_id,
+            "session_label": label,
             "session_started_at": at(minutes - 60).isoformat(),
             "session_ended_at": at(minutes).isoformat(),
             "prompt_version": prompt_version,
@@ -225,7 +228,7 @@ def test_open_session_fills_every_block_with_bounded_facts(tmp_path):
 
     result = snapshot(store)
 
-    assert result["schema_version"] == 1
+    assert result["schema_version"] == 2
     assert result["reference_at"] == "2026-09-02T14:00:00+00:00"
     assert result["window_minutes"] == 120
     assert result["timezone"] == "UTC"
@@ -247,6 +250,12 @@ def test_open_session_fills_every_block_with_bounded_facts(tmp_path):
 
     session = result["current_session"]
     assert session["is_open"] is True
+    # Identité stable (Core 0.5.0) : hash des event_id, label ordinal.
+    assert len(session["id"]) == 16 and int(session["id"], 16) >= 0
+    assert session["label"] == "work-1"
+    assert session["source_event_ids"] == sorted(session["source_event_ids"])
+    assert len(session["source_event_ids"]) == session["activity_count"]
+    assert session["reconstruction_version"] == 1
     assert session["started_at"] == "2026-09-02T13:02:00+00:00"
     assert session["last_activity_at"] == "2026-09-02T13:55:00+00:00"
     assert session["duration_minutes"] == 53
@@ -299,6 +308,10 @@ def test_window_keeps_the_closed_session_out_of_the_current_one(tmp_path):
     assert result["current_session"]["started_at"] == "2026-09-02T13:02:00+00:00"
     assert len(result["recent_sessions"]) == 1
     recent = result["recent_sessions"][0]
+    assert recent["label"] == "work-1" and result["current_session"]["label"] == "work-2"
+    assert recent["id"] != result["current_session"]["id"]
+    assert len(recent["source_event_ids"]) == 5
+    assert recent["reconstruction_version"] == 1
     assert recent["started_at"] == "2026-09-02T12:10:00+00:00"
     assert recent["ended_at"] == "2026-09-02T12:30:00+00:00"
     assert recent["duration_minutes"] == 20
@@ -397,20 +410,21 @@ def test_empty_store_returns_nulls_and_empty_lists(tmp_path):
 def test_last_session_summary_ignores_the_window_and_prefers_the_latest(tmp_path):
     store = make_store(
         tmp_path,
-        session_summary(-3000, session_id="2026-08-31/work-1", doing="Ancien."),
-        session_summary(-1500, session_id="2026-09-01/work-2", doing="Hier, v1."),
+        session_summary(-3000, session_id="aaaaaaaaaaaaaaaa", doing="Ancien."),
+        session_summary(-1500, session_id="bbbbbbbbbbbbbbbb", label="work-2", doing="Hier, v1."),
         session_summary(
-            -1500, session_id="2026-09-01/work-2", prompt_version="v2",
+            -1500, session_id="bbbbbbbbbbbbbbbb", label="work-2", prompt_version="v2",
             doing="Hier, régénéré en v2.",
         ),
-        session_summary(+30, session_id="2026-09-02/work-9", doing="Après at."),
+        session_summary(+30, session_id="cccccccccccccccc", doing="Après at."),
     )
 
     result = snapshot(store)
 
     assert result["current_session"] is None
     assert result["last_session_summary"] == {
-        "session_id": "2026-09-01/work-2",
+        "id": "bbbbbbbbbbbbbbbb",
+        "label": "work-2",
         "session_ended_at": "2026-09-01T13:00:00+00:00",
         "reprise": {"doing": "Hier, régénéré en v2.", "stopped_at": "—", "open": "—"},
         "confidence": "medium",
@@ -641,7 +655,7 @@ def test_route_returns_schema_version_one_with_sorted_keys(tmp_path):
     assert response.status_code == 200
     assert response.mimetype == "application/json"
     body = response.get_json()
-    assert body["schema_version"] == 1
+    assert body["schema_version"] == 2
     assert body["window_minutes"] == 120
     ordered = json.loads(
         response.get_data(as_text=True),
@@ -726,3 +740,89 @@ def test_status_reports_no_open_session_on_an_empty_store(tmp_path):
         "projects": [],
         "workspace": None,
     }
+
+
+def test_session_identity_in_context_survives_a_late_earlier_event(tmp_path):
+    store = make_store(tmp_path, *working_session())
+    before = snapshot(store)["current_session"]
+
+    store.append(commit(-300, "0000000aaaaaaaa", "commit du matin, arrivé tard"))
+    after = snapshot(store, window_minutes=1440)["current_session"]
+
+    assert before["label"] == "work-1" and after["label"] == "work-2"
+    assert after["id"] == before["id"]
+    assert after["source_event_ids"] == before["source_event_ids"]
+
+
+# --- GET /context/sessions : les sessions closes d'une journée ----------------
+
+
+def test_day_sessions_match_the_current_session_form_and_exclude_open_ones(tmp_path):
+    earlier = [
+        terminal(-110, "pytest -q"),
+        file_changed(-105, "a.py"),
+        commit(-95, "1111111aaaaaaaa", "feat: a"),
+    ]
+    store = make_store(tmp_path, *earlier, *working_session())
+
+    day = build_day_sessions(
+        store, day=REFERENCE.date(), reference_at=REFERENCE, local_timezone=timezone.utc
+    )
+    context_at_end = build_context_snapshot(
+        store, reference_at=at(-95), local_timezone=timezone.utc
+    )
+
+    assert day["schema_version"] == 2
+    assert day["date"] == "2026-09-02"
+    assert day["reconstruction_version"] == 1
+    assert [s["label"] for s in day["sessions"]] == ["work-1"]
+    closed = day["sessions"][0]
+    assert closed["is_open"] is False
+    # Même code, même forme : la session vue depuis /context à l'instant de sa
+    # fin est identique, au flag is_open près.
+    expected = dict(context_at_end["current_session"])
+    expected["is_open"] = False
+    assert closed == expected
+    assert closed["id"] == expected["id"]
+
+
+def test_day_sessions_of_a_past_day_are_all_closed(tmp_path):
+    store = make_store(
+        tmp_path,
+        terminal(-1500, "pytest -q"),
+        file_changed(-1495, "a.py"),
+        *working_session(),
+    )
+
+    yesterday = build_day_sessions(
+        store, day=REFERENCE.date() - timedelta(days=1), reference_at=REFERENCE,
+        local_timezone=timezone.utc,
+    )
+
+    assert [s["label"] for s in yesterday["sessions"]] == ["work-1"]
+    assert yesterday["sessions"][0]["is_open"] is False
+    assert yesterday["sessions"][0]["started_at"] == "2026-09-01T13:00:00+00:00"
+
+
+def test_day_sessions_route(tmp_path):
+    app_ = create_app(tmp_path / "trace.db")
+    client = app_.test_client()
+    store = app_.config["TRACE_STORE"]
+    for activity in (terminal(-200, "pytest -q"), file_changed(-190, "a.py")):
+        store.append(activity)
+
+    response = client.get("/context/sessions?date=2026-09-02&at=2026-09-02T14:00:00Z")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["date"] == "2026-09-02" and body["schema_version"] == 2
+    assert len(body["sessions"]) == 1
+    assert body["sessions"][0]["is_open"] is False
+    assert len(body["sessions"][0]["id"]) == 16
+
+    assert client.get("/context/sessions?date=hier").status_code == 400
+    assert client.get("/context/sessions?date=2026-02-30").status_code == 400
+    assert client.get("/context/sessions?at=hier").status_code == 400
+    empty = client.get("/context/sessions?date=2026-01-01").get_json()
+    assert empty["sessions"] == []
+    assert client.get("/context/sessions").status_code == 200

@@ -2,7 +2,7 @@
 
 Pas 2 de la roadmap V3 (voir `docs/VISION.md`). Seul changement autorisé dans Core depuis le gel 0.2.0.
 
-> Livré le 2026-09-02 dans Core 0.3.0 (branche `ship/context-api`). Ce document décrit **ce qui est livré** : les décisions d'implémentation prises pendant le chantier sont intégrées au contrat (§3) et récapitulées en §9, les limites connues en §10.
+> Livré le 2026-09-02 dans Core 0.3.0 (branche `ship/context-api`). **`schema_version` 2 depuis Core 0.5.0** (2026-09-03) : l'`id` de session est un hash stable, plus un ordinal — voir la section « Identité stable » ci-dessous et la route `GET /context/sessions`. Ce document décrit **ce qui est livré** : les décisions d'implémentation prises pendant le chantier sont intégrées au contrat (§3) et récapitulées en §9, les limites connues en §10.
 
 ## 1. Objectif
 
@@ -26,6 +26,9 @@ Cette route est le socle du pas 3 (résumé de session par modèle local). Sa so
 GET /context
 GET /context?window=120        # minutes, défaut 120, min 5, max 1440
 GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (tests)
+
+GET /context/sessions                  # sessions de travail closes du jour local
+GET /context/sessions?date=2026-09-02  # d'une journée donnée ; at optionnel comme /context
 ```
 
 `window` invalide → 400, même forme d'erreur que les routes existantes (`{"error": "..."}`).
@@ -57,7 +60,10 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
   },
 
   "current_session": {
-    "id": "2026-09-02/work-3",
+    "id": "3f9c2a1b7e4d5c60",
+    "label": "work-3",
+    "source_event_ids": ["…", "…"],
+    "reconstruction_version": 1,
     "started_at": "2026-09-02T13:40:00+00:00",
     "last_activity_at": "2026-09-02T15:51:48+00:00",
     "duration_minutes": 132,
@@ -91,7 +97,10 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
 
   "recent_sessions": [
     {
-      "id": "2026-09-02/work-2",
+      "id": "a81d0e7f2c93b415",
+      "label": "work-2",
+      "source_event_ids": ["…"],
+      "reconstruction_version": 1,
       "started_at": "…",
       "ended_at": "…",
       "duration_minutes": 47,
@@ -110,7 +119,8 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
   ],
 
   "last_session_summary": {
-    "session_id": "2026-09-01/work-2",
+    "id": "a81d0e7f2c93b415",
+    "label": "work-2",
     "session_ended_at": "…",
     "reprise": {"doing": "…", "stopped_at": "…", "open": "…"},
     "confidence": "high",
@@ -132,12 +142,13 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
 
 | Champ | Règle |
 |---|---|
-| `schema_version` | Entier, `1`. Toute modification incompatible incrémente. Ajout de champ optionnel = compatible. |
+| `schema_version` | Entier, `2` depuis Core 0.5.0 (`1` en 0.3.0 et 0.4.0). Toute modification incompatible incrémente. Ajout de champ optionnel = compatible. |
+| `current_session.id`, `label`, `source_event_ids`, `reconstruction_version` | **Identité stable** (Core 0.5.0). `id` = sha256 tronqué à 16 hex des `event_id` des activités de la session, triés : déterministe, sans état, correct par construction (si la composition change, c'est une autre session). `label` = l'ordinal `work-N` de la journée, pour l'affichage seulement : il bouge dès qu'un événement tardif s'insère plus tôt dans la journée. `source_event_ids` = la liste triée qui a produit le hash. `reconstruction_version` = constante de `analysis/timeline.py`, incrémentée à chaque changement des règles de sessionnisation. Mêmes champs sur chaque entrée de `recent_sessions`. |
 | `reference_at` | `at` si fourni, sinon `now` en UTC. Tout le calcul est relatif à cet instant. |
 | `timezone` | Celle de `_trace_timezone()`, informative seulement — **tous les timestamps sont en UTC ISO 8601 avec offset**. |
 | `workspace` | Résolu par le résolveur unique existant (`analysis/projects.py`, `persisted_workspace_identity`), jamais par `resolve_project_context` qui lit le disque. `resolution` ∈ `session` (workspace dominant de la session courante : le plus observé, égalité tranchée par le workspace attribué à la session puis par le chemin le plus petit), `last_observed` (pas de session courante, dernier workspace utile vu dans la fenêtre). Quand rien n'est résolu, `workspace` vaut `null` tout court : il n'y a pas de champ `resolution: "none"` orphelin. |
 | `workspace.git` | Repris des détails **persistés** des événements (règle du 2026-08-30 : jamais l'état du disque au moment du rendu). Le périmètre suit la résolution : `resolution == "session"` → calculé sur les activités de la session courante (une fenêtre de 5 min sur une session de 3 h connaît toujours le commit de la première heure) ; `last_observed` → sur la fenêtre. `branch` vient du dernier événement porteur (contexte git du producteur terminal ou `git_commit`), `dirty` du dernier contexte git terminal et vaut `null` si aucune commande de la période n'en portait (un `git_commit` ne renseigne pas l'état de l'arbre), `last_commit` du dernier événement `git_commit` (hash court, première ligne du message, instant). `null` si aucun événement du périmètre ne porte d'info git pour ce workspace. |
-| `current_session` | La session de travail (jamais une activité isolée) dont `last_activity_at` est la plus récente **et** postérieure à `reference_at − session_gap` (`DEFAULT_SESSION_GAP` de `session_tracker`, 30 min). `is_open` = `true` dans ce cas. Si aucune session ne satisfait ça, `current_session` vaut `null`. On ne met **pas** la dernière session fermée à la place : « rien en cours » est une information. Les sessions sont reconstruites jour local par jour local, comme la trace quotidienne, sur la journée entière jusqu'à `reference_at` : une session commencée avant la fenêtre garde ses vraies bornes. Identifiants de la forme `YYYY-MM-DD/work-N` (les identifiants de Core sont par jour). |
+| `current_session` | La session de travail (jamais une activité isolée) dont `last_activity_at` est la plus récente **et** postérieure à `reference_at − session_gap` (`DEFAULT_SESSION_GAP` de `session_tracker`, 30 min). `is_open` = `true` dans ce cas. Si aucune session ne satisfait ça, `current_session` vaut `null`. On ne met **pas** la dernière session fermée à la place : « rien en cours » est une information. Les sessions sont reconstruites jour local par jour local, comme la trace quotidienne, sur la journée entière jusqu'à `reference_at` : une session commencée avant la fenêtre garde ses vraies bornes. Identifiant : le hash stable (voir la ligne suivante) ; `label` porte l'ordinal `work-N`. |
 | `current_session.apps` | Triées par activations décroissantes puis nom. `IGNORED_APP_NAMES_FOR_RENDERING` s'applique. Max 5. |
 | `current_session.files` | Chemins relatifs au workspace quand possible (même logique que `_display_file_path`). Dédupliqués, ordre de première apparition. Max 20 par catégorie, `truncated: true` si coupé. |
 | `current_session.terminal` | Réutilise `useful_command_lines`, `is_test_command`, `is_interrupted_exit` (les prompts collés sont exclus par `useful_command_lines`). Une commande interrompue n'est pas une erreur. Max 10 par liste, `truncated: true` si une liste est coupée. |
@@ -145,7 +156,7 @@ GET /context?at=2026-09-02T14:00:00Z   # instant de référence, défaut now (te
 | `current_session.signals` | Types d'activité présents dans la session, ordre fixe = ordre de `SUPPORTED_ACTIVITY_TYPES` trié. Pas de doublon. |
 | `recent_sessions` | Les sessions **fermées** dont `ended_at` ≥ `reference_at − window`, hors session courante, les plus récentes d'abord, max 3. Forme compacte uniquement. |
 | `isolated_signals` | Les activités isolées (règle du 2026-08-30 : un signal fort seul ne crée pas de session) dans la fenêtre, max 10, plus récentes d'abord. `summary` : dernière ligne utile pour une commande, `Événement chemin-relatif` pour un fichier, le résumé stocké sinon. Un signal isolé dont le seul contenu est un prompt collé est écarté. |
-| `last_session_summary` | Ajouté en Core 0.4.0 (pas 3, spec du 2026-09-03 §8) : le dernier événement `session_summary` **sans limite de fenêtre**, borné par `reference_at`, ordonné par `occurred_at` (fin de la session résumée) puis par ligne (un résumé régénéré de la même session gagne). `null` si aucun. Ajout optionnel, `schema_version` reste 1. |
+| `last_session_summary` | Ajouté en Core 0.4.0 (pas 3, spec du 2026-09-03 §8), forme 0.5.0 : `id` (hash stable), `label`, `session_ended_at`, `reprise`, `confidence`, `age_minutes` — le dernier événement `session_summary` **sans limite de fenêtre**, borné par `reference_at`, ordonné par `occurred_at` (fin de la session résumée) puis par ligne (un résumé régénéré de la même session gagne). `null` si aucun. Ajout optionnel, `schema_version` reste 1. |
 | `last_agent_session` | Le dernier événement `agent_session` **sans limite de fenêtre** (une reprise a besoin du dernier résumé même s'il date d'hier), mais borné par `reference_at` pour rester déterministe. `null` si aucun. `agent` = la valeur stockée de `source_tool` (`claude-code`, `codex`), telle quelle. `summary` = le résumé figé de l'événement, jamais le transcript. `age_minutes` compté depuis `ended_at`. |
 
 ### Ce que la réponse ne contient jamais
@@ -262,13 +273,17 @@ Prises pendant le chantier, relues et acceptées, intégrées au contrat ci-dess
 3. `workspace.git` suit la résolution du workspace (session courante entière si `session`, fenêtre si `last_observed`), pas la fenêtre seule.
 4. `current_session.git.commits` ne compte que les événements `git_commit` du hook ; `push_observed` vient du terminal.
 5. `last_agent_session.agent` = valeur stockée de `source_tool`, sans renommage.
-6. Identifiants de session `YYYY-MM-DD/work-N`.
+6. ~~Identifiants de session `YYYY-MM-DD/work-N`.~~ Remplacé en Core 0.5.0 par l'identité stable (hash des `event_id`), l'ordinal ne survivant pas à un événement tardif.
 7. `build_context_snapshot` accepte `local_timezone` (additif) pour des tests indépendants de la machine.
 8. La session courante suit la règle du gap littéralement, sans tenir compte de la clôture `day_boundary` de la trace quotidienne (voir §10).
 
 Plus deux choix de robustesse : un signal isolé réduit à un prompt collé est écarté, et `/status` expose un bloc `context`.
 
-## 10. Limites connues
+## 10. Route `GET /context/sessions` (Core 0.5.0)
+
+`GET /context/sessions?date=YYYY-MM-DD` (défaut : la journée locale courante ; `at` optionnel, même parsing que `/context`) renvoie les sessions de travail **closes** de cette journée locale dans la forme exacte de `current_session` — même code, mêmes bornes 20/10/5, identité stable incluse — plus `is_open` (toujours `false` ici). Enveloppe : `schema_version`, `generated_at`, `reference_at`, `date`, `timezone`, `reconstruction_version`, `sessions` (ordre chronologique). `date` invalide → 400. C'est ce qu'un consommateur qui mémorise des sessions (la couche Intelligence) lit à la place de `/trace/<date>` : il ne reconstruit rien.
+
+## 11. Limites connues
 
 - **Minuit local.** La trace quotidienne ferme toute session à minuit (`day_boundary`). `/context` applique le gap de 30 min tel quel : entre 00:00 et 00:30, une session de la veille encore dans le gap est rapportée comme courante alors que le HTML l'affiche fermée. Cas rare, assumé ; à réconcilier si un consommateur en souffre.
 - **Fuseau machine.** Les bornes de jour dépendent du fuseau de la machine qui sert la route (comme la trace quotidienne). Le JSON est déterministe pour une machine donnée.

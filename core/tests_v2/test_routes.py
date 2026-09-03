@@ -997,7 +997,9 @@ def test_activities_accepts_session_summary_and_rejects_incomplete_reprise(tmp_p
         "producer": {"name": "pulse-intelligence", "version": "0.1.0"},
         "occurred_at": "2026-09-02T15:55:00+00:00",
         "details": {
-            "session_id": "2026-09-02/work-3",
+            "session_id": "0123456789abcdef",
+            "source_event_ids_hash": "0123456789abcdef",
+            "session_label": "work-3",
             "prompt_version": "v1",
             "model_id": "mlx-community/test-model",
             "reprise": {

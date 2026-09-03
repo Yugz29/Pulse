@@ -12,6 +12,7 @@ from .context_snapshot import (
     MAX_WINDOW_MINUTES,
     MIN_WINDOW_MINUTES,
     build_context_snapshot,
+    build_day_sessions,
 )
 from .daily_trace import (
     build_available_days,
@@ -140,6 +141,30 @@ def get_context():
             current_app.config["TRACE_STORE"],
             reference_at=reference_at,
             window_minutes=window,
+        )
+    )
+
+
+@api.get("/context/sessions")
+def get_context_sessions():
+    """Closed work sessions of a local day, in the current_session form."""
+    try:
+        reference_at = _parse_reference_at(request.args.get("at"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    raw_date = request.args.get("date")
+    if raw_date is None:
+        selected_day = reference_at.astimezone().date()
+    else:
+        try:
+            selected_day = _parse_trace_date(raw_date)
+        except ValueError:
+            return jsonify({"error": "invalid date; expected YYYY-MM-DD"}), 400
+    return jsonify(
+        build_day_sessions(
+            current_app.config["TRACE_STORE"],
+            day=selected_day,
+            reference_at=reference_at,
         )
     )
 

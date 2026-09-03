@@ -426,3 +426,66 @@ def test_latest_activity_of_type_prefers_highest_id_on_equal_instants(tmp_path):
     latest = store.latest_activity_of_type("agent_session", before=moment)
 
     assert latest is not None and latest.id == second.id
+
+
+def test_every_stored_activity_has_a_non_empty_event_id(tmp_path):
+    # Invariant de l'identité stable des sessions (Core 0.5.0) : le hash
+    # est calculé sur les event_id. Le repli id:<rowid> de session_identity
+    # n'existe que pour les fixtures sans event_id, jamais pour une ligne
+    # stockée — quel que soit le chemin d'écriture.
+    from daemon_v2.analysis.timeline import session_identity
+    from daemon_v2.daily_trace import build_daily_trace
+
+    database = tmp_path / "pulse.sqlite3"
+    create_historical_database(database)  # ligne d'avant le contrat canonique
+    store = TraceStore(database)
+    moment = datetime(2026, 7, 22, 10, 5, tzinfo=timezone.utc)
+
+    store.append(activity(moment))  # helper interne, event_id uuid4
+    store.append_event(
+        normalize_event(  # payload plat historique → adaptateur pulse-legacy
+            {
+                "type": "file_changed",
+                "occurred_at": (moment + timedelta(minutes=1)).isoformat(),
+                "path": "/project/legacy.py",
+            }
+        )
+    )
+    store.append_event(  # contrat canonique, event_id fourni par le producteur
+        normalize_event(
+            {
+                "event_id": "producer-owned-id",
+                "schema_version": 1,
+                "type": "file_changed",
+                "producer": {"name": "pulse-file-watcher"},
+                "occurred_at": (moment + timedelta(minutes=2)).isoformat(),
+                "details": {"path": "/project/canonical.py", "event": "modified"},
+            }
+        )
+    )
+
+    rows = store.activities_between(moment - timedelta(days=1), moment + timedelta(days=1))
+    assert len(rows) == 4
+    assert all(isinstance(row.event_id, str) and row.event_id for row in rows)
+    assert rows[0].event_id == "legacy-migrated:1"
+    with sqlite3.connect(database) as connection:
+        empty = connection.execute(
+            "SELECT COUNT(*) FROM activities WHERE event_id IS NULL OR event_id = ''"
+        ).fetchone()[0]
+    assert empty == 0
+
+    trace = build_daily_trace(store, moment.date(), timezone.utc, now=moment + timedelta(hours=3))
+    for session in trace["work_sessions"]:
+        _identity, sources = session_identity(session["activities"])
+        assert sources and not any(source.startswith("id:") for source in sources)
+
+
+def test_fresh_schema_declares_event_id_not_null(tmp_path):
+    database = tmp_path / "fresh.sqlite3"
+    TraceStore(database)
+
+    with sqlite3.connect(database) as connection:
+        columns = {
+            row[1]: row[3] for row in connection.execute("PRAGMA table_info(activities)")
+        }
+    assert columns["event_id"] == 1  # notnull
