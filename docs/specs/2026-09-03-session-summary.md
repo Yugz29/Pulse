@@ -220,7 +220,7 @@ Le modèle est remplacé par un `FakeSummarizer` qui rend une sortie fixée ; Co
 
 ## 13. Hors périmètre, explicitement
 
-- Affichage des résumés dans le HTML de Core.
+- Affichage définitif des résumés dans le HTML de Core — l'aperçu actuel via `build_current_state` (le résumé peut apparaître comme « Dernière activité utile » dans « Maintenant » et « Reprise », seulement quand rien de plus récent n'existe) est accepté en attendant.
 - Résumé de journée (agrégat des résumés de sessions) — chantier suivant naturel, pas celui-ci.
 - Toute forme de recherche, embedding ou mémoire sémantique.
 - Fine-tuning, LoRA, évaluation automatique de la qualité des reprises.
