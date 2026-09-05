@@ -35,6 +35,10 @@ class ProviderError(RuntimeError):
 
 class LLMProvider(Protocol):
     name: str
+    # Le modèle réellement servi. C'est lui qui identifie le résumé dans
+    # `summary_event_id` : deux modèles distincts derrière le même provider
+    # doivent produire deux event_id distincts.
+    model: str
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         """Texte du modèle pour cette requête, ou `ProviderError`."""
