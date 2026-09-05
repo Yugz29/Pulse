@@ -104,11 +104,14 @@ courante, projet actif, résumés de sessions, liens avec l'historique.
 events → sessions → context snapshots → summaries
 ```
 
-**État actuel : squelette livré** (`intelligence/`) : CLI complète avec faux
-modèle, sélection, validation, émission idempotente et état local. Le modèle
-MLX, le prompt réel et le service résident restent à construire. Un seul modèle
-local pour commencer, servi par MLX sur Apple Silicon. Pulse ne dépend d'aucun
-runtime d'inférence spécifique : le runtime est une brique remplaçable.
+**État actuel : première boucle IA livrée** (`intelligence/`). CLI complète,
+sélection, validation, émission idempotente, état local. Trois providers
+derrière une interface `LLMProvider` : faux, endpoint compatible OpenAI
+(référence de comparaison), et **MLX local** — `Qwen3.8-27B-4bit` retenu pour
+le dogfooding sur un corpus gelé de dix sessions. Le modèle est une brique
+remplaçable d'une ligne de config ; Pulse ne dépend d'aucun runtime
+d'inférence spécifique. Reste : cinq jours de dogfooding (étape 4), puis le
+service résident sous condition (étape 5).
 
 ### Agent — décider et utiliser des outils
 
@@ -251,3 +254,9 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   casse là où l'échec est silencieux). Aucune nouvelle source, aucun nouveau
   type d'événement, contrat `GET /context` inchangé
   ([note](decisions/2026-09-05-reouverture-core-hardening.md)).
+- **2026-09-06** — Première boucle IA livrée : interface `LLMProvider` (faux,
+  endpoint compatible OpenAI, MLX local), corpus gelé de dix sessions et
+  commande `eval`. Modèle local retenu pour le dogfooding :
+  `Qwen3.8-27B-4bit`, avec deux réserves écrites (hallucination sur les
+  sessions sans fichier, plafond mémoire ~30–40k tokens d'entrée)
+  ([note](decisions/2026-09-06-modele-local-qwen.md)).
