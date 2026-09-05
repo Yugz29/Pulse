@@ -5,8 +5,9 @@
     pulse-intel run [--once] --fake FICHIER
     pulse-intel show <id>|latest [--md]
 
-Le vrai modèle arrive à l'étape 3 ; d'ici là ``--fake`` lit la sortie du
-modèle dans un fichier et reste obligatoire pour ``summarize`` et ``run``.
+Le modèle est choisi par ``llm_provider`` dans la configuration — vide par
+défaut, parce que le choix du modèle est une décision écrite. ``--fake
+FICHIER`` court-circuite la couche modèle en lisant sa sortie dans un fichier.
 Un Core arrêté donne un message et le code 2. Tout ce que la commande écrit
 sous ``~/.pulse_intelligence`` est privé (umask 077).
 """
@@ -25,7 +26,8 @@ from typing import Any, Sequence
 from .config import Config, ConfigError, config_home, load_config
 from .core_client import CoreClient, CoreError, CoreUnavailable
 from .llm.fake import FakeProvider
-from .llm.provider import LLMProvider
+from .llm.openai_compatible import OpenAICompatibleProvider
+from .llm.provider import LLMProvider, ProviderError
 from .provider_summarizer import ProviderSummarizer, prompt_path_for
 from .selection import Classified, classify_sessions, find_session
 from .session_summary import run_pass, summarize_session
@@ -108,9 +110,8 @@ def _now() -> datetime:
 def _provider(config: Config) -> LLMProvider:
     """Le provider désigné par `llm_provider`, et rien d'autre.
 
-    Les deux implémentations réseau et locale arrivent aux PR suivantes ; le
-    message dit laquelle manque plutôt que de laisser tomber sur un défaut
-    silencieux.
+    L'implémentation locale arrive à la PR suivante ; le message dit laquelle
+    manque plutôt que de laisser tomber sur un défaut silencieux.
     """
     choice = config.llm_provider.strip()
     if not choice:
@@ -121,11 +122,17 @@ def _provider(config: Config) -> LLMProvider:
         )
     if choice == "fake":
         return FakeProvider()
-    if choice in {"openai-compatible", "mlx"}:
+    if choice == "openai-compatible":
+        return OpenAICompatibleProvider.from_environment(
+            fallback_base_url=config.llm_base_url,
+            fallback_model=config.model_id,
+            timeout_s=config.generation_timeout_s,
+        )
+    if choice == "mlx":
         raise ConfigError(
-            f"llm_provider = {choice!r} n'est pas encore implémenté "
+            "llm_provider = 'mlx' n'est pas encore implémenté "
             "(spec 2026-09-05-llm-provider v2, §13) ; "
-            'utilise "fake" en attendant'
+            'utilise "fake" ou "openai-compatible" en attendant'
         )
     raise ConfigError(
         f"llm_provider inconnu : {choice!r} "
@@ -144,7 +151,10 @@ def _summarizer(args: argparse.Namespace, config: Config) -> Summarizer:
     provider = _provider(config)
     return ProviderSummarizer(
         provider=provider,
-        model_id=config.model_id or f"{provider.name}/provider",
+        # `config.model_id` sert de repli AU provider (voir `_provider`) ; ce
+        # qui est enregistré est le modèle qui a réellement servi, sinon deux
+        # modèles distants différents partageraient un même event_id.
+        model_id=provider.model,
         prompt_path=prompt_path_for(config.prompt_version),
         max_tokens=config.llm_max_tokens,
     )
@@ -308,6 +318,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_show(args, config, client, state)
     except ConfigError as exc:
         print(f"configuration : {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    except ProviderError as exc:
+        # Une ProviderError n'arrive ici qu'à la construction du provider :
+        # pendant un passage, ProviderSummarizer la traduit en SummarizerError
+        # et summarize_session la traite session par session.
+        print(f"modèle : {exc}", file=sys.stderr)
         return EXIT_USAGE
     except CoreUnavailable as exc:
         print(f"Core injoignable : {exc}", file=sys.stderr)
