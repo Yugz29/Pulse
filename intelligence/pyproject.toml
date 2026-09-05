@@ -31,3 +31,7 @@ pulse-intel = "pulse_intelligence.cli:main"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# Les tests marqués `slow` chargent le vrai modèle MLX (14 Go) : hors suite
+# par défaut, hors CI. Pour les lancer : `pytest -m slow`.
+addopts = "-m 'not slow'"
+markers = ["slow: nécessite le modèle MLX local (extra mlx), exclu par défaut"]
