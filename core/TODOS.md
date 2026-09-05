@@ -175,6 +175,14 @@ incrémentale vers 100k.
 
 ## Completed
 
+### CI rouge : le test du verrou terminal assertait la vitesse du runner
+
+**What:** `test_terminal_hook_reports_sqlite_lock_timeout` bornait la durée du hook par le haut (`assert 4.5 <= elapsed < 8`, `subprocess.run(timeout=8)`). Le hook attend le `busy_timeout` de l'outbox (5 s) puis renonce ; sur `macos-latest`, ces 5 s plus deux démarrages de processus dépassaient 8 s et la CI tombait sur une machine lente, pas sur une régression. Vert sur `main` le 2026-09-03, rouge le 2026-09-05 sans qu'une ligne de code ait bougé.
+
+**Résolution:** Une machine lente ne peut qu'allonger `elapsed`, jamais le raccourcir : la borne basse porte tout le contrat (« il a bien attendu le verrou ») et reste vraie partout. Elle est désormais dérivée de `_BUSY_TIMEOUT_MS` au lieu d'être recopiée, avec 10 % de marge — SQLite ne rend pas la main à la milliseconde près. La borne haute est supprimée ; le `timeout=` du sous-processus, porté à 60 s, ne sert plus qu'à attraper un blocage franc. Aucun code de production touché : le défaut était l'assertion, pas l'attente. Mesuré à 5,35 s en local, suite Core à 550.
+
+**Completed:** 2026-09-05
+
 ### Couverture d'observation en mode service (watcher fichiers + observateur d'apps sous launchd)
 
 **What:** Le watcher fichiers et `PulseApplicationObserver` ne tournaient que sous `make dev` ; en mode service (launchd), le journal était aveugle aux fichiers et aux apps — le 2026-08-31 : `files_changed` 0, `applications` [] sur les deux sessions de la journée.
