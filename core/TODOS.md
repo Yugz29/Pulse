@@ -1,5 +1,77 @@
 # TODOS
 
+## Hardening 0.5.6
+
+Lot ouvert le 2026-09-05, note de décision
+`docs/decisions/2026-09-05-reouverture-core-hardening.md`. Le gel de Core porte
+sur son périmètre fonctionnel, pas sur ses correctifs.
+
+### Réentrance fatale de PulseApplicationObserver
+
+**What:** `ApplicationObserver.observe(_:)` est ré-entré pendant que
+`OutboxBridge.run(command:input:)` bloque la boucle principale dans
+`waitUntilExit` — `NSConcreteTask` fait tourner la run loop, qui redélivre
+`didActivateApplicationNotification` sur `.main`. L'accès exclusif à `recorder`
+(`var`, ligne 10) est violé : `Fatal access conflict detected`, SIGABRT.
+Trace complète dans `~/.pulse_v2/logs/app_observer.log`, 4 occurrences le
+2026-09-05. `KeepAlive` relance, donc la perte est bornée aux activations de
+l'intervalle — mais elle est silencieuse côté base. `SystemObserver.observe`
+emprunte le même pont et doit être couvert par la correction.
+
+**Impact (GitNexus):** `ApplicationObserver.observe` 12 impactés / LOW ;
+`OutboxBridge.run` 8 impactés / LOW, appelé par les deux observateurs.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** Xcode installé sur la machine (`swift test` échoue aujourd'hui
+sur `no such module 'Testing'`, seuls les Command Line Tools sont présents)
+
+### status.sh annonce le daemon inaccessible alors qu'il répond
+
+**What:** `scripts/status.sh:22` impose `curl --max-time 2` ; `GET /status`
+répond en 2,04–2,11 s (mesuré, code 200), donc `make status` sort en erreur
+avec « daemon inaccessible » pendant que les cinq services tournent. Le coût
+est dominé par la journée courante, pas par la taille de l'historique — la
+fusion de 16 800 événements ne l'a pas aggravé. À traiter par le délai, et à
+décider séparément si `/status` doit devenir moins cher.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
+### Résolution de casse là où l'échec est silencieux
+
+**What:** APFS est insensible à la casse, `PurePath` y est sensible, et
+`realpath`/`.resolve()` ne canonisent pas la casse (vérifié). Deux points où
+l'écart ne produit ni erreur ni avertissement :
+`file_watcher.should_ignore` / `should_ignore_directory` retournent `True` sur
+le `ValueError` de `relative_to`, donc un workspace déclaré à une casse
+différente de celle du disque filtre **tout** — le watcher démarre, journalise
+« Watching files in … » et n'émet plus rien (reproduit en conditions réelles :
+FSEvents remonte la casse canonique) ; `read_watched_workspaces` déduplique sur
+`set[Path]`, donc deux graphies du même dossier passent pour deux workspaces.
+`private_files.is_private_path` compare par `relative_to(root.resolve())` : un
+chemin sous une racine Pulse mal casée n'est pas reconnu comme privé et n'est
+pas resserré en `0700`/`0600`.
+
+**Contrainte:** `is_private_path` est le seul symbole du lot à risque HIGH
+(13 impactés, 4 processus). Toute correction peut élargir la **reconnaissance**
+d'un chemin comme privé, jamais le périmètre des racines dont Pulse modifie le
+mode.
+
+**Hors périmètre:** les 19 autres points sensibles à la casse relevés par la
+cartographie du 2026-09-05 (`analysis/projects.py`, `analysis/timeline.py`,
+`daily_trace.py`, `context_snapshot.py`, `event_logger.py`,
+`archive_transcripts.py`, `agent_sessions.py`) : ils dégradent l'affichage ou
+le regroupement, jamais en silence total.
+
+**Impact (GitNexus):** `should_ignore` 8 / LOW, `should_ignore_directory`
+5 / LOW, `read_watched_workspaces` 2 / LOW, `is_private_path` 13 / **HIGH**.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Aucun
+
 ## Daemon V2
 
 ### Coût de reconstruction de TraceStore à grande échelle

@@ -236,3 +236,9 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   avec son historique, Lab archivé dans `~/Projets/ARCHIVE/Pulse_Lab` sous le
   tag `archive/lab-2026-09`, `CLAUDE.md` et `AGENTS.md` désormais suivis par
   git.
+- **2026-09-05** — Le gel de Core porte sur son périmètre fonctionnel, pas sur
+  ses correctifs : lot hardening 0.5.6 ouvert sur trois items (réentrance de
+  l'observateur d'applications, faux négatif de `status.sh`, résolution de
+  casse là où l'échec est silencieux). Aucune nouvelle source, aucun nouveau
+  type d'événement, contrat `GET /context` inchangé
+  ([note](decisions/2026-09-05-reouverture-core-hardening.md)).
