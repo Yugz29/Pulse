@@ -256,6 +256,41 @@ def record_file_event(
         return False
 
 
+def canonical_case_path(path: Path) -> Path:
+    """Rend le chemin tel que le disque l'écrit, segment par segment.
+
+    ``resolve()`` suit les liens symboliques mais ne corrige pas la casse : sur
+    APFS, insensible à la casse, ``/Users/yugz`` « existe » et se résout en
+    ``/Users/yugz`` alors que le disque écrit ``/Users/Yugz``. Les comparaisons
+    de ``PurePath``, elles, sont sensibles à la casse — d'où un workspace qui
+    passe tous les contrôles mais dont plus aucun chemin ne correspond.
+
+    Un segment introuvable, ambigu (deux graphies présentes sur un volume
+    sensible à la casse) ou illisible arrête la canonisation : on rend ce qui
+    est déjà résolu plutôt que de deviner.
+    """
+    if not path.is_absolute():
+        return path
+    parts = path.parts
+    cursor = Path(parts[0])
+    for index, part in enumerate(parts[1:], start=1):
+        # `parts.index(part)` mentirait dès qu'un nom se répète
+        # (`Projets/DevNote/DevNote`) : l'indice vient de l'énumération.
+        remainder = parts[index:]
+        try:
+            names = {entry.name for entry in cursor.iterdir()}
+        except OSError:
+            return cursor.joinpath(*remainder)
+        if part in names:
+            cursor = cursor / part
+            continue
+        matches = [name for name in names if name.casefold() == part.casefold()]
+        if len(matches) != 1:
+            return cursor.joinpath(*remainder)
+        cursor = cursor / matches[0]
+    return cursor
+
+
 def read_watched_workspaces(config_path: Path) -> tuple[list[Path], list[str]]:
     """Liste des workspaces à observer en mode résident (launchd).
 
@@ -264,6 +299,12 @@ def read_watched_workspaces(config_path: Path) -> tuple[list[Path], list[str]]:
     observées (un workspace supprimé ne doit pas aveugler le service).
     Fichier absent = erreur : le service résident ne doit jamais tourner
     sans savoir quoi observer.
+
+    Chaque entrée est ramenée à la casse du disque : FSEvents remonte les
+    chemins tels qu'ils y sont écrits, et ``should_ignore`` filtre tout ce qui
+    n'est pas sous le workspace. Une casse déclarée différente rendait donc le
+    watcher silencieusement aveugle — il démarrait, journalisait « Watching
+    files in … » et n'émettait plus rien.
     """
     try:
         raw_lines = config_path.read_text(encoding="utf-8").splitlines()
@@ -282,6 +323,15 @@ def read_watched_workspaces(config_path: Path) -> tuple[list[Path], list[str]]:
         except OSError:
             warnings.append(f"unresolvable workspace ignored: {entry}")
             continue
+        canonical = canonical_case_path(workspace)
+        if canonical != workspace:
+            warnings.append(
+                f"workspace case corrected: {workspace} -> {canonical}"
+            )
+            workspace = canonical
+        # La déduplication porte sur la forme canonique : deux graphies du même
+        # dossier donnaient deux workspaces, donc deux collecteurs et deux
+        # snapshots sur la même arborescence.
         if workspace in seen:
             continue
         seen.add(workspace)

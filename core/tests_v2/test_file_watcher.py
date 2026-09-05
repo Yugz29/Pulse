@@ -499,3 +499,106 @@ def test_flush_carries_deferred_paths_to_the_next_pass_without_watchdog(tmp_path
     assert watched.deferred == set() and set(watched.snapshot) == {created}
     output = capsys.readouterr().out
     assert output.count("deferred in") == 1 and output.count("delivered") == 1
+
+
+# --- Casse du disque vs casse déclarée (hardening 0.5.6) ------------------
+
+
+def _filesystem_ignores_case(tmp_path) -> bool:
+    probe = tmp_path / "CaseProbe"
+    probe.mkdir()
+    return (tmp_path / "caseprobe").is_dir()
+
+
+def test_canonical_case_path_keeps_repeated_segment_names(tmp_path):
+    from daemon_v2.file_watcher import canonical_case_path
+
+    nested = tmp_path / "DevNote" / "DevNote" / "backend"
+    nested.mkdir(parents=True)
+
+    # Le nom répété piégeait une implémentation basée sur `parts.index`.
+    assert canonical_case_path(nested) == nested
+
+
+def test_canonical_case_path_leaves_an_unknown_path_untouched(tmp_path):
+    from daemon_v2.file_watcher import canonical_case_path
+
+    absent = tmp_path / "nowhere" / "deeper"
+
+    assert canonical_case_path(absent) == absent
+
+
+def test_canonical_case_path_rewrites_a_diverging_case(tmp_path):
+    from daemon_v2.file_watcher import canonical_case_path
+
+    if not _filesystem_ignores_case(tmp_path):
+        import pytest
+
+        pytest.skip("volume sensible à la casse : la divergence est impossible")
+    real = tmp_path / "CaseWorkspace"
+    real.mkdir()
+
+    assert canonical_case_path(tmp_path / "caseworkspace") == real
+
+
+def test_declared_workspace_case_is_corrected_and_warned(tmp_path):
+    from daemon_v2.file_watcher import read_watched_workspaces
+
+    if not _filesystem_ignores_case(tmp_path):
+        import pytest
+
+        pytest.skip("volume sensible à la casse : la divergence est impossible")
+    real = tmp_path / "CaseWorkspace"
+    real.mkdir()
+    config = tmp_path / "watched"
+    config.write_text(f"{tmp_path / 'caseworkspace'}\n", encoding="utf-8")
+
+    workspaces, warnings = read_watched_workspaces(config)
+
+    assert workspaces == [real.resolve()]
+    assert len(warnings) == 1 and "case corrected" in warnings[0]
+
+
+def test_two_case_variants_of_one_workspace_are_deduplicated(tmp_path):
+    from daemon_v2.file_watcher import read_watched_workspaces
+
+    if not _filesystem_ignores_case(tmp_path):
+        import pytest
+
+        pytest.skip("volume sensible à la casse : la divergence est impossible")
+    real = tmp_path / "CaseWorkspace"
+    real.mkdir()
+    config = tmp_path / "watched"
+    config.write_text(
+        f"{real}\n{tmp_path / 'caseworkspace'}\n", encoding="utf-8"
+    )
+
+    workspaces, _ = read_watched_workspaces(config)
+
+    # Deux collecteurs et deux snapshots sur la même arborescence sinon.
+    assert workspaces == [real.resolve()]
+
+
+def test_a_case_corrected_workspace_no_longer_filters_everything(tmp_path):
+    """La régression réelle : FSEvents remonte la casse du disque.
+
+    Déclarer le workspace dans une autre casse faisait retourner `True` à
+    `should_ignore` pour chaque chemin remonté — watcher démarré, journal
+    « Watching files in … », plus aucun événement.
+    """
+    from daemon_v2.file_watcher import read_watched_workspaces
+
+    if not _filesystem_ignores_case(tmp_path):
+        import pytest
+
+        pytest.skip("volume sensible à la casse : la divergence est impossible")
+    real = tmp_path / "CaseWorkspace"
+    (real / "src").mkdir(parents=True)
+    observed = real / "src" / "module.py"  # tel que FSEvents le remonterait
+    observed.write_text("x")
+    config = tmp_path / "watched"
+    config.write_text(f"{tmp_path / 'caseworkspace'}\n", encoding="utf-8")
+
+    workspaces, _ = read_watched_workspaces(config)
+
+    assert should_ignore(observed, workspaces[0]) is False
