@@ -22,6 +22,10 @@ class CompletionResult:
     prompt_tokens: int | None
     completion_tokens: int | None
     duration_ms: int
+    # Paramètres que l'endpoint a refusés et que le provider a retirés pour
+    # obtenir une réponse. Vide dans le cas nominal. Un rapport d'eval doit
+    # savoir qu'un résumé n'a pas été produit à température 0.
+    dropped_parameters: tuple[str, ...] = ()
 
 
 class ProviderError(RuntimeError):
