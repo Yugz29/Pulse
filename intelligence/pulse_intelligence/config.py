@@ -32,6 +32,15 @@ class Config:
     min_session_minutes: int = 10
     min_session_activities: int = 30
     lookback_days: int = 1
+    # Couche modèle (spec 2026-09-05-llm-provider v2). Clés à plat : `Config`
+    # est un dataclass simple et `load_config` refuse les clés inconnues, donc
+    # une table `[llm]` ne se chargerait pas.
+    # Vide par défaut : le choix du provider est une décision écrite, au
+    # même titre que `model_id` (voir `require_model`). Aucun modèle ne se
+    # branche par inadvertance.
+    llm_provider: str = ""
+    llm_base_url: str = ""
+    llm_max_tokens: int = 1024
 
     def require_model(self) -> "Config":
         """Le choix du modèle est une décision écrite, jamais un défaut."""
@@ -49,6 +58,7 @@ _INT_FIELDS = {
     "min_session_minutes",
     "min_session_activities",
     "lookback_days",
+    "llm_max_tokens",
 }
 
 

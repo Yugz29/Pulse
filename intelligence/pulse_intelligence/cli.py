@@ -24,6 +24,9 @@ from typing import Any, Sequence
 
 from .config import Config, ConfigError, config_home, load_config
 from .core_client import CoreClient, CoreError, CoreUnavailable
+from .llm.fake import FakeProvider
+from .llm.provider import LLMProvider
+from .provider_summarizer import ProviderSummarizer, prompt_path_for
 from .selection import Classified, classify_sessions, find_session
 from .session_summary import run_pass, summarize_session
 from .state import JobState
@@ -102,15 +105,48 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _provider(config: Config) -> LLMProvider:
+    """Le provider désigné par `llm_provider`, et rien d'autre.
+
+    Les deux implémentations réseau et locale arrivent aux PR suivantes ; le
+    message dit laquelle manque plutôt que de laisser tomber sur un défaut
+    silencieux.
+    """
+    choice = config.llm_provider.strip()
+    if not choice:
+        raise ConfigError(
+            "aucun modèle disponible : passe --fake FICHIER, ou choisis un "
+            "provider dans config.toml (llm_provider = \"fake\" | "
+            '"openai-compatible" | "mlx")'
+        )
+    if choice == "fake":
+        return FakeProvider()
+    if choice in {"openai-compatible", "mlx"}:
+        raise ConfigError(
+            f"llm_provider = {choice!r} n'est pas encore implémenté "
+            "(spec 2026-09-05-llm-provider v2, §13) ; "
+            'utilise "fake" en attendant'
+        )
+    raise ConfigError(
+        f"llm_provider inconnu : {choice!r} "
+        '(attendu : "fake", "openai-compatible" ou "mlx")'
+    )
+
+
 def _summarizer(args: argparse.Namespace, config: Config) -> Summarizer:
+    # `--fake FICHIER` court-circuite la couche modèle : le test fournit
+    # directement la sortie. Chemin livré à l'étape 2, inchangé.
     if args.fake is not None:
         return FakeSummarizer(
             outputs=args.fake.read_text(encoding="utf-8"),
             model_id=config.model_id or "fake/summarizer",
         )
-    raise ConfigError(
-        "aucun modèle disponible dans cette version : passe --fake FICHIER "
-        "(le modèle réel arrive à l'étape 3)"
+    provider = _provider(config)
+    return ProviderSummarizer(
+        provider=provider,
+        model_id=config.model_id or f"{provider.name}/provider",
+        prompt_path=prompt_path_for(config.prompt_version),
+        max_tokens=config.llm_max_tokens,
     )
 
 
