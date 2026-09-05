@@ -174,3 +174,41 @@ def test_real_qwen_loads_and_summarizes_without_thinking():
     assert "<think>" not in text and "</think>" not in text
     parsed = parse_model_output(text, input_paths(session))
     assert parsed.structured["confidence"] in {"high", "medium", "low"}
+
+
+def test_an_oversized_input_is_refused_before_the_prefill(monkeypatch):
+    """Refus explicite au lieu d'un OOM Metal (mesuré au spike B)."""
+
+    class _BigTokenizer(_Tokenizer):
+        def encode(self, text):
+            return list(range(50_000))  # au-dessus du plafond
+
+    tok = _BigTokenizer(template=None)
+    gen = _install_fake_mlx(monkeypatch, tok)
+
+    with pytest.raises(ProviderError, match="plafond"):
+        MLXProvider(max_input_tokens=30_000).complete(
+            CompletionRequest(system="s", prompt="p", max_tokens=64)
+        )
+
+    # Le refus est AVANT la génération : generate() n'a jamais été appelé.
+    assert not hasattr(gen, "last")
+
+
+def test_an_input_under_the_ceiling_is_generated(monkeypatch):
+    tok = _Tokenizer(template=None)  # encode = text.split() -> peu de tokens
+    _install_fake_mlx(monkeypatch, tok, output="{}")
+
+    result = MLXProvider(max_input_tokens=30_000).complete(
+        CompletionRequest(system="s", prompt="p q r", max_tokens=64)
+    )
+
+    assert result.text == "{}"
+
+
+def test_the_ceiling_is_wired_from_config():
+    from pulse_intelligence.cli import _provider
+
+    provider = _provider(Config(llm_provider="mlx", llm_max_input_tokens=12345))
+
+    assert provider.max_input_tokens == 12345

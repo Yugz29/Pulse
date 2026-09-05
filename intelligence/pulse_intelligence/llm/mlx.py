@@ -18,12 +18,18 @@ from typing import Any
 from .provider import CompletionRequest, CompletionResult, ProviderError
 
 DEFAULT_MODEL = "mlx-community/Qwen3.8-27B-4bit"
+# Plafond d'entrée sous le seuil OOM mesuré au spike B : sur un M3 Max 36 Go,
+# une entrée de 60k tokens fait planter Metal (pic ~28 Go) avant la fin du
+# prefill, quand la plus grosse session réelle (~6 500 tokens) tient à 19,77 Go.
+# 30 000 laisse une marge large au-dessus du réel et bien sous le seuil OOM.
+DEFAULT_MAX_INPUT_TOKENS = 30_000
 
 
 @dataclass
 class MLXProvider:
     model: str = DEFAULT_MODEL
     name: str = "mlx"
+    max_input_tokens: int = DEFAULT_MAX_INPUT_TOKENS
     # Chargé au premier complete(), puis réutilisé. Non sérialisable, hors repr.
     _bundle: Any = field(default=None, repr=False, compare=False)
 
@@ -64,6 +70,18 @@ class MLXProvider:
         from mlx_lm import generate
 
         prompt = self._render_prompt(tokenizer, request)
+
+        # Refuser AVANT le prefill : au-delà du plafond, le cache KV du contexte
+        # crève la mémoire unifiée et Metal plante en OOM (spike B). Un refus
+        # explicite vaut mieux qu'un `kIOGPUCommandBufferCallbackErrorOutOfMemory`.
+        input_tokens = _count(tokenizer, prompt)
+        if input_tokens is not None and input_tokens > self.max_input_tokens:
+            raise ProviderError(
+                f"entrée de {input_tokens} tokens au-dessus du plafond "
+                f"{self.max_input_tokens} : refusée avant le prefill "
+                "(un contexte trop long fait planter Metal en OOM sur cette machine)"
+            )
+
         started = time.monotonic()
         try:
             text = generate(

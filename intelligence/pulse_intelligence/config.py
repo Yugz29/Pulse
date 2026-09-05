@@ -45,6 +45,9 @@ class Config:
     # clôture n'était jamais atteinte, la sortie était rejetée à tort. Un
     # défaut qui échoue 30 % du temps sur du réel n'est pas un défaut.
     llm_max_tokens: int = 2048
+    # Plafond de tokens d'ENTRÉE pour le provider local : au-delà, MLX plante
+    # en OOM Metal (spike B). Refusé proprement avant le prefill.
+    llm_max_input_tokens: int = 30_000
     # Absente = non envoyée. Certains modèles derrière un endpoint compatible
     # refusent le paramètre ; la reproductibilité à 0.0 se demande, elle ne
     # s'impose pas. La négociation du provider reste le filet si un modèle
@@ -68,6 +71,7 @@ _INT_FIELDS = {
     "min_session_activities",
     "lookback_days",
     "llm_max_tokens",
+    "llm_max_input_tokens",
 }
 
 

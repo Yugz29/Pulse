@@ -137,7 +137,10 @@ def _provider(config: Config) -> LLMProvider:
     if choice == "mlx":
         from .llm.mlx import DEFAULT_MODEL, MLXProvider
 
-        return MLXProvider(model=config.model_id or DEFAULT_MODEL)
+        return MLXProvider(
+            model=config.model_id or DEFAULT_MODEL,
+            max_input_tokens=config.llm_max_input_tokens,
+        )
     raise ConfigError(
         f"llm_provider inconnu : {choice!r} "
         '(attendu : "fake", "openai-compatible" ou "mlx")'
