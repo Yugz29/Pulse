@@ -72,6 +72,34 @@ le regroupement, jamais en silence total.
 **Priority:** P2
 **Depends on:** Aucun
 
+## Hygiène du dépôt
+
+### Chemins `/Users/<user>` en dur dans un dépôt public
+
+**What:** Le dépôt est public et `main` porte 41 occurrences de chemins absolus
+sous le dossier utilisateur — `core/README.md`, sept fichiers de
+`core/tests_v2/`, `docs/specs/2026-09-02-context-api.md`, trois fichiers de
+`intelligence/tests/`. Le scan `gstack-redact` les classe LOW
+(`internal.user_path`), non bloquants. Les remplacer par un placeholder ou une
+fixture (`tmp_path`, `/Users/dev` déjà utilisé ailleurs dans les tests) rend le
+dépôt indépendant de la machine qui l'a produit.
+
+**Pas de réécriture d'historique :** le nom d'utilisateur est public depuis les
+premiers commits, une réécriture coûterait plus qu'elle ne masquerait. Le
+chantier porte sur l'état courant seulement.
+
+**Note pour une prochaine machine :** `tools/normalize_legacy_trace.py` porte sa
+table de correspondance en dur dans `PATH_RULES` — c'est la configuration d'une
+migration ponctuelle, assumée telle quelle. Si le cas se représente, la sortir
+dans un fichier de config ou un argument CLI rendrait l'outil réutilisable et
+retirerait les derniers chemins personnels du dépôt.
+
+**Déclencheur:** aucun — item d'hygiène, à traiter quand le dépôt est au calme.
+
+**Effort:** S
+**Priority:** P4
+**Depends on:** Aucun
+
 ## Daemon V2
 
 ### Coût de reconstruction de TraceStore à grande échelle
