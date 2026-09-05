@@ -1,0 +1,170 @@
+{
+ "context": {
+  "current_session": {
+   "activity_count": 1,
+   "apps": [],
+   "duration_minutes": 0,
+   "files": {
+    "created": [],
+    "deleted": [],
+    "modified": [],
+    "truncated": false
+   },
+   "git": {
+    "commits": [],
+    "push_observed": false
+   },
+   "id": "62bda60c7d0eb6f0",
+   "is_open": true,
+   "label": "work-4",
+   "last_activity_at": "2026-08-22T19:55:27+00:00",
+   "projects": [
+    "holbertonschool-devops-formation"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "terminal_finished"
+   ],
+   "source_event_ids": [
+    "083af87c-acfa-4ea5-ba3c-fe4c8fdb0d15"
+   ],
+   "started_at": "2026-08-22T19:55:27+00:00",
+   "terminal": {
+    "errors": [],
+    "tests_failed": [],
+    "tests_passed": [],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-05T22:06:25.378952+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 1,
+   "agent": "claude-code",
+   "ended_at": "2026-08-22T19:53:59.032000+00:00",
+   "started_at": "2026-08-22T19:53:42.209000+00:00",
+   "summary": "Agent session (claude-code): Tu peux créer un gitignore stp",
+   "workspace": "/Users/Yugz/Projets/Holberton28/holbertonschool-devops-formation"
+  },
+  "last_session_summary": null,
+  "recent_sessions": [
+   {
+    "duration_minutes": 28,
+    "ended_at": "2026-08-22T19:55:27+00:00",
+    "headline": {
+     "commits": 0,
+     "errors": 6,
+     "files_changed": 0,
+     "tests_failed": 0
+    },
+    "id": "2ce344566f7e85dc",
+    "label": "work-3",
+    "projects": [
+     "DevNote",
+     "holbertonschool-devops-formation",
+     "devops_culture_git",
+     "afcf590c603f62c269594bc80c4a039792cb9380"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "05b66904-47fb-4d38-9c41-d61ba2bcbe63",
+     "24a77ea2-59e1-4dd7-9991-fb13395d2e6e",
+     "27cf31ce-c2a9-47a0-9bde-be1fd9f91535",
+     "3a7c1fc3-be2e-49d2-8bb4-23cd9f77082e",
+     "3ac2efb5-40cb-48a1-ad85-3fd0ca9e78d5",
+     "517a8c11-8948-415b-96d7-4b9b9f71a840",
+     "518f423b-f1ae-401e-8428-bbec8cf37b60",
+     "5790b219-7adb-4fbf-a4ac-d023f51ccf06",
+     "57e72c62-9e0d-4ee4-ae9b-bc9cc83e8b0d",
+     "875a5ae2-feaf-4578-9788-758efe7206f4",
+     "a8894c82-87d1-4476-a734-27441b66cc21",
+     "b4cbff35-7fc8-4900-b43d-14a2060ae8a7",
+     "b4d26be7-ddbb-4bfc-85f4-dd82c073a1ad",
+     "eef39375-ffcb-4bed-ade6-5db1c578eb79",
+     "fe914158-49e1-4179-8f42-527622f6ff3b",
+     "fecb6161-18d2-4773-8cb3-5155c94eaaa9"
+    ],
+    "started_at": "2026-08-22T19:27:17+00:00"
+   }
+  ],
+  "reference_at": "2026-08-22T19:55:27+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": {
+    "branch": "main",
+    "dirty": true,
+    "last_commit": null
+   },
+   "path": "/Users/Yugz/Projets/Holberton28/holbertonschool-devops-formation",
+   "project": "holbertonschool-devops-formation",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-08-22",
+ "id": "2ce344566f7e85dc",
+ "label": "work-3",
+ "session_raw": {
+  "activity_count": 16,
+  "apps": [],
+  "duration_minutes": 28,
+  "files": {
+   "created": [],
+   "deleted": [],
+   "modified": [],
+   "truncated": false
+  },
+  "git": {
+   "commits": [],
+   "push_observed": false
+  },
+  "id": "2ce344566f7e85dc",
+  "is_open": false,
+  "label": "work-3",
+  "last_activity_at": "2026-08-22T19:55:27+00:00",
+  "projects": [
+   "DevNote",
+   "holbertonschool-devops-formation",
+   "devops_culture_git",
+   "afcf590c603f62c269594bc80c4a039792cb9380"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "terminal_finished"
+  ],
+  "source_event_ids": [
+   "05b66904-47fb-4d38-9c41-d61ba2bcbe63",
+   "24a77ea2-59e1-4dd7-9991-fb13395d2e6e",
+   "27cf31ce-c2a9-47a0-9bde-be1fd9f91535",
+   "3a7c1fc3-be2e-49d2-8bb4-23cd9f77082e",
+   "3ac2efb5-40cb-48a1-ad85-3fd0ca9e78d5",
+   "517a8c11-8948-415b-96d7-4b9b9f71a840",
+   "518f423b-f1ae-401e-8428-bbec8cf37b60",
+   "5790b219-7adb-4fbf-a4ac-d023f51ccf06",
+   "57e72c62-9e0d-4ee4-ae9b-bc9cc83e8b0d",
+   "875a5ae2-feaf-4578-9788-758efe7206f4",
+   "a8894c82-87d1-4476-a734-27441b66cc21",
+   "b4cbff35-7fc8-4900-b43d-14a2060ae8a7",
+   "b4d26be7-ddbb-4bfc-85f4-dd82c073a1ad",
+   "eef39375-ffcb-4bed-ade6-5db1c578eb79",
+   "fe914158-49e1-4179-8f42-527622f6ff3b",
+   "fecb6161-18d2-4773-8cb3-5155c94eaaa9"
+  ],
+  "started_at": "2026-08-22T19:27:17+00:00",
+  "terminal": {
+   "errors": [
+    "bash check-setup.sh",
+    "bash check-setup.s",
+    "git add devops_culture_git/0-environment.md",
+    "git commit -m \"chore: verify local environment setup\"",
+    "git add README.md devops_culture_git/README.md",
+    "git commit -m \"docs: add root and project README files\""
+   ],
+   "tests_failed": [],
+   "tests_passed": [],
+   "truncated": false
+  }
+ },
+ "why": "La plus ambiguë : 4 projets, 0 fichier."
+}

@@ -305,9 +305,18 @@ prévue. Pas de `bench/`.
 
 `eval` accepte `--provider` et écrit sous
 `eval/out/<provider>-<model_id assaini>/<session_id>.json`, plus un `meta.json`
-par passage (durée, tokens quand le provider les rend, pic mémoire via
-`resource`). La comparaison local ↔ référence distante se fait à l'œil sur ces
-fichiers ; pas de score automatique.
+par passage (durée, tokens quand le provider les rend, et **`dropped_parameters`
+par session** — un résumé produit sans `temperature = 0.0` n'est pas
+reproductible de la même façon). La comparaison local ↔ référence distante se
+fait à l'œil sur ces fichiers ; pas de score automatique.
+
+**Taille réelle des sessions.** Le corpus gelé plafonne à **~6 500 tokens
+d'entrée** (la plus grosse, `3cabaefb`, ~6 369 estimés) : sur 90 jours de trace,
+aucune session réelle n'approche les 60k tokens que le critère n°3 anticipe. Ce
+critère ne s'éprouve donc **pas** sur le corpus réel — il s'éprouve sur une
+entrée **synthétique** de ~60k tokens dans `eval/stress/synthetic-60k.json`,
+clairement étiquetée `_synthetic`, hors du corpus et hors de tout jugement de
+qualité, exécutée par le seul spike B (mémoire du `MLXProvider`).
 
 Règle inchangée : tout changement de prompt ou de modèle passe par `eval` avant
 d'être activé, et le rapport est joint à la PR.

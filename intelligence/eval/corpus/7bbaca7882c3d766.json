@@ -1,0 +1,336 @@
+{
+ "context": {
+  "current_session": {
+   "activity_count": 46,
+   "apps": [
+    {
+     "activations": 13,
+     "name": "ChatGPT"
+    },
+    {
+     "activations": 10,
+     "name": "Terminal"
+    },
+    {
+     "activations": 7,
+     "name": "Safari"
+    },
+    {
+     "activations": 3,
+     "name": "Code"
+    },
+    {
+     "activations": 1,
+     "name": "Codex"
+    }
+   ],
+   "duration_minutes": 22,
+   "files": {
+    "created": [],
+    "deleted": [],
+    "modified": [
+     "README.md"
+    ],
+    "truncated": false
+   },
+   "git": {
+    "commits": [],
+    "push_observed": true
+   },
+   "id": "7bbaca7882c3d766",
+   "is_open": true,
+   "label": "work-6",
+   "last_activity_at": "2026-07-05T20:22:21+00:00",
+   "projects": [
+    "core"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "app_activated",
+    "file_changed",
+    "terminal_finished"
+   ],
+   "source_event_ids": [
+    "legacy-migrated:1835",
+    "legacy-migrated:1836",
+    "legacy-migrated:1837",
+    "legacy-migrated:1838",
+    "legacy-migrated:1839",
+    "legacy-migrated:1840",
+    "legacy-migrated:1841",
+    "legacy-migrated:1842",
+    "legacy-migrated:1843",
+    "legacy-migrated:1844",
+    "legacy-migrated:1845",
+    "legacy-migrated:1846",
+    "legacy-migrated:1847",
+    "legacy-migrated:1848",
+    "legacy-migrated:1849",
+    "legacy-migrated:1850",
+    "legacy-migrated:1851",
+    "legacy-migrated:1852",
+    "legacy-migrated:1853",
+    "legacy-migrated:1855",
+    "legacy-migrated:1856",
+    "legacy-migrated:1857",
+    "legacy-migrated:1858",
+    "legacy-migrated:1859",
+    "legacy-migrated:1860",
+    "legacy-migrated:1861",
+    "legacy-migrated:1862",
+    "legacy-migrated:1863",
+    "legacy-migrated:1864",
+    "legacy-migrated:1865",
+    "legacy-migrated:1866",
+    "legacy-migrated:1867",
+    "legacy-migrated:1868",
+    "legacy-migrated:1869",
+    "legacy-migrated:1870",
+    "legacy-migrated:1871",
+    "legacy-migrated:1872",
+    "legacy-migrated:1873",
+    "legacy-migrated:1874",
+    "legacy-migrated:1875",
+    "legacy-migrated:1876",
+    "legacy-migrated:1877",
+    "legacy-migrated:1878",
+    "legacy-migrated:1879",
+    "legacy-migrated:1880",
+    "legacy-migrated:1881"
+   ],
+   "started_at": "2026-07-05T19:59:50+00:00",
+   "terminal": {
+    "errors": [],
+    "tests_failed": [],
+    "tests_passed": [
+     "make test"
+    ],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-05T22:06:25.365661+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 8,
+   "agent": "codex",
+   "ended_at": "2026-07-05T20:13:59.530000+00:00",
+   "started_at": "2026-07-05T17:47:44.739000+00:00",
+   "summary": "Agent session (codex): <environment_context> <cwd>/Users/Yugz/Projets/Pulse/core</cwd> <shell>zsh</shell> <current_date>2026-07-05</current_date> <timezone>Europe/Paris</timezone> <filesystem><workspace_roots><root>/Users/Yugz/Projets/Pulse/core</root></workspace_roots><permission_profile type=\"managed\"><…",
+   "workspace": "/Users/Yugz/Projets/Pulse/core"
+  },
+  "last_session_summary": null,
+  "recent_sessions": [
+   {
+    "duration_minutes": 29,
+    "ended_at": "2026-07-05T19:27:48.359849+00:00",
+    "headline": {
+     "commits": 0,
+     "errors": 0,
+     "files_changed": 8,
+     "tests_failed": 0
+    },
+    "id": "8b9621542c4bcc18",
+    "label": "work-5",
+    "projects": [
+     "core"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "legacy-migrated:1748",
+     "legacy-migrated:1749",
+     "legacy-migrated:1750",
+     "legacy-migrated:1751",
+     "legacy-migrated:1752",
+     "legacy-migrated:1753",
+     "legacy-migrated:1754",
+     "legacy-migrated:1755",
+     "legacy-migrated:1756",
+     "legacy-migrated:1757",
+     "legacy-migrated:1758",
+     "legacy-migrated:1759",
+     "legacy-migrated:1760",
+     "legacy-migrated:1761",
+     "legacy-migrated:1762",
+     "legacy-migrated:1763",
+     "legacy-migrated:1764",
+     "legacy-migrated:1765",
+     "legacy-migrated:1766",
+     "legacy-migrated:1767",
+     "legacy-migrated:1768",
+     "legacy-migrated:1769",
+     "legacy-migrated:1770",
+     "legacy-migrated:1771",
+     "legacy-migrated:1772",
+     "legacy-migrated:1773",
+     "legacy-migrated:1774",
+     "legacy-migrated:1775",
+     "legacy-migrated:1776",
+     "legacy-migrated:1777",
+     "legacy-migrated:1778",
+     "legacy-migrated:1779",
+     "legacy-migrated:1780",
+     "legacy-migrated:1781",
+     "legacy-migrated:1782",
+     "legacy-migrated:1783",
+     "legacy-migrated:1784",
+     "legacy-migrated:1785",
+     "legacy-migrated:1786",
+     "legacy-migrated:1787",
+     "legacy-migrated:1788",
+     "legacy-migrated:1789",
+     "legacy-migrated:1790",
+     "legacy-migrated:1791",
+     "legacy-migrated:1792",
+     "legacy-migrated:1793",
+     "legacy-migrated:1794",
+     "legacy-migrated:1795",
+     "legacy-migrated:1796",
+     "legacy-migrated:1797",
+     "legacy-migrated:1798",
+     "legacy-migrated:1799",
+     "legacy-migrated:1800",
+     "legacy-migrated:1801",
+     "legacy-migrated:1802",
+     "legacy-migrated:1803",
+     "legacy-migrated:1804",
+     "legacy-migrated:1805",
+     "legacy-migrated:1806",
+     "legacy-migrated:1807",
+     "legacy-migrated:1808",
+     "legacy-migrated:1809",
+     "legacy-migrated:1810",
+     "legacy-migrated:1811",
+     "legacy-migrated:1812",
+     "legacy-migrated:1813",
+     "legacy-migrated:1814",
+     "legacy-migrated:1815",
+     "legacy-migrated:1816",
+     "legacy-migrated:1817"
+    ],
+    "started_at": "2026-07-05T18:58:23.595608+00:00"
+   }
+  ],
+  "reference_at": "2026-07-05T20:22:21+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": null,
+   "path": "/Users/Yugz/Projets/Pulse/core",
+   "project": "core",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-07-05",
+ "id": "7bbaca7882c3d766",
+ "label": "work-6",
+ "session_raw": {
+  "activity_count": 46,
+  "apps": [
+   {
+    "activations": 13,
+    "name": "ChatGPT"
+   },
+   {
+    "activations": 10,
+    "name": "Terminal"
+   },
+   {
+    "activations": 7,
+    "name": "Safari"
+   },
+   {
+    "activations": 3,
+    "name": "Code"
+   },
+   {
+    "activations": 1,
+    "name": "Codex"
+   }
+  ],
+  "duration_minutes": 22,
+  "files": {
+   "created": [],
+   "deleted": [],
+   "modified": [
+    "README.md"
+   ],
+   "truncated": false
+  },
+  "git": {
+   "commits": [],
+   "push_observed": true
+  },
+  "id": "7bbaca7882c3d766",
+  "is_open": false,
+  "label": "work-6",
+  "last_activity_at": "2026-07-05T20:22:21+00:00",
+  "projects": [
+   "core"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "app_activated",
+   "file_changed",
+   "terminal_finished"
+  ],
+  "source_event_ids": [
+   "legacy-migrated:1835",
+   "legacy-migrated:1836",
+   "legacy-migrated:1837",
+   "legacy-migrated:1838",
+   "legacy-migrated:1839",
+   "legacy-migrated:1840",
+   "legacy-migrated:1841",
+   "legacy-migrated:1842",
+   "legacy-migrated:1843",
+   "legacy-migrated:1844",
+   "legacy-migrated:1845",
+   "legacy-migrated:1846",
+   "legacy-migrated:1847",
+   "legacy-migrated:1848",
+   "legacy-migrated:1849",
+   "legacy-migrated:1850",
+   "legacy-migrated:1851",
+   "legacy-migrated:1852",
+   "legacy-migrated:1853",
+   "legacy-migrated:1855",
+   "legacy-migrated:1856",
+   "legacy-migrated:1857",
+   "legacy-migrated:1858",
+   "legacy-migrated:1859",
+   "legacy-migrated:1860",
+   "legacy-migrated:1861",
+   "legacy-migrated:1862",
+   "legacy-migrated:1863",
+   "legacy-migrated:1864",
+   "legacy-migrated:1865",
+   "legacy-migrated:1866",
+   "legacy-migrated:1867",
+   "legacy-migrated:1868",
+   "legacy-migrated:1869",
+   "legacy-migrated:1870",
+   "legacy-migrated:1871",
+   "legacy-migrated:1872",
+   "legacy-migrated:1873",
+   "legacy-migrated:1874",
+   "legacy-migrated:1875",
+   "legacy-migrated:1876",
+   "legacy-migrated:1877",
+   "legacy-migrated:1878",
+   "legacy-migrated:1879",
+   "legacy-migrated:1880",
+   "legacy-migrated:1881"
+  ],
+  "started_at": "2026-07-05T19:59:50+00:00",
+  "terminal": {
+   "errors": [],
+   "tests_failed": [],
+   "tests_passed": [
+    "make test"
+   ],
+   "truncated": false
+  }
+ },
+ "why": "Bruyante : 34 activations d'apps, 1 fichier."
+}
