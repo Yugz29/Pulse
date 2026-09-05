@@ -239,6 +239,12 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   avec son historique, Lab archivé dans `~/Projets/ARCHIVE/Pulse_Lab` sous le
   tag `archive/lab-2026-09`, `CLAUDE.md` et `AGENTS.md` désormais suivis par
   git.
+- **2026-09-05** — Trace de l'ancienne machine normalisée puis fusionnée après
+  le changement de Mac : table de correspondance de chemins (casse du dossier
+  utilisateur, Core d'époque vers `Pulse/core`, deux renommages sans rapport),
+  noms de projet d'époque conservés, chevauchement du jour tranché par la
+  première trace locale. Outils dans `tools/`
+  ([note](decisions/2026-09-05-migration-trace-ancienne-machine.md)).
 - **2026-09-05** — Le gel de Core porte sur son périmètre fonctionnel, pas sur
   ses correctifs : lot hardening 0.5.6 ouvert sur trois items (réentrance de
   l'observateur d'applications, faux négatif de `status.sh`, résolution de
