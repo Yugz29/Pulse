@@ -1,0 +1,301 @@
+{
+ "context": {
+  "current_session": {
+   "activity_count": 1,
+   "apps": [],
+   "duration_minutes": 0,
+   "files": {
+    "created": [],
+    "deleted": [],
+    "modified": [],
+    "truncated": false
+   },
+   "git": {
+    "commits": [],
+    "push_observed": false
+   },
+   "id": "ecaa0c325a6782e6",
+   "is_open": true,
+   "label": "work-2",
+   "last_activity_at": "2026-09-02T11:59:44+00:00",
+   "projects": [
+    "DevNote"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "terminal_finished"
+   ],
+   "source_event_ids": [
+    "c41e3d27-fdf8-4cc2-b366-041d76e1f3a6"
+   ],
+   "started_at": "2026-09-02T11:59:44+00:00",
+   "terminal": {
+    "errors": [],
+    "tests_failed": [],
+    "tests_passed": [],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-05T22:06:25.468152+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 2412,
+   "agent": "claude-code",
+   "ended_at": "2026-08-31T19:47:04.709000+00:00",
+   "started_at": "2026-08-31T18:30:55.870000+00:00",
+   "summary": "Agent session (claude-code): <command-name>/model</command-name> <command-message>model</command-message> <command-args></command-args>",
+   "workspace": "/Users/Yugz/Projets/DevNote/DevNote"
+  },
+  "last_session_summary": null,
+  "recent_sessions": [
+   {
+    "duration_minutes": 36,
+    "ended_at": "2026-09-02T11:59:44+00:00",
+    "headline": {
+     "commits": 0,
+     "errors": 0,
+     "files_changed": 2,
+     "tests_failed": 0
+    },
+    "id": "071bbd62a95fb6cb",
+    "label": "work-1",
+    "projects": [
+     "DevNote"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "056c86c6-0f3b-4306-9f59-6f41eecb21e6",
+     "05fb99b0-6f65-4af8-a15b-3fb45f030ed3",
+     "07c21062-75e5-4d2a-9d40-ea8bbc3aa771",
+     "085c6c4d-b0f1-4da8-867d-b8df95faaadd",
+     "095aae71-0352-4b6b-80c4-3260f21fb40a",
+     "0b1b84b8-2599-437b-b3f5-7db5724649e5",
+     "0d05b241-be6b-4b43-b7cf-0a8688eb8fd8",
+     "101cd0fb-018c-469d-ad7d-c322fe016333",
+     "1a195ef5-de01-442b-b041-635b971417f6",
+     "1e9dc945-fc00-41fe-bf60-1ea980fb6837",
+     "25897846-52db-4d1c-b301-531e3480704f",
+     "2e031ed9-ca61-49d7-aa9c-10337b0288bf",
+     "324b884b-d059-4442-937e-7993ed8c3db2",
+     "369e0d28-a37a-45bc-929c-bc07d9165030",
+     "37d3647d-0261-4a99-a510-dd2d1773993d",
+     "393cf2ca-1ba5-42b5-9848-938dd92d9c88",
+     "3bd47894-8612-40f4-998d-a3f3bdb46356",
+     "3d16e328-2b70-4b20-b47d-96589f367e81",
+     "3f63323c-185f-4690-a53d-6f1d7ebb05b4",
+     "470a77ea-5d00-4c0f-98d6-1e1a770b0f78",
+     "49858b7a-672e-41ce-aa8b-5e1e4e8c414e",
+     "4d8bd5ec-0128-4510-9dfb-7657111b1979",
+     "531edb58-8ea8-432a-818c-af7fbe3e270e",
+     "5391fb0b-d02a-41d1-8b2b-381acfeca2ef",
+     "5450423c-4dd5-45d2-8a79-3df78c495e86",
+     "56596504-6a9b-4078-b246-6741b0a68321",
+     "5bb310fd-4962-4d3f-9ff7-ad4897704599",
+     "5e3dd942-61ea-4b05-92ca-7e1bb8c73f7d",
+     "6070a9f9-ac20-471c-bbb1-5d33abcb7c16",
+     "631eea61-6a7f-4ce1-ada9-ad87bf22aca3",
+     "6654d183-7fe0-4d0a-8602-37c317a7b0ee",
+     "6cb9251c-d004-499b-a37b-469f2827e09d",
+     "6f044f02-81d2-4805-b2a3-80f94ab61d60",
+     "7326e6e8-5c64-44e2-b71d-b05d0b04234b",
+     "75b82110-f14f-4096-aee4-64051c4b04ef",
+     "768471fa-9bcc-46e4-8e86-b68f8b6496f9",
+     "77d5e2f7-071e-4f52-85fc-6e91918339e5",
+     "783ccdd4-4708-4c6c-add7-8923c4104b0d",
+     "78e1ce0d-d389-441c-8d55-80c70048afba",
+     "7c263758-e552-47c3-adc2-4514b39987b7",
+     "8097966f-3c6d-49ba-8742-2c79ac78c567",
+     "819ab1a9-4b0f-49ab-8b31-afa39db0c409",
+     "824ad2b3-eda1-484a-a8cf-00b6414447b4",
+     "8729fff8-1f06-4e56-ac0e-11f2dd5f7779",
+     "884ea0f6-3454-4d09-b68b-f1a2a0d8c0d1",
+     "885e2121-fbd6-4810-ac6c-e77281946b8a",
+     "8d2dc15b-f6bc-48e5-99da-5140f9c12c16",
+     "925f0590-6a68-4f6a-bbe4-956cfaa141f1",
+     "92f8ce53-4b68-4d7a-a4a9-ea15059c3b8d",
+     "9387103e-61a3-44d3-90ff-ed9ddb890db3",
+     "94826f30-db2c-43d1-9627-d874dce88aba",
+     "9b5164fd-c528-4012-a62e-5c19f7c4f502",
+     "a516d453-6b12-4b12-a8aa-f113e8f04f48",
+     "a61df783-08b5-4ce8-ac6c-50411284ca70",
+     "a754bbe7-dcf7-46cf-964b-fa72d2f54dab",
+     "aa316ffd-1f9b-44b2-a2d0-aa3f642b7412",
+     "ab48ec6d-bc77-4d94-8056-4a46dc4c2f3e",
+     "bfa5417a-14aa-4255-a680-8975a28f5348",
+     "c17bf24d-2d2c-4c6f-a84b-e7333c69898e",
+     "cb8ca89a-d87a-4f77-9eb3-710853a451a2",
+     "cd7cbbec-37c9-4e2f-8ff3-6514c4382535",
+     "d51a3fc7-fd59-40df-bcc3-bf2fade8ef84",
+     "d6b95f8e-b63f-4cdc-a9db-30bc732a7970",
+     "d84c342f-e301-493c-b660-5407b8e1b46a",
+     "dc55db0a-cde3-4aec-9caa-4e06a6d8df75",
+     "dccfad08-db55-44c0-8191-f9a47815e96b",
+     "decf3476-8852-4f8d-90ec-84d3160a0924",
+     "e410eaff-17b9-47b5-8d91-c4b7083c6888",
+     "e7d8f7ba-6873-4e8d-96e3-ce6b24b50fb0",
+     "eb1d2a6c-6273-48de-a039-ff8b628d54b8",
+     "eed699c9-45bd-466d-8efe-deab40c7d939",
+     "f244e82b-2f07-4ade-8f5d-5bb6dd7048ce",
+     "f33737cb-7462-488d-818f-afe3cb3cdbeb",
+     "f697c154-ca64-4d16-93e5-49f75d8f04fa",
+     "fa3c2d80-66eb-4b01-b9d0-769ab4f60075",
+     "fb1dac1c-e237-4437-96d6-182177cb9ac7",
+     "fd224d87-bf57-47b2-968b-e763ceebee36"
+    ],
+    "started_at": "2026-09-02T11:22:52+00:00"
+   }
+  ],
+  "reference_at": "2026-09-02T11:59:44+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": null,
+   "path": "/Users/Yugz/Projets/DevNote",
+   "project": "DevNote",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-09-02",
+ "id": "071bbd62a95fb6cb",
+ "label": "work-1",
+ "session_raw": {
+  "activity_count": 77,
+  "apps": [
+   {
+    "activations": 8,
+    "name": "Claude"
+   },
+   {
+    "activations": 7,
+    "name": "Safari"
+   },
+   {
+    "activations": 3,
+    "name": "Acrobat"
+   },
+   {
+    "activations": 3,
+    "name": "Notes"
+   },
+   {
+    "activations": 3,
+    "name": "Pages"
+   }
+  ],
+  "duration_minutes": 36,
+  "files": {
+   "created": [],
+   "deleted": [],
+   "modified": [
+    "backend/logs/devnote.log",
+    "backend/db.sqlite3"
+   ],
+   "truncated": false
+  },
+  "git": {
+   "commits": [],
+   "push_observed": false
+  },
+  "id": "071bbd62a95fb6cb",
+  "is_open": false,
+  "label": "work-1",
+  "last_activity_at": "2026-09-02T11:59:44+00:00",
+  "projects": [
+   "DevNote"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "app_activated",
+   "file_changed",
+   "terminal_finished"
+  ],
+  "source_event_ids": [
+   "056c86c6-0f3b-4306-9f59-6f41eecb21e6",
+   "05fb99b0-6f65-4af8-a15b-3fb45f030ed3",
+   "07c21062-75e5-4d2a-9d40-ea8bbc3aa771",
+   "085c6c4d-b0f1-4da8-867d-b8df95faaadd",
+   "095aae71-0352-4b6b-80c4-3260f21fb40a",
+   "0b1b84b8-2599-437b-b3f5-7db5724649e5",
+   "0d05b241-be6b-4b43-b7cf-0a8688eb8fd8",
+   "101cd0fb-018c-469d-ad7d-c322fe016333",
+   "1a195ef5-de01-442b-b041-635b971417f6",
+   "1e9dc945-fc00-41fe-bf60-1ea980fb6837",
+   "25897846-52db-4d1c-b301-531e3480704f",
+   "2e031ed9-ca61-49d7-aa9c-10337b0288bf",
+   "324b884b-d059-4442-937e-7993ed8c3db2",
+   "369e0d28-a37a-45bc-929c-bc07d9165030",
+   "37d3647d-0261-4a99-a510-dd2d1773993d",
+   "393cf2ca-1ba5-42b5-9848-938dd92d9c88",
+   "3bd47894-8612-40f4-998d-a3f3bdb46356",
+   "3d16e328-2b70-4b20-b47d-96589f367e81",
+   "3f63323c-185f-4690-a53d-6f1d7ebb05b4",
+   "470a77ea-5d00-4c0f-98d6-1e1a770b0f78",
+   "49858b7a-672e-41ce-aa8b-5e1e4e8c414e",
+   "4d8bd5ec-0128-4510-9dfb-7657111b1979",
+   "531edb58-8ea8-432a-818c-af7fbe3e270e",
+   "5391fb0b-d02a-41d1-8b2b-381acfeca2ef",
+   "5450423c-4dd5-45d2-8a79-3df78c495e86",
+   "56596504-6a9b-4078-b246-6741b0a68321",
+   "5bb310fd-4962-4d3f-9ff7-ad4897704599",
+   "5e3dd942-61ea-4b05-92ca-7e1bb8c73f7d",
+   "6070a9f9-ac20-471c-bbb1-5d33abcb7c16",
+   "631eea61-6a7f-4ce1-ada9-ad87bf22aca3",
+   "6654d183-7fe0-4d0a-8602-37c317a7b0ee",
+   "6cb9251c-d004-499b-a37b-469f2827e09d",
+   "6f044f02-81d2-4805-b2a3-80f94ab61d60",
+   "7326e6e8-5c64-44e2-b71d-b05d0b04234b",
+   "75b82110-f14f-4096-aee4-64051c4b04ef",
+   "768471fa-9bcc-46e4-8e86-b68f8b6496f9",
+   "77d5e2f7-071e-4f52-85fc-6e91918339e5",
+   "783ccdd4-4708-4c6c-add7-8923c4104b0d",
+   "78e1ce0d-d389-441c-8d55-80c70048afba",
+   "7c263758-e552-47c3-adc2-4514b39987b7",
+   "8097966f-3c6d-49ba-8742-2c79ac78c567",
+   "819ab1a9-4b0f-49ab-8b31-afa39db0c409",
+   "824ad2b3-eda1-484a-a8cf-00b6414447b4",
+   "8729fff8-1f06-4e56-ac0e-11f2dd5f7779",
+   "884ea0f6-3454-4d09-b68b-f1a2a0d8c0d1",
+   "885e2121-fbd6-4810-ac6c-e77281946b8a",
+   "8d2dc15b-f6bc-48e5-99da-5140f9c12c16",
+   "925f0590-6a68-4f6a-bbe4-956cfaa141f1",
+   "92f8ce53-4b68-4d7a-a4a9-ea15059c3b8d",
+   "9387103e-61a3-44d3-90ff-ed9ddb890db3",
+   "94826f30-db2c-43d1-9627-d874dce88aba",
+   "9b5164fd-c528-4012-a62e-5c19f7c4f502",
+   "a516d453-6b12-4b12-a8aa-f113e8f04f48",
+   "a61df783-08b5-4ce8-ac6c-50411284ca70",
+   "a754bbe7-dcf7-46cf-964b-fa72d2f54dab",
+   "aa316ffd-1f9b-44b2-a2d0-aa3f642b7412",
+   "ab48ec6d-bc77-4d94-8056-4a46dc4c2f3e",
+   "bfa5417a-14aa-4255-a680-8975a28f5348",
+   "c17bf24d-2d2c-4c6f-a84b-e7333c69898e",
+   "cb8ca89a-d87a-4f77-9eb3-710853a451a2",
+   "cd7cbbec-37c9-4e2f-8ff3-6514c4382535",
+   "d51a3fc7-fd59-40df-bcc3-bf2fade8ef84",
+   "d6b95f8e-b63f-4cdc-a9db-30bc732a7970",
+   "d84c342f-e301-493c-b660-5407b8e1b46a",
+   "dc55db0a-cde3-4aec-9caa-4e06a6d8df75",
+   "dccfad08-db55-44c0-8191-f9a47815e96b",
+   "decf3476-8852-4f8d-90ec-84d3160a0924",
+   "e410eaff-17b9-47b5-8d91-c4b7083c6888",
+   "e7d8f7ba-6873-4e8d-96e3-ce6b24b50fb0",
+   "eb1d2a6c-6273-48de-a039-ff8b628d54b8",
+   "eed699c9-45bd-466d-8efe-deab40c7d939",
+   "f244e82b-2f07-4ade-8f5d-5bb6dd7048ce",
+   "f33737cb-7462-488d-818f-afe3cb3cdbeb",
+   "f697c154-ca64-4d16-93e5-49f75d8f04fa",
+   "fa3c2d80-66eb-4b01-b9d0-769ab4f60075",
+   "fb1dac1c-e237-4437-96d6-182177cb9ac7",
+   "fd224d87-bf57-47b2-968b-e763ceebee36"
+  ],
+  "started_at": "2026-09-02T11:22:52+00:00",
+  "terminal": {
+   "errors": [],
+   "tests_failed": [],
+   "tests_passed": [],
+   "truncated": false
+  }
+ },
+ "why": "Milieu de gamme, DevNote, peu de fichiers."
+}

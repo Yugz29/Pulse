@@ -25,6 +25,7 @@ from typing import Any, Sequence
 
 from .config import Config, ConfigError, config_home, load_config
 from .core_client import CoreClient, CoreError, CoreUnavailable
+from .evaluation import evaluate
 from .llm.fake import FakeProvider
 from .llm.openai_compatible import OpenAICompatibleProvider
 from .llm.provider import LLMProvider, ProviderError
@@ -81,6 +82,11 @@ def _build_parser() -> argparse.ArgumentParser:
     show = commands.add_parser("show", help="afficher un résumé")
     show.add_argument("target", help="identifiant de session, ou « latest »")
     show.add_argument("--md", action="store_true", help="la reprise seule, en trois lignes")
+
+    ev = commands.add_parser("eval", help="passer le modèle courant sur le corpus gelé")
+    ev.add_argument("--provider", default=None, help="remplace llm_provider pour ce passage")
+    ev.add_argument("--corpus", type=Path, default=None, help="dossier du corpus (défaut eval/corpus)")
+    ev.add_argument("--out", type=Path, default=None, help="dossier de sortie (défaut eval/out)")
     return parser
 
 
@@ -304,11 +310,42 @@ def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state
     return EXIT_OK
 
 
+def run_eval(args: argparse.Namespace, config: Config) -> int:
+    """Passe le modèle courant sur le corpus gelé. Ne touche pas Core."""
+    if args.provider:
+        config = Config(**{**config.__dict__, "llm_provider": args.provider})
+    summarizer = _summarizer(argparse.Namespace(fake=None), config)
+    if not isinstance(summarizer, ProviderSummarizer):
+        print("eval exige un provider (llm_provider), pas --fake", file=sys.stderr)
+        return EXIT_USAGE
+
+    kwargs: dict[str, Any] = {"provider_name": summarizer.provider.name}
+    if args.corpus is not None:
+        kwargs["corpus_dir"] = args.corpus
+    if args.out is not None:
+        kwargs["out_dir"] = args.out
+    outcomes, run_dir = evaluate(summarizer, now=_now(), **kwargs)
+
+    for o in outcomes:
+        mark = {"ok": "✓", "rejected": "✗", "failed": "!"}[o.status]
+        dropped = f" [temp retirée]" if o.dropped_parameters else ""
+        print(
+            f"  {mark} {o.entry.label:<8} {o.entry.id}  ~{o.input_tokens_est:>5}tok  "
+            f"{(str(o.duration_ms) + 'ms') if o.duration_ms is not None else '—':>7}"
+            f"{dropped}  {o.detail or o.entry.why[:38]}"
+        )
+    ok = sum(o.status == "ok" for o in outcomes)
+    print(f"\n{ok}/{len(outcomes)} valides -> {run_dir}")
+    return EXIT_OK if ok == len(outcomes) else EXIT_USAGE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     os.umask(PRIVATE_UMASK)
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "eval":
+            return run_eval(args, load_config(args.config))
         config, client, state = _load(args)
         if args.command == "list":
             return run_list(args, config, client, state)

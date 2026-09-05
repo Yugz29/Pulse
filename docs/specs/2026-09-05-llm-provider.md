@@ -129,6 +129,7 @@ class CompletionResult:
     prompt_tokens: int | None
     completion_tokens: int | None
     duration_ms: int
+    dropped_parameters: tuple[str, ...] = ()   # paramètres retirés à la négociation
 
 
 class ProviderError(RuntimeError):
@@ -275,8 +276,14 @@ style existant :
 | --- | --- | --- | --- |
 | `llm_provider` | str | `""` | `fake` \| `openai-compatible` \| `mlx` ; vide = décision non prise |
 | `llm_base_url` | str | `""` | racine de l'endpoint distant ; `PULSE_LLM_BASE_URL` prime |
-| `llm_max_tokens` | int | `1024` | plafond de génération |
+| `llm_max_tokens` | int | `2048` | plafond de génération (voir ci-dessous) |
 | `llm_temperature` | float\|null | `null` | absente = non envoyée ; `0.0` pour un résumé reproductible |
+
+`llm_max_tokens` vaut **2048 et non 1024** : au passage de référence (PR 3),
+1024 tronquait 3 des 10 sessions réelles — la complétion s'arrêtait avant la
+fence JSON de clôture (`completion_tokens = 1024` pile), et `parse_model_output`
+rejetait une sortie pourtant valide. Un défaut qui échoue sur 30 % du corpus
+réel est un mauvais défaut.
 
 `llm_max_tokens` est à ajouter à `_INT_FIELDS`, `llm_temperature` à
 `_FLOAT_FIELDS` (`config.py`), sans quoi `load_config` les refuserait comme
@@ -290,7 +297,7 @@ déjà obligatoire via `require_model()`), `prompt_version`,
 # ~/.pulse_intelligence/config.toml
 model_id = "mlx-community/Qwen3.8-27B-4bit"
 llm_provider = "mlx"
-llm_max_tokens = 1024
+llm_max_tokens = 2048
 ```
 
 Basculer sur la référence distante : `llm_provider = "openai-compatible"`,
@@ -305,9 +312,18 @@ prévue. Pas de `bench/`.
 
 `eval` accepte `--provider` et écrit sous
 `eval/out/<provider>-<model_id assaini>/<session_id>.json`, plus un `meta.json`
-par passage (durée, tokens quand le provider les rend, pic mémoire via
-`resource`). La comparaison local ↔ référence distante se fait à l'œil sur ces
-fichiers ; pas de score automatique.
+par passage (durée, tokens quand le provider les rend, et **`dropped_parameters`
+par session** — un résumé produit sans `temperature = 0.0` n'est pas
+reproductible de la même façon). La comparaison local ↔ référence distante se
+fait à l'œil sur ces fichiers ; pas de score automatique.
+
+**Taille réelle des sessions.** Le corpus gelé plafonne à **~6 500 tokens
+d'entrée** (la plus grosse, `3cabaefb`, ~6 369 estimés) : sur 90 jours de trace,
+aucune session réelle n'approche les 60k tokens que le critère n°3 anticipe. Ce
+critère ne s'éprouve donc **pas** sur le corpus réel — il s'éprouve sur une
+entrée **synthétique** de ~60k tokens dans `eval/stress/synthetic-60k.json`,
+clairement étiquetée `_synthetic`, hors du corpus et hors de tout jugement de
+qualité, exécutée par le seul spike B (mémoire du `MLXProvider`).
 
 Règle inchangée : tout changement de prompt ou de modèle passe par `eval` avant
 d'être activé, et le rapport est joint à la PR.

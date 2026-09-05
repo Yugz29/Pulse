@@ -1,0 +1,176 @@
+{
+ "context": {
+  "current_session": {
+   "activity_count": 32,
+   "apps": [],
+   "duration_minutes": 87,
+   "files": {
+    "created": [],
+    "deleted": [],
+    "modified": [],
+    "truncated": false
+   },
+   "git": {
+    "commits": [],
+    "push_observed": true
+   },
+   "id": "6a4166356dbab6ec",
+   "is_open": true,
+   "label": "work-1",
+   "last_activity_at": "2026-08-11T10:05:01+00:00",
+   "projects": [
+    "holbertonschool-agentic_ai"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "terminal_finished"
+   ],
+   "source_event_ids": [
+    "0311c8ff-0755-4ac9-a0b3-e1a0bc7a1303",
+    "05644daf-2398-4602-9837-ad16b384df96",
+    "064bad13-0394-4a56-97df-cebe917fac5d",
+    "0851896c-c1d6-48f5-b9f3-370942b1bcab",
+    "184437ed-d957-4604-8d08-ab7d0a135a82",
+    "352598b4-6ddd-4b67-90a3-1a88b1ec2869",
+    "38abe8a6-1ea3-43c8-a78d-7465f221562f",
+    "438c2d93-8df9-4a30-9d2f-5d8742ddc740",
+    "44bf77e0-bd8d-42bc-bf66-3cb9eca61a6c",
+    "4db45856-6fde-4f55-8838-fec985bfd2b1",
+    "5005ded3-4e4d-48d6-9098-458dcfced052",
+    "5020d184-dfbb-48a9-bc1b-fca3a00a5feb",
+    "50f1755e-ffce-488b-9ffe-6ccb84e1eea0",
+    "52ab941b-a858-4ff0-b918-a6a5c77b45ef",
+    "5d0608e3-54bd-496f-b0a7-49d1d71cb92e",
+    "647ec8a3-dab9-4036-b99b-b2c6befb6ba8",
+    "6ad54bd4-b5cc-479d-828c-507f4ab29915",
+    "83c21a39-13e3-416e-b0ca-0c571b97d8e4",
+    "8c552bf9-f927-4fee-8d41-407ccfd5e0b3",
+    "a89fcdfa-968b-448d-a5d2-ff3184bc8b73",
+    "ad598ea1-814c-486b-bfbf-dc814dfb0f69",
+    "b2cd7bcd-5857-4927-9b82-3952f034998f",
+    "b562c637-9af6-447d-81b5-4fb7accedf5b",
+    "c3818684-c330-42ba-842e-5be91e9f412a",
+    "cd2a19bd-1d00-4ad8-965f-dd92bed733ba",
+    "d479214c-44ad-4bbb-97ab-1ec9c4600212",
+    "d9cfd65c-2ae1-43bb-a085-668ea7c85c1c",
+    "e486f19f-cf63-450b-9bf3-39457027f7dc",
+    "e50d02e9-2ac9-400e-8abd-515c7ea56068",
+    "ec86a359-f285-4630-9e81-7ad3791729d4",
+    "f429aeec-0868-4bf2-bde2-985a00a2eab7",
+    "faae23b9-73c5-417c-ba06-45ed3ca92c1b"
+   ],
+   "started_at": "2026-08-11T08:38:01+00:00",
+   "terminal": {
+    "errors": [
+     "git statuys",
+     "git add vue/ .gitignore",
+     "git add front_end-frameworks/{react,vue}/{vite.config.js,package.json}"
+    ],
+    "tests_failed": [],
+    "tests_passed": [],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-05T22:06:25.326496+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 0,
+   "agent": "claude-code",
+   "ended_at": "2026-08-11T10:11:02.915000+00:00",
+   "started_at": "2026-08-11T09:39:36.608000+00:00",
+   "summary": "Agent session (claude-code): Contexte : mon repo GitHub `holbertonschool-agentic_ai` contient deux projets front-end dans front_end-frameworks/react/ et front_end-frameworks/vue/, tous deux déployés via GitHub Pages sur la branche gh-pages. Le déploiement du projet Vue a écrasé le déploiement React car les…",
+   "workspace": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks"
+  },
+  "last_session_summary": null,
+  "recent_sessions": [],
+  "reference_at": "2026-08-11T10:05:01+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": {
+    "branch": "main",
+    "dirty": false,
+    "last_commit": null
+   },
+   "path": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+   "project": "holbertonschool-agentic_ai",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-08-11",
+ "id": "6a4166356dbab6ec",
+ "label": "work-1",
+ "session_raw": {
+  "activity_count": 32,
+  "apps": [],
+  "duration_minutes": 87,
+  "files": {
+   "created": [],
+   "deleted": [],
+   "modified": [],
+   "truncated": false
+  },
+  "git": {
+   "commits": [],
+   "push_observed": true
+  },
+  "id": "6a4166356dbab6ec",
+  "is_open": false,
+  "label": "work-1",
+  "last_activity_at": "2026-08-11T10:05:01+00:00",
+  "projects": [
+   "holbertonschool-agentic_ai"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "terminal_finished"
+  ],
+  "source_event_ids": [
+   "0311c8ff-0755-4ac9-a0b3-e1a0bc7a1303",
+   "05644daf-2398-4602-9837-ad16b384df96",
+   "064bad13-0394-4a56-97df-cebe917fac5d",
+   "0851896c-c1d6-48f5-b9f3-370942b1bcab",
+   "184437ed-d957-4604-8d08-ab7d0a135a82",
+   "352598b4-6ddd-4b67-90a3-1a88b1ec2869",
+   "38abe8a6-1ea3-43c8-a78d-7465f221562f",
+   "438c2d93-8df9-4a30-9d2f-5d8742ddc740",
+   "44bf77e0-bd8d-42bc-bf66-3cb9eca61a6c",
+   "4db45856-6fde-4f55-8838-fec985bfd2b1",
+   "5005ded3-4e4d-48d6-9098-458dcfced052",
+   "5020d184-dfbb-48a9-bc1b-fca3a00a5feb",
+   "50f1755e-ffce-488b-9ffe-6ccb84e1eea0",
+   "52ab941b-a858-4ff0-b918-a6a5c77b45ef",
+   "5d0608e3-54bd-496f-b0a7-49d1d71cb92e",
+   "647ec8a3-dab9-4036-b99b-b2c6befb6ba8",
+   "6ad54bd4-b5cc-479d-828c-507f4ab29915",
+   "83c21a39-13e3-416e-b0ca-0c571b97d8e4",
+   "8c552bf9-f927-4fee-8d41-407ccfd5e0b3",
+   "a89fcdfa-968b-448d-a5d2-ff3184bc8b73",
+   "ad598ea1-814c-486b-bfbf-dc814dfb0f69",
+   "b2cd7bcd-5857-4927-9b82-3952f034998f",
+   "b562c637-9af6-447d-81b5-4fb7accedf5b",
+   "c3818684-c330-42ba-842e-5be91e9f412a",
+   "cd2a19bd-1d00-4ad8-965f-dd92bed733ba",
+   "d479214c-44ad-4bbb-97ab-1ec9c4600212",
+   "d9cfd65c-2ae1-43bb-a085-668ea7c85c1c",
+   "e486f19f-cf63-450b-9bf3-39457027f7dc",
+   "e50d02e9-2ac9-400e-8abd-515c7ea56068",
+   "ec86a359-f285-4630-9e81-7ad3791729d4",
+   "f429aeec-0868-4bf2-bde2-985a00a2eab7",
+   "faae23b9-73c5-417c-ba06-45ed3ca92c1b"
+  ],
+  "started_at": "2026-08-11T08:38:01+00:00",
+  "terminal": {
+   "errors": [
+    "git statuys",
+    "git add vue/ .gitignore",
+    "git add front_end-frameworks/{react,vue}/{vite.config.js,package.json}"
+   ],
+   "tests_failed": [],
+   "tests_passed": [],
+   "truncated": false
+  }
+ },
+ "why": "Raisonnement pur : 0 fichier, domaine scolaire, agent."
+}

@@ -12,7 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .llm.provider import CompletionRequest, LLMProvider, ProviderError
+from .llm.provider import (
+    CompletionRequest,
+    CompletionResult,
+    LLMProvider,
+    ProviderError,
+)
 from .summarizer import SummarizerError
 
 
@@ -53,7 +58,13 @@ class ProviderSummarizer:
         if not self.system.strip():
             raise SummarizerError(f"prompt vide : {self.prompt_path}")
 
-    def summarize(self, model_input: str) -> str:
+    def complete(self, model_input: str) -> CompletionResult:
+        """Le résultat complet du modèle, métadonnées comprises.
+
+        `summarize_session` n'a besoin que du texte ; `eval` veut aussi les
+        tokens, la durée et `dropped_parameters` pour son rapport. Un seul
+        chemin d'appel, deux profondeurs de retour.
+        """
         request = CompletionRequest(
             system=self.system,
             prompt=model_input,
@@ -61,9 +72,11 @@ class ProviderSummarizer:
             temperature=self.temperature,
         )
         try:
-            result = self.provider.complete(request)
+            return self.provider.complete(request)
         except ProviderError as exc:
             # Le résumé de session sait déjà traiter SummarizerError ; il n'a
             # pas à connaître les pannes propres à un runtime d'inférence.
             raise SummarizerError(f"{self.provider.name}: {exc}") from exc
-        return result.text
+
+    def summarize(self, model_input: str) -> str:
+        return self.complete(model_input).text
