@@ -142,3 +142,68 @@ def test_fix_permissions_script_tightens_only_pulse_roots_and_is_idempotent(tmp_
     assert "elsewhere" not in output
 
     assert run_fix_permissions(home) == ""
+
+
+# --- Casse divergente sous une racine Pulse (hardening 0.5.6) -------------
+
+
+def _filesystem_ignores_case(tmp_path: Path) -> bool:
+    probe = tmp_path / "CaseProbe"
+    probe.mkdir()
+    return (tmp_path / "caseprobe").is_dir()
+
+
+def test_a_pulse_root_written_in_another_case_is_recognized(tmp_path, monkeypatch):
+    import pytest
+
+    if not _filesystem_ignores_case(tmp_path):
+        pytest.skip("volume sensible à la casse : la divergence est impossible")
+    root = tmp_path / ".pulse_v2"
+    (root / "logs").mkdir(parents=True)
+    monkeypatch.setattr(private_files, "private_roots", lambda: (root,))
+
+    # Le même dossier, écrit dans une autre casse : `relative_to` échoue,
+    # le noyau confirme que c'est le même objet.
+    assert private_files.is_private_path(tmp_path / ".PULSE_V2" / "logs")
+
+
+def test_a_case_divergent_directory_under_a_root_is_tightened(tmp_path, monkeypatch):
+    import pytest
+
+    if not _filesystem_ignores_case(tmp_path):
+        pytest.skip("volume sensible à la casse : la divergence est impossible")
+    root = tmp_path / ".pulse_v2"
+    logs = root / "logs"
+    logs.mkdir(parents=True)
+    os.chmod(root, 0o755)
+    os.chmod(logs, 0o755)
+    monkeypatch.setattr(private_files, "private_roots", lambda: (root,))
+
+    ensure_private_directory(tmp_path / ".PULSE_V2" / "logs")
+
+    assert mode_of(logs) == 0o700
+
+
+def test_the_identity_fallback_does_not_widen_to_lookalike_names(tmp_path, monkeypatch):
+    root = tmp_path / ".pulse_v2"
+    root.mkdir()
+    lookalike = tmp_path / ".pulse_v2_backup"
+    lookalike.mkdir(mode=0o755)
+    os.chmod(lookalike, 0o755)
+    monkeypatch.setattr(private_files, "private_roots", lambda: (root,))
+
+    # Nom voisin, objet différent : ni reconnu, ni resserré.
+    assert not private_files.is_private_path(lookalike)
+    ensure_private_directory(lookalike)
+    assert mode_of(lookalike) == 0o755
+
+
+def test_the_identity_fallback_leaves_unrelated_paths_out(tmp_path, monkeypatch):
+    root = tmp_path / ".pulse_v2"
+    root.mkdir()
+    foreign = tmp_path / "foreign" / "deep"
+    foreign.mkdir(parents=True)
+    monkeypatch.setattr(private_files, "private_roots", lambda: (root,))
+
+    assert not private_files.is_private_path(foreign)
+    assert not private_files.is_private_path(tmp_path / "absent" / "child")

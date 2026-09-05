@@ -62,7 +62,10 @@ Direction, architecture, roadmap et décisions : `docs/VISION.md` (canonique).
 
 ## Jamais
 
-- **Core est gelé (0.4.0 : Context API, type `session_summary`).** Ne pas modifier
+- **Core est gelé sur son périmètre fonctionnel (0.5.6).** Le gel interdit les
+  ajouts (nouvelle source, nouveau type d'événement, changement du contrat
+  `GET /context`), pas les correctifs — voir
+  `docs/decisions/2026-09-05-reouverture-core-hardening.md`. Ne pas modifier
   `core/daemon_v2/`, `core/tests_v2/`, `core/scripts/`, `core/macos_observer/`
   sans demande explicite de l'utilisateur.
 - Pas de `git push` sans accord explicite de l'utilisateur.

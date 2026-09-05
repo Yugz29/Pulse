@@ -10,7 +10,8 @@ sur la machine.
 ## Structure du repo
 
 - `core/` — Pulse Core, la couche observation (daemon Python, watchers,
-  SQLite, observateur macOS, Context API `GET /context`). Gelée en 0.5.4.
+  SQLite, observateur macOS, Context API `GET /context`). Gelée sur son
+  périmètre fonctionnel en 0.5.6.
   Historique git conservé.
 - `intelligence/` — couche Intelligence (résumés de session, mémoire). CLI
   complète avec faux modèle livrée sur le contrat de `/context` ; modèle MLX

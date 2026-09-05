@@ -33,16 +33,58 @@ def private_roots() -> tuple[Path, ...]:
 
 
 def is_private_path(path: Path) -> bool:
+    """Le chemin est-il sous une racine Pulse ?
+
+    La comparaison lexicale de ``PurePath`` est sensible à la casse alors
+    qu'APFS ne l'est pas : un chemin écrit ``~/.pulse_v2`` sous un ``$HOME``
+    d'une autre casse désignait le même dossier sans être reconnu, donc sans
+    être resserré en ``0700``/``0600``.
+
+    Le repli demande au système, pas à une heuristique de casse : deux chemins
+    ne sont rapprochés que si le noyau dit que ce sont le **même objet**
+    (``st_dev``/``st_ino``). Sur un volume sensible à la casse, ``.PULSE_V2``
+    et ``.pulse_v2`` restent donc deux dossiers distincts, et le second n'est
+    pas reconnu — ce qui est correct. La reconnaissance s'élargit ;
+    ``private_roots()`` ne bouge pas, donc l'ensemble des dossiers dont Pulse
+    modifie le mode ne s'élargit jamais.
+    """
     try:
         resolved = path.expanduser().resolve()
     except OSError:
         return False
+    roots: list[Path] = []
     for root in private_roots():
         try:
-            resolved.relative_to(root.resolve())
-        except (OSError, ValueError):
+            resolved_root = root.resolve()
+        except OSError:
+            continue
+        roots.append(resolved_root)
+        try:
+            resolved.relative_to(resolved_root)
+        except ValueError:
             continue
         return True
+    return _is_inside_by_identity(resolved, roots)
+
+
+def _is_inside_by_identity(resolved: Path, roots: list[Path]) -> bool:
+    """``resolved`` ou l'un de ses parents est-il le même objet qu'une racine ?"""
+    root_identities: set[tuple[int, int]] = set()
+    for root in roots:
+        try:
+            info = root.stat()
+        except OSError:
+            continue
+        root_identities.add((info.st_dev, info.st_ino))
+    if not root_identities:
+        return False
+    for candidate in (resolved, *resolved.parents):
+        try:
+            info = candidate.stat()
+        except OSError:
+            continue
+        if (info.st_dev, info.st_ino) in root_identities:
+            return True
     return False
 
 

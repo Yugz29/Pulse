@@ -272,3 +272,67 @@ func repeatedSystemNotificationsAreSafelyDeduplicated() {
         #expect(deduplicator.isDuplicate(event))
     }
 }
+
+// MARK: - Réentrance du pont (hardening 0.5.6)
+
+/// Boîte mutable partagée avec un bloc de run loop exécuté sur le même thread.
+private final class ReentrancyFlag: @unchecked Sendable {
+    var didRun = false
+}
+
+@Test
+func outboxBridgeDoesNotPumpTheRunLoopWhileWaiting() throws {
+    // `waitUntilExit` fait tourner la run loop du thread appelant. Sur le
+    // thread principal de l'observateur, elle redélivrait
+    // `didActivateApplicationNotification` pendant l'enqueue : `observe(_:)`
+    // était ré-entré, l'accès exclusif à `recorder` violé, le processus abattu
+    // (« Fatal access conflict detected », 4 fois le 2026-09-05).
+    let fileManager = FileManager.default
+    let temporaryDirectory = fileManager.temporaryDirectory.appendingPathComponent(
+        "pulse-outbox-reentrancy-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try fileManager.createDirectory(
+        at: temporaryDirectory,
+        withIntermediateDirectories: true
+    )
+    defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+    let executable = temporaryDirectory.appendingPathComponent("slow.sh")
+    let script = """
+        #!/bin/sh
+        sleep 0.5
+        printf stable-instance
+        """
+    try Data(script.utf8).write(to: executable)
+    try fileManager.setAttributes(
+        [.posixPermissions: 0o700],
+        ofItemAtPath: executable.path
+    )
+
+    let bridge = OutboxBridge(
+        repositoryRoot: temporaryDirectory,
+        pythonExecutable: executable
+    )
+
+    // Un bloc en attente sur la run loop du thread courant : il ne doit
+    // s'exécuter que si quelqu'un fait tourner cette run loop.
+    let flag = ReentrancyFlag()
+    let runLoop = CFRunLoopGetCurrent()
+    CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue) {
+        flag.didRun = true
+    }
+    CFRunLoopWakeUp(runLoop)
+
+    _ = try bridge.instanceID()
+
+    #expect(
+        flag.didRun == false,
+        "le pont a fait tourner la run loop pendant l'attente du processus"
+    )
+
+    // Sans cette seconde attente, le test passerait aussi si le bloc n'avait
+    // jamais pu s'exécuter : on vérifie qu'il était bien en attente.
+    CFRunLoopRunInMode(.defaultMode, 0.5, false)
+    #expect(flag.didRun == true, "le bloc n'était pas réellement en attente")
+}

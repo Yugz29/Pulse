@@ -4,6 +4,43 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.5.6.0] - 2026-09-05
+
+Lot hardening ouvert au retour de migration, note de décision
+`docs/decisions/2026-09-05-reouverture-core-hardening.md`. Le gel de Core porte
+sur son périmètre fonctionnel, pas sur ses correctifs : aucun ajout de source,
+de type d'événement ni de changement du contrat `GET /context`.
+
+### Corrigé
+- Le pont vers l'outbox attend la fin de son processus sans faire tourner la
+  run loop du thread appelant. `waitUntilExit` la pompait, ce qui redélivrait
+  les notifications AppKit pendant l'enqueue : `ApplicationObserver.observe`
+  était ré-entré alors que son `recorder` tenait encore un accès exclusif, et
+  le processus était abattu (« Fatal access conflict detected », 4 fois le
+  2026-09-05). `SystemObserver` passe par le même pont.
+- Les workspaces déclarés dans `watched_workspaces` sont ramenés à la casse du
+  disque. APFS est insensible à la casse et `resolve()` ne la corrige pas :
+  une graphie différente laissait le watcher démarrer, journaliser
+  « Watching files in … » et n'émettre plus rien, `should_ignore` filtrant
+  chaque chemin remonté par FSEvents. La déduplication porte désormais sur la
+  forme canonique.
+- Un chemin sous une racine Pulse écrit dans une autre casse est reconnu comme
+  privé et resserré en `0700`/`0600`. Le repli compare l'identité de l'objet
+  (`st_dev`/`st_ino`), pas la casse : `private_roots()` ne bouge pas, donc
+  l'ensemble des dossiers dont Pulse modifie le mode ne s'élargit jamais.
+- `status.sh` ne confond plus un daemon absent avec un daemon lent : le délai
+  passe à 10 s et une expiration a son propre message. `/status` répondant en
+  ~2,1 s, `make status` sortait en erreur pendant que les cinq services
+  tournaient.
+
+### Documentation
+- Versions de Core réalignées dans `CLAUDE.md`, `AGENTS.md`, `README.md` et
+  `docs/VISION.md` ; la formule « gelé » précise désormais que le gel porte sur
+  le périmètre fonctionnel.
+
+Suite portée à 550 tests Core et 15 tests Swift. Suite Intelligence inchangée :
+62 tests.
+
 ## [0.5.5.0] - 2026-09-03
 
 Durcissement secondaire issu de l'audit externe (PR #38 et #39), sans ajout

@@ -83,14 +83,17 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, gelé, version 0.5.4** (`core/`). Daemon Flask et
-SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
-(FSEvents), applications (Swift), hook Git, sessions d'agents Claude Code /
-Codex en événements dérivés, services résidents sous launchd, vue HTML locale.
+**État actuel : existe, gelé sur son périmètre fonctionnel, version 0.5.6**
+(`core/`). Daemon Flask et SQLite append-only (`~/.pulse_v2/trace.db`),
+watchers terminal, fichiers (FSEvents), applications (Swift), hook Git,
+sessions d'agents Claude Code / Codex en événements dérivés, services
+résidents sous launchd, vue HTML locale.
 Identité de session stable par hash des événements sources (0.5.0).
 Le Context API (`GET /context`, pas 2 de la roadmap) est livré en 0.3.0 ; le
 type d'événement `session_summary` (0.4.0) et l'identité stable des sessions
-(0.5.0) sont les seuls ajouts du pas 3 côté Core, qui reste gelé.
+(0.5.0) sont les seuls **ajouts** du pas 3 côté Core. Les versions suivantes
+(0.5.1 à 0.5.6) sont des lots de correctifs sans ajout fonctionnel : le gel
+porte sur le périmètre, pas sur les corrections.
 
 ### Intelligence — transformer les faits en contexte
 
@@ -242,3 +245,9 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   noms de projet d'époque conservés, chevauchement du jour tranché par la
   première trace locale. Outils dans `tools/`
   ([note](decisions/2026-09-05-migration-trace-ancienne-machine.md)).
+- **2026-09-05** — Le gel de Core porte sur son périmètre fonctionnel, pas sur
+  ses correctifs : lot hardening 0.5.6 ouvert sur trois items (réentrance de
+  l'observateur d'applications, faux négatif de `status.sh`, résolution de
+  casse là où l'échec est silencieux). Aucune nouvelle source, aucun nouveau
+  type d'événement, contrat `GET /context` inchangé
+  ([note](decisions/2026-09-05-reouverture-core-hardening.md)).
