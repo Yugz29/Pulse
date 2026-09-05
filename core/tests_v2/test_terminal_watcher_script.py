@@ -4,7 +4,20 @@ import subprocess
 import time
 from pathlib import Path
 
-from daemon_v2.producer_outbox import ProducerOutbox
+from daemon_v2.producer_outbox import _BUSY_TIMEOUT_MS, ProducerOutbox
+
+
+# Le hook doit renoncer *après* avoir attendu le busy timeout de l'outbox. La
+# borne basse est dérivée de la constante plutôt que recopiée : elle suit le
+# jour où le timeout change. Marge de 10 % — SQLite ne rend pas la main à la
+# milliseconde près.
+_EXPECTED_WAIT_S = _BUSY_TIMEOUT_MS / 1000
+_MIN_WAIT_S = _EXPECTED_WAIT_S * 0.9
+# Plafond large : il n'existe que pour attraper un blocage franc. Un plafond
+# serré assertait en réalité la vitesse du runner — 5 s d'attente plus deux
+# démarrages de processus dépassaient les 8 s d'origine sur macos-latest, et
+# la CI tombait sur une machine lente, pas sur une régression.
+_HANG_TIMEOUT_S = 60
 
 
 def test_terminal_hook_reports_enqueue_failure_without_echoing_command():
@@ -59,7 +72,7 @@ _pulse_terminal_precmd
             ["zsh", "-c", script, "pulse-terminal-test", str(hook)],
             capture_output=True,
             text=True,
-            timeout=8,
+            timeout=_HANG_TIMEOUT_S,
             check=False,
             env={**os.environ, "PULSE_CORE_OUTBOX_PATH": str(database)},
         )
@@ -69,7 +82,11 @@ _pulse_terminal_precmd
     elapsed = time.monotonic() - started_at
 
     assert result.returncode == 0
-    assert 4.5 <= elapsed < 8
+    # Une machine lente ne peut qu'allonger `elapsed`, jamais le raccourcir :
+    # la borne basse reste vraie partout, et c'est elle qui porte le contrat
+    # (« il a attendu le verrou »). Un blocage franc est attrapé par le
+    # `timeout=` du sous-processus, qui lève plutôt que de laisser passer.
+    assert elapsed >= _MIN_WAIT_S
     assert result.stdout == ""
     assert result.stderr == (
         "Pulse : commande non enregistrée "

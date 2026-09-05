@@ -88,6 +88,20 @@ def _load(args: argparse.Namespace) -> tuple[Config, CoreClient, JobState]:
     return config, client, JobState.load(state_path)
 
 
+def _now() -> datetime:
+    """L'unique horloge de la CLI.
+
+    Tout ce qui est sous la CLI accepte déjà un `now` explicite — `lookback_days`,
+    `classify_sessions`, `find_session`, `run_pass`. Seule la CLI lisait l'heure
+    en quatre endroits, dont un qui ne la transmettait pas à `run_pass`. La
+    fenêtre de sélection valant « aujourd'hui plus la veille », une suite dont
+    les fixtures portent une date fixe passait le jour où elle a été écrite puis
+    échouait deux jours plus tard, sans qu'une ligne de code ait bougé. Une
+    seule source, remplaçable par les tests, referme la couture.
+    """
+    return datetime.now(timezone.utc)
+
+
 def _summarizer(args: argparse.Namespace, config: Config) -> Summarizer:
     if args.fake is not None:
         return FakeSummarizer(
@@ -118,7 +132,7 @@ def _format_listing(items: list[Classified]) -> str:
 
 
 def run_list(args: argparse.Namespace, config: Config, client: CoreClient, state: JobState) -> int:
-    now = datetime.now(timezone.utc)
+    now = _now()
     days = [args.date] if args.date is not None else None
     items = classify_sessions(
         client,
@@ -158,7 +172,7 @@ def run_list(args: argparse.Namespace, config: Config, client: CoreClient, state
 def run_summarize(
     args: argparse.Namespace, config: Config, client: CoreClient, state: JobState
 ) -> int:
-    now = datetime.now(timezone.utc)
+    now = _now()
     summarizer = _summarizer(args, config)
     session = find_session(client, args.session_id, now=now, config=config, day=args.date)
     if session is None:
@@ -184,8 +198,8 @@ def run_summarize(
 def run_run(args: argparse.Namespace, config: Config, client: CoreClient, state: JobState) -> int:
     summarizer = _summarizer(args, config)
     while True:
-        report = run_pass(client, summarizer, config, state)
-        stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        report = run_pass(client, summarizer, config, state, now=_now())
+        stamp = _now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         print(
             f"[{stamp}] candidates={report.candidates} created={report.count('created')} "
             f"duplicate={report.count('duplicate')} failed={report.count('failed')} "
