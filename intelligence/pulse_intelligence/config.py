@@ -40,7 +40,11 @@ class Config:
     # branche par inadvertance.
     llm_provider: str = ""
     llm_base_url: str = ""
-    llm_max_tokens: int = 1024
+    # 2048 et non 1024 : le passage de référence du corpus (PR 3) a tronqué 3
+    # sessions réelles sur 10 à 1024 tokens de complétion — la fence JSON de
+    # clôture n'était jamais atteinte, la sortie était rejetée à tort. Un
+    # défaut qui échoue 30 % du temps sur du réel n'est pas un défaut.
+    llm_max_tokens: int = 2048
     # Absente = non envoyée. Certains modèles derrière un endpoint compatible
     # refusent le paramètre ; la reproductibilité à 0.0 se demande, elle ne
     # s'impose pas. La négociation du provider reste le filet si un modèle
