@@ -66,6 +66,16 @@ public struct OutboxBridge: Sendable {
         process.standardOutput = standardOutput
         process.standardError = standardError
 
+        // `waitUntilExit` attend en faisant tourner la run loop du thread
+        // appelant. Sur le thread principal des observateurs, elle redélivre
+        // les notifications AppKit pendant l'enqueue : `observe(_:)` est
+        // ré-entré, l'accès exclusif à son `recorder` est violé et le
+        // processus est abattu (« Fatal access conflict detected »).
+        // Le sémaphore attend sans rien pomper : les notifications restent en
+        // file et sont livrées après, dans l'ordre.
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
+
         try process.run()
 
         let outputCapture = PipeCapture(standardOutput.fileHandleForReading)
@@ -87,7 +97,7 @@ public struct OutboxBridge: Sendable {
             standardInput.fileHandleForWriting.write(input)
         }
         try standardInput.fileHandleForWriting.close()
-        process.waitUntilExit()
+        exited.wait()
 
         drainGroup.wait()
 
