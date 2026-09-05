@@ -3,7 +3,12 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["pulse_intelligence"]
+packages = ["pulse_intelligence", "pulse_intelligence.llm"]
+
+[tool.setuptools.package-data]
+# Le prompt est une donnée du paquet : sans cette ligne, une installation
+# non éditable livrerait un ProviderSummarizer sans son prompt.
+pulse_intelligence = ["prompts/*.md"]
 
 [project]
 name = "pulse-intelligence"
