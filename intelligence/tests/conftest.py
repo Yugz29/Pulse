@@ -236,3 +236,21 @@ def fake_output_file(tmp_path) -> Path:
     path = tmp_path / "output.json"
     path.write_text(valid_output(), encoding="utf-8")
     return path
+
+
+@pytest.fixture(autouse=True)
+def frozen_cli_clock(monkeypatch):
+    """L'horloge de la CLI est gelée sur l'instant des fixtures.
+
+    Les vues rejouées par le faux Core sont ancrées sur ``REFERENCE`` et la
+    fenêtre de sélection vaut « aujourd'hui plus la veille » (`lookback_days`
+    = 1). Sans gel, la suite passe le jour où elle est écrite puis échoue deux
+    jours plus tard : le 2026-09-05, cinq tests de CLI ne trouvaient plus
+    aucune session close, sans qu'une ligne de code ait bougé.
+
+    Le gel porte sur l'horloge, pas sur les dates des fixtures : décaler les
+    fixtures aurait seulement reporté la panne de quelques mois.
+    """
+    from pulse_intelligence import cli
+
+    monkeypatch.setattr(cli, "_now", lambda: at(120))
