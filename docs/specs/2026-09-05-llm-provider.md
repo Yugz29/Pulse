@@ -118,7 +118,7 @@ class CompletionRequest:
     system: str
     prompt: str
     max_tokens: int = 1024
-    temperature: float = 0.0
+    temperature: float | None = None   # None = paramètre non envoyé
 
 
 @dataclass(frozen=True)
@@ -150,7 +150,14 @@ Règles :
   traduit en `SummarizerError`, que `summarize_session` sait déjà traiter
   (`session_summary.py`, `except (SummarizerError, InvalidModelOutput)`).
 - Aucune logique métier dans les providers. Pas de parsing, pas de retry.
-- `temperature = 0.0` par défaut : on veut un résumé reproductible.
+- `temperature` par défaut **non envoyée** (`llm_temperature` absente) :
+  certains modèles derrière un endpoint compatible refusent le paramètre
+  (vu en réel : « `temperature` is deprecated for this model », 400). La
+  reproductibilité à `0.0` se demande explicitement en config ; le provider
+  négocie en dernier recours si un modèle refuse une valeur pourtant fixée, et
+  `CompletionResult.dropped_parameters` en garde trace — à reporter dans le
+  `meta.json` d'`eval` (§10), un résumé produit sans `0.0` n'étant pas
+  reproductible de la même façon.
 
 ## 6. Les trois providers
 
@@ -261,17 +268,19 @@ une seconde tentative est une décision humaine.
 ## 9. Configuration — clés à plat
 
 `Config` est un dataclass **plat** et `load_config` refuse les clés inconnues :
-les tables imbriquées ne se chargeraient pas. Trois clés ajoutées, dans le style
-existant :
+les tables imbriquées ne se chargeraient pas. Quatre clés ajoutées, dans le
+style existant :
 
 | Clé | Type | Défaut | Rôle |
 | --- | --- | --- | --- |
-| `llm_provider` | str | `"fake"` | `fake` \| `openai-compatible` \| `mlx` |
+| `llm_provider` | str | `""` | `fake` \| `openai-compatible` \| `mlx` ; vide = décision non prise |
 | `llm_base_url` | str | `""` | racine de l'endpoint distant ; `PULSE_LLM_BASE_URL` prime |
 | `llm_max_tokens` | int | `1024` | plafond de génération |
+| `llm_temperature` | float\|null | `null` | absente = non envoyée ; `0.0` pour un résumé reproductible |
 
-`llm_max_tokens` est à ajouter à `_INT_FIELDS` (`config.py`), sans quoi
-`load_config` le refuserait comme non-chaîne.
+`llm_max_tokens` est à ajouter à `_INT_FIELDS`, `llm_temperature` à
+`_FLOAT_FIELDS` (`config.py`), sans quoi `load_config` les refuserait comme
+non-chaînes.
 
 Champs **réutilisés**, aucun doublon créé : `model_id` (identité du modèle,
 déjà obligatoire via `require_model()`), `prompt_version`,

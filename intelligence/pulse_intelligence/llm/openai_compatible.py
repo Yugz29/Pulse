@@ -25,6 +25,8 @@ ENV_API_KEY = "PULSE_LLM_API_KEY"
 ENV_MODEL = "PULSE_LLM_MODEL"
 
 DEFAULT_TIMEOUT_S = 120
+# Les seuls paramètres qu'un endpoint peut refuser et qu'on accepte de retirer.
+_NEGOTIABLE_PARAMETERS = ("temperature",)
 
 
 def _completions_url(base_url: str) -> str:
@@ -86,21 +88,28 @@ class OpenAICompatibleProvider:
                 {"role": "user", "content": request.prompt},
             ],
             "max_tokens": request.max_tokens,
-            "temperature": request.temperature,
         }
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
         started = time.monotonic()
-        try:
-            response = self.session.post(
-                _completions_url(self.base_url),
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=self.timeout_s,
-            )
-        except requests.RequestException as exc:
-            raise ProviderError(f"endpoint injoignable : {exc}") from exc
+        response = self._post(payload)
+
+        # Négociation de paramètres, pas retry sur contenu : certains modèles
+        # derrière un endpoint « compatible » refusent un paramètre optionnel
+        # (vu en réel : « `temperature` is deprecated for this model », 400).
+        # On retire ce paramètre-là, une fois, et on le dit dans le résultat.
+        # La liste est fermée : `max_tokens` n'en fait pas partie, le retirer
+        # laisserait le modèle générer sans borne.
+        dropped: list[str] = []
+        for parameter in _NEGOTIABLE_PARAMETERS:
+            if (
+                response.status_code == 400
+                and parameter in payload
+                and parameter in response.text
+            ):
+                payload.pop(parameter)
+                dropped.append(parameter)
+                response = self._post(payload)
         duration_ms = int((time.monotonic() - started) * 1000)
 
         if response.status_code >= 400:
@@ -123,7 +132,22 @@ class OpenAICompatibleProvider:
             prompt_tokens=_optional_int(usage.get("prompt_tokens")),
             completion_tokens=_optional_int(usage.get("completion_tokens")),
             duration_ms=duration_ms,
+            dropped_parameters=tuple(dropped),
         )
+
+    def _post(self, payload: dict[str, Any]) -> requests.Response:
+        try:
+            return self.session.post(
+                _completions_url(self.base_url),
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=self.timeout_s,
+            )
+        except requests.RequestException as exc:
+            raise ProviderError(f"endpoint injoignable : {exc}") from exc
 
     def healthcheck(self) -> bool:
         """Ne lève jamais : un endpoint muet est une réponse, pas une panne."""

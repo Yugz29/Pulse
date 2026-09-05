@@ -31,6 +31,19 @@ def today() -> str:
     return REFERENCE.astimezone().date().isoformat()
 
 
+@pytest.fixture(autouse=True)
+def _isolated_llm_environment(monkeypatch):
+    """Aucun test ne lit les variables du shell du développeur.
+
+    Vu en réel : les trois `PULSE_LLM_*` exportées pour un essai manuel
+    faisaient lire le vrai nom de modèle à la place du repli de config, et
+    un test vert en CI devenait rouge en local. Chaque test repart d'un
+    environnement vide et pose explicitement ce dont il a besoin.
+    """
+    for name in (ENV_BASE_URL, ENV_API_KEY, ENV_MODEL):
+        monkeypatch.delenv(name, raising=False)
+
+
 VALID_OUTPUT = json.dumps(
     {
         "reprise": {"doing": "d", "stopped_at": "s", "open": "o"},
@@ -52,6 +65,9 @@ class FakeEndpoint:
     status: int = 200
     body: dict[str, Any] | None = None
     raw_body: str | None = None
+    # Rejoue un modèle qui refuse `temperature` : 400 tant que le paramètre est
+    # dans la requête, réponse normale dès qu'il n'y est plus.
+    reject_temperature: bool = False
     requests_seen: list[dict[str, Any]] = field(default_factory=list)
     auth_seen: list[str | None] = field(default_factory=list)
     url: str = ""
@@ -65,8 +81,14 @@ def endpoint():
 
     @app.post("/v1/chat/completions")
     def completions():
-        state.requests_seen.append(request.get_json(silent=True) or {})
+        payload = request.get_json(silent=True) or {}
+        state.requests_seen.append(payload)
         state.auth_seen.append(request.headers.get("Authorization"))
+        if state.reject_temperature and "temperature" in payload:
+            return (
+                jsonify({"error": {"message": "`temperature` is deprecated for this model."}}),
+                400,
+            )
         if state.raw_body is not None:
             return state.raw_body, state.status, {"Content-Type": "application/json"}
         body = state.body or {
@@ -110,7 +132,9 @@ def test_the_request_carries_the_two_roles_and_the_generation_settings(endpoint)
     provider = _provider(endpoint)
 
     provider.complete(
-        CompletionRequest(system="le prompt", prompt="l'entrée", max_tokens=256)
+        CompletionRequest(
+            system="le prompt", prompt="l'entrée", max_tokens=256, temperature=0.0
+        )
     )
 
     sent = endpoint.requests_seen[0]
@@ -121,6 +145,14 @@ def test_the_request_carries_the_two_roles_and_the_generation_settings(endpoint)
     ]
     assert sent["max_tokens"] == 256
     assert sent["temperature"] == 0.0
+
+
+def test_an_absent_temperature_is_not_sent_at_all(endpoint):
+    _provider(endpoint).complete(CompletionRequest(system="s", prompt="p"))
+
+    # Non configurée = absente de la requête, pas envoyée à 0.0 : c'est ce
+    # qui évite le 400 des modèles qui refusent le paramètre.
+    assert "temperature" not in endpoint.requests_seen[0]
 
 
 def test_the_token_travels_as_a_bearer_header(endpoint):
@@ -348,3 +380,53 @@ def test_cli_runs_end_to_end_against_a_local_endpoint(
     # Et le résumé est revenu jusqu'à Core.
     summaries = [p for p in fake_core.posts if p["type"] == "session_summary"]
     assert summaries and summaries[-1]["details"]["model_id"] == "modele-de-test"
+
+
+# --- Négociation de paramètres --------------------------------------------
+
+
+def test_a_rejected_temperature_is_dropped_once_and_reported(endpoint):
+    endpoint.reject_temperature = True
+
+    # Configurée à 0.0 et pourtant refusée : le filet de sécurité joue.
+    result = _provider(endpoint).complete(
+        CompletionRequest(system="s", prompt="p", temperature=0.0)
+    )
+
+    # Deux requêtes : la première avec le paramètre, la seconde sans.
+    assert len(endpoint.requests_seen) == 2
+    assert "temperature" in endpoint.requests_seen[0]
+    assert "temperature" not in endpoint.requests_seen[1]
+    assert result.text == VALID_OUTPUT
+    # Le résultat dit que le résumé n'a pas été produit à température 0.
+    assert result.dropped_parameters == ("temperature",)
+
+
+def test_a_400_that_names_nothing_negotiable_is_not_retried(endpoint):
+    endpoint.status = 400
+    endpoint.body = {"error": {"message": "messages: champ requis"}}
+
+    with pytest.raises(ProviderError, match="400"):
+        _provider(endpoint).complete(CompletionRequest(system="s", prompt="p"))
+
+    # Une seule requête : rien à négocier, on ne réessaie pas au hasard.
+    assert len(endpoint.requests_seen) == 1
+
+
+def test_max_tokens_is_never_negotiated_away(endpoint):
+    endpoint.status = 400
+    endpoint.body = {"error": {"message": "`max_tokens` is not supported"}}
+
+    with pytest.raises(ProviderError, match="400"):
+        _provider(endpoint).complete(CompletionRequest(system="s", prompt="p"))
+
+    # La liste est fermée : retirer max_tokens laisserait générer sans borne.
+    assert len(endpoint.requests_seen) == 1
+    assert "max_tokens" in endpoint.requests_seen[0]
+
+
+def test_the_nominal_case_reports_no_dropped_parameter(endpoint):
+    result = _provider(endpoint).complete(CompletionRequest(system="s", prompt="p"))
+
+    assert result.dropped_parameters == ()
+    assert len(endpoint.requests_seen) == 1

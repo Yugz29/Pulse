@@ -41,6 +41,11 @@ class Config:
     llm_provider: str = ""
     llm_base_url: str = ""
     llm_max_tokens: int = 1024
+    # Absente = non envoyée. Certains modèles derrière un endpoint compatible
+    # refusent le paramètre ; la reproductibilité à 0.0 se demande, elle ne
+    # s'impose pas. La négociation du provider reste le filet si un modèle
+    # refuse une valeur pourtant configurée.
+    llm_temperature: float | None = None
 
     def require_model(self) -> "Config":
         """Le choix du modèle est une décision écrite, jamais un défaut."""
@@ -83,7 +88,14 @@ def load_config(path: Path | None = None) -> Config:
         if key in _INT_FIELDS:
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ConfigError(f"{key} doit être un entier positif")
+        elif key in _FLOAT_FIELDS:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise ConfigError(f"{key} doit être un nombre positif")
+            value = float(value)
         elif not isinstance(value, str):
             raise ConfigError(f"{key} doit être une chaîne")
         values[key] = value
     return replace(config, **values)
+
+
+_FLOAT_FIELDS = {"llm_temperature"}

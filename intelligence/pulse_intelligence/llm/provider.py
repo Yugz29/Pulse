@@ -11,7 +11,9 @@ class CompletionRequest:
     system: str
     prompt: str
     max_tokens: int = 1024
-    temperature: float = 0.0
+    # None = le paramètre n'est pas envoyé. La reproductibilité à 0.0 est un
+    # choix de configuration (`llm_temperature`), pas un défaut imposé.
+    temperature: float | None = None
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,10 @@ class CompletionResult:
     prompt_tokens: int | None
     completion_tokens: int | None
     duration_ms: int
+    # Paramètres que l'endpoint a refusés et que le provider a retirés pour
+    # obtenir une réponse. Vide dans le cas nominal. Un rapport d'eval doit
+    # savoir qu'un résumé n'a pas été produit à température 0.
+    dropped_parameters: tuple[str, ...] = ()
 
 
 class ProviderError(RuntimeError):

@@ -37,6 +37,7 @@ class ProviderSummarizer:
     model_id: str
     prompt_path: Path
     max_tokens: int = DEFAULT_MAX_TOKENS
+    temperature: float | None = None
     system: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -57,7 +58,7 @@ class ProviderSummarizer:
             system=self.system,
             prompt=model_input,
             max_tokens=self.max_tokens,
-            temperature=0.0,
+            temperature=self.temperature,
         )
         try:
             result = self.provider.complete(request)
