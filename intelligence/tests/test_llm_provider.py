@@ -217,18 +217,6 @@ def test_cli_refuses_an_unknown_provider(fake_core, tmp_path, capsys):
     assert "ollama" in capsys.readouterr().err
 
 
-def test_cli_names_the_provider_that_is_not_implemented_yet(fake_core, tmp_path, capsys):
-    config = _config_file(tmp_path, 'llm_provider = "mlx"\n')
-
-    code = cli.main(
-        ["--config", str(config), *base_args(fake_core, tmp_path), "run", "--once"]
-    )
-
-    assert code == 1
-    error = capsys.readouterr().err
-    assert "mlx" in error and "pas encore" in error
-
-
 def test_cli_runs_end_to_end_on_the_fake_provider(fake_core, tmp_path, capsys):
     """Critère d'acceptation n°1 : la chaîne complète tourne sans réseau."""
     fake_core.add_sessions(today(), session_view("dddddddddddddddd"))

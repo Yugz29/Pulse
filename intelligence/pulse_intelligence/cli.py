@@ -135,10 +135,11 @@ def _provider(config: Config) -> LLMProvider:
             timeout_s=config.generation_timeout_s,
         )
     if choice == "mlx":
-        raise ConfigError(
-            "llm_provider = 'mlx' n'est pas encore implémenté "
-            "(spec 2026-09-05-llm-provider v2, §13) ; "
-            'utilise "fake" ou "openai-compatible" en attendant'
+        from .llm.mlx import DEFAULT_MODEL, MLXProvider
+
+        return MLXProvider(
+            model=config.model_id or DEFAULT_MODEL,
+            max_input_tokens=config.llm_max_input_tokens,
         )
     raise ConfigError(
         f"llm_provider inconnu : {choice!r} "

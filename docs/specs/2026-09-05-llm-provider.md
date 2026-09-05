@@ -203,7 +203,12 @@ modèle local n'est pas disponible. Ce n'est pas le provider de production.
 - Thinking désactivé via le template de chat (`enable_thinking=False` ou
   l'équivalent de la version de `mlx-lm` installée). Vérifié en test : la sortie
   ne contient aucun bloc de réflexion.
-- `max_tokens` transmis tel quel, température 0.
+- `max_tokens` transmis tel quel, température selon la config.
+- **Plafond d'entrée `llm_max_input_tokens` (défaut 30 000).** Au-delà, le
+  provider **refuse avant le prefill** avec un `ProviderError` explicite. Mesuré
+  au spike B : sur un M3 Max 36 Go, une entrée de 60k tokens fait planter Metal
+  en OOM (pic ~28 Go), quand la plus grosse session réelle (~6 500 tokens) tient
+  à 19,77 Go. Un OOM Metal n'est pas une erreur propre ; le refus en amont l'est.
 
 > **Point à vérifier au premier chargement.** `Qwen3.8-27B` est un modèle
 > **multimodal** (`model_type: qwen3_5`). Avant toute mesure, vérifier que la
