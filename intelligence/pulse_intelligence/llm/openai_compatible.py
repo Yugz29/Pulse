@@ -88,8 +88,9 @@ class OpenAICompatibleProvider:
                 {"role": "user", "content": request.prompt},
             ],
             "max_tokens": request.max_tokens,
-            "temperature": request.temperature,
         }
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
         started = time.monotonic()
         response = self._post(payload)
 

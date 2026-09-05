@@ -80,7 +80,7 @@ def test_fake_provider_can_return_an_unparsable_output():
 def test_provider_summarizer_wraps_the_input_in_the_versioned_prompt():
     provider = FakeProvider()
     summarizer = ProviderSummarizer(
-        provider=provider, model_id="essai/modele", prompt_path=PROMPT
+        provider=provider, model_id="essai/modele", prompt_path=PROMPT, temperature=0.0
     )
 
     summarizer.summarize('{"session":{"id":"cccccccccccccccc"}}')
@@ -91,6 +91,31 @@ def test_provider_summarizer_wraps_the_input_in_the_versioned_prompt():
     assert request.system == PROMPT.read_text(encoding="utf-8")
     assert request.prompt == '{"session":{"id":"cccccccccccccccc"}}'
     assert request.temperature == 0.0
+
+
+def test_provider_summarizer_sends_no_temperature_unless_configured():
+    provider = FakeProvider()
+    summarizer = ProviderSummarizer(
+        provider=provider, model_id="essai/modele", prompt_path=PROMPT
+    )
+
+    summarizer.summarize("{}")
+
+    assert provider.calls[0].temperature is None
+
+
+def test_llm_temperature_loads_as_a_float_and_may_be_absent(tmp_path):
+    from pulse_intelligence.config import load_config as load
+
+    path = tmp_path / "config.toml"
+    path.write_text("llm_temperature = 0\n", encoding="utf-8")
+    assert load(path).llm_temperature == 0.0
+
+    path.write_text('llm_temperature = "froid"\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="nombre"):
+        load(path)
+
+    assert Config().llm_temperature is None
 
 
 def test_provider_summarizer_keeps_its_model_id_and_max_tokens():

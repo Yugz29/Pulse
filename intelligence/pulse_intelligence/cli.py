@@ -157,6 +157,7 @@ def _summarizer(args: argparse.Namespace, config: Config) -> Summarizer:
         model_id=provider.model,
         prompt_path=prompt_path_for(config.prompt_version),
         max_tokens=config.llm_max_tokens,
+        temperature=config.llm_temperature,
     )
 
 

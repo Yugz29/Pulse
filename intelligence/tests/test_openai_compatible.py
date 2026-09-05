@@ -132,7 +132,9 @@ def test_the_request_carries_the_two_roles_and_the_generation_settings(endpoint)
     provider = _provider(endpoint)
 
     provider.complete(
-        CompletionRequest(system="le prompt", prompt="l'entrée", max_tokens=256)
+        CompletionRequest(
+            system="le prompt", prompt="l'entrée", max_tokens=256, temperature=0.0
+        )
     )
 
     sent = endpoint.requests_seen[0]
@@ -143,6 +145,14 @@ def test_the_request_carries_the_two_roles_and_the_generation_settings(endpoint)
     ]
     assert sent["max_tokens"] == 256
     assert sent["temperature"] == 0.0
+
+
+def test_an_absent_temperature_is_not_sent_at_all(endpoint):
+    _provider(endpoint).complete(CompletionRequest(system="s", prompt="p"))
+
+    # Non configurée = absente de la requête, pas envoyée à 0.0 : c'est ce
+    # qui évite le 400 des modèles qui refusent le paramètre.
+    assert "temperature" not in endpoint.requests_seen[0]
 
 
 def test_the_token_travels_as_a_bearer_header(endpoint):
@@ -378,7 +388,10 @@ def test_cli_runs_end_to_end_against_a_local_endpoint(
 def test_a_rejected_temperature_is_dropped_once_and_reported(endpoint):
     endpoint.reject_temperature = True
 
-    result = _provider(endpoint).complete(CompletionRequest(system="s", prompt="p"))
+    # Configurée à 0.0 et pourtant refusée : le filet de sécurité joue.
+    result = _provider(endpoint).complete(
+        CompletionRequest(system="s", prompt="p", temperature=0.0)
+    )
 
     # Deux requêtes : la première avec le paramètre, la seconde sans.
     assert len(endpoint.requests_seen) == 2

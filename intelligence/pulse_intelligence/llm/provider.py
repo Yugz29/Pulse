@@ -11,7 +11,9 @@ class CompletionRequest:
     system: str
     prompt: str
     max_tokens: int = 1024
-    temperature: float = 0.0
+    # None = le paramètre n'est pas envoyé. La reproductibilité à 0.0 est un
+    # choix de configuration (`llm_temperature`), pas un défaut imposé.
+    temperature: float | None = None
 
 
 @dataclass(frozen=True)
