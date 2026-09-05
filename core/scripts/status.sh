@@ -19,9 +19,25 @@ cd "$repo_root"
 url="$("$python" -c \
   'from daemon_v2.runtime_config import status_url; print(status_url())')"
 
-if ! response="$(curl --silent --fail --max-time 2 "$url")"; then
-  echo "Pulse V2: daemon inaccessible sur ${url%/status}/."
-  echo "Pulse n'a pas été démarré automatiquement."
+# /status reconstruit la journée courante : mesuré à ~2,1 s, soit juste
+# au-dessus des 2 s d'origine, qui faisaient annoncer « daemon inaccessible »
+# pendant que les cinq services tournaient et que la route répondait 200.
+# Le coût suit le volume du jour, pas la taille de l'historique.
+timeout_s=10
+
+response="$(curl --silent --fail --max-time "$timeout_s" "$url")" \
+  && curl_status=0 || curl_status=$?
+
+if [[ $curl_status -ne 0 ]]; then
+  # 28 = délai dépassé : le daemon est là mais trop lent. Le confondre avec
+  # une absence de daemon envoie chercher la panne au mauvais endroit.
+  if [[ $curl_status -eq 28 ]]; then
+    echo "Pulse V2: le daemon n'a pas répondu en ${timeout_s} s sur ${url%/status}/."
+    echo "Le service tourne peut-être : vérifier avec 'launchctl list | grep pulse'."
+  else
+    echo "Pulse V2: daemon inaccessible sur ${url%/status}/."
+    echo "Pulse n'a pas été démarré automatiquement."
+  fi
   exit 1
 fi
 
@@ -56,7 +72,7 @@ print("  Watcher terminal   : {}".format(status["terminal_watcher"]))
 
 # Preuve d'usage minimale du Context API : le status consomme le contrat.
 context_url="${url%/status}/context"
-if context="$(curl --silent --fail --max-time 2 "$context_url")"; then
+if context="$(curl --silent --fail --max-time "$timeout_s" "$context_url")"; then
   printf '%s' "$context" | "$python" -c '
 import json
 import sys
