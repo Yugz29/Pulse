@@ -96,7 +96,8 @@ def test_voluntary_regeneration_is_the_only_way_to_get_a_new_payload(fake_core, 
     summarizer = FakeSummarizer(outputs=valid_output(), model_id="fake/summarizer")
     fake_core.fail_posts = 1
     pending = summarize_session(
-        session, client=client, summarizer=summarizer, config=Config(model_id="fake/summarizer"),
+        session, client=client, summarizer=summarizer,
+        config=Config(model_id="fake/summarizer", prompt_version="v1"),
         state=state, now=REFERENCE,
     )
     assert pending.status == "failed" and len(state.pending) == 1

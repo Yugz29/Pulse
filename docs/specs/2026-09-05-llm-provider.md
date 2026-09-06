@@ -234,7 +234,7 @@ class ProviderSummarizer:
 
 - Le prompt est un **fichier versionné**, identique pour tous les providers, et
   gelé pendant la comparaison sur le corpus. Sa version est déjà portée par
-  `config.prompt_version` (livré, défaut `"v1"`). **Version courante : `v2`**
+  `config.prompt_version` (livré ; défaut `"v2"` depuis le 2026-09-06). **Version courante : `v2`**
   (2026-09-06, activée dans la config de dogfooding après mesure sur le corpus,
   voir §10). `v1` est conservée telle quelle : elle rejoue les passages de
   référence de l'étape 3 et reste la version des résumés déjà émis.
