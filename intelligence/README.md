@@ -121,6 +121,7 @@ Code de sortie de `run --once`, le plus grave gagne :
 | Core injoignable | 2 |
 | au moins une candidate `failed` (réessayée au passage suivant) | 3 |
 | au moins une candidate `given_up` (abandonnée, intervention nécessaire) | 4 |
+| un autre `run` ou `summarize` tient déjà l'état (`state.json.lock`) : sortie immédiate, rien n'est lu ni écrit | 5 |
 
 Sans `--once`, `run` refait un passage toutes les `tick_minutes` jusqu'à Ctrl-C.
 
