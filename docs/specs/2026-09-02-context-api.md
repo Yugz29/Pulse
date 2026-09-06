@@ -297,4 +297,4 @@ Pourquoi sous gel : un consommateur qui a perdu son état local (la couche Intel
 ## 11. Limites connues
 
 - **Minuit local.** La trace quotidienne ferme toute session à minuit (`day_boundary`). `/context` applique le gap de 30 min tel quel : entre 00:00 et 00:30, une session de la veille encore dans le gap est rapportée comme courante alors que le HTML l'affiche fermée. Cas rare, assumé ; à réconcilier si un consommateur en souffre.
-- **Fuseau machine.** Les bornes de jour dépendent du fuseau de la machine qui sert la route (comme la trace quotidienne). Le JSON est déterministe pour une machine donnée.
+- **Fuseau de reconstruction.** Les bornes de jour viennent de `ZoneInfo(PULSE_RECONSTRUCTION_TZ)`, `Europe/Paris` par défaut (décision du 2026-09-06, `reconstruction_version` 3), plus du décalage de la machine au moment de la lecture : le JSON d'une journée est le même en été et en hiver. Changer la variable change les identifiants des sessions proches de minuit.

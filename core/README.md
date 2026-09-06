@@ -260,6 +260,8 @@ Pour lancer uniquement le daemon :
 
 La base SQLite V2 est créée dans `~/.pulse_v2/trace.db`. Elle n’est ni migrée depuis Pulse V1, ni partagée avec les anciennes bases situées dans `~/.pulse`. Le chemin peut être surchargé avec `PULSE_V2_DB_PATH=/chemin/vers/trace.db`.
 
+Les journées sont reconstruites dans un fuseau explicite, `PULSE_RECONSTRUCTION_TZ`, un nom IANA, `Europe/Paris` par défaut (décision du 2026-09-06). Il porte ses règles calendaires, donc les journées de 23 et 25 heures, et ne dépend plus du décalage de la machine au moment de la lecture : une journée de janvier relue en été garde son découpage. Une valeur inconnue fait échouer le démarrage. Le fuseau utilisé est inscrit dans le champ `timezone` de chaque trace et de chaque réponse `/context`. **Changer cette variable change la reconstruction** : bornes des journées, composition et identifiants des sessions proches de minuit ; c'est une nouvelle version de reconstruction, à décider, pas un réglage.
+
 Les bases (`trace.db` et l’outbox) fonctionnent en mode WAL : les écritures
 concurrentes (producteurs, worker, daemon) ne se bloquent plus entre elles.
 Conséquence pour les sauvegardes : copier uniquement le fichier `.db` peut
