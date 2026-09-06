@@ -193,6 +193,11 @@ class FakeCore:
             for field_name in ("event_id", "type", "occurred_at"):
                 if not payload.get(field_name):
                     return jsonify({"error": {"code": "invalid_event", "field": field_name}}), 400
+            # Même refus que le vrai Core (audit 2026-09-06, défaut 8) : un
+            # champ réservé de l'enveloppe ne passe pas dans details.
+            for reserved in ("type", "occurred_at"):
+                if reserved in details:
+                    return jsonify({"error": {"code": "invalid_event", "field": f"details.{reserved}"}}), 400
             if payload["type"] == "session_summary":
                 session_id = details.get("session_id", "")
                 if not HEX_ID.fullmatch(str(session_id)):
