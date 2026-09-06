@@ -24,6 +24,16 @@
 **Priority:** P3
 **Depends on:** Cas réel observé
 
+### Le corpus `eval/` ne porte aucune session à `previous_summary`
+
+**What:** Aucune des dix sessions gelées de `intelligence/eval/corpus/` n'a d'annexe `previous_summary` : la consigne du prompt v2 sur la réévaluation de `open` (défaut D1 du jour 1, `docs/dogfooding.md`) n'est donc pas mesurable par `pulse-intel eval`, seulement à l'œil sur le dogfooding. Ajouter au corpus, **hors gel** (les dix d'origine restent la référence de l'étape 3), une session réelle portant `previous_summary` — typiquement la seconde ou troisième session d'une journée résumée par `run` — avec son `context` tel que Core l'a servi, pour que D1 devienne mesurable à chaque changement de prompt.
+
+**Déclencheur:** une session réelle à `previous_summary` jugée au dogfooding (jour 2 ou après), dont le `open` v1 recopiait la note précédente.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Dogfooding jour 2
+
 ## Completed
 
 ### CI rouge : cinq tests de CLI dépendaient de la date du jour
