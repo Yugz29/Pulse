@@ -124,8 +124,27 @@ Après le troisième commit, suite verte.
 La déduplication des workspaces n'est pas encore couverte par un test.
 
 $ pulse-intel show latest             # l'événement complet, en JSON
-$ pulse-intel show <session_id>       # un résumé précis
+
+$ pulse-intel show a0aacd1f           # un préfixe d'identifiant suffit
+session         a0aacd1f17723f56  work-2  2026-09-06 00:26–00:39
+résumé          v2  mlx-community/Qwen3.8-27B-4bit  généré 2026-09-06 09:47
+confidence      medium
+doing           Tu implémentes le module intelligence avec un corpus gelé…
+stopped_at      Après le commit 1e893f6 (MLXProvider), sans push observé.
+open            Le push n'a pas été observé ; la configuration de llm_max_tokens…
+  ↳ reçu        (aucune annexe previous_summary)
+central_files   []
+
+$ pulse-intel show a0aacd1f --all     # tous les résumés coexistants (v1, v2…)
+$ pulse-intel show a0aacd1f --json    # l'événement émis, tel quel
 ```
+
+La ligne `↳ reçu` met le `open` de l'annexe `previous_summary` — ce que le
+modèle a reçu — juste sous le `open` qu'il a produit : c'est le jugement du
+défaut D1 (`docs/dogfooding.md`) d'un coup d'œil. L'annexe est conservée dans
+l'état local à l'émission ; un résumé antérieur à cet enregistrement affiche
+« inconnue », jamais « aucune ». Un préfixe ambigu est refusé avec la liste
+des sessions qu'il désigne.
 
 ### `eval` — comparer un modèle sur le corpus gelé
 

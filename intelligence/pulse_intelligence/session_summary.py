@@ -309,6 +309,7 @@ def summarize_session(
         model_id=model_id,
         at=event["details"]["generated_at"],
         event=event,
+        previous_summary=model_input["previous_summary"],
     )
     return _emit(
         session, event_id, event,
