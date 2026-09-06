@@ -11,6 +11,7 @@ un passage `eval` ou `run` résume plusieurs sessions sans recharger 14 Go.
 
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -82,15 +83,40 @@ class MLXProvider:
                 "(un contexte trop long fait planter Metal en OOM sur cette machine)"
             )
 
+        # mlx-lm n'a pas d'argument `temperature` : la température passe par
+        # un `sampler` construit avec `make_sampler(temp=...)`, transmis via
+        # les kwargs de `generate` jusqu'à `generate_step`. Sans sampler, le
+        # runtime prend l'argmax. None = paramètre absent, on ne fabrique
+        # rien ; 0.0 = sampler à zéro, même chemin que toute autre valeur.
+        kwargs: dict[str, Any] = {"max_tokens": request.max_tokens, "verbose": False}
+        dropped: tuple[str, ...] = ()
+        if request.temperature is None:
+            trace = "temperature=absente (argmax du runtime)"
+        else:
+            try:
+                from mlx_lm.sample_utils import make_sampler
+            except ImportError:
+                # Silence interdit : un runtime qui ne sait pas échantillonner
+                # génère quand même, mais le résultat dit que la température
+                # n'est pas partie, et stderr le dit tout de suite.
+                dropped = ("temperature",)
+                trace = "temperature=retirée (make_sampler absent de mlx_lm)"
+                print(
+                    f"⚠ mlx : température {request.temperature} demandée mais "
+                    "mlx_lm.sample_utils.make_sampler est introuvable, "
+                    "génération en argmax",
+                    file=sys.stderr,
+                )
+            else:
+                kwargs["sampler"] = make_sampler(temp=request.temperature)
+                trace = f"temperature={request.temperature} (sampler)"
+        # Paramètres effectifs de l'appel, sur stderr comme le reste des
+        # avertissements : visibles en terminal et dans run.log sous launchd.
+        print(f"mlx : génération max_tokens={request.max_tokens} {trace}", file=sys.stderr)
+
         started = time.monotonic()
         try:
-            text = generate(
-                model,
-                tokenizer,
-                prompt=prompt,
-                max_tokens=request.max_tokens,
-                verbose=False,
-            )
+            text = generate(model, tokenizer, prompt=prompt, **kwargs)
         except Exception as exc:
             raise ProviderError(f"génération : {exc}") from exc
         duration_ms = int((time.monotonic() - started) * 1000)
@@ -102,9 +128,10 @@ class MLXProvider:
             prompt_tokens=_count(tokenizer, prompt),
             completion_tokens=_count(tokenizer, text),
             duration_ms=duration_ms,
-            # temperature/max_tokens ne se négocient pas avec un modèle local :
-            # rien à retirer, la génération est toujours acceptée.
-            dropped_parameters=(),
+            # `max_tokens` ne se négocie pas avec un modèle local. La
+            # température non plus, sauf si le runtime n'a pas de sampler :
+            # alors elle est listée ici, jamais tue.
+            dropped_parameters=dropped,
         )
 
     def healthcheck(self) -> bool:
