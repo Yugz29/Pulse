@@ -167,9 +167,16 @@ def test_cli_mlx_defaults_to_the_pinned_model():
     assert provider.model == DEFAULT_MODEL
 
 
+@pytest.fixture(scope="module")
+def real_mlx_provider():
+    """Un seul chargement des poids pour les tests explicitement marqués slow."""
+    return MLXProvider()
+
+
 @pytest.mark.slow
-def test_real_qwen_loads_and_summarizes_without_thinking():
-    """Charge le vrai modèle, résume une session du corpus, valide la sortie.
+@pytest.mark.parametrize("prompt_version", ["v1", "v2"])
+def test_real_qwen_loads_and_summarizes_without_thinking(prompt_version, real_mlx_provider):
+    """Valide le prompt historique et le prompt actif avec le vrai modèle.
 
     Exclu par défaut (`-m 'not slow'`) : 14 Go et plusieurs secondes. À lancer
     quand l'extra mlx est présent, avec `pytest -m slow`.
@@ -191,14 +198,43 @@ def test_real_qwen_loads_and_summarizes_without_thinking():
     serialized = serialize_input(build_model_input(session, entry.context))
 
     summarizer = ProviderSummarizer(
-        provider=MLXProvider(), model_id=DEFAULT_MODEL,
-        prompt_path=prompt_path_for("v1"), max_tokens=2048,
+        provider=real_mlx_provider, model_id=DEFAULT_MODEL,
+        prompt_path=prompt_path_for(prompt_version), max_tokens=2048,
     )
     text = summarizer.summarize(serialized)
 
     assert "<think>" not in text and "</think>" not in text
     parsed = parse_model_output(text, input_paths(session))
     assert parsed.structured["confidence"] in {"high", "medium", "low"}
+
+
+@pytest.mark.slow
+def test_real_tokenizer_rejects_the_stress_fixture_before_generation(real_mlx_provider, monkeypatch):
+    """Vrai tokenizer et vrais poids ; un garde de test interdit le prefill géant."""
+    import json
+    from datetime import date
+    from pathlib import Path
+    import mlx_lm
+
+    from pulse_intelligence.llm.provider import ProviderInputRefused
+    from pulse_intelligence.provider_summarizer import prompt_path_for
+    from pulse_intelligence.selection import SessionView
+    from pulse_intelligence.session_input import build_model_input, serialize_input
+
+    raw = json.loads((Path(__file__).resolve().parents[1] / "eval" / "stress" /
+                      "synthetic-60k.json").read_text(encoding="utf-8"))
+    view = SessionView(raw["session_raw"], date.fromisoformat(raw["date"]))
+    request = CompletionRequest(
+        system=prompt_path_for("v2").read_text(encoding="utf-8"),
+        prompt=serialize_input(build_model_input(view, raw["context"])), max_tokens=1,
+    )
+
+    def forbidden_generation(*args, **kwargs):
+        pytest.fail("Une entrée trop longue ne doit jamais atteindre la génération MLX")
+
+    monkeypatch.setattr(mlx_lm, "generate", forbidden_generation)
+    with pytest.raises(ProviderInputRefused, match="au-dessus du plafond 30000"):
+        real_mlx_provider.complete(request)
 
 
 def test_an_oversized_input_is_refused_before_the_prefill(monkeypatch):
