@@ -255,7 +255,7 @@ def run_summarize(
     if session is None:
         print(f"session introuvable sur la période : {args.session_id}", file=sys.stderr)
         return EXIT_USAGE
-    if args.retry:
+    if args.retry and not args.dry_run:
         # Reprise explicite d'un abandon : les deux formes de clé (session
         # entière, forme ancienne ; identité session/prompt/modèle) sont
         # effacées, puis le chemin normal repart — pending d'abord.
@@ -430,6 +430,33 @@ def _print_core_summary(args: argparse.Namespace, summary: dict[str, Any]) -> No
         print(_card(summary, previous_summary=None, previous_known=False))
 
 
+def _read_show_entries(
+    state: JobState, client: CoreClient, session_id: str, *, all_versions: bool
+) -> list[dict[str, Any]]:
+    """Complète les copies manquantes pour l'affichage, sans écrire l'état.
+
+    Une émission acceptée sans copie locale compte dans l'ordre des versions.
+    Son identifiant enregistré reste valable après un changement de config.
+    Une relecture impossible est une erreur, jamais un retour à l'ancien résumé.
+    """
+    entries = sorted(
+        ((event_id, entry) for event_id, entry in state.emitted.items()
+         if entry.get("session_id") == session_id),
+        key=lambda item: str(item[1].get("at", "")),
+    )
+    if not all_versions:
+        entries = entries[-1:]
+    resolved = []
+    for event_id, entry in entries:
+        if not isinstance(entry.get("event"), dict):
+            stored = client.get_activity(event_id)
+            if stored is None:
+                raise CoreError(f"résumé accepté {event_id} introuvable dans Core")
+            entry = {**entry, "event": _recovered_event(stored), "origin": "core"}
+        resolved.append(entry)
+    return resolved
+
+
 def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state: JobState) -> int:
     if args.target == "latest":
         # Core est la vérité : le dernier résumé qu'il connaît, quel que soit
@@ -445,7 +472,7 @@ def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state
             else:
                 print(json.dumps(latest, ensure_ascii=False, indent=2, sort_keys=True))
             return EXIT_OK
-        entries = state.summaries_for(str(latest.get("id")))
+        entries = _read_show_entries(state, client, str(latest.get("id")), all_versions=True)
         if not entries:
             _print_core_summary(args, latest)
             return EXIT_OK
@@ -461,7 +488,7 @@ def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state
         )
         return EXIT_USAGE
     if session_id is not None:
-        _print_entries(args, state.summaries_for(session_id))
+        _print_entries(args, _read_show_entries(state, client, session_id, all_versions=args.all))
         return EXIT_OK
 
     # Sans entrée locale : l'événement de CETTE session dans Core, par son

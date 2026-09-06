@@ -144,6 +144,8 @@ Reprendre une session abandonnée : `pulse-intel summarize <id> --retry` efface
 son budget d'échecs (sous ses deux formes de clé, session et identité), rejoue
 le payload figé s'il en reste un, sinon régénère. Sans `--retry`, `summarize`
 sur une session `given_up` le reste.
+Avec `--retry --dry-run`, la prévisualisation conserve le fichier d'état,
+les compteurs d'échec et les payloads en attente ; aucun abandon n'est levé.
 
 Sans `--once`, `run` refait un passage toutes les `tick_minutes` jusqu'à Ctrl-C.
 
@@ -177,6 +179,12 @@ défaut D1 (`docs/dogfooding.md`) d'un coup d'œil. L'annexe est conservée dans
 l'état local à l'émission ; un résumé antérieur à cet enregistrement affiche
 « inconnue », jamais « aucune ». Un préfixe ambigu est refusé avec la liste
 des sessions qu'il désigne.
+
+Si Core a accepté un résumé mais que sa relecture après émission a échoué,
+`show` récupère la copie manquante par son identifiant enregistré, même après
+un changement de prompt ou de modèle. Cela s'applique aussi aux préfixes et à
+`--all`, sans réécrire l'état local. Si la copie demandée reste inaccessible,
+la commande sort en erreur (code 2) au lieu d'afficher un ancien résumé.
 
 ### `eval` — comparer un modèle sur le corpus gelé
 

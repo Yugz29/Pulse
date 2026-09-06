@@ -205,12 +205,12 @@ class JobState:
         return [entry["event"] for entry in self.summaries_for(session_id)]
 
     def session_ids(self) -> list[str]:
-        """Les sessions dont au moins un événement émis est conservé ici."""
+        """Les sessions émises, même si leur copie doit être relue dans Core."""
         return sorted(
             {
                 str(entry["session_id"])
                 for entry in self.emitted.values()
-                if entry.get("session_id") and isinstance(entry.get("event"), dict)
+                if entry.get("session_id")
             }
         )
 
