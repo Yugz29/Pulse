@@ -506,3 +506,16 @@ def test_new_store_is_private_regardless_of_the_ambient_umask(tmp_path):
     file_mode = stat.S_IMODE(Path(store.database_path).stat().st_mode)
     assert directory_mode == 0o700
     assert file_mode == 0o600
+
+
+def test_activity_by_event_id_reads_one_stored_row(tmp_path):
+    store = TraceStore(tmp_path / "trace.db")
+    assert store.activity_by_event_id("019c-store") is None
+
+    stored = store.append_event(canonical_ingested())
+    found = store.activity_by_event_id("019c-store")
+
+    assert found is not None
+    assert found.id == stored.id and found.event_id == "019c-store"
+    assert found.details == stored.details
+    assert found.recorded_at == stored.recorded_at

@@ -1109,3 +1109,79 @@ def test_details_without_reserved_fields_still_pass_on_both_paths(tmp_path):
             "SELECT type, activity_type FROM activities ORDER BY recorded_at"
         ).fetchall()
     assert rows == [("app_activated", "app_activated"), ("app_activated", "app_activated")]
+
+
+# --- GET /activities/<event_id> : lecture pure sous gel (audit 2026-09-06, défaut 3) ---
+
+
+def _summary_payload(event_id="6f1c2c2e-0000-5000-8000-0000000000aa", doing="Tu implémentais le Context API."):
+    return {
+        "event_id": event_id,
+        "schema_version": 1,
+        "type": "session_summary",
+        "producer": {"name": "pulse-intelligence", "version": "0.1.0"},
+        "occurred_at": "2026-09-02T15:55:00+00:00",
+        "details": {
+            "session_id": "0123456789abcdef",
+            "source_event_ids_hash": "0123456789abcdef",
+            "session_label": "work-3",
+            "prompt_version": "v1",
+            "model_id": "mlx-community/test-model",
+            "generated_at": "2026-09-02T16:30:00+00:00",
+            "reprise": {
+                "doing": doing,
+                "stopped_at": "Tu venais de pousser la branche.",
+                "open": "La PR attend ta relecture.",
+            },
+            "structured": {"project": "Pulse", "confidence": "high"},
+            "workspace": "/Users/dev/Projets/Pulse",
+        },
+    }
+
+
+def test_get_activity_by_event_id_returns_404_for_an_unknown_id(tmp_path):
+    client = create_app(tmp_path / "trace.db").test_client()
+
+    response = client.get("/activities/does-not-exist")
+
+    assert response.status_code == 404
+    assert response.get_json()["error"]["code"] == "unknown_event_id"
+
+
+def test_get_activity_by_event_id_returns_the_stored_row_in_the_export_form(tmp_path):
+    """La réponse est la ligne stockée, dans la forme de l'export JSON de la
+    trace : pas une reconstruction. Le marqueur secret prouve que `details`
+    est bien `details_json` après normalisation Core."""
+    client = create_app(tmp_path / "trace.db").test_client()
+    payload = _summary_payload(doing="Tu réglais TOKEN=audit-secret-123 dans la config.")
+    created = client.post("/activities", json=payload)
+    assert created.status_code == 201
+
+    response = client.get(f"/activities/{payload['event_id']}")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert set(body) == {
+        "id", "event_id", "schema_version", "type", "occurred_at", "recorded_at",
+        "producer", "source", "summary", "details",
+    }
+    assert body["event_id"] == payload["event_id"]
+    assert body["type"] == "session_summary"
+    assert body["occurred_at"] == "2026-09-02T15:55:00+00:00"
+    assert body["recorded_at"] == created.get_json()["recorded_at"]
+    assert body["producer"] == {"name": "pulse-intelligence", "version": "0.1.0", "instance_id": None}
+    assert body["source"] == "intelligence"
+    # Normalisé par Core, tel qu'en base : rédigé, sans les clés d'enveloppe.
+    assert "TOKEN=[REDACTED]" in body["details"]["reprise"]["doing"]
+    assert "audit-secret-123" not in response.get_data(as_text=True)
+    assert "type" not in body["details"] and "occurred_at" not in body["details"]
+    assert body["details"]["generated_at"] == "2026-09-02T16:30:00+00:00"
+    assert body["details"]["workspace"] == "/Users/dev/Projets/Pulse"
+    # Même ligne que l'export de la trace, champ pour champ.
+    exported = [
+        activity
+        for session in client.get("/trace/2026-09-02").get_json()["sessions"]
+        for activity in session["activities"]
+        if activity["event_id"] == payload["event_id"]
+    ]
+    assert exported == [body]
