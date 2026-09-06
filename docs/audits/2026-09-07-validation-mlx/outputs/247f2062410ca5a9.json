@@ -1,0 +1,29 @@
+{
+ "date": "2026-08-31",
+ "id": "247f2062410ca5a9",
+ "label": "work-4",
+ "reprise": {
+  "doing": "Tu implémentes les observateurs résidents sous launchd (watcher fichiers multi-workspaces et observateur d'apps).",
+  "open": "Le commit n'a pas été poussé ; la suite de tests n'a pas été exécutée dans le terminal.",
+  "stopped_at": "Après le commit 3f44230, sans push observé."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "daemon_v2/file_watcher.py",
+   "daemon_v2/agent_sessions.py",
+   "daemon_v2/routes.py",
+   "daemon_v2/renderers/html.py",
+   "tests_v2/test_file_watcher.py"
+  ],
+  "confidence": "high",
+  "intents": [
+   "implémenter les observateurs résidents sous launchd",
+   "ajouter le watcher de fichiers multi-workspaces",
+   "ajouter l'observateur d'apps"
+  ],
+  "project": "core"
+ },
+ "why": "2e plus grosse, agent + 1 commit — repli spike B."
+}

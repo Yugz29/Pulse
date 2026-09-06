@@ -1,0 +1,23 @@
+{
+ "date": "2026-08-22",
+ "id": "2ce344566f7e85dc",
+ "label": "work-3",
+ "reprise": {
+  "doing": "Tu configures l'environnement local et la structure de documentation pour le projet DevNote.",
+  "open": "La création du fichier .gitignore demandée à l'agent n'apparaît pas dans les modifications observées.",
+  "stopped_at": "Après deux commits (vérification setup et ajout des README), sans fichier modifié visible dans la vue."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "medium",
+  "intents": [
+   "vérifier l'environnement local",
+   "ajouter les fichiers README",
+   "créer un .gitignore"
+  ],
+  "project": "DevNote"
+ },
+ "why": "La plus ambiguë : 4 projets, 0 fichier."
+}

@@ -1,0 +1,29 @@
+{
+ "date": "2026-09-03",
+ "id": "cda6ccce898d3e88",
+ "label": "work-3",
+ "reprise": {
+  "doing": "Tu finalises la version 0.5.2 de Pulse, en supprimant les modules obsolètes et en corrigeant la concurrence SQLite.",
+  "open": "Le push n'a pas été observé ; les fichiers supprimés (file_lock, private_files) ne sont pas encore publiés.",
+  "stopped_at": "Après le commit de la correction WAL et la mise à jour du CHANGELOG/VERSION."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/producer_outbox.py",
+   "core/CHANGELOG.md",
+   "core/VERSION",
+   "core/daemon_v2/file_watcher.py",
+   "core/daemon_v2/main.py"
+  ],
+  "confidence": "high",
+  "intents": [
+   "supprimer les modules obsolètes (file_lock, private_files)",
+   "corriger la course au passage en WAL de l'outbox",
+   "bump la version à 0.5.2"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Courte (~10 min), dense en fichiers."
+}

@@ -1,0 +1,5 @@
+{
+  "status": "refused",
+  "detail": "entr\u00e9e de 113928 tokens au-dessus du plafond 30000 : refus\u00e9e avant le prefill (un contexte trop long fait planter Metal en OOM sur cette machine)",
+  "wall_s": 0.112
+}

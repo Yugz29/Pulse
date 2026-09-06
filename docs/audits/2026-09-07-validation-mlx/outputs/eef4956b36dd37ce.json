@@ -1,0 +1,27 @@
+{
+ "date": "2026-09-06",
+ "id": "eef4956b36dd37ce",
+ "label": "work-3",
+ "reprise": {
+  "doing": "Tu finalises le module intelligence avec la validation des tokens d'entrée et la documentation du dogfooding.",
+  "open": "Le push n'a pas été effectué ; la configuration de llm_max_tokens et le passage de référence restent à valider.",
+  "stopped_at": "Après le commit 1dc191e (prompt v2), sans push observé."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "docs/dogfooding.md",
+   "docs/specs/2026-09-05-llm-provider.md",
+   "intelligence/TODOS.md"
+  ],
+  "confidence": "high",
+  "intents": [
+   "implémenter la limite llm_max_input_tokens",
+   "documenter le dogfooding Qwen local",
+   "mettre à jour le prompt de résumé v2"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 2 (work-3 du 2026-09-06, 54 min) : seule session du jour résumée avec annexe (a0aacd1f), dont la v2 recopie encore le open. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s ; reproduit l'input_hash du résumé v2 émis."
+}

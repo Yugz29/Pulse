@@ -1,0 +1,21 @@
+{
+ "date": "2026-09-05",
+ "id": "8af930d9ef437d2a",
+ "label": "work-2",
+ "reprise": {
+  "doing": "Tu fais un état des lieux du projet Pulse après migration sur un nouveau MacBook Pro M3 Max.",
+  "open": "L'état de la PR #28 et la branche courante n'ont pas été confirmés.",
+  "stopped_at": "La session agent s'est terminée sans modification de fichiers ni commit."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "low",
+  "intents": [
+   "vérifier l'état git et la migration"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D3 du jour 2 (work-2 du 2026-09-05, 17 min, 1 activité) : open v2 « L'état de la PR #28 et la branche courante n'ont pas été confirmés » tiré de la demande initiale de l'annexe agent_session. Première session de sa journée, sans previous_summary. Ajoutée le 2026-09-06, hors gel."
+}

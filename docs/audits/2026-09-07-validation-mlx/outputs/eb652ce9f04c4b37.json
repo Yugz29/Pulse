@@ -1,0 +1,29 @@
+{
+ "date": "2026-09-03",
+ "id": "eb652ce9f04c4b37",
+ "label": "work-2",
+ "reprise": {
+  "doing": "Tu finalises la version 0.5.1 de Pulse : hardening des permissions, correction des courses dans l'archivage, épinglage des dépendances et mise en place de la CI.",
+  "open": "La suppression des fichiers `private_files.py`, `file_lock.py` et du workflow CI laisse l'état du dépôt ambigu par rapport aux commits de hardening.",
+  "stopped_at": "Après le commit `e8eb97d` (test de résolution de projet) et un push observé. Les fichiers de hardening créés plus tôt ont été supprimés."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/main.py",
+   "core/daemon_v2/ingest.py",
+   "core/daemon_v2/agent_sessions.py",
+   "core/daemon_v2/file_watcher.py",
+   "core/CHANGELOG.md"
+  ],
+  "confidence": "high",
+  "intents": [
+   "hardening des permissions locales",
+   "correction des courses dans l'archivage des transcripts",
+   "mise en place de la CI et épinglage des dépendances"
+  ],
+  "project": "Pulse"
+ },
+ "why": "git dense : 29 commits dans la session."
+}

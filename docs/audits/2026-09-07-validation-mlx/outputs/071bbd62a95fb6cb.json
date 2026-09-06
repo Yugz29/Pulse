@@ -1,0 +1,24 @@
+{
+ "date": "2026-09-02",
+ "id": "071bbd62a95fb6cb",
+ "label": "work-1",
+ "reprise": {
+  "doing": "Tu travailles sur le backend de DevNote, probablement en interaction avec l'agent Claude.",
+  "open": "Les modifications sur la base de données et les logs ne sont pas encore committées.",
+  "stopped_at": "Après 36 minutes d'activité, sans commit ni test exécuté visible."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "backend/logs/devnote.log",
+   "backend/db.sqlite3"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "développement backend"
+  ],
+  "project": "DevNote"
+ },
+ "why": "Milieu de gamme, DevNote, peu de fichiers."
+}

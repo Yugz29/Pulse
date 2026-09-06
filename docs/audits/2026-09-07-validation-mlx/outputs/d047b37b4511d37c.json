@@ -1,0 +1,31 @@
+{
+ "date": "2026-08-31",
+ "id": "d047b37b4511d37c",
+ "label": "work-6",
+ "reprise": {
+  "doing": "Tu implémentes la fonctionnalité de tokens API pour DevNote (backend Django, frontend React, client Python).",
+  "open": "Les modifications ne sont pas committées. La migration `0002_apitoken.py` a été créée mais l'exécution de `manage.py migrate` a généré des erreurs dans le terminal.",
+  "stopped_at": "Après la création des fichiers backend, frontend et client, sans commit ni push observé."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [
+   "erreurs lors de l'exécution de `python manage.py migrate`"
+  ],
+  "central_files": [
+   "backend/accounts/models.py",
+   "backend/accounts/authentication.py",
+   "backend/accounts/views.py",
+   "frontend/src/components/ApiTokenSettings.jsx",
+   "clients/python/devnote_client.py"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "implémenter l'authentification par tokens API",
+   "créer le client Python pour l'API",
+   "ajouter l'interface de gestion des tokens dans le frontend"
+  ],
+  "project": "DevNote"
+ },
+ "why": "Août, DevNote, agent."
+}

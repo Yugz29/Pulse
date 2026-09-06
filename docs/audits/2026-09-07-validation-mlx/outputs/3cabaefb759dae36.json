@@ -1,0 +1,27 @@
+{
+ "date": "2026-09-02",
+ "id": "3cabaefb759dae36",
+ "label": "work-6",
+ "reprise": {
+  "doing": "Tu construis le Context API : lecture bornée de TraceStore, module context_snapshot, route GET /context, et branchement de /status.",
+  "open": "Aucun push observé ; la suite de tests n'a pas été exécutée dans le terminal.",
+  "stopped_at": "Après le commit eaece45 (feat(core): /status et status.sh consomment le Context API)."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/trace_store.py",
+   "core/daemon_v2/context_snapshot.py",
+   "core/daemon_v2/routes.py",
+   "core/tests_v2/test_trace_store.py",
+   "core/tests_v2/test_context_snapshot.py"
+  ],
+  "confidence": "high",
+  "intents": [
+   "implémenter le Context API (TraceStore, snapshot, route, status)"
+  ],
+  "project": "Pulse"
+ },
+ "why": "La plus grosse (~6500 tok) — sert au spike B. Agent."
+}

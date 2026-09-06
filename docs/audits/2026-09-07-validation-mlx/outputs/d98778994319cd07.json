@@ -1,0 +1,22 @@
+{
+ "date": "2026-09-05",
+ "id": "d98778994319cd07",
+ "label": "work-24",
+ "reprise": {
+  "doing": "Tu travailles sur le projet Pulse, en mettant à jour les tests du verrou terminal et l'injection d'horloge dans la CLI.",
+  "open": "Les modifications ne sont pas poussées. L'état de la PR #28 et la branche courante n'ont pas été vérifiés.",
+  "stopped_at": "Après deux commits (40316b2, 7922529), sans push ni fichier modifié visible dans la vue."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "medium",
+  "intents": [
+   "corriger l'attente du verrou terminal dans les tests",
+   "rendre l'horloge injectable dans la CLI"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D3 du jour 2 (work-24 du 2026-09-05, 12 min, 2 activités) : open v2 « L'état de la PR #28 et la migration … n'ont pas été confirmés » tiré de l'annexe agent_session. Ajoutée le 2026-09-06, hors gel. Contexte pris à fin − 1 s."
+}

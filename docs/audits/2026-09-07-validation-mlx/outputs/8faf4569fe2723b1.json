@@ -1,0 +1,29 @@
+{
+ "date": "2026-07-08",
+ "id": "8faf4569fe2723b1",
+ "label": "work-1",
+ "reprise": {
+  "doing": "Tu implémentes le parseur Swift et ajustes l'analyseur de risque dans Cortex.",
+  "open": "Les modifications des fichiers sources ne sont pas encore committées localement.",
+  "stopped_at": "Après un push git, sans commit local enregistré dans la vue."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "src/cortex/analyzer/swiftParser.ts",
+   "src/cortex/analyzer/parser.ts",
+   "src/cortex/risk-score/referenceBaselines.ts",
+   "src/app/main/scanner.ts",
+   "tests/swiftParser.test.ts"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "ajouter le support Swift à l'analyseur",
+   "ajuster les baselines de risque",
+   "synchroniser l'application Electron"
+  ],
+  "project": "Cortex"
+ },
+ "why": "Longue en horloge (117 min), juillet, Cortex, agent."
+}

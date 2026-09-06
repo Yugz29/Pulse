@@ -15,10 +15,12 @@ ce résultat ne constitue pas un score de justesse des résumés.
 - Un provider réutilisé sur les 14 entrées : dix sessions gelées et quatre
   extensions de dogfooding. Passage par `evaluate`, `build_model_input`,
   `ProviderSummarizer` et `parse_model_output`, comme pour l'évaluation CLI.
-- Résultats écrits hors de l'arbre surveillé :
-  `/private/tmp/pulse-mlx-validation-85bcqy98/` (artefacts temporaires).
-  Ce dossier contient les sorties par session, `meta.json`, les versions du
-  runtime, les mesures par appel et le résultat du refus de l'entrée de stress.
+- Résultats écrits hors de l'arbre surveillé, dans un dossier temporaire,
+  puis copiés le 2026-09-07 sous
+  [`2026-09-07-validation-mlx/`](2026-09-07-validation-mlx/) : les sorties
+  par session (`outputs/`, avec `meta.json`), les versions du runtime
+  (`environment.json`), les mesures par appel (`measurements.json`) et le
+  résultat du refus de l'entrée de stress (`stress-guard.json`).
 
 ## Résultats du corpus
 
