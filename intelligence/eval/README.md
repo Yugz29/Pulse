@@ -5,13 +5,29 @@ modèle à une référence sur les mêmes entrées. Le corpus est figé : on ne 
 retouche pas d'un passage à l'autre, sinon la comparaison ne veut plus rien
 dire (règle du pas 3, spec `docs/specs/2026-09-03-session-summary.md` §11).
 
-## `corpus/` — les dix sessions
+## `corpus/` — les dix sessions, plus l'extension
 
 Chaque fichier `<session_id>.json` fige, pour une session :
 
 - `session_raw` — la vue de session rendue par Core, intacte ;
 - `context` — le `GET /context` à l'instant de fin de la session ;
-- `why` — pourquoi elle est au corpus.
+- `why` — pourquoi elle est au corpus ;
+- `added` — date d'ajout, **seulement** pour une entrée hors gel.
+
+Les dix d'origine (sans `added`) sont la référence de l'étape 3 et ne bougent
+pas. **Extension du 2026-09-06**, hors gel : `1e420dda8b6eee77` (work-26 du
+05) et `eef4956b36dd37ce` (work-3 du 06), les deux cas D1 du dogfooding
+(`docs/dogfooding.md`) — les seules entrées à annexe `previous_summary`, sans
+quoi la consigne de réévaluation du `open` n'est pas mesurable ici.
+
+Piège de capture pour une session déjà résumée : `GET /context?at=<fin>` rend
+en `last_session_summary` le résumé de la session *elle-même*, que
+`previous_summary_annex` écarte sans repli — l'annexe serait vide. Le
+contexte de l'extension est donc pris à **fin − 1 s**. Pour `eef4956b`,
+l'entrée ainsi reconstruite reproduit exactement l'`input_hash` du résumé v2
+émis au jour 2 ; pour `1e420dda`, elle diffère des deux résumés émis (le v1
+avait reçu la v1 de work-24, Core sert aujourd'hui sa v2 ; le v2 n'avait
+reçu aucune annexe).
 
 `eval` reconstruit l'entrée exacte du modèle par le même code que la production
 (`build_model_input`, `serialize_input`, `input_paths`) : aucune trace ni

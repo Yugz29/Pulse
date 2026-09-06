@@ -76,14 +76,31 @@ def _tiny_corpus(tmp_path):
 
 
 def test_the_frozen_corpus_has_exactly_ten_sessions():
+    """Dix d'origine gelées (sans `added`), plus les extensions datées."""
     entries = load_corpus(DEFAULT_CORPUS)
+    frozen = [e for e in entries if e.added is None]
 
-    assert len(entries) == 10
+    assert len(frozen) == 10
     # Chaque fixture porte de quoi reconstruire l'entrée hors ligne.
     for e in entries:
         assert e.session_raw["id"] == e.id
         assert isinstance(e.context, dict)
         assert e.why
+
+
+def test_the_extension_entries_carry_a_previous_summary_annex():
+    """Ajoutées le 2026-09-06 pour mesurer D1 (`docs/dogfooding.md`) : leur
+    contexte est pris à fin − 1 s, donc l'annexe est le résumé d'une *autre*
+    session, jamais le leur."""
+    from pulse_intelligence.session_input import build_model_input
+
+    extension = [e for e in load_corpus(DEFAULT_CORPUS) if e.added is not None]
+
+    assert {e.id for e in extension} == {"1e420dda8b6eee77", "eef4956b36dd37ce"}
+    for e in extension:
+        annex = build_model_input(e.view, e.context)["previous_summary"]
+        assert annex is not None and annex["id"] != e.id
+        assert annex["reprise"]["open"]
 
 
 def test_the_frozen_corpus_covers_several_projects_and_weeks():

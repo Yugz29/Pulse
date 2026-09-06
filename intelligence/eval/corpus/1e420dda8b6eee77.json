@@ -1,0 +1,476 @@
+{
+ "added": "2026-09-06",
+ "context": {
+  "current_session": {
+   "activity_count": 85,
+   "apps": [
+    {
+     "activations": 22,
+     "name": "Terminal"
+    },
+    {
+     "activations": 19,
+     "name": "Claude"
+    },
+    {
+     "activations": 11,
+     "name": "Safari"
+    },
+    {
+     "activations": 6,
+     "name": "Code"
+    },
+    {
+     "activations": 2,
+     "name": "Réglages Système"
+    }
+   ],
+   "duration_minutes": 79,
+   "files": {
+    "created": [],
+    "deleted": [],
+    "modified": [],
+    "truncated": false
+   },
+   "git": {
+    "commits": [
+     {
+      "hash": "d6e89cf",
+      "message": "docs: spec LLMProvider — interface modèle et contrat de sortie (pas 3)"
+     },
+     {
+      "hash": "2e40ef1",
+      "message": "probe: sonde de vérification du hook (jamais poussée)"
+     },
+     {
+      "hash": "330c3dc",
+      "message": "docs: spec LLMProvider v2 — alignée sur les étapes 1 et 2 livrées"
+     },
+     {
+      "hash": "28f488d",
+      "message": "feat(intelligence): couche LLMProvider, pont vers Summarizer, provider factice"
+     },
+     {
+      "hash": "2eb70e6",
+      "message": "feat(intelligence): provider HTTP générique pour endpoint compatible"
+     },
+     {
+      "hash": "f30781f",
+      "message": "docs(intelligence): consigner la divergence list/run sur le modèle"
+     }
+    ],
+    "push_observed": false
+   },
+   "id": "d86336de32a9d7ab",
+   "is_open": true,
+   "label": "work-26",
+   "last_activity_at": "2026-09-05T21:41:03+00:00",
+   "projects": [
+    "Pulse"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "app_activated",
+    "git_commit",
+    "terminal_finished"
+   ],
+   "source_event_ids": [
+    "01bb8dbc-3c8a-44e8-8bc4-4b9441e91790",
+    "0b010b01-5884-4851-8169-d1a96f2498b2",
+    "0dd3273e-ab4b-42cc-b3dd-bf39f647a935",
+    "118e37ac-9c8c-4160-bfab-44c06d4aa36e",
+    "12d59ba3-9e0c-4383-a184-471073f72ed8",
+    "14c54900-e2a9-449d-9f95-afe1589692fd",
+    "21379848-5831-4411-a6e6-cdfafacd6756",
+    "244cc755-3ca4-4e1d-bd75-4f74d5d9647e",
+    "25ae9cb7-c4b5-4d85-b6b1-b180ff160c4e",
+    "268f209e-9938-4671-a8ab-beba8417c9f1",
+    "287c29e5-f3cc-46ce-b34d-efb3c4266ce0",
+    "288208e6-2e8c-413b-8995-76d6ae1fc3d9",
+    "320c07f3-0168-4c68-b188-8c4460a080a1",
+    "3422cef3-f007-4e41-951d-df8715ba0767",
+    "35391016-4fbb-4ebc-9a5c-e0a02d059716",
+    "366a85a6-8a2c-4dc8-9783-bab7fb95d9c3",
+    "36e1d3ac-b6c3-4ac0-98b6-95e4611b81b5",
+    "3a5d1ba6-acb4-43f0-878d-6189aa15ff71",
+    "3e434339-80ff-48fa-9194-4cfb62d3d6a8",
+    "455996c9-c2f3-467e-ada7-3dad65a56a99",
+    "4587dc1f-8c9c-47d2-9e20-326fd7432e43",
+    "4a1cb17a-51b8-4d40-91be-7363876345e7",
+    "4c90bc34-790a-40c5-a359-e11379a08bd1",
+    "4eda71f8-a9d5-489e-966f-1ff34c49fd3a",
+    "556551e9-342a-467f-b1a3-6ef375aa9314",
+    "5e7e8f8e-ece7-4341-9880-bfc9b5158d1a",
+    "643660eb-6174-409c-b92d-31fbd54f7e3e",
+    "663cd621-28c1-4bd5-8e48-ac2957039afe",
+    "68866e07-b9a7-4813-9de9-d55f329b2dc9",
+    "68a372fe-5eae-4763-9c68-f9006ddfd1c4",
+    "68aa6246-503c-48a0-8c2c-43f82fe17db7",
+    "6fe81e75-69d6-4fc9-9312-f1e9482c1f71",
+    "748d54f4-6d1b-44c5-81b4-4b6328443051",
+    "76b1f6e8-3758-4258-8623-a627bea2a3f8",
+    "772f4e33-0c37-41d3-b20b-84aeb5b337c9",
+    "7b3daf94-4e20-498a-bedc-d2b7e3cd60e9",
+    "7b49ac75-9466-4c56-98e5-6f76fc3460fe",
+    "7cdeadb4-2c11-4cd3-9abc-50b0c54f84f7",
+    "7ef24429-8349-4ed7-badd-f6370a50d128",
+    "7f3822d9-f0c6-430f-88d9-97b0683ce4c1",
+    "7f4110b8-fdf8-44bc-80e6-dbb3a05586f1",
+    "821e6026-91a7-446c-9057-b990723c844c",
+    "8359a52b-aa02-4a07-a60c-101aa686a873",
+    "841984c0-be84-441e-bb0e-0f88adf1844d",
+    "85b2199f-3baf-4702-99e2-49ccbf9f1d2b",
+    "883e4cb9-d4c9-4ae0-b27f-46f48296718b",
+    "8dc5af91-d6fd-41c0-9252-1d7f9104a19d",
+    "8e46b438-844a-4f0d-8dfd-4f4686b19089",
+    "90650425-1f56-44f2-bb37-ce5ce01669fd",
+    "92b49180-637a-4a16-bf31-dad1728c1f1f",
+    "a8287317-82c4-4786-acb4-351f69f0c458",
+    "acba538c-8546-4de1-b075-d6b754f6158a",
+    "ae1a8449-13d7-4b85-83b7-a8da685b61fb",
+    "ae345a64-3b1d-4d1f-9343-04288776c07f",
+    "ae83ec31-23ee-4f8f-b957-b473e1ae4d31",
+    "b031f8f7-49f5-45ce-ade4-84a34a583927",
+    "b6789485-7be5-415c-8b84-d1e786ce122f",
+    "b802b038-fa78-4750-9baa-83a3bf531427",
+    "b83d3670-299e-4dc1-80ef-116894e78716",
+    "bb6f31c1-679e-4aa9-aa49-5cabda1f31cb",
+    "bde970a1-b0aa-45a8-8cbb-b4e7b892a09e",
+    "c12f7457-a7f0-47cc-b000-8992bd18bbf9",
+    "c3bc5e74-4d75-4c49-b836-dec046491162",
+    "c75004d9-f399-46a8-aa96-a071aa373d8a",
+    "c7f5a891-8182-4bfa-a07a-82d95bc56eca",
+    "cdc2a12d-2885-4ae8-b65a-34752bce3327",
+    "cf80248d-7f5f-4ee4-bbec-fc5fea52be3c",
+    "cff98f20-b8b0-4d32-9800-4cc20eefb0c8",
+    "d426a2b3-21ec-46c9-b71d-2e05bbd8c036",
+    "d5e19899-417c-41a3-b9d4-55f20873090f",
+    "d77bf086-c81a-44b3-9c6e-c6d34520983c",
+    "d7c3df32-1b47-4b7b-a5a8-811d4452de2c",
+    "d88f4c8a-a7c1-4792-843f-e2c1122ad302",
+    "e0915dee-bc4b-4f47-a63f-95c5ccc3765a",
+    "e19a0e2c-04cb-4b4f-b92a-080303730840",
+    "e3e15789-041c-41ae-a5aa-a6452d65c127",
+    "e63c557d-91b9-43c7-9f84-c25e8d5dc808",
+    "e6df445d-0455-4c2d-acf4-959344d4151b",
+    "ed250b0b-f455-498f-84bb-ece824a0a6fa",
+    "ee199bac-f877-433e-acb9-8366c4741599",
+    "f042a6e4-65b0-4b8c-880e-805a166ef328",
+    "f1ab44c0-bb42-45cd-9cb2-1e4ee916a3b3",
+    "f232c467-06cf-4808-9fba-a6065670dda3",
+    "f5600733-3936-4e37-be06-297a48e937de",
+    "fae17644-6be9-4c54-8cc2-5aedc57c139b"
+   ],
+   "started_at": "2026-09-05T20:21:59+00:00",
+   "terminal": {
+    "errors": [],
+    "tests_failed": [],
+    "tests_passed": [],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-06T09:51:10.091812+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 19,
+   "agent": "claude-code",
+   "ended_at": "2026-09-05T21:30:23.451000+00:00",
+   "started_at": "2026-09-05T16:01:04.422000+00:00",
+   "summary": "Agent session (claude-code): Je reprends le projet Pulse après une pause (nouveau MacBook Pro M3 Max, migration terminée). J'ai besoin d'un état des lieux complet avant de continuer. Peux-tu vérifier : 1. État git : la PR #28 (exclusion .gitnexus/ du watcher, Core 0.3.1) est-elle mergée ? Y a-t-il une branc…",
+   "workspace": "/Users/Yugz/Projets/Pulse"
+  },
+  "last_session_summary": {
+   "age_minutes": 93,
+   "confidence": "medium",
+   "id": "d98778994319cd07",
+   "label": "work-24",
+   "reprise": {
+    "doing": "Tu travailles sur le projet Pulse, en mettant à jour les tests et la logique d'horloge de la CLI.",
+    "open": "L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session.",
+    "stopped_at": "Après deux commits : un test sur le verrou terminal et un fix pour l'horloge injectable."
+   },
+   "session_ended_at": "2026-09-05T20:16:54.314154+00:00"
+  },
+  "recent_sessions": [
+   {
+    "duration_minutes": 5,
+    "ended_at": "2026-09-05T20:21:59+00:00",
+    "headline": {
+     "commits": 0,
+     "errors": 0,
+     "files_changed": 2,
+     "tests_failed": 0
+    },
+    "id": "2a1e33ee42750a36",
+    "label": "work-25",
+    "projects": [
+     "core"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "1fe75537-919a-4999-b5ff-5c2246b2fd0e",
+     "ee451e28-32ed-4ca7-8faa-7bb920e52be5"
+    ],
+    "started_at": "2026-09-05T20:16:54.314154+00:00"
+   },
+   {
+    "duration_minutes": 12,
+    "ended_at": "2026-09-05T20:16:54.314154+00:00",
+    "headline": {
+     "commits": 2,
+     "errors": 0,
+     "files_changed": 0,
+     "tests_failed": 0
+    },
+    "id": "d98778994319cd07",
+    "label": "work-24",
+    "projects": [
+     "Pulse"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "c972b6d1-79d5-4ea9-9d64-2f718f108476",
+     "e28583e7-e0bd-4648-a0b4-b20c6f22ff04"
+    ],
+    "started_at": "2026-09-05T20:04:14+00:00"
+   },
+   {
+    "duration_minutes": 9,
+    "ended_at": "2026-09-05T20:04:14+00:00",
+    "headline": {
+     "commits": 0,
+     "errors": 0,
+     "files_changed": 11,
+     "tests_failed": 0
+    },
+    "id": "ad4d0b4abba65619",
+    "label": "work-23",
+    "projects": [
+     "core"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "143e4eb8-6a4a-4422-9fc4-efad0afd3ea7",
+     "16924037-f033-471b-8bf0-7f5e33550b98",
+     "2225f77c-d8fb-41ac-9155-7924a25b471a",
+     "2c708d3a-c294-4fec-92f7-183dc174143e",
+     "2fb55959-aa64-4730-b7e6-46cd815f2bc6",
+     "38614439-54c4-4ae7-8475-0d8df66884be",
+     "49923366-0868-436d-b058-3ede656fefef",
+     "4d2b9e37-7b76-4bfa-8bab-20ffd01ad3a8",
+     "4fd97ec1-3f34-434d-baea-28b977538799",
+     "571d6d43-a06e-4d2a-9532-c892b3be8ad9",
+     "c4f08861-ab45-4598-87b5-81aef62b23b9",
+     "c7250c14-667c-4331-ab10-0530cc0718bf",
+     "ca2b5686-07c0-46b6-b4cd-76fbcb169eb5",
+     "dc9b431a-ceef-4215-ab01-a60812910894",
+     "e4a42b2a-3505-4288-800f-8933e01a817a",
+     "ed8b3c20-8afe-4516-8d06-cea6a406382c",
+     "fd2b14a5-72a8-4ec1-b28a-6c57bedc3bf0"
+    ],
+    "started_at": "2026-09-05T19:54:45.173167+00:00"
+   }
+  ],
+  "reference_at": "2026-09-05T21:50:14+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": {
+    "branch": "main",
+    "dirty": true,
+    "last_commit": {
+     "hash": "f30781f",
+     "message": "docs(intelligence): consigner la divergence list/run sur le modèle",
+     "occurred_at": "2026-09-05T21:41:03+00:00"
+    }
+   },
+   "path": "/Users/Yugz/Projets/Pulse",
+   "project": "Pulse",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-09-05",
+ "id": "1e420dda8b6eee77",
+ "label": "work-26",
+ "session_raw": {
+  "activity_count": 92,
+  "apps": [
+   {
+    "activations": 25,
+    "name": "Terminal"
+   },
+   {
+    "activations": 20,
+    "name": "Claude"
+   },
+   {
+    "activations": 12,
+    "name": "Safari"
+   },
+   {
+    "activations": 7,
+    "name": "Code"
+   },
+   {
+    "activations": 2,
+    "name": "Réglages Système"
+   }
+  ],
+  "duration_minutes": 88,
+  "files": {
+   "created": [],
+   "deleted": [],
+   "modified": [],
+   "truncated": false
+  },
+  "git": {
+   "commits": [
+    {
+     "hash": "d6e89cf",
+     "message": "docs: spec LLMProvider — interface modèle et contrat de sortie (pas 3)"
+    },
+    {
+     "hash": "2e40ef1",
+     "message": "probe: sonde de vérification du hook (jamais poussée)"
+    },
+    {
+     "hash": "330c3dc",
+     "message": "docs: spec LLMProvider v2 — alignée sur les étapes 1 et 2 livrées"
+    },
+    {
+     "hash": "28f488d",
+     "message": "feat(intelligence): couche LLMProvider, pont vers Summarizer, provider factice"
+    },
+    {
+     "hash": "2eb70e6",
+     "message": "feat(intelligence): provider HTTP générique pour endpoint compatible"
+    },
+    {
+     "hash": "f30781f",
+     "message": "docs(intelligence): consigner la divergence list/run sur le modèle"
+    },
+    {
+     "hash": "de1d5fe",
+     "message": "fix(intelligence): négocier un paramètre refusé par l'endpoint, tests hermétiques"
+    }
+   ],
+   "push_observed": false
+  },
+  "id": "1e420dda8b6eee77",
+  "is_open": false,
+  "label": "work-26",
+  "last_activity_at": "2026-09-05T21:50:15+00:00",
+  "projects": [
+   "Pulse"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "app_activated",
+   "git_commit",
+   "terminal_finished"
+  ],
+  "source_event_ids": [
+   "01bb8dbc-3c8a-44e8-8bc4-4b9441e91790",
+   "07475c1c-6adb-4989-b916-f3601de682d5",
+   "0b010b01-5884-4851-8169-d1a96f2498b2",
+   "0dd3273e-ab4b-42cc-b3dd-bf39f647a935",
+   "118e37ac-9c8c-4160-bfab-44c06d4aa36e",
+   "12d59ba3-9e0c-4383-a184-471073f72ed8",
+   "13621755-fa86-4bd9-aae7-d033d33cf570",
+   "14c54900-e2a9-449d-9f95-afe1589692fd",
+   "21379848-5831-4411-a6e6-cdfafacd6756",
+   "244cc755-3ca4-4e1d-bd75-4f74d5d9647e",
+   "25ae9cb7-c4b5-4d85-b6b1-b180ff160c4e",
+   "268f209e-9938-4671-a8ab-beba8417c9f1",
+   "287c29e5-f3cc-46ce-b34d-efb3c4266ce0",
+   "288208e6-2e8c-413b-8995-76d6ae1fc3d9",
+   "320c07f3-0168-4c68-b188-8c4460a080a1",
+   "3422cef3-f007-4e41-951d-df8715ba0767",
+   "35391016-4fbb-4ebc-9a5c-e0a02d059716",
+   "366a85a6-8a2c-4dc8-9783-bab7fb95d9c3",
+   "36e1d3ac-b6c3-4ac0-98b6-95e4611b81b5",
+   "3a5d1ba6-acb4-43f0-878d-6189aa15ff71",
+   "3e434339-80ff-48fa-9194-4cfb62d3d6a8",
+   "455996c9-c2f3-467e-ada7-3dad65a56a99",
+   "4587dc1f-8c9c-47d2-9e20-326fd7432e43",
+   "4a1cb17a-51b8-4d40-91be-7363876345e7",
+   "4c90bc34-790a-40c5-a359-e11379a08bd1",
+   "4eda71f8-a9d5-489e-966f-1ff34c49fd3a",
+   "556551e9-342a-467f-b1a3-6ef375aa9314",
+   "5e7e8f8e-ece7-4341-9880-bfc9b5158d1a",
+   "643660eb-6174-409c-b92d-31fbd54f7e3e",
+   "663cd621-28c1-4bd5-8e48-ac2957039afe",
+   "68866e07-b9a7-4813-9de9-d55f329b2dc9",
+   "68a372fe-5eae-4763-9c68-f9006ddfd1c4",
+   "68aa6246-503c-48a0-8c2c-43f82fe17db7",
+   "6cc162c9-6820-47a3-88a0-c141fd3b3a34",
+   "6fe81e75-69d6-4fc9-9312-f1e9482c1f71",
+   "748d54f4-6d1b-44c5-81b4-4b6328443051",
+   "76b1f6e8-3758-4258-8623-a627bea2a3f8",
+   "772f4e33-0c37-41d3-b20b-84aeb5b337c9",
+   "7b3daf94-4e20-498a-bedc-d2b7e3cd60e9",
+   "7b49ac75-9466-4c56-98e5-6f76fc3460fe",
+   "7cdeadb4-2c11-4cd3-9abc-50b0c54f84f7",
+   "7ef24429-8349-4ed7-badd-f6370a50d128",
+   "7f2a9bbb-90ea-49f8-871e-33288a5e1341",
+   "7f3822d9-f0c6-430f-88d9-97b0683ce4c1",
+   "7f4110b8-fdf8-44bc-80e6-dbb3a05586f1",
+   "821e6026-91a7-446c-9057-b990723c844c",
+   "8359a52b-aa02-4a07-a60c-101aa686a873",
+   "841984c0-be84-441e-bb0e-0f88adf1844d",
+   "85b2199f-3baf-4702-99e2-49ccbf9f1d2b",
+   "883e4cb9-d4c9-4ae0-b27f-46f48296718b",
+   "8dc5af91-d6fd-41c0-9252-1d7f9104a19d",
+   "8e46b438-844a-4f0d-8dfd-4f4686b19089",
+   "90650425-1f56-44f2-bb37-ce5ce01669fd",
+   "92b49180-637a-4a16-bf31-dad1728c1f1f",
+   "a8287317-82c4-4786-acb4-351f69f0c458",
+   "aa476ab2-e38d-4e33-9048-d31f59bc46f8",
+   "ac718cb2-3e9c-4161-a6f9-3f8f52edd792",
+   "acba538c-8546-4de1-b075-d6b754f6158a",
+   "ae1a8449-13d7-4b85-83b7-a8da685b61fb",
+   "ae345a64-3b1d-4d1f-9343-04288776c07f",
+   "ae83ec31-23ee-4f8f-b957-b473e1ae4d31",
+   "b031f8f7-49f5-45ce-ade4-84a34a583927",
+   "b6789485-7be5-415c-8b84-d1e786ce122f",
+   "b802b038-fa78-4750-9baa-83a3bf531427",
+   "b83d3670-299e-4dc1-80ef-116894e78716",
+   "bb6f31c1-679e-4aa9-aa49-5cabda1f31cb",
+   "bde970a1-b0aa-45a8-8cbb-b4e7b892a09e",
+   "c12f7457-a7f0-47cc-b000-8992bd18bbf9",
+   "c3bc5e74-4d75-4c49-b836-dec046491162",
+   "c75004d9-f399-46a8-aa96-a071aa373d8a",
+   "c7f5a891-8182-4bfa-a07a-82d95bc56eca",
+   "cc1a70b5-2452-4cfa-b02d-fbc03d099873",
+   "cdc2a12d-2885-4ae8-b65a-34752bce3327",
+   "cf80248d-7f5f-4ee4-bbec-fc5fea52be3c",
+   "cff98f20-b8b0-4d32-9800-4cc20eefb0c8",
+   "d426a2b3-21ec-46c9-b71d-2e05bbd8c036",
+   "d5e19899-417c-41a3-b9d4-55f20873090f",
+   "d77bf086-c81a-44b3-9c6e-c6d34520983c",
+   "d7c3df32-1b47-4b7b-a5a8-811d4452de2c",
+   "d88f4c8a-a7c1-4792-843f-e2c1122ad302",
+   "e0915dee-bc4b-4f47-a63f-95c5ccc3765a",
+   "e19a0e2c-04cb-4b4f-b92a-080303730840",
+   "e3e15789-041c-41ae-a5aa-a6452d65c127",
+   "e63c557d-91b9-43c7-9f84-c25e8d5dc808",
+   "e6df445d-0455-4c2d-acf4-959344d4151b",
+   "ed250b0b-f455-498f-84bb-ece824a0a6fa",
+   "ee199bac-f877-433e-acb9-8366c4741599",
+   "f042a6e4-65b0-4b8c-880e-805a166ef328",
+   "f1ab44c0-bb42-45cd-9cb2-1e4ee916a3b3",
+   "f232c467-06cf-4808-9fba-a6065670dda3",
+   "f5600733-3936-4e37-be06-297a48e937de",
+   "fae17644-6be9-4c54-8cc2-5aedc57c139b"
+  ],
+  "started_at": "2026-09-05T20:21:59+00:00",
+  "terminal": {
+   "errors": [],
+   "tests_failed": [],
+   "tests_passed": [],
+   "truncated": false
+  }
+ },
+ "why": "Cas D1 du jour 1 (work-26 du 2026-09-05, 88 min) : annexe previous_summary (work-24) que le résumé v1 recopiait. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s pour que l'annexe soit le résumé précédent, pas le sien."
+}
