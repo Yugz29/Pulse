@@ -263,7 +263,13 @@ def run_run(args: argparse.Namespace, config: Config, client: CoreClient, state:
             line = f"  {outcome.status} {outcome.session_id} event_id={outcome.event_id}"
             if outcome.detail:
                 line += f" — {outcome.detail}"
-            print(line)
+            if outcome.status in {"failed", "given_up"}:
+                # Bruyant : un refus (plafond d'entrée, modèle injoignable) ne
+                # doit pas se fondre dans la liste — sur stderr, donc visible en
+                # terminal et dans run.log sous launchd.
+                print(f"  ⚠ {line.strip()}", file=sys.stderr)
+            else:
+                print(line)
         if report.error:
             print(f"Core injoignable : {report.error}", file=sys.stderr)
             return EXIT_INFRASTRUCTURE
@@ -331,7 +337,8 @@ def run_eval(args: argparse.Namespace, config: Config) -> int:
         mark = {"ok": "✓", "rejected": "✗", "failed": "!"}[o.status]
         dropped = f" [temp retirée]" if o.dropped_parameters else ""
         print(
-            f"  {mark} {o.entry.label:<8} {o.entry.id}  ~{o.input_tokens_est:>5}tok  "
+            f"  {mark} {o.entry.label:<8} {o.entry.id}  "
+            f"{(str(o.prompt_tokens) + 'tok') if o.prompt_tokens is not None else '—':>9}  "
             f"{(str(o.duration_ms) + 'ms') if o.duration_ms is not None else '—':>7}"
             f"{dropped}  {o.detail or o.entry.why[:38]}"
         )

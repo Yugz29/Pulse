@@ -20,7 +20,7 @@ from .provider import CompletionRequest, CompletionResult, ProviderError
 DEFAULT_MODEL = "mlx-community/Qwen3.8-27B-4bit"
 # Plafond d'entrée sous le seuil OOM mesuré au spike B : sur un M3 Max 36 Go,
 # une entrée de 60k tokens fait planter Metal (pic ~28 Go) avant la fin du
-# prefill, quand la plus grosse session réelle (~6 500 tokens) tient à 19,77 Go.
+# prefill, quand la plus grosse session réelle (20 901 tokens) tient à 19,77 Go.
 # 30 000 laisse une marge large au-dessus du réel et bien sous le seuil OOM.
 DEFAULT_MAX_INPUT_TOKENS = 30_000
 

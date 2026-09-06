@@ -50,7 +50,6 @@ class EvalOutcome:
     status: str  # "ok" | "rejected" | "failed"
     detail: str | None
     parsed: ParsedSummary | None
-    input_tokens_est: int
     duration_ms: int | None
     prompt_tokens: int | None
     completion_tokens: int | None
@@ -98,14 +97,13 @@ def evaluate(
     for entry in entries:
         session = entry.view
         serialized = serialize_input(build_model_input(session, entry.context))
-        tokens_est = len(serialized) // 4
 
         try:
             result = summarizer.complete(serialized)
         except SummarizerError as exc:
             outcomes.append(
                 EvalOutcome(
-                    entry, "failed", str(exc), None, tokens_est,
+                    entry, "failed", str(exc), None,
                     None, None, None, (),
                 )
             )
@@ -120,7 +118,7 @@ def evaluate(
 
         outcomes.append(
             EvalOutcome(
-                entry, status, detail, parsed, tokens_est,
+                entry, status, detail, parsed,
                 result.duration_ms, result.prompt_tokens,
                 result.completion_tokens, result.dropped_parameters,
             )
@@ -181,7 +179,6 @@ def _write_meta(
                 "id": o.entry.id,
                 "label": o.entry.label,
                 "status": o.status,
-                "input_tokens_est": o.input_tokens_est,
                 "duration_ms": o.duration_ms,
                 "prompt_tokens": o.prompt_tokens,
                 "completion_tokens": o.completion_tokens,

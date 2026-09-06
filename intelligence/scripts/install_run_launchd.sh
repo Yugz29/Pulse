@@ -41,7 +41,7 @@ if [[ -e "$plist_path" ]] && ! grep -qF "$marker" "$plist_path" 2>/dev/null; the
 fi
 
 mkdir -p -- "$plist_dir" "$log_dir"
-chmod 700 -- "$log_dir"
+chmod 700 "$log_dir"
 
 cat > "$plist_path" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
