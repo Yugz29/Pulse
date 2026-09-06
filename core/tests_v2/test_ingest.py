@@ -904,3 +904,60 @@ def test_reserved_envelope_fields_inside_details_are_refused(overrides, field):
 
     assert raised.value.field == field
     assert field.split(".")[1] in str(raised.value)
+
+
+# --- schéma des champs libres d'un session_summary (audit 2026-09-06, défaut 9) ---
+
+
+def test_the_session_summary_schema_enumerates_its_free_text_fields():
+    """Le schéma est défini une fois dans `ingest.py` : les champs texte
+    libres, les listes de textes libres, et les champs fermés. Cette
+    énumération est le contrat du parseur Intelligence (spec du pas 3, §6) :
+    un champ ajouté d'un côté sans politique de l'autre casse ce test."""
+    from daemon_v2.ingest import (
+        SESSION_SUMMARY_CLOSED_FIELDS,
+        SESSION_SUMMARY_FREE_TEXT_FIELDS,
+        SESSION_SUMMARY_FREE_TEXT_LISTS,
+    )
+
+    assert SESSION_SUMMARY_FREE_TEXT_FIELDS == {
+        ("reprise", "doing"),
+        ("reprise", "stopped_at"),
+        ("reprise", "open"),
+        ("structured", "project"),
+    }
+    assert SESSION_SUMMARY_FREE_TEXT_LISTS == {
+        ("structured", "intents"),
+        ("structured", "central_files"),
+        ("structured", "blockers"),
+    }
+    assert SESSION_SUMMARY_CLOSED_FIELDS == {("structured", "confidence")}
+
+
+def test_every_declared_free_text_field_is_redacted_and_undeclared_ones_are_refused():
+    from daemon_v2.ingest import (
+        SESSION_SUMMARY_FREE_TEXT_FIELDS,
+        SESSION_SUMMARY_FREE_TEXT_LISTS,
+    )
+
+    payload = session_summary_payload()
+    for section, key in SESSION_SUMMARY_FREE_TEXT_FIELDS:
+        payload[section][key] = f"{key} TOKEN=secret-{key}"
+    for section, key in SESSION_SUMMARY_FREE_TEXT_LISTS:
+        payload[section][key] = [f"{key} TOKEN=secret-{key}"]
+
+    activity = normalize_activity(payload)
+
+    for section, key in SESSION_SUMMARY_FREE_TEXT_FIELDS:
+        assert activity.details[section][key] == f"{key} TOKEN=[REDACTED]", (section, key)
+    for section, key in SESSION_SUMMARY_FREE_TEXT_LISTS:
+        assert activity.details[section][key] == [f"{key} TOKEN=[REDACTED]"], (section, key)
+
+    # Un champ que le schéma ne connaît pas n'a pas de politique de
+    # rédaction : refusé, jamais recopié en silence.
+    for section in ("structured", "reprise"):
+        stray = session_summary_payload()
+        stray[section]["notes"] = "TOKEN=stray-secret"
+        with pytest.raises(InvalidActivity) as raised:
+            normalize_activity(stray)
+        assert raised.value.field == f"details.{section}.notes"
