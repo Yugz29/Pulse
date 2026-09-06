@@ -172,7 +172,8 @@ Commandes de diagnostic :
 ```
 
 `clear-dead-letter` supprime uniquement les dead-letters ciblées ;
-`replay-dead-letter` les re-enfile dans la file de livraison (sélection
+`replay-dead-letter` les re-enfile dans la file de livraison avec un budget
+HTTP neuf, `attempts` et `http_attempts` à zéro, en queue de FIFO (sélection
 explicite obligatoire : `--event-id`, `--http-status` ou `--all`). Aucune des
 deux ne touche aux événements pending. Aucune dead-letter n’est supprimée ou
 rejouée automatiquement.
@@ -180,7 +181,10 @@ rejouée automatiquement.
 Sémantique de livraison : les erreurs de connexion (daemon arrêté, machine
 hors ligne) sont réessayées indéfiniment — l’outbox survit à l’indisponibilité
 du daemon. Seuls les échecs HTTP répétés (le serveur répond mais échoue)
-finissent en dead-letter, après ~1 h de tentatives. Une réponse 204
+finissent en dead-letter, après ~1 h de tentatives. Les déconnexions ne
+consomment pas ce budget de réponses, même entremêlées : deux compteurs
+distincts (`attempts` pour le backoff, `http_attempts` pour le plafond), donc
+une longue coupure suivie d’un premier `503` reste réessayable. Une réponse 204
 (commande volontairement filtrée) supprime l’événement sans dead-letter.
 
 Test manuel :
