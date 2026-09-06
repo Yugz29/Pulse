@@ -185,6 +185,7 @@ class JobState:
             entry["previous_summary"] = pending["previous_summary"]
         self.emitted[event_id] = entry
         self.failures.pop(session_id, None)
+        self.failures.pop(event_id, None)
         self.save()
 
     def summaries_for(self, session_id: str) -> list[dict[str, Any]]:
@@ -221,16 +222,41 @@ class JobState:
             return None
         return max(entries, key=lambda entry: str(entry.get("at", "")))["event"]
 
-    def record_failure(self, session_id: str, reason: str) -> int:
-        count = self.failures.get(session_id, 0) + 1
-        self.failures[session_id] = count
+    def record_failure(self, session_id: str, reason: str, *, event_id: str | None = None) -> int:
+        """Une tentative de plus pour cette identité de résumé.
+
+        Clé = ``event_id`` (session, prompt, modèle) : changer de prompt ou
+        de modèle ouvre un vrai nouveau budget (audit 2026-09-06, défaut 5).
+        Sans ``event_id``, la clé reste la session, forme ancienne. Le format
+        du fichier ne change pas : ``failures`` et ``failed`` restent des
+        dictionnaires clé → compteur / motif.
+        """
+        key = event_id or session_id
+        count = self.failures.get(key, 0) + 1
+        self.failures[key] = count
         if count >= MAX_ATTEMPTS:
-            self.failed[session_id] = reason
+            self.failed[key] = reason
         self.save()
         return count
 
-    def is_failed(self, session_id: str) -> bool:
-        return session_id in self.failed
+    def is_failed(self, session_id: str, event_id: str | None = None) -> bool:
+        """Abandonnée sous l'une ou l'autre forme de clé : l'identité, ou la
+        session entière (clé ancienne, abandon d'avant l'identité)."""
+        return session_id in self.failed or (event_id is not None and event_id in self.failed)
+
+    def failure_reason(self, session_id: str, event_id: str | None = None) -> str | None:
+        if event_id is not None and event_id in self.failed:
+            return self.failed[event_id]
+        return self.failed.get(session_id)
+
+    def clear_failures(self, session_id: str, event_id: str | None = None) -> None:
+        """Reprise explicite (`summarize <id> --retry`) : efface les deux
+        formes de clé pour cette session, compteurs et motifs."""
+        for key in (session_id, event_id):
+            if key is not None:
+                self.failures.pop(key, None)
+                self.failed.pop(key, None)
+        self.save()
 
 
 def _acquire_lock(path: Path) -> int:

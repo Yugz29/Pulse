@@ -167,7 +167,7 @@ Structure imposée :
 
 ### Parsing et validation
 
-Tolère les clôtures ```` ```json ````. Rejette : schéma invalide, `reprise.*` vide, `confidence` hors énumération, tout `central_files[]` absent des chemins de l'entrée, toute chaîne > 300 caractères. Un rejet = pas d'émission, compteur d'échec dans l'état local, nouvelle tentative au tick suivant, trois maximum puis `failed`. Jamais rien dans `trace.db` avant validation.
+Tolère les clôtures ```` ```json ````. Rejette : schéma invalide, `reprise.*` vide, `confidence` hors énumération, tout `central_files[]` absent des chemins de l'entrée, toute chaîne > 300 caractères. Un rejet = pas d'émission, compteur d'échec dans l'état local, nouvelle tentative au tick suivant, trois maximum puis `given_up`. Jamais rien dans `trace.db` avant validation. **Budget par identité** (2026-09-06, défaut 5 de l'audit) : le compteur et l'abandon sont indexés par `event_id`, donc par (session, prompt, modèle) ; une clé de seize hexadécimaux dans `failures` / `failed` est un abandon ancien, portant sur la session entière, toujours respecté. Trois natures d'échec côté modèle : une **entrée refusée** de façon déterministe (`ProviderInputRefused` : plafond de tokens, HTTP 400) consomme le budget comme une sortie invalide ; une **panne transitoire** (`ProviderError` nue : délai de lecture, 429, 5xx, erreur de génération) donne `failed` sans consommer le budget ; un **modèle indisponible** (`ProviderUnavailable` : runtime absent, poids non chargés, connexion refusée) arrête le passage à la première candidate, `report.error`, code 2, comme un Core injoignable. Reprise explicite d'un abandon : `summarize <id> --retry` efface les deux formes de clé pour cette session puis repart, `pending` d'abord.
 
 ## 8. Exposition
 

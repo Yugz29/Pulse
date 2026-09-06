@@ -112,8 +112,10 @@ def test_three_rejections_mark_the_session_failed(fake_core, client, config, sta
     ]
 
     assert statuses == ["failed", "failed", "given_up", "given_up"]
-    assert state.failures["aaaaaaaaaaaaaaaa"] == 3
-    assert "non JSON" in state.failed["aaaaaaaaaaaaaaaa"]
+    # Budget par identité (session, prompt, modèle), audit 2026-09-06 défaut 5.
+    identity = summary_event_id("aaaaaaaaaaaaaaaa", "v1", "fake/summarizer")
+    assert state.failures[identity] == 3
+    assert "non JSON" in state.failed[identity]
     assert len(summarizer.calls) == 3  # plus d'appel au modèle une fois abandonnée
     assert fake_core.posts == []
 

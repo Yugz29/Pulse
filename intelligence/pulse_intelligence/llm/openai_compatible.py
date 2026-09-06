@@ -17,7 +17,7 @@ from typing import Any
 
 import requests
 
-from .provider import CompletionRequest, CompletionResult, ProviderError
+from .provider import CompletionRequest, CompletionResult, ProviderError, ProviderInputRefused, ProviderUnavailable
 
 
 ENV_BASE_URL = "PULSE_LLM_BASE_URL"
@@ -112,7 +112,13 @@ class OpenAICompatibleProvider:
                 response = self._post(payload)
         duration_ms = int((time.monotonic() - started) * 1000)
 
+        if response.status_code == 400:
+            # Après négociation, un 400 porte sur cette entrée-là : la même
+            # entrée sera refusée encore. Budget consommé, comme une sortie
+            # invalide.
+            raise ProviderInputRefused(f"HTTP 400 : {_short_body(response)}")
         if response.status_code >= 400:
+            # 401/403/404/429/5xx : réessayable au passage suivant, sans budget.
             raise ProviderError(
                 f"HTTP {response.status_code} : {_short_body(response)}"
             )
@@ -146,8 +152,13 @@ class OpenAICompatibleProvider:
                 },
                 timeout=self.timeout_s,
             )
+        except requests.ReadTimeout as exc:
+            # Réponse trop lente pour cet appel (génération longue) : transitoire.
+            raise ProviderError(f"délai dépassé : {exc}") from exc
         except requests.RequestException as exc:
-            raise ProviderError(f"endpoint injoignable : {exc}") from exc
+            # Connexion refusée, DNS, délai de connexion : injoignable pour
+            # toutes les candidates, le passage s'arrête.
+            raise ProviderUnavailable(f"endpoint injoignable : {exc}") from exc
 
     def healthcheck(self) -> bool:
         """Ne lève jamais : un endpoint muet est une réponse, pas une panne."""

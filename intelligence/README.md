@@ -110,8 +110,17 @@ $ pulse-intel run --once
 
 - `created` : résumé produit et émis.
 - `duplicate` : Core avait déjà cet événement (rejeu inoffensif).
-- `failed` : sortie rejetée (JSON invalide, chemin inventé…) — réessai au
-  passage suivant, trois fois puis `given_up`.
+- `failed` : sortie rejetée (JSON invalide, chemin inventé…) ou entrée refusée
+  par le modèle (plafond de tokens, HTTP 400) — réessai au passage suivant,
+  trois fois puis `given_up`. Le budget est compté **par identité de résumé**
+  (session, prompt, modèle) : changer de prompt ou de modèle ouvre une vraie
+  nouvelle tentative. Une panne transitoire du modèle (délai dépassé, 5xx,
+  erreur de génération) donne aussi `failed`, mais ne consomme pas le budget :
+  une session n'est jamais abandonnée pour une panne.
+- modèle indisponible pour toutes (runtime absent, poids non chargés, endpoint
+  injoignable) : le passage s'arrête à la première candidate, `passage
+  interrompu : modèle indisponible …` sur stderr, code 2, aucune tentative
+  consommée — comme un Core injoignable.
 - `replayed` : payloads `pending` rejoués **avant** la sélection, tels que
   figés lors d'une panne Core, même si leur session est sortie de la fenêtre
   `lookback_days` — sans modèle, sans commande datée. Un rejeu que Core refuse
@@ -127,6 +136,11 @@ Code de sortie de `run --once`, le plus grave gagne :
 | au moins une candidate `failed` (réessayée au passage suivant) | 3 |
 | au moins une candidate `given_up` (abandonnée, intervention nécessaire) | 4 |
 | un autre `run` ou `summarize` tient déjà l'état (`state.json.lock`) : sortie immédiate, rien n'est lu ni écrit | 5 |
+
+Reprendre une session abandonnée : `pulse-intel summarize <id> --retry` efface
+son budget d'échecs (sous ses deux formes de clé, session et identité), rejoue
+le payload figé s'il en reste un, sinon régénère. Sans `--retry`, `summarize`
+sur une session `given_up` le reste.
 
 Sans `--once`, `run` refait un passage toutes les `tick_minutes` jusqu'à Ctrl-C.
 

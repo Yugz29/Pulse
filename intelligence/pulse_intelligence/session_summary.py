@@ -27,7 +27,12 @@ from .session_input import (
     serialize_input,
 )
 from .state import JobState
-from .summarizer import Summarizer, SummarizerError
+from .summarizer import (
+    Summarizer,
+    SummarizerError,
+    SummarizerInputRefused,
+    SummarizerUnavailable,
+)
 
 
 CONFIDENCE_LEVELS = ("high", "medium", "low")
@@ -221,8 +226,10 @@ def _emit(
     """
     result = client.post_activity(event)
     if not result.accepted:
-        count = state.record_failure(session.id, f"Core {result.status_code}: {result.error}")
-        status = "given_up" if state.is_failed(session.id) else "failed"
+        count = state.record_failure(
+            session.id, f"Core {result.status_code}: {result.error}", event_id=event_id
+        )
+        status = "given_up" if state.is_failed(session.id, event_id) else "failed"
         return Outcome(
             session.id, status, event_id, detail=f"tentative {count}: Core {result.status_code}"
         )
@@ -279,8 +286,10 @@ def summarize_session(
     if not dry_run:
         if state.knows(event_id):
             return Outcome(session.id, "already_known", event_id)
-        if state.is_failed(session.id):
-            return Outcome(session.id, "given_up", event_id, detail=state.failed[session.id])
+        if state.is_failed(session.id, event_id):
+            return Outcome(
+                session.id, "given_up", event_id, detail=state.failure_reason(session.id, event_id)
+            )
         pending = state.pending_event(event_id)
         if pending is not None:
             return _emit(
@@ -322,12 +331,21 @@ def summarize_session(
     try:
         output = summarizer.summarize(serialized)
         parsed = parse_model_output(output, input_paths(session))
-    except (SummarizerError, InvalidModelOutput) as exc:
+    except SummarizerUnavailable:
+        # Modèle injoignable : la même erreur pour toute candidate. Remonte
+        # à run_pass, qui arrête le passage comme sur un Core injoignable.
+        raise
+    except (SummarizerInputRefused, InvalidModelOutput) as exc:
+        # Déterministe pour cette entrée : consomme le budget de l'identité.
         if dry_run:
             return Outcome(session.id, "failed", event_id, detail=str(exc))
-        count = state.record_failure(session.id, str(exc))
-        status = "given_up" if state.is_failed(session.id) else "failed"
+        count = state.record_failure(session.id, str(exc), event_id=event_id)
+        status = "given_up" if state.is_failed(session.id, event_id) else "failed"
         return Outcome(session.id, status, event_id, detail=f"tentative {count}: {exc}")
+    except SummarizerError as exc:
+        # Transitoire (délai, 5xx, génération) : réessayé au passage suivant,
+        # sans consommer le budget — une panne n'empoisonne pas une session.
+        return Outcome(session.id, "failed", event_id, detail=f"modèle indisponible (transitoire) : {exc}")
     generation_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
     generated_at = now or datetime.now(timezone.utc)
 
@@ -407,10 +425,12 @@ def run_pass(
             continue
         event_id = str(event.get("event_id", ""))
         drained.add(session_id)
-        if state.is_failed(session_id):
+        if state.is_failed(session_id, event_id):
             # Abandonnée : le pending reste sur disque jusqu'à une reprise
             # explicite ; il n'est ni rejoué ni oublié.
-            outcomes.append(Outcome(session_id, "given_up", event_id, detail=state.failed[session_id]))
+            outcomes.append(
+                Outcome(session_id, "given_up", event_id, detail=state.failure_reason(session_id, event_id))
+            )
             continue
         try:
             outcome = _replay_pending(entry, client=client, config=config, state=state)
@@ -427,13 +447,12 @@ def run_pass(
     for session in candidates:
         if session.id in drained:
             continue
-        if state.is_failed(session.id):
+        event_id = summary_event_id(session.id, config.prompt_version, summarizer.model_id)
+        if state.is_failed(session.id, event_id):
             outcomes.append(
                 Outcome(
-                    session.id,
-                    "given_up",
-                    summary_event_id(session.id, config.prompt_version, summarizer.model_id),
-                    detail=state.failed[session.id],
+                    session.id, "given_up", event_id,
+                    detail=state.failure_reason(session.id, event_id),
                 )
             )
             continue
@@ -443,6 +462,11 @@ def run_pass(
                     session, client=client, summarizer=summarizer, config=config,
                     state=state, now=moment,
                 )
+            )
+        except SummarizerUnavailable as exc:
+            return PassReport(
+                candidates=len(candidates), outcomes=outcomes,
+                error=f"modèle indisponible : {exc}", replayed=replayed,
             )
         except CoreUnavailable as exc:
             return PassReport(

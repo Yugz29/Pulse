@@ -87,9 +87,9 @@ def test_a_pending_of_a_given_up_session_stays_on_disk(fake_core, client, config
     state_path = tmp_path / "state" / "state.json"
     summarizer = _freeze_a_pending(fake_core, client, config, state_path)
     state = JobState.load(state_path)
-    state.record_failure(SESSION, "tentative 2: Core 503")
-    state.record_failure(SESSION, "tentative 3: Core 503")
-    assert state.is_failed(SESSION)
+    state.record_failure(SESSION, "tentative 2: Core 503", event_id=EVENT_ID)
+    state.record_failure(SESSION, "tentative 3: Core 503", event_id=EVENT_ID)
+    assert state.is_failed(SESSION, EVENT_ID)
 
     report = run_pass(client, summarizer, config, JobState.load(state_path), now=REFERENCE + timedelta(days=3))
 
