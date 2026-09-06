@@ -227,6 +227,18 @@ def _emit(
     """
     result = client.post_activity(event)
     if not result.accepted:
+        if result.status_code == 409:
+            # Core détient déjà un événement sous cet identifiant, avec un
+            # autre contenu : un `pending` d'avant une perte d'état ou d'une
+            # sauvegarde restaurée (relecture 2026-09-06, sonde B). Ce que
+            # Core a accepté est la référence : repris tel quel, `pending`
+            # retiré, zéro budget. Un 409 sans événement lisible (404) est
+            # un refus ordinaire et compte comme avant.
+            recovered = _recover_after_conflict(
+                session, event_id, client=client, config=config, model_id=model_id, state=state,
+            )
+            if recovered is not None:
+                return recovered
         count = state.record_failure(
             session.id, f"Core {result.status_code}: {result.error}", event_id=event_id
         )
@@ -262,9 +274,44 @@ def _emit(
         event=accepted,
         origin="core",
     )
+    # `event` est la copie de Core ou rien : la sortie du modèle avant
+    # rédaction ne sort jamais d'ici, ni vers l'état ni vers l'affichage.
     return Outcome(
         session.id, "duplicate" if result.duplicate else "created", event_id,
-        event=accepted or event,
+        event=accepted,
+    )
+
+
+def _recover_after_conflict(
+    session: SessionView,
+    event_id: str,
+    *,
+    client: CoreClient,
+    config: Config,
+    model_id: str,
+    state: JobState,
+) -> Outcome | None:
+    """Après un 409 : l'événement que Core détient, enregistré comme
+    référence (`origin: "core"`), ou ``None`` si Core n'en a pas (404).
+    Core injoignable remonte en ``CoreUnavailable`` : le `pending` reste."""
+    stored = client.get_activity(event_id)
+    if stored is None:
+        return None
+    recovered = _recovered_event(stored)
+    details = recovered["details"]
+    state.record_emitted(
+        event_id,
+        session_id=session.id,
+        prompt_version=config.prompt_version,
+        model_id=model_id,
+        at=str(details.get("generated_at") or recovered["occurred_at"]),
+        event=recovered,
+        origin="core",
+    )
+    return Outcome(
+        session.id, "already_known", event_id, event=recovered,
+        detail="récupéré depuis Core après conflit : Core détenait déjà un résumé "
+        "pour cette identité, repris tel quel, budget intact",
     )
 
 
@@ -436,9 +483,12 @@ def run_pass(
     # des sessions jamais traitées, qui n'existe pas ici.
     outcomes: list[Outcome] = []
     replayed = 0
-    # Une session traitée par le vidage ne l'est pas une seconde fois par la
+    # Une identité traitée par le vidage ne l'est pas une seconde fois par la
     # sélection du même passage : un rejeu refusé garde son unique tentative,
-    # un rejeu accepté la rend connue, donc non candidate.
+    # un rejeu accepté la rend connue, donc non candidate. La clé est
+    # l'identité (event_id), pas la session : un `pending` abandonné sous un
+    # ancien prompt ou modèle ne cache pas la session à une identité neuve
+    # (relecture 2026-09-06, sonde A).
     drained: set[str] = set()
     for entry in list(state.pending.values()):
         session_id = str(entry.get("session_id", ""))
@@ -446,7 +496,7 @@ def run_pass(
         if not session_id or not isinstance(event, dict):
             continue
         event_id = str(event.get("event_id", ""))
-        drained.add(session_id)
+        drained.add(event_id)
         if state.is_failed(session_id, event_id):
             # Abandonnée : le pending reste sur disque jusqu'à une reprise
             # explicite ; il n'est ni rejoué ni oublié.
@@ -467,9 +517,9 @@ def run_pass(
     except CoreUnavailable as exc:
         return PassReport(candidates=0, outcomes=outcomes, error=str(exc), replayed=replayed)
     for session in candidates:
-        if session.id in drained:
-            continue
         event_id = summary_event_id(session.id, config.prompt_version, summarizer.model_id)
+        if event_id in drained:
+            continue
         if state.is_failed(session.id, event_id):
             outcomes.append(
                 Outcome(
