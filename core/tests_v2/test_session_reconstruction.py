@@ -777,7 +777,7 @@ def test_late_event_moves_labels_but_never_the_session_identity(tmp_path):
     assert [s["label"] for s in before] == ["work-1"]
     afternoon_id = before[0]["id"]
     assert len(afternoon_id) == 16 and int(afternoon_id, 16) >= 0
-    assert before[0]["reconstruction_version"] == 2
+    assert before[0]["reconstruction_version"] == 3
     assert len(before[0]["source_event_ids"]) == 2
 
     # Un événement arrive après coup, daté du matin.
@@ -1001,7 +1001,7 @@ def test_lock_closes_the_session_at_once_on_its_last_work(lock_type):
     assert session["started_at"] == BASE.isoformat()
     assert session["ended_at"] == (BASE + timedelta(minutes=5)).isoformat()
     assert session["source_event_ids"] == ["id:1", "id:2"]
-    assert session["reconstruction_version"] == 2
+    assert session["reconstruction_version"] == 3
     assert unresolved == []
 
 

@@ -3,11 +3,35 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 DEFAULT_CORE_HOST = "127.0.0.1"
 DEFAULT_CORE_PORT = 8765
+# Fuseau de reconstruction des journées (décision 2026-09-06, audit défaut 7) :
+# un vrai fuseau IANA, porteur de ses règles calendaires, jamais le décalage
+# fixe du moment. Le changer change les bornes des journées, donc la
+# composition et les identifiants des sessions proches de minuit : c'est une
+# nouvelle version de reconstruction, pas un réglage anodin.
+DEFAULT_RECONSTRUCTION_TZ = "Europe/Paris"
+
+
+@lru_cache(maxsize=1)
+def reconstruction_timezone() -> ZoneInfo:
+    """``ZoneInfo(PULSE_RECONSTRUCTION_TZ)``, résolu une fois par processus.
+
+    Une valeur inconnue est une erreur de configuration, levée au démarrage
+    (``create_app``) plutôt qu'à la première journée reconstruite.
+    """
+    name = os.environ.get("PULSE_RECONSTRUCTION_TZ", "").strip() or DEFAULT_RECONSTRUCTION_TZ
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(
+            f"PULSE_RECONSTRUCTION_TZ must be an IANA zone name (got {name!r})"
+        ) from exc
 
 
 def select_database_path(database_path: str | Path | None = None) -> Path:

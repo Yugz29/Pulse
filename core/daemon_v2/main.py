@@ -9,6 +9,7 @@ from .runtime_config import (
     core_base_url,
     core_host,
     core_port,
+    reconstruction_timezone,
     select_database_path,
 )
 from .private_files import apply_private_umask
@@ -17,6 +18,8 @@ from .trace_store import TraceStore
 
 def create_app(database_path: str | Path | None = None) -> Flask:
     app = Flask(__name__)
+    # Échec explicite au démarrage si PULSE_RECONSTRUCTION_TZ est invalide.
+    reconstruction_timezone()
     path = select_database_path(database_path)
     app.config["DATABASE_PATH"] = path
     app.config["TRACE_STORE"] = TraceStore(path)
