@@ -32,7 +32,7 @@ from .llm.provider import LLMProvider, ProviderError
 from .provider_summarizer import ProviderSummarizer, prompt_path_for
 from .selection import Classified, classify_sessions, find_session
 from .session_summary import run_pass, summarize_session
-from .state import JobState
+from .state import JobState, StateLocked
 from .summarizer import FakeSummarizer, Summarizer
 
 
@@ -47,6 +47,9 @@ EXIT_INFRASTRUCTURE = 2
 # invalide qu'un provider indisponible.
 EXIT_PARTIAL = 3
 EXIT_GIVEN_UP = 4
+# `run` et `summarize` : un autre passage tient déjà l'état (décision
+# 2026-09-06, exécution unique). Sortie immédiate, rien n'est attendu.
+EXIT_LOCKED = 5
 PRIVATE_UMASK = 0o077
 
 
@@ -108,7 +111,10 @@ def _load(args: argparse.Namespace) -> tuple[Config, CoreClient, JobState]:
         config = Config(**{**config.__dict__, "core_url": args.core_url})
     client = CoreClient(config.core_url)
     state_path = args.state or config_home() / "state.json"
-    return config, client, JobState.load(state_path)
+    # Les commandes qui écrivent l'état prennent le verrou dès le chargement
+    # et le gardent jusqu'à la fin ; `list` et `show` lisent sans verrou.
+    lock = args.command in {"run", "summarize"}
+    return config, client, JobState.load(state_path, lock=lock)
 
 
 def _now() -> datetime:
@@ -481,6 +487,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     os.umask(PRIVATE_UMASK)
     parser = _build_parser()
     args = parser.parse_args(argv)
+    state: JobState | None = None
     try:
         if args.command == "eval":
             return run_eval(args, load_config(args.config))
@@ -492,6 +499,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "run":
             return run_run(args, config, client, state)
         return run_show(args, config, client, state)
+    except StateLocked as exc:
+        print(f"état : {exc}", file=sys.stderr)
+        return EXIT_LOCKED
     except ConfigError as exc:
         print(f"configuration : {exc}", file=sys.stderr)
         return EXIT_USAGE
@@ -507,6 +517,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except CoreError as exc:
         print(f"Core : {exc}", file=sys.stderr)
         return EXIT_INFRASTRUCTURE
+    finally:
+        if state is not None:
+            state.release()
 
 
 if __name__ == "__main__":

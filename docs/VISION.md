@@ -260,3 +260,7 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   `Qwen3.8-27B-4bit`, avec deux réserves écrites (hallucination sur les
   sessions sans fichier, plafond mémoire ~30–40k tokens d'entrée)
   ([note](decisions/2026-09-06-modele-local-qwen.md)).
+- **2026-09-06** — Exécution unique d'un passage Intelligence : verrou
+  `flock` pris avant le chargement de l'état et tenu jusqu'à la fin de
+  `run` / `summarize`, sortie immédiate avec le code `5` si pris, nom
+  temporaire unique à la sauvegarde. Format de l'état inchangé.

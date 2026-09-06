@@ -14,9 +14,11 @@ après hardening : dossier ``0700``, fichiers ``0600``.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import stat
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,11 @@ from typing import Any
 MAX_ATTEMPTS = 3
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
+LOCK_SUFFIX = ".lock"
+
+
+class StateLocked(RuntimeError):
+    """Un autre passage tient déjà l'état (décision 2026-09-06, exécution unique)."""
 
 
 def ensure_private_home(path: Path) -> Path:
@@ -45,10 +52,23 @@ class JobState:
     pending: dict[str, dict[str, Any]] = field(default_factory=dict)
     failures: dict[str, int] = field(default_factory=dict)
     failed: dict[str, str] = field(default_factory=dict)
+    # Descripteur du verrou exclusif, tenu tant que l'instance vit (ou jusqu'à
+    # `release`). Hors du fichier d'état : le format sur disque ne change pas.
+    _lock_fd: int | None = field(default=None, repr=False, compare=False)
 
     @classmethod
-    def load(cls, path: Path) -> "JobState":
+    def load(cls, path: Path, *, lock: bool = False) -> "JobState":
+        """Charge l'état ; ``lock=True`` prend d'abord le verrou exclusif.
+
+        Le verrou (``flock`` sur ``state.json.lock``, non bloquant) couvre le
+        chargement et tout ce qui suit : deux passages ne peuvent pas lire le
+        même fichier puis se réécrire l'un l'autre. Il est refusé sur-le-champ
+        (``StateLocked``), jamais attendu — un passage peut durer vingt
+        minutes. Les lectures seules (``list``, ``show``) ne le prennent pas.
+        """
         state = cls(path=path)
+        if lock:
+            state._lock_fd = _acquire_lock(path)
         if path.exists():
             raw = json.loads(path.read_text(encoding="utf-8"))
             state.emitted = dict(raw.get("emitted", {}))
@@ -65,13 +85,21 @@ class JobState:
             "failures": self.failures,
             "failed": self.failed,
         }
-        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
-        temporary.write_text(
-            json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        # Nom temporaire unique : un nom fixe est une seconde course entre
+        # deux sauvegardes réellement simultanées, même sous verrou côté CLI.
+        fd, temporary = tempfile.mkstemp(
+            dir=self.path.parent, prefix=self.path.name + ".", suffix=".tmp"
         )
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=2))
         os.chmod(temporary, PRIVATE_FILE_MODE)
         os.replace(temporary, self.path)
+
+    def release(self) -> None:
+        """Rend le verrou pris par ``load(lock=True)``. Idempotent."""
+        if self._lock_fd is not None:
+            os.close(self._lock_fd)
+            self._lock_fd = None
 
     def knows(self, event_id: str) -> bool:
         return event_id in self.emitted
@@ -195,3 +223,15 @@ class JobState:
 
     def is_failed(self, session_id: str) -> bool:
         return session_id in self.failed
+
+
+def _acquire_lock(path: Path) -> int:
+    ensure_private_home(path.parent)
+    lock_path = path.with_name(path.name + LOCK_SUFFIX)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, PRIVATE_FILE_MODE)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        os.close(fd)
+        raise StateLocked(f"un autre passage tient le verrou : {lock_path}") from exc
+    return fd
