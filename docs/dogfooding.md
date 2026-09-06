@@ -9,37 +9,57 @@ modèle sur le corpus `eval/`, et le service attend.
 
 ## Reprise
 
-**Où on en est (soir du jour 2, 2026-09-06).**
+**Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
+reprise du matin suivant : le lot launchd de 06:30 résume les sessions de la
+veille, on les lit et on les juge dans la journée. Le 2026-09-06 est le
+**jour 2 étendu** (jours 1 et 2 dans la nuit, jugements, `show`, corpus dans
+la journée). Le **jour 3 = 2026-09-07**, après le passage launchd de 06:30.
 
-- Jours 1 et 2 faits : 7/7 puis 8/8 résumés créés sur la trace réelle.
+**Où on en est (fin du 2026-09-06).**
+
+- Jours 1 et 2 faits : 7/7 puis 8/8 résumés créés sur la trace réelle, tous
+  jugés — 2 justes, 6 à moitié, 0 faux ; `doing`/`stopped_at` 10/10 cumulé
+  avec `1f931a43`, `open` 2/9. Défauts ouverts : D1 (annexe `previous_summary`
+  recopiée, 1 recopie / 1 réévaluation en réel), D3 (annexe `agent_session`
+  lue comme état ouvert, ×4), D4 (`git.commits` lus comme points ouverts),
+  D5 (« push non effectué » dans 9 `open` sur 9, Core n'observe pas les
+  pushs), plus les chemins présents à la fois dans `created` et `deleted`
+  (bascules de branche, famille D2).
 - Config de dogfooding : `llm_provider = "mlx"`, `Qwen3.8-27B-4bit`,
   `prompt_version = "v2"` (défaut du code aussi, PR #49).
 - `run --once` planifié par launchd **chaque jour à 06:30**
   (`com.pulse.intelligence-run`, PR #50, journal
   `~/.pulse_intelligence/logs/run.log`) — premier passage automatique le
   2026-09-07 au matin.
+- `pulse-intel show <id>` en fiche (PR #52) : la ligne `↳ reçu` met le `open`
+  de l'annexe `previous_summary` sous le `open` produit ; `--all` liste les
+  résumés coexistants. Les résumés émis avant la PR affichent « annexe
+  inconnue » ; ceux du 07 porteront l'annexe.
+- Corpus : 12 entrées (PR #53) — les dix gelées d'origine, plus `1e420dda` et
+  `eef4956b` avec annexe, hors gel (`added = "2026-09-06"`), contexte pris à
+  fin − 1 s. D1, D3, D4 et D5 sont désormais mesurables par `eval`.
 - Plan B consigné : `Qwen3.5-9B-4bit` (×3,8 plus rapide, 8 Go, mais invente des
   intentions dans `open` sur les grosses sessions) — note de décision.
 - Comptes de tokens corrigés partout : `#1` = 20 901 `prompt_tokens` réels, pas
   « ~6 500 » ; plafond 30 000 inchangé, marge 1,4×.
 
-**Ce qui attend au jour 3.**
+**Jour 3 (2026-09-07), dans l'ordre.**
 
-- Le jugement des huit reprises v2 du jour 2 (colonne « à juger »).
-- D1 / D3 sur les enchaînements du 2026-09-07 (toutes les sessions auront une
-  annexe, aucune n'ayant de résumé antérieur) → v3 du prompt seulement si le
-  jour 3 confirme.
-- Spike B v2 : pic mémoire du 27B avec le prompt v2 sur `#1`, puis entre 21k et
-  30k tokens ; la remesure du 2026-09-06 a échoué deux fois sur une erreur GPU
-  Metal, à refaire.
-- Corpus : geler `1e420dda` et `eef4956b` avec annexe (`intelligence/TODOS.md`,
-  piège de capture).
+1. Lecture du lot launchd de 06:30 avec `pulse-intel show <id>` — la ligne
+   `↳ reçu` donne D1 d'un coup d'œil ; vérifier `run.log` d'abord.
+2. Jugement D1 sur les enchaînements du 06 (toutes les sessions auront une
+   annexe, sauf la première de la journée).
+3. Rédaction de la **v3** du prompt : D3 + D4 + D5, D1 si le lot du 07 le
+   confirme, plus la consigne sur les chemins présents à la fois dans
+   `created` et `deleted` (« présent en fin de session sauf preuve du
+   contraire »). Mesurée par `eval` sur les **12 entrées**, les deux
+   providers, **avant activation** — aucune v3 activée avant lecture du lot.
 
 **Décisions en attente de moi.**
 
-- Merger la PR du refus bruyant + affichage des `prompt_tokens` réels dans
-  `eval` (branche `ship/intelligence-tokens`).
-- Relever ou non `llm_max_input_tokens` après le spike B v2.
+- Relever ou non `llm_max_input_tokens` après le spike B v2 (pic mémoire du
+  27B avec le prompt v2 sur `#1`, puis entre 21k et 30k tokens ; la remesure
+  du 06 a échoué deux fois sur une erreur GPU Metal, à refaire).
 - `eval/out` hors de la vue du watcher : ajouter `out` au filtre de Core
   (correctif) ou faire écrire `eval` hors de l'arbre observé.
 - Étape 5 : règle de préséance entre deux résumés d'une même session
