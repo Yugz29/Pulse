@@ -122,7 +122,7 @@ Règles :
 - `reconstruction_version` : celle renvoyée par Core au moment de la génération. Si Core l'incrémente plus tard, les anciens résumés restent valides pour leur version, et les sessions changées auront de nouveaux ids donc de nouveaux résumés — rien à migrer.
 - `reprise.*` : trois chaînes, une phrase chacune, en français, jamais vides. Si le modèle ne peut rien dire : `"—"` et `confidence = "low"`.
 - `structured.intents` 0–3, `central_files` 0–5 chemins relatifs **présents dans l'entrée**, `blockers` 0–3.
-- Rien de brut ne transite : l'entrée est la vue Core, déjà rédigée ; la sortie est rédigée à nouveau par Core.
+- Rien de brut ne transite : l'entrée est la vue Core, déjà rédigée ; la sortie est rédigée à nouveau par Core, sur **tout** champ texte libre du schéma, `reprise.doing`, `reprise.stopped_at`, `reprise.open`, `structured.project`, et chaque élément de `structured.intents`, `structured.central_files`, `structured.blockers` (décision du 2026-09-06, défaut 9 de l'audit). `structured.confidence` est une énumération fermée. Un champ hors schéma dans `reprise` ou `structured` est refusé en 400, faute de politique de rédaction : le schéma est énuméré une fois dans `core/daemon_v2/ingest.py` et un test le vérifie.
 
 ## 7. Sélection et entrée du modèle
 
@@ -144,7 +144,11 @@ Chaque passage commence par rejouer les payloads `pending`, **avant** la sélect
 
 L'identité d'un résumé est `event_id = f(session_id, prompt_version, model_id)`, mais son contenu porte `generated_at` et `generation_ms` : régénérer après une perte de `state.json` produit un contenu différent sous le même `event_id`, que Core refuse (`409`, préservé). Avant tout appel au modèle, quand l'état local ne connaît ni l'`event_id` ni un `pending` pour lui, Intelligence lit `GET /activities/<event_id>` : si Core l'a, l'entrée est enregistrée localement telle que Core l'a stockée (`origin: "core"`), statut `already_known`, zéro appel modèle, zéro POST ; sinon le chemin normal reprend. Core injoignable à cet instant remonte comme sur `/context` (code 2), jamais en `failed`.
 
-Limite explicite : la récupération renvoie **le résumé accepté par Core**, même si la session a grandi depuis son émission (`grown_after_emit`) ; elle ne le régénère pas. Une entrée récupérée porte l'événement normalisé par Core, une entrée émise porte la copie pré-normalisation : l'état a deux formes jusqu'à la résolution du défaut 9, qui alignera les émises sur les récupérées.
+Limite explicite : la récupération renvoie **le résumé accepté par Core**, même si la session a grandi depuis son émission (`grown_after_emit`) ; elle ne le régénère pas.
+
+### Une seule forme d'entrée `emitted` (2026-09-06, défaut 9 de l'audit)
+
+La copie de référence d'un résumé est l'événement **accepté par Core**, après normalisation. Après un `201` ou un `200 duplicate`, Intelligence relit `GET /activities/<event_id>` et enregistre cette forme, `origin: "core"`, jamais la sortie du modèle avant normalisation ; si la relecture échoue, l'entrée est enregistrée sans `event`, avec avertissement, et `show <id>` lit Core. Les entrées émises et récupérées ont donc la même forme. `show <id>` sans entrée locale interroge Core par l'identité (session, prompt, modèle), jamais le dernier résumé de `/context`, qui peut être une autre session ; un préfixe ne se résout que sur l'état local. Limite : les entrées antérieures, sans `origin`, gardent leur forme ancienne non rédigée et sont signalées dans la fiche (« copie locale antérieure à la rédaction Core ») ; pas de migration.
 
 ### Entrée du modèle
 
