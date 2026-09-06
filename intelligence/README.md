@@ -72,7 +72,7 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `llm_max_tokens` | `2048` | plafond de génération |
 | `llm_max_input_tokens` | `30000` | au-delà, le modèle local refuse (mémoire) |
 | `llm_temperature` | `null` | absente = non envoyée (le modèle local reste alors en argmax) ; `0.0` réduit l'aléa de l'échantillonnage, sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés |
-| `prompt_version` | `v2` | version du prompt (`prompts/session_summary_<v>.md`) ; `v1` reste disponible |
+| `prompt_version` | `v2` | version du prompt (`prompts/session_summary_<v>.md`) ; `v1` reste disponible, `v3` produit des points `open` référencés (voir plus bas) |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
 | `min_session_minutes` | `10` | une session plus courte n'est pas candidate |
 | `min_session_activities` | `30` | une session moins active n'est pas candidate |
@@ -179,6 +179,50 @@ défaut D1 (`docs/dogfooding.md`) d'un coup d'œil. L'annexe est conservée dans
 l'état local à l'émission ; un résumé antérieur à cet enregistrement affiche
 « inconnue », jamais « aucune ». Un préfixe ambigu est refusé avec la liste
 des sessions qu'il désigne.
+
+### `open` v3 : des points étayés
+
+Avec `prompt_version = "v3"`, `open` n'est plus une phrase libre mais une
+liste de points, chacun d'une nature déclarée et étayé par des références de
+l'entrée :
+
+```json
+{"text": "Aucun push observé pour les commits a1b2c3 et d4e5f6",
+ "kind": "observed", "evidence": ["commit:a1b2c3", "commit:d4e5f6"]}
+{"text": "La configuration de llm_max_tokens reste à valider",
+ "kind": "carried_over", "evidence": [], "carried_from": "previous_summary:1",
+ "reason_kept": "aucun événement sur config.toml depuis le résumé précédent"}
+{"text": "L'agent devait vérifier l'état de la PR #28",
+ "kind": "requested", "evidence": ["agent_request:0"]}
+```
+
+Le validateur rejette la note entière si : `kind` est inconnu ; un point
+`observed` n'a pas de preuve, cite une référence absente de l'entrée ou
+s'appuie sur une annexe ; un point `carried_over` ne désigne pas un point
+réel de `previous_summary` ou n'a pas de `reason_kept` ; un point
+`requested` cite autre chose que `agent_request:<i>` ; un texte reprend un
+point de `previous_summary` sans `kind: carried_over` (D1) ; un point
+`observed` affirme qu'un push n'a pas été effectué (D5 — Core n'observe pas
+les pushs). Les références s'écrivent `<type>:<clé>` avec la clé telle que
+Core la sert : `path:`, `commit:`, `event:`, `app:`, `test_passed:`,
+`test_failed:`, `error:`, `signal:`, `agent_request:0`,
+`previous_summary:<i>` (le i-ième point du `open` reçu, listé dans
+`previous_summary.open_items` de l'entrée). Aucune référence n'existe pour
+une absence.
+
+Core ne change pas : il reçoit `reprise.open` rendu en texte (une phrase par
+point, la raison d'une reprise entre parenthèses, une phrase fixe pour une
+liste vide) et recopie `details.open_items` — nature, preuves,
+`carried_from`, jamais de texte libre hors des champs qu'il rédige. Les
+résumés v1/v2 déjà en base gardent leur `open` en chaîne ; `show` les affiche
+comme avant et, pour un résumé v3, liste sous `open` chaque point avec sa
+nature et ses preuves.
+
+Les attentes annotées des quatre sessions D1/D3/D5 sont dans
+`eval/expected/` ; après un passage `eval` en v3, l'écart par session est
+imprimé (retrouvé, manquant, interdit, en plus), et
+`PULSE_EVAL_RUN=<dossier> pytest -m slow tests/test_expectations.py` le rejoue
+comme test.
 
 Si Core a accepté un résumé mais que sa relecture après émission a échoué,
 `show` récupère la copie manquante par son identifiant enregistré, même après

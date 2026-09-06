@@ -43,6 +43,17 @@ au moins une avec `agent_session`, une avec `git_commit`, une « bruyante »
 (beaucoup d'apps, peu de fichiers) et une volontairement ambiguë (quatre
 projets, zéro fichier).
 
+## `expected/` — les attentes annotées
+
+Un fichier par session cible du schéma `open` v3 (`1e420dda`, `eef4956b`,
+`8af930d9`, `d9877899`) : le `open` attendu, chaque point avec sa nature, ses
+preuves et un `why` ; `optional` pour les points acceptables sans être exigés ;
+`must_not` pour les motifs interdits (`kind`, `carried_from`, `text_matches`),
+justifiés. Un test rapide vérifie que chaque attente est elle-même une sortie
+v3 valide pour son entrée. La comparaison (`compare_open`) retrouve un point
+par sa nature et ses preuves, jamais par sa prose ; `eval` l'imprime après un
+passage v3.
+
 ## `stress/` — l'entrée synthétique
 
 `synthetic-60k.json` **n'est pas une vraie session** et n'entre jamais dans le
