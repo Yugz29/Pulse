@@ -318,6 +318,54 @@ ces deux champs. `open` réévalué sur la session, sans recopie du `open` de
    pas une absence de push ») ou, côté Core, un hook `pre-push` émettant
    `git_push` — consigné dans `core/TODOS.md`.
 
+### v3.1 rédigée et mesurée (après-midi)
+
+**Prompt v3.1** (PR #54, branche `ship/intelligence-prompt-v3`, non mergée,
+`prompt_version` reste `"v2"`) : la v2 intégrale plus quatre consignes avec
+exemple — D3 (l'annexe `agent_session` est une demande, pas un état), D4 (un
+commit est un fait accompli), D5 (le push n'est pas observable, jamais dans
+`open`), chemins présents à la fois dans `created` et `deleted` (état inconnu,
+ignoré en silence). Consigne D1 de la v2 inchangée. Une première rédaction
+(v3) puis deux retouches (v3.1) : l'exemple D3 ne propose plus « rien
+d'identifiable en suspens », que les deux modèles recopiaient en gabarit, et
+la règle « `open` vide seulement si aucun fait ne suggère un reste, jamais une
+formule de vide » est explicite.
+
+**Mesure `eval`, 12 entrées + `a0aacd1f` ad hoc** (entrée capturée à fin − 1 s,
+reproduit l'`input_hash` du résumé v2, hors dépôt), Qwen local v2 → v3 → v3.1 :
+**12/12 → 12/12 → 12/12**, 1/1 partout en ad hoc. Tableaux complets dans la
+PR #54.
+
+- **D4 et D5 à zéro** : le push était dans 6 `open` sur 13 en v2, 0 en v3 et
+  v3.1 ; `a0aacd1f` ne cite plus ses commits comme points ouverts.
+- **Points ouverts retrouvés** : `7bbaca78` « README.md non committé »,
+  `3cabaefb` « spec context-api créée hors commit » — la v3 initiale perdait
+  le premier (formule de vide). Les autres `open` sont à un fait de la
+  session, chemins précis.
+- **Coût Qwen inchangé** : complétion 150–300 tokens, durées 30–195 s ;
+  **+~1 000 tokens d'entrée** (la plus grosse passe de 20 901 à 22 025,
+  plafond 30 000 inchangé, marge 1,36×). `central_files` et `confidence`
+  stables à un cran près.
+- **Deux résidus laissés au réel** : `eb652ce9` écrit encore « fichiers
+  créés puis supprimés, d'état inconnu » malgré la consigne du silence ; et
+  `a0aacd1f` / `eef4956b` rendent « Aucun point ouvert identifié dans les
+  faits de la session » — la règle anti-formule de vide est lue, pas suivie.
+  À lire avec méfiance sur le lot du 07 : un `open` de vide n'est pas une
+  preuve qu'il n'y a rien.
+- **Artefact de délibération de la référence** : sur `claude-sonnet-5`, la v3
+  fait exploser la complétion (262 → 767, 394 → 1 953, 1 543 → 2 048) pour un
+  JSON de même taille ; `eb652ce9` sature le plafond de 2 048 avec une sortie
+  vide, reproduit 3/3, et passe à 4 096. Noté, **sans changement de
+  `llm_max_tokens`** : la référence n'est pas le modèle du dogfooding, et Qwen
+  ne délibère pas.
+- **D1 non tranché** : `eef4956b` recopiait l'annexe en v3, ne la recopie plus
+  en v3.1 mais la remplace par la formule de vide ; `1e420dda` ne recopie pas.
+  Un cas ne fait pas une statistique : le lot du 07 juge.
+
+D3 n'est pas mesurable sur ce corpus, dont aucune entrée ne porte l'un des
+quatre cas du jour 2 : `d9877899` et `8af930d9` sont ajoutés hors gel dans la
+foulée (voir plus bas).
+
 ### Suite
 
 Jour 3 : `run --once` sur les sessions du jour ; D1 à confirmer sur les
