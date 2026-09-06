@@ -190,18 +190,30 @@ annexe sans consigne d'usage. Candidat pour une **v3** du prompt (« la demande
 initiale de l'agent n'est pas ce qui reste ouvert »), à mesurer sur le corpus —
 qui, lui, porte des annexes `agent_session`.
 
-### Observation Core — des commits postérieurs à la session dans sa vue
+### Fausse alerte Core — le commit « postérieur » ne l'était pas
 
-`eef4956b` (close à 02:24) porte dans `session.git.commits` le commit
-`1dc191e` (prompt v2), fait à 09:35 — sept heures après. Le modèle en a fait
-son `stopped_at` (« Après le commit 1dc191e (prompt v2) »), faux pour cette
-session. Rien à reprocher au modèle : l'entrée le disait. La reconstruction
-rattache les commits par tranches entre sessions closes : la **dernière session
-close de la journée absorbe tout commit postérieur** tant qu'une nouvelle ne
-se ferme pas (`a0aacd1f` porte les cinq commits précédents, `eef4956b` les
-cinq suivants dont `1dc191e`). Core est gelé ;
-c'est un correctif (pas un ajout), à décider séparément — à consigner dans
-`core/TODOS.md` si confirmé sur une autre session.
+Première lecture : `eef4956b` (close à 02:24) portait dans `session.git.commits`
+le commit `1dc191e` (prompt v2), que je croyais fait le matin. Vérifié dans la
+trace (`git_commit`, `occurred_at 2026-09-06T02:22:52+02:00`, `recorded_at`
+trois secondes plus tard par le hook) : le commit date de **02:22:52, dans la
+fenêtre de la session**. La reconstruction est juste, le `stopped_at` du modèle
+(« Après le commit 1dc191e (prompt v2), sans push observé ») aussi. L'erreur
+était sur l'heure du commit, pas dans Core. Rien à consigner dans
+`core/TODOS.md`.
+
+### Décisions du jour 2
+
+- **Pas de bug Core** : l'alerte « commits postérieurs absorbés par la dernière
+  session close » était une erreur d'horodatage de ma part (voir ci-dessus) ;
+  rien n'entre dans `core/TODOS.md`.
+- **D1 + D3** : candidats groupés pour une **v3** du prompt, mais rien ne
+  s'écrit avant le jour 3 — un cas ne fait pas une statistique.
+- **D1 est en partie un problème de périmètre d'observation**, pas seulement de
+  prompt : `~/.pulse_intelligence/config.toml` et les sorties d'`eval` vivent
+  hors de l'arbre observé, donc la vue de `eef4956b` ne pouvait pas montrer les
+  deux points précédents comme traités. Un `open` réévalué sur ce que la vue
+  montrait aurait quand même été meilleur, mais la consigne « si traité, ne le
+  répète pas » n'a rien à quoi s'accrocher quand le travail est invisible.
 
 ### Suite
 
