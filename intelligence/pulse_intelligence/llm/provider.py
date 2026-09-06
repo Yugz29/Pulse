@@ -38,7 +38,23 @@ class ProviderError(RuntimeError):
     Une sortie mal formée n'est pas une `ProviderError` : le provider l'a
     transportée correctement. C'est `parse_model_output` qui la rejette, en
     aval, là où le contrat de sortie est connu.
+
+    Une `ProviderError` nue est **transitoire et propre à cet appel** (délai
+    dépassé, 5xx, erreur de génération) : réessayable, sans consommer le
+    budget d'échecs. Les deux sous-classes disent autre chose.
     """
+
+
+class ProviderUnavailable(ProviderError):
+    """Le modèle n'est pas joignable du tout : runtime absent, poids non
+    chargés, endpoint injoignable. La même erreur pour toute candidate, le
+    passage s'arrête à la première (audit 2026-09-06, défaut 5)."""
+
+
+class ProviderInputRefused(ProviderError):
+    """Le modèle refuse cette entrée-là, et la refusera encore : plafond de
+    tokens, HTTP 400 sur le contenu. Consomme le budget comme une sortie
+    invalide."""
 
 
 class LLMProvider(Protocol):

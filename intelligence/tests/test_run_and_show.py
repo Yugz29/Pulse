@@ -59,7 +59,9 @@ def test_run_pass_gives_up_after_three_failures_and_never_asks_again(fake_core, 
     assert fake_core.posts == []
     # L'état survit à un redémarrage.
     reloaded = JobState.load(state.path)
-    assert reloaded.is_failed("aaaaaaaaaaaaaaaa")
+    assert reloaded.is_failed("aaaaaaaaaaaaaaaa", statuses and run_pass(
+        client, summarizer, config, reloaded, now=REFERENCE
+    ).outcomes[0].event_id)
 
 
 def test_run_pass_reports_a_core_that_vanished(config, state, tmp_path):

@@ -21,7 +21,16 @@ class Summarizer(Protocol):
 
 
 class SummarizerError(RuntimeError):
-    """Le modèle n'a pas pu produire de sortie (timeout, chargement…)."""
+    """Le modèle n'a pas pu produire de sortie pour cet appel (délai, 5xx,
+    génération) : transitoire, réessayable, ne consomme pas le budget."""
+
+
+class SummarizerUnavailable(SummarizerError):
+    """Modèle injoignable pour toutes les candidates : arrêt du passage."""
+
+
+class SummarizerInputRefused(SummarizerError):
+    """Entrée refusée de façon déterministe : consomme le budget."""
 
 
 @dataclass

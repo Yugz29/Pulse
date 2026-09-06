@@ -16,7 +16,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from .provider import CompletionRequest, CompletionResult, ProviderError
+from .provider import (
+    CompletionRequest,
+    CompletionResult,
+    ProviderError,
+    ProviderInputRefused,
+    ProviderUnavailable,
+)
 
 DEFAULT_MODEL = "mlx-community/Qwen3.8-27B-4bit"
 # Plafond d'entrée sous le seuil OOM mesuré au spike B : sur un M3 Max 36 Go,
@@ -39,14 +45,14 @@ class MLXProvider:
             try:
                 from mlx_lm import load
             except ImportError as exc:
-                raise ProviderError(
+                raise ProviderUnavailable(
                     "mlx-lm absent : installe l'extra mlx "
                     "(`uv pip install -e '.[mlx]'`) pour le provider local"
                 ) from exc
             try:
                 self._bundle = load(self.model)
             except Exception as exc:  # chargement HF, poids, mémoire
-                raise ProviderError(f"chargement du modèle {self.model} : {exc}") from exc
+                raise ProviderUnavailable(f"chargement du modèle {self.model} : {exc}") from exc
         return self._bundle
 
     def _render_prompt(self, tokenizer: Any, request: CompletionRequest) -> str:
@@ -77,7 +83,7 @@ class MLXProvider:
         # explicite vaut mieux qu'un `kIOGPUCommandBufferCallbackErrorOutOfMemory`.
         input_tokens = _count(tokenizer, prompt)
         if input_tokens is not None and input_tokens > self.max_input_tokens:
-            raise ProviderError(
+            raise ProviderInputRefused(
                 f"entrée de {input_tokens} tokens au-dessus du plafond "
                 f"{self.max_input_tokens} : refusée avant le prefill "
                 "(un contexte trop long fait planter Metal en OOM sur cette machine)"

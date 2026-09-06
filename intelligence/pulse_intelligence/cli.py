@@ -31,7 +31,7 @@ from .llm.openai_compatible import OpenAICompatibleProvider
 from .llm.provider import LLMProvider, ProviderError
 from .provider_summarizer import ProviderSummarizer, prompt_path_for
 from .selection import Classified, classify_sessions, find_session
-from .session_summary import run_pass, summarize_session
+from .session_summary import run_pass, summarize_session, summary_event_id
 from .state import JobState, StateLocked
 from .summarizer import FakeSummarizer, Summarizer
 
@@ -84,6 +84,11 @@ def _build_parser() -> argparse.ArgumentParser:
     summarize.add_argument("session_id")
     summarize.add_argument("--date", type=_parse_day, default=None)
     summarize.add_argument("--dry-run", action="store_true", help="tout sauf l'émission")
+    summarize.add_argument(
+        "--retry", action="store_true",
+        help="reprendre une session abandonnée (given_up) : efface son budget d'échecs, "
+        "rejoue le payload figé s'il existe, sinon régénère",
+    )
     summarize.add_argument("--fake", type=Path, default=None, help=fake_help)
 
     run = commands.add_parser("run", help="résumer toutes les candidates")
@@ -250,6 +255,13 @@ def run_summarize(
     if session is None:
         print(f"session introuvable sur la période : {args.session_id}", file=sys.stderr)
         return EXIT_USAGE
+    if args.retry:
+        # Reprise explicite d'un abandon : les deux formes de clé (session
+        # entière, forme ancienne ; identité session/prompt/modèle) sont
+        # effacées, puis le chemin normal repart — pending d'abord.
+        event_id = summary_event_id(session.id, config.prompt_version, summarizer.model_id)
+        state.clear_failures(session.id, event_id)
+        print(f"reprise : budget d'échecs effacé pour {session.id} ({config.prompt_version}, {summarizer.model_id})")
     outcome = summarize_session(
         session,
         client=client,
@@ -289,7 +301,9 @@ def run_run(args: argparse.Namespace, config: Config, client: CoreClient, state:
             else:
                 print(line)
         if report.error:
-            print(f"Core injoignable : {report.error}", file=sys.stderr)
+            # Core injoignable, ou modèle indisponible pour toutes : le
+            # passage s'est arrêté, le suivant reprendra.
+            print(f"passage interrompu : {report.error}", file=sys.stderr)
             return EXIT_INFRASTRUCTURE
         if args.once:
             if report.count("given_up"):

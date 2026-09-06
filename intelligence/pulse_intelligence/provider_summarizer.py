@@ -17,8 +17,10 @@ from .llm.provider import (
     CompletionResult,
     LLMProvider,
     ProviderError,
+    ProviderInputRefused,
+    ProviderUnavailable,
 )
-from .summarizer import SummarizerError
+from .summarizer import SummarizerError, SummarizerInputRefused, SummarizerUnavailable
 
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -73,6 +75,10 @@ class ProviderSummarizer:
         )
         try:
             return self.provider.complete(request)
+        except ProviderUnavailable as exc:
+            raise SummarizerUnavailable(f"{self.provider.name}: {exc}") from exc
+        except ProviderInputRefused as exc:
+            raise SummarizerInputRefused(f"{self.provider.name}: {exc}") from exc
         except ProviderError as exc:
             # Le résumé de session sait déjà traiter SummarizerError ; il n'a
             # pas à connaître les pannes propres à un runtime d'inférence.

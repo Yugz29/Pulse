@@ -158,26 +158,26 @@ def test_summarize_retry_clears_both_key_forms_and_replays_the_pending(
     """`summarize <id> --retry` : efface l'abandon sous ses deux formes de clé
     (session et identité) et repart ; un `pending` existant est rejoué tel
     que figé, sans appel au modèle."""
+    from pulse_intelligence.config import Config
+
     fake_core.add_sessions(today(), session_view(SESSION))
-    frozen = json.loads(
-        json.dumps({
-            "event_id": V1, "schema_version": 1, "type": "session_summary",
-            "producer": {"name": "pulse-intelligence", "version": "0.1.0"},
-            "occurred_at": REFERENCE.isoformat(),
-            "details": {**json.loads(valid_output()), "session_id": SESSION, "generated_at": REFERENCE.isoformat()},
-        })
-    )
-    path = tmp_path / "state.json"
-    path.write_text(json.dumps({
-        "emitted": {},
-        "pending": {V1: {"session_id": SESSION, "prompt_version": "v1", "model_id": "fake/summarizer",
-                         "at": REFERENCE.isoformat(), "event": frozen, "previous_summary": None}},
-        "failures": {SESSION: 3, V1: 3},
-        "failed": {SESSION: "tentative 3: Core 503", V1: "tentative 3: Core 503"},
-    }), encoding="utf-8")
     summarizer = FakeSummarizer(outputs=valid_output(), model_id="fake/summarizer")
     monkeypatch.setattr(cli, "_summarizer", lambda args, config: summarizer)
+    path = tmp_path / "state.json"
     base = [*_base_path(fake_core, path)]
+    # Jour J : Core refuse, le payload validé est gelé en pending (tentative 1).
+    fake_core.fail_posts = 1
+    assert cli.main([*base, "run", "--once", "--fake", "unused"]) == cli.EXIT_PARTIAL
+    capsys.readouterr()
+    cli_id = summary_event_id(SESSION, Config().prompt_version, "fake/summarizer")
+    frozen = JobState.load(path).pending_event(cli_id)
+    assert frozen is not None and len(summarizer.calls) == 1
+    # Abandon sous les deux formes : clé ancienne (session) et identité.
+    state = JobState.load(path)
+    for _ in range(3):
+        state.record_failure(SESSION, "tentative 3: Core 503")
+        state.record_failure(SESSION, "tentative 3: Core 503", event_id=cli_id)
+    assert state.is_failed(SESSION) and state.is_failed(SESSION, cli_id)
 
     without = cli.main([*base, "summarize", SESSION, "--fake", "unused"])
     without_out = capsys.readouterr().out
@@ -186,11 +186,11 @@ def test_summarize_retry_clears_both_key_forms_and_replays_the_pending(
 
     assert without == cli.EXIT_USAGE and "given_up" in without_out
     assert code == cli.EXIT_OK and "created" in out
-    assert len(fake_core.posts) == 1 and fake_core.posts[0]["event_id"] == V1
-    assert summarizer.calls == []  # le pending gelé repart, pas de régénération
+    assert len(fake_core.posts) == 1 and fake_core.posts[0] == frozen  # tel que figé
+    assert len(summarizer.calls) == 1  # aucune régénération
     after = JobState.load(path)
     assert after.failed == {} and after.failures == {} and after.pending == {}
-    assert after.knows(V1)
+    assert after.knows(cli_id)
 
 
 def _base(fake_core, tmp_path) -> list[str]:
