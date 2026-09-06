@@ -212,6 +212,39 @@ de nouveau dans la trace).
 **Priority:** P3
 **Depends on:** Décision sur le gel
 
+### La vue de session devrait rendre l'état net par chemin, pas trois listes cumulées
+
+**What:** `files.created`, `files.modified`, `files.deleted` sont trois listes
+cumulées sur la session, sans ordre ni heure par chemin. Un même chemin peut
+figurer dans les trois, et rien ne dit lequel est l'état final. Les bascules
+de branche produisent des `deleted` fantômes : cas `1f931a43` (work-4 du
+2026-09-06), scripts launchd créés 10:03, « supprimés » 10:13 au retour sur
+`main` qui ne les portait pas encore, recréés 10:21 par le rebase, modifiés
+jusqu'à 10:28 — présents en fin de session, mais le résumé les dit « créés
+puis supprimés, statut incertain ». La vue devrait rendre l'état net par
+chemin en fin de session (existe / n'existe plus), quitte à garder les listes
+brutes à côté.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Décision sur le gel (changement du contrat `GET /context`)
+
+### Hook `pre-push` → événement `git_push` ; `push_observed` n'est jamais vrai
+
+**What:** Core n'observe pas les pushs : aucun producteur n'émet de
+`git_push`, donc `git.push_observed` vaut toujours `false`. Effet sur
+Intelligence (défaut D5, `docs/dogfooding.md`) : « le push n'a pas été
+effectué » figure dans 9 `open` sur 9 au 2026-09-06, y compris pour des
+commits poussés depuis des heures — le modèle lit « non observé » comme
+« non fait ». Remède côté Core : un hook `pre-push` (même mécanique que le
+hook de commit) émettant `git_push` avec branche, dépôt et plage de commits ;
+nouveau type d'événement, donc hors gel. En attendant, la consigne se traite
+côté prompt (v3).
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Décision sur le gel (nouveau type d'événement)
+
 ## Completed
 
 ### CI rouge : le test du verrou terminal assertait la vitesse du runner
