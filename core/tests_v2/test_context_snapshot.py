@@ -874,3 +874,81 @@ def test_a_session_closed_by_a_lock_never_reopens_for_the_context_api(tmp_path):
     assert reopened["current_session"]["started_at"] == at(0).isoformat()
     assert reopened["current_session"]["id"] != listed_before[0]["id"]
     assert [s["id"] for s in reopened["recent_sessions"]] == [listed_before[0]["id"]]
+
+
+# --- Fermeture explicite et session courante (audit 2026-09-06, défaut 1) -----
+
+
+def _audit_scenario(tmp_path, closure: str):
+    """Modifications à 10:00 et 10:05 UTC, fermeture à 10:06, lecture à 10:07.
+
+    REFERENCE est 14:00 UTC : 10:07 = at(-233)."""
+    store = make_store(
+        tmp_path,
+        file_changed(-240, "a.py"),
+        file_changed(-235, "b.py"),
+        _system(-234, closure),
+    )
+    read_at = at(-233)
+    result = snapshot(store, reference_at=read_at)
+    listed = build_day_sessions(
+        store, day=read_at.date(), reference_at=read_at, local_timezone=timezone.utc
+    )["sessions"]
+    return result, listed
+
+
+@pytest.mark.parametrize("closure", ["screen_locked", "system_sleep"])
+def test_a_session_just_closed_explicitly_is_never_current(tmp_path, closure):
+    """Les deux vues lisent le même fait : une session fermée par verrouillage
+    ou veille il y a une minute n'est ni courante ni ouverte, même dans le gap."""
+    result, listed = _audit_scenario(tmp_path, closure)
+
+    assert len(listed) == 1 and listed[0]["is_open"] is False
+    assert result["current_session"] is None
+    # recent_sessions est la forme compacte des sessions closes : pas de
+    # champ is_open, la présence ici est la fermeture.
+    assert [s["id"] for s in result["recent_sessions"]] == [listed[0]["id"]]
+    assert result["recent_sessions"][0]["ended_at"] == at(-235).isoformat()
+
+
+def test_a_session_active_within_the_gap_without_closure_stays_current(tmp_path):
+    """Contrôle : sans fermeture explicite, le gap de 30 min garde son sens."""
+    store = make_store(
+        tmp_path,
+        file_changed(-240, "a.py"),
+        file_changed(-235, "b.py"),
+    )
+    read_at = at(-233)
+
+    result = snapshot(store, reference_at=read_at)
+    listed = build_day_sessions(
+        store, day=read_at.date(), reference_at=read_at, local_timezone=timezone.utc
+    )["sessions"]
+
+    assert result["current_session"] is not None
+    assert result["current_session"]["is_open"] is True
+    assert result["current_session"]["last_activity_at"] == at(-235).isoformat()
+    assert listed == []
+
+
+def test_a_day_boundary_session_read_just_after_midnight_stays_current(tmp_path):
+    """Contrôle de la limite documentée (spec /context, « Minuit local ») :
+    entre 00:00 et 00:30, la session de la veille fermée en day_boundary est
+    encore courante. Le correctif ne vise que les fermetures explicites."""
+    # REFERENCE est le 2026-09-02 14:00 UTC : 23:40 et 23:50 la veille, lecture 00:10.
+    store = make_store(
+        tmp_path,
+        file_changed(-860, "a.py"),
+        file_changed(-850, "b.py"),
+    )
+    read_at = at(-830)
+    assert read_at.isoformat() == "2026-09-02T00:10:00+00:00"
+
+    result = snapshot(store, reference_at=read_at)
+    yesterday = build_day_sessions(
+        store, day=at(-850).date(), reference_at=read_at, local_timezone=timezone.utc
+    )["sessions"]
+
+    assert result["current_session"] is not None
+    assert result["current_session"]["is_open"] is True
+    assert [s["id"] for s in yesterday] == [result["current_session"]["id"]]
