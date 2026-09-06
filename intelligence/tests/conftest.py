@@ -150,6 +150,10 @@ class FakeCore:
     # contrat est prouvé par le test d'intégration contre Core réel.
     payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
     stored: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Panne simulée de la relecture : les N prochains GET /activities/<id>
+    # répondent 503. Le faux Core ne rédige pas : la preuve `[REDACTED]`
+    # est portée par le test d'intégration contre le vrai Core.
+    fail_readbacks: int = 0
     context_requests: int = 0
     url: str = ""
 
@@ -262,6 +266,12 @@ class FakeCore:
         @app.get("/activities/<event_id>")
         def activity(event_id: str):
             stored = self.stored.get(event_id)
+            # La panne simulée ne touche que la relecture d'un événement
+            # accepté : la vérification de récupération (#61) sur un id
+            # inconnu répond 404 normalement.
+            if stored is not None and self.fail_readbacks > 0:
+                self.fail_readbacks -= 1
+                return jsonify({"error": {"code": "unavailable"}}), 503
             if stored is None:
                 return jsonify({"error": {"code": "unknown_event_id", "event_id": event_id}}), 404
             return jsonify(stored)

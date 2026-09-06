@@ -170,16 +170,34 @@ def test_cli_show_by_id_reads_the_local_copy_of_the_emitted_event(fake_core, tmp
     assert md_code == 0 and len(md.rstrip("\n").split("\n")) == 3
 
 
-def test_cli_show_unknown_id_falls_back_to_core_then_fails(fake_core, tmp_path, capsys):
-    fake_core.default_context = context_view(reference_at=REFERENCE, last_session_summary=latest_summary())
+def test_cli_show_id_without_local_entry_reads_core_by_identity_not_latest(
+    fake_core, tmp_path, fake_output_file, capsys
+):
+    """Sans entrée locale, `show <id>` demande à Core l'événement de CETTE
+    session (identifiant recalculé depuis session/prompt/modèle), jamais le
+    dernier résumé de /context, qui peut être une autre session."""
+    fake_core.add_sessions(
+        today(),
+        session_view("aaaaaaaaaaaaaaaa"),
+        session_view("bbbbbbbbbbbbbbbb", label="work-2", started=-50, ended=-10),
+    )
+    assert cli.main([*base_args(fake_core, tmp_path), "run", "--once", "--fake", str(fake_output_file)]) == 0
+    capsys.readouterr()
+    # Le dernier résumé connu de Core est celui de bbbb… ; l'état local est perdu.
+    fake_core.default_context = context_view(
+        reference_at=REFERENCE, last_session_summary={**latest_summary(), "id": "bbbbbbbbbbbbbbbb", "label": "work-2"}
+    )
+    fresh = ["--core-url", fake_core.url, "--state", str(tmp_path / "other" / "state.json")]
 
-    known_in_core = cli.main([*base_args(fake_core, tmp_path), "show", "aaaaaaaaaaaaaaaa", "--md"])
-    known_out = capsys.readouterr().out
-    unknown = cli.main([*base_args(fake_core, tmp_path), "show", "ffffffffffffffff"])
+    code = cli.main([*fresh, "show", "aaaaaaaaaaaaaaaa"])
+    card = card_lines(capsys.readouterr().out)
+    unknown = cli.main([*fresh, "show", "ffffffffffffffff"])
     unknown_err = capsys.readouterr().err
 
-    assert known_in_core == 0 and len(known_out.rstrip("\n").split("\n")) == 3
-    assert unknown == 1 and "aucun résumé connu" in unknown_err
+    assert code == 0
+    assert card["session"].startswith("aaaaaaaaaaaaaaaa  work-1")
+    assert card["↳ reçu"].startswith("(annexe previous_summary inconnue")
+    assert unknown == 1 and "aucun résumé pour cette session" in unknown_err
 
 
 # --- CLI show : fiche, annexe, préfixe, --all --------------------------------------
@@ -349,19 +367,98 @@ def test_cli_show_all_lists_coexisting_summaries_oldest_first(fake_core, tmp_pat
     assert as_json == 0 and [e["details"]["prompt_version"] for e in events] == ["v1", "v2"]
 
 
-def test_cli_show_core_fallback_uses_the_card_and_cannot_know_the_annex(fake_core, tmp_path, capsys):
+def test_cli_show_prefix_without_local_entry_needs_the_full_id(fake_core, tmp_path, capsys):
+    """Un préfixe ne se résout que sur l'état local : sans lui, l'identité
+    Core ne peut pas être recalculée, et le dernier résumé de /context n'est
+    pas une réponse acceptable."""
     fake_core.default_context = context_view(reference_at=REFERENCE, last_session_summary=latest_summary())
 
     code = cli.main([*base_args(fake_core, tmp_path), "show", "aaaa"])
-    card = card_lines(capsys.readouterr().out)
+    err = capsys.readouterr().err
+
+    assert code == 1
+    assert "identifiant complet" in err
+
+
+# --- copie de référence = événement accepté par Core (audit 2026-09-06, défaut 9) ---
+
+
+def test_cli_show_id_and_show_latest_all_display_the_same_accepted_event(
+    fake_core, tmp_path, capsys
+):
+    """La copie locale est l'événement tel que Core l'a stocké (`origin:
+    "core"`), relu après acceptation ; `show <id>` et `show latest --all`
+    lisent la même chose que `GET /activities/<id>`. Le faux Core ne rédige
+    pas : la preuve `[REDACTED]` est dans le test d'intégration réel."""
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"))
+    marked = tmp_path / "marked.json"
+    marked.write_text(
+        valid_output(
+            reprise={"doing": "Tu réglais TOKEN=audit-secret-123.", "stopped_at": "x", "open": "y"},
+            structured={"project": "TOKEN=audit-project-secret", "confidence": "high", "central_files": []},
+        ),
+        encoding="utf-8",
+    )
+    assert cli.main([*base_args(fake_core, tmp_path), "run", "--once", "--fake", str(marked)]) == 0
+    capsys.readouterr()
+    event_id = fake_core.posts[0]["event_id"]
+    fake_core.default_context = context_view(reference_at=REFERENCE, last_session_summary=latest_summary())
+
+    by_id = cli.main([*base_args(fake_core, tmp_path), "show", "aaaaaaaaaaaaaaaa", "--json"])
+    by_id_out = json.loads(capsys.readouterr().out)
+    latest_all = cli.main([*base_args(fake_core, tmp_path), "show", "latest", "--all"])
+    latest_out = capsys.readouterr().out
+    by_id_card = cli.main([*base_args(fake_core, tmp_path), "show", "aaaaaaaaaaaaaaaa"])
+    by_id_card_out = capsys.readouterr().out
+
+    assert by_id == latest_all == by_id_card == 0
+    assert by_id_out["details"] == fake_core.stored[event_id]["details"]
+    assert by_id_card_out.strip() in latest_out
+    entry = JobState.load(tmp_path / "state.json").emitted[event_id]
+    assert entry["origin"] == "core"
+    assert entry["event"]["details"] == fake_core.stored[event_id]["details"]
+    assert "antérieure à la rédaction" not in by_id_card_out
+
+
+def test_cli_show_marks_entries_recorded_before_core_redaction(fake_core, tmp_path, fake_output_file, capsys):
+    """Entrée ancienne, sans `origin` : toujours lisible, forme ancienne,
+    signalée comme copie locale antérieure à la rédaction Core."""
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"))
+    assert cli.main([*base_args(fake_core, tmp_path), "run", "--once", "--fake", str(fake_output_file)]) == 0
+    capsys.readouterr()
+    state_path = tmp_path / "state.json"
+    raw = json.loads(state_path.read_text(encoding="utf-8"))
+    for entry in raw["emitted"].values():
+        entry.pop("origin", None)
+    state_path.write_text(json.dumps(raw), encoding="utf-8")
+
+    code = cli.main([*base_args(fake_core, tmp_path), "show", "aaaaaaaaaaaaaaaa"])
+    out = capsys.readouterr().out
 
     assert code == 0
-    assert card["session"].startswith("aaaaaaaaaaaaaaaa  work-1  —–")
-    assert card["résumé"].startswith("—  —")
-    assert card["confidence"] == "high"
-    assert card["open"] == "La PR attend ta relecture."
-    assert card["↳ reçu"].startswith("(annexe previous_summary inconnue")
-    assert card["central_files"] == "—"
+    assert "copie locale antérieure à la rédaction Core" in out
+
+
+def test_emission_records_an_entry_without_event_when_the_readback_fails(
+    fake_core, tmp_path, fake_output_file, capsys
+):
+    """POST accepté mais relecture impossible : jamais la copie pré-normalisation.
+    L'entrée est enregistrée sans `event`, avec avertissement ; `show <id>`
+    passe alors par Core."""
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"))
+    fake_core.fail_readbacks = 1
+
+    code = cli.main([*base_args(fake_core, tmp_path), "run", "--once", "--fake", str(fake_output_file)])
+    err = capsys.readouterr().err
+
+    assert code == 0 and len(fake_core.posts) == 1
+    assert "relecture" in err
+    state = JobState.load(tmp_path / "state.json")
+    entry = state.emitted[fake_core.posts[0]["event_id"]]
+    assert "event" not in entry and entry["origin"] == "core"
+    assert ("aaaaaaaaaaaaaaaa", entry["prompt_version"], "fake/summarizer") in state.known_summaries()
+    shown = cli.main([*base_args(fake_core, tmp_path), "show", "aaaaaaaaaaaaaaaa"])
+    assert shown == 0 and "aaaaaaaaaaaaaaaa" in capsys.readouterr().out
 
 
 # --- CLI run : exit codes (audit 2026-09-06, défaut 10) --------------------------
