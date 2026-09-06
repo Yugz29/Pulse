@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Pulse_Core** (1 435 nodes, 4 763 edges, 123 execution flows — index à la racine du repo unique, code sous `core/`).
+This project is indexed by GitNexus as **Pulse** (3 006 nodes, 8 215 edges, 257 execution flows, index `--index-only` du 2026-09-06 sur `65986f3` — index à la racine du repo unique, code sous `core/` et `intelligence/`). Les compteurs changent à chaque réindexation ; `node .gitnexus/run.cjs status` fait foi.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
@@ -26,10 +26,10 @@ This project is indexed by GitNexus as **Pulse_Core** (1 435 nodes, 4 763 edges,
 
 | Resource | Use for |
 | --- | --- |
-| `gitnexus://repo/Pulse_Core/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Pulse_Core/clusters` | All functional areas |
-| `gitnexus://repo/Pulse_Core/processes` | All execution flows |
-| `gitnexus://repo/Pulse_Core/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/Pulse/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/Pulse/clusters` | All functional areas |
+| `gitnexus://repo/Pulse/processes` | All execution flows |
+| `gitnexus://repo/Pulse/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
