@@ -1029,3 +1029,83 @@ def test_activities_accepts_session_summary_and_rejects_incomplete_reprise(tmp_p
         for activity in session["activities"]
     ]
     assert kinds == ["session_summary"]
+
+
+# --- champs réservés de l'enveloppe dans details (audit 2026-09-06, défaut 8) ---
+
+
+def test_details_type_cannot_bypass_the_canonical_type_validation(tmp_path):
+    """Scénario de l'audit : type="unsupported" dans l'enveloppe, mais
+    details.type="app_activated" et une application synthétique valide.
+    Avant : 201 et une ligne type='unsupported' / activity_type='app_activated'."""
+    database = tmp_path / "trace.db"
+    client = create_app(database).test_client()
+
+    response = client.post(
+        "/activities",
+        json=canonical_request(
+            type="unsupported",
+            details={"app": "Synthetic App", "type": "app_activated"},
+        ),
+    )
+
+    assert response.status_code == 400
+    assert response.json["error"]["code"] == "invalid_event"
+    assert response.json["error"]["field"] == "details.type"
+    assert "type" in response.json["error"]["message"]
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM activities"
+        ).fetchone()[0] == 0
+
+
+def test_details_occurred_at_is_refused_as_a_reserved_field(tmp_path):
+    database = tmp_path / "trace.db"
+    client = create_app(database).test_client()
+
+    response = client.post(
+        "/activities",
+        json=canonical_request(
+            details={
+                "path": "/project/main.py",
+                "event": "modified",
+                "occurred_at": "2020-01-01T00:00:00+00:00",
+            },
+        ),
+    )
+
+    assert response.status_code == 400
+    assert response.json["error"]["code"] == "invalid_event"
+    assert response.json["error"]["field"] == "details.occurred_at"
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM activities"
+        ).fetchone()[0] == 0
+
+
+def test_details_without_reserved_fields_still_pass_on_both_paths(tmp_path):
+    """Contrôle : le refus ne touche ni le chemin canonique (post_activity ->
+    _normalize_canonical_event) ni le chemin plat (adapt_legacy_payload)."""
+    database = tmp_path / "trace.db"
+    client = create_app(database).test_client()
+
+    canonical = client.post(
+        "/activities",
+        json=canonical_request(type="app_activated", details={"app": "Synthetic App"}),
+    )
+    legacy = client.post(
+        "/activities",
+        json={
+            "type": "app_activated",
+            "timestamp": "2026-07-23T12:00:00+02:00",
+            "app": "Synthetic App",
+        },
+    )
+
+    assert canonical.status_code == 201
+    assert legacy.status_code == 201
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute(
+            "SELECT type, activity_type FROM activities ORDER BY recorded_at"
+        ).fetchall()
+    assert rows == [("app_activated", "app_activated"), ("app_activated", "app_activated")]
