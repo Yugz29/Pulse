@@ -657,7 +657,20 @@ def adapt_legacy_payload(payload: dict[str, Any]) -> IngestedEvent:
     )
 
 
+# Envelope fields that the flat projection below carries by name. A producer
+# must not resend them inside ``details``: merged after the envelope, they
+# would silently replace the validated ``type`` or ``occurred_at`` and store
+# two contradictory types on one row (audit 2026-09-06, defect 8).
+_RESERVED_DETAILS_FIELDS = ("type", "occurred_at")
+
+
 def _activity_from_event(event: CanonicalEvent) -> Activity:
+    for key in _RESERVED_DETAILS_FIELDS:
+        if key in event.details:
+            raise InvalidActivity(
+                f"details.{key} is reserved: {key} belongs to the event envelope",
+                field=f"details.{key}",
+            )
     flat_payload = {
         "type": event.event_type,
         "occurred_at": event.occurred_at.isoformat(),
