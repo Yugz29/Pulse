@@ -14,3 +14,6 @@ cortex-snapshot.json
 .claude/
 .gitnexus/
 *.egg-info/
+
+# outillage local (pyenv), pas un fichier du projet
+.python-version
