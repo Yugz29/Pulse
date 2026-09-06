@@ -288,6 +288,12 @@ Plus deux choix de robustesse : un signal isolé réduit à un prompt collé est
 
 `GET /context/sessions?date=YYYY-MM-DD` (défaut : la journée locale courante ; `at` optionnel, même parsing que `/context`) renvoie les sessions de travail **closes** de cette journée locale dans la forme exacte de `current_session` — même code, mêmes bornes 20/10/5, identité stable incluse — plus `is_open` (toujours `false` ici). Enveloppe : `schema_version`, `generated_at`, `reference_at`, `date`, `timezone`, `reconstruction_version`, `sessions` (ordre chronologique). `date` invalide → 400. C'est ce qu'un consommateur qui mémorise des sessions (la couche Intelligence) lit à la place de `/trace/<date>` : il ne reconstruit rien.
 
+## 10 bis. Route `GET /activities/<event_id>` (2026-09-06, ajout de lecture pure sous gel)
+
+`GET /activities/<event_id>` renvoie **la ligne stockée** pour cet `event_id`, dans la forme exacte d'une activité de l'export JSON de la trace (`/trace/<date>`), produite par le même code (`export_stored_activity`) : `id`, `event_id`, `schema_version`, `type`, `occurred_at` (fuseau du producteur conservé), `recorded_at`, `producer` (`name`, `version`, `instance_id`), `source`, `summary`, `details`. `details` est `details_json` tel qu'écrit à l'insertion, après la normalisation de Core (rédaction des textes libres, clés d'enveloppe retirées) : ce que Core a accepté, jamais une reconstruction, aucun module d'analyse n'intervient. Inconnu → `404` `{"error": {"code": "unknown_event_id"}}`.
+
+Pourquoi sous gel : un consommateur qui a perdu son état local (la couche Intelligence, défaut 3 de l'audit du 2026-09-06) doit savoir ce que Core détient déjà pour une identité avant de régénérer ; un payload régénéré porte un autre `generated_at` et un autre `generation_ms` sous le même `event_id`, et le `409` le refuse à raison. L'écriture, l'ingestion et le `409` ne changent pas.
+
 ## 11. Limites connues
 
 - **Minuit local.** La trace quotidienne ferme toute session à minuit (`day_boundary`). `/context` applique le gap de 30 min tel quel : entre 00:00 et 00:30, une session de la veille encore dans le gap est rapportée comme courante alors que le HTML l'affiche fermée. Cas rare, assumé ; à réconcilier si un consommateur en souffre.
