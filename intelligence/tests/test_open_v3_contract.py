@@ -12,9 +12,11 @@ import pytest
 
 from conftest import REFERENCE, at, context_view, session_view, valid_output
 from pulse_intelligence import cli
+from pulse_intelligence.evaluation import DEFAULT_CORPUS, load_corpus
 from pulse_intelligence.selection import SessionView
 from pulse_intelligence.session_input import (
     build_model_input,
+    input_paths,
     input_references,
     split_open_text,
 )
@@ -284,3 +286,93 @@ def test_show_card_of_a_legacy_summary_is_unchanged():
     open_index = next(i for i, line in enumerate(card) if line.startswith("open "))
     assert card[open_index] == "open            La PR attend ta relecture."
     assert card[open_index + 1].startswith("  ↳ reçu")
+
+
+# --- Les sorties réelles du 2026-09-07, transcrites au schéma v3 ----------
+#
+# Les textes sont ceux produits par Qwen avec le prompt v2 (validation MLX du
+# 7 septembre). Sous le schéma v3, chaque point doit déclarer sa nature et
+# ses preuves ; les transcriptions ci-dessous sont les plus favorables au
+# modèle — et elles sont rejetées, chacune pour la raison du défaut.
+
+
+def _corpus_references(session_id: str):
+    entry = {e.id: e for e in load_corpus(DEFAULT_CORPUS)}[session_id]
+    model_input = build_model_input(entry.view, entry.context, references=True)
+    return entry, model_input, input_references(model_input)
+
+
+def _corpus_rejects(session_id: str, item: dict, message: str) -> None:
+    entry, _, references = _corpus_references(session_id)
+    with pytest.raises(InvalidModelOutput, match=message):
+        parse_model_output(_output(item), input_paths(entry.view), references=references)
+
+
+def test_d5_1e420dda_push_asserted_not_done_is_rejected(capture_timezone):
+    # Sortie v2 : « Les commits ne sont pas poussés (push_observed: false). »
+    text = "Les commits ne sont pas poussés (push_observed: false)"
+    _corpus_rejects("1e420dda8b6eee77", {"text": text, "kind": "observed", "evidence": ["commit:d6e89cf"]},
+                    "affirme un push non effectué")
+    # Sans preuve détournée, il n'y en a aucune à citer : rejet aussi.
+    _corpus_rejects("1e420dda8b6eee77", {"text": text, "kind": "observed", "evidence": []},
+                    "observed exige evidence non vide")
+
+
+def test_d5_eef4956b_push_not_performed_is_rejected(capture_timezone):
+    # Sortie v2 : « Le push n'a pas été effectué ; … »
+    _corpus_rejects("eef4956b36dd37ce",
+                    {"text": "Le push n'a pas été effectué", "kind": "observed", "evidence": ["commit:1dc191e"]},
+                    "affirme un push non effectué")
+
+
+def test_d1_eef4956b_copy_of_previous_summary_is_rejected(capture_timezone):
+    # Sortie v2 : « … la configuration de llm_max_tokens et le passage de
+    # référence restent à valider. » — mot pour mot previous_summary:1.
+    _, model_input, references = _corpus_references("eef4956b36dd37ce")
+    assert references.previous_open[1] == (
+        "la configuration de llm_max_tokens et le passage de référence restent à valider."
+    )
+    copied = "la configuration de llm_max_tokens et le passage de référence restent à valider."
+    _corpus_rejects("eef4956b36dd37ce", {"text": copied, "kind": "observed", "evidence": ["commit:d255672"]},
+                    "identique à previous_summary:1 sans kind carried_over")
+    # Déclaré repris mais sans raison : rejeté aussi. Avec une raison, c'est
+    # une reprise assumée, lisible comme telle dans la fiche.
+    _corpus_rejects("eef4956b36dd37ce",
+                    {"text": copied, "kind": "carried_over", "carried_from": "previous_summary:1"},
+                    "reason_kept absente")
+
+
+def test_d3_8af930d9_agent_request_presented_as_state_is_rejected(capture_timezone):
+    # Sortie v2 : « L'état de la PR #28 et la branche courante n'ont pas été confirmés. »
+    text = "L'état de la PR #28 et la branche courante n'ont pas été confirmés"
+    entry, model_input, references = _corpus_references("8af930d9ef437d2a")
+    assert model_input["previous_summary"] is None and references.agent_requests == ("agent_request:0",)
+    # La session ne montre rien : aucune preuve d'observation possible…
+    _corpus_rejects("8af930d9ef437d2a", {"text": text, "kind": "observed", "evidence": []},
+                    "observed exige evidence non vide")
+    # …et la demande de l'agent n'en est pas une.
+    _corpus_rejects("8af930d9ef437d2a", {"text": text, "kind": "observed", "evidence": ["agent_request:0"]},
+                    "ne s'étaye pas sur une annexe")
+    # Seule forme acceptée : dire que c'est une demande.
+    parsed = parse_model_output(
+        _output({"text": text, "kind": "requested", "evidence": ["agent_request:0"]}),
+        input_paths(entry.view), references=references,
+    )
+    assert parsed.open_items[0]["kind"] == "requested"
+
+
+def test_d3_d9877899_old_request_copied_from_previous_summary_is_rejected(capture_timezone):
+    # Sortie v2 : « L'état de la PR #28 et la branche courante n'ont pas été
+    # vérifiés. » — identique à previous_summary:1 (58874e67), lui-même D3.
+    text = "L'état de la PR #28 et la branche courante n'ont pas été vérifiés."
+    _, _, references = _corpus_references("d98778994319cd07")
+    assert references.previous_open[1] == text
+    _corpus_rejects("d98778994319cd07", {"text": text, "kind": "observed", "evidence": ["commit:40316b2"]},
+                    "identique à previous_summary:1")
+    _corpus_rejects("d98778994319cd07", {"text": text, "kind": "requested", "evidence": ["agent_request:0"]},
+                    "identique à previous_summary:1")
+    # Et « Les modifications ne sont pas poussées. » (même sortie) : D5.
+    _corpus_rejects("d98778994319cd07",
+                    {"text": "Les modifications ne sont pas poussées", "kind": "observed",
+                     "evidence": ["commit:40316b2", "commit:7922529"]},
+                    "affirme un push non effectué")
