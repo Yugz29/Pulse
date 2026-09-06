@@ -41,7 +41,9 @@ llm_max_tokens = 2048          # sous 2048, des sessions denses sont tronquées
 
 Le modèle (~14 Go) se télécharge au premier appel puis reste en cache. Il tient
 en mémoire sur une session réelle ; une entrée au-dessus de `llm_max_input_tokens`
-(défaut 30 000) est refusée avant de faire planter Metal.
+(défaut 30 000) est refusée avant de faire planter Metal — bruyamment : ligne
+`⚠ failed …` sur stderr dans la sortie de `run` (donc dans `run.log` sous launchd).
+Le compte de tokens (`prompt_tokens`) de chaque session est dans le `meta.json` d'`eval`.
 
 ### Endpoint distant (comparaison / dépannage)
 
@@ -134,8 +136,8 @@ changement de prompt avant de l'activer.
 
 ```
 $ pulse-intel eval --provider mlx
-  ✓ work-6   3cabaefb759dae36  ~ 6369tok  187366ms  La plus grosse…
-  ✗ work-3   2ce344566f7e85dc  ~  427tok   22684ms  central_files: … absent de l'entrée
+  ✓ work-6   3cabaefb759dae36   20901tok  192212ms  La plus grosse…
+  ✗ work-3   2ce344566f7e85dc    1993tok   23053ms  central_files: … absent de l'entrée
   …
   8/10 valides -> eval/out/mlx-mlx-community-Qwen3.8-27B-4bit
 ```
