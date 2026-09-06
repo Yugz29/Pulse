@@ -373,6 +373,22 @@ class TraceStore:
             return None
         return self._row_to_stored_activity(row)
 
+    def activity_by_event_id(self, event_id: str) -> StoredActivity | None:
+        """One stored row by its producer ``event_id``, or ``None``.
+
+        Read-only lookup for a consumer recovering its own state (audit
+        2026-09-06, defect 3): the row exactly as written, never a
+        reconstruction.
+        """
+        with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                "SELECT * FROM activities WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_stored_activity(row)
+
     def latest_activity_id(self) -> int:
         """Watermark for append-only caches: MAX(id), 0 on an empty store."""
         with closing(self._connect()) as connection, connection:

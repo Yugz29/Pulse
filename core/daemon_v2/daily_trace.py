@@ -822,6 +822,29 @@ def render_daily_trace_html(
     )
 
 
+
+def export_stored_activity(item: StoredActivity) -> dict[str, Any]:
+    """One stored row in the canonical export form (JSON trace and
+    ``GET /activities/<event_id>``): the same dict for both readers."""
+    return {
+        "id": item.id,
+        "event_id": item.event_id,
+        "schema_version": item.schema_version,
+        "type": item.activity.activity_type,
+        # Canonical exports preserve the producer's original timezone.
+        # Session boundaries in the daily trace remain localized projections.
+        "occurred_at": item.activity.occurred_at.isoformat(),
+        "recorded_at": item.recorded_at.isoformat(),
+        "producer": {
+            "name": item.producer_name,
+            "version": item.producer_version,
+            "instance_id": item.producer_instance_id,
+        },
+        "source": item.activity.source,
+        "summary": item.activity.summary,
+        "details": item.activity.details,
+    }
+
 def build_daily_trace(
     store: TraceStore,
     day: date | None = None,
@@ -849,28 +872,7 @@ def build_daily_trace(
                 "started_at": items[0].activity.occurred_at.astimezone(zone).isoformat(),
                 "ended_at": items[-1].activity.occurred_at.astimezone(zone).isoformat(),
                 "activity_count": len(items),
-                "activities": [
-                    {
-                        "id": item.id,
-                        "event_id": item.event_id,
-                        "schema_version": item.schema_version,
-                        "type": item.activity.activity_type,
-                        # Canonical exports preserve the producer's original
-                        # timezone. Session boundaries above remain localized
-                        # projections for the human-facing daily trace.
-                        "occurred_at": item.activity.occurred_at.isoformat(),
-                        "recorded_at": item.recorded_at.isoformat(),
-                        "producer": {
-                            "name": item.producer_name,
-                            "version": item.producer_version,
-                            "instance_id": item.producer_instance_id,
-                        },
-                        "source": item.activity.source,
-                        "summary": item.activity.summary,
-                        "details": item.activity.details,
-                    }
-                    for item in items
-                ],
+                "activities": [export_stored_activity(item) for item in items],
             }
         )
 

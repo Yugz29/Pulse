@@ -15,6 +15,7 @@ from .context_snapshot import (
     build_day_sessions,
 )
 from .daily_trace import (
+    export_stored_activity,
     build_available_days,
     build_daily_summary,
     build_daily_trace,
@@ -230,6 +231,24 @@ def post_activity():
         ),
         200 if stored.duplicate else 201,
     )
+
+
+@api.get("/activities/<event_id>")
+def get_activity(event_id: str):
+    """Ajout de lecture pure sous gel fonctionnel (audit 2026-09-06, défaut 3).
+
+    The stored row for one producer event_id, in the export form of the
+    JSON trace: what Core accepted, after its own normalization, never a
+    reconstruction. A consumer that lost its local state reads this before
+    regenerating anything. Writing and the 409 on conflict are untouched.
+    """
+    stored = current_app.config["TRACE_STORE"].activity_by_event_id(event_id)
+    if stored is None:
+        return (
+            jsonify({"error": {"code": "unknown_event_id", "event_id": event_id}}),
+            404,
+        )
+    return jsonify(export_stored_activity(stored))
 
 
 @api.get("/trace/today")
