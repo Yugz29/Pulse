@@ -264,3 +264,12 @@ Core antérieures au gel sont consignées dans `core/TODOS.md` (section
   `flock` pris avant le chargement de l'état et tenu jusqu'à la fin de
   `run` / `summarize`, sortie immédiate avec le code `5` si pris, nom
   temporaire unique à la sauvegarde. Format de l'état inchangé.
+- **2026-09-06** — Fuseau de reconstruction explicite :
+  `ZoneInfo(PULSE_RECONSTRUCTION_TZ)`, `Europe/Paris` par défaut, à la place
+  du décalage fixe du moment ; inscrit dans le `meta` des traces, changement
+  = nouvelle version de reconstruction
+  ([note](decisions/2026-09-06-fuseau-de-reconstruction.md)).
+- **2026-09-06** — Rédaction des champs libres : la copie de référence d'un
+  résumé est l'événement accepté par Core, et la rédaction s'applique à tout
+  champ texte libre d'un `session_summary`, `project` compris
+  ([note](decisions/2026-09-06-redaction-champs-libres.md)).
