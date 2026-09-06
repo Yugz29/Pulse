@@ -340,6 +340,7 @@ curl -X POST http://127.0.0.1:8765/activities \
 | `/context` | JSON | Context API : le présent, déterministe et sans modèle |
 | `/context/sessions` | JSON | Sessions de travail closes d’une journée, forme de `current_session` |
 | `/activities` | JSON | Ingestion d’une activité par `POST` |
+| `/activities/<event_id>` | JSON | Lecture pure : l’événement tel que stocké après normalisation, 404 sinon (ajout sous gel, audit 2026-09-06) |
 | `/trace/today` | JSON | Trace structurée de la journée en cours |
 | `/trace/today.md` | Markdown | Trace lisible de la journée en cours |
 | `/days` | HTML | Liste des jours disponibles |

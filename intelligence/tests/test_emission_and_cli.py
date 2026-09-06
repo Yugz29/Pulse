@@ -29,10 +29,14 @@ def test_emission_posts_once_then_never_calls_the_model_again(fake_core, client,
     assert stat.S_IMODE(state.path.parent.stat().st_mode) == 0o700
 
 
-def test_core_replies_duplicate_when_the_state_was_lost(fake_core, client, config, state, tmp_path):
+def test_a_lost_state_is_recovered_from_core_without_regenerating(fake_core, client, config, state, tmp_path):
+    """Audit 2026-09-06, défaut 3 : après perte de l'état local, le vrai Core
+    répond 409 à une régénération (generated_at, generation_ms diffèrent).
+    Intelligence demande d'abord à Core ce qu'il a déjà accepté pour cette
+    identité, et le reprend tel quel : zéro appel modèle, zéro POST."""
     session = SessionView(raw=session_view("aaaaaaaaaaaaaaaa"), day=REFERENCE.date())
     summarizer = FakeSummarizer(outputs=valid_output(), model_id="fake/summarizer")
-    summarize_session(session, client=client, summarizer=summarizer, config=config, state=state)
+    first = summarize_session(session, client=client, summarizer=summarizer, config=config, state=state)
 
     from pulse_intelligence.state import JobState
 
@@ -41,8 +45,31 @@ def test_core_replies_duplicate_when_the_state_was_lost(fake_core, client, confi
         session, client=client, summarizer=summarizer, config=config, state=fresh_state
     )
 
-    assert outcome.status == "duplicate"
-    assert len(fake_core.posts) == 2  # Core a répondu duplicate, rien de nouveau en base
+    assert first.status == "created"
+    assert outcome.status == "already_known" and "Core" in (outcome.detail or "")
+    assert len(fake_core.posts) == 1 and len(summarizer.calls) == 1
+    assert fresh_state.knows(first.event_id)
+    entry = fresh_state.emitted[first.event_id]
+    assert entry["origin"] == "core"
+    assert entry["event"]["details"]["reprise"] == fake_core.posts[0]["details"]["reprise"]
+    assert entry["prompt_version"] == "v1" and entry["model_id"] == "fake/summarizer"
+
+
+def test_fake_core_conflicts_like_the_real_one_on_a_different_content(fake_core, client, config, state):
+    """Le faux Core ne doit pas être plus permissif que le vrai : même id,
+    contenu différent → 409, jamais « duplicate »."""
+    session = SessionView(raw=session_view("aaaaaaaaaaaaaaaa"), day=REFERENCE.date())
+    summarizer = FakeSummarizer(outputs=valid_output(), model_id="fake/summarizer")
+    first = summarize_session(session, client=client, summarizer=summarizer, config=config, state=state)
+    payload = dict(fake_core.posts[0])
+    payload["details"] = {**payload["details"], "generated_at": "2030-01-01T00:00:00+00:00"}
+
+    conflict = client.post_activity(payload)
+    replay = client.post_activity(fake_core.posts[0])
+
+    assert first.status == "created"
+    assert conflict.status_code == 409 and conflict.accepted is False
+    assert replay.status_code == 200 and replay.duplicate is True
 
 
 def test_cli_list_marks_candidates_with_a_reason(fake_core, tmp_path, capsys):

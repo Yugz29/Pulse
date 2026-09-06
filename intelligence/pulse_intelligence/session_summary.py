@@ -239,6 +239,24 @@ def _emit(
     )
 
 
+def _recovered_event(stored: dict[str, Any]) -> dict[str, Any]:
+    """L'événement stocké par Core, remis dans la forme canonique d'émission.
+
+    C'est ce que Core a accepté après sa normalisation (rédaction,
+    enveloppe retirée), pas ce que le modèle avait produit : la copie
+    locale d'une entrée récupérée diffère de celle d'une émission.
+    """
+    details = stored.get("details")
+    return {
+        "event_id": stored["event_id"],
+        "schema_version": stored.get("schema_version", 1),
+        "type": stored["type"],
+        "producer": dict(stored.get("producer") or {}),
+        "occurred_at": stored["occurred_at"],
+        "details": dict(details) if isinstance(details, dict) else {},
+    }
+
+
 def summarize_session(
     session: SessionView,
     *,
@@ -268,6 +286,30 @@ def summarize_session(
             return _emit(
                 session, event_id, pending,
                 client=client, config=config, model_id=model_id, state=state,
+            )
+        # État local muet sur cette identité : avant de rappeler le modèle,
+        # demander à Core ce qu'il a déjà accepté. Après une perte d'état,
+        # régénérer produirait un contenu différent (generated_at,
+        # generation_ms) sous le même event_id, que Core refuse à raison
+        # (409). Core injoignable lève CoreUnavailable ici comme sur
+        # get_context : jamais un `failed`. (audit 2026-09-06, défaut 3)
+        stored = client.get_activity(event_id)
+        if stored is not None:
+            recovered = _recovered_event(stored)
+            details = recovered["details"]
+            state.record_emitted(
+                event_id,
+                session_id=session.id,
+                prompt_version=config.prompt_version,
+                model_id=model_id,
+                at=str(details.get("generated_at") or recovered["occurred_at"]),
+                event=recovered,
+                origin="core",
+            )
+            return Outcome(
+                session.id, "already_known", event_id, event=recovered,
+                detail="récupéré depuis Core : résumé déjà accepté pour cette "
+                "identité, repris tel quel, sans régénération",
             )
 
     context = client.get_context(at=session.ended_at)

@@ -160,13 +160,21 @@ class JobState:
         model_id: str,
         at: str,
         event: dict[str, Any] | None = None,
+        origin: str | None = None,
     ) -> None:
+        """``origin="core"`` : entrée récupérée depuis Core après perte
+        d'état ; son ``event`` est l'événement normalisé par Core, pas la
+        copie pré-normalisation d'une émission (voir défaut 9 de l'audit).
+        Absente sur une émission : le format des entrées existantes ne
+        change pas."""
         entry: dict[str, Any] = {
             "session_id": session_id,
             "prompt_version": prompt_version,
             "model_id": model_id,
             "at": at,
         }
+        if origin is not None:
+            entry["origin"] = origin
         if event is not None:
             # Copie locale de ce qui a été émis : `show <id>` lit ici, Core
             # reste la vérité (`show latest` lit /context).

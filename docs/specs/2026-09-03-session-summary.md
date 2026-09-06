@@ -136,6 +136,12 @@ Lues par `GET /context/sessions?date=` pour aujourd'hui et hier (`lookback_days 
 
 Une session dont l'`id` a disparu de `/context/sessions` entre deux ticks (composition changée par un événement tardif) est simplement oubliée : son résumé, s'il existait, reste dans `trace.db` comme résumé d'un ensemble d'événements qui a existé.
 
+### Récupération après perte de l'état local (2026-09-06, défaut 3 de l'audit)
+
+L'identité d'un résumé est `event_id = f(session_id, prompt_version, model_id)`, mais son contenu porte `generated_at` et `generation_ms` : régénérer après une perte de `state.json` produit un contenu différent sous le même `event_id`, que Core refuse (`409`, préservé). Avant tout appel au modèle, quand l'état local ne connaît ni l'`event_id` ni un `pending` pour lui, Intelligence lit `GET /activities/<event_id>` : si Core l'a, l'entrée est enregistrée localement telle que Core l'a stockée (`origin: "core"`), statut `already_known`, zéro appel modèle, zéro POST ; sinon le chemin normal reprend. Core injoignable à cet instant remonte comme sur `/context` (code 2), jamais en `failed`.
+
+Limite explicite : la récupération renvoie **le résumé accepté par Core**, même si la session a grandi depuis son émission (`grown_after_emit`) ; elle ne le régénère pas. Une entrée récupérée porte l'événement normalisé par Core, une entrée émise porte la copie pré-normalisation : l'état a deux formes jusqu'à la résolution du défaut 9, qui alignera les émises sur les récupérées.
+
 ### Entrée du modèle
 
 La vue de session renvoyée par Core, telle quelle, sérialisée `sort_keys`. Son sha256 est `input_hash`. Intelligence n'y retire ni n'y ajoute de faits.
