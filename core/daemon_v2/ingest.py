@@ -94,6 +94,38 @@ _KNOWN_TOKEN = re.compile(
 # Identité stable d'une session de travail (Core 0.5.0) : sha256 tronqué à
 # 16 hex des event_id sources. Un résumé ne s'attache jamais à un ordinal.
 _SESSION_IDENTITY = re.compile(r"[0-9a-f]{16}")
+# Schéma d'un `session_summary` (spec du pas 3, §6), défini une fois : tout
+# champ texte libre passe par `redact_command`, les listes de textes libres
+# élément par élément, les champs fermés sont validés. Un champ absent de ces
+# trois ensembles n'a pas de politique de rédaction : il est refusé, jamais
+# recopié en silence (décision 2026-09-06, rédaction des champs libres).
+SESSION_SUMMARY_FREE_TEXT_FIELDS: frozenset[tuple[str, str]] = frozenset({
+    ("reprise", "doing"),
+    ("reprise", "stopped_at"),
+    ("reprise", "open"),
+    ("structured", "project"),
+})
+SESSION_SUMMARY_FREE_TEXT_LISTS: frozenset[tuple[str, str]] = frozenset({
+    ("structured", "intents"),
+    ("structured", "central_files"),
+    ("structured", "blockers"),
+})
+SESSION_SUMMARY_CLOSED_FIELDS: frozenset[tuple[str, str]] = frozenset({
+    ("structured", "confidence"),
+})
+_SESSION_SUMMARY_KNOWN_KEYS: dict[str, frozenset[str]] = {
+    section: frozenset(
+        key
+        for fields in (
+            SESSION_SUMMARY_FREE_TEXT_FIELDS,
+            SESSION_SUMMARY_FREE_TEXT_LISTS,
+            SESSION_SUMMARY_CLOSED_FIELDS,
+        )
+        for field_section, key in fields
+        if field_section == section
+    )
+    for section in ("reprise", "structured")
+}
 _IGNORED_TERMINAL_COMMANDS = {
     "clear",
     "source ~/.zshrc",
@@ -264,6 +296,17 @@ def filter_terminal_command(command: str) -> str | None:
         if normalized_line and normalized_line not in _IGNORED_TERMINAL_COMMANDS:
             useful_lines.append(stripped_line)
     return "\n".join(useful_lines) or None
+
+
+def _refuse_unknown_summary_keys(section: str, values: dict[str, Any]) -> None:
+    """Un champ hors schéma n'a pas de politique de rédaction : refusé."""
+    for key in values:
+        if key not in _SESSION_SUMMARY_KNOWN_KEYS[section]:
+            raise InvalidActivity(
+                f"{section}.{key} is not part of the session_summary schema "
+                "(no redaction policy)",
+                field=f"details.{section}.{key}",
+            )
 
 
 def normalize_activity(payload: Any) -> Activity:
@@ -454,6 +497,7 @@ def normalize_activity(payload: Any) -> Activity:
                 "reprise must be an object",
                 field="details.reprise",
             )
+        _refuse_unknown_summary_keys("reprise", reprise)
         normalized_reprise = {}
         for key in ("doing", "stopped_at", "open"):
             value = reprise.get(key)
@@ -463,7 +507,9 @@ def normalize_activity(payload: Any) -> Activity:
                     field=f"details.reprise.{key}",
                 )
             # Défense en profondeur, comme first_prompt et les messages de
-            # commit : un texte libre n'entre jamais en base sans rédaction.
+            # commit : tout champ texte libre du schéma passe par la
+            # rédaction avant d'entrer en base — les motifs connus de
+            # `redact_command`, pas une garantie d'absence de tout secret.
             normalized_reprise[key] = redact_command(value.strip())
         structured = payload.get("structured")
         if not isinstance(structured, dict):
@@ -471,6 +517,7 @@ def normalize_activity(payload: Any) -> Activity:
                 "structured must be an object",
                 field="details.structured",
             )
+        _refuse_unknown_summary_keys("structured", structured)
         project = structured.get("project")
         if project is not None and not isinstance(project, str):
             raise InvalidActivity(
@@ -483,9 +530,12 @@ def normalize_activity(payload: Any) -> Activity:
                 field="details.structured.confidence",
             )
         # Texte libre produit par un modèle, même règle que la reprise :
-        # chaque élément des listes est rédigé avant d'entrer en base.
+        # `project` (audit 2026-09-06, défaut 9) et chaque élément des listes
+        # sont rédigés avant d'entrer en base.
         normalized_structured = dict(structured)
-        for key in ("intents", "central_files", "blockers"):
+        if isinstance(project, str):
+            normalized_structured["project"] = redact_command(project)
+        for section, key in sorted(SESSION_SUMMARY_FREE_TEXT_LISTS):
             values = structured.get(key)
             if isinstance(values, list):
                 normalized_structured[key] = [
