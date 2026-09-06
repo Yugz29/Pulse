@@ -203,6 +203,28 @@ def test_default_prompt_version_is_the_current_one_and_resolves_to_a_file():
     assert prompt_path_for("v2").is_file() and prompt_path_for("v1").is_file()
 
 
+def test_prompt_v3_is_selectable_by_configuration_and_v2_is_untouched():
+    """v3 (points `open` référencés) se choisit par `prompt_version = "v3"` ;
+    le défaut reste v2, dont le texte est épinglé : aucune retouche silencieuse
+    d'un prompt déjà mesuré (règle du pas 3)."""
+    import hashlib
+
+    from pulse_intelligence.llm.fake import FakeProvider
+    from pulse_intelligence.session_input import uses_open_items
+
+    assert uses_open_items("v3") and not uses_open_items(Config().prompt_version)
+    summarizer = ProviderSummarizer(provider=FakeProvider(), model_id="m", prompt_path=prompt_path_for("v3"))
+    for expected in ('"kind": "observed"', '"kind": "carried_over"', '"kind": "requested"',
+                     "non observé", "previous_summary:<i>", "agent_request:0"):
+        assert expected in summarizer.system, expected
+    pinned = {
+        "v1": "e411269c34fc3604c623cc6772b01bc8ca93861e63d8ce75880f193192efcfd0",
+        "v2": "585ee39c01efbad05c8cfd19dacf8ac62297287520875c6c9cb6830bd6b63a05",
+    }
+    for version, digest in pinned.items():
+        assert hashlib.sha256(prompt_path_for(version).read_bytes()).hexdigest() == digest, version
+
+
 def test_the_suite_never_reads_the_developer_home(tmp_path):
     # Fixture autouse de conftest : `load_config()` sans chemin tombe sur un dossier vide,
     # jamais sur ~/.pulse_intelligence — sinon une config de dogfooding fait rougir la suite.

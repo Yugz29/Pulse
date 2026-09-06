@@ -174,9 +174,10 @@ def real_mlx_provider():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("prompt_version", ["v1", "v2"])
+@pytest.mark.parametrize("prompt_version", ["v1", "v2", "v3"])
 def test_real_qwen_loads_and_summarizes_without_thinking(prompt_version, real_mlx_provider):
-    """Valide le prompt historique et le prompt actif avec le vrai modèle.
+    """Valide le prompt historique, le prompt actif et le prompt v3 (points
+    `open` référencés) avec le vrai modèle.
 
     Exclu par défaut (`-m 'not slow'`) : 14 Go et plusieurs secondes. À lancer
     quand l'extra mlx est présent, avec `pytest -m slow`.
@@ -189,13 +190,17 @@ def test_real_qwen_loads_and_summarizes_without_thinking(prompt_version, real_ml
     from pulse_intelligence.session_input import (
         build_model_input,
         input_paths,
+        input_references,
         serialize_input,
+        uses_open_items,
     )
     from pulse_intelligence.session_summary import parse_model_output
 
     entry = next(e for e in load_corpus() if e.id == "cda6ccce898d3e88")
     session = SessionView(entry.session_raw, date.fromisoformat(entry.date))
-    serialized = serialize_input(build_model_input(session, entry.context))
+    referenced = uses_open_items(prompt_version)
+    model_input = build_model_input(session, entry.context, references=referenced)
+    serialized = serialize_input(model_input)
 
     summarizer = ProviderSummarizer(
         provider=real_mlx_provider, model_id=DEFAULT_MODEL,
@@ -204,8 +209,12 @@ def test_real_qwen_loads_and_summarizes_without_thinking(prompt_version, real_ml
     text = summarizer.summarize(serialized)
 
     assert "<think>" not in text and "</think>" not in text
-    parsed = parse_model_output(text, input_paths(session))
+    parsed = parse_model_output(
+        text, input_paths(session),
+        references=input_references(model_input) if referenced else None,
+    )
     assert parsed.structured["confidence"] in {"high", "medium", "low"}
+    assert (parsed.open_items is not None) == referenced
 
 
 @pytest.mark.slow
