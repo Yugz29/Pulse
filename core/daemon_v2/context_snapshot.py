@@ -33,6 +33,7 @@ from .analysis.timeline import (
     reconstruct_session_views,
 )
 from .models import SUPPORTED_ACTIVITY_TYPES, StoredActivity
+from .runtime_config import reconstruction_timezone
 from .session_tracker import DEFAULT_SESSION_GAP
 from .trace_store import TraceStore
 
@@ -74,7 +75,7 @@ def build_context_snapshot(
             f"{MIN_WINDOW_MINUTES} and {MAX_WINDOW_MINUTES}"
         )
 
-    zone = local_timezone or datetime.now().astimezone().tzinfo or timezone.utc
+    zone = local_timezone or reconstruction_timezone()
     reference_utc = reference_at.astimezone(timezone.utc)
     window_start = reference_utc - timedelta(minutes=window_minutes)
 
@@ -146,7 +147,7 @@ def build_day_sessions(
     """
     if reference_at.tzinfo is None:
         raise ValueError("reference_at must include a timezone")
-    zone = local_timezone or datetime.now().astimezone().tzinfo or timezone.utc
+    zone = local_timezone or reconstruction_timezone()
     reference_utc = reference_at.astimezone(timezone.utc)
     sessions, _activities = _reconstruct_day(
         store, day=day, reference_at=reference_utc, zone=zone

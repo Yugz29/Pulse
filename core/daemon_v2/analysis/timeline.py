@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..runtime_config import reconstruction_timezone
+
 from .projects import (
     WorkspaceIdentity,
     activity_project_root,
@@ -37,7 +39,10 @@ RESUME_LOCK_TYPES = {resume: lock for lock, resume in LOCK_RESUME_TYPES.items()}
 # mémorisé une session sait alors que sa composition peut avoir changé.
 # 2 (2026-09-03) : fermeture monotone sur verrouillage/veille, activité forte
 # pendant un verrouillage rangée en arrière-plan hors session de travail.
-RECONSTRUCTION_VERSION = 2
+# 3 depuis le 2026-09-06 : fuseau de reconstruction explicite (ZoneInfo) à la
+# place du décalage fixe du moment ; les sessions proches de minuit peuvent
+# changer d'identifiant au premier replay, variation prévue par la décision.
+RECONSTRUCTION_VERSION = 3
 SESSION_IDENTITY_HEX_LENGTH = 16
 
 
@@ -576,7 +581,7 @@ def reconstruct_session_views(
                 current["pending_unresolved"].append(activity)
 
     if current is not None:
-        current_day = (now or datetime.now().astimezone()).date().isoformat()
+        current_day = (now or datetime.now(reconstruction_timezone())).date().isoformat()
         if trace["date"] != current_day:
             reason = "day_boundary"
         elif now is not None and now - current["last_work_at"] <= WORK_SESSION_GAP:

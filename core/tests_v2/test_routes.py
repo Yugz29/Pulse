@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from daemon_v2.daily_trace import build_daily_trace
 from daemon_v2.main import create_app
 from daemon_v2.models import Activity
+from daemon_v2.runtime_config import reconstruction_timezone
 
 
 def test_markdown_archive_omits_live_resume_and_does_not_read_git(
@@ -606,9 +607,12 @@ def test_status_and_today_json_accept_persisted_workspace_identity(tmp_path):
     database_path = tmp_path / "trace.db"
     app = create_app(database_path)
     client = app.test_client()
-    # Midi du jour courant : les routes lisent l'horloge réelle (non
-    # injectable), on réduit la fenêtre minuit au minimum structurel.
-    today_noon = datetime.combine(date.today(), time(12, 0)).astimezone()
+    # Midi du jour courant dans le fuseau de reconstruction : les routes
+    # lisent l'horloge réelle (non injectable), on réduit la fenêtre minuit
+    # au minimum structurel — ancré sur la zone de Core, pas sur la machine,
+    # sinon le test devient intermittent en CI UTC entre 22:00 et 00:00.
+    zone = reconstruction_timezone()
+    today_noon = datetime.combine(datetime.now(zone).date(), time(12, 0), zone)
     occurred_at = today_noon.isoformat()
     response = client.post(
         "/activities",

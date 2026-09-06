@@ -134,13 +134,27 @@ class ProducerOutbox:
             # migration idempotente : une base créée avant la colonne la reçoit
             # à l'ouverture, ses lignes partent avec un budget HTTP à zéro et
             # gardent leur `attempts` (backoff). Rien n'est supprimé ni réécrit.
+            #
+            # Sérialisée (issue #68) : BEGIN IMMEDIATE prend le verrou
+            # d'écriture AVANT la lecture du schéma. Un second ouvreur
+            # simultané attend (busy_timeout), relit sous verrou et voit la
+            # colonne. ALTER TABLE est du DDL, sans transaction implicite :
+            # sans ce verrou, deux premiers connecteurs lançaient tous deux
+            # l'ALTER et le second échouait en « duplicate column name ».
+            connection.execute("BEGIN IMMEDIATE")
             columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(events)")
             }
             if "http_attempts" not in columns:
-                connection.execute(
-                    "ALTER TABLE events ADD COLUMN http_attempts INTEGER NOT NULL DEFAULT 0"
-                )
+                try:
+                    connection.execute(
+                        "ALTER TABLE events ADD COLUMN http_attempts INTEGER NOT NULL DEFAULT 0"
+                    )
+                except sqlite3.OperationalError as exc:
+                    # Défense en profondeur : la colonne vient d'être ajoutée
+                    # par un autre ouvreur, c'est un succès, pas une erreur.
+                    if "duplicate column" not in str(exc).lower():
+                        raise
 
     def producer_instance_id(self) -> str:
         # Hot path (once per observed command): plain read, no write lock.

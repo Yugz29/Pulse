@@ -26,6 +26,7 @@ from .daily_trace import (
 )
 from .event_logger import log_ingested_event, validation_error_summary
 from .ingest import IgnoredActivity, InvalidActivity, normalize_event
+from .runtime_config import reconstruction_timezone
 from .trace_store import EventConflictError
 
 
@@ -155,7 +156,7 @@ def get_context_sessions():
         return jsonify({"error": str(exc)}), 400
     raw_date = request.args.get("date")
     if raw_date is None:
-        selected_day = reference_at.astimezone().date()
+        selected_day = reference_at.astimezone(reconstruction_timezone()).date()
     else:
         try:
             selected_day = _parse_trace_date(raw_date)

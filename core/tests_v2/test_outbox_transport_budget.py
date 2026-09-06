@@ -194,3 +194,82 @@ def test_replay_dead_letter_starts_a_fresh_http_budget(tmp_path):
 
     assert read_pending(database, "again")[1] == 0
     assert read_http_attempts(database, "again") == 0
+
+
+def test_concurrent_first_opens_of_an_old_database_add_the_column_once(tmp_path, monkeypatch):
+    """Régression de #65 : deux ouvertures simultanées d'une base d'avant la
+    colonne voyaient toutes deux « colonne absente » et lançaient l'ALTER,
+    la seconde échouait en `duplicate column name`.
+
+    La course est rendue déterministe : chaque connexion, après avoir lu
+    `PRAGMA table_info(events)`, attend que les autres l'aient lu aussi
+    avant de rendre la main — tous voient la colonne absente en même temps.
+    Une fois la migration sérialisée, un seul lecteur passe à la fois et la
+    barrière expire sans effet : le test reste valable des deux côtés."""
+    import threading
+    from daemon_v2 import producer_outbox as module
+
+    OPENERS = 4
+    old_schema = """
+        CREATE TABLE events (
+            event_id TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_attempt_at TEXT,
+            next_attempt_at TEXT,
+            last_error TEXT
+        );
+        CREATE TABLE dead_letters (
+            event_id TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            error TEXT NOT NULL,
+            http_status INTEGER,
+            response_body TEXT,
+            failed_at TEXT NOT NULL
+        );
+        CREATE TABLE producer_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    """
+    gate = threading.Barrier(OPENERS)
+    real_connect = sqlite3.connect
+
+    class WideningConnection(sqlite3.Connection):
+        def execute(self, sql, *args):
+            cursor = super().execute(sql, *args)
+            if "table_info(events)" in sql:
+                try:
+                    gate.wait(timeout=1.0)
+                except threading.BrokenBarrierError:
+                    pass  # lecteurs sérialisés : la fenêtre ne s'ouvre plus
+            return cursor
+
+    monkeypatch.setattr(
+        module.sqlite3, "connect",
+        lambda path, **kwargs: real_connect(path, factory=WideningConnection, **kwargs),
+    )
+
+    for round_index in range(3):
+        database = tmp_path / f"old-{round_index}.sqlite3"
+        with real_connect(database) as connection:
+            connection.executescript(old_schema)
+        gate.reset()
+        start_line = threading.Barrier(OPENERS)
+        errors: list[Exception] = []
+
+        def opener():
+            try:
+                start_line.wait(timeout=5)
+                ProducerOutbox(database)
+            except Exception as exc:  # noqa: BLE001 — le test veut zéro exception
+                errors.append(exc)
+
+        threads = [threading.Thread(target=opener) for _ in range(OPENERS)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        assert errors == [], errors
+        with real_connect(database) as connection:
+            columns = [row[1] for row in connection.execute("PRAGMA table_info(events)")]
+        assert columns.count("http_attempts") == 1
