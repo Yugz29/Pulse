@@ -45,6 +45,10 @@ class PendingEvent:
     payload_json: str
     created_at: str
     attempts: int
+    # Réponses HTTP réessayables (408, 429, 5xx) reçues pour cet événement :
+    # le seul compteur que le plafond de livraison lit. Les erreurs de
+    # connexion n'y entrent jamais (audit 2026-09-06, défaut 6).
+    http_attempts: int
     last_attempt_at: str | None
     next_attempt_at: str | None
     last_error: str | None
@@ -126,6 +130,17 @@ class ProducerOutbox:
                 );
                 """
             )
+            # Ajout de schéma additif et rétrocompatible sous gel fonctionnel,
+            # migration idempotente : une base créée avant la colonne la reçoit
+            # à l'ouverture, ses lignes partent avec un budget HTTP à zéro et
+            # gardent leur `attempts` (backoff). Rien n'est supprimé ni réécrit.
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(events)")
+            }
+            if "http_attempts" not in columns:
+                connection.execute(
+                    "ALTER TABLE events ADD COLUMN http_attempts INTEGER NOT NULL DEFAULT 0"
+                )
 
     def producer_instance_id(self) -> str:
         # Hot path (once per observed command): plain read, no write lock.
@@ -199,18 +214,24 @@ class ProducerOutbox:
         attempted_at: datetime,
         next_attempt_at: datetime,
         error: str,
+        counts_toward_limit: bool = False,
     ) -> None:
+        """Une tentative de plus. ``attempts`` compte toujours (backoff) ;
+        ``http_attempts`` seulement si la tentative a reçu une réponse HTTP
+        réessayable — jamais sur une erreur de connexion."""
         with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 UPDATE events
                 SET attempts = attempts + 1,
+                    http_attempts = http_attempts + ?,
                     last_attempt_at = ?,
                     next_attempt_at = ?,
                     last_error = ?
                 WHERE event_id = ?
                 """,
                 (
+                    1 if counts_toward_limit else 0,
                     attempted_at.isoformat(),
                     next_attempt_at.isoformat(),
                     error,
@@ -317,7 +338,8 @@ class ProducerOutbox:
     ) -> int:
         """Move selected dead letters back to the pending queue.
 
-        The replayed event starts a fresh delivery cycle: attempts back to 0,
+        The replayed event starts a fresh delivery cycle: attempts and
+        http_attempts back to 0 (column defaults),
         no next_attempt_at, and created_at set to now so a replay joins the
         FIFO tail instead of jumping ahead of already-pending events. A
         replay → re-failure cycle is safe: move_to_dead_letter overwrites the
@@ -644,6 +666,7 @@ def _pending_from_row(row: sqlite3.Row) -> PendingEvent:
         payload_json=row["payload_json"],
         created_at=row["created_at"],
         attempts=row["attempts"],
+        http_attempts=row["http_attempts"],
         last_attempt_at=row["last_attempt_at"],
         next_attempt_at=row["next_attempt_at"],
         last_error=row["last_error"],
