@@ -15,7 +15,10 @@ restant et les décisions différées dans [TODOS.md](TODOS.md).
 `POST /activities` accepte un contrat canonique versionné contenant
 `event_id`, `schema_version`, `type`, `producer`, `occurred_at` et `details`.
 `occurred_at` vient du producteur et conserve son fuseau ; `recorded_at` est
-créé en UTC par Core lors de la première insertion durable.
+créé en UTC par Core lors de la première insertion durable. Les champs
+réservés de l'enveloppe (`type`, `occurred_at`) ne sont pas acceptés dans
+`details` : leur présence est refusée en 400 `invalid_event`, champ
+`details.<nom>`.
 
 Les producteurs historiques qui envoient encore un payload plat passent par
 un adaptateur explicite `pulse-legacy`. Core leur attribue un nouvel

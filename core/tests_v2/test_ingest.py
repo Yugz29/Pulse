@@ -869,3 +869,38 @@ def test_unknown_schema_version_is_rejected_not_read_as_version_one():
         }
     )
     assert legacy.legacy is True and legacy.event.schema_version == 1
+
+
+# --- champs réservés de l'enveloppe dans details (audit 2026-09-06, défaut 8) ---
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field"),
+    [
+        # Scénario de l'audit : le type de l'enveloppe est invalide, mais
+        # details.type le remplaçait silencieusement.
+        (
+            {"type": "unsupported", "details": {"app": "Synthetic App", "type": "app_activated"}},
+            "details.type",
+        ),
+        # Enveloppe valide : la collision est refusée pour elle-même.
+        (
+            {
+                "details": {
+                    "path": "/project/main.py",
+                    "event": "modified",
+                    "occurred_at": "2020-01-01T00:00:00+00:00",
+                }
+            },
+            "details.occurred_at",
+        ),
+    ],
+)
+def test_reserved_envelope_fields_inside_details_are_refused(overrides, field):
+    """Un `details.type` ne doit jamais remplacer le `type` de l'enveloppe :
+    la collision est refusée avant la fusion, avec le champ nommé."""
+    with pytest.raises(InvalidActivity) as raised:
+        normalize_event(canonical_payload(**overrides))
+
+    assert raised.value.field == field
+    assert field.split(".")[1] in str(raised.value)
