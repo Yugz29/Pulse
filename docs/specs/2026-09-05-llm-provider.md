@@ -208,7 +208,7 @@ modèle local n'est pas disponible. Ce n'est pas le provider de production.
 - **Plafond d'entrée `llm_max_input_tokens` (défaut 30 000).** Au-delà, le
   provider **refuse avant le prefill** avec un `ProviderError` explicite. Mesuré
   au spike B : sur un M3 Max 36 Go, une entrée de 60k tokens fait planter Metal
-  en OOM (pic ~28 Go), quand la plus grosse session réelle (~6 500 tokens) tient
+  en OOM (pic ~28 Go), quand la plus grosse session réelle (20 901 tokens réels) tient
   à 19,77 Go. Un OOM Metal n'est pas une erreur propre ; le refus en amont l'est.
 
 > **Point à vérifier au premier chargement.** `Qwen3.8-27B` est un modèle
@@ -326,10 +326,16 @@ par session** — un résumé produit sans `temperature = 0.0` n'est pas
 reproductible de la même façon). La comparaison local ↔ référence distante se
 fait à l'œil sur ces fichiers ; pas de score automatique.
 
-**Taille réelle des sessions.** Le corpus gelé plafonne à **~6 500 tokens
-d'entrée** (la plus grosse, `3cabaefb`, ~6 369 estimés) : sur 90 jours de trace,
-aucune session réelle n'approche les 60k tokens que le critère n°3 anticipe. Ce
-critère ne s'éprouve donc **pas** sur le corpus réel — il s'éprouve sur une
+**Taille réelle des sessions.** Le corpus gelé plafonne à **20 901 tokens
+d'entrée** (la plus grosse, `3cabaefb`, `prompt_tokens` compté par le tokenizer,
+dans `meta.json` — même compte pour Qwen3.8-27B et Qwen3.5-9B). Les premiers
+passages annonçaient « ~6 500 » : c'était une estimation `len/4` du JSON
+sérialisé, qui sous-compte ×3,3 ; elle n'est plus affichée nulle part, le seul
+compte de référence est `prompt_tokens` quand le provider le rend. Sur 90 jours
+de trace, aucune session réelle n'approche les 60k tokens que le critère n°3
+anticipe — mais la plus grosse est à 21k sur un plafond de 30k
+(`llm_max_input_tokens`), soit 1,4× de marge, pas dix. Ce critère ne s'éprouve
+donc **pas** sur le corpus réel — il s'éprouve sur une
 entrée **synthétique** de ~60k tokens dans `eval/stress/synthetic-60k.json`,
 clairement étiquetée `_synthetic`, hors du corpus et hors de tout jugement de
 qualité, exécutée par le seul spike B (mémoire du `MLXProvider`).

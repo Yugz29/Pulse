@@ -41,19 +41,25 @@ durée par session         3,7–14,8 s   22–187 s   (5 à 30× plus lent)
 ### Spike B — mémoire (critère n°3 requalifié)
 
 ```
-#1 réel (6 369 tokens)   pic  19,77 Go   OK    ← la plus grosse session réelle
+#1 réel (20 901 tokens)  pic  19,77 Go   OK    ← la plus grosse session réelle
 synthétique 60k tokens   pic  27,98 Go   OOM   ← [METAL] Insufficient Memory
 ```
 
 Le critère n°3 de la spec (« tenir avec une session de 60k tokens ») **n'est
 pas tenu** par ce modèle sur 36 Go : une entrée de 60k tokens fait planter Metal
 en OOM avant la fin du prefill. Il est **requalifié en plafond connu** : sur du
-réel (≤ ~6 500 tokens sur 90 jours de trace), Qwen tient largement ; au-delà de
-~30k tokens d'entrée, `MLXProvider` **refuse proprement** avant le prefill
-(`llm_max_input_tokens`, défaut 30 000), plutôt que de laisser Metal planter.
+réel (≤ 20 901 tokens sur 90 jours de trace, `prompt_tokens` réel de `#1` —
+les « 6 369 » des premiers passages étaient une estimation `len/4`, fausse
+×3,3), Qwen tient ; au-delà de ~30k tokens d'entrée, `MLXProvider` **refuse
+proprement** avant le prefill (`llm_max_input_tokens`, défaut 30 000), plutôt
+que de laisser Metal planter. Le refus est bruyant : ligne `failed` en erreur
+dans la sortie de `run` (donc dans `run.log` sous launchd).
 
-Le corpus réel plafonnant dix fois sous ce seuil, la limite est théorique en
-pratique — mais écrite, pas découverte un soir de dogfooding.
+La plus grosse session réelle est à 21k sur 30k : **1,4× de marge, pas dix**.
+Le plafond reste à 30 000 jusqu'à un **spike B v2** (prompt v2, mesure du pic
+entre 21k et 30k) ; la remesure du pic 27B en v2 a échoué deux fois le
+2026-09-06 sur une erreur GPU Metal (`GPU Hang Error`, puis `victim of GPU
+error/recovery`), sans OOM ni processus résiduel — **à remesurer**, sans plus.
 
 ## Les deux réserves écrites
 
@@ -70,6 +76,27 @@ pratique — mais écrite, pas découverte un soir de dogfooding.
    ce seuil échouerait en local (refus explicite) là où la référence distante
    passerait. Non bloquant tant que le réel reste dix fois plus bas ; à
    rouvrir si une session longue réelle s'en approche.
+
+## Plan B : `mlx-community/Qwen3.5-9B-4bit`
+
+Mesuré le 2026-09-06 sur le corpus, prompt v2, contre le 27B :
+
+```
+                       27B            9B
+valides                10/10          9/10   (#8 : chemin inventé, rejeté)
+confidence = 27B         —            7/9 succès partagés
+durée corpus           668 s          177 s  (×3,8 plus rapide)
+pic mémoire, #1        19,77 Go       7,99 Go
+poids                  14 Go          5,6 Go
+```
+
+Rapide et léger, il tient sur une machine à 16 Go. Mais sur les grosses
+sessions ses `central_files` recoupent moins la référence (`eb652ce9` 1/5
+contre 3/5 pour le 27B) et son `open` **invente des intentions** que l'entrée ne
+porte pas (« la persistance des états des workspaces entre les redémarrages »
+sur `247f2062`), là où le 27B reste factuel (« aucun push observé ; suite de
+tests non exécutée »). **Le 27B reste le modèle du dogfooding** ; le 9B est le
+repli si la mémoire ou la durée deviennent le problème — une ligne de config.
 
 ## Vérifié au premier chargement
 

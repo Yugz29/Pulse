@@ -7,6 +7,44 @@ les reprises lues et jugées, les défauts trouvés. Critère de sortie (spec du
 justes et utiles** → service résident (étape 5) ; sinon on itère le prompt ou le
 modèle sur le corpus `eval/`, et le service attend.
 
+## Reprise
+
+**Où on en est (soir du jour 2, 2026-09-06).**
+
+- Jours 1 et 2 faits : 7/7 puis 8/8 résumés créés sur la trace réelle.
+- Config de dogfooding : `llm_provider = "mlx"`, `Qwen3.8-27B-4bit`,
+  `prompt_version = "v2"` (défaut du code aussi, PR #49).
+- `run --once` planifié par launchd **chaque jour à 06:30**
+  (`com.pulse.intelligence-run`, PR #50, journal
+  `~/.pulse_intelligence/logs/run.log`) — premier passage automatique le
+  2026-09-07 au matin.
+- Plan B consigné : `Qwen3.5-9B-4bit` (×3,8 plus rapide, 8 Go, mais invente des
+  intentions dans `open` sur les grosses sessions) — note de décision.
+- Comptes de tokens corrigés partout : `#1` = 20 901 `prompt_tokens` réels, pas
+  « ~6 500 » ; plafond 30 000 inchangé, marge 1,4×.
+
+**Ce qui attend au jour 3.**
+
+- Le jugement des huit reprises v2 du jour 2 (colonne « à juger »).
+- D1 / D3 sur les enchaînements du 2026-09-07 (toutes les sessions auront une
+  annexe, aucune n'ayant de résumé antérieur) → v3 du prompt seulement si le
+  jour 3 confirme.
+- Spike B v2 : pic mémoire du 27B avec le prompt v2 sur `#1`, puis entre 21k et
+  30k tokens ; la remesure du 2026-09-06 a échoué deux fois sur une erreur GPU
+  Metal, à refaire.
+- Corpus : geler `1e420dda` et `eef4956b` avec annexe (`intelligence/TODOS.md`,
+  piège de capture).
+
+**Décisions en attente de moi.**
+
+- Merger la PR du refus bruyant + affichage des `prompt_tokens` réels dans
+  `eval` (branche `ship/intelligence-tokens`).
+- Relever ou non `llm_max_input_tokens` après le spike B v2.
+- `eval/out` hors de la vue du watcher : ajouter `out` au filtre de Core
+  (correctif) ou faire écrire `eval` hors de l'arbre observé.
+- Étape 5 : règle de préséance entre deux résumés d'une même session
+  (`intelligence/TODOS.md`).
+
 ## Jour 1 — 2026-09-06
 
 **`pulse-intel run --once` sur la trace réelle : 7 candidates, 7/7 créées.**
