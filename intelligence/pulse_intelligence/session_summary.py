@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timezone
 from typing import Any
 
 from . import PRODUCER_NAME, __version__
@@ -367,6 +367,9 @@ class PassReport:
     candidates: int
     outcomes: list[Outcome]
     error: str | None = None
+    # Payloads `pending` rejoués par le vidage de la file, avant la sélection
+    # (défaut 4 de l'audit, issue #62). Leurs Outcome sont dans `outcomes`.
+    replayed: int = 0
 
     def count(self, status: str) -> int:
         return sum(1 for outcome in self.outcomes if outcome.status == status)
@@ -387,14 +390,43 @@ def run_pass(
     cours de passage arrête le passage proprement, le suivant reprendra.
     """
     moment = now or datetime.now(timezone.utc)
+    # Vidage de la file d'abord, indépendant de la fenêtre de sélection : un
+    # payload gelé pendant une panne repart tel quel même si sa session est
+    # sortie de `lookback_days` (défaut 4, issue #62). Distinct du rattrapage
+    # des sessions jamais traitées, qui n'existe pas ici.
+    outcomes: list[Outcome] = []
+    replayed = 0
+    # Une session traitée par le vidage ne l'est pas une seconde fois par la
+    # sélection du même passage : un rejeu refusé garde son unique tentative,
+    # un rejeu accepté la rend connue, donc non candidate.
+    drained: set[str] = set()
+    for entry in list(state.pending.values()):
+        session_id = str(entry.get("session_id", ""))
+        event = entry.get("event")
+        if not session_id or not isinstance(event, dict):
+            continue
+        event_id = str(event.get("event_id", ""))
+        drained.add(session_id)
+        if state.is_failed(session_id):
+            # Abandonnée : le pending reste sur disque jusqu'à une reprise
+            # explicite ; il n'est ni rejoué ni oublié.
+            outcomes.append(Outcome(session_id, "given_up", event_id, detail=state.failed[session_id]))
+            continue
+        try:
+            outcome = _replay_pending(entry, client=client, config=config, state=state)
+        except CoreUnavailable as exc:
+            return PassReport(candidates=0, outcomes=outcomes, error=str(exc), replayed=replayed)
+        replayed += 1
+        outcomes.append(outcome)
     try:
         candidates = select_candidates(
             client, now=moment, config=config, model_id=summarizer.model_id, state=state
         )
     except CoreUnavailable as exc:
-        return PassReport(candidates=0, outcomes=[], error=str(exc))
-    outcomes: list[Outcome] = []
+        return PassReport(candidates=0, outcomes=outcomes, error=str(exc), replayed=replayed)
     for session in candidates:
+        if session.id in drained:
+            continue
         if state.is_failed(session.id):
             outcomes.append(
                 Outcome(
@@ -413,5 +445,42 @@ def run_pass(
                 )
             )
         except CoreUnavailable as exc:
-            return PassReport(candidates=len(candidates), outcomes=outcomes, error=str(exc))
-    return PassReport(candidates=len(candidates), outcomes=outcomes)
+            return PassReport(
+                candidates=len(candidates), outcomes=outcomes, error=str(exc), replayed=replayed
+            )
+    return PassReport(candidates=len(candidates), outcomes=outcomes, replayed=replayed)
+
+
+def _replay_pending(
+    entry: dict[str, Any],
+    *,
+    client: CoreClient,
+    config: Config,
+    state: JobState,
+) -> Outcome:
+    """POST d'un payload `pending` exactement tel que figé (issue #62).
+
+    Rien n'est recalculé : ni `generated_at`, ni `generation_ms`, ni
+    `input_hash`, ni `producer`. Les versions enregistrées avec l'entrée
+    servent à l'inscription dans `emitted`, pas celles de la configuration
+    courante, qui a pu changer depuis le gel.
+    """
+    event: dict[str, Any] = entry["event"]
+    details = event.get("details") or {}
+    session_id = str(entry["session_id"])
+    day_text = details.get("session_date") or str(event.get("occurred_at", ""))[:10]
+    session = SessionView(
+        raw={"id": session_id, "label": details.get("session_label", "")},
+        day=date.fromisoformat(day_text),
+    )
+    frozen_config = replace(
+        config, prompt_version=str(entry.get("prompt_version") or config.prompt_version)
+    )
+    outcome = _emit(
+        session, str(event["event_id"]), event,
+        client=client, config=frozen_config,
+        model_id=str(entry.get("model_id") or details.get("model_id") or ""),
+        state=state,
+    )
+    detail = "rejeu pending" if outcome.detail is None else f"rejeu pending · {outcome.detail}"
+    return replace(outcome, detail=detail)

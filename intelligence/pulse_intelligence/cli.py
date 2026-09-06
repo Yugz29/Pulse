@@ -275,7 +275,7 @@ def run_run(args: argparse.Namespace, config: Config, client: CoreClient, state:
         print(
             f"[{stamp}] candidates={report.candidates} created={report.count('created')} "
             f"duplicate={report.count('duplicate')} failed={report.count('failed')} "
-            f"given_up={report.count('given_up')}"
+            f"given_up={report.count('given_up')} replayed={report.replayed}"
         )
         for outcome in report.outcomes:
             line = f"  {outcome.status} {outcome.session_id} event_id={outcome.event_id}"

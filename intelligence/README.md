@@ -103,7 +103,7 @@ candidate, le modèle n'est jamais rappelé pour elle.
 
 ```
 $ pulse-intel run --once
-[2026-09-05 22:41:03] candidates=2 created=2 duplicate=0 failed=0 given_up=0
+[2026-09-05 22:41:03] candidates=2 replayed=0 created=2 duplicate=0 failed=0 given_up=0
   created 2808ac8a3741f38a event_id=882d8a86-…
   created 8af930d9ef437d2a event_id=26974b80-…
 ```
@@ -112,6 +112,11 @@ $ pulse-intel run --once
 - `duplicate` : Core avait déjà cet événement (rejeu inoffensif).
 - `failed` : sortie rejetée (JSON invalide, chemin inventé…) — réessai au
   passage suivant, trois fois puis `given_up`.
+- `replayed` : payloads `pending` rejoués **avant** la sélection, tels que
+  figés lors d'une panne Core, même si leur session est sortie de la fenêtre
+  `lookback_days` — sans modèle, sans commande datée. Un rejeu que Core refuse
+  encore compte comme `failed` ; le `pending` d'une session `given_up` n'est
+  pas rejoué, il reste sur disque.
 
 Code de sortie de `run --once`, le plus grave gagne :
 
