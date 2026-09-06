@@ -70,7 +70,7 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `llm_max_tokens` | `2048` | plafond de génération |
 | `llm_max_input_tokens` | `30000` | au-delà, le modèle local refuse (mémoire) |
 | `llm_temperature` | `null` | absente = non envoyée ; `0.0` = reproductible |
-| `prompt_version` | `v1` | version du prompt (`prompts/session_summary_<v>.md`) |
+| `prompt_version` | `v2` | version du prompt (`prompts/session_summary_<v>.md`) ; `v1` reste disponible |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
 | `min_session_minutes` | `10` | une session plus courte n'est pas candidate |
 | `min_session_activities` | `30` | une session moins active n'est pas candidate |

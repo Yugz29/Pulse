@@ -22,6 +22,18 @@ from pulse_intelligence.state import JobState
 
 
 REFERENCE = datetime(2026, 9, 2, 16, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_intelligence_home(monkeypatch, tmp_path):
+    """Aucun test ne lit la config du poste (`~/.pulse_intelligence`).
+
+    Vu en réel : dès qu'une `config.toml` de dogfooding a existé avec un modèle
+    configuré, deux tests de CLI « sans modèle » sortaient 0 au lieu de 1 en
+    local, verts en CI. Même principe que l'isolement de `PULSE_LLM_*` : chaque
+    test repart d'un dossier vide et pose explicitement ce dont il a besoin.
+    """
+    monkeypatch.setenv("PULSE_INTELLIGENCE_HOME", str(tmp_path / "pulse_intelligence_home"))
 PULSE = "/Users/dev/Projets/Pulse"
 HEX_ID = re.compile(r"[0-9a-f]{16}")
 
@@ -223,7 +235,9 @@ def client(fake_core) -> CoreClient:
 
 @pytest.fixture
 def config() -> Config:
-    return Config(model_id="fake/summarizer")
+    # Version épinglée : les tests raisonnent sur « v1 connu, v2 = autre version »,
+    # indépendamment du défaut courant de `Config` (testé à part).
+    return Config(model_id="fake/summarizer", prompt_version="v1")
 
 
 @pytest.fixture

@@ -197,6 +197,18 @@ def test_no_provider_is_chosen_by_default():
     assert Config().llm_provider == ""
 
 
+def test_default_prompt_version_is_the_current_one_and_resolves_to_a_file():
+    # v2 courante depuis le 2026-09-06 (spec §7) ; v1 reste livrée pour rejouer la référence.
+    assert Config().prompt_version == "v2"
+    assert prompt_path_for("v2").is_file() and prompt_path_for("v1").is_file()
+
+
+def test_the_suite_never_reads_the_developer_home(tmp_path):
+    # Fixture autouse de conftest : `load_config()` sans chemin tombe sur un dossier vide,
+    # jamais sur ~/.pulse_intelligence — sinon une config de dogfooding fait rougir la suite.
+    assert load_config() == Config()
+
+
 # --- Câblage de la CLI ----------------------------------------------------
 
 

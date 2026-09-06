@@ -26,7 +26,7 @@ def config_home() -> Path:
 class Config:
     core_url: str = DEFAULT_CORE_URL
     model_id: str = ""
-    prompt_version: str = "v1"
+    prompt_version: str = "v2"
     tick_minutes: int = 10
     generation_timeout_s: int = 120
     min_session_minutes: int = 10
