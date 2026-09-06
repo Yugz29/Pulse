@@ -25,6 +25,7 @@ from .analysis.terminal import (
     useful_command_lines,
 )
 from .analysis.timeline import (
+    LOCK_RESUME_TYPES,
     RECONSTRUCTION_VERSION,
     app_activation_counts,
     display_file_path,
@@ -281,12 +282,17 @@ def _select_current_session(
     """The work session with the latest activity inside the session gap.
 
     Nothing inside the gap means « rien en cours » — the last closed session
-    is never substituted, that absence is information.
+    is never substituted, that absence is information. A session explicitly
+    closed by a lock or a sleep (``end_reason`` set by the reconstruction,
+    the same fact ``build_day_sessions`` lists as closed) is never current
+    either, even inside the gap: ``is_open: false`` must not depend on which
+    route is read (audit 2026-09-06, defect 1).
     """
     candidates = [
         session
         for session in sessions
         if session.get("activity_kind") == "work"
+        and session.get("end_reason") not in LOCK_RESUME_TYPES
         and reference_at - _session_end(session) <= DEFAULT_SESSION_GAP
     ]
     if not candidates:
