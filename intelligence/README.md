@@ -140,6 +140,25 @@ $ pulse-intel eval --provider mlx
   8/10 valides -> eval/out/mlx-mlx-community-Qwen3.8-27B-4bit
 ```
 
+### Le passage quotidien via launchd
+
+`run --once` chaque matin, sans y penser :
+
+```bash
+cd intelligence
+scripts/install_run_launchd.sh                      # chaque jour à 06:30
+PULSE_INTEL_RUN_HOUR=7 PULSE_INTEL_RUN_MINUTE=0 scripts/install_run_launchd.sh
+scripts/install_run_launchd.sh --uninstall
+```
+
+Installe `~/Library/LaunchAgents/com.pulse.intelligence-run.plist` (même
+patron que les agents de Core), qui lance `scripts/pulse_intel_run.sh` — le
+`pulse-intel` de la venv, sur la config du poste. Tâche calendaire : si le Mac
+dort à l'heure dite, launchd la rattrape au réveil. Journal :
+`~/.pulse_intelligence/logs/run.log`. Le matin couvre la veille entière (la
+fenêtre de `run` est « aujourd'hui + hier ») : une session close après le
+passage est prise le lendemain.
+
 ## 3. Lire un résumé
 
 Un `session_summary` a deux moitiés :
