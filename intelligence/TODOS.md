@@ -46,6 +46,18 @@
 **Priority:** P2
 **Depends on:** Service résident
 
+### `details.workspace` peut désigner la session suivante (`1f931a43`, 2026-09-06)
+
+**What:** Le résumé v2 de `1f931a43c3b7149f` (work-4 du 2026-09-06, 07:44–08:47 UTC) porte `structured.project: "Pulse"` — juste, la vue dit `projects: ["Pulse"]` et les fichiers sont sous `intelligence/` — mais `details.workspace: /Users/Yugz/Projets/Cortex`. Diagnostic (trace relue en lecture seule le 2026-09-07) : `last_activity_at` de la session vaut `08:47:25.998428`, qui est l'horodatage d'un `file_changed` **dans Cortex** (`electron.vite.config.…`, premier événement du travail suivant) que la reconstruction du jour a absorbé dans work-4 par la règle de proximité temporelle. `summarize_session` lit `GET /context?at=<last_activity_at>` ; à cet instant précis, `_select_current_session` de Core rend une session **ouverte** dans Cortex (work-5, `projects: ["Cortex"]`) et `workspace.resolution: "session"` suit cette session — alors qu'à `at − 1 s`, la session courante est bien work-4 et le workspace Pulse. `details.workspace` vient de ce `context.workspace.path` ; `structured.project` vient du modèle, qui lit la vue. Les deux routes de Core ne s'accordent donc pas sur l'appartenance de l'événement frontière (même famille que le défaut 1 de l'audit 2026-09-06 : `is_open` selon la route lue), et Intelligence prend le workspace de l'instant sans vérifier qu'il est celui de la session résumée. Aucune donnée n'a été modifiée : le résumé émis reste tel quel, `input_hash` compris.
+
+**Correction proposée (Intelligence, sans toucher Core) :** dans `summarize_session`, ne retenir `context.workspace.path` que si `context.current_session.id == session.id` (ou si `workspace.resolution` n'est pas `"session"`) ; sinon omettre `details.workspace` (champ optionnel) et l'écrire sur stderr. Variante : lire le contexte à `last_activity_at − 1 µs`, comme la capture du corpus le fait à fin − 1 s — mais cela change l'`input_hash` de tous les résumés à venir pour un cas frontière. Côté Core (gelé, correctif possible) : à `at == last_activity_at` d'une session close, `_select_current_session` devrait rendre cette session, cohérente avec `/context/sessions`. Le résumé de `1f931a43` n'est pas à réécrire : une régénération sous la même identité serait refusée (409), et le champ n'entre pas dans la reprise.
+
+**Déclencheur:** validation de la correction par l'utilisateur ; ou un second cas de workspace incohérent.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** —
+
 ## Completed
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`
