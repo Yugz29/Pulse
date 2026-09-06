@@ -124,8 +124,11 @@ $ pulse-intel run --once
 - `replayed` : payloads `pending` rejoués **avant** la sélection, tels que
   figés lors d'une panne Core, même si leur session est sortie de la fenêtre
   `lookback_days` — sans modèle, sans commande datée. Un rejeu que Core refuse
-  encore compte comme `failed` ; le `pending` d'une session `given_up` n'est
-  pas rejoué, il reste sur disque.
+  encore compte comme `failed` ; un `409` (Core détient déjà un résumé pour
+  cette identité, par exemple après restauration d'une sauvegarde) reprend
+  l'événement de Core en `already_known`, sans consommer le budget ; le
+  `pending` d'une session `given_up` n'est pas rejoué, il reste sur disque et
+  ne cache pas la session à un autre prompt ou modèle.
 
 Code de sortie de `run --once`, le plus grave gagne :
 
