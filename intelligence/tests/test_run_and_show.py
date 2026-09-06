@@ -461,6 +461,39 @@ def test_emission_records_an_entry_without_event_when_the_readback_fails(
     assert shown == 0 and "aaaaaaaaaaaaaaaa" in capsys.readouterr().out
 
 
+
+def test_cli_summarize_never_prints_the_event_before_core_redaction(
+    fake_core, tmp_path, capsys
+):
+    """POST accepté mais relecture impossible : `summarize` imprime l'id et
+    l'avertissement, jamais la sortie du modèle avant rédaction (relecture
+    2026-09-06, point 3). Avec relecture, il imprime la copie de Core."""
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"))
+    marked = tmp_path / "marked.json"
+    marked.write_text(
+        valid_output(reprise={"doing": "Tu réglais TOKEN=audit-secret-123.", "stopped_at": "x", "open": "y"}),
+        encoding="utf-8",
+    )
+    fake_core.fail_readbacks = 1
+
+    code = cli.main([*base_args(fake_core, tmp_path), "summarize", "aaaaaaaaaaaaaaaa", "--fake", str(marked)])
+    captured = capsys.readouterr()
+
+    event_id = fake_core.posts[0]["event_id"]
+    assert code == 0
+    assert f"created work-1 aaaaaaaaaaaaaaaa event_id={event_id}" in captured.out
+    assert "audit-secret-123" not in captured.out and "reprise" not in captured.out
+    assert "relecture" in captured.err and event_id in captured.err
+
+    # Même commande, relecture possible : la copie de Core est imprimée.
+    other = ["--core-url", fake_core.url, "--state", str(tmp_path / "other" / "state.json")]
+    code = cli.main([*other, "summarize", "aaaaaaaaaaaaaaaa", "--fake", str(marked)])
+    out = capsys.readouterr().out
+
+    assert code == 0 and "already_known" in out
+    printed = json.loads(out[out.index("{"):])
+    assert printed["details"] == fake_core.stored[event_id]["details"]
+
 # --- CLI run : exit codes (audit 2026-09-06, défaut 10) --------------------------
 
 

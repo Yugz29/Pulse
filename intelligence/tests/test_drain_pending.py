@@ -141,3 +141,118 @@ def test_cli_run_once_reports_the_drain_and_keeps_the_exit_codes(
 
 def _base(fake_core, tmp_path) -> list[str]:
     return ["--core-url", fake_core.url, "--state", str(tmp_path / "state.json")]
+
+
+# --- vidage et identité, récupération après conflit (relecture 2026-09-06, sondes A et B) ---
+
+
+def _abandon_the_pending(fake_core, client, config, state_path) -> FakeSummarizer:
+    """Trois refus Core du payload figé : l'identité v1 est abandonnée, le
+    `pending` reste sur disque."""
+    summarizer = _freeze_a_pending(fake_core, client, config, state_path)
+    fake_core.fail_posts = 2
+    statuses = [
+        run_pass(client, summarizer, config, JobState.load(state_path), now=REFERENCE).outcomes[0].status
+        for _ in range(2)
+    ]
+    assert statuses == ["failed", "given_up"]
+    state = JobState.load(state_path)
+    assert state.is_failed(SESSION, EVENT_ID) and state.pending_event(EVENT_ID) is not None
+    return summarizer
+
+
+def test_a_pending_given_up_under_an_old_identity_does_not_hide_the_session_from_a_new_one(
+    fake_core, client, config, tmp_path
+):
+    """Sonde A : le `pending` v1 est abandonné, la configuration passe en v2.
+    Aujourd'hui `run` rapporte given_up et n'appelle jamais le modèle pour v2.
+    Attendu : le saut post-vidage porte sur l'identité rejouée, pas sur la
+    session ; v2 est une vraie candidate, résumée et émise."""
+    from dataclasses import replace
+
+    state_path = tmp_path / "state" / "state.json"
+    _abandon_the_pending(fake_core, client, config, state_path)
+    v2 = FakeSummarizer(outputs=valid_output(), model_id="fake/summarizer")
+
+    report = run_pass(client, v2, replace(config, prompt_version="v2"), JobState.load(state_path), now=REFERENCE)
+
+    assert [o.status for o in report.outcomes] == ["given_up", "created"]
+    assert report.outcomes[0].event_id == EVENT_ID  # l'abandon v1 est toujours rapporté
+    assert report.outcomes[1].event_id == summary_event_id(SESSION, "v2", "fake/summarizer")
+    assert len(v2.calls) == 1 and len(fake_core.posts) == 1
+    assert fake_core.posts[0]["details"]["prompt_version"] == "v2"
+    after = JobState.load(state_path)
+    assert after.is_failed(SESSION, EVENT_ID) and after.pending_event(EVENT_ID) is not None  # v1 intact
+    assert after.knows(summary_event_id(SESSION, "v2", "fake/summarizer"))
+
+
+def test_a_pending_given_up_under_the_current_identity_is_reported_once(
+    fake_core, client, config, tmp_path
+):
+    """Contrôle : même identité, l'abandon est rapporté une fois par passage,
+    pas une fois par le vidage et une fois par la sélection."""
+    state_path = tmp_path / "state" / "state.json"
+    summarizer = _abandon_the_pending(fake_core, client, config, state_path)
+
+    report = run_pass(client, summarizer, config, JobState.load(state_path), now=REFERENCE)
+
+    assert [o.status for o in report.outcomes] == ["given_up"]
+    assert report.candidates == 1 and fake_core.posts == []
+
+
+def test_a_restored_pending_that_conflicts_with_core_is_recovered_not_abandoned(
+    fake_core, client, config, tmp_path
+):
+    """Sonde B, restauration de sauvegarde (critère 3 de l'audit) : un état
+    sauvegardé avec un `pending` T1 ; l'état vivant perd ce `pending`,
+    régénère T2 que Core accepte ; la sauvegarde est restaurée. Aujourd'hui
+    le rejeu de T1 reçoit 409 trois fois, la session est abandonnée et
+    ignorée alors que Core détient le résumé. Attendu : sur 409, Intelligence
+    relit Core et reprend l'événement accepté, sans consommer le budget."""
+    state_path = tmp_path / "state" / "state.json"
+    summarizer = _freeze_a_pending(fake_core, client, config, state_path)  # T1 figé, Core en panne
+    backup = state_path.read_text(encoding="utf-8")
+    live = JobState.load(state_path)
+    live.pending.clear()
+    live.save()
+    regenerated = run_pass(client, summarizer, config, JobState.load(state_path), now=REFERENCE + timedelta(minutes=1))
+    assert [o.status for o in regenerated.outcomes] == ["created"]  # T2, accepté par Core
+    state_path.write_text(backup, encoding="utf-8")
+    assert JobState.load(state_path).pending_event(EVENT_ID) == fake_core.refused[0]  # T1 de retour
+    posts_before = len(fake_core.posts)
+
+    report = run_pass(client, summarizer, config, JobState.load(state_path), now=REFERENCE + timedelta(days=1))
+
+    assert report.replayed == 1
+    assert [o.status for o in report.outcomes] == ["already_known"]
+    assert "conflit" in (report.outcomes[0].detail or "")
+    assert len(fake_core.posts) == posts_before + 1  # le rejeu de T1, refusé 409, rien d'autre
+    assert len(summarizer.calls) == 2  # T1 puis T2 : aucune régénération
+    after = JobState.load(state_path)
+    assert after.knows(EVENT_ID) and after.pending == {}
+    assert after.failures == {} and after.failed == {}  # zéro budget consommé
+    entry = after.emitted[EVENT_ID]
+    assert entry["origin"] == "core"
+    assert entry["event"]["details"] == fake_core.stored[EVENT_ID]["details"]  # T2, tel que Core l'a stocké
+    again = run_pass(client, summarizer, config, JobState.load(state_path), now=REFERENCE + timedelta(days=1, minutes=1))
+    assert again.outcomes == [] and len(fake_core.posts) == posts_before + 1
+
+
+def test_a_replayed_pending_refused_again_is_not_posted_twice_in_the_same_pass(
+    fake_core, client, config, tmp_path
+):
+    """Contrôle du cas que #63 protégeait : le rejeu refusé (503) garde son
+    unique tentative du passage ; la sélection, qui voit encore la session
+    dans la fenêtre, ne la POSTe pas une seconde fois."""
+    state_path = tmp_path / "state" / "state.json"
+    summarizer = _freeze_a_pending(fake_core, client, config, state_path)
+    fake_core.fail_posts = 1
+
+    report = run_pass(client, summarizer, config, JobState.load(state_path), now=REFERENCE + timedelta(minutes=10))
+
+    assert report.candidates == 1 and report.replayed == 1
+    assert [o.status for o in report.outcomes] == ["failed"]
+    assert "tentative 2" in (report.outcomes[0].detail or "")
+    assert len(fake_core.refused) == 2 and fake_core.posts == []
+    assert JobState.load(state_path).failures == {EVENT_ID: 2}
+    assert len(summarizer.calls) == 1
