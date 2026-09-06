@@ -31,7 +31,7 @@ from .llm.openai_compatible import OpenAICompatibleProvider
 from .llm.provider import LLMProvider, ProviderError
 from .provider_summarizer import ProviderSummarizer, prompt_path_for
 from .selection import Classified, classify_sessions, find_session
-from .session_summary import run_pass, summarize_session, summary_event_id
+from .session_summary import _recovered_event, run_pass, summarize_session, summary_event_id
 from .state import JobState, StateLocked
 from .summarizer import FakeSummarizer, Summarizer
 
@@ -335,6 +335,7 @@ def _card(
     *,
     previous_summary: dict[str, Any] | None,
     previous_known: bool,
+    local_before_redaction: bool = False,
 ) -> str:
     """Un résumé en fiche : la reprise, ce qui la qualifie, et le ``open``
     reçu en annexe juste sous le ``open`` produit — D1 se juge d'un coup d'œil.
@@ -374,6 +375,10 @@ def _card(
         lines.append(f"central_files   {', '.join(central) if central else '[]'}")
     else:
         lines.append("central_files   —")
+    if local_before_redaction:
+        # Entrée d'avant la copie de référence (décision 2026-09-06) : la
+        # sortie du modèle, pas l'événement accepté par Core, non rédigée.
+        lines.append("  ↳ note        copie locale antérieure à la rédaction Core")
     return "\n".join(lines)
 
 
@@ -406,6 +411,7 @@ def _print_entries(args: argparse.Namespace, entries: list[dict[str, Any]]) -> N
                     details,
                     previous_summary=entry.get("previous_summary"),
                     previous_known="previous_summary" in entry,
+                    local_before_redaction="origin" not in entry,
                 )
             )
     if args.all and not args.md:
@@ -458,13 +464,38 @@ def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state
         _print_entries(args, state.summaries_for(session_id))
         return EXIT_OK
 
-    latest = client.get_context().get("last_session_summary")
-    latest_id = str(latest.get("id", "")) if isinstance(latest, dict) else ""
-    if not latest_id or not latest_id.startswith(args.target):
-        print(f"aucun résumé connu pour la session {args.target}", file=sys.stderr)
+    # Sans entrée locale : l'événement de CETTE session dans Core, par son
+    # identité (session, prompt, modèle) — jamais le dernier résumé de
+    # /context, qui peut être une autre session. Un préfixe ne suffit pas.
+    if len(args.target) != 16:
+        print(
+            f"aucune entrée locale pour {args.target} : sans état local, "
+            "l'identifiant complet de session (16 hexadécimaux) est nécessaire",
+            file=sys.stderr,
+        )
         return EXIT_USAGE
-    _print_core_summary(args, latest)
+    event_id = summary_event_id(args.target, config.prompt_version, _configured_model_id(config))
+    stored = client.get_activity(event_id)
+    if stored is None:
+        print(
+            f"aucun résumé pour cette session : {args.target} "
+            f"({config.prompt_version}, {_configured_model_id(config)})",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    _print_entries(args, [{"event": _recovered_event(stored), "origin": "core"}])
     return EXIT_OK
+
+
+def _configured_model_id(config: Config) -> str:
+    """Le modèle que cette configuration ferait servir, pour recalculer une
+    identité de résumé sans charger de modèle ni exiger --fake."""
+    if not config.llm_provider.strip():
+        return config.model_id or "fake/summarizer"
+    try:
+        return _provider(config).model
+    except ProviderError:
+        return config.model_id
 
 
 def run_eval(args: argparse.Namespace, config: Config) -> int:

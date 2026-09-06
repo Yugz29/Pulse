@@ -574,6 +574,16 @@ requis `source_tool`, `session_id`, `transcript_path`, `summary_version`
 `tool_version` et `first_prompt` (re-rédigé à l'ingestion, défense en
 profondeur).
 
+Contrat `POST /activities` du type `session_summary` (couche Intelligence) :
+tout champ texte libre est rédigé à l'ingestion par le même filtre que les
+commandes (`redact_command`) : `reprise.doing`, `reprise.stopped_at`,
+`reprise.open`, `structured.project`, et chaque élément de
+`structured.intents`, `structured.central_files`, `structured.blockers`.
+`structured.confidence` est une énumération fermée. Un champ hors schéma dans
+`reprise` ou `structured` est refusé (400) : pas de politique de rédaction,
+pas de recopie silencieuse. La rédaction porte sur des motifs connus, elle ne
+garantit pas l’absence de tout secret.
+
 ## Services daemon + worker (launchd)
 
 Deux LaunchAgents `KeepAlive` font tourner Pulse en continu — relancés au

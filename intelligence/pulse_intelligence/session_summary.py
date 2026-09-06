@@ -10,6 +10,7 @@ résumé. Rien n'atteint ``trace.db`` avant validation.
 from __future__ import annotations
 
 import json
+import sys
 import re
 import uuid
 from dataclasses import dataclass, replace
@@ -18,7 +19,7 @@ from typing import Any
 
 from . import PRODUCER_NAME, __version__
 from .config import Config
-from .core_client import CoreClient, CoreUnavailable
+from .core_client import CoreClient, CoreError, CoreUnavailable
 from .selection import SessionView, select_candidates
 from .session_input import (
     build_model_input,
@@ -233,16 +234,37 @@ def _emit(
         return Outcome(
             session.id, status, event_id, detail=f"tentative {count}: Core {result.status_code}"
         )
+    # Copie de référence = l'événement accepté par Core, après sa
+    # normalisation (rédaction, enveloppe), relu par GET /activities. Jamais
+    # la sortie du modèle avant normalisation (décision 2026-09-06, rédaction
+    # des champs libres). Si la relecture échoue, l'entrée est enregistrée
+    # sans `event` : `show <id>` passera par Core.
+    accepted: dict[str, Any] | None = None
+    try:
+        stored = client.get_activity(event_id)
+        problem = None if stored is not None else "Core ne connaît pas encore l'événement"
+    except (CoreUnavailable, CoreError) as exc:
+        stored, problem = None, str(exc)
+    if stored is not None:
+        accepted = _recovered_event(stored)
+    else:
+        print(
+            f"⚠ relecture impossible après acceptation ({event_id}) : {problem} — "
+            "entrée enregistrée sans copie locale, `show` lira Core",
+            file=sys.stderr,
+        )
     state.record_emitted(
         event_id,
         session_id=session.id,
         prompt_version=config.prompt_version,
         model_id=model_id,
         at=event["details"]["generated_at"],
-        event=event,
+        event=accepted,
+        origin="core",
     )
     return Outcome(
-        session.id, "duplicate" if result.duplicate else "created", event_id, event=event
+        session.id, "duplicate" if result.duplicate else "created", event_id,
+        event=accepted or event,
     )
 
 

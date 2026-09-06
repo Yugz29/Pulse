@@ -1189,3 +1189,32 @@ def test_get_activity_by_event_id_returns_the_stored_row_in_the_export_form(tmp_
         if activity["event_id"] == payload["event_id"]
     ]
     assert exported == [body]
+
+
+# --- rédaction de tout champ libre d'un session_summary (audit 2026-09-06, défaut 9) ---
+
+
+def test_project_and_every_free_text_field_come_back_redacted(tmp_path):
+    """Scénario de l'audit, marqueurs artificiels : `TOKEN=audit-secret-123`
+    dans `doing`, `TOKEN=audit-project-secret` dans `structured.project`.
+    Aujourd'hui Core rédige `doing` mais recopie `project` tel quel."""
+    client = create_app(tmp_path / "trace.db").test_client()
+    payload = _summary_payload(doing="Tu réglais TOKEN=audit-secret-123 dans la config.")
+    payload["details"]["structured"] = {
+        "project": "TOKEN=audit-project-secret",
+        "intents": ["exporter TOKEN=audit-intent-secret"],
+        "central_files": ["core/README.md"],
+        "blockers": ["TOKEN=audit-blocker-secret expiré"],
+        "confidence": "high",
+    }
+    assert client.post("/activities", json=payload).status_code == 201
+
+    stored = client.get(f"/activities/{payload['event_id']}").get_data(as_text=True)
+    context = client.get("/context?at=2026-09-02T17:00:00Z").get_data(as_text=True)
+
+    for marker in ("audit-secret-123", "audit-project-secret", "audit-intent-secret", "audit-blocker-secret"):
+        assert marker not in stored, marker
+        assert marker not in context, marker
+    details = client.get(f"/activities/{payload['event_id']}").get_json()["details"]
+    assert details["structured"]["project"] == "TOKEN=[REDACTED]"
+    assert details["reprise"]["doing"] == "Tu réglais TOKEN=[REDACTED] dans la config."

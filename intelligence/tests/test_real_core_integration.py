@@ -150,3 +150,48 @@ def test_lost_state_recovers_the_summary_core_already_accepted(real_core, config
     conflicting = dict(first.event)
     conflicting["details"] = {**first.event["details"], "generated_at": "2030-01-01T00:00:00+00:00"}
     assert client.post_activity(conflicting).status_code == 409
+
+
+def test_both_show_paths_display_the_event_core_accepted_with_secrets_redacted(
+    real_core, tmp_path, monkeypatch, capsys
+):
+    """Audit 2026-09-06, défaut 9, marqueurs artificiels : `TOKEN=audit-secret-123`
+    dans `doing`, `TOKEN=audit-project-secret` dans `structured.project`. Après
+    émission, `show <id>` et `show latest` affichent ce que Core a accepté :
+    `[REDACTED]` partout, aucun chemin ne fait réapparaître un marqueur. Le
+    seul Core qui rédige est le vrai : cette assertion ne vit qu'ici."""
+    from pulse_intelligence import cli
+
+    client = CoreClient(real_core, timeout_s=5.0)
+    _seed_one_closed_session(client)
+    session = fetch_sessions(client, REFERENCE.astimezone().date(), at=REFERENCE)[0]
+    output = json.loads(valid_output())
+    output["reprise"]["doing"] = "Tu réglais TOKEN=audit-secret-123 dans la config."
+    output["structured"]["project"] = "TOKEN=audit-project-secret"
+    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    marked = tmp_path / "marked.json"
+    marked.write_text(json.dumps(output), encoding="utf-8")
+    monkeypatch.setattr(cli, "_now", lambda: REFERENCE)
+    base = ["--core-url", real_core, "--state", str(tmp_path / "state.json")]
+
+    assert cli.main([*base, "run", "--once", "--fake", str(marked)]) == 0
+    run_out = capsys.readouterr()
+    by_id = cli.main([*base, "show", session.id, "--json"])
+    by_id_out = capsys.readouterr().out
+    card = cli.main([*base, "show", session.id])
+    card_out = capsys.readouterr().out
+    latest = cli.main([*base, "show", "latest"])
+    latest_out = capsys.readouterr().out
+
+    assert by_id == card == latest == 0
+    event_id = json.loads(by_id_out)["event_id"]
+    stored = client.get_activity(event_id)
+    assert json.loads(by_id_out)["details"] == stored["details"]
+    for text in (by_id_out, card_out, latest_out, run_out.out, run_out.err):
+        assert "audit-secret-123" not in text
+        assert "audit-project-secret" not in text
+    assert stored["details"]["structured"]["project"] == "TOKEN=[REDACTED]"
+    assert "TOKEN=[REDACTED]" in card_out and "TOKEN=[REDACTED]" in latest_out
+    state = JobState.load(tmp_path / "state.json")
+    assert state.emitted[event_id]["origin"] == "core"
+    assert json.dumps(state.emitted[event_id]).count("audit-") == 0
