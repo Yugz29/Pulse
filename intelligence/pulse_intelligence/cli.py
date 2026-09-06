@@ -39,6 +39,14 @@ from .summarizer import FakeSummarizer, Summarizer
 EXIT_OK = 0
 EXIT_USAGE = 1
 EXIT_INFRASTRUCTURE = 2
+# `run --once` : le passage s'est fait mais au moins une candidate est restée
+# en `failed` (réessayable au prochain passage) ou en `given_up` (abandonnée,
+# une intervention est nécessaire). Le code le plus grave gagne : l'exit
+# code sert au monitoring humain, la reprise rejoue les `failed` de toute
+# façon. Jusqu'au défaut 5 de l'audit, 3 couvre aussi bien une sortie modèle
+# invalide qu'un provider indisponible.
+EXIT_PARTIAL = 3
+EXIT_GIVEN_UP = 4
 PRIVATE_UMASK = 0o077
 
 
@@ -278,6 +286,10 @@ def run_run(args: argparse.Namespace, config: Config, client: CoreClient, state:
             print(f"Core injoignable : {report.error}", file=sys.stderr)
             return EXIT_INFRASTRUCTURE
         if args.once:
+            if report.count("given_up"):
+                return EXIT_GIVEN_UP
+            if report.count("failed"):
+                return EXIT_PARTIAL
             return EXIT_OK
         try:
             time.sleep(max(1, config.tick_minutes) * 60)
