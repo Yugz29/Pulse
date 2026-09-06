@@ -360,3 +360,69 @@ def test_cli_show_core_fallback_uses_the_card_and_cannot_know_the_annex(fake_cor
     assert card["open"] == "La PR attend ta relecture."
     assert card["↳ reçu"].startswith("(annexe previous_summary inconnue")
     assert card["central_files"] == "—"
+
+
+# --- CLI run : exit codes (audit 2026-09-06, défaut 10) --------------------------
+
+
+def test_cli_run_once_exits_3_when_the_only_candidate_fails(fake_core, tmp_path, capsys):
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"))
+    bad_output = tmp_path / "bad.txt"
+    bad_output.write_text("pas du json", encoding="utf-8")
+
+    code = cli.main([*base_args(fake_core, tmp_path), "run", "--once", "--fake", str(bad_output)])
+    captured = capsys.readouterr()
+
+    assert "candidates=1 created=0" in captured.out and "failed=1" in captured.out
+    assert "⚠ failed aaaaaaaaaaaaaaaa" in captured.err
+    assert fake_core.posts == []
+    assert code == cli.EXIT_PARTIAL == 3
+
+
+def test_cli_run_once_exits_4_once_a_candidate_is_given_up(fake_core, tmp_path, capsys):
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"))
+    bad_output = tmp_path / "bad.txt"
+    bad_output.write_text("pas du json", encoding="utf-8")
+    args = [*base_args(fake_core, tmp_path), "run", "--once", "--fake", str(bad_output)]
+
+    codes = [cli.main(args) for _ in range(3)]
+    third_out = capsys.readouterr().out.splitlines()[-1]
+
+    assert codes == [3, 3, 4]
+    assert "failed=0 given_up=1" in third_out
+    assert cli.EXIT_GIVEN_UP == 4
+
+
+def test_cli_run_once_partial_success_still_exits_3(fake_core, tmp_path, capsys, monkeypatch):
+    # Deux candidates, une sortie valide puis une invalide : l'exit code
+    # signale l'échec même si l'autre session a été créée.
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"), session_view("bbbbbbbbbbbbbbbb"))
+    monkeypatch.setattr(
+        cli, "_summarizer",
+        lambda args, config: FakeSummarizer(outputs=[valid_output(), "pas du json"], model_id="fake/summarizer"),
+    )
+
+    code = cli.main([*base_args(fake_core, tmp_path), "run", "--once", "--fake", "unused"])
+    out = capsys.readouterr().out
+
+    assert "candidates=2 created=1" in out and "failed=1" in out
+    assert len(fake_core.posts) == 1
+    assert code == 3
+
+
+def test_cli_run_once_given_up_outranks_failed(fake_core, tmp_path, capsys, monkeypatch):
+    # Le code le plus grave gagne : une session abandonnée pèse plus qu'une
+    # session encore réessayable, l'exit code sert au monitoring humain.
+    fake_core.add_sessions(today(), session_view("aaaaaaaaaaaaaaaa"))
+    bad_output = tmp_path / "bad.txt"
+    bad_output.write_text("pas du json", encoding="utf-8")
+    args = [*base_args(fake_core, tmp_path), "run", "--once", "--fake", str(bad_output)]
+    for _ in range(3):
+        cli.main(args)
+    fake_core.add_sessions(today(), session_view("bbbbbbbbbbbbbbbb"))
+
+    code = cli.main(args)
+    out = capsys.readouterr().out.splitlines()[-1]
+
+    assert "failed=1 given_up=1" in out
+    assert code == 4
