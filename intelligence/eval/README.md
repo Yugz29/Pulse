@@ -15,10 +15,14 @@ Chaque fichier `<session_id>.json` fige, pour une session :
 - `added` — date d'ajout, **seulement** pour une entrée hors gel.
 
 Les dix d'origine (sans `added`) sont la référence de l'étape 3 et ne bougent
-pas. **Extension du 2026-09-06**, hors gel : `1e420dda8b6eee77` (work-26 du
-05) et `eef4956b36dd37ce` (work-3 du 06), les deux cas D1 du dogfooding
-(`docs/dogfooding.md`) — les seules entrées à annexe `previous_summary`, sans
-quoi la consigne de réévaluation du `open` n'est pas mesurable ici.
+pas. **Extension du 2026-09-06**, hors gel, quatre sessions du dogfooding
+(`docs/dogfooding.md`) : `1e420dda8b6eee77` (work-26 du 05) et
+`eef4956b36dd37ce` (work-3 du 06), les deux cas D1 — les seules entrées à
+annexe `previous_summary` ; `8af930d9ef437d2a` (work-2 du 05) et
+`d98778994319cd07` (work-24 du 05), deux des quatre cas D3 — leur annexe
+`agent_session` porte la demande initiale « vérifier l'état de la PR #28… »
+que le résumé v2 recopiait en point ouvert. Sans elles, ni D1 ni D3 ne sont
+mesurables par `eval`.
 
 Piège de capture pour une session déjà résumée : `GET /context?at=<fin>` rend
 en `last_session_summary` le résumé de la session *elle-même*, que

@@ -117,13 +117,21 @@ def test_the_extension_entries_carry_a_previous_summary_annex(capture_timezone):
     session, jamais le leur."""
     from pulse_intelligence.session_input import build_model_input
 
-    extension = [e for e in load_corpus(DEFAULT_CORPUS) if e.added is not None]
+    extension = {e.id: e for e in load_corpus(DEFAULT_CORPUS) if e.added is not None}
 
-    assert {e.id for e in extension} == {"1e420dda8b6eee77", "eef4956b36dd37ce"}
-    for e in extension:
-        annex = build_model_input(e.view, e.context)["previous_summary"]
-        assert annex is not None and annex["id"] != e.id
+    assert set(extension) == {
+        "1e420dda8b6eee77", "eef4956b36dd37ce",  # D1 : annexe previous_summary
+        "8af930d9ef437d2a", "d98778994319cd07",  # D3 : annexe agent_session
+    }
+    for sid in ("1e420dda8b6eee77", "eef4956b36dd37ce", "d98778994319cd07"):
+        annex = build_model_input(extension[sid].view, extension[sid].context)["previous_summary"]
+        assert annex is not None and annex["id"] != sid
         assert annex["reprise"]["open"]
+    # 8af930d9 est la première session de sa journée : pas de résumé précédent.
+    assert build_model_input(extension["8af930d9ef437d2a"].view, extension["8af930d9ef437d2a"].context)["previous_summary"] is None
+    for sid in ("8af930d9ef437d2a", "d98778994319cd07"):
+        agent = build_model_input(extension[sid].view, extension[sid].context)["agent_session"]
+        assert agent is not None and "PR #28" in agent["summary"]
 
 
 def test_the_frozen_corpus_covers_several_projects_and_weeks():

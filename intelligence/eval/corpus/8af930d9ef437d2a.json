@@ -1,0 +1,107 @@
+{
+ "added": "2026-09-06",
+ "context": {
+  "current_session": {
+   "activity_count": 1,
+   "apps": [],
+   "duration_minutes": 0,
+   "files": {
+    "created": [],
+    "deleted": [],
+    "modified": [],
+    "truncated": false
+   },
+   "git": {
+    "commits": [],
+    "push_observed": false
+   },
+   "id": "8af930d9ef437d2a",
+   "is_open": true,
+   "label": "work-2",
+   "last_activity_at": "2026-09-05T18:09:55+00:00",
+   "projects": [
+    "Pulse"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "terminal_finished"
+   ],
+   "source_event_ids": [
+    "b04a3146-0198-42d3-bde2-d78cb189749f"
+   ],
+   "started_at": "2026-09-05T18:09:55+00:00",
+   "terminal": {
+    "errors": [],
+    "tests_failed": [],
+    "tests_passed": [],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-06T11:02:09.709831+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 0,
+   "agent": "claude-code",
+   "ended_at": "2026-09-05T21:30:23.451000+00:00",
+   "started_at": "2026-09-05T16:01:04.422000+00:00",
+   "summary": "Agent session (claude-code): Je reprends le projet Pulse après une pause (nouveau MacBook Pro M3 Max, migration terminée). J'ai besoin d'un état des lieux complet avant de continuer. Peux-tu vérifier : 1. État git : la PR #28 (exclusion .gitnexus/ du watcher, Core 0.3.1) est-elle mergée ? Y a-t-il une branc…",
+   "workspace": "/Users/Yugz/Projets/Pulse"
+  },
+  "last_session_summary": null,
+  "recent_sessions": [],
+  "reference_at": "2026-09-05T18:27:36.228716+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": {
+    "branch": "main",
+    "dirty": true,
+    "last_commit": null
+   },
+   "path": "/Users/Yugz/Projets/Pulse",
+   "project": "Pulse",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-09-05",
+ "id": "8af930d9ef437d2a",
+ "label": "work-2",
+ "session_raw": {
+  "activity_count": 1,
+  "apps": [],
+  "duration_minutes": 17,
+  "files": {
+   "created": [],
+   "deleted": [],
+   "modified": [],
+   "truncated": false
+  },
+  "git": {
+   "commits": [],
+   "push_observed": false
+  },
+  "id": "8af930d9ef437d2a",
+  "is_open": false,
+  "label": "work-2",
+  "last_activity_at": "2026-09-05T18:27:37.228716+00:00",
+  "projects": [
+   "Pulse"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "terminal_finished"
+  ],
+  "source_event_ids": [
+   "b04a3146-0198-42d3-bde2-d78cb189749f"
+  ],
+  "started_at": "2026-09-05T18:09:55+00:00",
+  "terminal": {
+   "errors": [],
+   "tests_failed": [],
+   "tests_passed": [],
+   "truncated": false
+  }
+ },
+ "why": "Cas D3 du jour 2 (work-2 du 2026-09-05, 17 min, 1 activité) : open v2 « L'état de la PR #28 et la branche courante n'ont pas été confirmés » tiré de la demande initiale de l'annexe agent_session. Première session de sa journée, sans previous_summary. Ajoutée le 2026-09-06, hors gel."
+}
