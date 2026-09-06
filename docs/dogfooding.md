@@ -59,6 +59,61 @@ n'utilise que `run`. À traiter : soit ajouter `out` au filtre (changement de
 Core, gelé — justification à peser, `out` est un nom générique), soit faire
 écrire `eval` hors de l'arbre observé par défaut. Décision reportée, hors lot.
 
+### Mesure du jour 1 — prompt v2 sur le corpus
+
+La v2 ajoute deux consignes à la v1 : `open` réévalué sur la session courante,
+jamais recopié de `previous_summary` (D1) ; session sans fichier →
+`central_files: []`, avec un exemple à zéro fichier (réserve n°1 de la décision
+Qwen). Passage `eval` sur les dix sessions gelées, les deux providers, avant
+activation. `fich.` = fichiers modifiés dans la vue ; `cf` = taille de
+`central_files` ; `—` = rejeté par le garde-fou.
+
+**Qwen local `Qwen3.8-27B-4bit` — v1 → v2**
+
+| session | fich. | v1 | v2 | cf v1 | cf v2 | note |
+| --- | --- | --- | --- | --- | --- | --- |
+| `071bbd62` | 2 | ok | ok | 2 | 2 | |
+| `247f2062` | 60 | ok | ok | 5 | 5 | confidence medium → high |
+| `2ce34456` | 0 | **rejeté** | **ok** | — | 0 | #8 ambiguë → `[]` |
+| `3cabaefb` | 60 | ok | ok | 5 | 5 | |
+| `6a416635` | 0 | **rejeté** | **ok** | — | 0 | #6 → `[]`, plus de `vite.config.js` inventé |
+| `7bbaca78` | 1 | ok | ok | 1 | 1 | |
+| `8faf4569` | 25 | ok | ok | 5 | 5 | |
+| `cda6ccce` | 29 | ok | ok | 5 | 5 | |
+| `d047b37b` | 33 | ok | ok | 5 | 5 | |
+| `eb652ce9` | 38 | ok | ok | 5 | 5 | |
+
+Valides **8/10 → 10/10**, aucune perte ; les huit sessions à fichiers gardent
+le même compte (moyenne 4,1 → 4,1), 3 à 5 chemins sur 5 identiques entre v1 et
+v2, les substitutions restant des fichiers présents dans l'entrée.
+
+**Référence `claude-sonnet-5` — v1 → v2**
+
+| session | fich. | v1 | v2 | cf v1 | cf v2 | note |
+| --- | --- | --- | --- | --- | --- | --- |
+| `071bbd62` | 2 | ok | ok | 2 | 2 | |
+| `247f2062` | 60 | ok | ok | 5 | 5 | confidence medium → high |
+| `2ce34456` | 0 | **rejeté** | **ok** | — | 0 | #8 → `[]` |
+| `3cabaefb` | 60 | ok | ok | 5 | 5 | |
+| `6a416635` | 0 | ok | ok | 0 | 0 | #6 → `[]`, confidence medium → low |
+| `7bbaca78` | 1 | ok | ok | 1 | 1 | |
+| `8faf4569` | 25 | ok | ok | 5 | 5 | |
+| `cda6ccce` | 29 | ok | ok | 5 | 4 | seul cran perdu |
+| `d047b37b` | 33 | ok | ok | 5 | 5 | |
+| `eb652ce9` | 38 | ok | ok | 5 | 5 | |
+
+Valides **9/10 → 10/10**, aucune perte, moyenne 4,1 → 4,0 — pas de frilosité.
+
+**D1 non mesurable sur le corpus** : aucune des dix sessions gelées ne porte
+d'annexe `previous_summary`. Le corpus prouve que la consigne ne dégrade rien ;
+elle se juge au jour 2 sur les sessions enchaînées de la journée. Une session
+réelle à `previous_summary` est à ajouter au corpus, hors gel
+(`intelligence/TODOS.md`).
+
+**Décision : v2 adoptée**, `prompt_version = "v2"` dans la config de dogfooding
+à partir du jour 2. Les résumés du jour 1 restent des résumés v1.
+
 ### Suite
 
-Jour 2 : lecture des 6 autres reprises, `run --once` sur les sessions du jour.
+Jour 2 : lecture des 6 autres reprises, `run --once` sur les sessions du jour
+avec la v2 — premier jugement de D1 sur des sessions enchaînées.

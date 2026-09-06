@@ -96,7 +96,8 @@ pulse_intelligence/
     openai_compatible.py # OpenAICompatibleProvider
     mlx.py               # MLXProvider (import de mlx_lm paresseux)
   prompts/
-    session_summary_v1.md
+    session_summary_v1.md  # conservé : rejoue les passages de référence de l'étape 3
+    session_summary_v2.md  # courant depuis le 2026-09-06
   provider_summarizer.py # ProviderSummarizer : Summarizer bâti sur un LLMProvider
 ```
 
@@ -225,7 +226,7 @@ modèle local n'est pas disponible. Ce n'est pas le provider de production.
 class ProviderSummarizer:
     provider: LLMProvider
     model_id: str            # identité du modèle, telle qu'elle entre dans l'event_id
-    prompt_path: Path        # prompts/session_summary_v1.md
+    prompt_path: Path        # prompts/session_summary_<prompt_version>.md
     max_tokens: int = 1024
 
     def summarize(self, model_input: str) -> str: ...
@@ -233,7 +234,10 @@ class ProviderSummarizer:
 
 - Le prompt est un **fichier versionné**, identique pour tous les providers, et
   gelé pendant la comparaison sur le corpus. Sa version est déjà portée par
-  `config.prompt_version` (livré, défaut `"v1"`).
+  `config.prompt_version` (livré, défaut `"v1"`). **Version courante : `v2`**
+  (2026-09-06, activée dans la config de dogfooding après mesure sur le corpus,
+  voir §10). `v1` est conservée telle quelle : elle rejoue les passages de
+  référence de l'étape 3 et reste la version des résumés déjà émis.
 - `model_id` est la **seule** identité de modèle. Elle entre déjà dans
   `summary_event_id(session_id, prompt_version, model_id)` : changer de modèle
   ou de prompt produit mécaniquement un autre `event_id`, donc un autre
@@ -332,6 +336,35 @@ qualité, exécutée par le seul spike B (mémoire du `MLXProvider`).
 
 Règle inchangée : tout changement de prompt ou de modèle passe par `eval` avant
 d'être activé, et le rapport est joint à la PR.
+
+### Prompt v2 — première itération mesurée (2026-09-06)
+
+Deux consignes ajoutées à `v1`, motivées par le jour 1 du dogfooding
+([`../dogfooding.md`](../dogfooding.md)) et par la réserve n°1 de la
+[décision Qwen](../decisions/2026-09-06-modele-local-qwen.md) :
+
+1. **`previous_summary`** : l'annexe sert à la continuité, mais `open` se
+   réévalue sur les faits de *cette* session — jamais recopié (défaut D1).
+2. **Session sans fichier → `central_files: []`**, même si un chemin paraît
+   évident ; le second exemple du prompt est désormais un cas à zéro fichier
+   (réserve n°1 : Qwen inventait `vite.config.js` sur `6a416635`).
+
+Mesure sur les dix sessions gelées, mêmes réglages qu'à l'étape 3 :
+
+```
+                       référence v1 → v2   Qwen local v1 → v2
+valides                    9/10 → 10/10        8/10 → 10/10
+sessions à fichiers
+  dont central_files → 0        aucune              aucune
+central_files moyen           4,1 → 4,0           4,1 → 4,1
+```
+
+Les deux rejets du garde-fou en v1 (`6a416635`, `2ce34456`, 0 fichier)
+passent avec `central_files: []` pour les deux modèles, sans que les sessions
+riches en fichiers perdent leurs chemins — pas de frilosité induite. La
+consigne n°1 **n'est pas mesurable sur ce corpus** : aucune des dix sessions
+gelées ne porte de `previous_summary` (voir `intelligence/TODOS.md`) ; elle se
+juge sur le dogfooding, sessions enchaînées d'une même journée.
 
 ## 11. Tests
 
