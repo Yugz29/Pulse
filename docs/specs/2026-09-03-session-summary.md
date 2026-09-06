@@ -136,6 +136,10 @@ Lues par `GET /context/sessions?date=` pour aujourd'hui et hier (`lookback_days 
 
 Une session dont l'`id` a disparu de `/context/sessions` entre deux ticks (composition changée par un événement tardif) est simplement oubliée : son résumé, s'il existait, reste dans `trace.db` comme résumé d'un ensemble d'événements qui a existé.
 
+### Vidage de la file `pending` (2026-09-06, défaut 4 de l'audit, issue #62)
+
+Chaque passage commence par rejouer les payloads `pending`, **avant** la sélection et indépendamment de la fenêtre `lookback_days` : un résumé gelé pendant une panne Core repart au premier passage après rétablissement, même plusieurs jours plus tard, sans commande datée. Le rejeu est octet pour octet, `entry["event"]` tel que figé : ni `generated_at`, ni `generation_ms`, ni `input_hash`, ni `producer` ne sont recalculés, et les versions enregistrées avec l'entrée servent à l'inscription dans `emitted`. Le budget d'échecs et le `409` de Core s'appliquent comme à toute émission ; un rejeu refusé compte `failed` dans le bilan (`replayed=` dans la ligne de `run`, codes de sortie inchangés). Un `pending` d'une session `given_up` n'est pas rejoué par le vidage : il reste sur disque jusqu'à une reprise explicite (`summarize <id> --retry`). Ce vidage est distinct du rattrapage des sessions jamais traitées, qui relève d'une politique de curseur séparée, non livrée.
+
 ### Récupération après perte de l'état local (2026-09-06, défaut 3 de l'audit)
 
 L'identité d'un résumé est `event_id = f(session_id, prompt_version, model_id)`, mais son contenu porte `generated_at` et `generation_ms` : régénérer après une perte de `state.json` produit un contenu différent sous le même `event_id`, que Core refuse (`409`, préservé). Avant tout appel au modèle, quand l'état local ne connaît ni l'`event_id` ni un `pending` pour lui, Intelligence lit `GET /activities/<event_id>` : si Core l'a, l'entrée est enregistrée localement telle que Core l'a stockée (`origin: "core"`), statut `already_known`, zéro appel modèle, zéro POST ; sinon le chemin normal reprend. Core injoignable à cet instant remonte comme sur `/context` (code 2), jamais en `failed`.
