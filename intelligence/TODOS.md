@@ -26,13 +26,29 @@
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`
 
-**What:** Aucune des dix sessions gelées de `intelligence/eval/corpus/` n'a d'annexe `previous_summary` : la consigne du prompt v2 sur la réévaluation de `open` (défaut D1 du jour 1, `docs/dogfooding.md`) n'est donc pas mesurable par `pulse-intel eval`, seulement à l'œil sur le dogfooding. Ajouter au corpus, **hors gel** (les dix d'origine restent la référence de l'étape 3), une session réelle portant `previous_summary` — typiquement la seconde ou troisième session d'une journée résumée par `run` — avec son `context` tel que Core l'a servi, pour que D1 devienne mesurable à chaque changement de prompt.
+**What:** Aucune des dix sessions gelées de `intelligence/eval/corpus/` n'a d'annexe `previous_summary` : la consigne du prompt v2 sur la réévaluation de `open` (défaut D1, `docs/dogfooding.md`) n'est pas mesurable par `pulse-intel eval`, seulement à l'œil sur le dogfooding. Ajouter au corpus, **hors gel** (les dix d'origine restent la référence de l'étape 3), une session réelle portant `previous_summary`, avec son `context` tel que Core l'a servi.
 
-**Déclencheur:** une session réelle à `previous_summary` jugée au dogfooding (jour 2 ou après), dont le `open` v1 recopiait la note précédente.
+**Session désignée (jour 2) :** `1e420dda8b6eee77` (work-26 du 2026-09-05, 88 min), le cas D1 du jour 1 — son résumé v1 recopiait le `open` de work-24. Second cas, plus net : `eef4956b36dd37ce` (work-3 du 2026-09-06), seule session du jour 2 résumée **avec** annexe, où la v2 recopie encore le `open` précédent.
+
+**Piège de capture :** dès qu'une session a un résumé, `GET /context?at=<sa fin>` rend **ce résumé-là** en `last_session_summary` (même instant), et `previous_summary_annex` l'écarte (même id) sans repli sur le précédent : l'annexe est vide. Vérifié par `input_hash` : la régénération v2 de `1e420dda` a tourné sans annexe. Pour geler l'entrée, prendre le contexte à un instant **strictement antérieur** à `last_activity_at` (ou avant tout résumé de la session), et le noter dans `eval/README.md`.
+
+**Déclencheur:** jour 2 du dogfooding (2026-09-06) — les deux sessions existent.
 
 **Effort:** S
 **Priority:** P2
-**Depends on:** Dogfooding jour 2
+**Depends on:** —
+
+### Deux résumés d'une même session coexistent après un changement de `prompt_version`
+
+**What:** `summary_event_id(session_id, prompt_version, model_id)` fait qu'un changement de prompt rend candidates à nouveau les sessions déjà résumées (jour 2 : six sessions du 2026-09-05 régénérées en v2, trace append-only, aucune collision). Deux événements `session_summary` valides décrivent alors la même session. Rien ne dit lequel **fait foi** : `show <id>` rend le dernier émis localement, Core sert le dernier en `last_session_summary`, l'annexe `previous_summary` d'une session suivante prend celui que Core sert. Conséquence déjà vue : une régénération ne reçoit pas d'annexe (son propre résumé antérieur masque le précédent, voir l'entrée ci-dessus) — elle n'est donc pas comparable à l'original, l'entrée diffère.
+
+**À définir à l'étape 5 :** la règle de préséance (dernier émis ? version de prompt la plus haute ? celle de la config courante ?), et si l'annexe doit remonter au résumé d'une **autre** session plutôt qu'au dernier tout court — ce qui demande soit une règle côté Intelligence sur `recent_sessions`, soit une route Core, gelé.
+
+**Déclencheur:** étape 5 (service résident), ou le premier `show` trompeur.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Service résident
 
 ## Completed
 

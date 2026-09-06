@@ -117,3 +117,95 @@ réelle à `previous_summary` est à ajouter au corpus, hors gel
 
 Jour 2 : lecture des 6 autres reprises, `run --once` sur les sessions du jour
 avec la v2 — premier jugement de D1 sur des sessions enchaînées.
+
+## Jour 2 — 2026-09-06
+
+Prompt v2 adopté et activé (PR #48 ; `prompt_version = "v2"` dans la config,
+défaut du code aligné par PR #49). **`run --once` : 8 candidates, 8/8 créées**,
+Qwen local, 20–47 s par session.
+
+Six des huit sont des **régénérations v2 des sessions du 2026-09-05** — le
+changement de `prompt_version` les rend candidates à nouveau (autre `event_id`,
+trace append-only, pas de collision ; deux résumés par session coexistent
+désormais, voir `intelligence/TODOS.md`). Les deux autres sont les sessions de
+la nuit (`a0aacd1f` 00:26–00:39, `eef4956b` 01:29–02:24).
+
+### Reprises v2
+
+| session | durée | `doing` (résumé) | `open` v2 | cf | conf | jugement |
+| --- | --- | --- | --- | --- | --- | --- |
+| `8af930d9` work-2 (05) | 17 min | état des lieux post-migration | « L'état de la PR #28 et la branche courante n'ont pas été confirmés. » | 0 | low | à juger |
+| `2808ac8a` work-3 (05) | 13 min | watcher + fichiers privés | « Les modifications sur file_watcher.py et private_files.py ne sont pas committées ni testées. » | 4 | medium | à juger |
+| `eadb7573` work-13 (05) | 12 min | doc et versions Core 0.5.6 | « Le commit n'a pas été poussé ; l'état de la PR #28 reste à vérifier. » | 0 | medium | à juger |
+| `58874e67` work-20 (05) | 3 min | watcher, privés, Swift | « Les modifications ne sont pas committées. L'état de la PR #28 et la branche courante n'ont pas été vérifiés. » | 5 | medium | à juger |
+| `d9877899` work-24 (05) | 12 min | tests + horloge de la CLI | « L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session. » | 0 | medium | à juger |
+| `1e420dda` work-26 (05) | 88 min | couche LLMProvider | « Les commits locaux ne sont pas poussés. La divergence list/run sur le modèle est documentée mais non résolue. » | 0 | medium | à juger |
+| `a0aacd1f` work-2 (06) | 13 min | corpus gelé, eval, MLXProvider | « Le push n'a pas été observé ; la configuration de llm_max_tokens et le passage de référence restent à valider. » | 0 | medium | à juger |
+| `eef4956b` work-3 (06) | 54 min | garde d'entrée, doc du dogfooding | « Le push n'a pas été effectué ; la configuration de llm_max_tokens et le passage de référence restent à valider. » | 3 | high | à juger |
+
+### D1 sur du réel — ce que le jour 2 montre vraiment
+
+**Quelle session a reçu une annexe `previous_summary` ?** Vérifié par
+`input_hash` (reconstitution de l'entrée avec et sans annexe, hash identique à
+celui de l'événement émis) :
+
+| session | annexe pendant le run v2 | pourquoi |
+| --- | --- | --- |
+| les 6 régénérations du 05 | **aucune** | `GET /context?at=<fin>` rend le résumé **v1 de la session elle-même** (même instant) ; `previous_summary_annex` l'écarte (même id) sans repli sur le précédent |
+| `a0aacd1f` (06) | aucune | première de sa journée locale |
+| `eef4956b` (06) | **oui** : `a0aacd1f` v2 | seule session enchaînée résumée avec annexe |
+
+Conséquence : **`1e420dda` v2 n'est pas un test de D1.** Son `open` v2
+(« commits non poussés ; divergence list/run documentée mais non résolue ») est
+juste et réévalué sur la session — mais produit **sans** annexe, là où le v1
+(« PR #28 et migration restent à vérifier ») recopiait celle de work-24. Les
+deux ne se comparent pas : l'entrée diffère.
+
+**Le seul vrai cas D1 du jour, `eef4956b`, échoue.** Annexe = `open` de
+`a0aacd1f` : « Le push n'a pas été observé ; la configuration de
+`llm_max_tokens` et le passage de référence restent à valider. » Sortie v2 :
+« Le push n'a pas été effectué ; la configuration de `llm_max_tokens` et le
+passage de référence restent à valider. » — recopie à un mot près. La vue de
+la session montrait pourtant autre chose : `session_summary_v2.md` créé,
+`docs/dogfooding.md`, la spec et `TODOS.md` modifiés, aucun commit. Un `open`
+réévalué aurait dit « prompt v2 écrit, ni mesuré ni commité ». Circonstance
+atténuante : rien dans la vue ne montre les deux points précédents *traités*
+(`config.toml` et les sorties d'`eval` vivent hors de l'arbre observé), donc
+la consigne « si traité, ne le répète pas » n'avait pas prise — mais la
+consigne « réévalue sur les faits de cette session » n'a pas été suivie. **D1
+n'est pas réglé par la v2 seule** ; un cas, à confirmer au jour 3 sur d'autres
+enchaînements.
+
+### D3 — l'annexe `agent_session` porte la demande initiale, pas l'état
+
+« L'état de la PR #28 … reste à vérifier » apparaît dans le `open` de quatre
+sessions du 05 (`8af930d9`, `eadb7573`, `58874e67`, `d9877899`), **sans**
+annexe `previous_summary`. Source : l'annexe `agent_session`, dont le `summary`
+est le **premier prompt** de la session d'agent (« … Peux-tu vérifier : 1. État
+git : la PR #28 … est-elle mergée ? … »), attachée à chaque session de travail
+qui la chevauche (16:01 → 21:30 UTC, toute la soirée). Le modèle lit une
+question posée à 18:00 comme un point encore ouvert à 22:00. Ce n'est pas D1
+(pas de recopie de `open`), c'est le même mécanisme un cran plus haut : une
+annexe sans consigne d'usage. Candidat pour une **v3** du prompt (« la demande
+initiale de l'agent n'est pas ce qui reste ouvert »), à mesurer sur le corpus —
+qui, lui, porte des annexes `agent_session`.
+
+### Observation Core — des commits postérieurs à la session dans sa vue
+
+`eef4956b` (close à 02:24) porte dans `session.git.commits` le commit
+`1dc191e` (prompt v2), fait à 09:35 — sept heures après. Le modèle en a fait
+son `stopped_at` (« Après le commit 1dc191e (prompt v2) »), faux pour cette
+session. Rien à reprocher au modèle : l'entrée le disait. La reconstruction
+rattache les commits par tranches entre sessions closes : la **dernière session
+close de la journée absorbe tout commit postérieur** tant qu'une nouvelle ne
+se ferme pas (`a0aacd1f` porte les cinq commits précédents, `eef4956b` les
+cinq suivants dont `1dc191e`). Core est gelé ;
+c'est un correctif (pas un ajout), à décider séparément — à consigner dans
+`core/TODOS.md` si confirmé sur une autre session.
+
+### Suite
+
+Jour 3 : `run --once` sur les sessions du jour ; D1 à confirmer sur les
+enchaînements de la journée (toutes auront une annexe, aucune n'ayant de résumé
+antérieur) ; jugements de la colonne « à juger » ci-dessus. Corpus : geler
+`1e420dda` et `eef4956b` avec annexe (`intelligence/TODOS.md`, piège de capture).
