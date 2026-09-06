@@ -3,7 +3,7 @@
     pulse-intel list [--date YYYY-MM-DD] [--json]
     pulse-intel summarize <id> [--date YYYY-MM-DD] [--dry-run] --fake FICHIER
     pulse-intel run [--once] --fake FICHIER
-    pulse-intel show <id>|latest [--md]
+    pulse-intel show <id>|latest [--all] [--md|--json]
 
 Le modèle est choisi par ``llm_provider`` dans la configuration — vide par
 défaut, parce que le choix du modèle est une décision écrite. ``--fake
@@ -79,9 +79,13 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--once", action="store_true", help="un seul passage (sinon un passage toutes les tick_minutes)")
     run.add_argument("--fake", type=Path, default=None, help=fake_help)
 
-    show = commands.add_parser("show", help="afficher un résumé")
-    show.add_argument("target", help="identifiant de session, ou « latest »")
+    show = commands.add_parser("show", help="afficher le dernier résumé d'une session")
+    show.add_argument("target", help="identifiant de session (un préfixe suffit), ou « latest »")
+    show.add_argument(
+        "--all", action="store_true", help="tous les résumés coexistants de la session, du plus ancien au plus récent"
+    )
     show.add_argument("--md", action="store_true", help="la reprise seule, en trois lignes")
+    show.add_argument("--json", action="store_true", help="l'événement complet, en JSON")
 
     ev = commands.add_parser("eval", help="passer le modèle courant sur le corpus gelé")
     ev.add_argument("--provider", default=None, help="remplace llm_provider pour ce passage")
@@ -285,6 +289,109 @@ def _reprise_markdown(reprise: dict[str, Any]) -> str:
     return "\n".join(str(reprise.get(key, "—")) for key in ("doing", "stopped_at", "open"))
 
 
+def _local_stamp(value: Any, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    if not isinstance(value, str) or not value:
+        return "—"
+    try:
+        return datetime.fromisoformat(value).astimezone().strftime(fmt)
+    except ValueError:
+        return value
+
+
+def _card(
+    details: dict[str, Any],
+    *,
+    previous_summary: dict[str, Any] | None,
+    previous_known: bool,
+) -> str:
+    """Un résumé en fiche : la reprise, ce qui la qualifie, et le ``open``
+    reçu en annexe juste sous le ``open`` produit — D1 se juge d'un coup d'œil.
+
+    ``details`` est soit ``event["details"]`` de la copie locale, soit le
+    ``last_session_summary`` de Core (moins de champs : « — » là où il manque).
+    """
+    reprise = details.get("reprise") or {}
+    structured = details.get("structured") or {}
+    session_id = details.get("session_id") or details.get("id") or "—"
+    label = details.get("session_label") or details.get("label") or "—"
+    started = _local_stamp(details.get("session_started_at"))
+    ended = _local_stamp(details.get("session_ended_at"), "%H:%M")
+    confidence = structured.get("confidence") or details.get("confidence") or "—"
+    central = structured.get("central_files")
+
+    lines = [
+        f"session         {session_id}  {label}  {started}–{ended}",
+        f"résumé          {details.get('prompt_version') or '—'}  {details.get('model_id') or '—'}"
+        f"  généré {_local_stamp(details.get('generated_at'))}",
+        f"confidence      {confidence}",
+        f"doing           {reprise.get('doing', '—')}",
+        f"stopped_at      {reprise.get('stopped_at', '—')}",
+        f"open            {reprise.get('open', '—')}",
+    ]
+    if not previous_known:
+        lines.append("  ↳ reçu        (annexe previous_summary inconnue : résumé antérieur à son enregistrement)")
+    elif previous_summary is None:
+        lines.append("  ↳ reçu        (aucune annexe previous_summary)")
+    else:
+        received = (previous_summary.get("reprise") or {}).get("open", "—")
+        lines.append(
+            f"  ↳ reçu        {received}"
+            f"  [previous_summary {previous_summary.get('id') or '—'} {previous_summary.get('label') or ''}]".rstrip()
+        )
+    if isinstance(central, list):
+        lines.append(f"central_files   {', '.join(central) if central else '[]'}")
+    else:
+        lines.append("central_files   —")
+    return "\n".join(lines)
+
+
+def _resolve_target(state: JobState, target: str) -> tuple[str | None, list[str]]:
+    """L'identifiant complet visé par ``target`` (exact ou préfixe), ou les
+    candidats si le préfixe est ambigu."""
+    known = state.session_ids()
+    if target in known:
+        return target, []
+    matches = [session_id for session_id in known if session_id.startswith(target)]
+    if len(matches) == 1:
+        return matches[0], []
+    return None, matches
+
+
+def _print_entries(args: argparse.Namespace, entries: list[dict[str, Any]]) -> None:
+    if args.json:
+        events = [entry["event"] for entry in entries]
+        print(json.dumps(events if args.all else events[-1], ensure_ascii=False, indent=2, sort_keys=True))
+        return
+    selected = entries if args.all else entries[-1:]
+    blocks = []
+    for entry in selected:
+        details = entry["event"].get("details", {})
+        if args.md:
+            blocks.append(_reprise_markdown(details.get("reprise", {})))
+        else:
+            blocks.append(
+                _card(
+                    details,
+                    previous_summary=entry.get("previous_summary"),
+                    previous_known="previous_summary" in entry,
+                )
+            )
+    if args.all and not args.md:
+        session_id = entries[-1]["event"].get("details", {}).get("session_id", "?")
+        print(f"{len(entries)} résumé(s) pour {session_id}, du plus ancien au plus récent\n")
+    print("\n\n".join(blocks))
+
+
+def _print_core_summary(args: argparse.Namespace, summary: dict[str, Any]) -> None:
+    if args.json:
+        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+    elif args.md:
+        print(_reprise_markdown(summary.get("reprise", {})))
+    else:
+        # Core ne conserve pas l'annexe : on ne sait pas ce que le modèle a reçu.
+        print(_card(summary, previous_summary=None, previous_known=False))
+
+
 def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state: JobState) -> int:
     if args.target == "latest":
         # Core est la vérité : le dernier résumé qu'il connaît, quel que soit
@@ -293,27 +400,38 @@ def run_show(args: argparse.Namespace, config: Config, client: CoreClient, state
         if not isinstance(latest, dict):
             print("aucun résumé de session dans Core", file=sys.stderr)
             return EXIT_USAGE
-        if args.md:
-            print(_reprise_markdown(latest.get("reprise", {})))
-        else:
-            print(json.dumps(latest, ensure_ascii=False, indent=2, sort_keys=True))
+        if args.md or args.json or not args.all:
+            # Compatibilité : `show latest` sans option rend l'événement Core en JSON.
+            if args.md:
+                print(_reprise_markdown(latest.get("reprise", {})))
+            else:
+                print(json.dumps(latest, ensure_ascii=False, indent=2, sort_keys=True))
+            return EXIT_OK
+        entries = state.summaries_for(str(latest.get("id")))
+        if not entries:
+            _print_core_summary(args, latest)
+            return EXIT_OK
+        _print_entries(args, entries)
         return EXIT_OK
 
-    events = state.events_for(args.target)
-    if events:
-        event = events[-1]
-        reprise = event.get("details", {}).get("reprise", {})
-    else:
-        latest = client.get_context().get("last_session_summary")
-        if not isinstance(latest, dict) or latest.get("id") != args.target:
-            print(f"aucun résumé connu pour la session {args.target}", file=sys.stderr)
-            return EXIT_USAGE
-        event = latest
-        reprise = latest.get("reprise", {})
-    if args.md:
-        print(_reprise_markdown(reprise))
-    else:
-        print(json.dumps(event, ensure_ascii=False, indent=2, sort_keys=True))
+    session_id, ambiguous = _resolve_target(state, args.target)
+    if ambiguous:
+        print(
+            f"préfixe ambigu : {args.target} désigne {len(ambiguous)} sessions "
+            f"({', '.join(ambiguous)})",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    if session_id is not None:
+        _print_entries(args, state.summaries_for(session_id))
+        return EXIT_OK
+
+    latest = client.get_context().get("last_session_summary")
+    latest_id = str(latest.get("id", "")) if isinstance(latest, dict) else ""
+    if not latest_id or not latest_id.startswith(args.target):
+        print(f"aucun résumé connu pour la session {args.target}", file=sys.stderr)
+        return EXIT_USAGE
+    _print_core_summary(args, latest)
     return EXIT_OK
 
 

@@ -96,14 +96,23 @@ class JobState:
         model_id: str,
         at: str,
         event: dict[str, Any],
+        previous_summary: dict[str, Any] | None = None,
     ) -> None:
-        """Gèle le payload validé avant le POST. Sur disque avant tout envoi."""
+        """Gèle le payload validé avant le POST. Sur disque avant tout envoi.
+
+        ``previous_summary`` est l'annexe telle que le modèle l'a reçue (id,
+        label, reprise du résumé précédent), ou ``None`` s'il n'en a pas eu.
+        Elle n'entre pas dans l'événement — Core ne la connaît que par
+        ``input_hash`` — mais ``show`` en a besoin pour mettre le ``open``
+        produit en regard du ``open`` reçu (défaut D1, `docs/dogfooding.md`).
+        """
         self.pending[event_id] = {
             "session_id": session_id,
             "prompt_version": prompt_version,
             "model_id": model_id,
             "at": at,
             "event": event,
+            "previous_summary": previous_summary,
         }
         self.save()
 
@@ -134,20 +143,39 @@ class JobState:
             # Copie locale de ce qui a été émis : `show <id>` lit ici, Core
             # reste la vérité (`show latest` lit /context).
             entry["event"] = event
+        pending = self.pending.pop(event_id, None)
+        if pending is not None and "previous_summary" in pending:
+            # L'annexe suit le payload gelé, y compris sur un POST rejoué.
+            entry["previous_summary"] = pending["previous_summary"]
         self.emitted[event_id] = entry
-        self.pending.pop(event_id, None)
         self.failures.pop(session_id, None)
         self.save()
 
-    def events_for(self, session_id: str) -> list[dict[str, Any]]:
-        """Les événements émis pour une session, du plus ancien au plus récent."""
+    def summaries_for(self, session_id: str) -> list[dict[str, Any]]:
+        """Les entrées émises pour une session (événement et annexe), du plus
+        ancien au plus récent. Une entrée sans clé ``previous_summary`` date
+        d'avant l'enregistrement de l'annexe : « inconnue », pas « aucune »."""
         entries = [
             entry
             for entry in self.emitted.values()
             if entry.get("session_id") == session_id and isinstance(entry.get("event"), dict)
         ]
         entries.sort(key=lambda entry: str(entry.get("at", "")))
-        return [entry["event"] for entry in entries]
+        return entries
+
+    def events_for(self, session_id: str) -> list[dict[str, Any]]:
+        """Les événements émis pour une session, du plus ancien au plus récent."""
+        return [entry["event"] for entry in self.summaries_for(session_id)]
+
+    def session_ids(self) -> list[str]:
+        """Les sessions dont au moins un événement émis est conservé ici."""
+        return sorted(
+            {
+                str(entry["session_id"])
+                for entry in self.emitted.values()
+                if entry.get("session_id") and isinstance(entry.get("event"), dict)
+            }
+        )
 
     def latest_event(self) -> dict[str, Any] | None:
         entries = [

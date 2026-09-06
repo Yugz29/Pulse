@@ -173,6 +173,45 @@ incrémentale vers 100k.
 **Priority:** P4 (veille)
 **Depends on:** Aucun — item sentinelle, ne pas implémenter
 
+## Hors gel
+
+Observations du dogfooding (`docs/dogfooding.md`) qui touchent la
+reconstruction des sessions, donc le périmètre fonctionnel gelé (0.5.6). Parquées
+ici, par ordre de priorité, pas de correctif sans décision.
+
+### Fragmentation des sessions : `core/` détecté comme projet distinct de Pulse
+
+**What:** Dans le repo unique, `core/` est qualifié comme un projet à part
+(`core`) et non comme `Pulse` ; chaque bascule entre les deux coupe la session
+en cours. Le 2026-09-05 : 26 sessions reconstruites, 20 jugées « trop
+courtes ». Effet sur Intelligence : des sessions de 3 à 13 minutes qui ne
+racontent qu'un fragment du travail, et une annexe `previous_summary` qui
+remonte à un fragment plutôt qu'à la session précédente.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Décision sur le gel (changement de la qualification projet)
+
+### Une session ouverte par un commit ne voit pas ses fichiers
+
+**What:** Cas `eadb7573` (work-13 du 2026-09-05) : `core/CHANGELOG.md` et
+`core/VERSION` sont écrits à 21:02:04 et 21:02:14, rattachés à work-12 ; le
+commit 5d1f349 qui les contient tombe à 21:02:39 et **ouvre** work-13. La vue
+de work-13 porte le commit (hash + message) mais `files.modified = []`, donc
+le résumé rend `central_files: []`. L'événement `git_commit` porte
+`files_changed`, `insertions`, `deletions` dans `details_json`, mais pas les
+chemins.
+
+**Deux remèdes à peser :** enrichir l'événement à la source (le hook git émet
+la liste des chemins — donnée nouvelle dans un type existant, à confronter au
+gel) ; ou ne pas couper une session entre une rafale de `file_changed` et un
+`git_commit` qui la suit à moins d'une minute (reconstruction seulement, rien
+de nouveau dans la trace).
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Décision sur le gel
+
 ## Completed
 
 ### CI rouge : le test du verrou terminal assertait la vitesse du runner

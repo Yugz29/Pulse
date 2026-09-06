@@ -172,14 +172,33 @@ la nuit (`a0aacd1f` 00:26–00:39, `eef4956b` 01:29–02:24).
 
 | session | durée | `doing` (résumé) | `open` v2 | cf | conf | jugement |
 | --- | --- | --- | --- | --- | --- | --- |
-| `8af930d9` work-2 (05) | 17 min | état des lieux post-migration | « L'état de la PR #28 et la branche courante n'ont pas été confirmés. » | 0 | low | à juger |
-| `2808ac8a` work-3 (05) | 13 min | watcher + fichiers privés | « Les modifications sur file_watcher.py et private_files.py ne sont pas committées ni testées. » | 4 | medium | à juger |
-| `eadb7573` work-13 (05) | 12 min | doc et versions Core 0.5.6 | « Le commit n'a pas été poussé ; l'état de la PR #28 reste à vérifier. » | 0 | medium | à juger |
-| `58874e67` work-20 (05) | 3 min | watcher, privés, Swift | « Les modifications ne sont pas committées. L'état de la PR #28 et la branche courante n'ont pas été vérifiés. » | 5 | medium | à juger |
-| `d9877899` work-24 (05) | 12 min | tests + horloge de la CLI | « L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session. » | 0 | medium | à juger |
-| `1e420dda` work-26 (05) | 88 min | couche LLMProvider | « Les commits locaux ne sont pas poussés. La divergence list/run sur le modèle est documentée mais non résolue. » | 0 | medium | à juger |
-| `a0aacd1f` work-2 (06) | 13 min | corpus gelé, eval, MLXProvider | « Le push n'a pas été observé ; la configuration de llm_max_tokens et le passage de référence restent à valider. » | 0 | medium | à juger |
-| `eef4956b` work-3 (06) | 54 min | garde d'entrée, doc du dogfooding | « Le push n'a pas été effectué ; la configuration de llm_max_tokens et le passage de référence restent à valider. » | 3 | high | à juger |
+| `8af930d9` work-2 (05) | 17 min | état des lieux post-migration | « L'état de la PR #28 et la branche courante n'ont pas été confirmés. » | 0 | low | **à moitié** — `open` = D3 |
+| `2808ac8a` work-3 (05) | 13 min | watcher + fichiers privés | « Les modifications sur file_watcher.py et private_files.py ne sont pas committées ni testées. » | 4 | medium | **juste** |
+| `eadb7573` work-13 (05) | 12 min | doc et versions Core 0.5.6 | « Le commit n'a pas été poussé ; l'état de la PR #28 reste à vérifier. » | 0 | medium | **à moitié** — `open` = D3 |
+| `58874e67` work-20 (05) | 3 min | watcher, privés, Swift | « Les modifications ne sont pas committées. L'état de la PR #28 et la branche courante n'ont pas été vérifiés. » | 5 | medium | **à moitié** — `open` = D3 |
+| `d9877899` work-24 (05) | 12 min | tests + horloge de la CLI | « L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session. » | 0 | medium | **à moitié** — `open` = D3 |
+| `1e420dda` work-26 (05) | 88 min | couche LLMProvider | « Les commits locaux ne sont pas poussés. La divergence list/run sur le modèle est documentée mais non résolue. » | 0 | medium | **juste** |
+| `a0aacd1f` work-2 (06) | 13 min | corpus gelé, eval, MLXProvider | « Le push n'a pas été observé ; la configuration de llm_max_tokens et le passage de référence restent à valider. » | 0 | medium | **à moitié** — `open` périmé : commits 7cfb797 et 1e3af23 lus comme points ouverts (**D4**, nouveau) |
+| `eef4956b` work-3 (06) | 54 min | garde d'entrée, doc du dogfooding | « Le push n'a pas été effectué ; la configuration de llm_max_tokens et le passage de référence restent à valider. » | 3 | high | **à moitié** — `open` = D1 |
+
+### Bilan des huit
+
+**2 justes, 6 à moitié, 0 faux.** `doing` et `stopped_at` justes **8/8** ;
+`open` juste **2/8**. Toutes les erreurs de `open` viennent d'une source lue
+sans consigne d'usage : D3 ×4 (annexe `agent_session`), D1 ×1
+(`previous_summary`), D4 ×1 (`git.commits`). D4, nouveau : sur `a0aacd1f`, les
+commits 7cfb797 (« passage de référence ») et 1e3af23 (« `llm_max_tokens` par
+défaut à 2048 ») sont dans la vue, et le modèle en fait deux points « restant
+à valider » — le `open` était périmé au moment où il a été écrit.
+
+Mesure : D3 et D4 sont mesurables sur le corpus, qui porte des annexes
+`agent_session` et des `git_commit` ; D1 seulement après gel des deux sessions
+à annexe (`1e420dda`, `eef4956b`, `intelligence/TODOS.md`).
+
+Décision : **v3 justifiée sur D3 + D4** ; D1 y sera intégré si le lot du 07 le
+confirme. **Aucune v3 activée avant lecture du lot launchd du 07 à 06:30** —
+un changement de `prompt_version` rendrait les huit candidates à nouveau et
+brouillerait le jugement de D1 sur les enchaînements du jour.
 
 ### D1 sur du réel — ce que le jour 2 montre vraiment
 
