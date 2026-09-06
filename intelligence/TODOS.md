@@ -24,18 +24,14 @@
 **Priority:** P3
 **Depends on:** Cas réel observé
 
-### Le corpus `eval/` ne porte aucune session à `previous_summary`
+### L'annexe `previous_summary` dépend du fuseau de la machine
 
-**What:** Aucune des dix sessions gelées de `intelligence/eval/corpus/` n'a d'annexe `previous_summary` : la consigne du prompt v2 sur la réévaluation de `open` (défaut D1, `docs/dogfooding.md`) n'est pas mesurable par `pulse-intel eval`, seulement à l'œil sur le dogfooding. Ajouter au corpus, **hors gel** (les dix d'origine restent la référence de l'étape 3), une session réelle portant `previous_summary`, avec son `context` tel que Core l'a servi.
+**What:** `previous_summary_annex` ne garde le résumé précédent que s'il s'est terminé le même jour **local** que la session (`ended.astimezone().date() == session.day`), et le jour local vient du fuseau du processus. La même vue Core donne donc une entrée différente — et un autre `input_hash` — selon le fuseau : sur la PR #53, le test de l'extension du corpus était vert à Paris et rouge sur le runner en UTC (`a0aacd1f` finit le 05 à 22:39 UTC, le 06 à Paris). En production le fuseau est celui du poste, stable ; c'est la reproductibilité de `eval` hors du poste qui est en cause. Contournement : le test rejoue le corpus dans son fuseau de capture (`TZ=Europe/Paris`). À trancher : fixer le fuseau de la règle (celui du `context.timezone` servi par Core, plutôt que celui du processus).
 
-**Session désignée (jour 2) :** `1e420dda8b6eee77` (work-26 du 2026-09-05, 88 min), le cas D1 du jour 1 — son résumé v1 recopiait le `open` de work-24. Second cas, plus net : `eef4956b36dd37ce` (work-3 du 2026-09-06), seule session du jour 2 résumée **avec** annexe, où la v2 recopie encore le `open` précédent.
-
-**Piège de capture :** dès qu'une session a un résumé, `GET /context?at=<sa fin>` rend **ce résumé-là** en `last_session_summary` (même instant), et `previous_summary_annex` l'écarte (même id) sans repli sur le précédent : l'annexe est vide. Vérifié par `input_hash` : la régénération v2 de `1e420dda` a tourné sans annexe. Pour geler l'entrée, prendre le contexte à un instant **strictement antérieur** à `last_activity_at` (ou avant tout résumé de la session), et le noter dans `eval/README.md`.
-
-**Déclencheur:** jour 2 du dogfooding (2026-09-06) — les deux sessions existent.
+**Déclencheur:** `eval` lancé hors du poste (CI, autre machine), ou tout changement de `previous_summary_annex`.
 
 **Effort:** S
-**Priority:** P2
+**Priority:** P3
 **Depends on:** —
 
 ### Deux résumés d'une même session coexistent après un changement de `prompt_version`
@@ -51,6 +47,14 @@
 **Depends on:** Service résident
 
 ## Completed
+
+### Le corpus `eval/` ne porte aucune session à `previous_summary`
+
+**What:** Aucune des dix sessions gelées n'avait d'annexe `previous_summary` : la consigne du prompt v2 sur la réévaluation de `open` (défaut D1) n'était mesurable qu'à l'œil sur le dogfooding.
+
+**Résolution:** Deux sessions réelles ajoutées à `eval/corpus/`, hors gel (champ `added = "2026-09-06"`, les dix d'origine restent la référence) : `1e420dda8b6eee77` (cas D1 du jour 1) et `eef4956b36dd37ce` (cas D1 du jour 2). Contexte pris à fin − 1 s pour contourner le piège de capture (le résumé de la session elle-même masque le précédent) ; règle notée dans `eval/README.md`. L'entrée de `eef4956b` reproduit l'`input_hash` du résumé v2 émis.
+
+**Completed:** 2026-09-06
 
 ### CI rouge : cinq tests de CLI dépendaient de la date du jour
 

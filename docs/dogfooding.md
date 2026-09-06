@@ -272,6 +272,32 @@ fenêtre de la session**. La reconstruction est juste, le `stopped_at` du modèl
   montrait aurait quand même été meilleur, mais la consigne « si traité, ne le
   répète pas » n'a rien à quoi s'accrocher quand le travail est invisible.
 
+### Suite du jour 2 (matin)
+
+**`1f931a43` (work-4 du 06, 09:44–10:47, résumée à 11:15 par un `run --once`
+manuel) : à moitié.** `doing` et `stopped_at` justes — **10/10 cumulé** sur
+ces deux champs. `open` réévalué sur la session, sans recopie du `open` de
+`eef4956b` reçu en annexe : **D1 réussi** sur ce cas, soit en réel 1 recopie
+(`eef4956b`) pour 1 réévaluation (`1f931a43`). Mais deux points faux dans le
+`open` :
+
+1. **« Les scripts launchd ont été créés puis supprimés ; leur statut final
+   est incertain. »** Trace : créés 10:03, supprimés 10:13:48 (6 s après le
+   commit b2fbfe3 sur `ship/intelligence-launchd`, retour sur `main` qui ne
+   les portait pas encore), recréés 10:21:23 (rebase, puis PR #50), modifiés
+   jusqu'à 10:28. En fin de session les scripts existent. La vue de Core rend
+   `files.created`, `files.modified`, `files.deleted` comme trois listes
+   cumulées, sans ordre ni heure par fichier : une bascule de branche y
+   ressemble à une suppression. Défaut de la vue, pas du modèle — famille D2,
+   consigné dans `core/TODOS.md` (état net par chemin en fin de session).
+2. **« Le push n'a pas été effectué. »** — **D5**, nouveau : présent dans
+   **9 `open` sur 9** (les huit du jour 2 et celle-ci), parce que Core
+   n'observe pas les pushs — `push_observed` n'est jamais vrai, aucun
+   événement `git_push` n'existe. Le modèle lit « push non observé » comme
+   « push non fait ». Remèdes : consigne v3 (« l'absence d'observation n'est
+   pas une absence de push ») ou, côté Core, un hook `pre-push` émettant
+   `git_push` — consigné dans `core/TODOS.md`.
+
 ### Suite
 
 Jour 3 : `run --once` sur les sessions du jour ; D1 à confirmer sur les

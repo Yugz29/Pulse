@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from dataclasses import dataclass
 
 import pytest
@@ -76,14 +78,52 @@ def _tiny_corpus(tmp_path):
 
 
 def test_the_frozen_corpus_has_exactly_ten_sessions():
+    """Dix d'origine gelées (sans `added`), plus les extensions datées."""
     entries = load_corpus(DEFAULT_CORPUS)
+    frozen = [e for e in entries if e.added is None]
 
-    assert len(entries) == 10
+    assert len(frozen) == 10
     # Chaque fixture porte de quoi reconstruire l'entrée hors ligne.
     for e in entries:
         assert e.session_raw["id"] == e.id
         assert isinstance(e.context, dict)
         assert e.why
+
+
+@pytest.fixture
+def capture_timezone():
+    """Le fuseau dans lequel le corpus a été capturé (Europe/Paris).
+
+    `previous_summary_annex` ne garde le résumé précédent que s'il s'est
+    terminé le même jour *local* que la session : `a0aacd1f` finit le 05 à
+    22:39 UTC, soit le 06 à Paris, jour de `eef4956b`. En UTC (CI), c'est la
+    veille et l'annexe disparaît — vu en rouge sur la PR #53. Le corpus se
+    rejoue donc dans son fuseau de capture (`intelligence/TODOS.md`).
+    """
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Paris"
+    time.tzset()
+    yield
+    if previous is None:
+        del os.environ["TZ"]
+    else:
+        os.environ["TZ"] = previous
+    time.tzset()
+
+
+def test_the_extension_entries_carry_a_previous_summary_annex(capture_timezone):
+    """Ajoutées le 2026-09-06 pour mesurer D1 (`docs/dogfooding.md`) : leur
+    contexte est pris à fin − 1 s, donc l'annexe est le résumé d'une *autre*
+    session, jamais le leur."""
+    from pulse_intelligence.session_input import build_model_input
+
+    extension = [e for e in load_corpus(DEFAULT_CORPUS) if e.added is not None]
+
+    assert {e.id for e in extension} == {"1e420dda8b6eee77", "eef4956b36dd37ce"}
+    for e in extension:
+        annex = build_model_input(e.view, e.context)["previous_summary"]
+        assert annex is not None and annex["id"] != e.id
+        assert annex["reprise"]["open"]
 
 
 def test_the_frozen_corpus_covers_several_projects_and_weeks():

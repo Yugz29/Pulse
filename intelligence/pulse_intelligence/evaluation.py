@@ -38,6 +38,9 @@ class CorpusEntry:
     why: str
     session_raw: dict[str, Any]
     context: dict[str, Any]
+    # Date d'ajout pour une entrée hors gel ; None pour les dix d'origine,
+    # qui restent la référence de l'étape 3.
+    added: str | None = None
 
     @property
     def view(self) -> SessionView:
@@ -68,6 +71,7 @@ def load_corpus(corpus_dir: Path = DEFAULT_CORPUS) -> list[CorpusEntry]:
                 why=raw["why"],
                 session_raw=raw["session_raw"],
                 context=raw["context"],
+                added=raw.get("added"),
             )
         )
     return entries

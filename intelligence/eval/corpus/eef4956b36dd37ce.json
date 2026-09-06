@@ -1,0 +1,456 @@
+{
+ "added": "2026-09-06",
+ "context": {
+  "current_session": {
+   "activity_count": 95,
+   "apps": [
+    {
+     "activations": 24,
+     "name": "Terminal"
+    },
+    {
+     "activations": 21,
+     "name": "Claude"
+    },
+    {
+     "activations": 7,
+     "name": "Safari"
+    },
+    {
+     "activations": 3,
+     "name": "Pie"
+    },
+    {
+     "activations": 2,
+     "name": "App Store"
+    }
+   ],
+   "duration_minutes": 54,
+   "files": {
+    "created": [
+     "docs/dogfooding.md",
+     "intelligence/pulse_intelligence/prompts/session_summary_v2.md",
+     "core/.python-version"
+    ],
+    "deleted": [
+     "core/.python-version",
+     "intelligence/pulse_intelligence/prompts/session_summary_v2.md"
+    ],
+    "modified": [
+     "docs/dogfooding.md",
+     "docs/specs/2026-09-05-llm-provider.md",
+     "intelligence/TODOS.md"
+    ],
+    "truncated": false
+   },
+   "git": {
+    "commits": [
+     {
+      "hash": "d255672",
+      "message": "feat(intelligence): MLXProvider refuse une entrée au-dessus de llm_max_input_tokens"
+     },
+     {
+      "hash": "fd65d52",
+      "message": "docs: décision — Qwen3.8-27B-4bit en local pour le dogfooding"
+     },
+     {
+      "hash": "e10d770",
+      "message": "docs(intelligence): guide d'usage — config, commandes, lecture d'un résumé"
+     },
+     {
+      "hash": "f77db5f",
+      "message": "docs: journal de dogfooding — jour 1"
+     },
+     {
+      "hash": "1dc191e",
+      "message": "feat(intelligence): prompt v2 — previous_summary réévalué, session sans fichier → []"
+     }
+    ],
+    "push_observed": false
+   },
+   "id": "1d497556cf2ab156",
+   "is_open": true,
+   "label": "work-3",
+   "last_activity_at": "2026-09-06T00:23:58.599265+00:00",
+   "projects": [
+    "Pulse"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "app_activated",
+    "file_changed",
+    "git_commit",
+    "terminal_finished"
+   ],
+   "source_event_ids": [
+    "007daf37-625b-4716-99a3-4f6d99be0432",
+    "00a4fe3b-6dc5-4967-9a94-1df35fe95e5d",
+    "03a908b2-69c9-4624-8d85-c1d7d18c0d31",
+    "05b58284-9dd4-41fd-9e77-255af58b388a",
+    "08b9a4f7-e417-4673-9c42-069d1da4983e",
+    "0a12d164-660f-4434-ad9f-47c16b52aa3f",
+    "0e57f9e1-76a4-4fff-8ef6-cc999fe2562c",
+    "0eab7e08-15ee-4e64-ade2-f9dcd8a12b1c",
+    "0eca97b7-1b7e-48bf-99f7-bf344a4cfcf2",
+    "12348006-196e-4ed2-a4ad-df29ce608136",
+    "160b839d-d738-4021-9690-89a740d89037",
+    "1991769a-3a19-4f93-a595-f85a500d3387",
+    "1b4f5a47-b458-485a-ab74-f69597714167",
+    "1c9254ad-d720-439b-a42e-b2ac202a4ea1",
+    "1cd9f6bb-7cba-458c-bb94-e101ce4b9bab",
+    "1dd554f8-368e-4b51-bee6-aa7120dab692",
+    "1e931ba8-7e5f-4ac1-b457-c6985b126cb5",
+    "20c4b873-e050-45ed-9ae1-8e6baff8581d",
+    "24ea5a54-00bd-4c3f-8868-d16a1c802c4a",
+    "35a85495-ec82-4ee4-817c-a1dd09adb48d",
+    "3a7c9cc7-d8cf-4b8b-9d89-7e1e1cc182e9",
+    "3dbc3dc6-8b99-4dfd-a1da-a9e44cecf1e6",
+    "3de496f3-0cb0-42ba-a31e-c13574478173",
+    "40d15b80-2131-41db-bf39-ab9d14d5f3c5",
+    "43934a8d-a09c-4804-8241-b819337fb13c",
+    "45eea8be-bb61-4e06-ac66-519d36aead84",
+    "4635aab7-dc1f-483c-ae57-03b62a06323b",
+    "493f335a-46ec-414d-a64a-f9cc03e419b9",
+    "49966200-4850-42ef-8835-07c89536a3fb",
+    "529648ef-795d-4689-9672-498e2714caed",
+    "56c64d0a-6660-4ef9-8f2d-c1224064b819",
+    "5742230b-fe37-4916-ba0f-c0611273866b",
+    "5808d48e-e80f-4a48-9771-663010be117a",
+    "5a28358e-f0eb-4b2f-8f46-7425b114efaa",
+    "5b0a5c44-156d-4781-a9d0-e119990d960f",
+    "5e25e339-0007-4c1a-b035-6dc95bfb7571",
+    "5e5b0588-76e6-4eea-89a8-aa1b995d4c06",
+    "5f682e3c-18c3-4cc6-b854-dbdc6d85a453",
+    "649cb5ac-489c-4944-9534-f882080becc7",
+    "650d7050-76f2-4a46-8001-2bdc019a05b8",
+    "6854485a-bf45-40e9-a821-96a479a5627d",
+    "68bce2e9-078f-4817-adde-4d76cae37d03",
+    "6a0ae7fe-a842-4167-9fe2-68988e29215a",
+    "6b744c10-87da-431c-9c33-5fc62d02f00a",
+    "70530ea7-64a9-4c85-a4df-3b1113b8daac",
+    "760b1249-f578-4ea9-8a7d-41b31c7bf4fb",
+    "77bbacc0-5f85-404b-a0ff-cde6802d757e",
+    "78cdf92a-c876-46b8-8f93-da2034106d99",
+    "7a5ce35c-039d-41ce-85d7-69b2f0d1a55f",
+    "7aa9670a-9300-49ea-84e4-a905149505fc",
+    "8698d234-4860-410e-b036-a7f03c4ecf4e",
+    "8734caca-23a3-41e0-bff5-4799d9c7fbda",
+    "87b6c84d-452c-4983-aa4f-e7c2023543db",
+    "89652e17-5b86-485d-b84c-71a680f1b655",
+    "8cb6d625-ebc1-4ae4-bc8f-90b9b10bd407",
+    "945311be-542b-4eef-92d6-271ec431f75f",
+    "9741cc31-3c01-4f4c-a1b6-5c477da6b4db",
+    "97d4f38f-e6c6-475b-83b8-04fab86f1d79",
+    "97dd25c9-af2b-4921-a119-eefa843dd189",
+    "9a84271c-ac1d-433d-a570-6698b66729c2",
+    "9c6c3202-213c-42f1-8adc-5e289b82310c",
+    "9cd68332-64e3-4cae-8853-775ccf88db5e",
+    "9d20b6e6-0dcd-44e3-8310-cdeec74f7e6d",
+    "9d5b2a28-88cc-45ed-8945-186503c175b4",
+    "a4d06281-7e7e-408c-9c4c-521e203e4c51",
+    "a4f1590f-10fa-47d3-a7ab-3a999823ef0b",
+    "a8b42f92-6fa1-4dc5-b92d-4de46668005a",
+    "ac72ca27-baf0-4c9a-8559-8b656b63f633",
+    "b22856a8-5f80-4cb4-a4e0-6bba279a991e",
+    "b6624afe-1d15-4d35-a2fc-5e7a569c77af",
+    "b6752317-caed-4809-8341-9f5fbe2eb857",
+    "b9fac7bc-bab8-48ca-9126-f8fa3ae0c323",
+    "bc166915-575c-465f-9bb4-103ba4fc42ab",
+    "bcc19d04-7440-4049-8f46-9655f206ea32",
+    "be7ed32a-9f36-47af-8c4e-82a88e36866c",
+    "c05eccf5-64cd-4f31-8b64-c4e81291ed83",
+    "c4cde896-7c9c-485f-a224-374303d131e1",
+    "d87dffec-84ff-46e0-a9fe-02eb5891d0c1",
+    "d9afc9ff-a804-40a0-92b8-0860dd37eb06",
+    "dab2c333-2305-4388-86e2-b30583262576",
+    "db009ecb-7da9-4a70-99b2-e23dd33bd2a8",
+    "dba5ce0d-f0c2-482b-82e7-3ff87ecff710",
+    "dbe2edd7-e611-4120-87de-2fd7e4e3aab0",
+    "dda94f02-d99f-4f25-8ae9-855a30f64724",
+    "e02510bb-d92c-415c-aec3-0e213c0c78cd",
+    "e1ea0722-5fc6-4342-90e9-63538c31c8ef",
+    "e45ccafb-096c-4e70-aa51-4734bc6c58d8",
+    "ead2b42c-4c11-4998-b57e-6bfec94c281d",
+    "eb6a885d-8fef-4742-99e3-ba6b9d18e314",
+    "eb751dc8-1e9a-4e3f-a861-60b8eb9e99cb",
+    "edcae0d4-548e-4b11-be92-c556d2811686",
+    "f0032b60-abda-4e7b-a96c-1f65e653275e",
+    "f188b7ed-22f3-4ac6-8cf7-947972a96c98",
+    "f5a22e0c-dcf2-485a-a413-33eb8937f538",
+    "fed5d5ae-6cc9-4c30-a932-6cd3de1751b2"
+   ],
+   "started_at": "2026-09-05T23:29:28+00:00",
+   "terminal": {
+    "errors": [],
+    "tests_failed": [],
+    "tests_passed": [],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-06T09:51:10.181110+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 173,
+   "agent": "claude-code",
+   "ended_at": "2026-09-05T21:30:23.451000+00:00",
+   "started_at": "2026-09-05T16:01:04.422000+00:00",
+   "summary": "Agent session (claude-code): Je reprends le projet Pulse après une pause (nouveau MacBook Pro M3 Max, migration terminée). J'ai besoin d'un état des lieux complet avant de continuer. Peux-tu vérifier : 1. État git : la PR #28 (exclusion .gitnexus/ du watcher, Core 0.3.1) est-elle mergée ? Y a-t-il une branc…",
+   "workspace": "/Users/Yugz/Projets/Pulse"
+  },
+  "last_session_summary": {
+   "age_minutes": 104,
+   "confidence": "medium",
+   "id": "a0aacd1f17723f56",
+   "label": "work-2",
+   "reprise": {
+    "doing": "Tu implémentes le module intelligence avec un corpus gelé, une commande eval et un provider MLX pour Qwen local.",
+    "open": "Le push n'a pas été observé ; la configuration de llm_max_tokens et le passage de référence restent à valider.",
+    "stopped_at": "Après le commit 1e893f6 (MLXProvider), sans push ni fichier modifié visible dans la vue."
+   },
+   "session_ended_at": "2026-09-05T22:39:31+00:00"
+  },
+  "recent_sessions": [
+   {
+    "duration_minutes": 13,
+    "ended_at": "2026-09-05T22:39:31+00:00",
+    "headline": {
+     "commits": 5,
+     "errors": 0,
+     "files_changed": 0,
+     "tests_failed": 0
+    },
+    "id": "a0aacd1f17723f56",
+    "label": "work-2",
+    "projects": [
+     "Pulse"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "11c96372-3c51-4104-9fb6-7f0d036b88ac",
+     "2d6ac14f-12b1-43e7-b627-11d52810961a",
+     "2f0d1d85-448e-4b0a-825f-f0ee8e4f26fb",
+     "3d3e3c3d-3418-44e1-bf85-8212c73227f9",
+     "4e123492-adcf-4ac3-b545-d5d184fff483",
+     "6deb43e7-5f03-4978-9f51-ecdae804abae",
+     "a2da3e14-3c7c-4438-a852-a2310bdf87ab",
+     "ba37ac93-b96d-4407-9eea-d85ad568fbe0",
+     "ddd41a15-d3c0-4293-a4e8-1e4f1074387e",
+     "fcbc2e21-7afc-48a6-841e-604be246c710"
+    ],
+    "started_at": "2026-09-05T22:26:11+00:00"
+   }
+  ],
+  "reference_at": "2026-09-06T00:23:59.836580+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": {
+    "branch": "ship/prompt-v2",
+    "dirty": true,
+    "last_commit": {
+     "hash": "1dc191e",
+     "message": "feat(intelligence): prompt v2 — previous_summary réévalué, session sans fichier → []",
+     "occurred_at": "2026-09-06T00:22:52+00:00"
+    }
+   },
+   "path": "/Users/Yugz/Projets/Pulse",
+   "project": "Pulse",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-09-06",
+ "id": "eef4956b36dd37ce",
+ "label": "work-3",
+ "session_raw": {
+  "activity_count": 99,
+  "apps": [
+   {
+    "activations": 24,
+    "name": "Terminal"
+   },
+   {
+    "activations": 21,
+    "name": "Claude"
+   },
+   {
+    "activations": 7,
+    "name": "Safari"
+   },
+   {
+    "activations": 3,
+    "name": "Pie"
+   },
+   {
+    "activations": 2,
+    "name": "App Store"
+   }
+  ],
+  "duration_minutes": 54,
+  "files": {
+   "created": [
+    "docs/dogfooding.md",
+    "intelligence/pulse_intelligence/prompts/session_summary_v2.md",
+    "core/.python-version"
+   ],
+   "deleted": [
+    "core/.python-version",
+    "intelligence/pulse_intelligence/prompts/session_summary_v2.md"
+   ],
+   "modified": [
+    "docs/dogfooding.md",
+    "docs/specs/2026-09-05-llm-provider.md",
+    "intelligence/TODOS.md"
+   ],
+   "truncated": false
+  },
+  "git": {
+   "commits": [
+    {
+     "hash": "d255672",
+     "message": "feat(intelligence): MLXProvider refuse une entrée au-dessus de llm_max_input_tokens"
+    },
+    {
+     "hash": "fd65d52",
+     "message": "docs: décision — Qwen3.8-27B-4bit en local pour le dogfooding"
+    },
+    {
+     "hash": "e10d770",
+     "message": "docs(intelligence): guide d'usage — config, commandes, lecture d'un résumé"
+    },
+    {
+     "hash": "f77db5f",
+     "message": "docs: journal de dogfooding — jour 1"
+    },
+    {
+     "hash": "1dc191e",
+     "message": "feat(intelligence): prompt v2 — previous_summary réévalué, session sans fichier → []"
+    }
+   ],
+   "push_observed": false
+  },
+  "id": "eef4956b36dd37ce",
+  "is_open": false,
+  "label": "work-3",
+  "last_activity_at": "2026-09-06T00:24:00.836580+00:00",
+  "projects": [
+   "Pulse"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "app_activated",
+   "file_changed",
+   "git_commit",
+   "terminal_finished"
+  ],
+  "source_event_ids": [
+   "007daf37-625b-4716-99a3-4f6d99be0432",
+   "00a4fe3b-6dc5-4967-9a94-1df35fe95e5d",
+   "03a908b2-69c9-4624-8d85-c1d7d18c0d31",
+   "05b58284-9dd4-41fd-9e77-255af58b388a",
+   "08b9a4f7-e417-4673-9c42-069d1da4983e",
+   "0a12d164-660f-4434-ad9f-47c16b52aa3f",
+   "0e57f9e1-76a4-4fff-8ef6-cc999fe2562c",
+   "0eab7e08-15ee-4e64-ade2-f9dcd8a12b1c",
+   "0eca97b7-1b7e-48bf-99f7-bf344a4cfcf2",
+   "12348006-196e-4ed2-a4ad-df29ce608136",
+   "160b839d-d738-4021-9690-89a740d89037",
+   "1991769a-3a19-4f93-a595-f85a500d3387",
+   "1b4f5a47-b458-485a-ab74-f69597714167",
+   "1c9254ad-d720-439b-a42e-b2ac202a4ea1",
+   "1cd9f6bb-7cba-458c-bb94-e101ce4b9bab",
+   "1dd554f8-368e-4b51-bee6-aa7120dab692",
+   "1e931ba8-7e5f-4ac1-b457-c6985b126cb5",
+   "20c4b873-e050-45ed-9ae1-8e6baff8581d",
+   "24ea5a54-00bd-4c3f-8868-d16a1c802c4a",
+   "28c41218-76ce-4f94-84e6-04929eb33c58",
+   "35a85495-ec82-4ee4-817c-a1dd09adb48d",
+   "375c8936-93fb-4a93-bb61-4dc9b93de0ac",
+   "3a7c9cc7-d8cf-4b8b-9d89-7e1e1cc182e9",
+   "3dbc3dc6-8b99-4dfd-a1da-a9e44cecf1e6",
+   "3de496f3-0cb0-42ba-a31e-c13574478173",
+   "40d15b80-2131-41db-bf39-ab9d14d5f3c5",
+   "43934a8d-a09c-4804-8241-b819337fb13c",
+   "45eea8be-bb61-4e06-ac66-519d36aead84",
+   "4635aab7-dc1f-483c-ae57-03b62a06323b",
+   "493f335a-46ec-414d-a64a-f9cc03e419b9",
+   "49966200-4850-42ef-8835-07c89536a3fb",
+   "529648ef-795d-4689-9672-498e2714caed",
+   "56c64d0a-6660-4ef9-8f2d-c1224064b819",
+   "5742230b-fe37-4916-ba0f-c0611273866b",
+   "5808d48e-e80f-4a48-9771-663010be117a",
+   "5a28358e-f0eb-4b2f-8f46-7425b114efaa",
+   "5b0a5c44-156d-4781-a9d0-e119990d960f",
+   "5e25e339-0007-4c1a-b035-6dc95bfb7571",
+   "5e5b0588-76e6-4eea-89a8-aa1b995d4c06",
+   "5f682e3c-18c3-4cc6-b854-dbdc6d85a453",
+   "61f86ff8-4332-4c09-8d38-7a64beaae6c9",
+   "649cb5ac-489c-4944-9534-f882080becc7",
+   "650d7050-76f2-4a46-8001-2bdc019a05b8",
+   "6854485a-bf45-40e9-a821-96a479a5627d",
+   "68bce2e9-078f-4817-adde-4d76cae37d03",
+   "6a0ae7fe-a842-4167-9fe2-68988e29215a",
+   "6b744c10-87da-431c-9c33-5fc62d02f00a",
+   "70530ea7-64a9-4c85-a4df-3b1113b8daac",
+   "760b1249-f578-4ea9-8a7d-41b31c7bf4fb",
+   "77bbacc0-5f85-404b-a0ff-cde6802d757e",
+   "78cdf92a-c876-46b8-8f93-da2034106d99",
+   "7a5ce35c-039d-41ce-85d7-69b2f0d1a55f",
+   "7aa9670a-9300-49ea-84e4-a905149505fc",
+   "824095c7-9fe1-4c68-8330-68618baa9e40",
+   "8698d234-4860-410e-b036-a7f03c4ecf4e",
+   "8734caca-23a3-41e0-bff5-4799d9c7fbda",
+   "87b6c84d-452c-4983-aa4f-e7c2023543db",
+   "89652e17-5b86-485d-b84c-71a680f1b655",
+   "8cb6d625-ebc1-4ae4-bc8f-90b9b10bd407",
+   "945311be-542b-4eef-92d6-271ec431f75f",
+   "9741cc31-3c01-4f4c-a1b6-5c477da6b4db",
+   "97d4f38f-e6c6-475b-83b8-04fab86f1d79",
+   "97dd25c9-af2b-4921-a119-eefa843dd189",
+   "9a84271c-ac1d-433d-a570-6698b66729c2",
+   "9c6c3202-213c-42f1-8adc-5e289b82310c",
+   "9cd68332-64e3-4cae-8853-775ccf88db5e",
+   "9d20b6e6-0dcd-44e3-8310-cdeec74f7e6d",
+   "9d5b2a28-88cc-45ed-8945-186503c175b4",
+   "a4d06281-7e7e-408c-9c4c-521e203e4c51",
+   "a4f1590f-10fa-47d3-a7ab-3a999823ef0b",
+   "a8b42f92-6fa1-4dc5-b92d-4de46668005a",
+   "ac72ca27-baf0-4c9a-8559-8b656b63f633",
+   "b22856a8-5f80-4cb4-a4e0-6bba279a991e",
+   "b6624afe-1d15-4d35-a2fc-5e7a569c77af",
+   "b6752317-caed-4809-8341-9f5fbe2eb857",
+   "b9fac7bc-bab8-48ca-9126-f8fa3ae0c323",
+   "bc166915-575c-465f-9bb4-103ba4fc42ab",
+   "bcc19d04-7440-4049-8f46-9655f206ea32",
+   "be7ed32a-9f36-47af-8c4e-82a88e36866c",
+   "c05eccf5-64cd-4f31-8b64-c4e81291ed83",
+   "c4cde896-7c9c-485f-a224-374303d131e1",
+   "d87dffec-84ff-46e0-a9fe-02eb5891d0c1",
+   "d9afc9ff-a804-40a0-92b8-0860dd37eb06",
+   "dab2c333-2305-4388-86e2-b30583262576",
+   "db009ecb-7da9-4a70-99b2-e23dd33bd2a8",
+   "dba5ce0d-f0c2-482b-82e7-3ff87ecff710",
+   "dbe2edd7-e611-4120-87de-2fd7e4e3aab0",
+   "dda94f02-d99f-4f25-8ae9-855a30f64724",
+   "e02510bb-d92c-415c-aec3-0e213c0c78cd",
+   "e1ea0722-5fc6-4342-90e9-63538c31c8ef",
+   "e45ccafb-096c-4e70-aa51-4734bc6c58d8",
+   "ead2b42c-4c11-4998-b57e-6bfec94c281d",
+   "eb6a885d-8fef-4742-99e3-ba6b9d18e314",
+   "eb751dc8-1e9a-4e3f-a861-60b8eb9e99cb",
+   "edcae0d4-548e-4b11-be92-c556d2811686",
+   "f0032b60-abda-4e7b-a96c-1f65e653275e",
+   "f188b7ed-22f3-4ac6-8cf7-947972a96c98",
+   "f5a22e0c-dcf2-485a-a413-33eb8937f538",
+   "fed5d5ae-6cc9-4c30-a932-6cd3de1751b2"
+  ],
+  "started_at": "2026-09-05T23:29:28+00:00",
+  "terminal": {
+   "errors": [],
+   "tests_failed": [],
+   "tests_passed": [],
+   "truncated": false
+  }
+ },
+ "why": "Cas D1 du jour 2 (work-3 du 2026-09-06, 54 min) : seule session du jour résumée avec annexe (a0aacd1f), dont la v2 recopie encore le open. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s ; reproduit l'input_hash du résumé v2 émis."
+}
