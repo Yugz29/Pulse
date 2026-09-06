@@ -121,7 +121,10 @@ class OutboxWorker:
         http_status: int | None,
         response_body: str | None,
     ) -> str:
-        if pending.attempts + 1 >= MAX_DELIVERY_ATTEMPTS:
+        # Seules les réponses HTTP réessayables comptent vers le plafond :
+        # `http_attempts`, pas `attempts`, que les déconnexions font aussi
+        # avancer pour le backoff (audit 2026-09-06, défaut 6).
+        if pending.http_attempts + 1 >= MAX_DELIVERY_ATTEMPTS:
             self.outbox.move_to_dead_letter(
                 pending,
                 error=f"retry limit reached ({MAX_DELIVERY_ATTEMPTS}): {error}",
@@ -130,7 +133,7 @@ class OutboxWorker:
                 failed_at=attempted_at,
             )
             return "dead-letter"
-        self._retry(pending, attempted_at, error)
+        self._retry(pending, attempted_at, error, counts_toward_limit=True)
         return "retry"
 
     def _retry(
@@ -138,6 +141,8 @@ class OutboxWorker:
         pending: PendingEvent,
         attempted_at: datetime,
         error: str,
+        *,
+        counts_toward_limit: bool = False,
     ) -> None:
         delay = min(2 ** pending.attempts, MAX_BACKOFF_SECONDS)
         self.outbox.mark_retry(
@@ -145,6 +150,7 @@ class OutboxWorker:
             attempted_at=attempted_at,
             next_attempt_at=attempted_at + timedelta(seconds=delay),
             error=error,
+            counts_toward_limit=counts_toward_limit,
         )
 
     def _dead_letter(
