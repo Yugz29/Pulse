@@ -142,3 +142,30 @@ def test_state_file_round_trips_the_frozen_payload(tmp_path):
     assert reloaded.pending == state.pending
     assert reloaded.pending_event("evt") == {"event_id": "evt"}
     assert reloaded.pending_event("other") is None
+
+
+def test_an_existing_state_without_origin_survives_a_load_and_save(tmp_path):
+    """Contrôle (audit 2026-09-06, défaut 3) : un state.json d'avant la clé
+    `origin` est rechargé puis resauvegardé sans rien perdre ni inventer."""
+    path = tmp_path / "state" / "state.json"
+    path.parent.mkdir(parents=True)
+    before = {
+        "emitted": {
+            "e1": {
+                "session_id": "aaaaaaaaaaaaaaaa", "prompt_version": "v1",
+                "model_id": "fake/summarizer", "at": "2026-09-02T16:00:00+00:00",
+                "event": {"event_id": "e1", "details": {"reprise": {"doing": "x"}}},
+                "previous_summary": None,
+            }
+        },
+        "pending": {"e2": {"session_id": "bbbbbbbbbbbbbbbb", "event": {"event_id": "e2"}}},
+        "failures": {"cccccccccccccccc": 2},
+        "failed": {"dddddddddddddddd": "tentative 3: pas du json"},
+    }
+    path.write_text(json.dumps(before), encoding="utf-8")
+
+    state = JobState.load(path)
+    state.save()
+
+    assert json.loads(path.read_text(encoding="utf-8")) == before
+    assert "origin" not in JobState.load(path).emitted["e1"]

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import threading
@@ -140,6 +141,15 @@ class FakeCore:
     refused: list[dict[str, Any]] = field(default_factory=list)
     requested_dates: list[str] = field(default_factory=list)
     seen_event_ids: set[str] = field(default_factory=set)
+    # Même contrat que le vrai Core : un event_id connu avec un contenu
+    # différent est un conflit (409), pas un doublon. Sans importer ni
+    # recopier la formule d'empreinte de Core (principe 1 : rien de Core,
+    # tests compris) : le payload complet est mémorisé par event_id et
+    # comparé en égalité profonde, tout sauf `event_id` — au moins aussi
+    # strict que l'empreinte de Core, qui couvre tout le payload. Le vrai
+    # contrat est prouvé par le test d'intégration contre Core réel.
+    payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
+    stored: dict[str, dict[str, Any]] = field(default_factory=dict)
     context_requests: int = 0
     url: str = ""
 
@@ -208,15 +218,60 @@ class FakeCore:
                 for key in ("doing", "stopped_at", "open"):
                     if not isinstance(reprise.get(key), str) or not reprise[key].strip():
                         return jsonify({"error": {"code": "invalid_event", "field": f"details.reprise.{key}"}}), 400
-            duplicate = payload["event_id"] in self.seen_event_ids
-            self.seen_event_ids.add(payload["event_id"])
+            event_id = payload["event_id"]
+            content = _content(payload)
+            duplicate = event_id in self.seen_event_ids
+            if duplicate and self.payloads[event_id] != content:
+                self.posts.append(payload)
+                return (
+                    jsonify(
+                        {
+                            "accepted": False,
+                            "event_id": event_id,
+                            "error": {"code": "event_id_conflict", "field": "event_id"},
+                        }
+                    ),
+                    409,
+                )
+            self.seen_event_ids.add(event_id)
+            self.payloads[event_id] = content
             self.posts.append(payload)
+            if not duplicate:
+                self.stored[event_id] = {
+                    "id": len(self.stored) + 1,
+                    "event_id": event_id,
+                    "schema_version": payload.get("schema_version"),
+                    "type": payload["type"],
+                    "occurred_at": payload["occurred_at"],
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "producer": {
+                        "name": payload.get("producer", {}).get("name"),
+                        "version": payload.get("producer", {}).get("version"),
+                        "instance_id": payload.get("producer", {}).get("instance_id"),
+                    },
+                    "source": "intelligence",
+                    "summary": str(details.get("reprise", {}).get("doing", "")).splitlines()[0]
+                    if details.get("reprise") else "",
+                    "details": details,
+                }
             return (
-                jsonify({"accepted": True, "event_id": payload["event_id"], "duplicate": duplicate}),
+                jsonify({"accepted": True, "event_id": event_id, "duplicate": duplicate}),
                 200 if duplicate else 201,
             )
 
+        @app.get("/activities/<event_id>")
+        def activity(event_id: str):
+            stored = self.stored.get(event_id)
+            if stored is None:
+                return jsonify({"error": {"code": "unknown_event_id", "event_id": event_id}}), 404
+            return jsonify(stored)
+
         return app
+
+
+def _content(payload: dict[str, Any]) -> dict[str, Any]:
+    """Tout le payload sauf `event_id`, copié : la base de comparaison du 409."""
+    return copy.deepcopy({key: value for key, value in payload.items() if key != "event_id"})
 
 
 @pytest.fixture
