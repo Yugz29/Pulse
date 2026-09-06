@@ -35,11 +35,18 @@ de ce que tu sais.
 
 Entrée : `agent_session.summary` = « Peux-tu vérifier l'état de la PR #28 et
 si la branche est mergée ? », session d'agent ouverte à 18:00 ; la session
-courante (22:00) montre deux commits de documentation sur `core/CHANGELOG.md`,
-aucune commande git touchant la PR.
-`open` juste : « Rien d'identifiable en suspens après les deux commits de
-documentation. » — `open` faux : « L'état de la PR #28 reste à vérifier. »,
-c'est la demande de 18:00, pas un fait de la session.
+courante (22:00) montre un commit « docs: PR #28 mergée, CHANGELOG à jour »,
+puis `core/daemon_v2/routes.py` modifié sans commit et `pytest` en échec dans
+le terminal.
+`open` juste : « La modification de routes.py n'est pas committée et la suite
+échoue. » — un fait de la session. `open` faux : « L'état de la PR #28 reste
+à vérifier. », c'est la demande de 18:00, close par le commit.
+
+Un `open` vide n'est acceptable que si **aucun fait de la session** ne suggère
+un reste — fichier modifié sans commit, test rouge, erreur de commande. N'y
+écris jamais une formule de vide (« rien d'identifiable », « aucun point
+ouvert ») : cherche d'abord le reste dans les faits ; s'il n'y en a aucun,
+dis en une phrase sur quoi la session s'achève.
 
 ### Un commit est un fait accompli
 
@@ -75,8 +82,10 @@ Entrée : trois commits, `push_observed: false`, suite de tests verte.
 sur la session, sans ordre ni heure. Un chemin présent **à la fois** dans
 `created` et `deleted` est d'état inconnu : le plus souvent une bascule de
 branche, pas une suppression. N'affirme rien sur lui dans `open` — ni
-« supprimé », ni « statut incertain ». Ne le mets dans `central_files` que
-s'il figure **aussi** dans `modified`.
+« supprimé », ni « statut incertain ». Cette incertitude ne s'écrit **nulle
+part** dans la sortie — ni dans `open`, ni ailleurs ; on l'ignore
+silencieusement. Ne le mets dans `central_files` que s'il figure **aussi**
+dans `modified`.
 
 Entrée : `intelligence/scripts/install_run_launchd.sh` dans `created`,
 `deleted` et `modified` ; `intelligence/scripts/pulse_intel_run.sh` dans
