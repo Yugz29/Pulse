@@ -24,6 +24,16 @@
 **Priority:** P3
 **Depends on:** Cas réel observé
 
+### L'annexe `previous_summary` dépend du fuseau de la machine
+
+**What:** `previous_summary_annex` ne garde le résumé précédent que s'il s'est terminé le même jour **local** que la session (`ended.astimezone().date() == session.day`), et le jour local vient du fuseau du processus. La même vue Core donne donc une entrée différente — et un autre `input_hash` — selon le fuseau : sur la PR #53, le test de l'extension du corpus était vert à Paris et rouge sur le runner en UTC (`a0aacd1f` finit le 05 à 22:39 UTC, le 06 à Paris). En production le fuseau est celui du poste, stable ; c'est la reproductibilité de `eval` hors du poste qui est en cause. Contournement : le test rejoue le corpus dans son fuseau de capture (`TZ=Europe/Paris`). À trancher : fixer le fuseau de la règle (celui du `context.timezone` servi par Core, plutôt que celui du processus).
+
+**Déclencheur:** `eval` lancé hors du poste (CI, autre machine), ou tout changement de `previous_summary_annex`.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** —
+
 ### Deux résumés d'une même session coexistent après un changement de `prompt_version`
 
 **What:** `summary_event_id(session_id, prompt_version, model_id)` fait qu'un changement de prompt rend candidates à nouveau les sessions déjà résumées (jour 2 : six sessions du 2026-09-05 régénérées en v2, trace append-only, aucune collision). Deux événements `session_summary` valides décrivent alors la même session. Rien ne dit lequel **fait foi** : `show <id>` rend le dernier émis localement, Core sert le dernier en `last_session_summary`, l'annexe `previous_summary` d'une session suivante prend celui que Core sert. Conséquence déjà vue : une régénération ne reçoit pas d'annexe (son propre résumé antérieur masque le précédent, voir l'entrée ci-dessus) — elle n'est donc pas comparable à l'original, l'entrée diffère.
