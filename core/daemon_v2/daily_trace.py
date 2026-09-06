@@ -36,6 +36,7 @@ from .analysis.timeline import (
     reconstruct_session_views,
 )
 from .git_context import parse_status_output
+from .runtime_config import reconstruction_timezone
 from .trace_store import TraceStore
 
 
@@ -853,7 +854,7 @@ def build_daily_trace(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build the day view; ``now`` is injectable so tests stay deterministic."""
-    zone = local_timezone or datetime.now().astimezone().tzinfo or timezone.utc
+    zone = local_timezone or reconstruction_timezone()
     reference_now = now if now is not None else datetime.now(zone)
     selected_day = day or reference_now.date()
     start = datetime.combine(selected_day, time.min, zone)
@@ -964,7 +965,7 @@ def build_available_days(
     *,
     now: datetime | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    zone = local_timezone or datetime.now().astimezone().tzinfo or timezone.utc
+    zone = local_timezone or reconstruction_timezone()
     today = (now or datetime.now(zone)).astimezone(zone).date()
     cache = _available_days_cache.setdefault(
         (store.database_path, str(zone)),
