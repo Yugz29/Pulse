@@ -120,6 +120,26 @@ class CoreClient:
             self._json(response, "/context/sessions"), "/context/sessions"
         )
 
+    def get_activity(self, event_id: str) -> dict[str, Any] | None:
+        """GET /activities/<event_id> : l'événement tel que Core l'a stocké,
+        ou ``None`` s'il ne le connaît pas (404).
+
+        Un Core injoignable lève ``CoreUnavailable`` comme pour ``/context`` ;
+        toute autre réponse est une ``CoreError``. Un Core antérieur à cette
+        route répond 404 : le chemin normal reprend, comme avant.
+        """
+        response = self._request("GET", f"/activities/{event_id}")
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+            raise CoreError(
+                f"/activities/{event_id}: {response.status_code} {response.text[:200]}"
+            )
+        body = self._json(response, "/activities")
+        if not isinstance(body, dict):
+            raise CoreError(f"/activities/{event_id}: réponse inexploitable")
+        return body
+
     def post_activity(self, payload: dict[str, Any]) -> PostResult:
         response = self._request("POST", "/activities", json=payload)
         body = self._json(response, "/activities") if response.content else {}
