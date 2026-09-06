@@ -32,6 +32,11 @@ def prompt_path_for(prompt_version: str) -> Path:
     return PROMPTS_DIR / f"session_summary_{prompt_version}.md"
 
 
+def prompt_version_of(prompt_path: Path) -> str:
+    """L'inverse : la version portée par le nom du fichier de prompt."""
+    return prompt_path.name.removeprefix("session_summary_").removesuffix(".md")
+
+
 @dataclass
 class ProviderSummarizer:
     """Enveloppe l'entrée sérialisée dans le prompt versionné, appelle le modèle.

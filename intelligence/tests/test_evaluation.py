@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import time
 from dataclasses import dataclass
 
 import pytest
@@ -88,27 +86,6 @@ def test_the_frozen_corpus_has_exactly_ten_sessions():
         assert e.session_raw["id"] == e.id
         assert isinstance(e.context, dict)
         assert e.why
-
-
-@pytest.fixture
-def capture_timezone():
-    """Le fuseau dans lequel le corpus a été capturé (Europe/Paris).
-
-    `previous_summary_annex` ne garde le résumé précédent que s'il s'est
-    terminé le même jour *local* que la session : `a0aacd1f` finit le 05 à
-    22:39 UTC, soit le 06 à Paris, jour de `eef4956b`. En UTC (CI), c'est la
-    veille et l'annexe disparaît — vu en rouge sur la PR #53. Le corpus se
-    rejoue donc dans son fuseau de capture (`intelligence/TODOS.md`).
-    """
-    previous = os.environ.get("TZ")
-    os.environ["TZ"] = "Europe/Paris"
-    time.tzset()
-    yield
-    if previous is None:
-        del os.environ["TZ"]
-    else:
-        os.environ["TZ"] = previous
-    time.tzset()
 
 
 def test_the_extension_entries_carry_a_previous_summary_annex(capture_timezone):

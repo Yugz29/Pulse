@@ -19,9 +19,15 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .provider_summarizer import ProviderSummarizer
+from .provider_summarizer import ProviderSummarizer, prompt_version_of
 from .selection import SessionView
-from .session_input import build_model_input, input_paths, serialize_input
+from .session_input import (
+    build_model_input,
+    input_paths,
+    input_references,
+    serialize_input,
+    uses_open_items,
+)
 from .session_summary import InvalidModelOutput, ParsedSummary, parse_model_output
 from .summarizer import SummarizerError
 
@@ -97,10 +103,14 @@ def evaluate(
     run_dir = out_dir / f"{provider_name}-{_sanitize(summarizer.model_id)}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # Le schéma de `open` suit le prompt, comme en production : l'entrée est
+    # référencée et la sortie validée au schéma v3 dès que le prompt l'attend.
+    referenced = uses_open_items(prompt_version_of(summarizer.prompt_path))
     outcomes: list[EvalOutcome] = []
     for entry in entries:
         session = entry.view
-        serialized = serialize_input(build_model_input(session, entry.context))
+        model_input = build_model_input(session, entry.context, references=referenced)
+        serialized = serialize_input(model_input)
 
         try:
             result = summarizer.complete(serialized)
@@ -115,7 +125,10 @@ def evaluate(
             continue
 
         try:
-            parsed = parse_model_output(result.text, input_paths(session))
+            parsed = parse_model_output(
+                result.text, input_paths(session),
+                references=input_references(model_input) if referenced else None,
+            )
             status, detail = "ok", None
         except InvalidModelOutput as exc:
             parsed, status, detail = None, "rejected", str(exc)
@@ -151,6 +164,10 @@ def _write_result(
     if parsed is not None:
         payload["reprise"] = parsed.reprise
         payload["structured"] = parsed.structured
+        if parsed.open_items is not None:
+            # Les points validés, texte compris : `eval` écrit hors de Core,
+            # c'est ici que les attentes annotées se comparent.
+            payload["open_items"] = parsed.open_items
     else:
         payload["detail"] = detail
         # La sortie brute rejetée aide à comprendre pourquoi le prompt a lâché.

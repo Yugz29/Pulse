@@ -22,10 +22,13 @@ from .config import Config
 from .core_client import CoreClient, CoreError, CoreUnavailable
 from .selection import SessionView, select_candidates
 from .session_input import (
+    InputReferences,
     build_model_input,
     input_hash,
     input_paths,
+    input_references,
     serialize_input,
+    uses_open_items,
 )
 from .state import JobState
 from .summarizer import (
@@ -41,6 +44,12 @@ MAX_INTENTS = 3
 MAX_CENTRAL_FILES = 5
 MAX_BLOCKERS = 3
 MAX_STRING_LENGTH = 300
+# Schéma `open` v3 : une liste de points, chacun d'une nature déclarée et
+# étayé par des références de l'entrée (`session_input.input_references`).
+MAX_OPEN_ITEMS = 5
+OPEN_KINDS = ("observed", "carried_over", "requested")
+OPEN_ITEM_KEYS = frozenset({"text", "kind", "evidence", "carried_from", "reason_kept"})
+EMPTY_OPEN_TEXT = "Aucun point ouvert étayé par les faits de la session."
 
 
 class InvalidModelOutput(ValueError):
@@ -57,6 +66,10 @@ _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 class ParsedSummary:
     reprise: dict[str, str]
     structured: dict[str, Any]
+    # Schéma v3 : les points ouverts tels que validés (texte, nature,
+    # preuves). `reprise["open"]` en est le rendu texte, seul format que Core
+    # accepte ; `None` pour une sortie au schéma d'origine.
+    open_items: list[dict[str, Any]] | None = None
 
 
 def _bounded_string(value: Any, *, name: str) -> str:
@@ -86,8 +99,155 @@ def _string_list(value: Any, *, name: str, limit: int) -> list[str]:
     return cleaned
 
 
-def parse_model_output(text: str, allowed_paths: set[str]) -> ParsedSummary:
-    """Valide le JSON du modèle. Tout écart est un rejet, jamais un rafistolage."""
+# --- `open` v3 : points référencés -------------------------------------------
+
+
+_TRAILING_CARRY_NOTE = re.compile(r"\s*\(repris\s*:[^()]*\)\s*$")
+# D5 : le push n'est pas observable par Core (`push_observed` n'est jamais
+# vrai, aucun événement `git_push`). Un point qui affirme qu'il n'a pas eu
+# lieu transforme un silence en fait ; « non observé » reste permis.
+_PUSH = re.compile(r"push|pouss", re.IGNORECASE)
+_ASSERTED_NOT_DONE = re.compile(
+    r"(?:pas|non|jamais)\s+(?:encore\s+)?(?:été\s+)?(?:effectué|fait|réalisé|poussé)"
+    r"|ne\s+sont\s+pas\s+pouss|n['’]est\s+pas\s+pouss|non\s+pouss",
+    re.IGNORECASE,
+)
+
+
+def normalize_open_text(text: str) -> str:
+    """La forme sous laquelle deux points se comparent (règle D1) : sans la
+    note de reprise du rendu, sans ponctuation finale, sans casse."""
+    cleaned = " ".join(text.split()).rstrip(" .;!?")
+    cleaned = _TRAILING_CARRY_NOTE.sub("", cleaned).rstrip(" .;!?")
+    return cleaned.casefold()
+
+
+def asserts_unobservable_push(text: str) -> bool:
+    """« Le push n'a pas été effectué » : un fait affirmé sur un événement
+    que la vue ne peut pas montrer. « Aucun push observé » n'en est pas un."""
+    return bool(_PUSH.search(text)) and bool(_ASSERTED_NOT_DONE.search(text))
+
+
+def render_open_items(items: list[dict[str, Any]]) -> str:
+    """Le `open` que Core reçoit : une phrase par point, dans l'ordre.
+
+    Inverse de `split_open_text` sur les textes ordinaires : chaque phrase se
+    termine par un point, un point repris porte sa raison entre parenthèses.
+    Aucune liste vide n'atteint Core (`reprise.open` doit être non vide) : la
+    phrase de vide est fixe, jamais rédigée par le modèle."""
+    if not items:
+        return EMPTY_OPEN_TEXT
+    sentences = []
+    for item in items:
+        body = item["text"].strip().rstrip(" .;")
+        if item["kind"] == "carried_over":
+            body += f" (repris : {item['reason_kept'].strip().rstrip(' .;')})"
+        sentences.append(body + ".")
+    return " ".join(sentences)
+
+
+def _references(value: Any, *, name: str, references: InputReferences) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise InvalidModelOutput(f"{name} doit être une liste de références")
+    cleaned = []
+    for index, ref in enumerate(value):
+        if not isinstance(ref, str) or not ref.strip():
+            raise InvalidModelOutput(f"{name}[{index}] doit être une référence non vide")
+        ref = ref.strip()
+        if ref not in references:
+            raise InvalidModelOutput(f"{name}: référence {ref} absente de l'entrée")
+        cleaned.append(ref)
+    return cleaned
+
+
+def _open_items(value: Any, references: InputReferences) -> list[dict[str, Any]]:
+    """Le schéma v3 de `open`, règle par règle. Tout écart est un rejet."""
+    if not isinstance(value, list):
+        raise InvalidModelOutput("reprise.open doit être une liste de points (schéma v3)")
+    if len(value) > MAX_OPEN_ITEMS:
+        raise InvalidModelOutput(f"reprise.open: {len(value)} points, max {MAX_OPEN_ITEMS}")
+    previous = {normalize_open_text(text): index for index, text in enumerate(references.previous_open)}
+    items: list[dict[str, Any]] = []
+    for index, raw in enumerate(value):
+        name = f"reprise.open[{index}]"
+        if not isinstance(raw, dict):
+            raise InvalidModelOutput(f"{name} doit être un objet")
+        unknown = sorted(set(raw) - OPEN_ITEM_KEYS)
+        if unknown:
+            raise InvalidModelOutput(f"{name}: clés inconnues {', '.join(unknown)}")
+        text = _bounded_string(raw.get("text"), name=f"{name}.text")
+        kind = raw.get("kind")
+        if kind not in OPEN_KINDS:
+            raise InvalidModelOutput(
+                f"{name}.kind doit être {', '.join(OPEN_KINDS)}, reçu {kind!r}"
+            )
+        evidence = _references(raw.get("evidence"), name=f"{name}.evidence", references=references)
+        item: dict[str, Any] = {"text": text, "kind": kind, "evidence": evidence}
+
+        if kind == "carried_over":
+            carried_from = raw.get("carried_from")
+            if not isinstance(carried_from, str) or not carried_from.startswith("previous_summary:"):
+                raise InvalidModelOutput(
+                    f"{name}.carried_from doit désigner un point previous_summary:<i>"
+                )
+            if carried_from not in references:
+                raise InvalidModelOutput(
+                    f"{name}.carried_from: {carried_from} absent de l'annexe previous_summary"
+                )
+            item["carried_from"] = carried_from
+            item["reason_kept"] = _bounded_string(raw.get("reason_kept"), name=f"{name}.reason_kept")
+        else:
+            for forbidden in ("carried_from", "reason_kept"):
+                if forbidden in raw:
+                    raise InvalidModelOutput(
+                        f"{name}.{forbidden} n'a de sens que pour kind carried_over"
+                    )
+            if kind == "observed":
+                if not evidence:
+                    raise InvalidModelOutput(f"{name}: un point observed exige evidence non vide")
+                # Une annexe n'est pas un fait de la session : la demande de
+                # l'agent étaye un point requested, le résumé précédent un
+                # point carried_over, jamais une observation.
+                annexed = [ref for ref in evidence if ref.split(":", 1)[0] in ("agent_request", "previous_summary")]
+                if annexed:
+                    raise InvalidModelOutput(
+                        f"{name}: un point observed ne s'étaye pas sur une annexe ({', '.join(annexed)})"
+                    )
+                if asserts_unobservable_push(text):
+                    raise InvalidModelOutput(
+                        f"{name}: affirme un push non effectué, que la vue ne peut pas montrer "
+                        "(formuler « non observé »)"
+                    )
+            else:  # requested
+                if not evidence or any(ref not in references.agent_requests for ref in evidence):
+                    raise InvalidModelOutput(
+                        f"{name}: un point requested cite l'annexe d'agent (agent_request:<i>) et rien d'autre"
+                    )
+            # D1 : un point du résumé précédent repris mot pour mot sans être
+            # déclaré comme tel n'a pas été réévalué.
+            match = previous.get(normalize_open_text(text))
+            if match is not None:
+                raise InvalidModelOutput(
+                    f"{name}: texte identique à previous_summary:{match} sans kind carried_over"
+                )
+        items.append(item)
+    return items
+
+
+def parse_model_output(
+    text: str,
+    allowed_paths: set[str],
+    *,
+    references: InputReferences | None = None,
+) -> ParsedSummary:
+    """Valide le JSON du modèle. Tout écart est un rejet, jamais un rafistolage.
+
+    Sans ``references``, `open` est la chaîne libre du contrat d'origine
+    (prompts v1, v2). Avec, c'est la liste de points du schéma v3, dont chaque
+    référence doit exister dans l'entrée — même mécanisme que `central_files`.
+    """
     stripped = text.strip()
     fenced = _FENCE.match(stripped)
     if fenced:
@@ -104,8 +264,14 @@ def parse_model_output(text: str, allowed_paths: set[str]) -> ParsedSummary:
         raise InvalidModelOutput("reprise absente ou non objet")
     cleaned_reprise = {
         key: _bounded_string(reprise.get(key), name=f"reprise.{key}")
-        for key in ("doing", "stopped_at", "open")
+        for key in ("doing", "stopped_at")
     }
+    open_items: list[dict[str, Any]] | None = None
+    if references is None:
+        cleaned_reprise["open"] = _bounded_string(reprise.get("open"), name="reprise.open")
+    else:
+        open_items = _open_items(reprise.get("open"), references)
+        cleaned_reprise["open"] = render_open_items(open_items)
 
     structured = payload.get("structured")
     if not isinstance(structured, dict):
@@ -141,7 +307,25 @@ def parse_model_output(text: str, allowed_paths: set[str]) -> ParsedSummary:
             ),
             "confidence": confidence,
         },
+        open_items=open_items,
     )
+
+
+def open_items_for_core(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ce que l'événement emporte des points v3 : nature et preuves, alignées
+    sur les phrases de `reprise.open`, sans texte libre.
+
+    Core rédige `reprise.open` (champ connu de son schéma) mais recopierait
+    tel quel un champ libre inconnu de `details` : `text` et `reason_kept`
+    ne voyagent donc que rendus dans `reprise.open`, jamais à côté
+    (décision 2026-09-06, rédaction des champs libres)."""
+    exported = []
+    for item in items:
+        entry: dict[str, Any] = {"kind": item["kind"], "evidence": list(item["evidence"])}
+        if item["kind"] == "carried_over":
+            entry["carried_from"] = item["carried_from"]
+        exported.append(entry)
+    return exported
 
 
 # --- Événement -----------------------------------------------------------------
@@ -185,6 +369,8 @@ def build_event(
         "reprise": dict(parsed.reprise),
         "structured": dict(parsed.structured),
     }
+    if parsed.open_items is not None:
+        details["open_items"] = open_items_for_core(parsed.open_items)
     if workspace:
         details["workspace"] = workspace
     return {
@@ -391,7 +577,8 @@ def summarize_session(
             )
 
     context = client.get_context(at=session.ended_at)
-    model_input = build_model_input(session, context)
+    referenced = uses_open_items(config.prompt_version)
+    model_input = build_model_input(session, context, references=referenced)
     serialized = serialize_input(model_input)
     workspace = context.get("workspace") or {}
     workspace_path = workspace.get("path") if isinstance(workspace, dict) else None
@@ -399,7 +586,10 @@ def summarize_session(
     started = datetime.now(timezone.utc)
     try:
         output = summarizer.summarize(serialized)
-        parsed = parse_model_output(output, input_paths(session))
+        parsed = parse_model_output(
+            output, input_paths(session),
+            references=input_references(model_input) if referenced else None,
+        )
     except SummarizerUnavailable:
         # Modèle injoignable : la même erreur pour toute candidate. Remonte
         # à run_pass, qui arrête le passage comme sur un Core injoignable.

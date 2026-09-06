@@ -407,3 +407,37 @@ def test_real_mlx_summary_is_accepted_shown_and_not_generated_twice(
     assert shown["event_id"] == event_id and shown["details"] == stored["details"]
     assert state_path.read_bytes() == before
     _assert_source_unchanged(client, session, event_count=31)
+
+
+def test_core_accepts_a_v3_summary_and_keeps_its_open_items(real_core, config, tmp_path):
+    """Schéma `open` v3 : Core reçoit `reprise.open` rendu en texte (champ de
+    son schéma, rédigé) et recopie `details.open_items` (nature et preuves,
+    sans texte libre) — sans qu'une ligne de Core ait bougé."""
+    from dataclasses import replace
+
+    client = CoreClient(real_core, timeout_s=5)
+    _seed_one_closed_session(client)
+    session = fetch_sessions(client, REFERENCE.date(), at=REFERENCE)[0]
+    path = session.raw["files"]["modified"][0]
+    output = json.loads(valid_output())
+    output["structured"]["central_files"] = [path]
+    output["reprise"]["open"] = [
+        {"text": f"Le fichier {path} est modifié sans commit", "kind": "observed",
+         "evidence": [f"path:{path}"]},
+    ]
+    summarizer = FakeSummarizer(outputs=json.dumps(output), model_id=config.model_id)
+
+    outcome = summarize_session(
+        session, client=client, summarizer=summarizer, config=replace(config, prompt_version="v3"),
+        state=JobState.load(tmp_path / "state.json"), now=REFERENCE,
+    )
+
+    assert outcome.status == "created", outcome
+    stored = client.get_activity(outcome.event_id)
+    assert stored["details"]["reprise"]["open"] == f"Le fichier {path} est modifié sans commit."
+    assert stored["details"]["open_items"] == [{"kind": "observed", "evidence": [f"path:{path}"]}]
+    assert stored["details"]["prompt_version"] == "v3"
+    # La lecture par Core d'un résumé v3 reste celle d'avant : `open` est une chaîne.
+    context = client.get_context(at=REFERENCE + timedelta(minutes=1))
+    assert context["last_session_summary"]["reprise"]["open"] == stored["details"]["reprise"]["open"]
+    _assert_source_unchanged(client, session, event_count=31)

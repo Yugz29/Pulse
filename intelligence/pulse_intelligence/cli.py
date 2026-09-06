@@ -31,6 +31,7 @@ from .llm.openai_compatible import OpenAICompatibleProvider
 from .llm.provider import LLMProvider, ProviderError
 from .provider_summarizer import ProviderSummarizer, prompt_path_for
 from .selection import Classified, classify_sessions, find_session
+from .session_input import split_open_text
 from .session_summary import _recovered_event, run_pass, summarize_session, summary_event_id
 from .state import JobState, StateLocked
 from .summarizer import FakeSummarizer, Summarizer
@@ -361,6 +362,7 @@ def _card(
         f"stopped_at      {reprise.get('stopped_at', '—')}",
         f"open            {reprise.get('open', '—')}",
     ]
+    lines.extend(_open_item_lines(reprise.get("open"), details.get("open_items")))
     if not previous_known:
         lines.append("  ↳ reçu        (annexe previous_summary inconnue : résumé antérieur à son enregistrement)")
     elif previous_summary is None:
@@ -380,6 +382,32 @@ def _card(
         # sortie du modèle, pas l'événement accepté par Core, non rédigée.
         lines.append("  ↳ note        copie locale antérieure à la rédaction Core")
     return "\n".join(lines)
+
+
+def _open_item_lines(rendered: Any, open_items: Any) -> list[str]:
+    """Schéma v3 : la nature et les preuves de chaque point, sous ``open``.
+
+    L'événement ne porte que ``kind``, ``evidence`` et ``carried_from``
+    (jamais de texte libre hors des champs rédigés par Core) ; le texte du
+    point vient du découpage de ``reprise.open``, le même que celui de
+    l'annexe. Un résumé au schéma d'origine n'a pas ``open_items`` : rien
+    n'est ajouté, la fiche reste celle d'avant."""
+    if not isinstance(open_items, list):
+        return []
+    sentences = split_open_text(rendered)
+    aligned = len(sentences) == len(open_items)
+    lines = []
+    for index, item in enumerate(open_items):
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "?")
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), list) else []
+        proof = ", ".join(str(ref) for ref in evidence) or "—"
+        if item.get("carried_from"):
+            proof = f"{proof}  repris de {item['carried_from']}"
+        text = f"  {sentences[index]}" if aligned else ""
+        lines.append(f"  · {kind:<12}{text}  ← {proof}")
+    return lines
 
 
 def _resolve_target(state: JobState, target: str) -> tuple[str | None, list[str]]:
