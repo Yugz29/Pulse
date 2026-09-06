@@ -188,7 +188,8 @@ la commande sort en erreur (code 2) au lieu d'afficher un ancien résumé.
 
 ### `eval` — comparer un modèle sur le corpus gelé
 
-Passe le modèle courant sur les dix sessions figées de `eval/`, écrit un
+Passe le modèle courant sur les 14 sessions de `eval/` (dix gelées et quatre
+cas supplémentaires issus du dogfooding), écrit un
 résultat par session sous `eval/out/<provider>-<modèle>/` plus un `meta.json`.
 Ne touche pas Core, ne dépend pas de la trace. Sert à juger un modèle ou un
 changement de prompt avant de l'activer.
@@ -255,4 +256,41 @@ uv venv --python 3.14
 uv pip install -e '.[dev]'          # ajouter ',mlx' pour le modèle local
 .venv/bin/python -m pytest -q       # suite par défaut (hors modèle)
 .venv/bin/python -m pytest -m slow  # charge le vrai modèle MLX
+```
+
+Les tests `slow` partagent un chargement des poids et vérifient les prompts v1
+et v2 sur une session réelle du corpus : génération, absence de balises de
+raisonnement et sortie conforme au contrat. Un troisième test vérifie le refus
+de l'entrée de stress avec le vrai tokenizer ; un garde de test interdit de
+lancer la génération si ce refus régresse. Ces tests ne mesurent pas à eux
+seuls la justesse des résumés.
+Un quatrième test relie la CLI au vrai modèle et à un Core temporaire : résumé
+accepté, copie locale conforme, affichage et seconde exécution sans recharger
+le modèle ni créer de doublon.
+Pour évaluer aussi les sessions ambiguës, longues ou enrichies d'un résumé
+précédent, passer le corpus complet puis lire les sorties :
+
+```bash
+TZ=Europe/Paris HF_HUB_OFFLINE=1 .venv/bin/python -m pulse_intelligence.cli \
+  eval --provider mlx --out /private/tmp/pulse-eval-mlx
+```
+
+Ce mode hors ligne nécessite le modèle déjà présent en cache. La sortie hors
+du dépôt évite que le watcher transforme les résultats de l'évaluation en
+activités. Utiliser un nouveau dossier `--out` pour conserver chaque passage.
+
+La suite par défaut inclut deux familles de parcours sans modèle MLX.
+`test_cli_process_lock.py` lance la CLI dans des processus distincts contre le
+faux Core et vérifie le verrou d'exécution, sa libération après `SIGKILL` et
+la lecture (`list`) pendant qu'un producteur le tient.
+`test_real_core_integration.py` lance un vrai Core sur une base temporaire et
+vérifie la reprise d'un résumé déjà accepté après `SIGKILL`, la restauration
+d'une sauvegarde en conflit et la relecture des résumés après une panne, avec
+le masquage des secrets par Core. Les arrêts des processus enfants sont
+synchronisés par un marqueur sur un pipe, à des étapes précises.
+
+Pour lancer uniquement ces parcours (macOS/Linux, ports locaux nécessaires) :
+
+```bash
+.venv/bin/python -m pytest -q tests/test_cli_process_lock.py tests/test_real_core_integration.py
 ```
