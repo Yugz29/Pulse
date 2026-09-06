@@ -5,7 +5,8 @@
 **Spec :** [`../specs/2026-09-05-llm-provider.md`](../specs/2026-09-05-llm-provider.md) (v2)
 **Rapport :** passage `eval` sur les dix sessions gelées, comparé à une
 référence distante ; spike B mémoire. Chiffres reproductibles via
-`pulse-intel eval --provider mlx` et `eval/stress/synthetic-60k.json`.
+`pulse-intel eval --provider mlx` et `eval/stress/synthetic-60k.json` (renommé
+`synthetic-114k.json` le 2026-09-07 : 113 928 tokens réels).
 
 ## Décision
 

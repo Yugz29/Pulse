@@ -231,7 +231,7 @@ def test_real_tokenizer_rejects_the_stress_fixture_before_generation(real_mlx_pr
     from pulse_intelligence.session_input import build_model_input, serialize_input
 
     raw = json.loads((Path(__file__).resolve().parents[1] / "eval" / "stress" /
-                      "synthetic-60k.json").read_text(encoding="utf-8"))
+                      "synthetic-114k.json").read_text(encoding="utf-8"))
     view = SessionView(raw["session_raw"], date.fromisoformat(raw["date"]))
     request = CompletionRequest(
         system=prompt_path_for("v2").read_text(encoding="utf-8"),

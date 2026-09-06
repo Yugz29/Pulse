@@ -56,8 +56,9 @@ passage v3.
 
 ## `stress/` — l'entrée synthétique
 
-`synthetic-60k.json` **n'est pas une vraie session** et n'entre jamais dans le
-corpus. Le réel plafonne à 20 901 tokens (`prompt_tokens` de `meta.json`, `3cabaefb`) ; le critère n°3 de la spec (« tenir
+`synthetic-114k.json` (ex-`synthetic-60k.json`, renommé le 2026-09-07 d'après
+sa taille réelle : 113 928 tokens avec le tokenizer Qwen et le prompt v2)
+**n'est pas une vraie session** et n'entre jamais dans le corpus. Le réel plafonne à 20 901 tokens (`prompt_tokens` de `meta.json`, `3cabaefb`) ; le critère n°3 de la spec (« tenir
 avec une session de 60k tokens ») ne s'éprouve donc que sur cette entrée
 fabriquée, réservée au spike B (mesure mémoire du `MLXProvider`). Elle porte des
 marqueurs `_synthetic` pour qu'on ne la confonde jamais avec du réel, et ne sert

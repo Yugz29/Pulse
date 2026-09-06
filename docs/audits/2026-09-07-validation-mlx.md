@@ -53,7 +53,8 @@ garantie de stabilité sous d'autres charges.
 
 ## Refus d'une entrée trop longue
 
-Le fichier nommé `synthetic-60k.json` compte en réalité **113 928 tokens**
+Le fichier alors nommé `synthetic-60k.json` (renommé `synthetic-114k.json` le
+2026-09-07) compte en réalité **113 928 tokens**
 avec le tokenizer du modèle et le prompt v2. Il est refusé au plafond de
 30 000, avant le prefill, en environ **0,11 s** avec les poids déjà chargés.
 Son nom historique et l'estimation caractères/4 ne sont pas une mesure MLX.

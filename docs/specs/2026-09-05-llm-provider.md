@@ -336,7 +336,8 @@ de trace, aucune session réelle n'approche les 60k tokens que le critère n°3
 anticipe — mais la plus grosse est à 21k sur un plafond de 30k
 (`llm_max_input_tokens`), soit 1,4× de marge, pas dix. Ce critère ne s'éprouve
 donc **pas** sur le corpus réel — il s'éprouve sur une
-entrée **synthétique** de ~60k tokens dans `eval/stress/synthetic-60k.json`,
+entrée **synthétique** dans `eval/stress/synthetic-114k.json` (nommée
+`synthetic-60k.json` jusqu'au 2026-09-07 ; 113 928 tokens réels),
 clairement étiquetée `_synthetic`, hors du corpus et hors de tout jugement de
 qualité, exécutée par le seul spike B (mémoire du `MLXProvider`).
 

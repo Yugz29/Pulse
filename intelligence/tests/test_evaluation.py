@@ -217,14 +217,15 @@ def test_cli_eval_refuses_the_fake_summarizer_shortcut(tmp_path, capsys):
 
 
 def test_the_stress_fixture_is_outside_the_corpus_and_labelled():
-    stress = DEFAULT_CORPUS.parent / "stress" / "synthetic-60k.json"
+    stress = DEFAULT_CORPUS.parent / "stress" / "synthetic-114k.json"
     assert stress.exists()
     data = json.loads(stress.read_text())
     assert data["_synthetic"] is True
     assert data["session_raw"]["_synthetic"] is True
     # Elle ne doit pas être ramassée par le corpus.
     assert not (DEFAULT_CORPUS / stress.name).exists()
-    # Et elle vise bien ~60k tokens.
+    # Nommée par sa taille réelle (113 928 tokens Qwen, validation du 07) ;
+    # l'estimation caractères/4 ci-dessous n'est qu'un plancher grossier.
     from pulse_intelligence.selection import SessionView
     from pulse_intelligence.session_input import build_model_input, serialize_input
     from datetime import date
