@@ -1,0 +1,29 @@
+{
+ "id": "1e420dda8b6eee77",
+ "label": "work-26",
+ "date": "2026-09-05",
+ "notes": "88 min, sept commits, aucun fichier dans la vue, aucun test. Annexe previous_summary = work-24 (d9877899), dont le open est lui-même un cas D3 ; annexe agent_session = la demande d'état des lieux de 18:01 (PR #28, migration). Le seul reste étayé par la session est la divergence list/run, consignée par commit sans correctif visible.",
+ "open": [
+  {
+   "text": "La divergence list/run sur le modèle est consignée (commit f30781f) ; aucun correctif observé ensuite dans la session",
+   "kind": "observed",
+   "evidence": ["commit:f30781f"],
+   "why": "Le commit f30781f « consigner la divergence list/run sur le modèle » est un fait de la session ; il documente, il ne corrige pas (TODOS d'Intelligence). Formulé comme une observation, pas comme un fait négatif."
+  }
+ ],
+ "optional": [],
+ "must_not": [
+  {
+   "text_matches": "PR #28|migration|MacBook",
+   "why": "D3 : c'est la demande initiale de l'agent (16:01 UTC), recopiée par le v1 via previous_summary et par la v2 des sessions voisines. Rien dans cette session ne la concerne : ni carried_over (aucune raison de la garder), ni observed."
+  },
+  {
+   "text_matches": "push|pouss",
+   "why": "D5 : Core n'observe pas les pushs ; « les commits ne sont pas poussés » (sortie v2 du 07) affirme un fait que la vue ne peut pas montrer."
+  },
+  {
+   "kind": "carried_over",
+   "why": "Les deux points reçus (PR #28, migration) sont une demande d'agent, pas un reste de travail : les reprendre serait D1 sous un autre nom."
+  }
+ ]
+}

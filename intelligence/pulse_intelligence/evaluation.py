@@ -215,3 +215,145 @@ def _write_meta(
         json.dumps(meta, ensure_ascii=False, indent=1, sort_keys=True),
         encoding="utf-8",
     )
+
+
+# --- Attentes annotées (`eval/expected/`) ------------------------------------
+#
+# Un fichier par session : le `open` attendu au schéma v3, chaque point avec
+# un `why` ; `optional` liste des points acceptables sans être exigés ;
+# `must_not` des motifs interdits (`kind`, `carried_from`, `text_matches`),
+# chacun justifié. La comparaison ne juge pas la prose : un point attendu est
+# retrouvé quand un point produit a la même nature et les mêmes preuves (ou la
+# même origine `carried_from`). Le texte est affiché, jamais comparé.
+
+DEFAULT_EXPECTED = Path(__file__).parent.parent / "eval" / "expected"
+
+
+@dataclass(frozen=True)
+class OpenComparison:
+    session_id: str
+    matched: list[tuple[dict[str, Any], dict[str, Any]]]   # (attendu, produit)
+    optional_matched: list[tuple[dict[str, Any], dict[str, Any]]]
+    missing: list[dict[str, Any]]                            # attendus jamais retrouvés
+    unexpected: list[dict[str, Any]]                         # produits sans attente
+    forbidden: list[tuple[dict[str, Any], dict[str, Any]]]  # (règle must_not, produit)
+    error: str | None = None                                 # pas d'open_items (rejet, ancien schéma)
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None and not self.missing and not self.forbidden
+
+
+def load_expectations(expected_dir: Path = DEFAULT_EXPECTED) -> dict[str, dict[str, Any]]:
+    expectations = {}
+    for path in sorted(expected_dir.glob("*.json")):
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        expectations[raw["id"]] = raw
+    return expectations
+
+
+def _same_point(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
+    if expected.get("kind") != actual.get("kind"):
+        return False
+    if expected.get("kind") == "carried_over":
+        return expected.get("carried_from") == actual.get("carried_from")
+    return set(expected.get("evidence") or []) == set(actual.get("evidence") or [])
+
+
+def _violates(rule: dict[str, Any], actual: dict[str, Any]) -> bool:
+    """Toutes les clauses de la règle doivent s'appliquer au point produit."""
+    import re
+
+    clauses = 0
+    if "kind" in rule:
+        clauses += 1
+        if rule["kind"] != actual.get("kind"):
+            return False
+    if "carried_from" in rule:
+        clauses += 1
+        if rule["carried_from"] != actual.get("carried_from"):
+            return False
+    if "text_matches" in rule:
+        clauses += 1
+        haystack = f"{actual.get('text', '')} {actual.get('reason_kept', '')}"
+        if not re.search(rule["text_matches"], haystack, re.IGNORECASE):
+            return False
+    return clauses > 0
+
+
+def compare_open(
+    session_id: str, actual_items: list[dict[str, Any]] | None, expectation: dict[str, Any]
+) -> OpenComparison:
+    if actual_items is None:
+        return OpenComparison(session_id, [], [], list(expectation.get("open") or []), [], [],
+                              error="aucun open_items : sortie rejetée ou au schéma d'origine")
+    remaining = list(actual_items)
+    matched, optional_matched, missing = [], [], []
+    for expected in expectation.get("open") or []:
+        hit = next((item for item in remaining if _same_point(expected, item)), None)
+        if hit is None:
+            missing.append(expected)
+        else:
+            matched.append((expected, hit))
+            remaining.remove(hit)
+    for expected in expectation.get("optional") or []:
+        hit = next((item for item in remaining if _same_point(expected, item)), None)
+        if hit is not None:
+            optional_matched.append((expected, hit))
+            remaining.remove(hit)
+    forbidden = [
+        (rule, item)
+        for item in actual_items
+        for rule in expectation.get("must_not") or []
+        if _violates(rule, item)
+    ]
+    return OpenComparison(session_id, matched, optional_matched, missing, remaining, forbidden)
+
+
+def _describe(item: dict[str, Any]) -> str:
+    proof = ", ".join(item.get("evidence") or []) or "—"
+    if item.get("carried_from"):
+        proof = f"{proof} · repris de {item['carried_from']}"
+    return f"[{item.get('kind', '?')}] {item.get('text', '')!s}  ← {proof}"
+
+
+def format_comparison(comparison: OpenComparison) -> str:
+    """L'écart, lisible d'un coup d'œil : ce qui est retrouvé, manquant,
+    interdit, en plus. Une ligne par point, la justification en dessous."""
+    verdict = "conforme" if comparison.ok else "écart"
+    lines = [f"{comparison.session_id}  {verdict}"]
+    if comparison.error:
+        lines.append(f"  ! {comparison.error}")
+    for expected, actual in comparison.matched:
+        lines.append(f"  ✓ attendu retrouvé  {_describe(actual)}")
+    for expected, actual in comparison.optional_matched:
+        lines.append(f"  ✓ acceptable        {_describe(actual)}")
+    for expected in comparison.missing:
+        lines.append(f"  ✗ manquant          {_describe(expected)}")
+        lines.append(f"      pourquoi : {expected.get('why', '—')}")
+    for rule, actual in comparison.forbidden:
+        clause = ", ".join(f"{k}={v}" for k, v in rule.items() if k != "why")
+        lines.append(f"  ✗ interdit ({clause})  {_describe(actual)}")
+        lines.append(f"      pourquoi : {rule.get('why', '—')}")
+    for actual in comparison.unexpected:
+        lines.append(f"  ? en plus           {_describe(actual)}")
+    return "\n".join(lines)
+
+
+def compare_run(run_dir: Path, expected_dir: Path = DEFAULT_EXPECTED) -> list[OpenComparison]:
+    """Les résultats d'un passage `eval` face aux attentes qui existent."""
+    comparisons = []
+    for session_id, expectation in load_expectations(expected_dir).items():
+        result_path = run_dir / f"{session_id}.json"
+        if not result_path.exists():
+            continue
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        items = result.get("open_items") if result.get("status") == "ok" else None
+        comparison = compare_open(session_id, items, expectation)
+        if items is None and result.get("status") != "ok":
+            comparison = OpenComparison(
+                session_id, [], [], list(expectation.get("open") or []), [], [],
+                error=f"{result.get('status')} : {result.get('detail')}",
+            )
+        comparisons.append(comparison)
+    return comparisons

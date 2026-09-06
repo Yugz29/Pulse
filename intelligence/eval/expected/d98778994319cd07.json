@@ -1,0 +1,34 @@
+{
+ "id": "d98778994319cd07",
+ "label": "work-24",
+ "date": "2026-09-05",
+ "notes": "12 min, deux commits (40316b2 test du verrou terminal, 7922529 horloge injectable de la CLI), aucun fichier dans la vue, aucun test. Annexe previous_summary = 58874e67 : « Les modifications ne sont pas committées. L'état de la PR #28 et la branche courante n'ont pas été vérifiés. » Annexe agent_session = la demande d'état des lieux. Les deux commits traitent le premier point reçu ; le second est la demande d'agent (D3).",
+ "open": [],
+ "optional": [
+  {
+   "text": "L'agent devait vérifier l'état de la PR #28 et la branche courante",
+   "kind": "requested",
+   "evidence": ["agent_request:0"],
+   "why": "Rappel de la demande, déclaré comme tel. Le v2 du 07 écrivait « L'état de la PR #28 et la branche courante n'ont pas été vérifiés », copie de previous_summary:1 présentée comme un état (D3 + D1)."
+  }
+ ],
+ "must_not": [
+  {
+   "carried_from": "previous_summary:0",
+   "why": "« Les modifications ne sont pas committées » est traité : deux commits dans la session."
+  },
+  {
+   "carried_from": "previous_summary:1",
+   "why": "D3 propagé par previous_summary : la demande d'agent n'est pas un reste de travail."
+  },
+  {
+   "text_matches": "push|pouss",
+   "why": "D5 : la sortie v2 du 07 écrivait « Les modifications ne sont pas poussées »."
+  },
+  {
+   "kind": "observed",
+   "text_matches": "PR #28",
+   "why": "Le sujet de la PR #28 ne peut être qu'une demande (requested), jamais une observation de la session."
+  }
+ ]
+}

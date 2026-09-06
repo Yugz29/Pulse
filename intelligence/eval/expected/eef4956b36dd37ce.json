@@ -1,0 +1,38 @@
+{
+ "id": "eef4956b36dd37ce",
+ "label": "work-3",
+ "date": "2026-09-06",
+ "notes": "54 min, cinq commits dont 1dc191e (prompt v2) et f77db5f (journal de dogfooding). Fichiers : docs/dogfooding.md créé et modifié, docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md modifiés ; session_summary_v2.md et core/.python-version à la fois créés et supprimés (bascule de branche, état inconnu). Annexe previous_summary = a0aacd1f : « Le push n'a pas été observé ; la configuration de llm_max_tokens et le passage de référence restent à valider. » Pas d'annexe agent (la session d'agent finit à 21:30 UTC, la session commence à 23:29).",
+ "open": [
+  {
+   "text": "La configuration de llm_max_tokens et le passage de référence restent à valider",
+   "kind": "carried_over",
+   "evidence": [],
+   "carried_from": "previous_summary:1",
+   "reason_kept": "aucun événement sur config.toml ni sur les sorties d'eval dans la vue de cette session",
+   "why": "Le seul cas D1 réel du jour 2. Le point précédent n'est ni traité ni contredit par la vue : config.toml et eval/out vivent hors de l'arbre observé. Le garder est légitime, mais seulement déclaré comme repris, avec la raison — pas recopié comme une observation."
+  }
+ ],
+ "optional": [
+  {
+   "text": "docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés sans commit qui les nomme",
+   "kind": "observed",
+   "evidence": ["path:docs/specs/2026-09-05-llm-provider.md", "path:intelligence/TODOS.md"],
+   "why": "Deux fichiers modifiés que les cinq messages de commit ne citent pas : un reste plausible, étayé par les chemins. Acceptable, pas exigé — la vue ne dit pas si un commit les contient."
+  }
+ ],
+ "must_not": [
+  {
+   "text_matches": "push|pouss",
+   "why": "D5 : la sortie v2 du 07 écrivait « Le push n'a pas été effectué » ; previous_summary:0 (« Le push n'a pas été observé ») ne doit pas non plus être repris, l'absence d'observation n'est pas un point ouvert."
+  },
+  {
+   "carried_from": "previous_summary:0",
+   "why": "Reprendre « Le push n'a pas été observé » propagerait D5 de résumé en résumé."
+  },
+  {
+   "text_matches": "python-version|session_summary_v2\\.md",
+   "why": "Créés et supprimés dans la même vue : état inconnu (famille D2), on n'affirme rien."
+  }
+ ]
+}

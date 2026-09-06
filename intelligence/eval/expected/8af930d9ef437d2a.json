@@ -1,0 +1,29 @@
+{
+ "id": "8af930d9ef437d2a",
+ "label": "work-2",
+ "date": "2026-09-05",
+ "notes": "17 min, une seule activité (terminal_finished), aucun fichier, aucun commit, aucune application. Pas d'annexe previous_summary (première session de la journée). Annexe agent_session = la demande d'état des lieux (« Peux-tu vérifier : 1. État git : la PR #28 … »). La session ne montre rien : aucun point observé n'est possible.",
+ "open": [],
+ "optional": [
+  {
+   "text": "L'agent devait vérifier l'état de la PR #28 et la branche courante",
+   "kind": "requested",
+   "evidence": ["agent_request:0"],
+   "why": "La demande peut être rappelée, mais comme demande : c'est la seule nature qui la rend lisible pour ce qu'elle est. Le v2 du 07 la présentait comme un état non confirmé (D3)."
+  }
+ ],
+ "must_not": [
+  {
+   "kind": "observed",
+   "why": "Rien dans la vue à citer : tout point observed serait inventé (le validateur le rejette déjà, faute de référence)."
+  },
+  {
+   "kind": "carried_over",
+   "why": "Aucune annexe previous_summary."
+  },
+  {
+   "text_matches": "push|pouss",
+   "why": "D5."
+  }
+ ]
+}

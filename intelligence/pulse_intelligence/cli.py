@@ -25,13 +25,13 @@ from typing import Any, Sequence
 
 from .config import Config, ConfigError, config_home, load_config
 from .core_client import CoreClient, CoreError, CoreUnavailable
-from .evaluation import evaluate
+from .evaluation import compare_run, evaluate, format_comparison
 from .llm.fake import FakeProvider
 from .llm.openai_compatible import OpenAICompatibleProvider
 from .llm.provider import LLMProvider, ProviderError
-from .provider_summarizer import ProviderSummarizer, prompt_path_for
+from .provider_summarizer import ProviderSummarizer, prompt_path_for, prompt_version_of
 from .selection import Classified, classify_sessions, find_session
-from .session_input import split_open_text
+from .session_input import split_open_text, uses_open_items
 from .session_summary import _recovered_event, run_pass, summarize_session, summary_event_id
 from .state import JobState, StateLocked
 from .summarizer import FakeSummarizer, Summarizer
@@ -580,6 +580,15 @@ def run_eval(args: argparse.Namespace, config: Config) -> int:
         )
     ok = sum(o.status == "ok" for o in outcomes)
     print(f"\n{ok}/{len(outcomes)} valides -> {run_dir}")
+    # Attentes annotées (`eval/expected/`) : l'écart par session, quand le
+    # prompt produit des points v3. Informatif — le verdict de `eval` reste
+    # la validité du contrat, le jugement de sens se lit ici.
+    comparisons = compare_run(run_dir) if uses_open_items(prompt_version_of(summarizer.prompt_path)) else []
+    if comparisons:
+        conform = sum(c.ok for c in comparisons)
+        print(f"\nattentes annotées : {conform}/{len(comparisons)} conformes")
+        for comparison in comparisons:
+            print(format_comparison(comparison))
     return EXIT_OK if ok == len(outcomes) else EXIT_USAGE
 
 
