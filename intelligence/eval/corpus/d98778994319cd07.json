@@ -1,0 +1,240 @@
+{
+ "added": "2026-09-06",
+ "context": {
+  "current_session": {
+   "activity_count": 2,
+   "apps": [],
+   "duration_minutes": 0,
+   "files": {
+    "created": [],
+    "deleted": [],
+    "modified": [],
+    "truncated": false
+   },
+   "git": {
+    "commits": [
+     {
+      "hash": "40316b2",
+      "message": "test(core): ne plus borner par le haut l'attente du verrou terminal"
+     },
+     {
+      "hash": "7922529",
+      "message": "fix(intelligence): une seule horloge dans la CLI, injectable par les tests"
+     }
+    ],
+    "push_observed": false
+   },
+   "id": "d98778994319cd07",
+   "is_open": true,
+   "label": "work-24",
+   "last_activity_at": "2026-09-05T20:04:16+00:00",
+   "projects": [
+    "Pulse"
+   ],
+   "reconstruction_version": 2,
+   "signals": [
+    "git_commit"
+   ],
+   "source_event_ids": [
+    "c972b6d1-79d5-4ea9-9d64-2f718f108476",
+    "e28583e7-e0bd-4648-a0b4-b20c6f22ff04"
+   ],
+   "started_at": "2026-09-05T20:04:14+00:00",
+   "terminal": {
+    "errors": [],
+    "tests_failed": [],
+    "tests_passed": [],
+    "truncated": false
+   }
+  },
+  "generated_at": "2026-09-06T11:02:10.494861+00:00",
+  "isolated_signals": [],
+  "last_agent_session": {
+   "age_minutes": 0,
+   "agent": "claude-code",
+   "ended_at": "2026-09-05T21:30:23.451000+00:00",
+   "started_at": "2026-09-05T16:01:04.422000+00:00",
+   "summary": "Agent session (claude-code): Je reprends le projet Pulse après une pause (nouveau MacBook Pro M3 Max, migration terminée). J'ai besoin d'un état des lieux complet avant de continuer. Peux-tu vérifier : 1. État git : la PR #28 (exclusion .gitnexus/ du watcher, Core 0.3.1) est-elle mergée ? Y a-t-il une branc…",
+   "workspace": "/Users/Yugz/Projets/Pulse"
+  },
+  "last_session_summary": {
+   "age_minutes": 48,
+   "confidence": "medium",
+   "id": "58874e674b575609",
+   "label": "work-20",
+   "reprise": {
+    "doing": "Tu mets à jour le watcher de fichiers et les fichiers privés après la migration sur le nouveau MacBook Pro M3 Max.",
+    "open": "Les modifications ne sont pas committées. L'état de la PR #28 et la branche courante n'ont pas été vérifiés.",
+    "stopped_at": "Après avoir modifié les fichiers du daemon, les tests et le code Swift, sans commit ni push."
+   },
+   "session_ended_at": "2026-09-05T19:28:37.939429+00:00"
+  },
+  "recent_sessions": [
+   {
+    "duration_minutes": 9,
+    "ended_at": "2026-09-05T20:04:14+00:00",
+    "headline": {
+     "commits": 0,
+     "errors": 0,
+     "files_changed": 11,
+     "tests_failed": 0
+    },
+    "id": "ad4d0b4abba65619",
+    "label": "work-23",
+    "projects": [
+     "core"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "143e4eb8-6a4a-4422-9fc4-efad0afd3ea7",
+     "16924037-f033-471b-8bf0-7f5e33550b98",
+     "2225f77c-d8fb-41ac-9155-7924a25b471a",
+     "2c708d3a-c294-4fec-92f7-183dc174143e",
+     "2fb55959-aa64-4730-b7e6-46cd815f2bc6",
+     "38614439-54c4-4ae7-8475-0d8df66884be",
+     "49923366-0868-436d-b058-3ede656fefef",
+     "4d2b9e37-7b76-4bfa-8bab-20ffd01ad3a8",
+     "4fd97ec1-3f34-434d-baea-28b977538799",
+     "571d6d43-a06e-4d2a-9532-c892b3be8ad9",
+     "c4f08861-ab45-4598-87b5-81aef62b23b9",
+     "c7250c14-667c-4331-ab10-0530cc0718bf",
+     "ca2b5686-07c0-46b6-b4cd-76fbcb169eb5",
+     "dc9b431a-ceef-4215-ab01-a60812910894",
+     "e4a42b2a-3505-4288-800f-8933e01a817a",
+     "ed8b3c20-8afe-4516-8d06-cea6a406382c",
+     "fd2b14a5-72a8-4ec1-b28a-6c57bedc3bf0"
+    ],
+    "started_at": "2026-09-05T19:54:45.173167+00:00"
+   },
+   {
+    "duration_minutes": 0,
+    "ended_at": "2026-09-05T19:54:45.173167+00:00",
+    "headline": {
+     "commits": 1,
+     "errors": 0,
+     "files_changed": 0,
+     "tests_failed": 0
+    },
+    "id": "d0c77aba372fe236",
+    "label": "work-22",
+    "projects": [
+     "Pulse"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "ea01ab99-daf6-487a-900c-23016ef42565"
+    ],
+    "started_at": "2026-09-05T19:54:02+00:00"
+   },
+   {
+    "duration_minutes": 3,
+    "ended_at": "2026-09-05T19:54:02+00:00",
+    "headline": {
+     "commits": 0,
+     "errors": 0,
+     "files_changed": 10,
+     "tests_failed": 0
+    },
+    "id": "1ae3329ef391f66e",
+    "label": "work-21",
+    "projects": [
+     "core"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+     "0f1ef631-cf91-42ed-b916-692f5638fa6f",
+     "2498248d-2f99-43cd-b736-987a9b8b064f",
+     "2a3fa366-59f2-400a-985e-9abaf49bcdf1",
+     "4cf87c35-8106-49e8-b1e8-9e64a4afe201",
+     "586628a6-5903-435a-b368-e92f6c81a767",
+     "5b0458a7-d584-4f46-958d-93b731db31eb",
+     "650d4f29-7f7d-4cc9-b004-5abc527e60b9",
+     "672c86e0-4351-407b-9980-bb46a0b78950",
+     "70fc6fab-c4af-4375-a0b1-190d17cd6ddc",
+     "7f67fab8-f18e-4f55-a50c-fb63b74beefd",
+     "8fa06154-f65d-4273-aee7-6e4fb9133e3d",
+     "a3327704-2328-4739-a557-1169ba5699b7",
+     "a9b643ce-9747-4b79-9ec6-d23569924a45",
+     "ab32d38c-3e66-418c-bbe5-9905b3cee2fc",
+     "ba846933-3107-4639-a0b1-feb4f824681b",
+     "bb9253d6-9112-482a-9f9b-8ab6af5e7591",
+     "bdba838f-f769-4318-8c7f-1d908ffba946",
+     "be700e5c-e047-4f6c-b4ce-f72ab247a524",
+     "c8141917-cc64-446d-bd3c-aa788330b859",
+     "dd481225-725d-4060-9763-bd1aeb1b849d",
+     "ea4648a1-50f7-446b-902f-76ebde9cf244",
+     "f8c06b79-7119-40b3-bcd8-d76de00d99e7"
+    ],
+    "started_at": "2026-09-05T19:50:52.067435+00:00"
+   }
+  ],
+  "reference_at": "2026-09-05T20:16:53.314154+00:00",
+  "schema_version": 2,
+  "timezone": "+02:00",
+  "window_minutes": 120,
+  "workspace": {
+   "git": {
+    "branch": "ship/ci-green",
+    "dirty": null,
+    "last_commit": {
+     "hash": "7922529",
+     "message": "fix(intelligence): une seule horloge dans la CLI, injectable par les tests",
+     "occurred_at": "2026-09-05T20:04:16+00:00"
+    }
+   },
+   "path": "/Users/Yugz/Projets/Pulse",
+   "project": "Pulse",
+   "resolution": "session"
+  }
+ },
+ "date": "2026-09-05",
+ "id": "d98778994319cd07",
+ "label": "work-24",
+ "session_raw": {
+  "activity_count": 2,
+  "apps": [],
+  "duration_minutes": 12,
+  "files": {
+   "created": [],
+   "deleted": [],
+   "modified": [],
+   "truncated": false
+  },
+  "git": {
+   "commits": [
+    {
+     "hash": "40316b2",
+     "message": "test(core): ne plus borner par le haut l'attente du verrou terminal"
+    },
+    {
+     "hash": "7922529",
+     "message": "fix(intelligence): une seule horloge dans la CLI, injectable par les tests"
+    }
+   ],
+   "push_observed": false
+  },
+  "id": "d98778994319cd07",
+  "is_open": false,
+  "label": "work-24",
+  "last_activity_at": "2026-09-05T20:16:54.314154+00:00",
+  "projects": [
+   "Pulse"
+  ],
+  "reconstruction_version": 2,
+  "signals": [
+   "git_commit"
+  ],
+  "source_event_ids": [
+   "c972b6d1-79d5-4ea9-9d64-2f718f108476",
+   "e28583e7-e0bd-4648-a0b4-b20c6f22ff04"
+  ],
+  "started_at": "2026-09-05T20:04:14+00:00",
+  "terminal": {
+   "errors": [],
+   "tests_failed": [],
+   "tests_passed": [],
+   "truncated": false
+  }
+ },
+ "why": "Cas D3 du jour 2 (work-24 du 2026-09-05, 12 min, 2 activités) : open v2 « L'état de la PR #28 et la migration … n'ont pas été confirmés » tiré de l'annexe agent_session. Ajoutée le 2026-09-06, hors gel. Contexte pris à fin − 1 s."
+}
