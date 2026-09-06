@@ -49,9 +49,10 @@ class Config:
     # en OOM Metal (spike B). Refusé proprement avant le prefill.
     llm_max_input_tokens: int = 30_000
     # Absente = non envoyée. Certains modèles derrière un endpoint compatible
-    # refusent le paramètre ; la reproductibilité à 0.0 se demande, elle ne
-    # s'impose pas. La négociation du provider reste le filet si un modèle
-    # refuse une valeur pourtant configurée.
+    # refusent le paramètre ; 0.0 se demande, il ne s'impose pas, et il
+    # réduit l'aléa sans garantir la reproductibilité (prompt, modèle, poids
+    # et runtime comptent aussi). La négociation du provider reste le filet
+    # si un modèle refuse une valeur pourtant configurée.
     llm_temperature: float | None = None
 
     def require_model(self) -> "Config":

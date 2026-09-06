@@ -71,7 +71,7 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `model_id` | `""` | identifiant du modèle (entre dans l'identité du résumé) |
 | `llm_max_tokens` | `2048` | plafond de génération |
 | `llm_max_input_tokens` | `30000` | au-delà, le modèle local refuse (mémoire) |
-| `llm_temperature` | `null` | absente = non envoyée ; `0.0` = reproductible |
+| `llm_temperature` | `null` | absente = non envoyée (le modèle local reste alors en argmax) ; `0.0` réduit l'aléa de l'échantillonnage, sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés |
 | `prompt_version` | `v2` | version du prompt (`prompts/session_summary_<v>.md`) ; `v1` reste disponible |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
 | `min_session_minutes` | `10` | une session plus courte n'est pas candidate |

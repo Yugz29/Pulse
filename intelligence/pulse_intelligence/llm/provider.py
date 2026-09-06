@@ -11,8 +11,10 @@ class CompletionRequest:
     system: str
     prompt: str
     max_tokens: int = 1024
-    # None = le paramètre n'est pas envoyé. La reproductibilité à 0.0 est un
-    # choix de configuration (`llm_temperature`), pas un défaut imposé.
+    # None = le paramètre n'est pas envoyé. 0.0 réduit l'aléa de
+    # l'échantillonnage ; ce n'est pas une garantie de reproductibilité tant
+    # que prompt, modèle, poids et runtime ne sont pas figés. C'est un choix
+    # de configuration (`llm_temperature`), pas un défaut imposé.
     temperature: float | None = None
 
 

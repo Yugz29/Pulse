@@ -40,16 +40,41 @@ def _install_fake_mlx(monkeypatch, tokenizer, output="{}", *, load_error=None, g
             raise load_error
         return ("MODEL", tokenizer)
 
-    def generate(model, tok, *, prompt, max_tokens, verbose):
+    def generate(model, tok, *, prompt, max_tokens, verbose, **kwargs):
         if gen_error:
             raise gen_error
-        generate.last = {"prompt": prompt, "max_tokens": max_tokens}
+        generate.last = {"prompt": prompt, "max_tokens": max_tokens, **kwargs}
+        generate.calls.append(generate.last)
         return output
 
+    generate.calls = []
     module.load = load
     module.generate = generate
     monkeypatch.setitem(sys.modules, "mlx_lm", module)
+
+    # `mlx_lm.sample_utils.make_sampler(temp=...)` : la vraie signature du
+    # runtime installé (0.31.3). La doublure rend un marqueur qui retient
+    # la température demandée, à la place du callable argmax/catégoriel.
+    sample_utils = types.ModuleType("mlx_lm.sample_utils")
+
+    def make_sampler(temp=0.0, **_):
+        return _SamplerMarker(temp)
+
+    sample_utils.make_sampler = make_sampler
+    module.sample_utils = sample_utils
+    monkeypatch.setitem(sys.modules, "mlx_lm.sample_utils", sample_utils)
     return generate
+
+
+class _SamplerMarker:
+    def __init__(self, temp):
+        self.temp = temp
+
+    def __eq__(self, other):
+        return isinstance(other, _SamplerMarker) and other.temp == self.temp
+
+    def __repr__(self):
+        return f"sampler(temp={self.temp})"
 
 
 def test_thinking_is_disabled_when_the_template_supports_it(monkeypatch):
@@ -212,3 +237,62 @@ def test_the_ceiling_is_wired_from_config():
     provider = _provider(Config(llm_provider="mlx", llm_max_input_tokens=12345))
 
     assert provider.max_input_tokens == 12345
+
+
+# --- température (audit 2026-09-06, défaut 11) --------------------------------------
+
+
+def _request(temperature):
+    return CompletionRequest(system="s", prompt="p", max_tokens=64, temperature=temperature)
+
+
+def test_the_temperature_reaches_the_runtime_and_changes_the_call(monkeypatch, capsys):
+    """Deux températures, deux appels différents : 0.0 et 1.0 ne peuvent pas
+    produire les mêmes arguments de génération, sinon le réglage est décoratif."""
+    gen = _install_fake_mlx(monkeypatch, _Tokenizer(None))
+    provider = MLXProvider()
+
+    cold = provider.complete(_request(0.0))
+    hot = provider.complete(_request(1.0))
+
+    assert gen.calls[0] != gen.calls[1]
+    assert gen.calls[0]["sampler"] == _SamplerMarker(0.0)
+    assert gen.calls[1]["sampler"] == _SamplerMarker(1.0)
+    # Transmis, donc rien de retiré : `dropped_parameters` vide n'est vrai
+    # que parce que le paramètre est bien parti.
+    assert cold.dropped_parameters == () and hot.dropped_parameters == ()
+    err = capsys.readouterr().err
+    assert "temperature=0.0" in err and "temperature=1.0" in err
+
+
+def test_zero_is_a_sampler_not_a_special_case(monkeypatch):
+    gen = _install_fake_mlx(monkeypatch, _Tokenizer(None))
+
+    MLXProvider().complete(_request(0.0))
+
+    assert gen.last["sampler"] == _SamplerMarker(0.0)
+
+
+def test_no_temperature_means_no_sampler_and_says_so(monkeypatch, capsys):
+    """None = paramètre absent : le runtime garde son argmax, et la trace le dit."""
+    gen = _install_fake_mlx(monkeypatch, _Tokenizer(None))
+
+    result = MLXProvider().complete(_request(None))
+
+    assert "sampler" not in gen.last
+    assert result.dropped_parameters == ()
+    assert "temperature=absente" in capsys.readouterr().err
+
+
+def test_a_runtime_without_make_sampler_drops_the_temperature_loudly(monkeypatch, capsys):
+    """Silence interdit : si le runtime ne sait pas échantillonner, la
+    température est listée comme retirée et un avertissement sort sur stderr."""
+    gen = _install_fake_mlx(monkeypatch, _Tokenizer(None))
+    monkeypatch.setitem(sys.modules, "mlx_lm.sample_utils", None)  # force l'ImportError
+    monkeypatch.delattr(sys.modules["mlx_lm"], "sample_utils")
+
+    result = MLXProvider().complete(_request(0.0))
+
+    assert "sampler" not in gen.last
+    assert result.dropped_parameters == ("temperature",)
+    assert "temperature" in capsys.readouterr().err
