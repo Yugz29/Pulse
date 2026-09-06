@@ -113,6 +113,15 @@ $ pulse-intel run --once
 - `failed` : sortie rejetée (JSON invalide, chemin inventé…) — réessai au
   passage suivant, trois fois puis `given_up`.
 
+Code de sortie de `run --once`, le plus grave gagne :
+
+| Passage | Code |
+| --- | --- |
+| aucune candidate, ou toutes `created` / `duplicate` / `already_known` | 0 |
+| Core injoignable | 2 |
+| au moins une candidate `failed` (réessayée au passage suivant) | 3 |
+| au moins une candidate `given_up` (abandonnée, intervention nécessaire) | 4 |
+
 Sans `--once`, `run` refait un passage toutes les `tick_minutes` jusqu'à Ctrl-C.
 
 ### `show` — lire un résumé
