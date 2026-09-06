@@ -246,6 +246,17 @@ $ pulse-intel eval --provider mlx
   8/10 valides -> eval/out/mlx-mlx-community-Qwen3.8-27B-4bit
 ```
 
+### Version de reconstruction de Core
+
+Chaque vue de session porte `reconstruction_version` (Core : 3 depuis le
+2026-09-06). Le code d'Intelligence déclare celle sur laquelle il a été
+validé (`KNOWN_RECONSTRUCTION_VERSION`). Si Core en sert une autre — daemon
+resté sur un ancien code, ou constante à relire — chaque commande l'annonce
+sur stderr au premier `/context/sessions` (donc dans `run.log`), et `eval`
+l'annonce aussi pour son corpus, dont `meta.json` note les versions figées
+(`corpus_reconstruction_versions`) et la version connue. Le corpus actuel a
+été capturé sous la v2 : l'avertissement est attendu jusqu'à sa recapture.
+
 ### Le passage quotidien via launchd
 
 `run --once` chaque matin, sans y penser :

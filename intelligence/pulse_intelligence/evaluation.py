@@ -19,6 +19,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import KNOWN_RECONSTRUCTION_VERSION
 from .provider_summarizer import ProviderSummarizer, prompt_version_of
 from .selection import SessionView
 from .session_input import (
@@ -81,6 +82,20 @@ def load_corpus(corpus_dir: Path = DEFAULT_CORPUS) -> list[CorpusEntry]:
             )
         )
     return entries
+
+
+def reconstruction_versions(entries: list[CorpusEntry]) -> dict[str, int]:
+    """Combien d'entrées du corpus portent chaque version de reconstruction.
+
+    Le corpus est un export figé des vues de Core : une version qui n'est pas
+    celle connue du code (`KNOWN_RECONSTRUCTION_VERSION`) veut dire que les
+    entrées ont été capturées sous une autre reconstruction — à dire dans le
+    rapport, pas à corriger."""
+    counts: dict[str, int] = {}
+    for entry in entries:
+        key = str(entry.view.reconstruction_version)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _sanitize(model_id: str) -> str:
@@ -191,6 +206,10 @@ def _write_meta(
         "model_id": summarizer.model_id,
         "prompt_path": summarizer.prompt_path.name,
         "generated_at": (now or datetime.now(timezone.utc)).isoformat(),
+        # L'export dit sous quelle reconstruction ses entrées ont été figées,
+        # et laquelle le code connaît : l'écart se lit sans ouvrir le corpus.
+        "known_reconstruction_version": KNOWN_RECONSTRUCTION_VERSION,
+        "corpus_reconstruction_versions": reconstruction_versions([o.entry for o in outcomes]),
         "session_count": len(outcomes),
         "ok": sum(o.status == "ok" for o in outcomes),
         "rejected": sum(o.status == "rejected" for o in outcomes),

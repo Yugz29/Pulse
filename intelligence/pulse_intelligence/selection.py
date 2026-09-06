@@ -8,13 +8,35 @@ session mérite un résumé.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from . import KNOWN_RECONSTRUCTION_VERSION
 from .config import Config
 from .core_client import CoreClient
 from .state import JobState
+
+
+_announced_versions: set[Any] = set()
+
+
+def check_reconstruction_version(served: Any, *, source: str = "Core") -> str | None:
+    """L'avertissement si ``served`` n'est pas la version connue, une fois par
+    version et par processus, sur stderr (terminal et run.log). Rend le texte
+    émis, ou ``None``."""
+    if served == KNOWN_RECONSTRUCTION_VERSION or served in _announced_versions:
+        return None
+    _announced_versions.add(served)
+    message = (
+        f"⚠ {source} sert la reconstruction de sessions v{served} ; ce code a été validé "
+        f"sur v{KNOWN_RECONSTRUCTION_VERSION} : vues et identifiants de session peuvent "
+        "différer de ceux validés (daemon à redémarrer si son code est plus récent, "
+        "ou constante KNOWN_RECONSTRUCTION_VERSION à relire)"
+    )
+    print(message, file=sys.stderr)
+    return message
 
 
 def _instant(value: str) -> datetime:
@@ -92,6 +114,9 @@ def fetch_sessions(
     at: datetime | None = None,
 ) -> list[SessionView]:
     body = client.get_sessions(day, at=at)
+    # Au premier contact avec Core, donc au démarrage de `list`, `summarize`,
+    # `run` et `show <id>` : la version servie face à celle connue du code.
+    check_reconstruction_version(body.get("reconstruction_version"))
     return [SessionView(raw=session, day=day) for session in body.get("sessions", [])]
 
 

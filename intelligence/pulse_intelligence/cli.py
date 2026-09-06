@@ -25,7 +25,8 @@ from typing import Any, Sequence
 
 from .config import Config, ConfigError, config_home, load_config
 from .core_client import CoreClient, CoreError, CoreUnavailable
-from .evaluation import compare_run, evaluate, format_comparison
+from . import KNOWN_RECONSTRUCTION_VERSION
+from .evaluation import compare_run, evaluate, format_comparison, reconstruction_versions
 from .llm.fake import FakeProvider
 from .llm.openai_compatible import OpenAICompatibleProvider
 from .llm.provider import LLMProvider, ProviderError
@@ -580,6 +581,14 @@ def run_eval(args: argparse.Namespace, config: Config) -> int:
         )
     ok = sum(o.status == "ok" for o in outcomes)
     print(f"\n{ok}/{len(outcomes)} valides -> {run_dir}")
+    versions = reconstruction_versions([o.entry for o in outcomes])
+    if set(versions) != {str(KNOWN_RECONSTRUCTION_VERSION)}:
+        print(
+            f"⚠ corpus figé sous la reconstruction {', '.join(f'v{v} ({n})' for v, n in sorted(versions.items()))} ; "
+            f"ce code a été validé sur v{KNOWN_RECONSTRUCTION_VERSION} : les vues ne sont pas "
+            "celles que Core sert aujourd'hui (voir meta.json)",
+            file=sys.stderr,
+        )
     # Attentes annotées (`eval/expected/`) : l'écart par session, quand le
     # prompt produit des points v3. Informatif — le verdict de `eval` reste
     # la validité du contrat, le jugement de sens se lit ici.
