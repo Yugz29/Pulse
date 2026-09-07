@@ -216,6 +216,49 @@ def test_an_observed_item_asserting_a_push_did_not_happen_is_rejected():
                        ALLOWED, references=_references())
 
 
+def test_an_observed_item_claiming_a_file_is_not_committed_is_rejected_when_the_session_shows_commits():
+    # D6 (dogfooding, jour 3) : la vue donne le message d'un commit, jamais
+    # ses fichiers ; « aucun commit ne le nomme » n'est pas une observation
+    # dès qu'un commit existe. La session de référence en montre deux.
+    for text in (
+        "core/daemon_v2/routes.py est modifié et aucun commit de la session ne le nomme",
+        "core/daemon_v2/routes.py est modifié sans commit associé",
+        "config.toml a été créé et n'apparaît dans aucun commit",
+        "core/daemon_v2/routes.py n'est pas nommé dans le commit a1b2c3",
+        "Les modifications de config.toml ne sont pas committées",
+        "config.toml est modifié, non commité",
+        "config.toml est modifié, pas de commit pour lui",
+    ):
+        _rejects(_output({"text": text, "kind": "observed", "evidence": ["path:core/daemon_v2/routes.py"]}),
+                 "n'est pas commité alors que la session montre 2 commit")
+    # Un commit reste citable comme fait, une commande git en échec reste une
+    # erreur observée : ni l'un ni l'autre n'affirme qu'un fichier est hors commit.
+    for text in (
+        "core/daemon_v2/routes.py est modifié après le commit d4e5f6",
+        "Les commandes git add et git commit ont échoué dans le terminal",
+    ):
+        parse_model_output(
+            _output({"text": text, "kind": "observed", "evidence": ["path:core/daemon_v2/routes.py"]}),
+            ALLOWED, references=_references(),
+        )
+
+
+def test_a_file_modified_in_a_session_without_any_commit_is_an_observation():
+    session = SessionView(
+        raw=session_view("aaaaaaaaaaaaaaaa", commits=[],
+                         files={"created": [], "modified": ["core/daemon_v2/routes.py"], "deleted": []}),
+        day=REFERENCE.date(),
+    )
+    references = _references(session)
+    assert references.commits == ()
+    parsed = parse_model_output(
+        _output({"text": "core/daemon_v2/routes.py est modifié et la session ne montre aucun commit",
+                 "kind": "observed", "evidence": ["path:core/daemon_v2/routes.py"]}),
+        ALLOWED, references=references,
+    )
+    assert parsed.open_items[0]["kind"] == "observed"
+
+
 def test_shape_limits_of_the_item_list():
     _rejects(_output(*([OBSERVED] * 6)), "6 points, max 5")
     _rejects(_output("une chaîne"), r"open\[0\] doit être un objet")
@@ -376,3 +419,33 @@ def test_d3_d9877899_old_request_copied_from_previous_summary_is_rejected(captur
                     {"text": "Les modifications ne sont pas poussées", "kind": "observed",
                      "evidence": ["commit:40316b2", "commit:7922529"]},
                     "affirme un push non effectué")
+
+
+def test_d6_eef4956b_file_not_named_by_a_commit_is_rejected(capture_timezone):
+    # Sortie v3 du 07 (validation open v3) : « docs/specs/2026-09-05-llm-provider.md
+    # et intelligence/TODOS.md sont modifiés et aucun commit de la session ne
+    # les nomme. » — la session montre cinq commits, dont la vue ne liste pas
+    # les fichiers (D6, dogfooding jour 3 : 20 points sur 27 contredits par git).
+    _, _, references = _corpus_references("eef4956b36dd37ce")
+    assert len(references.commits) == 5
+    _corpus_rejects(
+        "eef4956b36dd37ce",
+        {"text": "docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés "
+                 "et aucun commit de la session ne les nomme",
+         "kind": "observed",
+         "evidence": ["path:docs/specs/2026-09-05-llm-provider.md", "path:intelligence/TODOS.md"]},
+        "n'est pas commité alors que la session montre 5 commit",
+    )
+
+
+def test_d6_7bbaca78_file_modified_without_any_commit_stays_observable(capture_timezone):
+    # Sortie v3 du 07 : « README.md a été modifié mais aucun commit n'a été
+    # enregistré dans la session. » — la vue ne porte aucun commit : un fait.
+    entry, _, references = _corpus_references("7bbaca7882c3d766")
+    assert references.commits == ()
+    parsed = parse_model_output(
+        _output({"text": "README.md a été modifié mais aucun commit n'a été enregistré dans la session",
+                 "kind": "observed", "evidence": ["path:README.md"]}),
+        input_paths(entry.view), references=references,
+    )
+    assert parsed.open_items[0]["evidence"] == ["path:README.md"]

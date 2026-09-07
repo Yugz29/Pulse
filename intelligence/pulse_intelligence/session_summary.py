@@ -128,6 +128,27 @@ def asserts_unobservable_push(text: str) -> bool:
     return bool(_PUSH.search(text)) and bool(_ASSERTED_NOT_DONE.search(text))
 
 
+# D6 (dogfooding, jour 3) : la vue donne le hash et le message d'un commit,
+# jamais ses fichiers. Qu'aucun message ne nomme un chemin ne dit pas qu'il
+# n'est pas commité ; dès que la session montre un commit, l'affirmer
+# transforme un silence en fait (20 points sur 27 contredits par git le
+# 2026-09-07). Sans aucun commit dans la vue, « modifié sans commit » est
+# un fait, et reste permis.
+_UNCOMMITTED = re.compile(
+    r"aucun\s+commit|sans\s+commit|pas\s+de\s+commit"
+    r"|(?:pas|non)\s+(?:encore\s+)?(?:été\s+)?commit+ée?s?"
+    r"|(?:pas|non)\s+(?:nommée?s?|référencée?s?|citée?s?)\s+(?:dans|par)\s+(?:le|un|les|des)\s+commit",
+    re.IGNORECASE,
+)
+
+
+def asserts_uncommitted_file(text: str) -> bool:
+    """« Modifié et aucun commit de la session ne le nomme », « sans commit
+    associé », « non commité » : une affirmation que la vue ne peut étayer
+    que si elle ne porte aucun commit."""
+    return bool(_UNCOMMITTED.search(text))
+
+
 def render_open_items(items: list[dict[str, Any]]) -> str:
     """Le `open` que Core reçoit : une phrase par point, dans l'ordre.
 
@@ -219,6 +240,12 @@ def _open_items(value: Any, references: InputReferences) -> list[dict[str, Any]]
                     raise InvalidModelOutput(
                         f"{name}: affirme un push non effectué, que la vue ne peut pas montrer "
                         "(formuler « non observé »)"
+                    )
+                if references.commits and asserts_uncommitted_file(text):
+                    raise InvalidModelOutput(
+                        f"{name}: affirme qu'un fichier n'est pas commité alors que la session "
+                        f"montre {len(references.commits)} commit(s) dont la vue ne liste pas "
+                        "les fichiers"
                     )
             else:  # requested
                 if not evidence or any(ref not in references.agent_requests for ref in evidence):

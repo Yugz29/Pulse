@@ -25,6 +25,13 @@ lieu ».
 - **Un commit est un fait accompli.** Son message dit ce qui a été fait,
   jamais ce qui reste à faire. Ne reformule pas un message de commit en point
   ouvert ; un commit nourrit `doing` et `stopped_at`.
+- **Un commit ne liste pas ses fichiers.** `git.commits` donne un hash et un
+  message, jamais les chemins qu'un commit contient. Qu'aucun message ne
+  nomme un fichier ne dit rien de lui. Dès que la session montre un commit,
+  n'écris jamais qu'un fichier « n'apparaît dans aucun commit », est « sans
+  commit associé » ou « n'est pas commité » : la note serait rejetée. Un
+  fichier modifié n'est un reste que si la session ne montre **aucun**
+  commit.
 - **La session d'agent porte une demande, pas un état.** `agent_session`
   est la dernière session d'agent (Claude Code, Codex…) qui chevauche
   celle-ci ; son `summary` est la **demande initiale**, souvent faite des
@@ -50,8 +57,9 @@ lieu ».
 Trois natures, et aucune autre :
 
 - `observed` — un reste que **les faits de cette session** montrent : un
-  fichier modifié qu'aucun commit ne nomme, un test en échec, une erreur de
-  commande. `evidence` cite au moins une référence de la vue. Une annexe
+  test en échec, une erreur de commande, un fichier modifié dans une session
+  qui ne montre aucun commit. `evidence` cite au moins une référence de la
+  vue. Une annexe
   (`agent_request:…`, `previous_summary:…`) n'est jamais une preuve
   d'observation.
 - `carried_over` — un point de `previous_summary` que tu gardes parce que
@@ -143,20 +151,20 @@ plus 3. Une liste vide est une réponse valide — mieux vaut vide qu'inventé.
 ## Exemples
 
 Entrée : trois commits sur `core/daemon_v2/file_watcher.py` (le dernier
-`9f1e2d3`), `core/daemon_v2/workspaces.py` dans `files.modified` sans commit
-qui le nomme, la suite `pytest -q` dans `tests_passed`, `push_observed:
-false`, deux heures de session, pas d'annexe.
+`9f1e2d3`), `core/daemon_v2/workspaces.py` dans `files.modified`, la suite
+`pytest -q` dans `tests_failed`, `push_observed: false`, deux heures de
+session, pas d'annexe.
 
 ```json
 {
   "reprise": {
     "doing": "Tu corriges la résolution de casse du watcher de fichiers.",
-    "stopped_at": "Après le commit 9f1e2d3, suite verte.",
+    "stopped_at": "Après le commit 9f1e2d3, suite rouge.",
     "open": [
       {
-        "text": "core/daemon_v2/workspaces.py est modifié et aucun commit de la session ne le nomme",
+        "text": "La suite pytest -q échoue après le commit 9f1e2d3",
         "kind": "observed",
-        "evidence": ["path:core/daemon_v2/workspaces.py"]
+        "evidence": ["test_failed:pytest -q", "commit:9f1e2d3"]
       }
     ]
   },
@@ -164,14 +172,15 @@ false`, deux heures de session, pas d'annexe.
     "project": "Pulse",
     "intents": ["corriger la casse des workspaces déclarés"],
     "central_files": ["core/daemon_v2/file_watcher.py", "core/daemon_v2/workspaces.py"],
-    "blockers": [],
+    "blockers": ["la suite pytest -q échoue"],
     "confidence": "high"
   }
 }
 ```
 
-`open` ne dit pas « les commits ne sont pas poussés » : rien dans la vue ne
-peut le montrer.
+`open` ne dit ni « les commits ne sont pas poussés » ni « workspaces.py est
+modifié et aucun commit ne le nomme » : la vue ne montre ni les pushs ni les
+fichiers d'un commit. Sans le test rouge, `open` serait `[]`.
 
 Entrée : `agent_session.summary` = « Peux-tu vérifier l'état de la PR #28 et
 si la branche est mergée ? » (`ref: agent_request:0`), ouverte à 18:00 ;

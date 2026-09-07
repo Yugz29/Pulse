@@ -199,13 +199,16 @@ class InputReferences:
     ``refs`` est l'ensemble complet ; ``previous_open`` donne le texte de
     chaque ``previous_summary:<i>`` (dans l'ordre) pour la règle D1 ;
     ``agent_requests`` les références ``agent_request:<i>`` pour la règle
-    des points ``requested``.
+    des points ``requested`` ; ``commits`` les références ``commit:<hash>``
+    de la session, pour la règle D6 (un fichier « sans commit » n'est un
+    fait que si la vue ne porte aucun commit).
     """
 
     refs: frozenset[str]
     paths: frozenset[str]
     previous_open: tuple[str, ...]
     agent_requests: tuple[str, ...]
+    commits: tuple[str, ...] = ()
 
     def __contains__(self, ref: object) -> bool:
         return ref in self.refs
@@ -234,10 +237,12 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
             paths.update(_strings(files.get(category)))
     refs.update(f"path:{path}" for path in paths)
     git = session.get("git") if isinstance(session, dict) else None
+    commits: list[str] = []
     if isinstance(git, dict):
         for commit in git.get("commits") or []:
             if isinstance(commit, dict) and isinstance(commit.get("hash"), str) and commit["hash"]:
-                refs.add(f"commit:{commit['hash']}")
+                commits.append(f"commit:{commit['hash']}")
+    refs.update(commits)
     if isinstance(session, dict):
         refs.update(f"event:{event_id}" for event_id in _strings(session.get("source_event_ids")))
         refs.update(f"signal:{name}" for name in _strings(session.get("signals")))
@@ -268,4 +273,5 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
         paths=frozenset(paths),
         previous_open=previous_open,
         agent_requests=agent_requests,
+        commits=tuple(commits),
     )
