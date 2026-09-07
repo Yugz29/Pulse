@@ -1,14 +1,16 @@
-"""Pure helpers for preparing timeline data for renderers."""
+"""Deterministic work-session reconstruction and timeline presentation helpers.
+
+Only reconstruct_session_views owns work-session boundaries, composition,
+identity and closure. It takes stored events, never historical session groups.
+"""
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import date, datetime, timedelta, timezone, tzinfo
 import hashlib
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-from ..runtime_config import reconstruction_timezone
 
 from .projects import (
     WorkspaceIdentity,
@@ -57,12 +59,7 @@ def session_identity(activities: list[dict[str, Any]]) -> tuple[str, list[str]]:
     qu'un événement tardif s'insère plus tôt dans la journée : il sert à
     l'affichage, jamais comme clé.
     """
-    keys = sorted(
-        activity["event_id"]
-        if isinstance(activity.get("event_id"), str) and activity["event_id"]
-        else f"id:{activity.get('id')}"
-        for activity in activities
-    )
+    keys = sorted(activity["event_id"] for activity in activities)
     digest = hashlib.sha256("\n".join(keys).encode("utf-8")).hexdigest()
     return digest[:SESSION_IDENTITY_HEX_LENGTH], keys
 
@@ -308,9 +305,11 @@ def _session_from_activities(
 
 
 def reconstruct_session_views(
-    trace: dict[str, Any],
+    activities: list[dict[str, Any]],
     *,
-    now: datetime | None = None,
+    day: date,
+    zone: tzinfo,
+    now: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Sessions de travail (et vues « isolated » / « background ») du jour.
 
@@ -321,13 +320,9 @@ def reconstruct_session_views(
     pendant un verrouillage (un agent qui tourne seul), jamais une reprise
     humaine — qui ne compose ni identité ni bornes de session de travail.
     """
-    trace_zone = _trace_timezone(trace)
+    trace_zone = zone
     activities = sorted(
-        (
-            activity
-            for source_session in trace["sessions"]
-            for activity in source_session["activities"]
-        ),
+        activities,
         key=lambda activity: (
             datetime.fromisoformat(activity["occurred_at"]),
             activity.get("id", 0),
@@ -581,12 +576,10 @@ def reconstruct_session_views(
                 current["pending_unresolved"].append(activity)
 
     if current is not None:
-        current_day = (now or datetime.now(reconstruction_timezone())).date().isoformat()
-        if trace["date"] != current_day:
+        current_day = now.astimezone(zone).date()
+        if day != current_day:
             reason = "day_boundary"
-        elif now is not None and now - current["last_work_at"] <= WORK_SESSION_GAP:
-            reason = "open"
-        elif now is None:
+        elif now - current["last_work_at"] <= WORK_SESSION_GAP:
             reason = "open"
         else:
             reason = "inactivity"
@@ -637,29 +630,10 @@ def reconstruct_session_views(
     return work_sessions, unresolved_sessions
 
 
-def _unresolved_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
-    if "unresolved_sessions" in trace:
-        return trace["unresolved_sessions"]
-    if "passive_sessions" in trace:
-        return trace["passive_sessions"]
-    return reconstruct_session_views(trace)[1]
-
-
-def _passive_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
-    """Deprecated compatibility alias for unresolved activity."""
-    return _unresolved_sessions(trace)
-
-
-def _work_session_views(trace: dict[str, Any]) -> list[dict[str, Any]]:
-    if "work_sessions" in trace:
-        return trace["work_sessions"]
-    return reconstruct_session_views(trace)[0]
-
-
 def _displayed_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         session
-        for session in _work_session_views(trace)
+        for session in trace["work_sessions"]
         if session.get("activity_kind") not in {"isolated", "background"}
     ]
 
@@ -668,7 +642,7 @@ def background_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
     """Activité forte observée pendant un verrouillage, rendue à part."""
     return [
         session
-        for session in _work_session_views(trace)
+        for session in trace["work_sessions"]
         if session.get("activity_kind") == "background"
     ]
 
@@ -677,23 +651,9 @@ def isolated_sessions(trace: dict[str, Any]) -> list[dict[str, Any]]:
     """Événements forts isolés, rendus en une ligne hors blocs Session."""
     return [
         session
-        for session in _work_session_views(trace)
+        for session in trace["work_sessions"]
         if session.get("activity_kind") == "isolated"
     ]
-
-
-def _session_has_recent_strong_activity(
-    session: dict[str, Any],
-    now: datetime,
-) -> bool:
-    if "end_reason" in session:
-        return session["end_reason"] == "open"
-    strong_times = [
-        datetime.fromisoformat(activity["occurred_at"])
-        for activity in session["activities"]
-        if is_strong_work_activity(activity)
-    ]
-    return bool(strong_times) and now - strong_times[-1] <= WORK_SESSION_GAP
 
 
 def _file_change_groups(

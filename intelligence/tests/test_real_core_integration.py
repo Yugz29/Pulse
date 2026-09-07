@@ -441,3 +441,34 @@ def test_core_accepts_a_v3_summary_and_keeps_its_open_items(real_core, config, t
     context = client.get_context(at=REFERENCE + timedelta(minutes=1))
     assert context["last_session_summary"]["reprise"]["open"] == stored["details"]["reprise"]["open"]
     _assert_source_unchanged(client, session, event_count=31)
+
+
+def test_intelligence_consumes_the_journal_identity_before_and_after_a_summary(
+    real_core, config, tmp_path
+):
+    client = CoreClient(real_core, timeout_s=5.0)
+    _seed_one_closed_session(client)
+    day = REFERENCE.astimezone().date()
+    session = fetch_sessions(client, day, at=REFERENCE)[0]
+    trace = requests.get(f"{real_core}/trace/{day}", timeout=5).json()
+    work = trace["work_sessions"][0]
+    assert trace["schema_version"] == 2
+    assert trace["work_session_count"] == 1
+    assert work["id"] == session.id
+    assert work["source_event_ids"] == session.raw["source_event_ids"]
+    assert work["reconstruction_version"] == session.reconstruction_version
+    assert set(work["source_event_ids"]) == {e["event_id"] for e in trace["activities"]}
+
+    output = json.loads(valid_output())
+    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    result = summarize_session(
+        session, client=client, config=config,
+        summarizer=FakeSummarizer(outputs=json.dumps(output), model_id="fake/summarizer"),
+        state=JobState.load(tmp_path / "authority-state.json"),
+    )
+    assert result.status == "created"
+    assert result.event["details"]["session_id"] == session.id
+    after = requests.get(f"{real_core}/trace/{day}", timeout=5).json()
+    assert after["work_sessions"] == trace["work_sessions"]
+    assert fetch_sessions(client, day, at=REFERENCE)[0].raw == session.raw
+    assert any(e["type"] == "session_summary" for e in after["activities"])

@@ -1,6 +1,5 @@
 """Markdown renderer for daily traces."""
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,10 +16,8 @@ from ..analysis.timeline import (
     _file_change_groups,
     _ranked_apps,
     _session_duration,
-    _session_has_recent_strong_activity,
     _session_observed_bounds,
     _trace_timezone,
-    _unresolved_sessions,
     _is_strong_work_activity,
     isolated_sessions,
 )
@@ -76,7 +73,7 @@ def render_daily_trace_markdown(
     current = build_current_state(trace) if not archive_mode else None
     resume = build_resume(trace) if not archive_mode else []
     displayed_sessions = _displayed_sessions(trace)
-    unresolved_sessions = _unresolved_sessions(trace)
+    unresolved_sessions = trace["unresolved_sessions"]
     trace_zone = _trace_timezone(trace)
     apps = [_markdown_text(app) for app, _count in _ranked_apps(summary["apps"])]
     projects = [
@@ -173,8 +170,6 @@ def render_daily_trace_markdown(
         lines.extend(["_Aucune activité._", ""])
         return "\n".join(lines)
 
-    now = datetime.now(trace_zone)
-    current_day = now.date().isoformat()
     for index, session in enumerate(displayed_sessions, start=1):
         observed_start, observed_end = _session_observed_bounds(session)
         started_at = _display_time(observed_start, trace_zone)
@@ -183,13 +178,7 @@ def render_daily_trace_markdown(
         # end_reason == "open" carries the decision already made by the
         # reconstruction (with its injectable clock); re-deriving it here
         # from wall-clock would contradict deterministic traces.
-        if "end_reason" in session:
-            session_is_open = session["end_reason"] == "open"
-        else:
-            session_is_open = (
-                trace["date"] == current_day
-                and _session_has_recent_strong_activity(session, now)
-            )
+        session_is_open = session["end_reason"] == "open"
         in_progress = (
             " · en cours"
             if index == len(displayed_sessions) and session_is_open

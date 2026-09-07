@@ -95,8 +95,8 @@ def test_builds_structured_daily_trace(tmp_path):
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
 
     assert trace["activity_count"] == 2
-    assert trace["session_count"] == 1
-    assert [item["type"] for item in trace["sessions"][0]["activities"]] == [
+    assert trace["work_session_count"] == 1
+    assert [item["type"] for item in trace["activities"]] == [
         "file_changed",
         "terminal_finished",
     ]
@@ -466,8 +466,9 @@ def test_renders_empty_daily_trace():
         "date": "2026-07-03",
         "timezone": "UTC",
         "activity_count": 0,
-        "session_count": 0,
-        "sessions": [],
+        "activities": [],
+        "work_sessions": [],
+        "unresolved_sessions": [],
     }
 
     markdown = render_daily_trace_markdown(trace)
@@ -511,7 +512,7 @@ def test_renders_multiline_terminal_command_as_nested_list(tmp_path):
     )
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
 
-    assert trace["sessions"][0]["activities"][0]["details"]["command"] == command
+    assert trace["activities"][0]["details"]["command"] == command
     markdown = render_daily_trace_markdown(trace)
     assert "## Session 1 — 21:06–21:07" in markdown
     assert (
@@ -567,7 +568,7 @@ def test_renders_file_path_relative_to_workspace(tmp_path):
     )
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
 
-    assert trace["sessions"][0]["activities"][0]["details"]["path"] == absolute_path
+    assert trace["activities"][0]["details"]["path"] == absolute_path
     markdown = render_daily_trace_markdown(trace)
     html = render_daily_trace_html(trace)
     assert "## Session 1 — 21:20–21:21" in markdown
@@ -651,7 +652,7 @@ def test_does_not_coalesce_same_file_across_sessions(tmp_path):
     markdown = render_daily_trace_markdown(trace)
     timeline = markdown.split("## Session 1", 1)[1]
 
-    assert trace["session_count"] == 2
+    assert trace["work_session_count"] == 2
     assert timeline.count("Modified `a.py`") == 2
     assert "×2" not in markdown
 
@@ -773,7 +774,8 @@ def test_does_not_coalesce_app_activations_across_sessions(tmp_path):
     markdown = render_daily_trace_markdown(trace)
     html = render_daily_trace_html(trace)
 
-    assert trace["session_count"] == 2
+    assert trace["work_session_count"] == 0
+    assert len(trace["unresolved_sessions"]) == 2
     assert "## Session " not in markdown
     assert "## Activité non attribuée" in markdown
     assert "- 08:00 · ChatGPT" in markdown
@@ -1245,7 +1247,7 @@ def test_inspection_only_sessions_hide_empty_project_summaries(tmp_path):
     markdown = render_daily_trace_markdown(trace)
     html = render_daily_trace_html(trace)
 
-    assert trace["session_count"] == 3
+    assert trace["work_session_count"] == 3
     assert markdown.count("#### Pulse") == 1
     assert html.count("<h4>Pulse</h4>") == 1
     assert "- Apps actives : Code" in markdown
@@ -1733,11 +1735,9 @@ def test_hides_ignored_app_only_sessions_in_markdown_and_html(tmp_path):
     markdown = render_daily_trace_markdown(trace)
     html = render_daily_trace_html(trace)
 
-    assert trace["session_count"] == 2
+    assert trace["work_session_count"] == 1
     assert trace["activity_count"] == 5
-    assert [activity["details"]["app"] for activity in trace["sessions"][0]["activities"]] == [
-        "loginwindow"
-    ]
+    assert trace["activities"][0]["details"]["app"] == "loginwindow"
     assert "- Sessions de travail : 1" in markdown
     assert "- Activités non attribuées : 1" in markdown
     assert markdown.count("## Session ") == 1
@@ -1915,7 +1915,7 @@ def test_timeline_marks_project_changes_but_keeps_weak_cwd_as_detail(tmp_path):
     html = render_daily_trace_html(trace)
     timeline_lines = markdown.splitlines()
 
-    assert trace["session_count"] == 1
+    assert trace["work_session_count"] == 3
     assert timeline_lines.count("### Pulse\\_V2") == 2
     assert timeline_lines.count("### Pulse\\_Sandbox") == 1
     assert "### TEST" not in timeline_lines
@@ -2179,14 +2179,13 @@ def test_day_window_follows_dst_transitions(tmp_path, day, inside_utc, outside_u
         )
 
     # now= ancré : la reconstruction ne dépend jamais de l'horloge réelle.
-    anchored_now = datetime.combine(day, time(12, 0), zone)
+    anchored_now = datetime.combine(day + timedelta(days=1), time.min, zone)
     trace = build_daily_trace(store, day, zone, now=anchored_now)
 
     assert trace["activity_count"] == len(inside_utc)
     stored_instants = {
         datetime.fromisoformat(activity["occurred_at"]).astimezone(timezone.utc)
-        for session in trace["sessions"]
-        for activity in session["activities"]
+        for activity in trace["activities"]
     }
     assert stored_instants == set(inside_utc)
 

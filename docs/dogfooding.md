@@ -15,55 +15,57 @@ veille, on les lit et on les juge dans la journée. Le 2026-09-06 est le
 **jour 2 étendu** (jours 1 et 2 dans la nuit, jugements, `show`, corpus dans
 la journée). Le **jour 3 = 2026-09-07**, après le passage launchd de 06:30.
 
-**Où on en est (fin du 2026-09-06).**
+**Où on en est (fin du 2026-09-07).**
 
-- Jours 1 et 2 faits : 7/7 puis 8/8 résumés créés sur la trace réelle, tous
-  jugés — 2 justes, 6 à moitié, 0 faux ; `doing`/`stopped_at` 10/10 cumulé
-  avec `1f931a43`, `open` 2/9. Défauts ouverts : D1 (annexe `previous_summary`
-  recopiée, 1 recopie / 1 réévaluation en réel), D3 (annexe `agent_session`
-  lue comme état ouvert, ×4), D4 (`git.commits` lus comme points ouverts),
-  D5 (« push non effectué » dans 9 `open` sur 9, Core n'observe pas les
-  pushs), plus les chemins présents à la fois dans `created` et `deleted`
-  (bascules de branche, famille D2).
-- Config de dogfooding : `llm_provider = "mlx"`, `Qwen3.8-27B-4bit`,
-  `prompt_version = "v2"` (défaut du code aussi, PR #49).
-- `run --once` planifié par launchd **chaque jour à 06:30**
-  (`com.pulse.intelligence-run`, PR #50, journal
-  `~/.pulse_intelligence/logs/run.log`) — premier passage automatique le
-  2026-09-07 au matin.
-- `pulse-intel show <id>` en fiche (PR #52) : la ligne `↳ reçu` met le `open`
-  de l'annexe `previous_summary` sous le `open` produit ; `--all` liste les
-  résumés coexistants. Les résumés émis avant la PR affichent « annexe
-  inconnue » ; ceux du 07 porteront l'annexe.
-- Corpus : 12 entrées (PR #53) — les dix gelées d'origine, plus `1e420dda` et
-  `eef4956b` avec annexe, hors gel (`added = "2026-09-06"`), contexte pris à
-  fin − 1 s. D1, D3, D4 et D5 sont désormais mesurables par `eval`.
-- Plan B consigné : `Qwen3.5-9B-4bit` (×3,8 plus rapide, 8 Go, mais invente des
-  intentions dans `open` sur les grosses sessions) — note de décision.
-- Comptes de tokens corrigés partout : `#1` = 20 901 `prompt_tokens` réels, pas
-  « ~6 500 » ; plafond 30 000 inchangé, marge 1,4×.
+- Jours 1, 2 et 3 faits : 7/7, 8/8 puis **13/13** résumés créés sur la trace
+  réelle, tous jugés. Cumul `doing`/`stopped_at` **23/23** ; `open` juste
+  2/22 (0/13 au jour 3). Le jour 3 requalifie D1 : pas une recopie, un
+  **report sans réévaluation d'un point que la vue ne peut pas clore** (le
+  push), qui fait boule de neige sur les enchaînements. D3, D4, D5 et le cas
+  `created` ∩ `deleted` réapparaissent tous malgré la consigne v2.
+- **`prompt_version = "v3"` activé le 2026-09-08 à 00:24** (config de
+  dogfooding, sauvegarde `config.toml.bak-v2-2026-09-08`), après le merge
+  de la PR #77 (D6). `llm_provider = "mlx"`, `Qwen3.8-27B-4bit` inchangés.
+- **Un seul v3 désormais.** La PR #54 (v3.1 textuelle, CONFLICTING, 115
+  fichiers derrière main) est **fermée comme remplacée** par le v3 de main
+  (7865f0f : schéma `open` typé `observed` / `carried_over` / `requested`,
+  validateur, attentes annotées), qui reprend ses quatre consignes. Le v3 de
+  main est arrivé par commits directs sur main, sans PR — écart de process
+  assumé et consigné au jour 3.
+- **D6 corrigé (PR #77, mergée à 00:20).** Dry-run v3 sur les 13 sessions
+  du lot : D5 et D4 à zéro, D3 déclaré en `requested` mais faux sur le fond
+  dans 4 fiches, et un gabarit D6 — « fichier modifié et aucun commit de la
+  session ne le nomme » — contredit par git dans 20 points sur 27. Le
+  validateur rejette désormais ce point dès que la session montre un commit ;
+  sur le corpus, le gabarit passe de 9 sorties sur 14 à 2, toutes deux sur
+  des sessions sans commit, au prix de 2 rejets (12/14 valides).
+- launchd a tiré à **06:42** sur un DarkWake batterie, le Mac s'est rendormi
+  2 s après : premier résumé « généré » en 2 h 40 d'horloge, lot complet à
+  09:32 au réveil. La fenêtre 06:30 n'est nominale que Mac éveillé.
 
-**Jour 3 (2026-09-07), dans l'ordre.**
+**Jour 4 (2026-09-08), dans l'ordre.**
 
-1. Lecture du lot launchd de 06:30 avec `pulse-intel show <id>` — la ligne
-   `↳ reçu` donne D1 d'un coup d'œil ; vérifier `run.log` d'abord.
-2. Jugement D1 sur les enchaînements du 06 (toutes les sessions auront une
-   annexe, sauf la première de la journée).
-3. Rédaction de la **v3** du prompt : D3 + D4 + D5, D1 si le lot du 07 le
-   confirme, plus la consigne sur les chemins présents à la fois dans
-   `created` et `deleted` (« présent en fin de session sauf preuve du
-   contraire »). Mesurée par `eval` sur les **12 entrées**, les deux
-   providers, **avant activation** — aucune v3 activée avant lecture du lot.
+1. Lot launchd de 06:30, **premier passage v3**. `list` à 00:25 donne
+   4 candidates, toutes du 07 (`lookback_days = 1`, les sessions du 06 sont
+   sorties de la fenêtre) : `5accd3c0` et `3e9fee12` régénérées **sans
+   annexe** (deuxième résumé), `78765707` (09:25–09:43) et `d78708a6`
+   (23:26–23:51) fraîches, **avec annexe** — plus les sessions closes dans
+   la nuit. Premier vrai test de D1 en `carried_over`.
+2. Lecture avec `show` : compter les rejets (D6 attrapé = résumé non émis,
+   `failed` puis `given_up` — à reprendre par `summarize --retry` après
+   retouche), les `requested` faux sur le fond, les `carried_over` et leur
+   `reason_kept`. Vérifier `run.log` et l'heure réelle du passage (veille).
+3. Jugement de la grille sur le lot ; corpus : geler les cas D6 réels si le
+   lot en produit.
 
 **Décisions en attente de moi.**
 
-- Relever ou non `llm_max_input_tokens` après le spike B v2 (pic mémoire du
-  27B avec le prompt v2 sur `#1`, puis entre 21k et 30k tokens ; la remesure
-  du 06 a échoué deux fois sur une erreur GPU Metal, à refaire).
-- `eval/out` hors de la vue du watcher : ajouter `out` au filtre de Core
-  (correctif) ou faire écrire `eval` hors de l'arbre observé.
-- Étape 5 : règle de préséance entre deux résumés d'une même session
-  (`intelligence/TODOS.md`).
+- Relever ou non `llm_max_input_tokens` ; `eval/out` hors du watcher ; règle
+  de préséance entre résumés d'une même session (voir aussi la nouvelle
+  entrée « filiation des résumés » d'`intelligence/TODOS.md`) — inchangées.
+- Un `checkout main` non expliqué à 23:48:30 le 07 dans le dépôt (reflog),
+  pendant l'eval : les deux commits D6 ont d'abord atterri sur `main` local
+  et ont été remis sur la branche avant la PR. À élucider si ça se reproduit.
 
 ## Jour 1 — 2026-09-06
 
@@ -372,3 +374,208 @@ Jour 3 : `run --once` sur les sessions du jour ; D1 à confirmer sur les
 enchaînements de la journée (toutes auront une annexe, aucune n'ayant de résumé
 antérieur) ; jugements de la colonne « à juger » ci-dessus. Corpus : geler
 `1e420dda` et `eef4956b` avec annexe (`intelligence/TODOS.md`, piège de capture).
+
+## Jour 3 — 2026-09-07
+
+**Premier lot launchd : 13 candidates, 13/13 créées**, prompt v2, Qwen local,
+sessions du 06 10:47 au 07 02:21. Entrée de chacune reconstituée (vue Core à
+la fin de session, annexe de la chaîne) et vérifiée : les 13 hashes retombent
+sur l'`input_hash` émis. Les jugements confrontent `open` au journal git et au
+reflog des pushs.
+
+### La veille du Mac à 06:42
+
+`pmset -g log` : DarkWake batterie à 06:42:20 (pas 06:30 — launchd attend un
+réveil), retour en veille à 06:42:22. Le premier résumé (`9abe3e88`) porte
+`generation_ms` = 9 591 s : l'horloge a couru pendant la veille ; les 12
+autres font 21 à 67 s. Le lot n'a été complet qu'à 09:32, au réveil. Le
+`generation_ms` du premier résumé ne mesure rien, et la fenêtre 06:30 n'est
+nominale que Mac éveillé et branché.
+
+### Reprises v2
+
+`doing` et `stopped_at` justes **13/13** (23/23 cumulé). `open` :
+
+| session | `open` v2 (abrégé) | `open` | défaut |
+| --- | --- | --- | --- |
+| `9abe3e88` work-6 | push non effectué ; erreur `run --once` | à moitié | D5 ; l'erreur est réelle |
+| `8eb40fb9` work-7 | push non effectué ; l'erreur précédente n'apparaît plus | à moitié | D5 faux (push 12:03) ; réévaluation D1 visible |
+| `df34583f` work-9 | push de 24bb012 toujours pas fait ; cortex-snapshot non commité | à moitié | D5 faux (poussé avant la session) |
+| `d32c9766` work-11 | 5 commits non poussés ; 3 fichiers « plus présents sur disque » | faux | D5 faux ; `created` ∩ `deleted`, les 3 existent |
+| `708e2f0a` work-13 | 3 commits non poussés ; les 5 de work-11 aussi | faux | 3 vrais à 14:53 (push 15:03) ; les 5 poussés depuis 13:10 |
+| `758ac159` work-15 | 12 + 3 non poussés | faux | pushs 15:36, 15:55, 16:15 en session |
+| `92dd9887` work-17 | 15 + 12 non poussés | faux | 4 PR mergées en session |
+| `55866a1e` work-18 | 5 + 15 non poussés | faux | PR #64, #65 mergées en session |
+| `b0c0dfb2` work-19 | 8 + 20 non poussés | faux | pushs 20:53, 20:58, 21:12 |
+| `783a423d` work-25 | 7 + 28 non poussés ; défaut 10 non traité | faux | D5 faux ; **D3** |
+| `7b7408b8` work-27 | commits non poussés ; défaut 10 reste à traiter | faux | push 23:37 en session ; **D1 recopie** de work-25 |
+| `5accd3c0` work-1 | aucun push observé, modifs locales ; validation v3 non confirmée | à moitié | vrai à 01:41 (push 02:21) ; mission d'agent reformulée |
+| `3e9fee12` work-2 | aucun push observé, modifs locales ; version de reconstruction à vérifier | faux | push 02:21:38, dernière activité 02:21:59 ; **D4** (commit a8ba1c8) |
+
+Grille du jour 2 : **0 juste, 13 à moitié, 0 faux** ; `open` seul : 0 juste,
+4 à moitié, 9 faux.
+
+### D1 requalifié — report sans réévaluation d'un point non observable
+
+Les 12 sessions enchaînées ont reçu une annexe (`work-1` ouvre sa journée).
+
+- **La réévaluation marche sur les points observables** : le point launchd
+  (reçu de `1f931a43`), l'erreur `run --once` (work-6 → work-7) et
+  cortex-snapshot (work-9 → work-11) sont abandonnés dès que la vue suivante
+  ne les montre plus. Recopie stricte : 2 sur 12 (work-27 reprend « défaut
+  10 » de work-25 ; work-2 reprend mot pour mot la phrase push de work-1).
+- **Elle ne marche pas sur l'inobservable** : le point push est repris dans
+  12 annexes sur 12 et, de work-13 à work-25, fait boule de neige — « les N
+  commits de la précédente restent non poussés », de 3 à 28. La consigne v2
+  « si traité, ne le répète pas » n'a rien à quoi s'accrocher : Core
+  n'observe pas les pushs. C'est la circonstance atténuante de `eef4956b`
+  au jour 2, devenue systématique.
+- D1 n'est donc pas un défaut de recopie mais de **report d'un point que la
+  vue ne peut jamais clore**. Seule une règle sur la nature du point le
+  règle : le `carried_over` déclaré, avec sa raison, du v3 de main.
+
+### D3, D4, D5 et `created` ∩ `deleted` malgré la v2
+
+- **D3, 2 cas nets + 1 faible.** L'annexe `agent_session` de 14:45 à 22:07
+  dit « Cette session ne traite QUE le défaut 10 ». À 22:07, work-25 écrit
+  « le défaut 10 n'a pas été traité », alors qu'il l'a été en work-13 (PR
+  #56 mergée 15:32) et que `docs/audits/2026-09-06-suivi.md`, dans la vue,
+  l'affiche mergé. work-27 le reporte ; work-1 reformule la mission de
+  l'agent en « validation non confirmée ».
+- **D4, 1 cas** : work-2 lit le commit a8ba1c8 comme « reste à vérifier ».
+- **D5, 13/13**, dont 9 faux au reflog ; 11 en forme affirmée, 2 en « aucun
+  push observé ; restent locales ».
+- **`created` ∩ `deleted`, 1 cas faux** (work-11) sur 8 sessions qui
+  portaient une telle intersection.
+
+### Le v3 de main : provenance et écart de process
+
+Commit 7865f0f (`session_summary_v3.md`, 01:46), au milieu de 15 commits
+directs sur `main` entre 01:26 et 02:12, produits par une session Claude Code
+lancée à 01:17 sur une mission écrite (« rendre le champ `open`
+vérifiable » : références stables, schéma typé, validateur, attentes,
+prompt v3, eval MLX, rapport). La mission disait « commits atomiques, pas
+de push » et ne nommait aucune branche ; la session a travaillé sur `main`
+tel que checkout. Le push d'`origin/main` à 02:21:38 a été fait hors de la
+session (aucune commande push dans sa transcription). Validation : suite
+rapide 239 tests, 6 tests `slow` avec MLX, eval 14/14, rapport
+`docs/audits/2026-09-07-validation-open-v3.md`. **Aucune PR, aucune
+relecture.** v2 et v3 sont épinglés par hash dans les tests ; le défaut de
+`Config` reste v2, rien n'est activé.
+
+Écart avec la pratique du 06 : le code y passait par PR (#56 à #75, une par
+défaut), les prompts par branche `ship/` (v2 par la PR #48, v3.1 par la PR
+#54) ; seuls docs et chores allaient sur `main` en direct. Le premier commit
+de code direct sur `main` est 6e93fd5 (23:37, session codex), puis la série
+de nuit, prompt v3 inclus. Un prompt versionné est du comportement, pas de
+la doc. Décision à prendre : écart assumé et noté ici, ou régularisé.
+
+### Dry-run v3 sur les 13 sessions du lot
+
+`summarize --dry-run`, config temporaire `prompt_version = "v3"`, aucune
+émission, état intact, 43 à 116 s par session chargement compris (18 min).
+Entrée **sans annexe** (Core rend le résumé v2 de la session elle-même,
+écarté sans repli) : D1 n'est pas testable ici, `carried_over` = 0.
+
+**13/13 valides, 0 rejet.** 34 points : 28 `observed`, 6 `requested`, une
+liste vide (work-13, la session qui a réglé le défaut 10 — juste).
+
+| session | `open` v2 | `open` v3 | ce qui change |
+| --- | --- | --- | --- |
+| work-6 | à moitié | **juste** | erreur `run --once` + cortex-snapshot créé, tous deux vrais |
+| work-7 | à moitié | **juste** | `session_summary_v3.md` créé non commité : vrai à 12:12 |
+| work-9 | à moitié | **juste** | cortex-snapshot ; `requested` inutile (« l'agent devait lire… ») |
+| work-11 | faux | faux | D6 : 4 fichiers « sans commit », tous commités en session ; `created` ∩ `deleted` tu, comme demandé |
+| work-13 | faux | **juste** | `[]` |
+| work-15 | faux | à moitié | `requested` « défaut 10 non couvert par les commits » : faux, réglé en work-13 |
+| work-17 | faux | faux | D6 ×5, tous commités ; `doing` contaminé par la demande d'agent |
+| work-18 | faux | faux | D6 (17 chemins, tous commités) + `requested` défaut 10 |
+| work-19 | faux | faux | D6 (10 chemins sur 15 commités) + `requested` défaut 10 |
+| work-25 | faux | faux | D6 (2 sur 4) + `requested` défaut 10 ; `doing` contaminé |
+| work-27 | faux | à moitié | D6 : 2 faux, 3 vrais (commités le lendemain seulement) |
+| work-1 | à moitié | faux | D6 ×5, tous commités |
+| work-2 | faux | faux | D6 3 faux, 1 vrai ; `requested` rapporte la mission accomplie |
+
+- **D5 : 0/13** (13/13 en v2). **D4 : 0/13** (1 en v2). `created` ∩
+  `deleted` : silence dans les 8 sessions concernées.
+- **D3 : déplacé, pas réglé.** 6 `requested` ; 4 (work-15, 18, 19, 25)
+  affirment que le défaut 10 « n'est pas couvert par les commits », faux sur
+  le fond, légal pour le validateur, visible dans la fiche. Et la demande
+  contamine désormais `doing` sur 3 fiches (work-15, 17, 25 : « en
+  commençant par le défaut 10 »), que la v2 rendait juste 13/13.
+- **D6, nouveau** : « fichier modifié et aucun commit de la session ne le
+  nomme » — 27 points sur 10 sessions, **20 contredits par git** (le fichier
+  est dans un commit de la fenêtre). Littéralement vrai de l'entrée (la vue
+  donne hash et message, jamais les fichiers d'un commit), faux comme état.
+  Cause : l'exemple du prompt v3 (« `workspaces.py` est modifié et aucun
+  commit de la session ne le nomme ») est appliqué à chaque fichier modifié
+  dont le nom n'est pas dans un message. Le validateur l'accepte (preuve
+  `path:` présente) : c'est le trou « pertinence d'une preuve » du rapport.
+  Remède prompt : la vue ne montre pas les fichiers d'un commit, donc « aucun
+  commit ne le nomme » n'est pas une observation ; un fichier modifié n'est
+  un reste que si la session ne montre aucun commit après lui, ce que la vue
+  ne date pas — donc jamais, sauf session sans commit.
+- `open` v3 : **4 justes, 2 à moitié, 7 faux** (v2 : 0, 4, 9). Le modèle
+  remplace un gabarit (push) par un autre (D6) ; les faux de v3 tiennent à
+  une seule phrase de prompt, comme ceux de v2.
+
+### D6 corrigé et mesuré (soirée, PR #77)
+
+Correctif en branche `ship/intelligence-prompt-v3-d6`, mergé à 00:20 le 08 :
+
+- **Validateur** : un point `observed` qui affirme qu'un fichier n'est pas
+  commité (« aucun commit ne le nomme », « sans commit associé »,
+  « n'apparaît dans aucun commit », « non commité »…) est rejeté **dès que la
+  session montre un commit** (`InputReferences.commits`). Sans aucun commit
+  dans la vue, c'est un fait, permis. Même esprit que D5 : mieux vaut pas de
+  résumé qu'un `open` faux.
+- **Prompt v3** : consigne « un commit ne liste pas ses fichiers »,
+  définition d'`observed` sans l'exemple copiable, premier exemple réécrit
+  (test rouge). +160 à +170 tokens d'entrée par session, la plus grosse à
+  23 013, marge 1,30×.
+- Tests : 243 verts (4 nouveaux, dont `eef4956b` rejetée et `7bbaca78`
+  acceptée sur le corpus). L'attente d'`eef4956b` passe le point « sans
+  commit qui les nomme » d'`optional` à `must_not`.
+
+**Corpus, MLX, argmax, 14 entrées** (archive
+`docs/audits/2026-09-08-eval-v3-d6/`) :
+
+| | nuit du 07 (v3) | v3 + D6 |
+| --- | --- | --- |
+| valides | 14/14 | 12/14 |
+| gabarit D6 dans les sorties valides | 9 | 2, sur des sessions sans commit |
+| sessions à commits rendant `[]` | 1 | 4 (`3cabaefb`, `cda6ccce`, `eb652ce9`, `d9877899`) |
+| rejets | 0 | 2 (`247f2062`, 1 commit ; `eef4956b`, 5 commits) |
+| attentes annotées | 3/4 | 2/4 (`eef4956b` rejetée ; `1e420dda` écart connu) |
+
+Les deux rejets écrivent encore « les modifications sur … ne sont pas
+committées » : la consigne ne suffit pas seule, le validateur fait le reste.
+`eb652ce9` passe de cinq points D6 à `[]`. Le résidu du jour 2 (`1e420dda`
+reprend la PR #28 en `carried_over`) est inchangé.
+
+**Les 13 sessions du lot, rejouées en dry-run sous le v3 corrigé** (00:05 à
+00:39, sans annexe, les 11 du 06 avec `--date`) : **12 valides, 1 rejet**
+(`783a423d` work-25, 7 commits : « ne sont pas committées », attrapé). Aucun
+point D6 faux : le seul « sans commit associé » restant est cortex-snapshot
+sur work-9, session sans commit. Push : 0. Cinq `[]` (work-7, 13, 27, 1, 2),
+dont work-27 qui tait trois fichiers réellement non commités à 23:58 — un
+silence, pas une erreur. `open` : **7 justes, 5 à moitié, 0 faux, 1 rejeté**
+(v3 tel quel : 4, 2, 7 ; v2 : 0, 4, 9). Les cinq « à moitié » sont les
+mêmes qu'avant : quatre `requested` « défaut 10 non couvert par les
+commits » (work-15, 17, 18, 19 — faux sur le fond, réglé en work-13) et
+work-11 qui relit le message du commit 2ecc77b (« non activé ») en point
+ouvert, un D4 sous forme `observed` avec preuve `commit:`. `doing` reste
+contaminé par la demande d'agent sur work-15 et work-17. Reste à traiter en
+v3, dans cet ordre : le `requested` qui affirme un état (« non couvert »,
+« pas confirmée ») et le message de commit cité comme reste.
+
+### Décisions du jour 3
+
+- **PR #54 fermée** comme remplacée par le v3 de main, branche conservée.
+- **Écart de process 7865f0f assumé et noté** (ci-dessus) ; règle pour la
+  suite : un prompt versionné est du comportement, il passe par une PR.
+- **`prompt_version = "v3"` activé** le 08 à 00:24, après merge de la PR #77
+  et mesure corpus. Le lot du 08 juge D1 en `carried_over` sur le réel.
+- Sujet posé dans `intelligence/TODOS.md` : les résumés héritent de
+  l'immutabilité de `trace.db` par effet de bord ; piste d'une filiation
+  `supersedes` / `superseded_by` côté Intelligence, avant l'étape 5.

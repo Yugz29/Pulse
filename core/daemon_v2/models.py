@@ -104,7 +104,6 @@ class IngestedEvent:
 @dataclass(frozen=True)
 class StoredActivity:
     id: int
-    session_id: str
     activity: Activity
     event_id: str
     schema_version: int
@@ -125,11 +124,3 @@ class StoredActivity:
     @property
     def details(self) -> dict[str, Any]:
         return self.activity.details
-
-
-@dataclass(frozen=True)
-class Session:
-    id: str
-    started_at: datetime
-    ended_at: datetime
-    activity_count: int

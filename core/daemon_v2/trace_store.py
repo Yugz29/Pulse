@@ -11,18 +11,15 @@ from .models import (
     Activity,
     CanonicalEvent,
     IngestedEvent,
-    Session,
     StoredActivity,
     canonical_event_fingerprint,
 )
 from .private_files import ensure_private_directory, restrict_private_file
-from .session_tracker import select_session
 
 
 CREATE_ACTIVITIES_TABLE = """
 CREATE TABLE IF NOT EXISTS activities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
     event_id TEXT NOT NULL,
     schema_version INTEGER NOT NULL,
     type TEXT NOT NULL,
@@ -43,7 +40,6 @@ CREATE TABLE IF NOT EXISTS activities (
 INDEX_STATEMENTS = (
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_event_id ON activities(event_id)",
     "CREATE INDEX IF NOT EXISTS idx_activities_occurred_at_utc ON activities(occurred_at_utc)",
-    "CREATE INDEX IF NOT EXISTS idx_activities_session_id ON activities(session_id)",
 )
 
 TRIGGER_STATEMENTS = (
@@ -124,6 +120,10 @@ class TraceStore:
                 row["name"]
                 for row in connection.execute("PRAGMA table_info(activities)")
             }
+
+            # Legacy databases keep their historical column and values untouched.
+            # New events only satisfy its NOT NULL constraint; no session is assigned.
+            self._has_legacy_session_column = "session_id" in columns
 
             # Temporarily remove append-only guards only inside the migration
             # transaction; they are recreated before commit.
@@ -216,7 +216,6 @@ class TraceStore:
                 stored = self._row_to_stored_activity(existing)
                 return StoredActivity(
                     id=stored.id,
-                    session_id=stored.session_id,
                     activity=stored.activity,
                     event_id=stored.event_id,
                     schema_version=stored.schema_version,
@@ -228,21 +227,18 @@ class TraceStore:
                 )
 
             recorded_at = datetime.now(timezone.utc)
-            session_id = select_session(
-                activity.occurred_at_utc,
-                self._sessions(connection),
-            )
+            legacy_column = "session_id," if self._has_legacy_session_column else ""
+            legacy_value = "''," if self._has_legacy_session_column else ""
             cursor = connection.execute(
-                """
+                f"""
                 INSERT INTO activities (
-                    session_id, event_id, schema_version, type,
+                    {legacy_column} event_id, schema_version, type,
                     producer_name, producer_version, producer_instance_id,
                     occurred_at, occurred_at_utc, recorded_at, details_json,
                     event_fingerprint, activity_type, source, summary
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES ({legacy_value} ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    session_id,
                     event.event_id,
                     event.schema_version,
                     event.event_type,
@@ -263,7 +259,6 @@ class TraceStore:
 
         return StoredActivity(
             id=activity_id,
-            session_id=session_id,
             activity=activity,
             event_id=event.event_id,
             schema_version=event.schema_version,
@@ -293,29 +288,6 @@ class TraceStore:
                 legacy=True,
             )
         )
-
-    def _sessions(self, connection: sqlite3.Connection) -> list[Session]:
-        rows = connection.execute(
-            """
-            SELECT session_id, occurred_at
-            FROM activities
-            ORDER BY occurred_at_utc ASC, id ASC
-            """
-        ).fetchall()
-        grouped: dict[str, list[datetime]] = {}
-        for row in rows:
-            grouped.setdefault(row["session_id"], []).append(
-                datetime.fromisoformat(row["occurred_at"])
-            )
-        return [
-            Session(
-                id=session_id,
-                started_at=min(timestamps),
-                ended_at=max(timestamps),
-                activity_count=len(timestamps),
-            )
-            for session_id, timestamps in grouped.items()
-        ]
 
     def activities_between(self, start: datetime, end: datetime) -> list[StoredActivity]:
         with closing(self._connect()) as connection, connection:
@@ -416,7 +388,6 @@ class TraceStore:
         )
         return StoredActivity(
             id=row["id"],
-            session_id=row["session_id"],
             activity=activity,
             event_id=row["event_id"],
             schema_version=row["schema_version"],

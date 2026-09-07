@@ -46,6 +46,18 @@
 **Priority:** P2
 **Depends on:** Service résident
 
+### Les résumés héritent de l'immutabilité de `trace.db` par effet de bord
+
+**What:** Un `session_summary` est une **interprétation** (sortie d'un modèle, sous un prompt et une version données), pas un fait observé ; il entre pourtant dans `trace.db` par la même route que le brut (`POST /activities`), append-only, sans possibilité de le retirer ni de le marquer dépassé. Deux conséquences déjà rencontrées : (1) quand deux résumés d'une même session coexistent (entrée « Deux résumés d'une même session coexistent… »), rien ne dit lequel fait foi ; (2) le 2026-09-07 au soir, la bascule vers le prompt v3 a été retenue tout en sachant qu'une part des `open` régénérés serait fausse (D6, `docs/dogfooding.md`, jour 3) — on émet donc sciemment des interprétations partiellement fausses que rien ne pourra ensuite déclasser. L'append-only reste **correct pour le brut observé** ; il est subi pour les interprétations.
+
+**Piste à creuser (Intelligence, sans toucher Core) :** une **filiation** entre résumés — `supersedes` / `superseded_by` portés par Intelligence (dans `details`, ou dans l'état local, ou les deux), une régénération désignant explicitement le résumé qu'elle remplace ; `show`, l'annexe `previous_summary` et un futur service suivraient la tête de filiation plutôt que « le dernier émis ». Questions ouvertes, sans conception ici : où vit la filiation (Core la recopie sans la lire, ou Intelligence seule ?), ce que devient un résumé dépassé pour `GET /context` (Core gelé : `last_session_summary` sert le dernier tout court), et si un résumé reconnu faux doit pouvoir être **retiré** de la reprise sans être effacé de la trace.
+
+**Déclencheur:** avant l'étape 5 (service résident), qui figerait la règle « dernier émis » par défaut ; ou le premier résumé faux qu'on voudrait déclasser.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Service résident ; entrée « Deux résumés d'une même session coexistent… »
+
 ### `details.workspace` peut désigner la session suivante (`1f931a43`, 2026-09-06)
 
 **What:** Le résumé v2 de `1f931a43c3b7149f` (work-4 du 2026-09-06, 07:44–08:47 UTC) porte `structured.project: "Pulse"` — juste, la vue dit `projects: ["Pulse"]` et les fichiers sont sous `intelligence/` — mais `details.workspace: /Users/Yugz/Projets/Cortex`. Diagnostic (trace relue en lecture seule le 2026-09-07) : `last_activity_at` de la session vaut `08:47:25.998428`, qui est l'horodatage d'un `file_changed` **dans Cortex** (`electron.vite.config.…`, premier événement du travail suivant) que la reconstruction du jour a absorbé dans work-4 par la règle de proximité temporelle. `summarize_session` lit `GET /context?at=<last_activity_at>` ; à cet instant précis, `_select_current_session` de Core rend une session **ouverte** dans Cortex (work-5, `projects: ["Cortex"]`) et `workspace.resolution: "session"` suit cette session — alors qu'à `at − 1 s`, la session courante est bien work-4 et le workspace Pulse. `details.workspace` vient de ce `context.workspace.path` ; `structured.project` vient du modèle, qui lit la vue. Les deux routes de Core ne s'accordent donc pas sur l'appartenance de l'événement frontière (même famille que le défaut 1 de l'audit 2026-09-06 : `is_open` selon la route lue), et Intelligence prend le workspace de l'instant sans vérifier qu'il est celui de la session résumée. Aucune donnée n'a été modifiée : le résumé émis reste tel quel, `input_hash` compris.

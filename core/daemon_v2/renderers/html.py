@@ -1,6 +1,5 @@
 """HTML renderers for daily traces and available-day archives."""
 
-from datetime import datetime
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -18,11 +17,9 @@ from ..analysis.timeline import (
     _file_change_groups,
     _ranked_apps,
     _session_duration,
-    _session_has_recent_strong_activity,
     _session_observed_bounds,
     _session_project_sequence,
     _trace_timezone,
-    _unresolved_sessions,
     _is_strong_work_activity,
     isolated_sessions,
 )
@@ -71,7 +68,7 @@ def render_daily_trace_html(
     current = build_current_state(trace) if not archive_mode else None
     resume = build_resume(trace) if not archive_mode else []
     displayed_sessions = _displayed_sessions(trace)
-    unresolved_sessions = _unresolved_sessions(trace)
+    unresolved_sessions = trace["unresolved_sessions"]
     agent_views = agent_session_views(trace)
     background_views = background_session_views(trace)
     trace_zone = _trace_timezone(trace)
@@ -360,8 +357,6 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
     ):
         body.append("<p>Aucune activité pour cette journée.</p>")
 
-    now = datetime.now(trace_zone)
-    current_day = now.date().isoformat()
     for index, session in enumerate(displayed_sessions, start=1):
         observed_start, observed_end = _session_observed_bounds(session)
         started_at = _display_time(observed_start, trace_zone)
@@ -370,13 +365,7 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
         # end_reason == "open" carries the decision already made by the
         # reconstruction (with its injectable clock); re-deriving it here
         # from wall-clock would contradict deterministic traces.
-        if "end_reason" in session:
-            session_is_open = session["end_reason"] == "open"
-        else:
-            session_is_open = (
-                trace["date"] == current_day
-                and _session_has_recent_strong_activity(session, now)
-            )
+        session_is_open = session["end_reason"] == "open"
         in_progress = (
             " · en cours"
             if not archive_mode

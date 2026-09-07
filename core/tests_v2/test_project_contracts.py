@@ -221,7 +221,7 @@ def test_session_propagation_differs_from_exact_days_attribution(tmp_path):
     trace = trace_for(store)
     summary = build_daily_summary(trace)
     session_summaries = _session_project_summaries(
-        trace["sessions"][0], set(summary["workspaces"])
+        {"activities": trace["activities"]}, set(summary["workspaces"])
     )
     available_day = build_available_days(store, timezone.utc)["days"][0]
 

@@ -16,7 +16,7 @@ def activity(occurred_at):
     return Activity("file_changed", occurred_at, "filesystem", "Modified /tmp/a", {"path": "/tmp/a"})
 
 
-def test_append_persists_activity_and_reuses_nearby_session(tmp_path):
+def test_append_persists_independent_events_in_time_order(tmp_path):
     store = TraceStore(tmp_path / "pulse.sqlite3")
     first_at = datetime(2026, 7, 3, 8, 0, tzinfo=timezone.utc)
 
@@ -24,7 +24,7 @@ def test_append_persists_activity_and_reuses_nearby_session(tmp_path):
     second = store.append(activity(first_at + timedelta(minutes=10)))
     rows = store.activities_between(first_at, first_at + timedelta(hours=1))
 
-    assert first.session_id == second.session_id
+    assert first.event_id != second.event_id
     assert [row.id for row in rows] == [first.id, second.id]
 
 
@@ -43,7 +43,7 @@ def test_activities_are_append_only(tmp_path):
             connection.execute("DELETE FROM activities WHERE id = ?", (stored.id,))
 
 
-def test_out_of_order_activity_reuses_session_containing_its_timestamp(tmp_path):
+def test_out_of_order_events_reconstruct_isolated_work_and_unresolved_presence(tmp_path):
     store = TraceStore(tmp_path / "pulse.sqlite3")
     first_at = datetime(2026, 7, 3, 12, 28, tzinfo=timezone.utc)
 
@@ -87,12 +87,11 @@ def test_out_of_order_activity_reuses_session_containing_its_timestamp(tmp_path)
         ),
     ]
 
-    assert len({item.session_id for item in stored}) == 1
+    assert len({item.event_id for item in stored}) == 5
     trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
     markdown = render_daily_trace_markdown(trace)
-    assert trace["session_count"] == 1
-    # Nouveau contrat (2026-08-30) : les deux événements forts isolés ne
-    # forment plus des blocs Session — la session RAW du store, elle, reste une.
+    assert trace["work_session_count"] == 0
+    # Two isolated strong events do not become work sessions through weak signals.
     assert "## Session " not in markdown
     assert "## Activités isolées" in markdown
     assert "- 12:28 ·" in markdown
@@ -196,7 +195,7 @@ def test_migrates_historical_schema_without_loss_and_is_idempotent(tmp_path):
         date(2026, 7, 22),
         timezone.utc,
     )
-    exported = historical_trace["sessions"][0]["activities"][0]
+    exported = historical_trace["activities"][0]
     assert exported["event_id"] == "legacy-migrated:1"
     assert exported["schema_version"] == 0
     assert exported["producer"]["name"] == "pulse-legacy-migrated"
@@ -431,9 +430,8 @@ def test_latest_activity_of_type_prefers_highest_id_on_equal_instants(tmp_path):
 
 def test_every_stored_activity_has_a_non_empty_event_id(tmp_path):
     # Invariant de l'identité stable des sessions (Core 0.5.0) : le hash
-    # est calculé sur les event_id. Le repli id:<rowid> de session_identity
-    # n'existe que pour les fixtures sans event_id, jamais pour une ligne
-    # stockée — quel que soit le chemin d'écriture.
+    # est calculé sur les event_id, jamais sur une clé de ligne de repli,
+    # quel que soit le chemin d'écriture.
     from daemon_v2.analysis.timeline import session_identity
     from daemon_v2.daily_trace import build_daily_trace
 

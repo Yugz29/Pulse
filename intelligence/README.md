@@ -5,6 +5,12 @@ Elle lit les sessions closes exposées par Pulse Core, les fait résumer par un
 modèle local, et réémet le résumé vers Core comme événement `session_summary`.
 Core ne sait pas qu'elle existe.
 
+Depuis le 2026-09-08, le journal et `/context/sessions` proviennent du même
+chargement et de la même reconstruction Core. Intelligence conserve le hash
+stable de session, ses sources et la version 3 ; elle ne reconstruit ni ne
+réattribue les sessions. Aucun changement du format d’entrée LLM dans ce
+chantier ([décision](../docs/decisions/2026-09-08-reconstruction-unique-des-sessions.md)).
+
 ## En bref
 
 ```

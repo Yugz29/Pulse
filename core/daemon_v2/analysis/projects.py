@@ -280,20 +280,19 @@ def persisted_workspace_identity(
 
 def last_observed_workspace(trace: dict[str, Any]) -> str | None:
     workspace = None
-    for session in trace["sessions"]:
-        for activity in session["activities"]:
-            if activity["type"] == "app_activated":
-                continue
-            details = activity.get("details", {})
-            useful_activity = (
-                activity["type"] != "terminal_finished"
-                or bool(useful_command_lines(details.get("command")))
-            )
-            if not useful_activity:
-                continue
-            candidate = activity_project_root(activity)
-            if candidate and not is_weak_workspace(candidate):
-                workspace = candidate
+    for activity in trace["activities"]:
+        if activity["type"] == "app_activated":
+            continue
+        details = activity.get("details", {})
+        useful_activity = (
+            activity["type"] != "terminal_finished"
+            or bool(useful_command_lines(details.get("command")))
+        )
+        if not useful_activity:
+            continue
+        candidate = activity_project_root(activity)
+        if candidate and not is_weak_workspace(candidate):
+            workspace = candidate
     return workspace
 
 
@@ -301,12 +300,11 @@ def most_frequent_explicit_workspace(
     trace: dict[str, Any],
 ) -> str | None:
     counts: dict[str, int] = {}
-    for session in trace["sessions"]:
-        for activity in session["activities"]:
-            workspace = activity.get("details", {}).get("workspace")
-            if isinstance(workspace, dict):
-                workspace = workspace.get("workspace_root")
-            if workspace and not is_weak_workspace(workspace):
-                project_root = resolve_project_context(workspace).project_root
-                counts[project_root] = counts.get(project_root, 0) + 1
+    for activity in trace["activities"]:
+        workspace = activity.get("details", {}).get("workspace")
+        if isinstance(workspace, dict):
+            workspace = workspace.get("workspace_root")
+        if workspace and not is_weak_workspace(workspace):
+            project_root = resolve_project_context(workspace).project_root
+            counts[project_root] = counts.get(project_root, 0) + 1
     return max(counts, key=counts.get) if counts else None
