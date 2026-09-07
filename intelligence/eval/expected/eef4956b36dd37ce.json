@@ -13,14 +13,7 @@
    "why": "Le seul cas D1 réel du jour 2. Le point précédent n'est ni traité ni contredit par la vue : config.toml et eval/out vivent hors de l'arbre observé. Le garder est légitime, mais seulement déclaré comme repris, avec la raison — pas recopié comme une observation."
   }
  ],
- "optional": [
-  {
-   "text": "docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés sans commit qui les nomme",
-   "kind": "observed",
-   "evidence": ["path:docs/specs/2026-09-05-llm-provider.md", "path:intelligence/TODOS.md"],
-   "why": "Deux fichiers modifiés que les cinq messages de commit ne citent pas : un reste plausible, étayé par les chemins. Acceptable, pas exigé — la vue ne dit pas si un commit les contient."
-  }
- ],
+ "optional": [],
  "must_not": [
   {
    "text_matches": "push|pouss",
@@ -33,6 +26,11 @@
   {
    "text_matches": "python-version|session_summary_v2\\.md",
    "why": "Créés et supprimés dans la même vue : état inconnu (famille D2), on n'affirme rien."
+  },
+  {
+   "kind": "observed",
+   "text_matches": "aucun commit|sans commit|commit+ée?s?",
+   "why": "D6 (dogfooding, jour 3) : la sortie v3 du 07 écrivait « docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés et aucun commit de la session ne les nomme » ; la vue donne le message des cinq commits, jamais leurs fichiers — un silence lu comme un fait. Point autrefois « acceptable, pas exigé », désormais rejeté par le validateur."
   }
  ]
 }

@@ -1,0 +1,34 @@
+⚠ corpus figé sous la reconstruction v2 (14) ; ce code a été validé sur v3 : les vues ne sont pas celles que Core sert aujourd'hui (voir meta.json)
+  ✓ work-1   071bbd62a95fb6cb    5964tok  62840ms  Milieu de gamme, DevNote, peu de fichi
+  ✓ work-26  1e420dda8b6eee77    7017tok  71078ms  Cas D1 du jour 1 (work-26 du 2026-09-0
+  ✗ work-4   247f2062410ca5a9   14841tok  149583ms  reprise.open[0]: affirme qu'un fichier n'est pas commité alors que la session montre 1 commit(s) dont la vue ne liste pas les fichiers
+  ✓ work-3   2ce344566f7e85dc    4105tok  71832ms  La plus ambiguë : 4 projets, 0 fichier
+  ✓ work-6   3cabaefb759dae36   23013tok  225360ms  La plus grosse (~6500 tok) — sert au s
+  ✓ work-1   6a4166356dbab6ec    4596tok  49505ms  Raisonnement pur : 0 fichier, domaine 
+  ✓ work-6   7bbaca7882c3d766    4030tok  44351ms  Bruyante : 34 activations d'apps, 1 fi
+  ✓ work-2   8af930d9ef437d2a    3594tok  44388ms  Cas D3 du jour 2 (work-2 du 2026-09-05
+  ✓ work-1   8faf4569fe2723b1    6923tok  83049ms  Longue en horloge (117 min), juillet, 
+  ✓ work-3   cda6ccce898d3e88    5087tok  62551ms  Courte (~10 min), dense en fichiers.
+  ✓ work-6   d047b37b4511d37c    8714tok  104173ms  Août, DevNote, agent.
+  ✓ work-24  d98778994319cd07    3859tok  42488ms  Cas D3 du jour 2 (work-24 du 2026-09-0
+  ✓ work-2   eb652ce9f04c4b37   13072tok  137190ms  git dense : 29 commits dans la session
+  ✗ work-3   eef4956b36dd37ce    7082tok  102296ms  reprise.open[0]: affirme qu'un fichier n'est pas commité alors que la session montre 5 commit(s) dont la vue ne liste pas les fichiers
+
+12/14 valides -> <out>/mlx-mlx-community-Qwen3.8-27B-4bit
+
+attentes annotées : 2/4 conformes
+1e420dda8b6eee77  écart
+  ✗ manquant          [observed] La divergence list/run sur le modèle est consignée (commit f30781f) ; aucun correctif observé ensuite dans la session  ← commit:f30781f
+      pourquoi : Le commit f30781f « consigner la divergence list/run sur le modèle » est un fait de la session ; il documente, il ne corrige pas (TODOS d'Intelligence). Formulé comme une observation, pas comme un fait négatif.
+  ✗ interdit (text_matches=PR #28|migration|MacBook)  [carried_over] L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session.  ← — · repris de previous_summary:0
+      pourquoi : D3 : c'est la demande initiale de l'agent (16:01 UTC), recopiée par le v1 via previous_summary et par la v2 des sessions voisines. Rien dans cette session ne la concerne : ni carried_over (aucune raison de la garder), ni observed.
+  ✗ interdit (kind=carried_over)  [carried_over] L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session.  ← — · repris de previous_summary:0
+      pourquoi : Les deux points reçus (PR #28, migration) sont une demande d'agent, pas un reste de travail : les reprendre serait D1 sous un autre nom.
+  ? en plus           [carried_over] L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session.  ← — · repris de previous_summary:0
+8af930d9ef437d2a  conforme
+  ✓ acceptable        [requested] Vérifier l'état de la PR #28 et l'exclusion de .gitnexus/ du watcher  ← agent_request:0
+d98778994319cd07  conforme
+eef4956b36dd37ce  écart
+  ! rejected : reprise.open[0]: affirme qu'un fichier n'est pas commité alors que la session montre 5 commit(s) dont la vue ne liste pas les fichiers
+  ✗ manquant          [carried_over] La configuration de llm_max_tokens et le passage de référence restent à valider  ← — · repris de previous_summary:1
+      pourquoi : Le seul cas D1 réel du jour 2. Le point précédent n'est ni traité ni contredit par la vue : config.toml et eval/out vivent hors de l'arbre observé. Le garder est légitime, mais seulement déclaré comme repris, avec la raison — pas recopié comme une observation.
