@@ -201,6 +201,9 @@ def test_default_prompt_version_is_the_current_one_and_resolves_to_a_file():
     # v2 courante depuis le 2026-09-06 (spec §7) ; v1 reste livrée pour rejouer la référence.
     assert Config().prompt_version == "v2"
     assert prompt_path_for("v2").is_file() and prompt_path_for("v1").is_file()
+    # v3 rédigée le 2026-09-06 (D3, D4, D5, chemins ambigus), pas encore le
+    # défaut : activation après lecture du lot launchd du 07.
+    assert prompt_path_for("v3").is_file()
 
 
 def test_the_suite_never_reads_the_developer_home(tmp_path):
