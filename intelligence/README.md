@@ -203,7 +203,11 @@ réel de `previous_summary` ou n'a pas de `reason_kept` ; un point
 `requested` cite autre chose que `agent_request:<i>` ; un texte reprend un
 point de `previous_summary` sans `kind: carried_over` (D1) ; un point
 `observed` affirme qu'un push n'a pas été effectué (D5 — Core n'observe pas
-les pushs). Les références s'écrivent `<type>:<clé>` avec la clé telle que
+les pushs) ; un point `observed` affirme qu'un fichier n'est pas commité
+(« aucun commit ne le nomme », « sans commit associé ») alors que la session
+montre au moins un commit (D6 — la vue donne le message d'un commit, jamais
+ses fichiers ; sans aucun commit dans la vue, le point reste permis). Les
+références s'écrivent `<type>:<clé>` avec la clé telle que
 Core la sert : `path:`, `commit:`, `event:`, `app:`, `test_passed:`,
 `test_failed:`, `error:`, `signal:`, `agent_request:0`,
 `previous_summary:<i>` (le i-ième point du `open` reçu, listé dans

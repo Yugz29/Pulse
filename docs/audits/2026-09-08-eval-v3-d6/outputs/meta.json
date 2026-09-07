@@ -1,0 +1,156 @@
+{
+ "corpus_reconstruction_versions": {
+  "2": 14
+ },
+ "failed": 0,
+ "generated_at": "2026-09-07T21:49:51.594676+00:00",
+ "known_reconstruction_version": 3,
+ "model_id": "mlx-community/Qwen3.8-27B-4bit",
+ "ok": 12,
+ "prompt_path": "session_summary_v3.md",
+ "provider": "mlx",
+ "rejected": 2,
+ "session_count": 14,
+ "sessions": [
+  {
+   "completion_tokens": 234,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 62840,
+   "id": "071bbd62a95fb6cb",
+   "label": "work-1",
+   "prompt_tokens": 5964,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 283,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 71078,
+   "id": "1e420dda8b6eee77",
+   "label": "work-26",
+   "prompt_tokens": 7017,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 345,
+   "detail": "reprise.open[0]: affirme qu'un fichier n'est pas commité alors que la session montre 1 commit(s) dont la vue ne liste pas les fichiers",
+   "dropped_parameters": [],
+   "duration_ms": 149583,
+   "id": "247f2062410ca5a9",
+   "label": "work-4",
+   "prompt_tokens": 14841,
+   "status": "rejected"
+  },
+  {
+   "completion_tokens": 236,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 71832,
+   "id": "2ce344566f7e85dc",
+   "label": "work-3",
+   "prompt_tokens": 4105,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 222,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 225360,
+   "id": "3cabaefb759dae36",
+   "label": "work-6",
+   "prompt_tokens": 23013,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 217,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 49505,
+   "id": "6a4166356dbab6ec",
+   "label": "work-1",
+   "prompt_tokens": 4596,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 189,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 44351,
+   "id": "7bbaca7882c3d766",
+   "label": "work-6",
+   "prompt_tokens": 4030,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 195,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 44388,
+   "id": "8af930d9ef437d2a",
+   "label": "work-2",
+   "prompt_tokens": 3594,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 292,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 83049,
+   "id": "8faf4569fe2723b1",
+   "label": "work-1",
+   "prompt_tokens": 6923,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 226,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 62551,
+   "id": "cda6ccce898d3e88",
+   "label": "work-3",
+   "prompt_tokens": 5087,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 312,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 104173,
+   "id": "d047b37b4511d37c",
+   "label": "work-6",
+   "prompt_tokens": 8714,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 144,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 42488,
+   "id": "d98778994319cd07",
+   "label": "work-24",
+   "prompt_tokens": 3859,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 252,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 137190,
+   "id": "eb652ce9f04c4b37",
+   "label": "work-2",
+   "prompt_tokens": 13072,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 483,
+   "detail": "reprise.open[0]: affirme qu'un fichier n'est pas commité alors que la session montre 5 commit(s) dont la vue ne liste pas les fichiers",
+   "dropped_parameters": [],
+   "duration_ms": 102296,
+   "id": "eef4956b36dd37ce",
+   "label": "work-3",
+   "prompt_tokens": 7082,
+   "status": "rejected"
+  }
+ ]
+}
