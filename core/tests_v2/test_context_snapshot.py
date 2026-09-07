@@ -931,10 +931,8 @@ def test_a_session_active_within_the_gap_without_closure_stays_current(tmp_path)
     assert listed == []
 
 
-def test_a_day_boundary_session_read_just_after_midnight_stays_current(tmp_path):
-    """Contrôle de la limite documentée (spec /context, « Minuit local ») :
-    entre 00:00 et 00:30, la session de la veille fermée en day_boundary est
-    encore courante. Le correctif ne vise que les fermetures explicites."""
+def test_a_day_boundary_session_is_recent_and_closed_in_every_view(tmp_path):
+    """La fermeture à minuit est la même dans le journal et /context."""
     # REFERENCE est le 2026-09-02 14:00 UTC : 23:40 et 23:50 la veille, lecture 00:10.
     store = make_store(
         tmp_path,
@@ -949,6 +947,6 @@ def test_a_day_boundary_session_read_just_after_midnight_stays_current(tmp_path)
         store, day=at(-850).date(), reference_at=read_at, local_timezone=timezone.utc
     )["sessions"]
 
-    assert result["current_session"] is not None
-    assert result["current_session"]["is_open"] is True
-    assert [s["id"] for s in yesterday] == [result["current_session"]["id"]]
+    assert result["current_session"] is None
+    assert len(yesterday) == 1 and yesterday[0]["is_open"] is False
+    assert [s["id"] for s in result["recent_sessions"]] == [yesterday[0]["id"]]

@@ -35,10 +35,10 @@ def _raw_insert_unredacted(database: Path, command: str) -> None:
         connection.execute(
             """
             INSERT INTO activities (
-                session_id, event_id, schema_version, type, producer_name,
+                event_id, schema_version, type, producer_name,
                 occurred_at, occurred_at_utc, recorded_at, details_json,
                 activity_type, source, summary
-            ) VALUES ('s', 'raw-' || ?, 1, 'terminal_finished', 'test',
+            ) VALUES ('raw-' || ?, 1, 'terminal_finished', 'test',
                       '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00.000000+00:00',
                       '2026-07-03T12:00:00+00:00',
                       ?, 'terminal_finished', 'terminal', ?)
@@ -68,10 +68,10 @@ def test_audit_scans_git_commit_messages(tmp_path):
         connection.execute(
             """
             INSERT INTO activities (
-                session_id, event_id, schema_version, type, producer_name,
+                event_id, schema_version, type, producer_name,
                 occurred_at, occurred_at_utc, recorded_at, details_json,
                 activity_type, source, summary
-            ) VALUES ('s', 'msg-1', 1, 'git_commit', 'test',
+            ) VALUES ('msg-1', 1, 'git_commit', 'test',
                       '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00.000000+00:00',
                       '2026-07-03T12:00:00+00:00',
                       ?, 'git_commit', 'git', 'Commit abc1234')
@@ -106,10 +106,10 @@ def test_audit_tolerates_malformed_json_rows(tmp_path):
         connection.execute(
             """
             INSERT INTO activities (
-                session_id, event_id, schema_version, type, producer_name,
+                event_id, schema_version, type, producer_name,
                 occurred_at, occurred_at_utc, recorded_at, details_json,
                 activity_type, source, summary
-            ) VALUES ('s', 'bad-json', 1, 'terminal_finished', 'test',
+            ) VALUES ('bad-json', 1, 'terminal_finished', 'test',
                       '2026-07-03T12:00:00+00:00', '2026-07-03T12:00:00.000000+00:00',
                       '2026-07-03T12:00:00+00:00',
                       'not json{{{', 'terminal_finished', 'terminal', 'ok')

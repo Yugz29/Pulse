@@ -27,14 +27,15 @@ from .analysis.terminal import (
 )
 from .analysis.timeline import (
     IGNORED_APP_NAMES_FOR_RENDERING,
+    RECONSTRUCTION_VERSION,
     display_file_path,
     _display_time,
     _displayed_sessions,
-    _unresolved_sessions,
     _trace_timezone,
     background_sessions,
     reconstruct_session_views,
 )
+from .models import StoredActivity
 from .git_context import parse_status_output
 from .runtime_config import reconstruction_timezone
 from .trace_store import TraceStore
@@ -252,28 +253,27 @@ def agent_session_views(trace: dict[str, Any]) -> list[dict[str, Any]]:
     l'événement — rien n'est recalculé.
     """
     views = []
-    for session in trace["sessions"]:
-        for activity in session["activities"]:
-            if activity["type"] != "agent_session":
-                continue
-            details = activity.get("details", {})
-            workspace = details.get("workspace")
-            if isinstance(workspace, dict):
-                workspace = workspace.get("workspace_root")
-            views.append(
-                {
-                    "occurred_at": activity["occurred_at"],
-                    "started_at": _optional_instant(details.get("started_at")),
-                    "ended_at": _optional_instant(details.get("ended_at")),
-                    "agent": details.get("source_tool"),
-                    "summary": activity["summary"],
-                    "workspace": (
-                        workspace
-                        if isinstance(workspace, str) and workspace
-                        else None
-                    ),
-                }
-            )
+    for activity in trace["activities"]:
+        if activity["type"] != "agent_session":
+            continue
+        details = activity.get("details", {})
+        workspace = details.get("workspace")
+        if isinstance(workspace, dict):
+            workspace = workspace.get("workspace_root")
+        views.append(
+            {
+                "occurred_at": activity["occurred_at"],
+                "started_at": _optional_instant(details.get("started_at")),
+                "ended_at": _optional_instant(details.get("ended_at")),
+                "agent": details.get("source_tool"),
+                "summary": activity["summary"],
+                "workspace": (
+                    workspace
+                    if isinstance(workspace, str) and workspace
+                    else None
+                ),
+            }
+        )
     views.sort(key=lambda view: datetime.fromisoformat(view["occurred_at"]))
     return views
 
@@ -392,28 +392,27 @@ def build_current_state(trace: dict[str, Any]) -> dict[str, Any]:
     last_app = None
     last_command = None
     last_useful_activity = None
-    for session in trace["sessions"]:
-        for activity in session["activities"]:
-            details = activity.get("details", {})
-            if activity["type"] == "app_activated":
-                app = details.get("app")
-                if app and app not in IGNORED_APP_NAMES_FOR_RENDERING:
-                    last_app = app
-            else:
-                useful_activity = (
-                    activity["type"] != "terminal_finished"
-                    or bool(_useful_command_lines(details.get("command")))
-                )
-                if useful_activity:
-                    last_useful_activity = activity
-            if activity["type"] == "terminal_finished":
-                command_lines = [
-                    line.strip()
-                    for line in str(details.get("command", "")).splitlines()
-                    if line.strip()
-                ]
-                if command_lines:
-                    last_command = command_lines[-1]
+    for activity in trace["activities"]:
+        details = activity.get("details", {})
+        if activity["type"] == "app_activated":
+            app = details.get("app")
+            if app and app not in IGNORED_APP_NAMES_FOR_RENDERING:
+                last_app = app
+        else:
+            useful_activity = (
+                activity["type"] != "terminal_finished"
+                or bool(_useful_command_lines(details.get("command")))
+            )
+            if useful_activity:
+                last_useful_activity = activity
+        if activity["type"] == "terminal_finished":
+            command_lines = [
+                line.strip()
+                for line in str(details.get("command", "")).splitlines()
+                if line.strip()
+            ]
+            if command_lines:
+                last_command = command_lines[-1]
 
     return {
         "project": (
@@ -562,47 +561,46 @@ def build_resume(trace: dict[str, Any]) -> list[ResumeFact]:
     last_test_succeeded = None
     last_successful_test_at = None
 
-    for session in trace["sessions"]:
-        for activity in session["activities"]:
-            if activity["type"] == "file_changed":
-                last_file_at = activity["occurred_at"]
-            if activity["type"] != "terminal_finished":
-                continue
-            details = activity.get("details", {})
-            command = details.get("command")
-            command_lines = _useful_command_lines(command)
-            if not command_lines:
-                continue
-            occurred_at = activity["occurred_at"]
-            exit_code = details.get("exit_code")
-            test_lines = [line for line in command_lines if _is_test_command(line)]
-            if test_lines:
-                status = "OK" if exit_code == 0 else f"Échec ({exit_code})"
-                last_test = f"{test_lines[-1]} — {status}"
-                last_test_succeeded = exit_code == 0
-                if exit_code == 0:
-                    last_successful_test_at = occurred_at
-            for line in command_lines:
-                git_command = parse_git_command(line)
-                if git_command.action == "commit":
-                    last_commit = (
-                        git_command.commit_message
-                        if git_command.commit_message is not None
-                        else "commit"
-                    )
-                    last_commit_at = occurred_at
-                elif git_command.action == "push":
-                    last_push_at = occurred_at
-            if (
-                isinstance(exit_code, int)
-                and not isinstance(exit_code, bool)
-                and exit_code != 0
-                and not _is_interrupted_exit(exit_code)
-                and command_lines
-            ):
-                error_command = test_lines[-1] if test_lines else command_lines[-1]
-                last_error = f"{error_command} — code {exit_code}"
-                last_error_at = occurred_at
+    for activity in trace["activities"]:
+        if activity["type"] == "file_changed":
+            last_file_at = activity["occurred_at"]
+        if activity["type"] != "terminal_finished":
+            continue
+        details = activity.get("details", {})
+        command = details.get("command")
+        command_lines = _useful_command_lines(command)
+        if not command_lines:
+            continue
+        occurred_at = activity["occurred_at"]
+        exit_code = details.get("exit_code")
+        test_lines = [line for line in command_lines if _is_test_command(line)]
+        if test_lines:
+            status = "OK" if exit_code == 0 else f"Échec ({exit_code})"
+            last_test = f"{test_lines[-1]} — {status}"
+            last_test_succeeded = exit_code == 0
+            if exit_code == 0:
+                last_successful_test_at = occurred_at
+        for line in command_lines:
+            git_command = parse_git_command(line)
+            if git_command.action == "commit":
+                last_commit = (
+                    git_command.commit_message
+                    if git_command.commit_message is not None
+                    else "commit"
+                )
+                last_commit_at = occurred_at
+            elif git_command.action == "push":
+                last_push_at = occurred_at
+        if (
+            isinstance(exit_code, int)
+            and not isinstance(exit_code, bool)
+            and exit_code != 0
+            and not _is_interrupted_exit(exit_code)
+            and command_lines
+        ):
+            error_command = test_lines[-1] if test_lines else command_lines[-1]
+            last_error = f"{error_command} — code {exit_code}"
+            last_error_at = occurred_at
 
     show_error = last_error and (
         not last_successful_test_at
@@ -717,38 +715,37 @@ def build_daily_summary(trace: dict[str, Any]) -> dict[str, Any]:
     file_paths: set[str] = set()
     git_commit_count = 0
 
-    for session in trace["sessions"]:
-        for activity in session["activities"]:
-            details = activity.get("details", {})
-            workspace = activity_project_root(activity)
-            workspace_is_useful = (
-                activity["type"] != "terminal_finished"
-                or bool(_useful_command_lines(details.get("command")))
-            )
-            if workspace and workspace_is_useful:
-                if workspace not in workspace_counts:
-                    workspace_order.append(workspace)
-                    workspace_counts[workspace] = 0
-                workspace_counts[workspace] += 1
-                if activity["type"] == "file_changed" and details.get("workspace"):
-                    explicit_file_workspaces.add(workspace)
-            if (
-                workspace
-                and persisted_workspace_identity(activity).method == "git"
-            ):
-                git_proven_workspaces.add(workspace)
-            if activity["type"] == "terminal_finished":
-                terminal_count += 1
-                for label in _terminal_labels(activity):
-                    terminal_label_counts[label] += 1
-            elif activity["type"] == "file_changed" and details.get("path"):
-                file_paths.add(details["path"])
-            elif activity["type"] == "git_commit":
-                git_commit_count += 1
-            elif activity["type"] == "app_activated" and details.get("app"):
-                app = details["app"]
-                if app not in IGNORED_APP_NAMES_FOR_RENDERING:
-                    app_counts[app] = app_counts.get(app, 0) + 1
+    for activity in trace["activities"]:
+        details = activity.get("details", {})
+        workspace = activity_project_root(activity)
+        workspace_is_useful = (
+            activity["type"] != "terminal_finished"
+            or bool(_useful_command_lines(details.get("command")))
+        )
+        if workspace and workspace_is_useful:
+            if workspace not in workspace_counts:
+                workspace_order.append(workspace)
+                workspace_counts[workspace] = 0
+            workspace_counts[workspace] += 1
+            if activity["type"] == "file_changed" and details.get("workspace"):
+                explicit_file_workspaces.add(workspace)
+        if (
+            workspace
+            and persisted_workspace_identity(activity).method == "git"
+        ):
+            git_proven_workspaces.add(workspace)
+        if activity["type"] == "terminal_finished":
+            terminal_count += 1
+            for label in _terminal_labels(activity):
+                terminal_label_counts[label] += 1
+        elif activity["type"] == "file_changed" and details.get("path"):
+            file_paths.add(details["path"])
+        elif activity["type"] == "git_commit":
+            git_commit_count += 1
+        elif activity["type"] == "app_activated" and details.get("app"):
+            app = details["app"]
+            if app not in IGNORED_APP_NAMES_FOR_RENDERING:
+                app_counts[app] = app_counts.get(app, 0) + 1
 
     # Git proof comes from persisted event details only (resolver 5A), never
     # from the disk at render time: live and archive qualify identically, and
@@ -764,7 +761,7 @@ def build_daily_summary(trace: dict[str, Any]) -> dict[str, Any]:
         )
     ]
 
-    unresolved_sessions = _unresolved_sessions(trace)
+    unresolved_sessions = trace["unresolved_sessions"]
     unresolved_activity_count = sum(
         len(session["activities"]) for session in unresolved_sessions
     )
@@ -853,62 +850,22 @@ def build_daily_trace(
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Build the day view; ``now`` is injectable so tests stay deterministic."""
+    """Load one local day through ``now`` and reconstruct it exactly once.
+
+    Shared by the journal and Context API. The flat event inventory includes
+    derived/system events even when they do not belong to any work session.
+    Only analysis.timeline defines grouping, identity, bounds and closure.
+    """
     zone = local_timezone or reconstruction_timezone()
-    reference_now = now if now is not None else datetime.now(zone)
+    reference_now = now.astimezone(zone) if now is not None else datetime.now(zone)
     selected_day = day or reference_now.date()
     start = datetime.combine(selected_day, time.min, zone)
     end = start + timedelta(days=1)
-    activities = store.activities_between(start, end)
-
-    grouped: OrderedDict[str, list] = OrderedDict()
-    for stored in activities:
-        grouped.setdefault(stored.session_id, []).append(stored)
-
-    sessions = []
-    for session_id, items in grouped.items():
-        sessions.append(
-            {
-                "id": session_id,
-                "started_at": items[0].activity.occurred_at.astimezone(zone).isoformat(),
-                "ended_at": items[-1].activity.occurred_at.astimezone(zone).isoformat(),
-                "activity_count": len(items),
-                "activities": [export_stored_activity(item) for item in items],
-            }
-        )
-
-    merged_sessions = []
-    for session in sessions:
-        if (
-            merged_sessions
-            and datetime.fromisoformat(session["started_at"])
-            <= datetime.fromisoformat(merged_sessions[-1]["ended_at"])
-        ):
-            previous = merged_sessions[-1]
-            previous["activities"] = sorted(
-                previous["activities"] + session["activities"],
-                key=lambda activity: (
-                    datetime.fromisoformat(activity["occurred_at"]),
-                    activity["id"],
-                ),
-            )
-            previous["started_at"] = (
-                datetime.fromisoformat(
-                    previous["activities"][0]["occurred_at"]
-                )
-                .astimezone(zone)
-                .isoformat()
-            )
-            previous["ended_at"] = (
-                datetime.fromisoformat(
-                    previous["activities"][-1]["occurred_at"]
-                )
-                .astimezone(zone)
-                .isoformat()
-            )
-            previous["activity_count"] = len(previous["activities"])
-        else:
-            merged_sessions.append(session)
+    end = min(end, reference_now.astimezone(timezone.utc) + timedelta(microseconds=1))
+    activities = [
+        export_stored_activity(item)
+        for item in store.activities_between(start, end)
+    ] if end > start else []
 
     zone_key = getattr(zone, "key", None)
     if zone_key:
@@ -922,32 +879,25 @@ def build_daily_trace(
         hours, minutes = divmod(abs(total_minutes), 60)
         zone_name = f"{sign}{hours:02d}:{minutes:02d}"
 
-    trace = {
+    work_sessions, unresolved_sessions = reconstruct_session_views(
+        activities, day=selected_day, zone=zone, now=reference_now,
+    )
+    return {
+        "schema_version": 2,
+        "reconstruction_version": RECONSTRUCTION_VERSION,
         "date": selected_day.isoformat(),
         "timezone": zone_name,
         "activity_count": len(activities),
-        "session_count": len(merged_sessions),
-        "sessions": merged_sessions,
+        "activities": activities,
+        "work_session_count": sum(
+            session["activity_kind"] == "work" for session in work_sessions
+        ),
+        "work_sessions": work_sessions,
+        "unresolved_sessions": unresolved_sessions,
+        "unresolved_activity_count": sum(
+            len(session["activities"]) for session in unresolved_sessions
+        ),
     }
-    work_sessions, unresolved_sessions = reconstruct_session_views(
-        trace,
-        now=reference_now,
-    )
-    trace["work_session_count"] = len(
-        [
-            session
-            for session in work_sessions
-            if session.get("activity_kind") not in {"isolated", "background"}
-        ]
-    )
-    trace["work_sessions"] = work_sessions
-    trace["unresolved_sessions"] = unresolved_sessions
-    trace["unresolved_activity_count"] = sum(
-        len(session["activities"]) for session in unresolved_sessions
-    )
-    # Deprecated JSON alias retained temporarily for existing clients.
-    trace["passive_sessions"] = unresolved_sessions
-    return trace
 
 
 # Per-day cache for /days (decision 11A). The store is append-only, so a
@@ -999,11 +949,7 @@ def _build_day_entry(
         resolve_project_context(workspace).project_name
         for workspace in summary["workspaces"]
     ]
-    activities = [
-        activity
-        for session in trace["sessions"]
-        for activity in session["activities"]
-    ]
+    activities = trace["activities"]
     project_summaries = []
     for workspace in summary["workspaces"]:
         project_activities = [
@@ -1037,11 +983,7 @@ def _build_short_day_summary(
     trace: dict[str, Any],
     projects: list[str],
 ) -> list[str]:
-    activities = [
-        activity
-        for session in trace["sessions"]
-        for activity in session["activities"]
-    ]
+    activities = trace["activities"]
     prefix = ", ".join(projects) if projects else "Activité locale"
     summary = _build_compact_activity_summary(
         activities,

@@ -173,7 +173,7 @@ def test_app_activated_is_readable_in_markdown_and_html(tmp_path):
     assert trace["activity_count"] == 11
     assert [
         activity["details"]["app"]
-        for activity in trace["sessions"][0]["activities"]
+        for activity in trace["activities"]
     ] == apps
 
     expected = "ChatGPT, Terminal, Safari, Code, Codex"
@@ -489,7 +489,7 @@ def test_dated_trace_routes_filter_day_and_handle_empty_or_invalid_dates(tmp_pat
     assert response.status_code == 200
     assert trace["date"] == "2026-07-04"
     assert trace["activity_count"] == 2
-    assert trace["sessions"][0]["activities"][0]["details"]["path"].endswith(
+    assert trace["activities"][0]["details"]["path"].endswith(
         "day4.py"
     )
 
@@ -529,7 +529,7 @@ def test_dated_trace_routes_filter_day_and_handle_empty_or_invalid_dates(tmp_pat
     empty_trace = client.get("/trace/2026-07-02").get_json()
     assert empty_trace["date"] == "2026-07-02"
     assert empty_trace["activity_count"] == 0
-    assert empty_trace["sessions"] == []
+    assert empty_trace["activities"] == []
     assert "_Aucune activité._" in client.get(
         "/trace/2026-07-02.md"
     ).get_data(as_text=True)
@@ -607,12 +607,10 @@ def test_status_and_today_json_accept_persisted_workspace_identity(tmp_path):
     database_path = tmp_path / "trace.db"
     app = create_app(database_path)
     client = app.test_client()
-    # Midi du jour courant dans le fuseau de reconstruction : les routes
-    # lisent l'horloge réelle (non injectable), on réduit la fenêtre minuit
-    # au minimum structurel — ancré sur la zone de Core, pas sur la machine,
-    # sinon le test devient intermittent en CI UTC entre 22:00 et 00:00.
+    # Deux faits au début du jour local, jamais datés après la lecture.
+    # Deux signaux forts suffisent même à timestamp identique.
     zone = reconstruction_timezone()
-    today_noon = datetime.combine(datetime.now(zone).date(), time(12, 0), zone)
+    today_noon = datetime.now(zone).replace(hour=0, minute=0, second=0, microsecond=0)
     occurred_at = today_noon.isoformat()
     response = client.post(
         "/activities",
@@ -652,7 +650,7 @@ def test_status_and_today_json_accept_persisted_workspace_identity(tmp_path):
                 "version": "1",
                 "instance_id": "status-regression",
             },
-            "occurred_at": (today_noon + timedelta(minutes=1)).isoformat(),
+            "occurred_at": today_noon.isoformat(),
             "details": {
                 "command": "echo ok",
                 "exit_code": 0,
@@ -799,7 +797,7 @@ def test_file_changed_route_renders_relative_path_and_keeps_absolute_json(tmp_pa
 
     assert response.status_code == 201
     trace = client.get("/trace/today").get_json()
-    assert trace["sessions"][0]["activities"][0]["details"]["path"] == absolute_path
+    assert trace["activities"][0]["details"]["path"] == absolute_path
     markdown = client.get("/trace/today.md").get_data(as_text=True)
     assert "Modified `daemon_v2/daily_trace.py`" in markdown
     assert f"Modified `{absolute_path}`" not in markdown
@@ -833,7 +831,7 @@ def test_repeated_file_changes_are_raw_in_json_and_coalesced_in_markdown(tmp_pat
 
     trace = client.get("/trace/today").get_json()
     assert trace["activity_count"] == 4
-    assert len(trace["sessions"][0]["activities"]) == 4
+    assert len(trace["activities"]) == 4
 
     markdown = client.get("/trace/today.md").get_data(as_text=True)
     timeline = markdown.split("## Session 1", 1)[1]
@@ -934,7 +932,7 @@ def test_json_export_contains_versioned_event_metadata(tmp_path):
     assert response.status_code == 201
 
     trace = client.get("/trace/2026-07-23").json
-    event = trace["sessions"][0]["activities"][0]
+    event = trace["activities"][0]
 
     assert event["event_id"] == "019c-route"
     assert event["schema_version"] == 1
@@ -961,7 +959,7 @@ def test_legacy_route_response_and_export_are_explicit(tmp_path):
     first = client.post("/activities", json=payload)
     second = client.post("/activities", json=payload)
     trace = client.get("/trace/2026-07-23").json
-    events = trace["sessions"][0]["activities"]
+    events = trace["activities"]
 
     assert first.status_code == second.status_code == 201
     assert first.json["event_id"] != second.json["event_id"]
@@ -1029,8 +1027,7 @@ def test_activities_accepts_session_summary_and_rejects_incomplete_reprise(tmp_p
     stored = client.get("/trace/2026-09-02").get_json()
     kinds = [
         activity["type"]
-        for session in stored["sessions"]
-        for activity in session["activities"]
+        for activity in stored["activities"]
     ]
     assert kinds == ["session_summary"]
 
@@ -1184,8 +1181,7 @@ def test_get_activity_by_event_id_returns_the_stored_row_in_the_export_form(tmp_
     # Même ligne que l'export de la trace, champ pour champ.
     exported = [
         activity
-        for session in client.get("/trace/2026-09-02").get_json()["sessions"]
-        for activity in session["activities"]
+        for activity in client.get("/trace/2026-09-02").get_json()["activities"]
         if activity["event_id"] == payload["event_id"]
     ]
     assert exported == [body]

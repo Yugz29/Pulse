@@ -392,7 +392,7 @@ def test_agent_session_is_listed_apart_in_the_daily_trace(tmp_path):
     assert trace["activity_count"] == 1
     assert trace["work_sessions"] == []
     assert trace["unresolved_sessions"] == []
-    stored_summary = trace["sessions"][0]["activities"][0]["summary"]
+    stored_summary = trace["activities"][0]["summary"]
     assert stored_summary.startswith("Agent session (claude-code)")
     assert "## Sessions d’agent" in markdown
     assert f"· {_markdown_text(stored_summary)}" in markdown

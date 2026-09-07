@@ -86,8 +86,8 @@ def _build_status(trace):
         reference_at=datetime.now(timezone.utc),
     )
     last_event = None
-    if trace["sessions"]:
-        activity = trace["sessions"][-1]["activities"][-1]
+    if trace["activities"]:
+        activity = trace["activities"][-1]
         last_event = {
             "type": activity["type"],
             "occurred_at": activity["occurred_at"],

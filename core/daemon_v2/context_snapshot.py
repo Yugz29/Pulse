@@ -10,7 +10,7 @@ only clock read and the only field allowed to differ between two calls.
 Same store + same ``reference_at`` + same ``window_minutes`` → same dict.
 """
 
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Any
 
 from .analysis.projects import (
@@ -25,16 +25,14 @@ from .analysis.terminal import (
     useful_command_lines,
 )
 from .analysis.timeline import (
-    LOCK_RESUME_TYPES,
     RECONSTRUCTION_VERSION,
     app_activation_counts,
     display_file_path,
     is_strong_work_activity,
-    reconstruct_session_views,
 )
-from .models import SUPPORTED_ACTIVITY_TYPES, StoredActivity
+from .models import SUPPORTED_ACTIVITY_TYPES
+from .daily_trace import build_daily_trace
 from .runtime_config import reconstruction_timezone
-from .session_tracker import DEFAULT_SESSION_GAP
 from .trace_store import TraceStore
 
 
@@ -65,7 +63,7 @@ def build_context_snapshot(
     ``reference_at`` must be timezone-aware; every timestamp in the result
     is UTC ISO 8601 with offset. ``local_timezone`` only decides where local
     days start (sessions never cross local midnight, exactly like the daily
-    trace); it defaults to the machine zone like ``build_daily_trace``.
+    trace); it defaults to the configured reconstruction zone like ``build_daily_trace``.
     """
     if reference_at.tzinfo is None:
         raise ValueError("reference_at must include a timezone")
@@ -90,7 +88,7 @@ def build_context_snapshot(
         for activity in activities
         if _instant(activity["occurred_at"]) >= window_start
     ]
-    current = _select_current_session(sessions, reference_utc)
+    current = _select_current_session(sessions)
 
     workspace_root, workspace_name, resolution = _resolve_workspace(
         current, windowed
@@ -149,9 +147,8 @@ def build_day_sessions(
         raise ValueError("reference_at must include a timezone")
     zone = local_timezone or reconstruction_timezone()
     reference_utc = reference_at.astimezone(timezone.utc)
-    sessions, _activities = _reconstruct_day(
-        store, day=day, reference_at=reference_utc, zone=zone
-    )
+    trace = build_daily_trace(store, day, zone, now=reference_utc)
+    sessions = trace["work_sessions"]
     closed = [
         session
         for session in sessions
@@ -199,17 +196,6 @@ def _zone_name(zone: tzinfo, at: datetime) -> str:
     return f"{sign}{hours:02d}:{minutes:02d}"
 
 
-def _activity_view(stored: StoredActivity) -> dict[str, Any]:
-    return {
-        "id": stored.id,
-        "event_id": stored.event_id,
-        "type": stored.type,
-        "occurred_at": stored.occurred_at.isoformat(),
-        "summary": stored.activity.summary,
-        "details": stored.details,
-    }
-
-
 def _reconstruct_days(
     store: TraceStore,
     *,
@@ -230,46 +216,11 @@ def _reconstruct_days(
     day: date = window_start.astimezone(zone).date()
     last_day = reference_at.astimezone(zone).date()
     while day <= last_day:
-        day_sessions, day_activities = _reconstruct_day(
-            store, day=day, reference_at=reference_at, zone=zone
-        )
-        sessions.extend(day_sessions)
-        activities.extend(day_activities)
+        trace = build_daily_trace(store, day, zone, now=reference_at)
+        sessions.extend(trace["work_sessions"])
+        activities.extend(trace["activities"])
         day += timedelta(days=1)
     return sessions, activities
-
-
-def _reconstruct_day(
-    store: TraceStore,
-    *,
-    day: date,
-    reference_at: datetime,
-    zone: tzinfo,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """One local day, reconstructed like the daily trace, up to reference_at."""
-    day_start = datetime.combine(day, time.min, zone)
-    day_end = min(
-        day_start + timedelta(days=1),
-        reference_at + timedelta(microseconds=1),
-    )
-    if day_end <= day_start:
-        return [], []
-    views = [
-        _activity_view(stored)
-        for stored in store.activities_between(day_start, day_end)
-    ]
-    if not views:
-        return [], []
-    trace = {
-        "date": day.isoformat(),
-        "timezone": _zone_name(zone, reference_at),
-        "sessions": [{"activities": views}],
-    }
-    work_sessions, _unresolved = reconstruct_session_views(
-        trace,
-        now=reference_at.astimezone(zone),
-    )
-    return work_sessions, views
 
 
 def _session_end(session: dict[str, Any]) -> datetime:
@@ -278,23 +229,17 @@ def _session_end(session: dict[str, Any]) -> datetime:
 
 def _select_current_session(
     sessions: list[dict[str, Any]],
-    reference_at: datetime,
 ) -> dict[str, Any] | None:
-    """The work session with the latest activity inside the session gap.
+    """The open work session selected by the authoritative reconstruction.
 
-    Nothing inside the gap means « rien en cours » — the last closed session
-    is never substituted, that absence is information. A session explicitly
-    closed by a lock or a sleep (``end_reason`` set by the reconstruction,
-    the same fact ``build_day_sessions`` lists as closed) is never current
-    either, even inside the gap: ``is_open: false`` must not depend on which
-    route is read (audit 2026-09-06, defect 1).
+    No closure is reinterpreted here, including day_boundary. A closed
+    session belongs to recent_sessions, never current_session.
     """
     candidates = [
         session
         for session in sessions
         if session.get("activity_kind") == "work"
-        and session.get("end_reason") not in LOCK_RESUME_TYPES
-        and reference_at - _session_end(session) <= DEFAULT_SESSION_GAP
+        and session["end_reason"] == "open"
     ]
     if not candidates:
         return None

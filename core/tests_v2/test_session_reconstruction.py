@@ -31,6 +31,7 @@ def event(
 ) -> dict:
     return {
         "id": event_id,
+        "event_id": f"fixture:{event_id}",
         "type": event_type,
         "occurred_at": (BASE + timedelta(minutes=minutes)).isoformat(),
         "details": details or {},
@@ -65,13 +66,8 @@ def reconstruct(
     *activities: dict,
     now: datetime | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    trace = {
-        "date": BASE.date().isoformat(),
-        "timezone": "UTC",
-        "sessions": [{"activities": list(activities)}],
-    }
     return reconstruct_session_views(
-        trace,
+        list(activities), day=BASE.date(), zone=timezone.utc,
         now=now or BASE + timedelta(minutes=10),
     )
 
@@ -651,7 +647,8 @@ def test_json_and_markdown_exports_include_session_metadata(tmp_path):
     session = trace["work_sessions"][0]
     markdown = render_daily_trace_markdown(trace, archive_mode=True)
 
-    assert trace["passive_sessions"] is trace["unresolved_sessions"]
+    assert "passive_sessions" not in trace
+    assert "sessions" not in trace
     assert session["project_name"] == "Pulse_Core"
     assert session["duration_seconds"] == 300
     assert session["interruptions"] == []
@@ -809,9 +806,9 @@ def test_session_identity_is_order_independent_and_composition_sensitive():
     assert sources_ab == sources_ba == ["evt-a", "evt-b"]
     assert identity_abc != identity_ab
     assert len(identity_ab) == 16
-    # Sans event_id (fixtures, lignes historiques) : la clé de ligne sert de repli.
-    fallback, sources = session_identity([{"id": 7}, {"id": 5}])
-    assert sources == ["id:5", "id:7"] and len(fallback) == 16
+    # A row id is ordering metadata, never a replacement for provenance.
+    with pytest.raises(KeyError, match="event_id"):
+        session_identity([{"id": 7}])
 
 
 def test_reconstructed_sessions_carry_identity_and_label():
@@ -821,7 +818,7 @@ def test_reconstructed_sessions_carry_identity_and_label():
     )
 
     assert sessions[0]["label"] == "work-1"
-    assert sessions[0]["source_event_ids"] == ["id:1", "id:2"]
+    assert sessions[0]["source_event_ids"] == ["fixture:1", "fixture:2"]
     assert sessions[0]["id"] == session_identity_of(sessions[0])
 
 
@@ -905,8 +902,8 @@ def test_agent_session_no_longer_bridges_two_clusters_within_the_gap():
     )
 
     assert [session["source_event_ids"] for session in sessions] == [
-        ["id:1", "id:2"],
-        ["id:4", "id:5"],
+        ["fixture:1", "fixture:2"],
+        ["fixture:4", "fixture:5"],
     ]
     assert sessions[0]["end_reason"] == "inactivity"
     assert unresolved == []
@@ -1000,7 +997,7 @@ def test_lock_closes_the_session_at_once_on_its_last_work(lock_type):
     assert session["end_reason"] == lock_type
     assert session["started_at"] == BASE.isoformat()
     assert session["ended_at"] == (BASE + timedelta(minutes=5)).isoformat()
-    assert session["source_event_ids"] == ["id:1", "id:2"]
+    assert session["source_event_ids"] == ["fixture:1", "fixture:2"]
     assert session["reconstruction_version"] == 3
     assert unresolved == []
 
@@ -1024,7 +1021,7 @@ def test_closure_is_monotonic_more_data_never_reopens_the_session():
     assert {k: after[0][k] for k in keys} == {k: before[0][k] for k in keys}
     assert after[1]["started_at"] == (BASE + timedelta(minutes=12)).isoformat()
     assert after[1]["end_reason"] == "open"
-    assert after[1]["source_event_ids"] == ["id:5"]
+    assert after[1]["source_event_ids"] == ["fixture:5"]
     assert unresolved == []
 
 
@@ -1041,10 +1038,10 @@ def test_strong_work_while_locked_is_background_not_a_session(minutes):
 
     work = [s for s in sessions if s["activity_kind"] == "work"]
     assert len(work) == 1 and work[0]["end_reason"] == "screen_locked"
-    assert work[0]["source_event_ids"] == ["id:1", "id:2"]
+    assert work[0]["source_event_ids"] == ["fixture:1", "fixture:2"]
     background = background_sessions({"work_sessions": sessions})
     assert len(background) == 1
-    assert background[0]["source_event_ids"] == ["id:4"]
+    assert background[0]["source_event_ids"] == ["fixture:4"]
     assert background[0]["lock_type"] == "screen_locked"
     assert background[0]["locked_at"] == (BASE + timedelta(minutes=10)).isoformat()
     assert background[0]["resumed_at"] is None
@@ -1064,7 +1061,7 @@ def test_background_window_closes_on_resume_and_work_restarts_a_session():
     kinds = [s["activity_kind"] for s in sessions]
     assert kinds == ["isolated", "background", "work"]
     background = sessions[1]
-    assert background["source_event_ids"] == ["id:3", "id:4"]
+    assert background["source_event_ids"] == ["fixture:3", "fixture:4"]
     assert background["started_at"] == (BASE + timedelta(minutes=12)).isoformat()
     assert background["ended_at"] == (BASE + timedelta(minutes=30)).isoformat()
     assert background["resumed_at"] == (BASE + timedelta(minutes=40)).isoformat()
@@ -1106,9 +1103,9 @@ def test_lock_then_sleep_needs_both_resumes_before_work_counts_again():
     )
 
     assert [s["activity_kind"] for s in sessions] == ["work", "background", "work"]
-    assert sessions[1]["source_event_ids"] == ["id:6"]
+    assert sessions[1]["source_event_ids"] == ["fixture:6"]
     assert sessions[1]["lock_type"] == "screen_locked"
-    assert sessions[2]["source_event_ids"] == ["id:8"]
+    assert sessions[2]["source_event_ids"] == ["fixture:8"]
 
 
 def test_agent_session_during_a_lock_keeps_its_own_treatment():
@@ -1123,8 +1120,8 @@ def test_agent_session_during_a_lock_keeps_its_own_treatment():
     )
 
     assert [s["activity_kind"] for s in sessions] == ["work", "background"]
-    assert sessions[0]["source_event_ids"] == ["id:1", "id:2"]
-    assert sessions[1]["source_event_ids"] == ["id:5"]
+    assert sessions[0]["source_event_ids"] == ["fixture:1", "fixture:2"]
+    assert sessions[1]["source_event_ids"] == ["fixture:5"]
     assert all(agent not in s["activities"] for s in sessions)
     assert unresolved == []
 
