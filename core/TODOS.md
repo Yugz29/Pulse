@@ -102,12 +102,13 @@ retirerait les derniers chemins personnels du dépôt.
 
 ## Daemon V2
 
-### Coût de reconstruction de TraceStore à grande échelle
+### Coût historique de l’attribution de session — résolu le 2026-09-08
 
-`TraceStore.append_event` recharge toute la table à chaque écriture (coût
-mesuré : ~50ms à 50k lignes, ~14 mois au rythme actuel). Déclencheur :
-surveiller à l'approche de 50k événements, envisager un index ou une stratégie
-incrémentale vers 100k.
+L’attribution à l’écriture et son scan global ont été supprimés. La
+reconstruction de travail est effectuée en lecture, commune au journal et à
+`/context`. Aucun index ou calcul incrémental de session à introduire dans
+`append_event`. Mesure locale à 50k lignes : médiane 30,67 → 0,73 ms
+([décision](../docs/decisions/2026-09-08-reconstruction-unique-des-sessions.md)).
 
 ### TraceStore._connect : même ordre pragma-puis-busy_timeout que l'outbox avant correctif
 

@@ -289,6 +289,20 @@ trace enregistrée avec un contexte Git local lu passivement : état du dépôt,
 branche et commits du jour. Cette lecture Git est best-effort, limitée par un
 timeout court, et n’est pas écrite dans SQLite.
 
+Depuis le 2026-09-08, l’export JSON du journal porte `schema_version: 2`.
+Les événements sont dans la liste plate `activities`. Les anciens groupes
+`sessions` et leur `session_count` ont disparu ; `work_sessions` vient de la
+reconstruction déterministe, dont la version reste 3. Le journal et `/context`
+partagent cette reconstruction et son statut de fermeture, même à minuit.
+Les événements datés après la référence restent en base et ne sont pas encore
+inclus dans la vue. L’API `/context/sessions` et l’entrée Intelligence restent
+inchangées. Voir la [décision détaillée](../docs/decisions/2026-09-08-reconstruction-unique-des-sessions.md).
+
+Le store ne calcule plus de session à l’écriture. Les anciennes bases gardent
+leur colonne `session_id` et ses valeurs sans les utiliser ; les nouvelles
+bases n’ont plus cette colonne. Les identités produit et leur provenance sont
+calculées à partir des `event_id`, pas de ces anciens identifiants.
+
 Vérifier l’état local sans démarrer de processus :
 
 ```bash
@@ -433,7 +447,6 @@ daemon_v2/
   producer_outbox.py
   routes.py
   runtime_config.py
-  session_tracker.py
   trace_store.py
   workspace_context.py
 ```
@@ -459,9 +472,11 @@ daemon_v2/
 - `ingest.py` valide, normalise et masque les données sensibles des activités
   entrantes.
 - `trace_store.py` encapsule le stockage SQLite append-only.
-- `session_tracker.py` affecte les activités aux sessions.
-- `daily_trace.py` construit la trace quotidienne, calcule les synthèses et
-  conserve les façades publiques de rendu.
+- `analysis/timeline.py` possède toutes les règles de reconstruction et
+  d’identité des sessions de travail, uniquement en lecture.
+- `daily_trace.py` charge les événements d’une journée jusqu’à une référence,
+  appelle la reconstruction commune au journal et à `/context`, calcule les
+  synthèses et conserve les façades publiques de rendu.
 - `analysis/terminal.py` contient la classification des commandes terminal et
   le parsing des commandes Git observées.
 - `analysis/projects.py` contient les helpers purs liés aux workspaces et aux
@@ -709,8 +724,8 @@ preuve de projet. Celles qui ne sont pas confirmées par une activité de travai
 ultérieure sont exposées dans `unresolved_sessions`, sans workspace. Une
 activité forte ultérieure dans la même session peut les y rattacher
 rétroactivement ; une activation isolée ne prolonge jamais `ended_at`.
-L’ancien champ JSON `passive_sessions` est conservé temporairement comme alias
-déprécié de `unresolved_sessions` pour les clients existants.
+L’export du journal v2 retire l’ancien alias `passive_sessions` : les lecteurs
+utilisent `unresolved_sessions`.
 
 Sur macOS, `make dev` lance `PulseApplicationObserver`, fondé sur
 `NSWorkspace`. L’ancien watcher Python n’est plus lancé par le superviseur.

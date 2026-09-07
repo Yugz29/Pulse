@@ -190,6 +190,11 @@ problème réel.
 
 ## Décisions prises
 
+- **2026-09-08** — Reconstruction unique des sessions de travail : stockage
+  sans attribution de session, événements plats, moteur déterministe commun
+  au journal et au contexte ; identité v3 conservée, export journal v2
+  ([note](decisions/2026-09-08-reconstruction-unique-des-sessions.md)).
+
 Les notes détaillées sont dans [`decisions/`](decisions/). Les décisions de
 Core antérieures au gel sont consignées dans `core/TODOS.md` (section
 « Completed ») et `core/CHANGELOG.md`.

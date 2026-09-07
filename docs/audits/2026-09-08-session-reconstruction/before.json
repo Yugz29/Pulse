@@ -1,0 +1,30 @@
+[
+  {
+    "prior_rows": 0,
+    "n": 25,
+    "median_ms": 1.814,
+    "min_ms": 1.652,
+    "max_ms": 2.205
+  },
+  {
+    "prior_rows": 1000,
+    "n": 25,
+    "median_ms": 1.289,
+    "min_ms": 1.073,
+    "max_ms": 1.938
+  },
+  {
+    "prior_rows": 10000,
+    "n": 25,
+    "median_ms": 6.355,
+    "min_ms": 6.078,
+    "max_ms": 7.27
+  },
+  {
+    "prior_rows": 50000,
+    "n": 25,
+    "median_ms": 30.669,
+    "min_ms": 29.523,
+    "max_ms": 33.246
+  }
+]

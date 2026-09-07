@@ -1,5 +1,12 @@
 # Migration de la trace de l'ancienne machine — normalisation puis fusion
 
+> Migration ponctuelle historique. Les outils cités ciblent les copies et le
+> schéma de septembre 2026 avec `activities.session_id`. Ils ne sont pas des
+> outils génériques pour les bases neuves sans cette colonne depuis le
+> [chantier du 2026-09-08](2026-09-08-reconstruction-unique-des-sessions.md).
+> La lecture des anciennes bases par Core reste assurée sans ces scripts.
+
+
 **Date :** 2026-09-05
 **Statut :** appliquée
 **Source :** changement de machine (MacBook Pro M3 Max). `~/.pulse_v2` n'a pas
