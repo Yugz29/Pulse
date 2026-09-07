@@ -1,0 +1,43 @@
+{
+ "date": "2026-09-06",
+ "id": "eef4956b36dd37ce",
+ "label": "work-3",
+ "open_items": [
+  {
+   "evidence": [
+    "path:docs/specs/2026-09-05-llm-provider.md",
+    "path:intelligence/TODOS.md"
+   ],
+   "kind": "observed",
+   "text": "docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés et aucun commit de la session ne les nomme"
+  },
+  {
+   "carried_from": "previous_summary:1",
+   "evidence": [],
+   "kind": "carried_over",
+   "reason_kept": "aucun événement sur la configuration ou le passage de référence dans la vue de cette session",
+   "text": "la configuration de llm_max_tokens et le passage de référence restent à valider"
+  }
+ ],
+ "reprise": {
+  "doing": "Tu documentes le dogfooding local avec Qwen3.8-27B-4bit et tu implémentes le prompt v2 pour la réévaluation des résumés.",
+  "open": "docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés et aucun commit de la session ne les nomme. la configuration de llm_max_tokens et le passage de référence restent à valider (repris : aucun événement sur la configuration ou le passage de référence dans la vue de cette session).",
+  "stopped_at": "Après le commit 1dc191e (prompt v2), avec des modifications non committées sur docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "docs/dogfooding.md",
+   "docs/specs/2026-09-05-llm-provider.md",
+   "intelligence/TODOS.md"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "documenter le dogfooding local",
+   "implémenter le prompt v2 de résumé"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 2 (work-3 du 2026-09-06, 54 min) : seule session du jour résumée avec annexe (a0aacd1f), dont la v2 recopie encore le open. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s ; reproduit l'input_hash du résumé v2 émis."
+}

@@ -1,0 +1,100 @@
+[
+  {
+    "wall_s": 54.793,
+    "peak_memory_bytes": 18548112438,
+    "prompt_tokens": 5795,
+    "completion_tokens": 240,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 62.628,
+    "peak_memory_bytes": 18883656758,
+    "prompt_tokens": 6848,
+    "completion_tokens": 285,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 131.245,
+    "peak_memory_bytes": 20225866806,
+    "prompt_tokens": 14672,
+    "completion_tokens": 367,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 71.607,
+    "peak_memory_bytes": 20225866806,
+    "prompt_tokens": 3936,
+    "completion_tokens": 354,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 244.069,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 22844,
+    "completion_tokens": 315,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 48.176,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 4427,
+    "completion_tokens": 215,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 41.262,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 3861,
+    "completion_tokens": 200,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 38.639,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 3425,
+    "completion_tokens": 213,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 80.474,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 6754,
+    "completion_tokens": 364,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 65.351,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 4918,
+    "completion_tokens": 361,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 92.496,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 8545,
+    "completion_tokens": 341,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 37.384,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 3690,
+    "completion_tokens": 144,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 163.791,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 12903,
+    "completion_tokens": 590,
+    "thinking_tags": false
+  },
+  {
+    "wall_s": 110.95,
+    "peak_memory_bytes": 21568076854,
+    "prompt_tokens": 6913,
+    "completion_tokens": 434,
+    "thinking_tags": false
+  }
+]

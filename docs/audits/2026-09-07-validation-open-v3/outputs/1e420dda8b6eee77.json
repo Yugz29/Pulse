@@ -1,0 +1,32 @@
+{
+ "date": "2026-09-05",
+ "id": "1e420dda8b6eee77",
+ "label": "work-26",
+ "open_items": [
+  {
+   "carried_from": "previous_summary:0",
+   "evidence": [],
+   "kind": "carried_over",
+   "reason_kept": "Aucun événement dans la vue de cette session ne mentionne la PR #28 ni la migration.",
+   "text": "L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session."
+  }
+ ],
+ "reprise": {
+  "doing": "Tu construis la couche LLMProvider pour le projet Pulse, de la spécification à l'implémentation HTTP.",
+  "open": "L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session (repris : Aucun événement dans la vue de cette session ne mentionne la PR #28 ni la migration).",
+  "stopped_at": "Après le commit de1d5fe, qui corrige la négociation d'un paramètre refusé par l'endpoint."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "medium",
+  "intents": [
+   "Spécifier l'interface LLMProvider",
+   "Implémenter la couche LLMProvider et le pont Summarizer",
+   "Corriger la négociation des paramètres avec l'endpoint"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 1 (work-26 du 2026-09-05, 88 min) : annexe previous_summary (work-24) que le résumé v1 recopiait. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s pour que l'annexe soit le résumé précédent, pas le sien."
+}

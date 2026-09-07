@@ -1,0 +1,66 @@
+{
+ "date": "2026-09-03",
+ "id": "eb652ce9f04c4b37",
+ "label": "work-2",
+ "open_items": [
+  {
+   "evidence": [
+    "path:core/daemon_v2/main.py"
+   ],
+   "kind": "observed",
+   "text": "core/daemon_v2/main.py est modifié et aucun commit de la session ne le nomme"
+  },
+  {
+   "evidence": [
+    "path:core/daemon_v2/file_watcher.py"
+   ],
+   "kind": "observed",
+   "text": "core/daemon_v2/file_watcher.py est modifié et aucun commit de la session ne le nomme"
+  },
+  {
+   "evidence": [
+    "path:core/daemon_v2/agent_sessions.py"
+   ],
+   "kind": "observed",
+   "text": "core/daemon_v2/agent_sessions.py est modifié et aucun commit de la session ne le nomme"
+  },
+  {
+   "evidence": [
+    "path:core/daemon_v2/dev_environment.py"
+   ],
+   "kind": "observed",
+   "text": "core/daemon_v2/dev_environment.py est modifié et aucun commit de la session ne le nomme"
+  },
+  {
+   "evidence": [
+    "path:core/daemon_v2/context_snapshot.py"
+   ],
+   "kind": "observed",
+   "text": "core/daemon_v2/context_snapshot.py est modifié et aucun commit de la session ne le nomme"
+  }
+ ],
+ "reprise": {
+  "doing": "Tu finalises la version 0.5.1 de Core : durcissement des permissions, correction des courses en archivage, épinglage des dépendances et mise en place de la CI.",
+  "open": "core/daemon_v2/main.py est modifié et aucun commit de la session ne le nomme. core/daemon_v2/file_watcher.py est modifié et aucun commit de la session ne le nomme. core/daemon_v2/agent_sessions.py est modifié et aucun commit de la session ne le nomme. core/daemon_v2/dev_environment.py est modifié et aucun commit de la session ne le nomme. core/daemon_v2/context_snapshot.py est modifié et aucun commit de la session ne le nomme.",
+  "stopped_at": "Après le commit e8eb97d (test de résolution de projet) et le push observé."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/main.py",
+   "core/daemon_v2/file_watcher.py",
+   "core/daemon_v2/agent_sessions.py",
+   "core/daemon_v2/dev_environment.py",
+   "core/daemon_v2/context_snapshot.py"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "durcissement des permissions locales",
+   "correction des courses en archivage et ingestion",
+   "mise en place de la CI et épinglage des dépendances"
+  ],
+  "project": "Pulse"
+ },
+ "why": "git dense : 29 commits dans la session."
+}

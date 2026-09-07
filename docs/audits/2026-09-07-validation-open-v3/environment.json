@@ -1,0 +1,16 @@
+{
+  "python": "3.14.7",
+  "machine": "arm64",
+  "packages": {
+    "mlx": "0.32.2",
+    "mlx-lm": "0.31.3",
+    "transformers": "5.16.1",
+    "tokenizers": "0.23.2"
+  },
+  "model": "mlx-community/Qwen3.8-27B-4bit",
+  "prompt": "v3",
+  "max_tokens": 2048,
+  "max_input_tokens": 30000,
+  "temperature": null,
+  "total_wall_s_including_load": 1242.9
+}

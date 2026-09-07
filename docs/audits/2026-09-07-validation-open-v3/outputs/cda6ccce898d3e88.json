@@ -1,0 +1,41 @@
+{
+ "date": "2026-09-03",
+ "id": "cda6ccce898d3e88",
+ "label": "work-3",
+ "open_items": [
+  {
+   "evidence": [
+    "path:core/daemon_v2/agent_sessions.py",
+    "path:core/daemon_v2/main.py",
+    "path:core/daemon_v2/file_watcher.py",
+    "path:core/tests_v2/test_agent_sessions.py",
+    "path:core/scripts/install_daemon_launchd.sh"
+   ],
+   "kind": "observed",
+   "text": "De nombreux fichiers sont modifiés (daemon_v2, scripts, tests) et aucun commit de la session ne les nomme explicitement."
+  }
+ ],
+ "reprise": {
+  "doing": "Tu corriges la course au passage en WAL d'une outbox neuve et tu prépares la release 0.5.2.",
+  "open": "De nombreux fichiers sont modifiés (daemon_v2, scripts, tests) et aucun commit de la session ne les nomme explicitement.",
+  "stopped_at": "Après le commit 2beaf51 (docs: Core 0.5.2 — CHANGELOG et VERSION)."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/agent_sessions.py",
+   "core/daemon_v2/main.py",
+   "core/daemon_v2/file_watcher.py",
+   "core/CHANGELOG.md",
+   "core/VERSION"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "corriger le verrouillage de la base de données lors du passage en WAL",
+   "préparer la release 0.5.2"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Courte (~10 min), dense en fichiers."
+}

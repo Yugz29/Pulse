@@ -1,0 +1,48 @@
+{
+ "date": "2026-07-08",
+ "id": "8faf4569fe2723b1",
+ "label": "work-1",
+ "open_items": [
+  {
+   "evidence": [
+    "path:src/cortex/analyzer/swiftParser.ts",
+    "path:tests/swiftParser.test.ts",
+    "error:git commit -m \"fix: serialize project scans\""
+   ],
+   "kind": "observed",
+   "text": "Les modifications de src/cortex/analyzer/swiftParser.ts et tests/swiftParser.test.ts ne sont pas committées"
+  },
+  {
+   "evidence": [
+    "error:git push"
+   ],
+   "kind": "observed",
+   "text": "La commande git push a échoué"
+  }
+ ],
+ "reprise": {
+  "doing": "Tu implémentes l'analyseur Swift et tu ajustes le scanner principal.",
+  "open": "Les modifications de src/cortex/analyzer/swiftParser.ts et tests/swiftParser.test.ts ne sont pas committées. La commande git push a échoué.",
+  "stopped_at": "Après une tentative de commit et de push qui a échoué."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [
+   "échec du commit et du push"
+  ],
+  "central_files": [
+   "src/cortex/analyzer/swiftParser.ts",
+   "src/app/main/scanner.ts",
+   "src/cortex/analyzer/parser.ts",
+   "src/cortex/risk-score/referenceBaselines.ts",
+   "src/cortex/analyzer/churn.ts"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "implémenter l'analyseur Swift",
+   "synchroniser les scans de projet"
+  ],
+  "project": "Cortex"
+ },
+ "why": "Longue en horloge (117 min), juillet, Cortex, agent."
+}

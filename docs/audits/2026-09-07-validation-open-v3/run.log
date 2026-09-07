@@ -1,0 +1,32 @@
+ok        071bbd62a95fb6cb 5795 tok 50801 ms  
+ok        1e420dda8b6eee77 6848 tok 62609 ms  
+ok        247f2062410ca5a9 14672 tok 131223 ms  
+ok        2ce344566f7e85dc 3936 tok 71600 ms  
+ok        3cabaefb759dae36 22844 tok 244042 ms  
+ok        6a4166356dbab6ec 4427 tok 48169 ms  
+ok        7bbaca7882c3d766 3861 tok 41256 ms  
+ok        8af930d9ef437d2a 3425 tok 38633 ms  
+ok        8faf4569fe2723b1 6754 tok 80464 ms  
+ok        cda6ccce898d3e88 4918 tok 65343 ms  
+ok        d047b37b4511d37c 8545 tok 92484 ms  
+ok        d98778994319cd07 3690 tok 37378 ms  
+ok        eb652ce9f04c4b37 12903 tok 163774 ms  
+ok        eef4956b36dd37ce 6913 tok 110940 ms  
+
+14/14 valides -> /private/tmp/claude-501/-Users-Yugz-Projets-Pulse/426c4e06-949e-4a89-bf02-2abd21e5d635/scratchpad/eval-v3/mlx-mlx-community-Qwen3.8-27B-4bit  (1243s)
+
+attentes annotées : 3/4 conformes
+1e420dda8b6eee77  écart
+  ✗ manquant          [observed] La divergence list/run sur le modèle est consignée (commit f30781f) ; aucun correctif observé ensuite dans la session  ← commit:f30781f
+      pourquoi : Le commit f30781f « consigner la divergence list/run sur le modèle » est un fait de la session ; il documente, il ne corrige pas (TODOS d'Intelligence). Formulé comme une observation, pas comme un fait négatif.
+  ✗ interdit (text_matches=PR #28|migration|MacBook)  [carried_over] L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session.  ← — · repris de previous_summary:0
+      pourquoi : D3 : c'est la demande initiale de l'agent (16:01 UTC), recopiée par le v1 via previous_summary et par la v2 des sessions voisines. Rien dans cette session ne la concerne : ni carried_over (aucune raison de la garder), ni observed.
+  ✗ interdit (kind=carried_over)  [carried_over] L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session.  ← — · repris de previous_summary:0
+      pourquoi : Les deux points reçus (PR #28, migration) sont une demande d'agent, pas un reste de travail : les reprendre serait D1 sous un autre nom.
+  ? en plus           [carried_over] L'état de la PR #28 et la migration du nouveau MacBook Pro M3 Max n'ont pas été confirmés dans cette session.  ← — · repris de previous_summary:0
+8af930d9ef437d2a  conforme
+  ✓ acceptable        [requested] Vérifier l'état de la PR #28 (exclusion .gitnexus/ du watcher, Core 0.3.1) et l'état des branches.  ← agent_request:0
+d98778994319cd07  conforme
+eef4956b36dd37ce  conforme
+  ✓ attendu retrouvé  [carried_over] la configuration de llm_max_tokens et le passage de référence restent à valider  ← — · repris de previous_summary:1
+  ✓ acceptable        [observed] docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés et aucun commit de la session ne les nomme  ← path:docs/specs/2026-09-05-llm-provider.md, path:intelligence/TODOS.md

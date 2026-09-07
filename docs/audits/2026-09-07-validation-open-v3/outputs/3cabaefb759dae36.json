@@ -1,0 +1,38 @@
+{
+ "date": "2026-09-02",
+ "id": "3cabaefb759dae36",
+ "label": "work-6",
+ "open_items": [
+  {
+   "evidence": [
+    "path:docs/specs/2026-09-02-context-api.md"
+   ],
+   "kind": "observed",
+   "text": "docs/specs/2026-09-02-context-api.md a été créé et n'apparaît dans aucun commit de la session"
+  }
+ ],
+ "reprise": {
+  "doing": "Tu construis l'API de contexte (Context API) pour le daemon v2 de Pulse.",
+  "open": "docs/specs/2026-09-02-context-api.md a été créé et n'apparaît dans aucun commit de la session.",
+  "stopped_at": "Après le commit eaece45, qui intègre le Context API dans /status et status.sh."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/trace_store.py",
+   "core/daemon_v2/context_snapshot.py",
+   "core/daemon_v2/routes.py",
+   "core/tests_v2/test_trace_store.py",
+   "core/tests_v2/test_context_snapshot.py"
+  ],
+  "confidence": "high",
+  "intents": [
+   "implémenter l'API de contexte (Context API)",
+   "ajouter la lecture bornée de TraceStore",
+   "créer le module context_snapshot"
+  ],
+  "project": "Pulse"
+ },
+ "why": "La plus grosse (~6500 tok) — sert au spike B. Agent."
+}
