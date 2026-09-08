@@ -322,6 +322,7 @@ class TraceStore:
         activity_type: str,
         *,
         before: datetime,
+        workspace_root: str | None = None,
     ) -> StoredActivity | None:
         """Most recent activity of ``activity_type`` occurred at or before ``before``.
 
@@ -336,10 +337,19 @@ class TraceStore:
                 SELECT * FROM activities
                 WHERE type = ?
                   AND occurred_at_utc <= ?
+                  AND (? IS NULL OR
+                       CASE json_type(details_json, '$.workspace')
+                         WHEN 'text' THEN rtrim(json_extract(details_json, '$.workspace'), '/')
+                         ELSE rtrim(json_extract(details_json, '$.workspace.workspace_root'), '/')
+                       END IS NULL OR
+                       CASE json_type(details_json, '$.workspace')
+                         WHEN 'text' THEN rtrim(json_extract(details_json, '$.workspace'), '/')
+                         ELSE rtrim(json_extract(details_json, '$.workspace.workspace_root'), '/')
+                       END = rtrim(?, '/'))
                 ORDER BY occurred_at_utc DESC, id DESC
                 LIMIT 1
                 """,
-                (activity_type, utc_lexical(before)),
+                (activity_type, utc_lexical(before), workspace_root, workspace_root),
             ).fetchone()
         if row is None:
             return None

@@ -309,6 +309,22 @@ def _refuse_unknown_summary_keys(section: str, values: dict[str, Any]) -> None:
             )
 
 
+def _validate_observation_provenance(payload: dict[str, Any]) -> None:
+    """Closed reference keys, exact source ids, no new unredacted free text."""
+    version = payload.get("observation_version")
+    sources = payload.get("observation_sources")
+    if type(version) is not int or version < 1 or not isinstance(sources, dict):
+        raise InvalidActivity("invalid observation provenance", field="details.observation_sources")
+    for ref, ids in sources.items():
+        if not isinstance(ref, str) or not re.fullmatch(r"(?:o[1-9][0-9]*|app:[1-9][0-9]*|agent_request:0|previous_summary:[0-9]+)", ref):
+            raise InvalidActivity("invalid observation reference", field="details.observation_sources")
+        if not isinstance(ids, list) or not ids or any(
+            not isinstance(value, str) or not value or len(value) > 200 or redact_command(value) != value
+            for value in ids
+        ):
+            raise InvalidActivity("invalid observation source ids", field="details.observation_sources")
+
+
 def normalize_activity(payload: Any) -> Activity:
     """Normalize a historical flat activity payload.
 
@@ -542,6 +558,8 @@ def normalize_activity(payload: Any) -> Activity:
                     redact_command(item) if isinstance(item, str) else item
                     for item in values
                 ]
+        if "observation_sources" in payload or "observation_version" in payload:
+            _validate_observation_provenance(payload)
         details = {
             key: value
             for key, value in payload.items()
