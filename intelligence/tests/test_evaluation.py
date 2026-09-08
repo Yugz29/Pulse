@@ -18,11 +18,11 @@ from pulse_intelligence.llm.provider import CompletionRequest, CompletionResult,
 from pulse_intelligence.provider_summarizer import ProviderSummarizer, prompt_path_for
 from pulse_intelligence.summarizer import SummarizerError
 
-PROMPT = prompt_path_for("v1")
+PROMPT = prompt_path_for("v5")
 
 VALID = json.dumps(
     {
-        "reprise": {"doing": "d", "stopped_at": "s", "open": "o"},
+        "reprise": {"doing": "d", "stopped_at": "s", "open": []},
         "structured": {
             "project": "Pulse", "intents": [], "central_files": [],
             "blockers": [], "confidence": "low",
@@ -224,11 +224,18 @@ def test_the_stress_fixture_is_outside_the_corpus_and_labelled():
     assert data["session_raw"]["_synthetic"] is True
     # Elle ne doit pas être ramassée par le corpus.
     assert not (DEFAULT_CORPUS / stress.name).exists()
-    # Nommée par sa taille réelle (113 928 tokens Qwen, validation du 07) ;
-    # l'estimation caractères/4 ci-dessous n'est qu'un plancher grossier.
+    # Le nom conserve la mesure Qwen historique ; le seuil ci-dessous
+    # vérifie seulement la taille JSON actuelle en caractères.
     from pulse_intelligence.selection import SessionView
     from pulse_intelligence.session_input import build_model_input, serialize_input
     from datetime import date
     view = SessionView(data["session_raw"], date.fromisoformat(data["date"]))
-    tokens = len(serialize_input(build_model_input(view, data["context"]))) // 4
-    assert tokens >= 55_000
+    json_chars = len(serialize_input(build_model_input(view, data["context"])))
+    assert json_chars >= 190_000
+
+
+@pytest.fixture(autouse=True)
+def current_prompt_for_provider_tests(monkeypatch):
+    """Exercise real provider wiring against the current input contract."""
+    from pulse_intelligence.config import config_home
+    (config_home() / "config.toml").write_text('prompt_version = "v5"\n')

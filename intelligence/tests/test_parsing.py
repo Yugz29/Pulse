@@ -99,7 +99,8 @@ def test_dry_run_builds_the_event_without_emitting(fake_core, client, config, st
     assert details["generated_at"] == REFERENCE.isoformat()
     assert details["workspace"] == "/Users/dev/Projets/Pulse"
     assert len(details["input_hash"]) == 64
-    assert json.loads(summarizer.calls[0])["session"] == session.raw
+    assert "source_event_ids" not in json.loads(summarizer.calls[0])["session"]
+    assert json.loads(summarizer.calls[0])["input_version"] == 3
 
 
 def test_three_rejections_mark_the_session_failed(fake_core, client, config, state):

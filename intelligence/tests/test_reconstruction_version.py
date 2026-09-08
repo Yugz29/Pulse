@@ -4,6 +4,7 @@ annoncée au démarrage (premier `/context/sessions`) et dans l'export d'`eval`.
 from __future__ import annotations
 
 import json
+import pytest
 
 from conftest import REFERENCE, session_view
 from pulse_intelligence import KNOWN_RECONSTRUCTION_VERSION, cli, selection
@@ -72,3 +73,10 @@ def test_the_frozen_corpus_was_captured_under_reconstruction_2():
     """Fait, pas défaut : les 14 entrées datent d'avant la v3 de Core ; `eval`
     l'annonce à chaque passage tant que le corpus n'est pas recapturé."""
     assert reconstruction_versions(load_corpus(DEFAULT_CORPUS)) == {"2": 14}
+
+
+@pytest.fixture(autouse=True)
+def current_prompt_for_provider_tests(monkeypatch):
+    """Exercise real provider wiring against the current input contract."""
+    from pulse_intelligence.config import config_home
+    (config_home() / "config.toml").write_text('prompt_version = "v4"\n')

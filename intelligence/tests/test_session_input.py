@@ -30,19 +30,20 @@ def test_input_hash_is_stable_between_two_constructions():
     assert len(input_hash(first)) == 64
 
 
-def test_core_view_is_passed_through_untouched():
+def test_projection_keeps_core_view_immutable_and_provenance_off_prompt():
     session = view()
     snapshot = copy.deepcopy(session.raw)
     context = context_view(reference_at=at(-60), current_session=session.raw)
 
     model_input = build_model_input(session, context)
 
-    assert model_input["session"] == snapshot
+    assert model_input["session"]["legacy_aggregates"]["files"] == snapshot["files"]
+    assert "source_event_ids" not in model_input["session"]
     assert session.raw == snapshot
-    assert set(model_input) == {"session", "previous_summary", "agent_session"}
+    assert set(model_input) == {"input_version", "session", "resumption", "previous_summary", "agent_session"}
     # Sérialisation à clés triées : l'ordre du dict source ne compte pas.
     serialized = serialize_input(model_input)
-    assert json.loads(serialized)["session"] == snapshot
+    assert json.loads(serialized) == model_input
     assert serialized.index('"agent_session"') < serialized.index('"session"')
 
 
@@ -74,6 +75,9 @@ def test_previous_summary_of_the_same_day_is_annexed_but_not_own_or_other_day():
     skipped_day = build_model_input(session, context_view(reference_at=at(-60), last_session_summary=other_day))
 
     assert annexed["previous_summary"] == {
+        "origin": "previous_model_interpretation", "evidence_eligible": False,
+        "as_of": same_day["session_ended_at"], "current_state": "unknown",
+        "workspace_attribution": "unknown",
         "id": "bbbbbbbbbbbbbbbb",
         "label": "work-1",
         "reprise": same_day["reprise"],
@@ -98,6 +102,9 @@ def test_agent_session_is_annexed_only_when_it_overlaps():
     skipped = build_model_input(session, context_view(reference_at=at(-60), last_agent_session=earlier))
 
     assert annexed["agent_session"] == {
+        "origin": "initial_agent_request", "evidence_eligible": False, "completion_state": "unknown",
+        "workspace_attribution": "unknown",
+        "workspace": overlapping["workspace"],
         "agent": "claude-code",
         "started_at": overlapping["started_at"],
         "ended_at": overlapping["ended_at"],
@@ -156,7 +163,7 @@ def test_legacy_prompts_keep_the_free_text_open():
     assert uses_open_items("v3")
 
 
-def test_without_references_the_input_is_byte_identical_to_before():
+def test_annex_references_change_the_hash_without_adding_raw_provenance():
     session = view(commits=[{"hash": "a1b2c3", "message": "fix: x"}])
     context = _annexed_context(session)
 
@@ -170,18 +177,17 @@ def test_without_references_the_input_is_byte_identical_to_before():
     )
 
 
-def test_references_number_the_previous_open_and_the_agent_request_without_touching_the_view():
+def test_annex_reference_identifies_interpretation_without_claim_evidence():
     session = view(commits=[{"hash": "a1b2c3", "message": "fix: x"}])
     snapshot = copy.deepcopy(session.raw)
 
     referenced = build_model_input(session, _annexed_context(session), references=True)
 
-    assert referenced["session"] == snapshot
-    assert referenced["previous_summary"]["open_items"] == [
-        {"ref": "previous_summary:0", "text": "Le push n'a pas été observé"},
-        {"ref": "previous_summary:1", "text": "la configuration de llm_max_tokens reste à valider."},
-        {"ref": "previous_summary:2", "text": "La PR #28 attend."},
-    ]
+    assert session.raw == snapshot
+    assert "source_event_ids" not in referenced["session"]
+    assert referenced["previous_summary"]["ref"] == "previous_summary:0"
+    assert "open_items" not in referenced["previous_summary"]
+    assert referenced["previous_summary"]["evidence_eligible"] is False
     assert referenced["previous_summary"]["reprise"]["open"].startswith("Le push")
     assert referenced["agent_session"]["ref"] == "agent_request:0"
 
@@ -200,19 +206,16 @@ def test_input_references_enumerate_exactly_what_the_view_and_annexes_carry():
     assert {"path:new.py", "path:core/daemon_v2/routes.py", "path:old.py"} <= references.refs
     assert "commit:a1b2c3" in references and "app:Terminal" in references
     assert {"test_passed:pytest -q", "signal:file_changed", "signal:terminal_finished"} <= references.refs
-    assert {"event:evt-aaaaaaaaaaaaaaaa-0", "event:evt-aaaaaaaaaaaaaaaa-1"} <= references.refs
+    assert not any(ref.startswith("event:") for ref in references.refs)
     assert references.agent_requests == ("agent_request:0",)
-    assert references.previous_open == (
-        "Le push n'a pas été observé",
-        "la configuration de llm_max_tokens reste à valider.",
-        "La PR #28 attend.",
-    )
-    assert {"previous_summary:0", "previous_summary:1", "previous_summary:2"} <= references.refs
+    assert references.previous_open == ()
+    assert "previous_summary:0" in references.refs
+    assert "previous_summary:1" not in references.refs
     # Une absence n'est pas un fait citable ; un hash inventé non plus.
     assert "git:push_observed" not in references
     assert "commit:deadbeef" not in references and "previous_summary:3" not in references
-    # Même énumération sans annexes référencées : les clés viennent de la vue.
-    assert input_references(build_model_input(session, _annexed_context(session))).refs == references.refs
+    # Sans référence visible, aucune référence à l’interprétation n’est inventée.
+    assert "previous_summary:0" not in input_references(build_model_input(session, _annexed_context(session))).refs
 
 
 def test_input_references_are_empty_without_annexes_or_facts():

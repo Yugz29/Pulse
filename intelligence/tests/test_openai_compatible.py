@@ -46,7 +46,7 @@ def _isolated_llm_environment(monkeypatch):
 
 VALID_OUTPUT = json.dumps(
     {
-        "reprise": {"doing": "d", "stopped_at": "s", "open": "o"},
+        "reprise": {"doing": "d", "stopped_at": "s", "open": []},
         "structured": {
             "project": None,
             "intents": [],
@@ -430,3 +430,10 @@ def test_the_nominal_case_reports_no_dropped_parameter(endpoint):
 
     assert result.dropped_parameters == ()
     assert len(endpoint.requests_seen) == 1
+
+
+@pytest.fixture(autouse=True)
+def current_prompt_for_provider_tests(monkeypatch):
+    """Exercise real provider wiring against the current input contract."""
+    from pulse_intelligence.config import config_home
+    (config_home() / "config.toml").write_text('prompt_version = "v5"\n')

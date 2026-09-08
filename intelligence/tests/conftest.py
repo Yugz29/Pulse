@@ -36,7 +36,12 @@ def _isolated_intelligence_home(monkeypatch, tmp_path):
     local, verts en CI. Même principe que l'isolement de `PULSE_LLM_*` : chaque
     test repart d'un dossier vide et pose explicitement ce dont il a besoin.
     """
-    monkeypatch.setenv("PULSE_INTELLIGENCE_HOME", str(tmp_path / "pulse_intelligence_home"))
+    home = tmp_path / "pulse_intelligence_home"
+    home.mkdir()
+    # Delivery/recovery fixtures carry the original free-text open format.
+    # Pin their prompt identity; current-generation tests explicitly use v4.
+    (home / "config.toml").write_text('prompt_version = "v1"\n')
+    monkeypatch.setenv("PULSE_INTELLIGENCE_HOME", str(home))
 PULSE = "/Users/dev/Projets/Pulse"
 HEX_ID = re.compile(r"[0-9a-f]{16}")
 

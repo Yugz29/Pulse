@@ -174,17 +174,16 @@ def real_mlx_provider():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("prompt_version", ["v1", "v2", "v3"])
+@pytest.mark.parametrize("prompt_version", ["v1", "v2", "v3", "v5"])
 def test_real_qwen_loads_and_summarizes_without_thinking(prompt_version, real_mlx_provider):
-    """Valide le prompt historique, le prompt actif et le prompt v3 (points
-    `open` référencés) avec le vrai modèle.
+    """Valide les prompts archivés sur leurs vues et le contrat courant v5.
 
     Exclu par défaut (`-m 'not slow'`) : 14 Go et plusieurs secondes. À lancer
     quand l'extra mlx est présent, avec `pytest -m slow`.
     """
     from datetime import date
 
-    from pulse_intelligence.evaluation import load_corpus
+    from pulse_intelligence.evaluation import load_corpus, DEFAULT_CORPUS
     from pulse_intelligence.provider_summarizer import ProviderSummarizer, prompt_path_for
     from pulse_intelligence.selection import SessionView
     from pulse_intelligence.session_input import (
@@ -196,10 +195,14 @@ def test_real_qwen_loads_and_summarizes_without_thinking(prompt_version, real_ml
     )
     from pulse_intelligence.session_summary import parse_model_output
 
-    entry = next(e for e in load_corpus() if e.id == "cda6ccce898d3e88")
+    corpus = DEFAULT_CORPUS if prompt_version == "v5" else DEFAULT_CORPUS.parent / "corpus"
+    entry = next(e for e in load_corpus(corpus) if e.id == "cda6ccce898d3e88")
     session = SessionView(entry.session_raw, date.fromisoformat(entry.date))
     referenced = uses_open_items(prompt_version)
     model_input = build_model_input(session, entry.context, references=referenced)
+    if prompt_version != "v5":
+        # Historical aggregate input, before input_version was introduced.
+        model_input = {"session": session.raw, "previous_summary": None, "agent_session": None}
     serialized = serialize_input(model_input)
 
     summarizer = ProviderSummarizer(
@@ -234,7 +237,7 @@ def test_real_tokenizer_rejects_the_stress_fixture_before_generation(real_mlx_pr
                       "synthetic-114k.json").read_text(encoding="utf-8"))
     view = SessionView(raw["session_raw"], date.fromisoformat(raw["date"]))
     request = CompletionRequest(
-        system=prompt_path_for("v2").read_text(encoding="utf-8"),
+        system=prompt_path_for("v5").read_text(encoding="utf-8"),
         prompt=serialize_input(build_model_input(view, raw["context"])), max_tokens=1,
     )
 

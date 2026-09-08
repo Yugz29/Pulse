@@ -198,21 +198,21 @@ def test_no_provider_is_chosen_by_default():
 
 
 def test_default_prompt_version_is_the_current_one_and_resolves_to_a_file():
-    # v2 courante depuis le 2026-09-06 (spec §7) ; v1 reste livrée pour rejouer la référence.
-    assert Config().prompt_version == "v2"
+    # v5 accompagne la reprise fondée ; les prompts historiques restent livrés.
+    assert Config().prompt_version == "v5"
     assert prompt_path_for("v2").is_file() and prompt_path_for("v1").is_file()
 
 
 def test_prompt_v3_is_selectable_by_configuration_and_v2_is_untouched():
     """v3 (points `open` référencés) se choisit par `prompt_version = "v3"` ;
-    le défaut reste v2, dont le texte est épinglé : aucune retouche silencieuse
+    v2 reste archivée et son texte épinglé : aucune retouche silencieuse
     d'un prompt déjà mesuré (règle du pas 3)."""
     import hashlib
 
     from pulse_intelligence.llm.fake import FakeProvider
     from pulse_intelligence.session_input import uses_open_items
 
-    assert uses_open_items("v3") and not uses_open_items(Config().prompt_version)
+    assert uses_open_items("v3") and uses_open_items(Config().prompt_version)
     summarizer = ProviderSummarizer(provider=FakeProvider(), model_id="m", prompt_path=prompt_path_for("v3"))
     for expected in ('"kind": "observed"', '"kind": "carried_over"', '"kind": "requested"',
                      "non observé", "previous_summary:<i>", "agent_request:0"):
@@ -290,3 +290,10 @@ def test_fake_provider_ignores_the_id_of_the_annexed_previous_summary():
 
     assert "2222222222222222" in result.text
     assert "1111111111111111" not in result.text
+
+
+@pytest.fixture(autouse=True)
+def current_prompt_for_provider_tests(monkeypatch):
+    """Exercise real provider wiring against the current input contract."""
+    from pulse_intelligence.config import config_home
+    (config_home() / "config.toml").write_text('prompt_version = "v5"\n')

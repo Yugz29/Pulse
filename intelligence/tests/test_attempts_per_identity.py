@@ -169,7 +169,7 @@ def test_summarize_retry_clears_both_key_forms_and_replays_the_pending(
     fake_core.fail_posts = 1
     assert cli.main([*base, "run", "--once", "--fake", "unused"]) == cli.EXIT_PARTIAL
     capsys.readouterr()
-    cli_id = summary_event_id(SESSION, Config().prompt_version, "fake/summarizer")
+    cli_id = summary_event_id(SESSION, "v1", "fake/summarizer")
     frozen = JobState.load(path).pending_event(cli_id)
     assert frozen is not None and len(summarizer.calls) == 1
     # Abandon sous les deux formes : clé ancienne (session) et identité.
