@@ -5,6 +5,7 @@ import pytest
 
 from daemon_v2.context_snapshot import build_context_snapshot, build_day_sessions
 from daemon_v2.main import create_app
+from daemon_v2 import routes
 from daemon_v2.models import Activity
 from daemon_v2.trace_store import TraceStore
 
@@ -676,18 +677,29 @@ def test_route_rejects_invalid_reference_instant(tmp_path, value):
 # --- Statut : premier consommateur du contrat ------------------------------
 
 
-def test_status_exposes_a_compact_context_block(tmp_path):
+class _ClockAtReference(datetime):
+    """`datetime.now()` pinned to REFERENCE: `/status` has no `at` parameter."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return REFERENCE.astimezone(tz) if tz is not None else REFERENCE
+
+
+def test_status_exposes_a_compact_context_block(tmp_path, monkeypatch):
+    # Sessions are reconstructed per local day. With the wall clock as
+    # reference, two events 12 and 2 minutes ago straddle local midnight
+    # for a few minutes each night and the session shrank to duration 0.
+    monkeypatch.setattr(routes, "datetime", _ClockAtReference)
     app_ = create_app(tmp_path / "trace.db")
     client = app_.test_client()
-    now = datetime.now(timezone.utc)
     for activity in (
         Activity(
-            "terminal_finished", now - timedelta(minutes=12), "terminal",
+            "terminal_finished", at(-12), "terminal",
             "Command succeeded: pytest -q",
             {"command": "pytest -q", "exit_code": 0, "cwd": PULSE, **workspace_details(PULSE)},
         ),
         Activity(
-            "file_changed", now - timedelta(minutes=2), "filesystem",
+            "file_changed", at(-2), "filesystem",
             f"Modified {PULSE}/a.py",
             {"path": f"{PULSE}/a.py", "event": "modified", "workspace": PULSE},
         ),
