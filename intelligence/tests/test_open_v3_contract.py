@@ -1,3 +1,4 @@
+# Archived v3 output compatibility only. Current generation is tested in test_resumption.py.
 """Schéma `open` v3 : chaque point est d'une nature déclarée et étayé par des
 références de l'entrée. Un test par règle de rejet, puis les trois sorties
 réelles du 2026-09-07 (D1, D3, D5), transcrites au schéma v3, qui doivent
@@ -67,7 +68,7 @@ def _context(session: SessionView, *, previous: bool = True, agent: bool = True)
 
 def _references(session=None, **context_kwargs):
     session = session or _session()
-    return input_references(build_model_input(session, _context(session, **context_kwargs), references=True))
+    return input_references({**build_model_input(session, _context(session, **context_kwargs), references=True), "input_version": 2})
 
 
 def _output(*items: dict) -> str:
@@ -204,43 +205,8 @@ def test_a_text_copied_from_previous_summary_without_carried_over_is_rejected():
     _rejects(_output({**REQUESTED, "text": "Le push n'a pas été observé."}), "identique à previous_summary:0")
 
 
-def test_an_observed_item_asserting_a_push_did_not_happen_is_rejected():
-    for text in (
-        "Le push n'a pas été effectué",
-        "Les commits ne sont pas poussés (push_observed: false)",
-        "Le push n'est pas encore fait",
-    ):
-        _rejects(_output({**OBSERVED, "text": text}), "affirme un push non effectué")
-    # « non observé » reste la formulation attendue.
-    parse_model_output(_output({**OBSERVED, "text": "Aucun push observé après le commit a1b2c3"}),
-                       ALLOWED, references=_references())
 
 
-def test_an_observed_item_claiming_a_file_is_not_committed_is_rejected_when_the_session_shows_commits():
-    # D6 (dogfooding, jour 3) : la vue donne le message d'un commit, jamais
-    # ses fichiers ; « aucun commit ne le nomme » n'est pas une observation
-    # dès qu'un commit existe. La session de référence en montre deux.
-    for text in (
-        "core/daemon_v2/routes.py est modifié et aucun commit de la session ne le nomme",
-        "core/daemon_v2/routes.py est modifié sans commit associé",
-        "config.toml a été créé et n'apparaît dans aucun commit",
-        "core/daemon_v2/routes.py n'est pas nommé dans le commit a1b2c3",
-        "Les modifications de config.toml ne sont pas committées",
-        "config.toml est modifié, non commité",
-        "config.toml est modifié, pas de commit pour lui",
-    ):
-        _rejects(_output({"text": text, "kind": "observed", "evidence": ["path:core/daemon_v2/routes.py"]}),
-                 "n'est pas commité alors que la session montre 2 commit")
-    # Un commit reste citable comme fait, une commande git en échec reste une
-    # erreur observée : ni l'un ni l'autre n'affirme qu'un fichier est hors commit.
-    for text in (
-        "core/daemon_v2/routes.py est modifié après le commit d4e5f6",
-        "Les commandes git add et git commit ont échoué dans le terminal",
-    ):
-        parse_model_output(
-            _output({"text": text, "kind": "observed", "evidence": ["path:core/daemon_v2/routes.py"]}),
-            ALLOWED, references=_references(),
-        )
 
 
 def test_a_file_modified_in_a_session_without_any_commit_is_an_observation():
@@ -250,7 +216,6 @@ def test_a_file_modified_in_a_session_without_any_commit_is_an_observation():
         day=REFERENCE.date(),
     )
     references = _references(session)
-    assert references.commits == ()
     parsed = parse_model_output(
         _output({"text": "core/daemon_v2/routes.py est modifié et la session ne montre aucun commit",
                  "kind": "observed", "evidence": ["path:core/daemon_v2/routes.py"]}),
@@ -340,8 +305,8 @@ def test_show_card_of_a_legacy_summary_is_unchanged():
 
 
 def _corpus_references(session_id: str):
-    entry = {e.id: e for e in load_corpus(DEFAULT_CORPUS)}[session_id]
-    model_input = build_model_input(entry.view, entry.context, references=True)
+    entry = {e.id: e for e in load_corpus(DEFAULT_CORPUS.parent / "corpus")}[session_id]
+    model_input = {**build_model_input(entry.view, entry.context, references=True), "input_version": 2}
     return entry, model_input, input_references(model_input)
 
 
@@ -351,21 +316,8 @@ def _corpus_rejects(session_id: str, item: dict, message: str) -> None:
         parse_model_output(_output(item), input_paths(entry.view), references=references)
 
 
-def test_d5_1e420dda_push_asserted_not_done_is_rejected(capture_timezone):
-    # Sortie v2 : « Les commits ne sont pas poussés (push_observed: false). »
-    text = "Les commits ne sont pas poussés (push_observed: false)"
-    _corpus_rejects("1e420dda8b6eee77", {"text": text, "kind": "observed", "evidence": ["commit:d6e89cf"]},
-                    "affirme un push non effectué")
-    # Sans preuve détournée, il n'y en a aucune à citer : rejet aussi.
-    _corpus_rejects("1e420dda8b6eee77", {"text": text, "kind": "observed", "evidence": []},
-                    "observed exige evidence non vide")
 
 
-def test_d5_eef4956b_push_not_performed_is_rejected(capture_timezone):
-    # Sortie v2 : « Le push n'a pas été effectué ; … »
-    _corpus_rejects("eef4956b36dd37ce",
-                    {"text": "Le push n'a pas été effectué", "kind": "observed", "evidence": ["commit:1dc191e"]},
-                    "affirme un push non effectué")
 
 
 def test_d1_eef4956b_copy_of_previous_summary_is_rejected(capture_timezone):
@@ -414,35 +366,12 @@ def test_d3_d9877899_old_request_copied_from_previous_summary_is_rejected(captur
                     "identique à previous_summary:1")
     _corpus_rejects("d98778994319cd07", {"text": text, "kind": "requested", "evidence": ["agent_request:0"]},
                     "identique à previous_summary:1")
-    # Et « Les modifications ne sont pas poussées. » (même sortie) : D5.
-    _corpus_rejects("d98778994319cd07",
-                    {"text": "Les modifications ne sont pas poussées", "kind": "observed",
-                     "evidence": ["commit:40316b2", "commit:7922529"]},
-                    "affirme un push non effectué")
-
-
-def test_d6_eef4956b_file_not_named_by_a_commit_is_rejected(capture_timezone):
-    # Sortie v3 du 07 (validation open v3) : « docs/specs/2026-09-05-llm-provider.md
-    # et intelligence/TODOS.md sont modifiés et aucun commit de la session ne
-    # les nomme. » — la session montre cinq commits, dont la vue ne liste pas
-    # les fichiers (D6, dogfooding jour 3 : 20 points sur 27 contredits par git).
-    _, _, references = _corpus_references("eef4956b36dd37ce")
-    assert len(references.commits) == 5
-    _corpus_rejects(
-        "eef4956b36dd37ce",
-        {"text": "docs/specs/2026-09-05-llm-provider.md et intelligence/TODOS.md sont modifiés "
-                 "et aucun commit de la session ne les nomme",
-         "kind": "observed",
-         "evidence": ["path:docs/specs/2026-09-05-llm-provider.md", "path:intelligence/TODOS.md"]},
-        "n'est pas commité alors que la session montre 5 commit",
-    )
 
 
 def test_d6_7bbaca78_file_modified_without_any_commit_stays_observable(capture_timezone):
     # Sortie v3 du 07 : « README.md a été modifié mais aucun commit n'a été
     # enregistré dans la session. » — la vue ne porte aucun commit : un fait.
     entry, _, references = _corpus_references("7bbaca7882c3d766")
-    assert references.commits == ()
     parsed = parse_model_output(
         _output({"text": "README.md a été modifié mais aucun commit n'a été enregistré dans la session",
                  "kind": "observed", "evidence": ["path:README.md"]}),

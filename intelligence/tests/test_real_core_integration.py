@@ -122,7 +122,7 @@ def test_lost_state_recovers_the_summary_core_already_accepted(real_core, config
     # La sortie fixe cite un fichier réellement présent dans la vue servie par
     # Core : la validation des chemins est la vraie, pas une fixture.
     output = json.loads(valid_output())
-    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    output["structured"]["central_files"] = [next(f["path"] for f in session.raw["observations"]["timeline"] if f["kind"] == "file")]
     summarizer = FakeSummarizer(outputs=json.dumps(output), model_id="fake/summarizer")
 
     first = summarize_session(
@@ -168,7 +168,7 @@ def test_both_show_paths_display_the_event_core_accepted_with_secrets_redacted(
     output = json.loads(valid_output())
     output["reprise"]["doing"] = "Tu réglais TOKEN=audit-secret-123 dans la config."
     output["structured"]["project"] = "TOKEN=audit-project-secret"
-    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    output["structured"]["central_files"] = [next(f["path"] for f in session.raw["observations"]["timeline"] if f["kind"] == "file")]
     marked = tmp_path / "marked.json"
     marked.write_text(json.dumps(output), encoding="utf-8")
     monkeypatch.setattr(cli, "_now", lambda: REFERENCE)
@@ -223,7 +223,7 @@ def test_sigkill_after_core_acceptance_replays_without_regenerating(
     _seed_one_closed_session(client)
     session = fetch_sessions(client, REFERENCE.date(), at=REFERENCE)[0]
     output = json.loads(valid_output())
-    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    output["structured"]["central_files"] = [next(f["path"] for f in session.raw["observations"]["timeline"] if f["kind"] == "file")]
     fake = tmp_path / "output.json"
     fake.write_text(json.dumps(output), encoding="utf-8")
     path = tmp_path / "state.json"
@@ -269,7 +269,7 @@ def test_restored_backup_with_conflicting_pending_recovers_actual_core_version(
     _seed_one_closed_session(client)
     session = fetch_sessions(client, REFERENCE.date(), at=REFERENCE)[0]
     output = json.loads(valid_output())
-    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    output["structured"]["central_files"] = [next(f["path"] for f in session.raw["observations"]["timeline"] if f["kind"] == "file")]
     summarizer = FakeSummarizer(outputs=json.dumps(output), model_id=config.model_id)
     state = JobState.load(tmp_path / "state.json")
     draft = summarize_session(
@@ -316,7 +316,7 @@ def test_show_after_readback_failure_recovers_newest_redacted_version(
     session = fetch_sessions(client, REFERENCE.date(), at=REFERENCE)[0]
     state = JobState.load(tmp_path / "state.json")
     output = json.loads(valid_output())
-    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    output["structured"]["central_files"] = [next(f["path"] for f in session.raw["observations"]["timeline"] if f["kind"] == "file")]
     output["reprise"]["doing"] = "ANCIEN RESUME"
     first = summarize_session(
         session, client=client, config=config, state=state,
@@ -377,7 +377,7 @@ def test_real_mlx_summary_is_accepted_shown_and_not_generated_twice(
     session = fetch_sessions(client, REFERENCE.date(), at=REFERENCE)[0]
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        f'llm_provider = "mlx"\nmodel_id = "{DEFAULT_MODEL}"\nprompt_version = "v2"\n',
+        f'llm_provider = "mlx"\nmodel_id = "{DEFAULT_MODEL}"\nprompt_version = "v5"\n',
         encoding="utf-8",
     )
     state_path = tmp_path / "state.json"
@@ -392,7 +392,7 @@ def test_real_mlx_summary_is_accepted_shown_and_not_generated_twice(
     stored = client.get_activity(event_id)
     assert stored is not None and stored["type"] == "session_summary"
     assert state.emitted[event_id]["model_id"] == DEFAULT_MODEL
-    assert state.emitted[event_id]["prompt_version"] == "v2"
+    assert state.emitted[event_id]["prompt_version"] == "v5"
     assert state.emitted[event_id]["event"]["details"] == stored["details"]
 
     def forbidden_loading(*args, **kwargs):
@@ -418,24 +418,27 @@ def test_core_accepts_a_v3_summary_and_keeps_its_open_items(real_core, config, t
     client = CoreClient(real_core, timeout_s=5)
     _seed_one_closed_session(client)
     session = fetch_sessions(client, REFERENCE.date(), at=REFERENCE)[0]
-    path = session.raw["files"]["modified"][0]
+    path = next(f["path"] for f in session.raw["observations"]["timeline"] if f["kind"] == "file")
     output = json.loads(valid_output())
     output["structured"]["central_files"] = [path]
     output["reprise"]["open"] = [
         {"text": f"Le fichier {path} est modifié sans commit", "kind": "observed",
-         "evidence": [f"path:{path}"]},
+         "evidence": [next(f["ref"] for f in session.raw["observations"]["timeline"] if f.get("path") == path)]},
     ]
-    summarizer = FakeSummarizer(outputs=json.dumps(output), model_id=config.model_id)
-
-    outcome = summarize_session(
-        session, client=client, summarizer=summarizer, config=replace(config, prompt_version="v3"),
-        state=JobState.load(tmp_path / "state.json"), now=REFERENCE,
+    # Replay an archived v3 event; the current generation no longer accepts
+    # file notifications as evidence for a still-open issue.
+    from pulse_intelligence.session_input import input_references, input_paths
+    from pulse_intelligence.session_summary import parse_model_output, build_event
+    parsed = parse_model_output(json.dumps(output), input_paths(session),
+                                references=input_references({"session": session.raw}))
+    event = build_event(
+        session, parsed, prompt_version="v3", model_id=config.model_id,
+        generated_at=REFERENCE, generation_ms=0, context_hash="a"*64, workspace=None,
     )
-
-    assert outcome.status == "created", outcome
-    stored = client.get_activity(outcome.event_id)
+    assert client.post_activity(event).status_code == 201
+    stored = client.get_activity(event["event_id"])
     assert stored["details"]["reprise"]["open"] == f"Le fichier {path} est modifié sans commit."
-    assert stored["details"]["open_items"] == [{"kind": "observed", "evidence": [f"path:{path}"]}]
+    assert stored["details"]["open_items"] == [{"kind": "observed", "evidence": [next(f["ref"] for f in session.raw["observations"]["timeline"] if f.get("path") == path)]}]
     assert stored["details"]["prompt_version"] == "v3"
     # La lecture par Core d'un résumé v3 reste celle d'avant : `open` est une chaîne.
     context = client.get_context(at=REFERENCE + timedelta(minutes=1))
@@ -460,7 +463,7 @@ def test_intelligence_consumes_the_journal_identity_before_and_after_a_summary(
     assert set(work["source_event_ids"]) == {e["event_id"] for e in trace["activities"]}
 
     output = json.loads(valid_output())
-    output["structured"]["central_files"] = [session.raw["files"]["modified"][0]]
+    output["structured"]["central_files"] = [next(f["path"] for f in session.raw["observations"]["timeline"] if f["kind"] == "file")]
     result = summarize_session(
         session, client=client, config=config,
         summarizer=FakeSummarizer(outputs=json.dumps(output), model_id="fake/summarizer"),
@@ -472,3 +475,42 @@ def test_intelligence_consumes_the_journal_identity_before_and_after_a_summary(
     assert after["work_sessions"] == trace["work_sessions"]
     assert fetch_sessions(client, day, at=REFERENCE)[0].raw == session.raw
     assert any(e["type"] == "session_summary" for e in after["activities"])
+
+
+def test_v5_quote_is_redacted_and_previous_interpretation_stays_attributed(real_core, config, tmp_path):
+    """No free quote bypasses Core redaction; subsequent context keeps its origin."""
+    from dataclasses import replace
+    from pulse_intelligence.session_input import build_model_input
+    client = CoreClient(real_core, timeout_s=5)
+    _seed_one_closed_session(client)
+    secret = 'sk-' + 'A' * 32
+    event = {
+        'event_id': str(uuid.uuid4()), 'schema_version': 1, 'type': 'git_commit',
+        'producer': {'name': 'test', 'version': '1'},
+        'occurred_at': (REFERENCE-timedelta(minutes=347)).isoformat(),
+        'details': {'commit_hash': 'a'*40, 'message': f'Reste à vérifier : api_key={secret}',
+                    'git_root': '/project/Pulse', 'repository': '/project/Pulse', 'branch': 'main'},
+    }
+    assert client.post_activity(event).accepted
+    session = fetch_sessions(client, REFERENCE.date(), at=REFERENCE)[0]
+    fact = next(f for f in session.raw['observations']['timeline'] if f['kind']=='commit')
+    assert secret not in fact['message']
+    output=json.loads(valid_output());output['structured']['central_files']=[]
+    output['reprise']['open']=[dict(text=f'Le message signale une vérification : api_key={secret}',
+                                  kind='recorded_statement',evidence=[fact['ref']],quote=fact['message'])]
+    result=summarize_session(session,client=client,summarizer=FakeSummarizer(json.dumps(output),model_id=config.model_id),
+                             config=replace(config,prompt_version='v5'),state=JobState.load(tmp_path/'v5.json'),now=REFERENCE)
+    assert result.status=='created', result
+    stored=client.get_activity(result.event_id)
+    assert secret not in json.dumps(stored)
+    assert set(stored['details']['open_items'][0])=={'kind','evidence','scope'}
+    context=client.get_context(at=REFERENCE)
+    assert context['last_session_summary']['origin']=='model_interpretation'
+    # A later session receives context, never a new observation or open proof.
+    next_raw={**session.raw,'id':'f'*16,'started_at':REFERENCE.isoformat(),
+              'last_activity_at':(REFERENCE+timedelta(minutes=15)).isoformat()}
+    from pulse_intelligence.selection import SessionView
+    later=build_model_input(SessionView(next_raw,REFERENCE.date()),context,references=True)
+    assert later['previous_summary']['origin']=='previous_model_interpretation'
+    assert later['previous_summary']['evidence_eligible'] is False
+    assert later['previous_summary']['current_state']=='unknown'

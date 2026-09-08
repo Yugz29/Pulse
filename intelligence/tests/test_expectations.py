@@ -46,11 +46,11 @@ def test_there_is_one_annotated_expectation_per_target_session():
 
 
 def test_every_expected_and_optional_point_is_a_valid_v3_output_for_its_session(capture_timezone):
-    """Les attentes ne demandent rien que le validateur refuserait."""
-    corpus = {e.id: e for e in load_corpus(DEFAULT_CORPUS)}
+    """Les attentes historiques restent valides sous leur contrat v3 archivé."""
+    corpus = {e.id: e for e in load_corpus(DEFAULT_CORPUS.parent / "corpus")}
     for session_id, expectation in load_expectations(DEFAULT_EXPECTED).items():
         entry = corpus[session_id]
-        model_input = build_model_input(entry.view, entry.context, references=True)
+        model_input = {**build_model_input(entry.view, entry.context, references=True), "input_version": 2}
         references = input_references(model_input)
         items = [_strip(item) for item in [*expectation["open"], *expectation["optional"]]]
         parsed = parse_model_output(_output(items), input_paths(entry.view), references=references)
@@ -168,17 +168,17 @@ def qwen_tokenizer():
 def test_the_referenced_input_of_the_target_sessions_stays_far_under_the_ceiling(
     capture_timezone, qwen_tokenizer
 ):
-    """Le schéma v3 ajoute `open_items` et `ref` aux annexes : mesuré avec le
-    vrai tokenizer et le prompt v3 s'il existe (sinon v2), l'entrée des quatre
-    sessions cibles reste sous le plafond, et le surcoût des références est
-    borné — ce n'est pas ce qui rapprochera une session du plafond."""
+    """Mesure le surcoût de provenance avec l'entrée courante et le prompt v5.
+
+    Le vrai tokenizer vérifie le plafond sur les quatre sessions annotées.
+    """
     from pulse_intelligence.config import Config
     from pulse_intelligence.llm.mlx import MLXProvider, _count
     from pulse_intelligence.llm.provider import CompletionRequest
     from pulse_intelligence.provider_summarizer import prompt_path_for
     from pulse_intelligence.session_input import serialize_input
 
-    prompt_path = prompt_path_for("v3") if prompt_path_for("v3").exists() else prompt_path_for("v2")
+    prompt_path = prompt_path_for("v5")
     system = prompt_path.read_text(encoding="utf-8")
     provider = MLXProvider()
     corpus = {e.id: e for e in load_corpus(DEFAULT_CORPUS)}
