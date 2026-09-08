@@ -1,7 +1,7 @@
 """Client HTTP de Pulse Core : le seul lien entre Intelligence et Core.
 
 Trois routes du contrat public (spec v2 §4) : GET /context (Context API,
-schema_version 2), GET /context/sessions (sessions de travail d'une journée,
+schema_version 3, lecture historique 2), GET /context/sessions (sessions de travail d'une journée,
 seule source de sessions closes) et POST /activities (ingestion canonique).
 Un Core arrêté se traduit par CoreUnavailable, jamais par une trace de pile.
 """
@@ -15,7 +15,7 @@ from typing import Any
 import requests
 
 
-EXPECTED_SCHEMA_VERSION = 2
+EXPECTED_SCHEMA_VERSION = 3
 
 
 class CoreUnavailable(RuntimeError):
@@ -68,7 +68,7 @@ class CoreClient:
     @staticmethod
     def _check_schema(body: dict[str, Any], path: str) -> dict[str, Any]:
         version = body.get("schema_version")
-        if version != EXPECTED_SCHEMA_VERSION:
+        if version not in {2, EXPECTED_SCHEMA_VERSION}:
             raise CoreError(
                 f"{path}: schema_version {version!r}, attendu {EXPECTED_SCHEMA_VERSION} "
                 "(Core ≥ 0.5.0 requis)"
