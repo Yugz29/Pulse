@@ -1,0 +1,155 @@
+{
+  "before": {
+    "sessions": 14,
+    "accepted": 14,
+    "open_points": 21,
+    "empty_open_sessions": 1,
+    "prompt_tokens": 80858,
+    "completion_tokens": 5140,
+    "duration_ms": 1053144,
+    "serialized_input_chars": 167454,
+    "format_valid": 14,
+    "human": [
+      {
+        "id": "1e420dda8b6eee77",
+        "ok": false,
+        "missing": 0,
+        "forbidden": 2
+      },
+      {
+        "id": "8af930d9ef437d2a",
+        "ok": true,
+        "missing": 0,
+        "forbidden": 0
+      },
+      {
+        "id": "d98778994319cd07",
+        "ok": false,
+        "missing": 0,
+        "forbidden": 1
+      },
+      {
+        "id": "eef4956b36dd37ce",
+        "ok": false,
+        "missing": 0,
+        "forbidden": 3
+      }
+    ]
+  },
+  "trial-v5": {
+    "sessions": 14,
+    "accepted": 10,
+    "open_points": 7,
+    "empty_open_sessions": 9,
+    "prompt_tokens": 80014,
+    "completion_tokens": 4075,
+    "duration_ms": 1000626,
+    "serialized_input_chars": 170617,
+    "format_valid": 14
+  },
+  "after": {
+    "sessions": 14,
+    "accepted": 14,
+    "open_points": 9,
+    "empty_open_sessions": 9,
+    "prompt_tokens": 80238,
+    "completion_tokens": 4074,
+    "duration_ms": 962214,
+    "serialized_input_chars": 170617,
+    "format_valid": 14,
+    "human": [
+      {
+        "id": "1e420dda8b6eee77",
+        "ok": false,
+        "missing": 1,
+        "forbidden": 0
+      },
+      {
+        "id": "8af930d9ef437d2a",
+        "ok": true,
+        "missing": 0,
+        "forbidden": 0
+      },
+      {
+        "id": "d98778994319cd07",
+        "ok": true,
+        "missing": 0,
+        "forbidden": 0
+      },
+      {
+        "id": "eef4956b36dd37ce",
+        "ok": false,
+        "missing": 1,
+        "forbidden": 0
+      }
+    ]
+  },
+  "scenarios": {
+    "sessions": 8,
+    "accepted": 8,
+    "open_points": 2,
+    "empty_open_sessions": 6,
+    "prompt_tokens": 12633,
+    "completion_tokens": 1378,
+    "duration_ms": 189548,
+    "serialized_input_chars": 9683
+  },
+  "versions": {
+    "core_api": 3,
+    "observations": 1,
+    "reconstruction": 3,
+    "input_before": 2,
+    "input_after": 3,
+    "prompt_before": "v4",
+    "prompt_after": "v5",
+    "model": "mlx-community/Qwen3.8-27B-4bit",
+    "snapshot": "3e6447f082e89cc7f0bc6e5441afd38dfce760ff",
+    "temperature": 0,
+    "max_tokens": 2048,
+    "max_input_tokens": 30000,
+    "offline": true,
+    "thinking": false
+  },
+  "third_task_runtime_python_changes": [
+    {
+      "path": "core/daemon_v2/context_snapshot.py",
+      "added": 5,
+      "removed": 0
+    },
+    {
+      "path": "intelligence/pulse_intelligence/config.py",
+      "added": 1,
+      "removed": 1
+    },
+    {
+      "path": "intelligence/pulse_intelligence/evaluation.py",
+      "added": 5,
+      "removed": 1
+    },
+    {
+      "path": "intelligence/pulse_intelligence/llm/fake.py",
+      "added": 1,
+      "removed": 1
+    },
+    {
+      "path": "intelligence/pulse_intelligence/provider_summarizer.py",
+      "added": 4,
+      "removed": 2
+    },
+    {
+      "path": "intelligence/pulse_intelligence/resumption.py",
+      "added": 40,
+      "removed": 0
+    },
+    {
+      "path": "intelligence/pulse_intelligence/session_input.py",
+      "added": 40,
+      "removed": 18
+    },
+    {
+      "path": "intelligence/pulse_intelligence/session_summary.py",
+      "added": 54,
+      "removed": 1
+    }
+  ]
+}
