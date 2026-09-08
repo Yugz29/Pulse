@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import json
 
 from .llm.provider import (
     CompletionRequest,
@@ -72,6 +73,15 @@ class ProviderSummarizer:
         tokens, la durée et `dropped_parameters` pour son rapport. Un seul
         chemin d'appel, deux profondeurs de retour.
         """
+        if prompt_version_of(self.prompt_path) in {"v1", "v2", "v3", "v4"}:
+            try:
+                version = json.loads(model_input).get("input_version")
+            except (ValueError, AttributeError):
+                version = None
+            if version == 3:
+                raise SummarizerInputRefused("Cette entrée exige prompt_version = 'v5'. Les prompts v1–v4 sont historiques.")
+            if version == 2 and prompt_version_of(self.prompt_path) != "v4":
+                raise SummarizerError("Cette entrée exige prompt_version = 'v4'. Les prompts v1–v3 sont historiques.")
         request = CompletionRequest(
             system=self.system,
             prompt=model_input,
