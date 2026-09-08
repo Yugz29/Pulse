@@ -1,43 +1,9 @@
-"""Vue de session → entrée du modèle (spec v2 §7).
+"""Model-visible work observations; exhaustive provenance stays with Pulse.
 
-L'entrée est la vue renvoyée par Core, telle quelle, sérialisée à clés
-triées ; son sha256 est ``input_hash``. Intelligence n'y retire ni n'y
-ajoute de faits. Deux annexes, sous des clés séparées, s'il y a lieu : la
-reprise du résumé précédent de la même journée, et le dernier
-``agent_session`` dont l'intervalle chevauche la session — les deux lus sur
-``GET /context?at=<fin de session>``, jamais sur ``/trace``.
-
-Références stables (schéma ``open`` v3)
----------------------------------------
-
-Chaque fait de l'entrée est désignable depuis la sortie par une référence
-``<type>:<clé>`` ; ``input_references`` énumère celles qui existent et le
-validateur rejette toute autre. Les clés sont celles que Core sert déjà,
-sans réécriture de la vue :
-
-- ``path:<chemin>`` — un chemin de ``files.created``, ``modified`` ou ``deleted`` ;
-- ``commit:<hash>`` — le ``hash`` d'un ``git.commits[]`` ;
-- ``event:<id>`` — un ``source_event_ids[]`` (la vue n'en porte pas le
-  contenu : référence possible, rarement utile) ;
-- ``app:<nom>`` — un ``apps[].name`` ;
-- ``test_passed:<commande>``, ``test_failed:<commande>``, ``error:<texte>`` —
-  les listes de ``terminal`` ;
-- ``signal:<nom>`` — un ``signals[]`` ;
-- ``agent_request:0`` — l'annexe ``agent_session`` (une seule par entrée) ;
-- ``previous_summary:<i>`` — le i-ième point du ``open`` de l'annexe
-  ``previous_summary``, découpé par ``split_open_text``.
-
-Core sert ``open`` en une seule chaîne ; les points y sont des phrases. Le
-découpage est déterministe et identique côté entrée (``open_items`` de
-l'annexe) et côté validateur, et son inverse est ``render_open_items``
-(``session_summary``). Il n'y a ni ``git:push_observed`` ni aucune référence
-à une absence : une absence d'observation ne se cite pas, elle se dit.
-
-Les références ne changent pas la vue Core. Elles n'ajoutent aux annexes
-(``open_items``, ``ref``) que lorsque ``references=True`` — c'est-à-dire pour
-les prompts au schéma ``open`` v3 (``uses_open_items``) ; l'entrée des
-prompts v1 et v2, et donc leur ``input_hash``, restent octet pour octet
-celles d'avant.
+Core owns the ordered projection. Intelligence selects the visible fields and
+separates previous interpretations and agent requests from observations. Old
+aggregate snapshots remain readable with explicit missing chronology; they
+cannot be upgraded by guessing the order of their lists.
 """
 
 from __future__ import annotations
@@ -46,11 +12,13 @@ import copy
 import hashlib
 import json
 import re
+import posixpath
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from .selection import SessionView
+from .resumption import command_outcomes
 
 
 # Les prompts dont `open` est une chaîne libre (contrat d'origine). Tout
@@ -96,13 +64,10 @@ def _instant(value: Any) -> datetime | None:
 def previous_summary_annex(
     context: dict[str, Any], session: SessionView, *, references: bool = False
 ) -> dict[str, Any] | None:
-    """La reprise du résumé précédent de la même journée locale, sinon rien.
+    """Earlier interpretation in the same day, never independent evidence.
 
-    Le résumé de la session elle-même (régénération sous une autre version)
-    n'est pas une continuité : il est écarté. Avec ``references``, le ``open``
-    reçu est aussi donné point par point sous ``open_items``, chacun avec la
-    référence ``previous_summary:<i>`` que la sortie devra citer pour le
-    reprendre.
+    Own, future and known foreign-workspace summaries are excluded. The
+    single optional reference audits the context received, not its truth.
     """
     previous = context.get("last_session_summary")
     if not isinstance(previous, dict):
@@ -110,20 +75,26 @@ def previous_summary_annex(
     if previous.get("id") == session.id:
         return None
     ended = _instant(previous.get("session_ended_at"))
-    if ended is None or ended.astimezone().date() != session.day:
+    if ended is None or ended.astimezone().date() != session.day or ended > session.started_at:
+        return None
+    workspace = session.raw.get("workspace")
+    previous_workspace = previous.get("workspace")
+    if workspace and previous_workspace and posixpath.normpath(workspace) != posixpath.normpath(previous_workspace):
         return None
     annex: dict[str, Any] = {
+        "origin": "previous_model_interpretation",
+        "evidence_eligible": False,
+        "as_of": previous.get("session_ended_at"),
+        "current_state": "unknown",
+        "workspace_attribution": "same_workspace" if workspace and previous_workspace else "unknown",
         "id": previous.get("id"),
         "label": previous.get("label"),
         "reprise": previous.get("reprise"),
     }
     if references:
-        reprise = previous.get("reprise")
-        received = reprise.get("open") if isinstance(reprise, dict) else None
-        annex["open_items"] = [
-            {"ref": f"previous_summary:{index}", "text": text}
-            for index, text in enumerate(split_open_text(received))
-        ]
+        # One source for the interpretation, not evidence tokens for each
+        # generated claim. No autonomous carry-over chain is created.
+        annex["ref"] = "previous_summary:0"
     return annex
 
 
@@ -140,7 +111,16 @@ def agent_session_annex(
         return None
     if started > session.ended_at or ended < session.started_at:
         return None
+    workspace = session.raw.get("workspace")
+    agent_workspace = agent.get("workspace")
+    if workspace and agent_workspace and posixpath.normpath(workspace) != posixpath.normpath(agent_workspace):
+        return None
     annex: dict[str, Any] = {
+        "origin": "initial_agent_request",
+        "evidence_eligible": False,
+        "completion_state": "unknown",
+        "workspace_attribution": "same_workspace" if workspace and agent_workspace else "unknown",
+        "workspace": agent_workspace,
         "agent": agent.get("agent"),
         "started_at": agent.get("started_at"),
         "ended_at": agent.get("ended_at"),
@@ -154,13 +134,27 @@ def agent_session_annex(
 def build_model_input(
     session: SessionView, context: dict[str, Any], *, references: bool = False
 ) -> dict[str, Any]:
-    """``session`` est la vue Core intacte ; les annexes sont à part.
-
-    ``references`` ajoute aux annexes les identifiants du schéma ``open`` v3
-    (voir l'en-tête du module) ; la vue elle-même n'est jamais réécrite.
-    """
+    """Only useful observations reach the model; never event UUIDs."""
+    raw = session.raw
+    visible = {key: copy.deepcopy(raw.get(key)) for key in (
+        "id", "started_at", "last_activity_at", "duration_minutes", "projects", "workspace"
+    )}
+    observations = raw.get("observations")
+    if isinstance(observations, dict):
+        visible["observations"] = {key: copy.deepcopy(value) for key, value in observations.items() if key != "sources"}
+    else:
+        # Targeted read compatibility for frozen corpus / older Core. These
+        # lists cannot establish a last result, a file state, or chronology.
+        visible["legacy_aggregates"] = {key: copy.deepcopy(raw.get(key)) for key in ("files", "git", "terminal", "apps", "signals")}
+        visible["chronology"] = "unavailable_in_legacy_snapshot"
     return {
-        "session": copy.deepcopy(session.raw),
+        "input_version": 3,
+        "session": visible,
+        "resumption": {
+            "as_of": raw.get("last_activity_at"),
+            "current_state": "unknown",
+            "command_outcomes": command_outcomes((observations or {}).get("timeline", [])),
+        },
         "previous_summary": previous_summary_annex(context, session, references=references),
         "agent_session": agent_session_annex(context, session, references=references),
     }
@@ -182,6 +176,9 @@ def input_hash(serialized: str) -> str:
 
 def input_paths(session: SessionView) -> set[str]:
     """Les chemins que le modèle a le droit de citer : ceux de la vue, rien d'autre."""
+    observations = session.raw.get("observations")
+    if isinstance(observations, dict):
+        return {fact["path"] for fact in observations.get("timeline", []) if fact.get("kind") == "file"}
     files = session.raw.get("files", {})
     paths: set[str] = set()
     if isinstance(files, dict):
@@ -194,21 +191,16 @@ def input_paths(session: SessionView) -> set[str]:
 
 @dataclass(frozen=True)
 class InputReferences:
-    """Ce que la sortie a le droit de citer, calculé depuis l'entrée du modèle.
-
-    ``refs`` est l'ensemble complet ; ``previous_open`` donne le texte de
-    chaque ``previous_summary:<i>`` (dans l'ordre) pour la règle D1 ;
-    ``agent_requests`` les références ``agent_request:<i>`` pour la règle
-    des points ``requested`` ; ``commits`` les références ``commit:<hash>``
-    de la session, pour la règle D6 (un fichier « sans commit » n'est un
-    fait que si la vue ne porte aucun commit).
-    """
+    """Visible references and annex roles; membership is not proof of truth."""
 
     refs: frozenset[str]
     paths: frozenset[str]
     previous_open: tuple[str, ...]
     agent_requests: tuple[str, ...]
-    commits: tuple[str, ...] = ()
+    # None denotes an archived input contract. Current validation uses the
+    # actual observation types and bounded relations, never prose matching.
+    observations: dict[str, dict[str, Any]] | None = None
+    outcomes: tuple[dict[str, Any], ...] = ()
 
     def __contains__(self, ref: object) -> bool:
         return ref in self.refs
@@ -229,15 +221,20 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
     la vue Core, les annexes ne font que les rendre visibles au modèle.
     """
     session = model_input.get("session") or {}
-    refs: set[str] = set()
-    paths: set[str] = set()
+    observations = session.get("observations") or {}
+    facts = observations.get("timeline", []) + observations.get("applications", [])
+    refs: set[str] = {fact["ref"] for fact in facts}
+    paths: set[str] = {fact["path"] for fact in facts if fact.get("kind") == "file"}
+    # Old reference names remain readable for historical evaluations only.
+    session = session.get("legacy_aggregates", session)
     files = session.get("files") if isinstance(session, dict) else None
     if isinstance(files, dict):
         for category in ("created", "modified", "deleted"):
             paths.update(_strings(files.get(category)))
-    refs.update(f"path:{path}" for path in paths)
+    if not observations:
+        refs.update(f"path:{path}" for path in paths)
     git = session.get("git") if isinstance(session, dict) else None
-    commits: list[str] = []
+    commits: list[str] = [fact["ref"] for fact in facts if fact.get("kind") == "commit"]
     if isinstance(git, dict):
         for commit in git.get("commits") or []:
             if isinstance(commit, dict) and isinstance(commit.get("hash"), str) and commit["hash"]:
@@ -258,10 +255,14 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
     previous = model_input.get("previous_summary")
     previous_open: tuple[str, ...] = ()
     if isinstance(previous, dict):
-        reprise = previous.get("reprise")
-        received = reprise.get("open") if isinstance(reprise, dict) else None
-        previous_open = tuple(split_open_text(received))
-        refs.update(f"previous_summary:{index}" for index in range(len(previous_open)))
+        if model_input.get("input_version") == 3:
+            if previous.get("ref"):
+                refs.add(previous["ref"])
+        else:
+            reprise = previous.get("reprise")
+            received = reprise.get("open") if isinstance(reprise, dict) else None
+            previous_open = tuple(split_open_text(received))
+            refs.update(f"previous_summary:{index}" for index in range(len(previous_open)))
 
     agent_requests: tuple[str, ...] = ()
     if isinstance(model_input.get("agent_session"), dict):
@@ -273,5 +274,23 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
         paths=frozenset(paths),
         previous_open=previous_open,
         agent_requests=agent_requests,
-        commits=tuple(commits),
+        observations={fact["ref"]: fact for fact in facts} if model_input.get("input_version") == 3 else None,
+        outcomes=tuple(model_input.get("resumption", {}).get("command_outcomes", [])),
     )
+
+
+def input_provenance(session: SessionView, context: dict[str, Any], model_input: dict[str, Any]) -> dict[str, list[str]]:
+    """Source ids for exactly the observations and annexes made visible."""
+    sources = copy.deepcopy((session.raw.get("observations") or {}).get("sources", {}))
+    for key, context_key in (("agent_session", "last_agent_session"), ("previous_summary", "last_session_summary")):
+        annex = model_input.get(key)
+        source = context.get(context_key)
+        if not isinstance(annex, dict) or not isinstance(source, dict):
+            continue
+        source_id = source.get("event_id")
+        if not isinstance(source_id, str):
+            continue
+        refs = [annex["ref"]] if "ref" in annex else [item["ref"] for item in annex.get("open_items", [])]
+        for ref in refs:
+            sources[ref] = [source_id]
+    return sources

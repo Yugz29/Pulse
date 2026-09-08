@@ -50,12 +50,16 @@ def _echoing_output(prompt: str) -> str:
     passe sa propre sortie par `outputs`.
     """
     session_id = _session_id_of(prompt)
+    try:
+        referenced = json.loads(prompt).get("input_version") in {2, 3}
+    except (ValueError, AttributeError):
+        referenced = False
     return json.dumps(
         {
             "reprise": {
                 "doing": f"Reprise de la session {session_id}.",
                 "stopped_at": "Sortie fixée du faux provider.",
-                "open": "Rien, c'est un faux modèle.",
+                "open": [] if referenced else "Rien, c'est un faux modèle.",
             },
             "structured": {
                 "project": None,
