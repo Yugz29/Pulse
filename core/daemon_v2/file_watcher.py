@@ -30,40 +30,12 @@ from .private_files import apply_private_umask
 from .producer_outbox import ProducerOutbox, enqueue_file_event
 
 
-IGNORED_DIRECTORY_NAMES = {
-    ".build",
-    ".git",
-    # Index GitNexus (base lbug + CSV régénérés à chaque analyse) : du churn
-    # d'outillage, pas du travail — il remplissait /context jusqu'à la
-    # troncature des fichiers.
-    ".gitnexus",
-    ".pytest_cache",
-    ".swiftpm",
-    ".venv",
-    "__pycache__",
-    "build",
-    "dist",
-    "node_modules",
-}
-IGNORED_FILE_NAMES = {".DS_Store"}
-IGNORED_FILE_SUFFIXES = {".pyc", ".db"}
+from .file_policy import IGNORED_DIRECTORY_NAMES, should_ignore
 
 FileSignature: TypeAlias = tuple[int, int]
 Snapshot: TypeAlias = dict[Path, FileSignature]
 # Transport d'un changement observé ; True = pris en charge durablement.
 Enqueue: TypeAlias = Callable[[str, Path], bool]
-
-
-def should_ignore(path: Path, workspace: Path) -> bool:
-    try:
-        relative_path = path.relative_to(workspace)
-    except ValueError:
-        return True
-    return (
-        any(part in IGNORED_DIRECTORY_NAMES for part in relative_path.parts[:-1])
-        or path.name in IGNORED_FILE_NAMES
-        or path.suffix in IGNORED_FILE_SUFFIXES
-    )
 
 
 def should_ignore_directory(path: Path, workspace: Path) -> bool:
