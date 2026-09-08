@@ -17,3 +17,10 @@ cortex-snapshot.json
 
 # outillage local (pyenv), pas un fichier du projet
 .python-version
+
+# Traces d'audit (rejeux, sorties de modèle, scénarios) : hors dépôt, dans
+# corpus/ à la racine, même arborescence. Les tables d'analyse à la racine
+# d'un audit (mesures, taxonomie, revue, empreintes) restent versionnées.
+corpus/
+docs/audits/**/*.json
+!docs/audits/*/*.json
