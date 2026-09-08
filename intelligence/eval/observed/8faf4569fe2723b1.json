@@ -1,0 +1,2470 @@
+{
+  "context": {
+    "current_session": {
+      "activity_count": 337,
+      "apps": [
+        {
+          "activations": 54,
+          "name": "ChatGPT"
+        },
+        {
+          "activations": 43,
+          "name": "Terminal"
+        },
+        {
+          "activations": 37,
+          "name": "Codex"
+        },
+        {
+          "activations": 35,
+          "name": "Cortex"
+        },
+        {
+          "activations": 24,
+          "name": "Safari"
+        }
+      ],
+      "duration_minutes": 117,
+      "files": {
+        "created": [
+          "src/cortex/analyzer/swiftParser.ts",
+          "tests/swiftParser.test.ts",
+          "tests/functionsDb.test.ts",
+          "electron.vite.config.1783467018354.mjs",
+          "tests/couplingCache.test.ts"
+        ],
+        "deleted": [
+          "electron.vite.config.1783467018354.mjs"
+        ],
+        "modified": [
+          "src/app/main/scanner.ts",
+          "tests/importGraph.test.ts",
+          "node_modules/.vite/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709/results.json",
+          "dist/tsconfig.node.tsbuildinfo",
+          "out/main/index.js",
+          "out/preload/index.js",
+          "src/cortex/analyzer/parser.ts",
+          "src/cortex/risk-score/referenceBaselines.ts",
+          "cortex-snapshot.json",
+          "src/cortex/analyzer/swiftParser.ts",
+          "tests/swiftParser.test.ts",
+          "src/app/main/index.ts",
+          "src/app/preload/index.ts",
+          "src/app/renderer/types.ts",
+          "src/app/renderer/App.tsx",
+          "dist/tsconfig.web.tsbuildinfo",
+          "src/database/db.ts",
+          "src/app/renderer/components/GraphView.tsx",
+          "src/cortex/analyzer/churn.ts"
+        ],
+        "truncated": false
+      },
+      "git": {
+        "commits": [],
+        "push_observed": true
+      },
+      "id": "8faf4569fe2723b1",
+      "is_open": true,
+      "label": "work-1",
+      "last_activity_at": "2026-07-08T00:01:08+00:00",
+      "projects": [
+        "Cortex"
+      ],
+      "reconstruction_version": 2,
+      "signals": [
+        "app_activated",
+        "file_changed",
+        "terminal_finished"
+      ],
+      "source_event_ids": [
+        "legacy-migrated:3714",
+        "legacy-migrated:3715",
+        "legacy-migrated:3716",
+        "legacy-migrated:3717",
+        "legacy-migrated:3718",
+        "legacy-migrated:3719",
+        "legacy-migrated:3720",
+        "legacy-migrated:3721",
+        "legacy-migrated:3722",
+        "legacy-migrated:3723",
+        "legacy-migrated:3724",
+        "legacy-migrated:3725",
+        "legacy-migrated:3726",
+        "legacy-migrated:3727",
+        "legacy-migrated:3728",
+        "legacy-migrated:3729",
+        "legacy-migrated:3730",
+        "legacy-migrated:3731",
+        "legacy-migrated:3732",
+        "legacy-migrated:3733",
+        "legacy-migrated:3734",
+        "legacy-migrated:3735",
+        "legacy-migrated:3736",
+        "legacy-migrated:3737",
+        "legacy-migrated:3738",
+        "legacy-migrated:3739",
+        "legacy-migrated:3740",
+        "legacy-migrated:3741",
+        "legacy-migrated:3742",
+        "legacy-migrated:3743",
+        "legacy-migrated:3744",
+        "legacy-migrated:3745",
+        "legacy-migrated:3746",
+        "legacy-migrated:3747",
+        "legacy-migrated:3748",
+        "legacy-migrated:3749",
+        "legacy-migrated:3750",
+        "legacy-migrated:3751",
+        "legacy-migrated:3752",
+        "legacy-migrated:3753",
+        "legacy-migrated:3754",
+        "legacy-migrated:3755",
+        "legacy-migrated:3756",
+        "legacy-migrated:3757",
+        "legacy-migrated:3758",
+        "legacy-migrated:3759",
+        "legacy-migrated:3760",
+        "legacy-migrated:3761",
+        "legacy-migrated:3762",
+        "legacy-migrated:3763",
+        "legacy-migrated:3764",
+        "legacy-migrated:3765",
+        "legacy-migrated:3766",
+        "legacy-migrated:3767",
+        "legacy-migrated:3768",
+        "legacy-migrated:3769",
+        "legacy-migrated:3770",
+        "legacy-migrated:3771",
+        "legacy-migrated:3772",
+        "legacy-migrated:3773",
+        "legacy-migrated:3774",
+        "legacy-migrated:3775",
+        "legacy-migrated:3776",
+        "legacy-migrated:3777",
+        "legacy-migrated:3778",
+        "legacy-migrated:3779",
+        "legacy-migrated:3780",
+        "legacy-migrated:3781",
+        "legacy-migrated:3782",
+        "legacy-migrated:3783",
+        "legacy-migrated:3784",
+        "legacy-migrated:3785",
+        "legacy-migrated:3786",
+        "legacy-migrated:3787",
+        "legacy-migrated:3788",
+        "legacy-migrated:3789",
+        "legacy-migrated:3790",
+        "legacy-migrated:3791",
+        "legacy-migrated:3792",
+        "legacy-migrated:3793",
+        "legacy-migrated:3794",
+        "legacy-migrated:3795",
+        "legacy-migrated:3796",
+        "legacy-migrated:3797",
+        "legacy-migrated:3798",
+        "legacy-migrated:3799",
+        "legacy-migrated:3800",
+        "legacy-migrated:3801",
+        "legacy-migrated:3802",
+        "legacy-migrated:3803",
+        "legacy-migrated:3804",
+        "legacy-migrated:3805",
+        "legacy-migrated:3806",
+        "legacy-migrated:3807",
+        "legacy-migrated:3808",
+        "legacy-migrated:3809",
+        "legacy-migrated:3810",
+        "legacy-migrated:3811",
+        "legacy-migrated:3812",
+        "legacy-migrated:3813",
+        "legacy-migrated:3814",
+        "legacy-migrated:3815",
+        "legacy-migrated:3816",
+        "legacy-migrated:3817",
+        "legacy-migrated:3818",
+        "legacy-migrated:3819",
+        "legacy-migrated:3820",
+        "legacy-migrated:3821",
+        "legacy-migrated:3822",
+        "legacy-migrated:3823",
+        "legacy-migrated:3824",
+        "legacy-migrated:3825",
+        "legacy-migrated:3826",
+        "legacy-migrated:3827",
+        "legacy-migrated:3828",
+        "legacy-migrated:3829",
+        "legacy-migrated:3830",
+        "legacy-migrated:3831",
+        "legacy-migrated:3832",
+        "legacy-migrated:3833",
+        "legacy-migrated:3834",
+        "legacy-migrated:3835",
+        "legacy-migrated:3836",
+        "legacy-migrated:3837",
+        "legacy-migrated:3838",
+        "legacy-migrated:3839",
+        "legacy-migrated:3840",
+        "legacy-migrated:3841",
+        "legacy-migrated:3842",
+        "legacy-migrated:3843",
+        "legacy-migrated:3844",
+        "legacy-migrated:3845",
+        "legacy-migrated:3846",
+        "legacy-migrated:3847",
+        "legacy-migrated:3848",
+        "legacy-migrated:3849",
+        "legacy-migrated:3850",
+        "legacy-migrated:3851",
+        "legacy-migrated:3852",
+        "legacy-migrated:3853",
+        "legacy-migrated:3854",
+        "legacy-migrated:3855",
+        "legacy-migrated:3856",
+        "legacy-migrated:3857",
+        "legacy-migrated:3858",
+        "legacy-migrated:3859",
+        "legacy-migrated:3860",
+        "legacy-migrated:3861",
+        "legacy-migrated:3862",
+        "legacy-migrated:3863",
+        "legacy-migrated:3864",
+        "legacy-migrated:3865",
+        "legacy-migrated:3866",
+        "legacy-migrated:3867",
+        "legacy-migrated:3868",
+        "legacy-migrated:3869",
+        "legacy-migrated:3870",
+        "legacy-migrated:3871",
+        "legacy-migrated:3872",
+        "legacy-migrated:3873",
+        "legacy-migrated:3874",
+        "legacy-migrated:3875",
+        "legacy-migrated:3876",
+        "legacy-migrated:3877",
+        "legacy-migrated:3878",
+        "legacy-migrated:3879",
+        "legacy-migrated:3880",
+        "legacy-migrated:3881",
+        "legacy-migrated:3882",
+        "legacy-migrated:3883",
+        "legacy-migrated:3884",
+        "legacy-migrated:3885",
+        "legacy-migrated:3886",
+        "legacy-migrated:3887",
+        "legacy-migrated:3888",
+        "legacy-migrated:3889",
+        "legacy-migrated:3890",
+        "legacy-migrated:3891",
+        "legacy-migrated:3892",
+        "legacy-migrated:3893",
+        "legacy-migrated:3894",
+        "legacy-migrated:3895",
+        "legacy-migrated:3896",
+        "legacy-migrated:3897",
+        "legacy-migrated:3898",
+        "legacy-migrated:3899",
+        "legacy-migrated:3900",
+        "legacy-migrated:3901",
+        "legacy-migrated:3902",
+        "legacy-migrated:3903",
+        "legacy-migrated:3904",
+        "legacy-migrated:3905",
+        "legacy-migrated:3906",
+        "legacy-migrated:3907",
+        "legacy-migrated:3908",
+        "legacy-migrated:3909",
+        "legacy-migrated:3910",
+        "legacy-migrated:3911",
+        "legacy-migrated:3912",
+        "legacy-migrated:3913",
+        "legacy-migrated:3914",
+        "legacy-migrated:3915",
+        "legacy-migrated:3916",
+        "legacy-migrated:3917",
+        "legacy-migrated:3918",
+        "legacy-migrated:3919",
+        "legacy-migrated:3920",
+        "legacy-migrated:3921",
+        "legacy-migrated:3922",
+        "legacy-migrated:3923",
+        "legacy-migrated:3924",
+        "legacy-migrated:3925",
+        "legacy-migrated:3926",
+        "legacy-migrated:3927",
+        "legacy-migrated:3928",
+        "legacy-migrated:3929",
+        "legacy-migrated:3930",
+        "legacy-migrated:3931",
+        "legacy-migrated:3932",
+        "legacy-migrated:3933",
+        "legacy-migrated:3934",
+        "legacy-migrated:3935",
+        "legacy-migrated:3936",
+        "legacy-migrated:3937",
+        "legacy-migrated:3938",
+        "legacy-migrated:3939",
+        "legacy-migrated:3940",
+        "legacy-migrated:3941",
+        "legacy-migrated:3942",
+        "legacy-migrated:3943",
+        "legacy-migrated:3944",
+        "legacy-migrated:3945",
+        "legacy-migrated:3946",
+        "legacy-migrated:3947",
+        "legacy-migrated:3948",
+        "legacy-migrated:3949",
+        "legacy-migrated:3950",
+        "legacy-migrated:3951",
+        "legacy-migrated:3952",
+        "legacy-migrated:3953",
+        "legacy-migrated:3954",
+        "legacy-migrated:3955",
+        "legacy-migrated:3956",
+        "legacy-migrated:3957",
+        "legacy-migrated:3958",
+        "legacy-migrated:3959",
+        "legacy-migrated:3960",
+        "legacy-migrated:3961",
+        "legacy-migrated:3962",
+        "legacy-migrated:3963",
+        "legacy-migrated:3964",
+        "legacy-migrated:3965",
+        "legacy-migrated:3966",
+        "legacy-migrated:3967",
+        "legacy-migrated:3968",
+        "legacy-migrated:3969",
+        "legacy-migrated:3970",
+        "legacy-migrated:3971",
+        "legacy-migrated:3972",
+        "legacy-migrated:3973",
+        "legacy-migrated:3974",
+        "legacy-migrated:3975",
+        "legacy-migrated:3976",
+        "legacy-migrated:3977",
+        "legacy-migrated:3978",
+        "legacy-migrated:3979",
+        "legacy-migrated:3980",
+        "legacy-migrated:3981",
+        "legacy-migrated:3982",
+        "legacy-migrated:3983",
+        "legacy-migrated:3984",
+        "legacy-migrated:3985",
+        "legacy-migrated:3986",
+        "legacy-migrated:3987",
+        "legacy-migrated:3988",
+        "legacy-migrated:3989",
+        "legacy-migrated:3990",
+        "legacy-migrated:3991",
+        "legacy-migrated:3992",
+        "legacy-migrated:3993",
+        "legacy-migrated:3994",
+        "legacy-migrated:3995",
+        "legacy-migrated:3996",
+        "legacy-migrated:3997",
+        "legacy-migrated:3998",
+        "legacy-migrated:3999",
+        "legacy-migrated:4000",
+        "legacy-migrated:4001",
+        "legacy-migrated:4002",
+        "legacy-migrated:4003",
+        "legacy-migrated:4004",
+        "legacy-migrated:4005",
+        "legacy-migrated:4006",
+        "legacy-migrated:4007",
+        "legacy-migrated:4008",
+        "legacy-migrated:4009",
+        "legacy-migrated:4010",
+        "legacy-migrated:4011",
+        "legacy-migrated:4012",
+        "legacy-migrated:4013",
+        "legacy-migrated:4014",
+        "legacy-migrated:4015",
+        "legacy-migrated:4016",
+        "legacy-migrated:4017",
+        "legacy-migrated:4018",
+        "legacy-migrated:4019",
+        "legacy-migrated:4020",
+        "legacy-migrated:4021",
+        "legacy-migrated:4022",
+        "legacy-migrated:4023",
+        "legacy-migrated:4024",
+        "legacy-migrated:4025",
+        "legacy-migrated:4026",
+        "legacy-migrated:4027",
+        "legacy-migrated:4028",
+        "legacy-migrated:4029",
+        "legacy-migrated:4030",
+        "legacy-migrated:4031",
+        "legacy-migrated:4032",
+        "legacy-migrated:4033",
+        "legacy-migrated:4034",
+        "legacy-migrated:4035",
+        "legacy-migrated:4036",
+        "legacy-migrated:4037",
+        "legacy-migrated:4038",
+        "legacy-migrated:4039",
+        "legacy-migrated:4040",
+        "legacy-migrated:4041",
+        "legacy-migrated:4042",
+        "legacy-migrated:4043",
+        "legacy-migrated:4044",
+        "legacy-migrated:4045",
+        "legacy-migrated:4046",
+        "legacy-migrated:4047",
+        "legacy-migrated:4048",
+        "legacy-migrated:4049",
+        "legacy-migrated:4050"
+      ],
+      "started_at": "2026-07-07T22:04:06.739059+00:00",
+      "terminal": {
+        "errors": [
+          "git add .",
+          "git commit -m \"fix: serialize project scans\"",
+          "git push"
+        ],
+        "tests_failed": [],
+        "tests_passed": [],
+        "truncated": false
+      }
+    },
+    "generated_at": "2026-09-05T22:06:25.248561+00:00",
+    "isolated_signals": [],
+    "last_agent_session": {
+      "age_minutes": 0,
+      "agent": "codex",
+      "ended_at": "2026-07-08T11:43:09.150000+00:00",
+      "started_at": "2026-07-07T11:01:32.467000+00:00",
+      "summary": "Agent session (codex): <environment_context> <cwd>/Users/Yugz/Projets/Cortex</cwd> <shell>zsh</shell> <current_date>2026-07-07</current_date> <timezone>Europe/Paris</timezone> <filesystem><workspace_roots><root>/Users/Yugz/Projets/Cortex</root></workspace_roots><permission_profile type=\"managed\"><file…",
+      "workspace": "/Users/Yugz/Projets/Cortex"
+    },
+    "last_session_summary": null,
+    "recent_sessions": [],
+    "reference_at": "2026-07-08T00:01:08+00:00",
+    "schema_version": 2,
+    "timezone": "+02:00",
+    "window_minutes": 120,
+    "workspace": {
+      "git": null,
+      "path": "/Users/Yugz/Projets/Cortex",
+      "project": "Cortex",
+      "resolution": "session"
+    }
+  },
+  "date": "2026-07-08",
+  "id": "8faf4569fe2723b1",
+  "label": "work-1",
+  "session_raw": {
+    "activity_count": 337,
+    "duration_minutes": 117,
+    "id": "8faf4569fe2723b1",
+    "is_open": false,
+    "label": "work-1",
+    "last_activity_at": "2026-07-08T00:01:08+00:00",
+    "projects": [
+      "Cortex"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+      "legacy-migrated:3714",
+      "legacy-migrated:3715",
+      "legacy-migrated:3716",
+      "legacy-migrated:3717",
+      "legacy-migrated:3718",
+      "legacy-migrated:3719",
+      "legacy-migrated:3720",
+      "legacy-migrated:3721",
+      "legacy-migrated:3722",
+      "legacy-migrated:3723",
+      "legacy-migrated:3724",
+      "legacy-migrated:3725",
+      "legacy-migrated:3726",
+      "legacy-migrated:3727",
+      "legacy-migrated:3728",
+      "legacy-migrated:3729",
+      "legacy-migrated:3730",
+      "legacy-migrated:3731",
+      "legacy-migrated:3732",
+      "legacy-migrated:3733",
+      "legacy-migrated:3734",
+      "legacy-migrated:3735",
+      "legacy-migrated:3736",
+      "legacy-migrated:3737",
+      "legacy-migrated:3738",
+      "legacy-migrated:3739",
+      "legacy-migrated:3740",
+      "legacy-migrated:3741",
+      "legacy-migrated:3742",
+      "legacy-migrated:3743",
+      "legacy-migrated:3744",
+      "legacy-migrated:3745",
+      "legacy-migrated:3746",
+      "legacy-migrated:3747",
+      "legacy-migrated:3748",
+      "legacy-migrated:3749",
+      "legacy-migrated:3750",
+      "legacy-migrated:3751",
+      "legacy-migrated:3752",
+      "legacy-migrated:3753",
+      "legacy-migrated:3754",
+      "legacy-migrated:3755",
+      "legacy-migrated:3756",
+      "legacy-migrated:3757",
+      "legacy-migrated:3758",
+      "legacy-migrated:3759",
+      "legacy-migrated:3760",
+      "legacy-migrated:3761",
+      "legacy-migrated:3762",
+      "legacy-migrated:3763",
+      "legacy-migrated:3764",
+      "legacy-migrated:3765",
+      "legacy-migrated:3766",
+      "legacy-migrated:3767",
+      "legacy-migrated:3768",
+      "legacy-migrated:3769",
+      "legacy-migrated:3770",
+      "legacy-migrated:3771",
+      "legacy-migrated:3772",
+      "legacy-migrated:3773",
+      "legacy-migrated:3774",
+      "legacy-migrated:3775",
+      "legacy-migrated:3776",
+      "legacy-migrated:3777",
+      "legacy-migrated:3778",
+      "legacy-migrated:3779",
+      "legacy-migrated:3780",
+      "legacy-migrated:3781",
+      "legacy-migrated:3782",
+      "legacy-migrated:3783",
+      "legacy-migrated:3784",
+      "legacy-migrated:3785",
+      "legacy-migrated:3786",
+      "legacy-migrated:3787",
+      "legacy-migrated:3788",
+      "legacy-migrated:3789",
+      "legacy-migrated:3790",
+      "legacy-migrated:3791",
+      "legacy-migrated:3792",
+      "legacy-migrated:3793",
+      "legacy-migrated:3794",
+      "legacy-migrated:3795",
+      "legacy-migrated:3796",
+      "legacy-migrated:3797",
+      "legacy-migrated:3798",
+      "legacy-migrated:3799",
+      "legacy-migrated:3800",
+      "legacy-migrated:3801",
+      "legacy-migrated:3802",
+      "legacy-migrated:3803",
+      "legacy-migrated:3804",
+      "legacy-migrated:3805",
+      "legacy-migrated:3806",
+      "legacy-migrated:3807",
+      "legacy-migrated:3808",
+      "legacy-migrated:3809",
+      "legacy-migrated:3810",
+      "legacy-migrated:3811",
+      "legacy-migrated:3812",
+      "legacy-migrated:3813",
+      "legacy-migrated:3814",
+      "legacy-migrated:3815",
+      "legacy-migrated:3816",
+      "legacy-migrated:3817",
+      "legacy-migrated:3818",
+      "legacy-migrated:3819",
+      "legacy-migrated:3820",
+      "legacy-migrated:3821",
+      "legacy-migrated:3822",
+      "legacy-migrated:3823",
+      "legacy-migrated:3824",
+      "legacy-migrated:3825",
+      "legacy-migrated:3826",
+      "legacy-migrated:3827",
+      "legacy-migrated:3828",
+      "legacy-migrated:3829",
+      "legacy-migrated:3830",
+      "legacy-migrated:3831",
+      "legacy-migrated:3832",
+      "legacy-migrated:3833",
+      "legacy-migrated:3834",
+      "legacy-migrated:3835",
+      "legacy-migrated:3836",
+      "legacy-migrated:3837",
+      "legacy-migrated:3838",
+      "legacy-migrated:3839",
+      "legacy-migrated:3840",
+      "legacy-migrated:3841",
+      "legacy-migrated:3842",
+      "legacy-migrated:3843",
+      "legacy-migrated:3844",
+      "legacy-migrated:3845",
+      "legacy-migrated:3846",
+      "legacy-migrated:3847",
+      "legacy-migrated:3848",
+      "legacy-migrated:3849",
+      "legacy-migrated:3850",
+      "legacy-migrated:3851",
+      "legacy-migrated:3852",
+      "legacy-migrated:3853",
+      "legacy-migrated:3854",
+      "legacy-migrated:3855",
+      "legacy-migrated:3856",
+      "legacy-migrated:3857",
+      "legacy-migrated:3858",
+      "legacy-migrated:3859",
+      "legacy-migrated:3860",
+      "legacy-migrated:3861",
+      "legacy-migrated:3862",
+      "legacy-migrated:3863",
+      "legacy-migrated:3864",
+      "legacy-migrated:3865",
+      "legacy-migrated:3866",
+      "legacy-migrated:3867",
+      "legacy-migrated:3868",
+      "legacy-migrated:3869",
+      "legacy-migrated:3870",
+      "legacy-migrated:3871",
+      "legacy-migrated:3872",
+      "legacy-migrated:3873",
+      "legacy-migrated:3874",
+      "legacy-migrated:3875",
+      "legacy-migrated:3876",
+      "legacy-migrated:3877",
+      "legacy-migrated:3878",
+      "legacy-migrated:3879",
+      "legacy-migrated:3880",
+      "legacy-migrated:3881",
+      "legacy-migrated:3882",
+      "legacy-migrated:3883",
+      "legacy-migrated:3884",
+      "legacy-migrated:3885",
+      "legacy-migrated:3886",
+      "legacy-migrated:3887",
+      "legacy-migrated:3888",
+      "legacy-migrated:3889",
+      "legacy-migrated:3890",
+      "legacy-migrated:3891",
+      "legacy-migrated:3892",
+      "legacy-migrated:3893",
+      "legacy-migrated:3894",
+      "legacy-migrated:3895",
+      "legacy-migrated:3896",
+      "legacy-migrated:3897",
+      "legacy-migrated:3898",
+      "legacy-migrated:3899",
+      "legacy-migrated:3900",
+      "legacy-migrated:3901",
+      "legacy-migrated:3902",
+      "legacy-migrated:3903",
+      "legacy-migrated:3904",
+      "legacy-migrated:3905",
+      "legacy-migrated:3906",
+      "legacy-migrated:3907",
+      "legacy-migrated:3908",
+      "legacy-migrated:3909",
+      "legacy-migrated:3910",
+      "legacy-migrated:3911",
+      "legacy-migrated:3912",
+      "legacy-migrated:3913",
+      "legacy-migrated:3914",
+      "legacy-migrated:3915",
+      "legacy-migrated:3916",
+      "legacy-migrated:3917",
+      "legacy-migrated:3918",
+      "legacy-migrated:3919",
+      "legacy-migrated:3920",
+      "legacy-migrated:3921",
+      "legacy-migrated:3922",
+      "legacy-migrated:3923",
+      "legacy-migrated:3924",
+      "legacy-migrated:3925",
+      "legacy-migrated:3926",
+      "legacy-migrated:3927",
+      "legacy-migrated:3928",
+      "legacy-migrated:3929",
+      "legacy-migrated:3930",
+      "legacy-migrated:3931",
+      "legacy-migrated:3932",
+      "legacy-migrated:3933",
+      "legacy-migrated:3934",
+      "legacy-migrated:3935",
+      "legacy-migrated:3936",
+      "legacy-migrated:3937",
+      "legacy-migrated:3938",
+      "legacy-migrated:3939",
+      "legacy-migrated:3940",
+      "legacy-migrated:3941",
+      "legacy-migrated:3942",
+      "legacy-migrated:3943",
+      "legacy-migrated:3944",
+      "legacy-migrated:3945",
+      "legacy-migrated:3946",
+      "legacy-migrated:3947",
+      "legacy-migrated:3948",
+      "legacy-migrated:3949",
+      "legacy-migrated:3950",
+      "legacy-migrated:3951",
+      "legacy-migrated:3952",
+      "legacy-migrated:3953",
+      "legacy-migrated:3954",
+      "legacy-migrated:3955",
+      "legacy-migrated:3956",
+      "legacy-migrated:3957",
+      "legacy-migrated:3958",
+      "legacy-migrated:3959",
+      "legacy-migrated:3960",
+      "legacy-migrated:3961",
+      "legacy-migrated:3962",
+      "legacy-migrated:3963",
+      "legacy-migrated:3964",
+      "legacy-migrated:3965",
+      "legacy-migrated:3966",
+      "legacy-migrated:3967",
+      "legacy-migrated:3968",
+      "legacy-migrated:3969",
+      "legacy-migrated:3970",
+      "legacy-migrated:3971",
+      "legacy-migrated:3972",
+      "legacy-migrated:3973",
+      "legacy-migrated:3974",
+      "legacy-migrated:3975",
+      "legacy-migrated:3976",
+      "legacy-migrated:3977",
+      "legacy-migrated:3978",
+      "legacy-migrated:3979",
+      "legacy-migrated:3980",
+      "legacy-migrated:3981",
+      "legacy-migrated:3982",
+      "legacy-migrated:3983",
+      "legacy-migrated:3984",
+      "legacy-migrated:3985",
+      "legacy-migrated:3986",
+      "legacy-migrated:3987",
+      "legacy-migrated:3988",
+      "legacy-migrated:3989",
+      "legacy-migrated:3990",
+      "legacy-migrated:3991",
+      "legacy-migrated:3992",
+      "legacy-migrated:3993",
+      "legacy-migrated:3994",
+      "legacy-migrated:3995",
+      "legacy-migrated:3996",
+      "legacy-migrated:3997",
+      "legacy-migrated:3998",
+      "legacy-migrated:3999",
+      "legacy-migrated:4000",
+      "legacy-migrated:4001",
+      "legacy-migrated:4002",
+      "legacy-migrated:4003",
+      "legacy-migrated:4004",
+      "legacy-migrated:4005",
+      "legacy-migrated:4006",
+      "legacy-migrated:4007",
+      "legacy-migrated:4008",
+      "legacy-migrated:4009",
+      "legacy-migrated:4010",
+      "legacy-migrated:4011",
+      "legacy-migrated:4012",
+      "legacy-migrated:4013",
+      "legacy-migrated:4014",
+      "legacy-migrated:4015",
+      "legacy-migrated:4016",
+      "legacy-migrated:4017",
+      "legacy-migrated:4018",
+      "legacy-migrated:4019",
+      "legacy-migrated:4020",
+      "legacy-migrated:4021",
+      "legacy-migrated:4022",
+      "legacy-migrated:4023",
+      "legacy-migrated:4024",
+      "legacy-migrated:4025",
+      "legacy-migrated:4026",
+      "legacy-migrated:4027",
+      "legacy-migrated:4028",
+      "legacy-migrated:4029",
+      "legacy-migrated:4030",
+      "legacy-migrated:4031",
+      "legacy-migrated:4032",
+      "legacy-migrated:4033",
+      "legacy-migrated:4034",
+      "legacy-migrated:4035",
+      "legacy-migrated:4036",
+      "legacy-migrated:4037",
+      "legacy-migrated:4038",
+      "legacy-migrated:4039",
+      "legacy-migrated:4040",
+      "legacy-migrated:4041",
+      "legacy-migrated:4042",
+      "legacy-migrated:4043",
+      "legacy-migrated:4044",
+      "legacy-migrated:4045",
+      "legacy-migrated:4046",
+      "legacy-migrated:4047",
+      "legacy-migrated:4048",
+      "legacy-migrated:4049",
+      "legacy-migrated:4050"
+    ],
+    "started_at": "2026-07-07T22:04:06.739059+00:00",
+    "workspace": "/Users/Yugz/Projets/Cortex",
+    "observations": {
+      "version": 1,
+      "time_origin": "2026-07-07T22:04:06.739059+00:00",
+      "time_unit": "seconds",
+      "timeline": [
+        {
+          "ref": "o1",
+          "kind": "file",
+          "at": 0.0,
+          "path": "src/app/main/scanner.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 0.0,
+              "last_at": 0.0,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o2",
+          "kind": "file",
+          "at": 43.229544,
+          "path": "tests/importGraph.test.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 43.229544,
+              "last_at": 43.229544,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o3",
+          "kind": "command",
+          "at": 345.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": -16249.739059,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o4",
+          "kind": "file",
+          "at": 366.156176,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.156176,
+              "last_at": 366.156176,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o5",
+          "kind": "file",
+          "at": 366.188355,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.188355,
+              "last_at": 366.188355,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o6",
+          "kind": "command",
+          "at": 839.260941,
+          "command": "git add .\ngit commit -m \"feat: support tsconfig paths in import graph\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 835.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o7",
+          "kind": "command",
+          "at": 905.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 363.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o8",
+          "kind": "file",
+          "at": 928.069068,
+          "path": "src/cortex/analyzer/swiftParser.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 928.069068,
+              "last_at": 928.069068,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o9",
+          "kind": "file",
+          "at": 934.334433,
+          "path": "src/app/main/scanner.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 934.334433,
+              "last_at": 934.334433,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o10",
+          "kind": "file",
+          "at": 944.320961,
+          "path": "src/cortex/analyzer/parser.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 944.320961,
+              "last_at": 944.320961,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o11",
+          "kind": "file",
+          "at": 948.287784,
+          "path": "src/cortex/risk-score/referenceBaselines.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 948.287784,
+              "last_at": 948.287784,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o12",
+          "kind": "file",
+          "at": 980.626567,
+          "path": "tests/swiftParser.test.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 980.626567,
+              "last_at": 980.626567,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o13",
+          "kind": "file",
+          "at": 1044.520514,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1044.520514,
+              "last_at": 1044.520514,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o14",
+          "kind": "file",
+          "at": 1044.524943,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1044.524943,
+              "last_at": 1044.524943,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o15",
+          "kind": "command",
+          "at": 1627.260941,
+          "command": "git add .\ngit commit -m \"feat: add minimal swift analysis support\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 1624.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o16",
+          "kind": "file",
+          "at": 1666.271806,
+          "path": "cortex-snapshot.json",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1666.271806,
+              "last_at": 1737.308419,
+              "count": 4
+            }
+          ]
+        },
+        {
+          "ref": "o17",
+          "kind": "file",
+          "at": 1692.221704,
+          "path": "src/cortex/analyzer/swiftParser.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1692.221704,
+              "last_at": 1710.925306,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o18",
+          "kind": "file",
+          "at": 1732.303326,
+          "path": "tests/swiftParser.test.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1732.303326,
+              "last_at": 1732.303326,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o19",
+          "kind": "command",
+          "at": 1786.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 1042.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o20",
+          "kind": "file",
+          "at": 1793.537323,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1793.537323,
+              "last_at": 1793.537323,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o21",
+          "kind": "file",
+          "at": 1793.551014,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1793.551014,
+              "last_at": 1793.551014,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o22",
+          "kind": "file",
+          "at": 1796.254419,
+          "path": "cortex-snapshot.json",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1796.254419,
+              "last_at": 1796.254419,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o23",
+          "kind": "file",
+          "at": 2272.79839,
+          "path": "src/cortex/analyzer/parser.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 2272.79839,
+              "last_at": 2287.908953,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o24",
+          "kind": "command",
+          "at": 2347.260941,
+          "command": "git add .\ngit commit -m \"chore: clean parser type imports\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 2344.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o25",
+          "kind": "command",
+          "at": 2359.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 1791.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o26",
+          "kind": "file",
+          "at": 2365.400325,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 2365.400325,
+              "last_at": 2365.400325,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o27",
+          "kind": "file",
+          "at": 2365.450972,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 2365.450972,
+              "last_at": 2365.450972,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o28",
+          "kind": "command",
+          "at": 2696.260941,
+          "command": "git status",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 2696.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "status"
+        },
+        {
+          "ref": "o29",
+          "kind": "file",
+          "at": 3107.619368,
+          "path": "src/app/main/index.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3107.619368,
+              "last_at": 3107.619368,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o30",
+          "kind": "file",
+          "at": 3115.060928,
+          "path": "src/app/preload/index.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3115.060928,
+              "last_at": 3115.060928,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o31",
+          "kind": "file",
+          "at": 3117.578984,
+          "path": "src/app/renderer/types.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3117.578984,
+              "last_at": 3117.578984,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o32",
+          "kind": "file",
+          "at": 3123.868517,
+          "path": "src/app/renderer/App.tsx",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3123.868517,
+              "last_at": 3123.868517,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o33",
+          "kind": "command",
+          "at": 3194.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 2363.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o34",
+          "kind": "command",
+          "at": 3217.260941,
+          "command": "git add .\ngit commit -m \"fix: ignore stale scan results\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 3213.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o35",
+          "kind": "file",
+          "at": 3223.183446,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3223.183446,
+              "last_at": 3223.183446,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o36",
+          "kind": "file",
+          "at": 3223.212626,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3223.212626,
+              "last_at": 3223.212626,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o37",
+          "kind": "file",
+          "at": 3249.826037,
+          "path": "cortex-snapshot.json",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3249.826037,
+              "last_at": 3249.826037,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o38",
+          "kind": "command",
+          "at": 3425.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 3221.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o39",
+          "kind": "command",
+          "at": 3593.260941,
+          "command": "ls",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 3593.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o40",
+          "kind": "file",
+          "at": 3997.023438,
+          "path": "src/app/main/index.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 3997.023438,
+              "last_at": 4047.142645,
+              "count": 3
+            }
+          ]
+        },
+        {
+          "ref": "o41",
+          "kind": "command",
+          "at": 4318.260941,
+          "command": "git add .\ngit commit -m \"fix: serialize project scans\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 4314.260941,
+          "exit_code": 128,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o42",
+          "kind": "file",
+          "at": 4335.848746,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 4335.848746,
+              "last_at": 4335.848746,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o43",
+          "kind": "file",
+          "at": 4335.937629,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 4335.937629,
+              "last_at": 4335.937629,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o44",
+          "kind": "file",
+          "at": 4521.983979,
+          "path": "src/database/db.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 4521.983979,
+              "last_at": 4521.983979,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o45",
+          "kind": "file",
+          "at": 4530.789352,
+          "path": "src/app/main/scanner.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 4530.789352,
+              "last_at": 4530.789352,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o46",
+          "kind": "file",
+          "at": 4560.338317,
+          "path": "tests/functionsDb.test.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 4560.338317,
+              "last_at": 4560.338317,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o47",
+          "kind": "command",
+          "at": 4569.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 4333.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o48",
+          "kind": "file",
+          "at": 4585.691573,
+          "path": "src/database/db.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 4585.691573,
+              "last_at": 4585.691573,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o49",
+          "kind": "file",
+          "at": 5171.863007,
+          "path": "electron.vite.config.1783467018354.mjs",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 5171.863007,
+              "last_at": 5171.863007,
+              "count": 1
+            },
+            {
+              "event": "deleted",
+              "first_at": 5173.093295,
+              "last_at": 5173.093295,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o50",
+          "kind": "file",
+          "at": 5173.081267,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 5173.081267,
+              "last_at": 5173.081267,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o51",
+          "kind": "file",
+          "at": 5173.089773,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 5173.089773,
+              "last_at": 5173.089773,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o52",
+          "kind": "file",
+          "at": 5291.468073,
+          "path": "cortex-snapshot.json",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 5291.468073,
+              "last_at": 5471.058439,
+              "count": 8
+            }
+          ]
+        },
+        {
+          "ref": "o53",
+          "kind": "file",
+          "at": 5374.416748,
+          "path": "src/app/renderer/components/GraphView.tsx",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 5374.416748,
+              "last_at": 5468.545425,
+              "count": 7
+            }
+          ]
+        },
+        {
+          "ref": "o54",
+          "kind": "command",
+          "at": 5512.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 5170.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o55",
+          "kind": "file",
+          "at": 5533.027971,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 5533.027971,
+              "last_at": 5533.027971,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o56",
+          "kind": "file",
+          "at": 5533.062869,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 5533.062869,
+              "last_at": 5533.062869,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o57",
+          "kind": "file",
+          "at": 5535.607864,
+          "path": "cortex-snapshot.json",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 5535.607864,
+              "last_at": 5633.768877,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o58",
+          "kind": "command",
+          "at": 5649.260941,
+          "command": "git add .\ngit commit -m \"perf: optimize graph view rendering\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 5647.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o59",
+          "kind": "file",
+          "at": 6194.114488,
+          "path": "src/cortex/analyzer/churn.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6194.114488,
+              "last_at": 6194.114488,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o60",
+          "kind": "file",
+          "at": 6196.557544,
+          "path": "cortex-snapshot.json",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6196.557544,
+              "last_at": 6196.557544,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o61",
+          "kind": "command",
+          "at": 6225.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 5531.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o62",
+          "kind": "file",
+          "at": 6265.000136,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6265.000136,
+              "last_at": 6265.000136,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o63",
+          "kind": "file",
+          "at": 6265.019976,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6265.019976,
+              "last_at": 6265.019976,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o64",
+          "kind": "file",
+          "at": 6267.69057,
+          "path": "cortex-snapshot.json",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6267.69057,
+              "last_at": 6267.69057,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o65",
+          "kind": "command",
+          "at": 6274.260941,
+          "command": "git add .\ngit commit -m \"chore: add git churn performance logs\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 6269.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o66",
+          "kind": "file",
+          "at": 6483.20428,
+          "path": "src/cortex/analyzer/churn.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6483.20428,
+              "last_at": 6483.20428,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o67",
+          "kind": "file",
+          "at": 6525.328427,
+          "path": "tests/couplingCache.test.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 6525.328427,
+              "last_at": 6525.328427,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o68",
+          "kind": "command",
+          "at": 6595.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 6263.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o69",
+          "kind": "command",
+          "at": 6620.260941,
+          "command": "git add .\ngit commit -m \"perf: cache git coupling map by head\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 6609.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o70",
+          "kind": "file",
+          "at": 6625.105496,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6625.105496,
+              "last_at": 6625.105496,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o71",
+          "kind": "file",
+          "at": 6625.152692,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6625.152692,
+              "last_at": 6625.152692,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o72",
+          "kind": "command",
+          "at": 6777.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 6623.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o73",
+          "kind": "file",
+          "at": 6861.132737,
+          "path": "src/cortex/analyzer/churn.ts",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6861.132737,
+              "last_at": 6861.132737,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o74",
+          "kind": "command",
+          "at": 6908.260941,
+          "command": "git add .\ngit commit -m \"chore: add coupling cache timing logs\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 6906.260941,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false
+        },
+        {
+          "ref": "o75",
+          "kind": "file",
+          "at": 6911.864832,
+          "path": "out/main/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6911.864832,
+              "last_at": 6911.864832,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o76",
+          "kind": "file",
+          "at": 6911.886415,
+          "path": "out/preload/index.js",
+          "workspace": "/Users/Yugz/Projets/Cortex",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 6911.886415,
+              "last_at": 6911.886415,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o77",
+          "kind": "command",
+          "at": 7021.260941,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Cortex",
+          "started_at": 6910.260941,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false
+        }
+      ],
+      "applications": [
+        {
+          "ref": "app:1",
+          "name": "ChatGPT",
+          "first_at": 308.76009,
+          "last_at": 6979.335241,
+          "activations": 54
+        },
+        {
+          "ref": "app:2",
+          "name": "Terminal",
+          "first_at": 335.555237,
+          "last_at": 7020.53749,
+          "activations": 43
+        },
+        {
+          "ref": "app:3",
+          "name": "Safari",
+          "first_at": 340.716828,
+          "last_at": 6228.801741,
+          "activations": 24
+        },
+        {
+          "ref": "app:4",
+          "name": "Cortex",
+          "first_at": 367.414863,
+          "last_at": 6914.147444,
+          "activations": 35
+        },
+        {
+          "ref": "app:5",
+          "name": "Codex",
+          "first_at": 696.59693,
+          "last_at": 6789.319675,
+          "activations": 37
+        },
+        {
+          "ref": "app:6",
+          "name": "Code",
+          "first_at": 824.621696,
+          "last_at": 2458.677541,
+          "activations": 6
+        },
+        {
+          "ref": "app:7",
+          "name": "CleanMyMac Menu",
+          "first_at": 1908.021526,
+          "last_at": 4577.353857,
+          "activations": 5
+        },
+        {
+          "ref": "app:8",
+          "name": "Finder",
+          "first_at": 2568.583006,
+          "last_at": 6784.15666,
+          "activations": 4
+        }
+      ],
+      "last_observed": {
+        "commands": [
+          "o77",
+          "o6",
+          "o15",
+          "o24",
+          "o28",
+          "o34",
+          "o39",
+          "o41",
+          "o58",
+          "o65",
+          "o69",
+          "o74"
+        ],
+        "files": [
+          "o45",
+          "o2",
+          "o75",
+          "o76",
+          "o17",
+          "o23",
+          "o11",
+          "o18",
+          "o64",
+          "o40",
+          "o30",
+          "o31",
+          "o32",
+          "o48",
+          "o46",
+          "o49",
+          "o53",
+          "o73",
+          "o67"
+        ],
+        "git": {}
+      },
+      "coverage": {
+        "omitted_events": {
+          "file_noise": 30
+        },
+        "command_output": "not_collected",
+        "commit_files": "not_collected",
+        "remote_push_state": "not_collected"
+      },
+      "sources": {
+        "o1": [
+          "legacy-migrated:3714"
+        ],
+        "o2": [
+          "legacy-migrated:3715"
+        ],
+        "app:1": [
+          "legacy-migrated:3719",
+          "legacy-migrated:3729",
+          "legacy-migrated:3731",
+          "legacy-migrated:3733",
+          "legacy-migrated:3737",
+          "legacy-migrated:3750",
+          "legacy-migrated:3757",
+          "legacy-migrated:3760",
+          "legacy-migrated:3762",
+          "legacy-migrated:3768",
+          "legacy-migrated:3770",
+          "legacy-migrated:3772",
+          "legacy-migrated:3775",
+          "legacy-migrated:3797",
+          "legacy-migrated:3811",
+          "legacy-migrated:3819",
+          "legacy-migrated:3822",
+          "legacy-migrated:3824",
+          "legacy-migrated:3826",
+          "legacy-migrated:3840",
+          "legacy-migrated:3845",
+          "legacy-migrated:3848",
+          "legacy-migrated:3851",
+          "legacy-migrated:3853",
+          "legacy-migrated:3855",
+          "legacy-migrated:3864",
+          "legacy-migrated:3867",
+          "legacy-migrated:3878",
+          "legacy-migrated:3880",
+          "legacy-migrated:3889",
+          "legacy-migrated:3897",
+          "legacy-migrated:3904",
+          "legacy-migrated:3906",
+          "legacy-migrated:3912",
+          "legacy-migrated:3914",
+          "legacy-migrated:3916",
+          "legacy-migrated:3933",
+          "legacy-migrated:3943",
+          "legacy-migrated:3946",
+          "legacy-migrated:3964",
+          "legacy-migrated:3975",
+          "legacy-migrated:3978",
+          "legacy-migrated:3980",
+          "legacy-migrated:3984",
+          "legacy-migrated:3994",
+          "legacy-migrated:4007",
+          "legacy-migrated:4017",
+          "legacy-migrated:4019",
+          "legacy-migrated:4022",
+          "legacy-migrated:4028",
+          "legacy-migrated:4030",
+          "legacy-migrated:4040",
+          "legacy-migrated:4042",
+          "legacy-migrated:4048"
+        ],
+        "app:2": [
+          "legacy-migrated:3720",
+          "legacy-migrated:3722",
+          "legacy-migrated:3735",
+          "legacy-migrated:3739",
+          "legacy-migrated:3751",
+          "legacy-migrated:3759",
+          "legacy-migrated:3761",
+          "legacy-migrated:3773",
+          "legacy-migrated:3776",
+          "legacy-migrated:3798",
+          "legacy-migrated:3810",
+          "legacy-migrated:3827",
+          "legacy-migrated:3844",
+          "legacy-migrated:3849",
+          "legacy-migrated:3865",
+          "legacy-migrated:3868",
+          "legacy-migrated:3875",
+          "legacy-migrated:3881",
+          "legacy-migrated:3886",
+          "legacy-migrated:3891",
+          "legacy-migrated:3893",
+          "legacy-migrated:3896",
+          "legacy-migrated:3907",
+          "legacy-migrated:3923",
+          "legacy-migrated:3934",
+          "legacy-migrated:3942",
+          "legacy-migrated:3965",
+          "legacy-migrated:3974",
+          "legacy-migrated:3976",
+          "legacy-migrated:3990",
+          "legacy-migrated:3995",
+          "legacy-migrated:4000",
+          "legacy-migrated:4004",
+          "legacy-migrated:4006",
+          "legacy-migrated:4012",
+          "legacy-migrated:4020",
+          "legacy-migrated:4023",
+          "legacy-migrated:4029",
+          "legacy-migrated:4032",
+          "legacy-migrated:4035",
+          "legacy-migrated:4041",
+          "legacy-migrated:4043",
+          "legacy-migrated:4049"
+        ],
+        "app:3": [
+          "legacy-migrated:3721",
+          "legacy-migrated:3727",
+          "legacy-migrated:3755",
+          "legacy-migrated:3764",
+          "legacy-migrated:3766",
+          "legacy-migrated:3771",
+          "legacy-migrated:3783",
+          "legacy-migrated:3788",
+          "legacy-migrated:3793",
+          "legacy-migrated:3804",
+          "legacy-migrated:3806",
+          "legacy-migrated:3808",
+          "legacy-migrated:3833",
+          "legacy-migrated:3873",
+          "legacy-migrated:3892",
+          "legacy-migrated:3894",
+          "legacy-migrated:3905",
+          "legacy-migrated:3915",
+          "legacy-migrated:3918",
+          "legacy-migrated:3928",
+          "legacy-migrated:3940",
+          "legacy-migrated:3971",
+          "legacy-migrated:3982",
+          "legacy-migrated:3992"
+        ],
+        "o3": [
+          "legacy-migrated:3723"
+        ],
+        "o4": [
+          "legacy-migrated:3724"
+        ],
+        "o5": [
+          "legacy-migrated:3725"
+        ],
+        "app:4": [
+          "legacy-migrated:3726",
+          "legacy-migrated:3728",
+          "legacy-migrated:3734",
+          "legacy-migrated:3754",
+          "legacy-migrated:3756",
+          "legacy-migrated:3758",
+          "legacy-migrated:3778",
+          "legacy-migrated:3784",
+          "legacy-migrated:3802",
+          "legacy-migrated:3805",
+          "legacy-migrated:3809",
+          "legacy-migrated:3821",
+          "legacy-migrated:3823",
+          "legacy-migrated:3832",
+          "legacy-migrated:3834",
+          "legacy-migrated:3837",
+          "legacy-migrated:3839",
+          "legacy-migrated:3847",
+          "legacy-migrated:3872",
+          "legacy-migrated:3874",
+          "legacy-migrated:3876",
+          "legacy-migrated:3879",
+          "legacy-migrated:3911",
+          "legacy-migrated:3913",
+          "legacy-migrated:3939",
+          "legacy-migrated:3941",
+          "legacy-migrated:3944",
+          "legacy-migrated:3969",
+          "legacy-migrated:3972",
+          "legacy-migrated:3998",
+          "legacy-migrated:4002",
+          "legacy-migrated:4005",
+          "legacy-migrated:4010",
+          "legacy-migrated:4027",
+          "legacy-migrated:4047"
+        ],
+        "app:5": [
+          "legacy-migrated:3730",
+          "legacy-migrated:3738",
+          "legacy-migrated:3741",
+          "legacy-migrated:3763",
+          "legacy-migrated:3765",
+          "legacy-migrated:3767",
+          "legacy-migrated:3777",
+          "legacy-migrated:3782",
+          "legacy-migrated:3786",
+          "legacy-migrated:3796",
+          "legacy-migrated:3812",
+          "legacy-migrated:3841",
+          "legacy-migrated:3843",
+          "legacy-migrated:3852",
+          "legacy-migrated:3854",
+          "legacy-migrated:3856",
+          "legacy-migrated:3883",
+          "legacy-migrated:3885",
+          "legacy-migrated:3887",
+          "legacy-migrated:3890",
+          "legacy-migrated:3895",
+          "legacy-migrated:3898",
+          "legacy-migrated:3917",
+          "legacy-migrated:3922",
+          "legacy-migrated:3932",
+          "legacy-migrated:3947",
+          "legacy-migrated:3979",
+          "legacy-migrated:3981",
+          "legacy-migrated:3983",
+          "legacy-migrated:3985",
+          "legacy-migrated:3993",
+          "legacy-migrated:4008",
+          "legacy-migrated:4011",
+          "legacy-migrated:4014",
+          "legacy-migrated:4018",
+          "legacy-migrated:4031",
+          "legacy-migrated:4036"
+        ],
+        "app:6": [
+          "legacy-migrated:3732",
+          "legacy-migrated:3769",
+          "legacy-migrated:3792",
+          "legacy-migrated:3820",
+          "legacy-migrated:3825",
+          "legacy-migrated:3836"
+        ],
+        "o6": [
+          "legacy-migrated:3736"
+        ],
+        "o7": [
+          "legacy-migrated:3740"
+        ],
+        "o8": [
+          "legacy-migrated:3742"
+        ],
+        "o9": [
+          "legacy-migrated:3743"
+        ],
+        "o10": [
+          "legacy-migrated:3744"
+        ],
+        "o11": [
+          "legacy-migrated:3745"
+        ],
+        "o12": [
+          "legacy-migrated:3746"
+        ],
+        "o13": [
+          "legacy-migrated:3752"
+        ],
+        "o14": [
+          "legacy-migrated:3753"
+        ],
+        "o15": [
+          "legacy-migrated:3774"
+        ],
+        "o16": [
+          "legacy-migrated:3779",
+          "legacy-migrated:3781",
+          "legacy-migrated:3787",
+          "legacy-migrated:3790"
+        ],
+        "o17": [
+          "legacy-migrated:3780",
+          "legacy-migrated:3785"
+        ],
+        "o18": [
+          "legacy-migrated:3789"
+        ],
+        "o19": [
+          "legacy-migrated:3799"
+        ],
+        "o20": [
+          "legacy-migrated:3800"
+        ],
+        "o21": [
+          "legacy-migrated:3801"
+        ],
+        "o22": [
+          "legacy-migrated:3803"
+        ],
+        "app:7": [
+          "legacy-migrated:3807",
+          "legacy-migrated:3835",
+          "legacy-migrated:3838",
+          "legacy-migrated:3884",
+          "legacy-migrated:3926"
+        ],
+        "o23": [
+          "legacy-migrated:3813",
+          "legacy-migrated:3816"
+        ],
+        "o24": [
+          "legacy-migrated:3828"
+        ],
+        "o25": [
+          "legacy-migrated:3829"
+        ],
+        "o26": [
+          "legacy-migrated:3830"
+        ],
+        "o27": [
+          "legacy-migrated:3831"
+        ],
+        "app:8": [
+          "legacy-migrated:3842",
+          "legacy-migrated:3846",
+          "legacy-migrated:4001",
+          "legacy-migrated:4034"
+        ],
+        "o28": [
+          "legacy-migrated:3850"
+        ],
+        "o29": [
+          "legacy-migrated:3857"
+        ],
+        "o30": [
+          "legacy-migrated:3858"
+        ],
+        "o31": [
+          "legacy-migrated:3859"
+        ],
+        "o32": [
+          "legacy-migrated:3860"
+        ],
+        "o33": [
+          "legacy-migrated:3866"
+        ],
+        "o34": [
+          "legacy-migrated:3869"
+        ],
+        "o35": [
+          "legacy-migrated:3870"
+        ],
+        "o36": [
+          "legacy-migrated:3871"
+        ],
+        "o37": [
+          "legacy-migrated:3877"
+        ],
+        "o38": [
+          "legacy-migrated:3882"
+        ],
+        "o39": [
+          "legacy-migrated:3888"
+        ],
+        "o40": [
+          "legacy-migrated:3899",
+          "legacy-migrated:3900",
+          "legacy-migrated:3901"
+        ],
+        "o41": [
+          "legacy-migrated:3908"
+        ],
+        "o42": [
+          "legacy-migrated:3909"
+        ],
+        "o43": [
+          "legacy-migrated:3910"
+        ],
+        "o44": [
+          "legacy-migrated:3919"
+        ],
+        "o45": [
+          "legacy-migrated:3920"
+        ],
+        "o46": [
+          "legacy-migrated:3921"
+        ],
+        "o47": [
+          "legacy-migrated:3924"
+        ],
+        "o48": [
+          "legacy-migrated:3929"
+        ],
+        "o49": [
+          "legacy-migrated:3935",
+          "legacy-migrated:3938"
+        ],
+        "o50": [
+          "legacy-migrated:3936"
+        ],
+        "o51": [
+          "legacy-migrated:3937"
+        ],
+        "o52": [
+          "legacy-migrated:3945",
+          "legacy-migrated:3949",
+          "legacy-migrated:3951",
+          "legacy-migrated:3953",
+          "legacy-migrated:3955",
+          "legacy-migrated:3957",
+          "legacy-migrated:3959",
+          "legacy-migrated:3961"
+        ],
+        "o53": [
+          "legacy-migrated:3948",
+          "legacy-migrated:3950",
+          "legacy-migrated:3952",
+          "legacy-migrated:3954",
+          "legacy-migrated:3956",
+          "legacy-migrated:3958",
+          "legacy-migrated:3960"
+        ],
+        "o54": [
+          "legacy-migrated:3966"
+        ],
+        "o55": [
+          "legacy-migrated:3967"
+        ],
+        "o56": [
+          "legacy-migrated:3968"
+        ],
+        "o57": [
+          "legacy-migrated:3970",
+          "legacy-migrated:3973"
+        ],
+        "o58": [
+          "legacy-migrated:3977"
+        ],
+        "o59": [
+          "legacy-migrated:3986"
+        ],
+        "o60": [
+          "legacy-migrated:3987"
+        ],
+        "o61": [
+          "legacy-migrated:3991"
+        ],
+        "o62": [
+          "legacy-migrated:3996"
+        ],
+        "o63": [
+          "legacy-migrated:3997"
+        ],
+        "o64": [
+          "legacy-migrated:3999"
+        ],
+        "o65": [
+          "legacy-migrated:4003"
+        ],
+        "o66": [
+          "legacy-migrated:4009"
+        ],
+        "o67": [
+          "legacy-migrated:4013"
+        ],
+        "o68": [
+          "legacy-migrated:4021"
+        ],
+        "o69": [
+          "legacy-migrated:4024"
+        ],
+        "o70": [
+          "legacy-migrated:4025"
+        ],
+        "o71": [
+          "legacy-migrated:4026"
+        ],
+        "o72": [
+          "legacy-migrated:4033"
+        ],
+        "o73": [
+          "legacy-migrated:4037"
+        ],
+        "o74": [
+          "legacy-migrated:4044"
+        ],
+        "o75": [
+          "legacy-migrated:4045"
+        ],
+        "o76": [
+          "legacy-migrated:4046"
+        ],
+        "o77": [
+          "legacy-migrated:4050"
+        ]
+      }
+    }
+  },
+  "why": "Longue en horloge (117 min), juillet, Cortex, agent."
+}

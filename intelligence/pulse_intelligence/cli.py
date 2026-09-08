@@ -107,7 +107,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ev = commands.add_parser("eval", help="passer le modèle courant sur le corpus gelé")
     ev.add_argument("--provider", default=None, help="remplace llm_provider pour ce passage")
-    ev.add_argument("--corpus", type=Path, default=None, help="dossier du corpus (défaut eval/corpus)")
+    ev.add_argument("--corpus", type=Path, default=None, help="dossier du corpus (défaut eval/observed)")
     ev.add_argument("--out", type=Path, default=None, help="dossier de sortie (défaut eval/out)")
     return parser
 

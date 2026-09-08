@@ -1,6 +1,6 @@
 """`pulse-intel eval` : le modèle courant sur le corpus gelé, côte à côte.
 
-Le corpus (`eval/corpus/`) est dix sessions réelles figées — vue Core et
+Le corpus courant (`eval/observed/`) contient quatorze sessions réelles figées — vue Core et
 contexte capturés une fois, reproductibles hors ligne, sans trace ni daemon.
 `eval` reconstruit l'entrée exacte du modèle par le même code que la production
 (`build_model_input`, `serialize_input`, `input_paths`), appelle le provider,
@@ -33,7 +33,7 @@ from .session_summary import InvalidModelOutput, ParsedSummary, parse_model_outp
 from .summarizer import SummarizerError
 
 
-DEFAULT_CORPUS = Path(__file__).parent.parent / "eval" / "corpus"
+DEFAULT_CORPUS = Path(__file__).parent.parent / "eval" / "observed"
 DEFAULT_OUT = Path(__file__).parent.parent / "eval" / "out"
 
 
@@ -175,6 +175,12 @@ def _write_result(
         "date": entry.date,
         "why": entry.why,
         "status": status,
+    }
+    observations = entry.session_raw.get("observations") or {}
+    payload["commit_references"] = {
+        fact["ref"]: f"commit:{fact['hash'][:7]}"
+        for fact in observations.get("timeline", [])
+        if fact.get("kind") == "commit" and fact.get("hash")
     }
     if parsed is not None:
         payload["reprise"] = parsed.reprise
@@ -368,7 +374,19 @@ def compare_run(run_dir: Path, expected_dir: Path = DEFAULT_EXPECTED) -> list[Op
             continue
         result = json.loads(result_path.read_text(encoding="utf-8"))
         items = result.get("open_items") if result.get("status") == "ok" else None
-        comparison = compare_open(session_id, items, expectation)
+        # The original human annotations cite commit:<short hash>. Translate
+        # reference spelling only, never their text, required/forbidden rules,
+        # or the stored model output. This is not a new quality score.
+        anchors = result.get("commit_references", {})
+        comparable = None if items is None else [
+            {**item,
+             # Both v5 support types were named observed by the original
+             # human contract. Normalize the category, not the criterion.
+             "kind": "observed" if item.get("kind") in {"command_failure", "recorded_statement"} else item.get("kind"),
+             "evidence": [anchors.get(ref, ref) for ref in item.get("evidence", [])]}
+            for item in items
+        ]
+        comparison = compare_open(session_id, comparable, expectation)
         if items is None and result.get("status") != "ok":
             comparison = OpenComparison(
                 session_id, [], [], list(expectation.get("open") or []), [], [],

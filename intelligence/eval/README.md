@@ -1,5 +1,41 @@
 # Corpus d'évaluation — `intelligence/eval/`
 
+## Reprise fondée : entrée v3 / prompt v5
+
+Le troisième chantier garde `observed/` et `expected/` strictement inchangés.
+La comparaison traduit les appuis v5 `command_failure` / `recorded_statement`
+vers la catégorie historique `observed` et les références de commit vers leur
+hash. Elle ne modifie ni le texte, ni les points exigés, ni les interdictions.
+Le résultat brut conserve les nouveaux types.
+
+L'attente `eef4956b` exige un `carried_over` sans observation indépendante : elle
+reste évaluée telle quelle malgré sa tension avec la politique v5. Le rapport
+sépare format, appui, résolution et utilité ; une sortie rejetée garde son texte
+pour examiner ses points, et un `open` vide peut rester une omission.
+
+Voir le [rapport du troisième chantier](../../docs/audits/2026-09-08-reprise-fondee/README.md).
+
+## Corpus courant et référence historique (2026-09-08)
+
+`eval` utilise désormais **`observed/`** : les mêmes 14 identités et les mêmes
+annexes gelées, avec une projection ordonnée obtenue à partir de la totalité
+de leurs événements sources retrouvés. Ce n'est pas une nouvelle
+reconstruction : les versions de reconstruction historiques restent affichées.
+`corpus/` reste intact pour la lecture de la référence antérieure. Le récit
+ci-dessous de sa constitution est historique.
+
+Les critères de `expected/` restent inchangés. L'export associe les références
+compactes de commits à leurs hashes courts pour comparer les anciennes
+annotations, sans modifier les textes ni les interdictions. `compare_open`
+contrôle ces attentes, pas toute la justesse : ses points supplémentaires ne
+font pas échouer `ok`. Toujours lire aussi `unexpected` et les sorties.
+
+Les replays du **deuxième chantier**, mesures réelles et limites sont dans
+[`docs/audits/2026-09-08-observations-ordonnees`](../../docs/audits/2026-09-08-observations-ordonnees/README.md).
+Une liste d'UUID n'entre plus dans le modèle. Les anciennes entrées et les
+nouveaux faits ne doivent jamais être comparés comme si seul le prompt avait
+changé : représentation, bruit historique, annexes et prompt changent ensemble.
+
 Dix sessions **réelles gelées**, tirées des 90 jours de trace, pour comparer un
 modèle à une référence sur les mêmes entrées. Le corpus est figé : on ne le
 retouche pas d'un passage à l'autre, sinon la comparaison ne veut plus rien
