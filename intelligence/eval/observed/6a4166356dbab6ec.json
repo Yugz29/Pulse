@@ -1,0 +1,825 @@
+{
+  "context": {
+    "current_session": {
+      "activity_count": 32,
+      "apps": [],
+      "duration_minutes": 87,
+      "files": {
+        "created": [],
+        "deleted": [],
+        "modified": [],
+        "truncated": false
+      },
+      "git": {
+        "commits": [],
+        "push_observed": true
+      },
+      "id": "6a4166356dbab6ec",
+      "is_open": true,
+      "label": "work-1",
+      "last_activity_at": "2026-08-11T10:05:01+00:00",
+      "projects": [
+        "holbertonschool-agentic_ai"
+      ],
+      "reconstruction_version": 2,
+      "signals": [
+        "terminal_finished"
+      ],
+      "source_event_ids": [
+        "0311c8ff-0755-4ac9-a0b3-e1a0bc7a1303",
+        "05644daf-2398-4602-9837-ad16b384df96",
+        "064bad13-0394-4a56-97df-cebe917fac5d",
+        "0851896c-c1d6-48f5-b9f3-370942b1bcab",
+        "184437ed-d957-4604-8d08-ab7d0a135a82",
+        "352598b4-6ddd-4b67-90a3-1a88b1ec2869",
+        "38abe8a6-1ea3-43c8-a78d-7465f221562f",
+        "438c2d93-8df9-4a30-9d2f-5d8742ddc740",
+        "44bf77e0-bd8d-42bc-bf66-3cb9eca61a6c",
+        "4db45856-6fde-4f55-8838-fec985bfd2b1",
+        "5005ded3-4e4d-48d6-9098-458dcfced052",
+        "5020d184-dfbb-48a9-bc1b-fca3a00a5feb",
+        "50f1755e-ffce-488b-9ffe-6ccb84e1eea0",
+        "52ab941b-a858-4ff0-b918-a6a5c77b45ef",
+        "5d0608e3-54bd-496f-b0a7-49d1d71cb92e",
+        "647ec8a3-dab9-4036-b99b-b2c6befb6ba8",
+        "6ad54bd4-b5cc-479d-828c-507f4ab29915",
+        "83c21a39-13e3-416e-b0ca-0c571b97d8e4",
+        "8c552bf9-f927-4fee-8d41-407ccfd5e0b3",
+        "a89fcdfa-968b-448d-a5d2-ff3184bc8b73",
+        "ad598ea1-814c-486b-bfbf-dc814dfb0f69",
+        "b2cd7bcd-5857-4927-9b82-3952f034998f",
+        "b562c637-9af6-447d-81b5-4fb7accedf5b",
+        "c3818684-c330-42ba-842e-5be91e9f412a",
+        "cd2a19bd-1d00-4ad8-965f-dd92bed733ba",
+        "d479214c-44ad-4bbb-97ab-1ec9c4600212",
+        "d9cfd65c-2ae1-43bb-a085-668ea7c85c1c",
+        "e486f19f-cf63-450b-9bf3-39457027f7dc",
+        "e50d02e9-2ac9-400e-8abd-515c7ea56068",
+        "ec86a359-f285-4630-9e81-7ad3791729d4",
+        "f429aeec-0868-4bf2-bde2-985a00a2eab7",
+        "faae23b9-73c5-417c-ba06-45ed3ca92c1b"
+      ],
+      "started_at": "2026-08-11T08:38:01+00:00",
+      "terminal": {
+        "errors": [
+          "git statuys",
+          "git add vue/ .gitignore",
+          "git add front_end-frameworks/{react,vue}/{vite.config.js,package.json}"
+        ],
+        "tests_failed": [],
+        "tests_passed": [],
+        "truncated": false
+      }
+    },
+    "generated_at": "2026-09-05T22:06:25.326496+00:00",
+    "isolated_signals": [],
+    "last_agent_session": {
+      "age_minutes": 0,
+      "agent": "claude-code",
+      "ended_at": "2026-08-11T10:11:02.915000+00:00",
+      "started_at": "2026-08-11T09:39:36.608000+00:00",
+      "summary": "Agent session (claude-code): Contexte : mon repo GitHub `holbertonschool-agentic_ai` contient deux projets front-end dans front_end-frameworks/react/ et front_end-frameworks/vue/, tous deux déployés via GitHub Pages sur la branche gh-pages. Le déploiement du projet Vue a écrasé le déploiement React car les…",
+      "workspace": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks"
+    },
+    "last_session_summary": null,
+    "recent_sessions": [],
+    "reference_at": "2026-08-11T10:05:01+00:00",
+    "schema_version": 2,
+    "timezone": "+02:00",
+    "window_minutes": 120,
+    "workspace": {
+      "git": {
+        "branch": "main",
+        "dirty": false,
+        "last_commit": null
+      },
+      "path": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+      "project": "holbertonschool-agentic_ai",
+      "resolution": "session"
+    }
+  },
+  "date": "2026-08-11",
+  "id": "6a4166356dbab6ec",
+  "label": "work-1",
+  "session_raw": {
+    "activity_count": 32,
+    "duration_minutes": 87,
+    "id": "6a4166356dbab6ec",
+    "is_open": false,
+    "label": "work-1",
+    "last_activity_at": "2026-08-11T10:05:01+00:00",
+    "projects": [
+      "holbertonschool-agentic_ai"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+      "0311c8ff-0755-4ac9-a0b3-e1a0bc7a1303",
+      "05644daf-2398-4602-9837-ad16b384df96",
+      "064bad13-0394-4a56-97df-cebe917fac5d",
+      "0851896c-c1d6-48f5-b9f3-370942b1bcab",
+      "184437ed-d957-4604-8d08-ab7d0a135a82",
+      "352598b4-6ddd-4b67-90a3-1a88b1ec2869",
+      "38abe8a6-1ea3-43c8-a78d-7465f221562f",
+      "438c2d93-8df9-4a30-9d2f-5d8742ddc740",
+      "44bf77e0-bd8d-42bc-bf66-3cb9eca61a6c",
+      "4db45856-6fde-4f55-8838-fec985bfd2b1",
+      "5005ded3-4e4d-48d6-9098-458dcfced052",
+      "5020d184-dfbb-48a9-bc1b-fca3a00a5feb",
+      "50f1755e-ffce-488b-9ffe-6ccb84e1eea0",
+      "52ab941b-a858-4ff0-b918-a6a5c77b45ef",
+      "5d0608e3-54bd-496f-b0a7-49d1d71cb92e",
+      "647ec8a3-dab9-4036-b99b-b2c6befb6ba8",
+      "6ad54bd4-b5cc-479d-828c-507f4ab29915",
+      "83c21a39-13e3-416e-b0ca-0c571b97d8e4",
+      "8c552bf9-f927-4fee-8d41-407ccfd5e0b3",
+      "a89fcdfa-968b-448d-a5d2-ff3184bc8b73",
+      "ad598ea1-814c-486b-bfbf-dc814dfb0f69",
+      "b2cd7bcd-5857-4927-9b82-3952f034998f",
+      "b562c637-9af6-447d-81b5-4fb7accedf5b",
+      "c3818684-c330-42ba-842e-5be91e9f412a",
+      "cd2a19bd-1d00-4ad8-965f-dd92bed733ba",
+      "d479214c-44ad-4bbb-97ab-1ec9c4600212",
+      "d9cfd65c-2ae1-43bb-a085-668ea7c85c1c",
+      "e486f19f-cf63-450b-9bf3-39457027f7dc",
+      "e50d02e9-2ac9-400e-8abd-515c7ea56068",
+      "ec86a359-f285-4630-9e81-7ad3791729d4",
+      "f429aeec-0868-4bf2-bde2-985a00a2eab7",
+      "faae23b9-73c5-417c-ba06-45ed3ca92c1b"
+    ],
+    "started_at": "2026-08-11T08:38:01+00:00",
+    "workspace": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+    "observations": {
+      "version": 1,
+      "time_origin": "2026-08-11T08:38:01+00:00",
+      "time_unit": "seconds",
+      "timeline": [
+        {
+          "ref": "o1",
+          "kind": "command",
+          "at": 0.0,
+          "command": "cd ..",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/react",
+          "started_at": 0.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o2",
+          "kind": "command",
+          "at": 19.0,
+          "command": "mkdir vue",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 19.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o3",
+          "kind": "command",
+          "at": 25.0,
+          "command": "cd vue",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 25.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o4",
+          "kind": "command",
+          "at": 167.0,
+          "command": "cd ..",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 167.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o5",
+          "kind": "command",
+          "at": 430.0,
+          "command": "npm install tailwindcss @tailwindcss/vite",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 425.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o6",
+          "kind": "command",
+          "at": 1296.0,
+          "command": "npm install lucide-vue-next",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 1293.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o7",
+          "kind": "command",
+          "at": 1490.0,
+          "command": "npm init @eslint/config@latest",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 1392.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o8",
+          "kind": "command",
+          "at": 1575.0,
+          "command": "npm run lint",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 1573.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o9",
+          "kind": "command",
+          "at": 1954.0,
+          "command": "npm run dev",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 616.0,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o10",
+          "kind": "command",
+          "at": 2144.0,
+          "command": "npm run preview",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 2127.0,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o11",
+          "kind": "command",
+          "at": 2150.0,
+          "command": "npm run build",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 2148.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o12",
+          "kind": "command",
+          "at": 2266.0,
+          "command": "npm run preview",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 2198.0,
+          "exit_code": 130,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o13",
+          "kind": "command",
+          "at": 2272.0,
+          "command": "npm install -D gh-pages",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 2268.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o14",
+          "kind": "command",
+          "at": 2321.0,
+          "command": "npm run deploy",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 2315.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o15",
+          "kind": "command",
+          "at": 2476.0,
+          "command": "cd ..",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 2476.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o16",
+          "kind": "command",
+          "at": 2478.0,
+          "command": "git statuys",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 2478.0,
+          "exit_code": 1,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "statuys",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o17",
+          "kind": "command",
+          "at": 2480.0,
+          "command": "git status",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 2480.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "status",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o18",
+          "kind": "command",
+          "at": 2509.0,
+          "command": "git add .",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 2509.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "add",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o19",
+          "kind": "command",
+          "at": 2521.0,
+          "command": "git commit -m \"Add Vue.js project setup\"",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 2521.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "commit",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o20",
+          "kind": "command",
+          "at": 2897.0,
+          "command": "git add vue/ .gitignore",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 2897.0,
+          "exit_code": 128,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "add",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o21",
+          "kind": "command",
+          "at": 3199.0,
+          "command": "git push",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 3197.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "push",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o22",
+          "kind": "command",
+          "at": 4119.0,
+          "command": "git add front_end-frameworks/{react,vue}/{vite.config.js,package.json}",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 4119.0,
+          "exit_code": 128,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "add",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o23",
+          "kind": "command",
+          "at": 4157.0,
+          "command": "git add {react,vue}/{vite.config.js,package.json}",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 4157.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "add",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o24",
+          "kind": "command",
+          "at": 4162.0,
+          "command": "git commit -m \"fix: deploy react & vue into separate gh-pages subfolders\"",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 4162.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o25",
+          "kind": "command",
+          "at": 4169.0,
+          "command": "git push",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 4167.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "push",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o26",
+          "kind": "command",
+          "at": 4237.0,
+          "command": "git status",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 4237.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_action": "status",
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": true
+          }
+        },
+        {
+          "ref": "o27",
+          "kind": "command",
+          "at": 4268.0,
+          "command": "git add vue/.gitignore\ngit commit -m \"update vue .gitignore\"\ngit push",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 4266.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o28",
+          "kind": "command",
+          "at": 4280.0,
+          "command": "cd vue/",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 4280.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o29",
+          "kind": "command",
+          "at": 4281.0,
+          "command": "ls",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 4281.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o30",
+          "kind": "command",
+          "at": 5215.0,
+          "command": "cd ..",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/vue",
+          "started_at": 5215.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o31",
+          "kind": "command",
+          "at": 5218.0,
+          "command": "cd react/",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks",
+          "started_at": 5218.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o32",
+          "kind": "command",
+          "at": 5220.0,
+          "command": "ls -R src",
+          "cwd": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai/front_end-frameworks/react",
+          "started_at": 5220.0,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai",
+            "branch": "main",
+            "dirty": false
+          }
+        }
+      ],
+      "applications": [],
+      "last_observed": {
+        "commands": [
+          "o1",
+          "o2",
+          "o3",
+          "o30",
+          "o5",
+          "o6",
+          "o7",
+          "o8",
+          "o9",
+          "o12",
+          "o11",
+          "o13",
+          "o14",
+          "o16",
+          "o26",
+          "o18",
+          "o19",
+          "o20",
+          "o25",
+          "o22",
+          "o23",
+          "o24",
+          "o27",
+          "o28",
+          "o29",
+          "o31",
+          "o32"
+        ],
+        "files": [],
+        "git": {
+          "/Users/Yugz/Projets/Holberton28/holbertonschool-agentic_ai": {
+            "branch": "o32",
+            "dirty": "o32"
+          }
+        }
+      },
+      "coverage": {
+        "omitted_events": {},
+        "command_output": "not_collected",
+        "commit_files": "not_collected",
+        "remote_push_state": "not_collected"
+      },
+      "sources": {
+        "o1": [
+          "5005ded3-4e4d-48d6-9098-458dcfced052"
+        ],
+        "o2": [
+          "0851896c-c1d6-48f5-b9f3-370942b1bcab"
+        ],
+        "o3": [
+          "52ab941b-a858-4ff0-b918-a6a5c77b45ef"
+        ],
+        "o4": [
+          "faae23b9-73c5-417c-ba06-45ed3ca92c1b"
+        ],
+        "o5": [
+          "c3818684-c330-42ba-842e-5be91e9f412a"
+        ],
+        "o6": [
+          "ad598ea1-814c-486b-bfbf-dc814dfb0f69"
+        ],
+        "o7": [
+          "5020d184-dfbb-48a9-bc1b-fca3a00a5feb"
+        ],
+        "o8": [
+          "184437ed-d957-4604-8d08-ab7d0a135a82"
+        ],
+        "o9": [
+          "8c552bf9-f927-4fee-8d41-407ccfd5e0b3"
+        ],
+        "o10": [
+          "f429aeec-0868-4bf2-bde2-985a00a2eab7"
+        ],
+        "o11": [
+          "e486f19f-cf63-450b-9bf3-39457027f7dc"
+        ],
+        "o12": [
+          "a89fcdfa-968b-448d-a5d2-ff3184bc8b73"
+        ],
+        "o13": [
+          "38abe8a6-1ea3-43c8-a78d-7465f221562f"
+        ],
+        "o14": [
+          "0311c8ff-0755-4ac9-a0b3-e1a0bc7a1303"
+        ],
+        "o15": [
+          "438c2d93-8df9-4a30-9d2f-5d8742ddc740"
+        ],
+        "o16": [
+          "50f1755e-ffce-488b-9ffe-6ccb84e1eea0"
+        ],
+        "o17": [
+          "05644daf-2398-4602-9837-ad16b384df96"
+        ],
+        "o18": [
+          "e50d02e9-2ac9-400e-8abd-515c7ea56068"
+        ],
+        "o19": [
+          "b562c637-9af6-447d-81b5-4fb7accedf5b"
+        ],
+        "o20": [
+          "5d0608e3-54bd-496f-b0a7-49d1d71cb92e"
+        ],
+        "o21": [
+          "44bf77e0-bd8d-42bc-bf66-3cb9eca61a6c"
+        ],
+        "o22": [
+          "6ad54bd4-b5cc-479d-828c-507f4ab29915"
+        ],
+        "o23": [
+          "83c21a39-13e3-416e-b0ca-0c571b97d8e4"
+        ],
+        "o24": [
+          "ec86a359-f285-4630-9e81-7ad3791729d4"
+        ],
+        "o25": [
+          "4db45856-6fde-4f55-8838-fec985bfd2b1"
+        ],
+        "o26": [
+          "352598b4-6ddd-4b67-90a3-1a88b1ec2869"
+        ],
+        "o27": [
+          "064bad13-0394-4a56-97df-cebe917fac5d"
+        ],
+        "o28": [
+          "d9cfd65c-2ae1-43bb-a085-668ea7c85c1c"
+        ],
+        "o29": [
+          "647ec8a3-dab9-4036-b99b-b2c6befb6ba8"
+        ],
+        "o30": [
+          "b2cd7bcd-5857-4927-9b82-3952f034998f"
+        ],
+        "o31": [
+          "d479214c-44ad-4bbb-97ab-1ec9c4600212"
+        ],
+        "o32": [
+          "cd2a19bd-1d00-4ad8-965f-dd92bed733ba"
+        ]
+      }
+    }
+  },
+  "why": "Raisonnement pur : 0 fichier, domaine scolaire, agent."
+}

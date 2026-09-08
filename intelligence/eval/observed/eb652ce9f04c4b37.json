@@ -1,0 +1,4598 @@
+{
+  "context": {
+    "current_session": {
+      "activity_count": 255,
+      "apps": [
+        {
+          "activations": 15,
+          "name": "Claude"
+        },
+        {
+          "activations": 12,
+          "name": "Terminal"
+        },
+        {
+          "activations": 6,
+          "name": "Safari"
+        },
+        {
+          "activations": 1,
+          "name": "ChatGPT"
+        },
+        {
+          "activations": 1,
+          "name": "Code"
+        }
+      ],
+      "duration_minutes": 35,
+      "files": {
+        "created": [
+          "core/daemon_v2/private_files.py",
+          "core/scripts/fix_permissions.sh",
+          "core/tests_v2/test_private_files.py",
+          "core/daemon_v2/file_lock.py",
+          "core/tests_v2/test_file_lock.py",
+          ".github/workflows/core.yml",
+          "core/requirements-dev.txt",
+          "core/requirements.txt",
+          "docs/decisions/2026-09-03-hardening.md"
+        ],
+        "deleted": [
+          ".github/workflows/core.yml",
+          "core/daemon_v2/file_lock.py",
+          "core/daemon_v2/private_files.py",
+          "core/requirements-dev.txt",
+          "core/requirements.txt",
+          "core/scripts/fix_permissions.sh",
+          "core/tests_v2/test_file_lock.py",
+          "core/tests_v2/test_private_files.py",
+          "docs/decisions/2026-09-03-hardening.md"
+        ],
+        "modified": [
+          "docs/specs/2026-09-03-session-summary.md",
+          "core/README.md",
+          "docs/VISION.md",
+          "core/tests_v2/test_trace_store.py",
+          "core/CHANGELOG.md",
+          "core/VERSION",
+          "core/daemon_v2/analysis/timeline.py",
+          "core/daemon_v2/context_snapshot.py",
+          "core/daemon_v2/ingest.py",
+          "core/daemon_v2/routes.py",
+          "core/tests_v2/test_context_snapshot.py",
+          "core/tests_v2/test_daily_trace.py",
+          "core/tests_v2/test_ingest.py",
+          "core/tests_v2/test_routes.py",
+          "core/tests_v2/test_session_reconstruction.py",
+          "docs/specs/2026-09-02-context-api.md",
+          "core/daemon_v2/agent_sessions.py",
+          "core/daemon_v2/dev_environment.py",
+          "core/daemon_v2/file_watcher.py",
+          "core/daemon_v2/main.py"
+        ],
+        "truncated": true
+      },
+      "git": {
+        "commits": [
+          {
+            "hash": "ac538fa",
+            "message": "test(core): invariant — toute activité stockée porte un event_id non vide ; docs 0.5.0"
+          },
+          {
+            "hash": "4673eed",
+            "message": "docs: spec du pas 3 en v2 — identité stable, /context/sessions, CLI avant service"
+          },
+          {
+            "hash": "df7d6a6",
+            "message": "fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600"
+          },
+          {
+            "hash": "99b09c8",
+            "message": "fix(core): rédaction complète des session_summary — intents, blockers et central_files"
+          },
+          {
+            "hash": "e25ca67",
+            "message": "fix(core): course dans l'archivage des transcripts et l'émission des agent_session"
+          },
+          {
+            "hash": "dc369f9",
+            "message": "fix(core): versions de schéma supportées explicites à l'ingestion"
+          },
+          {
+            "hash": "4978444",
+            "message": "chore(core): dépendances épinglées — requirements.txt et requirements-dev.txt"
+          },
+          {
+            "hash": "7df87ce",
+            "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14"
+          },
+          {
+            "hash": "deada29",
+            "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION"
+          },
+          {
+            "hash": "3825801",
+            "message": "docs: spec du pas 3 en v2 — identité stable, /context/sessions, CLI avant service"
+          },
+          {
+            "hash": "537f131",
+            "message": "fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600"
+          },
+          {
+            "hash": "4bdd213",
+            "message": "fix(core): rédaction complète des session_summary — intents, blockers et central_files"
+          },
+          {
+            "hash": "9158639",
+            "message": "fix(core): course dans l'archivage des transcripts et l'émission des agent_session"
+          },
+          {
+            "hash": "adac9da",
+            "message": "fix(core): versions de schéma supportées explicites à l'ingestion"
+          },
+          {
+            "hash": "a5e9c23",
+            "message": "chore(core): dépendances épinglées — requirements.txt et requirements-dev.txt"
+          },
+          {
+            "hash": "04f61fb",
+            "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14"
+          },
+          {
+            "hash": "d6855c2",
+            "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION"
+          },
+          {
+            "hash": "2c84bd8",
+            "message": "fixup! fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600"
+          },
+          {
+            "hash": "24b118d",
+            "message": "fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600"
+          },
+          {
+            "hash": "29180dd",
+            "message": "fix(core): rédaction complète des session_summary — intents, blockers et central_files"
+          },
+          {
+            "hash": "e15430a",
+            "message": "fix(core): course dans l'archivage des transcripts et l'émission des agent_session"
+          },
+          {
+            "hash": "398f36c",
+            "message": "fix(core): versions de schéma supportées explicites à l'ingestion"
+          },
+          {
+            "hash": "474c779",
+            "message": "chore(core): dépendances épinglées — requirements.txt et requirements-dev.txt"
+          },
+          {
+            "hash": "71f3c3b",
+            "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14"
+          },
+          {
+            "hash": "6577b82",
+            "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION"
+          },
+          {
+            "hash": "2939336",
+            "message": "fixup! ci: workflow core.yml — pytest sur macos-latest, Python 3.14"
+          },
+          {
+            "hash": "f30ac8b",
+            "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14"
+          },
+          {
+            "hash": "c58f4db",
+            "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION"
+          },
+          {
+            "hash": "e8eb97d",
+            "message": "test(core): les tests de résolution de projet figent Path.home sur /Users/Yugz"
+          }
+        ],
+        "push_observed": true
+      },
+      "id": "eb652ce9f04c4b37",
+      "is_open": true,
+      "label": "work-2",
+      "last_activity_at": "2026-09-03T10:17:57+00:00",
+      "projects": [
+        "Pulse"
+      ],
+      "reconstruction_version": 2,
+      "signals": [
+        "app_activated",
+        "file_changed",
+        "git_commit",
+        "terminal_finished"
+      ],
+      "source_event_ids": [
+        "005168c0-2568-40d1-afc8-0fc912995481",
+        "00c1a846-f139-46c8-b318-b6274bfe0855",
+        "015894f5-24de-4096-96fb-912fa5856986",
+        "019fb541-9318-4a84-93ab-13a502889633",
+        "03575de5-89c1-42e1-b3e1-036b6ba25fd1",
+        "04bac2fa-da07-4582-8b30-e20b8598941a",
+        "050f4d08-74e6-465b-8aba-37f3531ebadf",
+        "058f2bfd-2b0e-4343-9d75-f7f5516d6968",
+        "0839210e-8cab-4811-9253-af7732771cfa",
+        "0921c870-1de2-48e9-8807-577ceb59e005",
+        "09c09ff5-29d4-4a3f-81d5-de9cf1ce9b5c",
+        "09c23131-bbf6-4ad0-be13-428f843880a2",
+        "09e33015-fc66-4490-9fe5-2b693fdb3f7c",
+        "0a5f5596-ad88-417a-a8d7-09e7d38dbee1",
+        "0c518b27-c38f-49be-81ee-9b23feb7ea0e",
+        "0effed78-3ccf-4a00-ac40-9840fd6f05f0",
+        "102223de-0a8a-47d1-bef0-7d701d15f45d",
+        "1294df02-0d59-4d85-b8c4-202da125eba0",
+        "129bdb29-29ad-4b07-994d-220c715953fc",
+        "13dad5c6-e353-40c3-aeb9-85739700d6a1",
+        "145c1c4e-a78c-4603-9d96-944864d40f4f",
+        "147cd62b-e8ea-43d4-b781-35e05ecca41c",
+        "15fa0f2c-7f6d-44bb-81fa-b1e6d64a63db",
+        "1615373b-59e2-494d-8e28-801fd6e3f3d3",
+        "16bfac6b-3af4-48ec-a38c-a12c03d978dc",
+        "16e06660-9576-4ca8-9d8b-c2118ada6d06",
+        "17b4dcca-e8ab-47c4-b245-f6772724b1ba",
+        "17fcc546-4d6c-4127-9fb1-3f885f6bd6f3",
+        "1984aa43-df27-4c85-b1ba-a4c44f400bd6",
+        "1a9b3ed2-86b5-4335-a027-3c443be2ddf9",
+        "1acd3b3e-e547-431a-99a7-b5bc0daabd13",
+        "1c31968c-014e-4720-a510-9c01bbee2586",
+        "1c4becd1-0284-4fe2-8579-d5295f468b8d",
+        "1dc41a96-e19a-41b6-ab91-7b76f18b8f04",
+        "1ec825bf-6bfe-4a7e-b69c-0741265655ce",
+        "1fa33b17-6d3d-4d53-bb53-a8fd417a1307",
+        "20350fad-e625-4aab-b360-4752a8c0a7a9",
+        "20c15e8f-8c48-4498-8c8c-3f7a7cd11a9a",
+        "20c64ed5-d08e-497c-831a-6175b67d36e3",
+        "22053d4d-5894-4eda-ae6a-05ffd4a886ae",
+        "221bf67c-8307-4482-9052-bc58e1ac4113",
+        "22be6ebc-db33-49a5-a429-a5dd56fb9406",
+        "28f6e272-ff98-41b2-89a9-a079e4ad5489",
+        "2918e13f-49e0-4684-9c3f-9d3a1a0e9053",
+        "2d1afed8-5c2d-4a2a-a038-f982abfd43f8",
+        "2efe1536-56c3-45ba-aebd-065ac132eb03",
+        "2fb86bc3-6348-4593-a25f-cba44812b18a",
+        "2fc0f4cb-b045-4a0d-b117-1579c18f9be8",
+        "325bc50d-ef64-43fa-84eb-ec709bfcd855",
+        "32d87f2a-38eb-457a-9158-2256d63a6164",
+        "3332d94b-35bf-4891-b200-ee9044446b54",
+        "3339200b-5f18-4e5c-9eb1-2b5a4123a149",
+        "36d3cbb5-bf6d-434d-b736-b6847bbc9c3b",
+        "3787638a-ac07-439d-80c9-a4905ad1f46e",
+        "38895fe5-0919-4ace-8fda-a6c9cbfa45ef",
+        "38d12ec2-e31d-431e-9c51-fbca517a67da",
+        "3b5d5d87-7059-42bc-bdc1-86e7c1809de8",
+        "3bdbe240-9390-444f-8eed-d8960c6d3cef",
+        "3d43ae41-463c-4a43-a10b-a2fc6c2f6c9d",
+        "3dd62d5b-507a-40ed-99be-5ab6d2a32c5a",
+        "3ee34ca2-b14e-4dfa-9197-dec82fda48f3",
+        "40b3e1ef-7d32-4c74-a4b6-38a18b350c12",
+        "43165feb-61ea-40e9-b779-5496bb560db9",
+        "4587a768-b3c4-467e-a6eb-06cfe5b3ab4c",
+        "460b5226-239e-4438-bcfb-7fbeb68cc617",
+        "478e497b-4be1-40a9-960b-bb204dc8f0ff",
+        "491a49a1-14cc-4b26-a022-7cf4b760d43c",
+        "4968cde6-eb78-4537-96b4-0e13f681e484",
+        "49b05d6c-f102-4e07-b265-2af54d93eb4e",
+        "4ca79dc5-bf67-49ee-b5fc-81489bc5f99b",
+        "4f51c958-95a4-46e6-a6b1-aa9f331459fe",
+        "504dc09b-607d-46af-97d7-f2de4428eb4d",
+        "517fd158-79c6-4e5f-8326-ead5c5a9334b",
+        "531d3b05-8a83-49a7-84ae-ab1829feb7b9",
+        "5331ab83-fde7-437d-b531-231c3ddddbe1",
+        "53a80728-2dcb-4aa4-85ab-2b005a528626",
+        "5455d1c4-f0e7-4137-8793-a41d02461c63",
+        "5492e1ce-e243-4491-9222-5cf32d1164fd",
+        "54fc39c1-c2d3-4b64-a19c-cad73c3cd2b1",
+        "5511f1fd-5a19-4c80-81a8-dff319e78554",
+        "556548ea-54c0-4e4d-a448-2a6889fa9c03",
+        "559d8cbc-e9be-4b71-ad9a-131a056124b9",
+        "560da2fb-c633-4d9e-bdcc-5f960de0d2fe",
+        "5762f0a9-5f47-429e-b29e-f5c5e25b1e2f",
+        "5c10fb76-2eb1-4bbf-a076-9eb868ce03ed",
+        "5d69a528-60a2-41aa-9a21-fd65f733987d",
+        "5dafbee0-8262-4909-a4ca-cf192e823a64",
+        "5ecb655e-114a-4c1f-9bc5-390be3d7f549",
+        "6027bfb6-71c6-40a1-85ee-4579a445ea52",
+        "60e044a8-c836-4022-a06d-9a487ff80f5d",
+        "610c4105-1cac-4ab9-bc5f-a4999e5981a4",
+        "611ff1e6-abcd-479a-a20a-7279c596ee6d",
+        "6584bd64-b592-48fa-a2f1-b66508b9facf",
+        "65af78d8-0c25-4ecc-ac53-5f81448fe9ed",
+        "66990760-2295-4818-953d-893e82247a91",
+        "66c3d99d-5780-489b-8b88-62de95cf3795",
+        "69c49a06-6ab0-4b9c-a8e0-af0a4f4f79af",
+        "6a80381c-a4d3-4614-9835-21df1d796c89",
+        "6dbea16d-3149-4b16-909f-cb9616a3bcbd",
+        "6f4992da-63a1-44b7-8344-37850570f450",
+        "6f4ce328-f3ad-4217-9d69-462ee36b3ae6",
+        "6fa2a1bf-8e7a-4a9b-a5b9-54819d714a87",
+        "70331d3e-ae93-431b-8f27-9ff062f6a86a",
+        "7274a77a-ecaa-43eb-b051-2a8737f1b00b",
+        "72dff0af-e07d-4459-af29-8101f8886c0b",
+        "74e302a2-5245-4e22-af78-a6aab60c828d",
+        "753ba999-8ec7-4027-8a16-3778e8fb16d5",
+        "75cae8a6-ba5d-4031-a2bb-85739a28c613",
+        "769d2b51-bcb6-49e3-ad51-4254e4e013a0",
+        "778c2338-9883-45e9-9aed-712124eee64b",
+        "77fb7fc5-660f-4507-83d7-9e90d36090bb",
+        "7800042b-ea8d-4d66-97bb-d324b1d5f453",
+        "7a04075b-17fa-40d1-a910-f075e66b9b36",
+        "7a41f2f6-a8d8-4442-b613-4fdcd1ffd371",
+        "7b60fbdd-0794-4e03-9825-0f03cde81eb7",
+        "7b7bf9d2-023a-4025-ac3e-b3e9c8a083ff",
+        "7c462114-7817-4c31-87d5-5c57211ed0bf",
+        "7f375e81-f0e7-47f5-bf4d-bd39815200ec",
+        "7fe3fc3d-1914-4813-b3a8-b43ef17890a1",
+        "802c1925-513a-44d5-9b2c-cad24bdfaa5c",
+        "810c1014-760c-4810-ab71-7dde41760ea8",
+        "8168002b-5aed-4b61-9c4d-b0fba7f07f8b",
+        "81a5c4d5-554b-4b8e-a81e-678b02e0dc06",
+        "8276d6cd-93a3-4e7f-85d0-cf9a5ab398af",
+        "838332f4-8400-4c1c-806a-fe970797824b",
+        "8521d114-3d75-4c86-b143-fcdbaba39254",
+        "859e3481-18f6-4852-8eaa-f31da00ff4ff",
+        "869a25f8-f562-4ff0-a0e7-01a0cf915b82",
+        "88d8bb4d-a0db-45a3-ac22-913349942eb1",
+        "8a3443d0-6519-45fc-ad58-7256e185c733",
+        "8c538228-6117-4a40-bf1c-785d542c69d0",
+        "8e9b422b-49c1-4145-bd4a-37826a21f720",
+        "9029815b-2d67-425e-b91d-fc26b7b573ec",
+        "905562bf-8c46-448c-9494-8551869012c8",
+        "930f0208-63cd-452b-84d4-0c1e89e2c28f",
+        "93263c7a-c1ff-4269-aca0-f420972f5ea6",
+        "934e393a-7feb-4156-b590-434487ae7ae3",
+        "93821cb5-f2fe-4b60-b807-a71fa3c6607c",
+        "93978aee-a6d7-4122-a6bf-ea60f267063e",
+        "9641fdd3-f56b-41bb-8848-46c745f61af4",
+        "9744a19a-b2b1-4829-94f4-320934bcde94",
+        "978726a8-f04c-4b89-af87-2f68f6b0e084",
+        "9904728c-adec-4443-89de-b104b3c8dad5",
+        "99ad37fb-69c7-4455-b910-39afacfe9ac1",
+        "99f4b114-b4dd-4aa4-b39c-63a12ad37fce",
+        "9b8a1ed9-7e62-4188-9482-e84af020e562",
+        "9bb1937b-9a57-4be5-b697-fa263ad35c0b",
+        "9c053fc4-cfff-4740-8bbd-192ef3ca63bf",
+        "9c5e80df-5f08-4893-bf22-b9c79a791bec",
+        "9cfa8e7e-38ad-48e0-84f1-32dcd809cc34",
+        "9df11dff-6e63-46f6-a0f3-f3c53c3a23c8",
+        "a0b84a0b-fb03-401b-afce-d139de231f9e",
+        "a0d0d279-5cad-4eb1-93d0-c41240b9eb88",
+        "a15f8050-91c1-44b9-9f1d-9b4fe0019dcb",
+        "a243375b-9f22-4294-8b25-881c31f3e09d",
+        "a4cd1696-4933-4233-aaf8-8024d2e8beeb",
+        "a67e6b2e-56cb-4cd5-9ce4-f7bbe24214c0",
+        "a72b0944-5d7d-4b51-9d65-849cd9a93e38",
+        "aa619aed-8f1a-46d8-b189-3878d6939a75",
+        "aa85a093-3e11-4f67-ac0a-06567b31cdbf",
+        "ab576509-1af0-4ed3-ac73-7d79a8553f9f",
+        "ab7761c4-e38f-44e2-8015-c3bc20520223",
+        "ab7e0502-c61a-44c6-8128-36b14e57a86e",
+        "ae4fa262-aa22-4884-8b48-14dafb04affe",
+        "aef54e1e-e4c0-4e55-bfae-2c3de4d38cbb",
+        "af0170e4-1dce-4498-95d9-df2673b2be6a",
+        "af023806-204b-45fb-9083-64ebdf510192",
+        "af22153f-b720-4753-b837-eedf3391069c",
+        "af56baa5-f4ee-4949-919d-632cd934f9d5",
+        "b006db14-77ef-4365-a6a2-5f8ab836e375",
+        "b32bcf2c-a79e-44a0-984f-9874cafe1c02",
+        "b53d6d87-e6ed-4258-974b-80a031eeb25a",
+        "b600bcb9-0e56-4c55-b513-e7afbe18e742",
+        "b76ca3eb-3f13-4d74-bc38-71e49a3eb4fa",
+        "b84defb6-4900-4132-b3df-22e849af24bc",
+        "b86223bf-09db-45e2-8e78-1e76de01b4c8",
+        "b8d6ee82-7fc8-41fd-88e1-9c8c28d1ea80",
+        "b935f46f-aadc-457b-975d-3d6d58299aa1",
+        "bbc6bef7-3f69-4ea4-9c6e-5161959b4e8b",
+        "bd687e05-35d9-4f7a-8f79-6968728798d4",
+        "bd6b8e28-148f-42fc-8e8e-50f81113491e",
+        "bf4659a8-1490-46b7-b60c-d5b5b5926c2b",
+        "c000d2bd-22d2-4d0c-954f-55c484299c49",
+        "c09f815c-2eca-40f7-81cd-b61216bcebe8",
+        "c1ea6ddb-9b9c-4d36-92b0-9af7149559b3",
+        "c20aabda-f23d-4880-a87b-6901a485c1a1",
+        "c279b151-eebb-42e4-8d47-97197be2b230",
+        "c2fdeb83-ada9-466d-b0a8-29c840e48c42",
+        "c4d74b28-1dbf-4c8b-b575-4921ec498400",
+        "c4dbf72e-006a-4974-9dd0-815ecf6c624b",
+        "c6570d99-61e3-44b7-aaeb-a4810b8361b8",
+        "c69789d5-fbfb-4c7e-8ca8-cc34b8da1cca",
+        "c834799b-7b3a-4289-9d7d-6bc24bca538b",
+        "c8ae403d-26f8-4beb-9f45-72f53a1d4837",
+        "c8bf9245-9f53-4dc8-a2de-e313e086ded1",
+        "c99e475e-9b0d-4be1-9bad-7dcc414343fa",
+        "ca09167c-fc16-4aaa-8c24-e7fcfcf9c698",
+        "ca0c73fc-4b55-423e-a023-54e30e0a300e",
+        "ca3a5b32-beb1-4326-9e29-7307561bd19b",
+        "cad1de9b-2ce9-47bd-8267-949ca35f8519",
+        "cb559f78-ef80-4c7e-8dca-23e4ffd94e21",
+        "cba994dd-fd87-404c-a5b5-49cc4ca21db2",
+        "cbb46893-a791-47d4-9f38-1695888a0e13",
+        "cd40ff8a-8c67-40d8-820c-23b2912527c5",
+        "cd9feee8-76c0-42cd-a1b6-32c4317d48e0",
+        "cdfcea8e-b87e-442e-ab78-53fc66ed830e",
+        "ce2ccb65-e842-4784-8125-f24fced8fbdf",
+        "ceb6ef02-5392-47d7-8dfe-715f04b0a9c0",
+        "cf4acca0-e8cb-44e8-b62b-5a1c97c5c173",
+        "cf6c9529-ecd9-4dfc-bb5a-7a8c388465d3",
+        "d0520e41-8167-431f-9042-8bf6ff1b5d8b",
+        "d143b6f8-5f1c-46ad-8473-505a386a32e9",
+        "d3a79b40-20b0-4d4f-8647-283a9bad1a98",
+        "d59445c6-8088-47e7-8c89-58a92f42059c",
+        "d6d5eafd-badc-475e-9b23-cc272519d0ab",
+        "d8b33665-078e-421a-a6b9-ebdd7ad9d683",
+        "d8b8483f-f635-4d61-bc68-5be2d4538835",
+        "dd12947c-7b66-4b6d-bd92-67fa43c074f6",
+        "de02627c-c6fe-474a-861e-ad0fbcb7c629",
+        "de607bcf-6e9e-404d-8116-c7a41ee415f8",
+        "df25b7b9-57b2-43b4-bac2-6ddab138d02e",
+        "e052e0de-f814-4e92-8c0e-351a4742c653",
+        "e10cf8a8-0595-44de-bb6a-b23d8e52cc68",
+        "e1966f4f-39d4-4119-ae86-029568b503e2",
+        "e538b5e2-c41e-4f57-a88c-e632dcf49673",
+        "e5ce5258-e143-46e9-8ed9-5cb6cd1ad1b8",
+        "e6494ba1-8634-4dee-9e53-7c9cce698afe",
+        "e6d12919-592c-467c-8c1c-476189ed4a3e",
+        "e8777416-4840-44a3-9982-a5d62ef5405a",
+        "e8c7a7bb-53b0-4999-8ee5-60d88829ea28",
+        "e90cf688-c2f0-481f-9124-dc469251a17f",
+        "eab25f84-5fbf-4046-8230-ab4982696351",
+        "eb476e96-1692-455b-a4b4-4138e0c1f158",
+        "eb77832f-cf55-4e68-bcfe-4debc921553f",
+        "eba9e9a0-f665-4aab-9f06-34bb219d0eee",
+        "ec57540a-977f-4db2-8b99-aebd02a39eb6",
+        "ed5b9a76-c22a-4eb5-b26f-67fa6aa44948",
+        "edd18ab7-0311-4dd2-ba97-660893e956b8",
+        "ee111264-1102-482a-910c-34920bfaec77",
+        "ef003e99-1789-43b9-89e3-43db30e2551c",
+        "efe4435e-0303-4a2c-b0f5-1882f116c328",
+        "f01d8baa-1cfa-4675-8bc5-233ff148b111",
+        "f24d3a1e-627a-43ce-96c3-adc3f95b3efe",
+        "f325b04b-ac6b-4eec-b3d8-0905d205c863",
+        "f3d683d9-b330-41c9-953b-f2090555c23a",
+        "f5743d27-8632-4ca4-bc9b-616578a522a6",
+        "f5c2e625-b893-4a38-9170-89b3d19bf744",
+        "f7381c81-2ac4-483d-a4cc-0ba571d74477",
+        "f77a8a4f-6dcf-4974-9a91-d678dca00f0c",
+        "f7801b34-9e97-4565-8aa3-12bb791d35ec",
+        "fc0f9399-3e1d-4de3-8ff9-65cfe9a14b32",
+        "fc2fbcc1-17ed-4130-b905-b4d718fe5a2f",
+        "fdb921c0-2094-4c27-b37f-5c3584a4e415",
+        "fe4d3b61-0fd2-4e22-a88d-925eaf3af058",
+        "ffd3e9ed-a881-4afd-bce5-8c9ca9b7dd03"
+      ],
+      "started_at": "2026-09-03T09:42:17.388753+00:00",
+      "terminal": {
+        "errors": [],
+        "tests_failed": [],
+        "tests_passed": [],
+        "truncated": false
+      }
+    },
+    "generated_at": "2026-09-05T22:06:25.119159+00:00",
+    "isolated_signals": [],
+    "last_agent_session": {
+      "age_minutes": 60,
+      "agent": "codex",
+      "ended_at": "2026-09-03T09:17:19.998000+00:00",
+      "started_at": "2026-09-03T09:17:15.405000+00:00",
+      "summary": "Agent session (codex): # AGENTS.md instructions for /Users/Yugz/Projets/Pulse <INSTRUCTIONS> <!-- gitnexus:start --> # GitNexus — Code Intelligence This project is indexed by GitNexus as **Pulse_Core** (1 435 nodes, 4 763 edges, 123 execution flows — index à la racine du repo unique, code sous `core/`…",
+      "workspace": "/Users/Yugz/Projets/Pulse"
+    },
+    "last_session_summary": null,
+    "recent_sessions": [
+      {
+        "duration_minutes": 29,
+        "ended_at": "2026-09-03T09:20:50+00:00",
+        "headline": {
+          "commits": 10,
+          "errors": 0,
+          "files_changed": 32,
+          "tests_failed": 0
+        },
+        "id": "0fb9052f2f8e1217",
+        "label": "work-1",
+        "projects": [
+          "Pulse"
+        ],
+        "reconstruction_version": 2,
+        "source_event_ids": [
+          "00bbf4c6-464f-439d-be03-95bbf832997e",
+          "013c5a10-1af4-407e-976e-e83d580f7c2d",
+          "035cc134-e121-49a3-a739-f6dbd968079e",
+          "069487ab-ffe9-40f6-8fda-8f169ad2c045",
+          "073d8779-2ebf-4f82-8df9-243352a05dd5",
+          "0c4e67ef-9d7a-4a95-8a9e-8c927182836f",
+          "0d464e68-8b35-4dce-bb1e-6e604d16d478",
+          "1331087e-f193-4a87-abc6-c4158754db00",
+          "1719c476-0047-4490-95f0-5a8015401148",
+          "182f65ec-691a-40d2-9171-78063243cdab",
+          "1e1e07dd-5aaa-4826-ad18-3c601be643f9",
+          "1ebac080-91c9-48c4-a4ff-0b48cce21de7",
+          "1fa97c6d-0914-47ff-885e-89fdec4be298",
+          "20d2595d-044f-4282-8def-ebd882feb165",
+          "20fe7bdd-cc04-430b-945e-220cc32f7739",
+          "22576c9e-3e1f-4f5d-a724-1bf3e87938b0",
+          "237a9fdc-992a-4333-8e60-32eb323d35aa",
+          "23b8a7fc-c8d1-4257-82a3-5cadfdc485ed",
+          "24b61e23-c211-4855-ba7e-eaf127b696eb",
+          "253c327a-eb42-4ea8-bc24-1915dab19b20",
+          "25f159cb-a9c4-486c-b7d9-e16a80a25640",
+          "277f405d-15c6-4b9c-a18b-fae83d26ade8",
+          "27d5da0c-cbf8-47d2-8d7e-427a1652399a",
+          "291ae653-4364-4ca7-8840-5cdec975f234",
+          "29a877b3-8bfa-4b13-b7c1-abc3e3b47bd1",
+          "2b0d83ed-4744-42f4-99ca-9126541d61d0",
+          "2b4574a0-ebb4-4892-bc12-6e6710769e2c",
+          "2b5ef09d-c748-4785-8090-306b34448111",
+          "2c528650-6d53-487c-8e27-190f46783714",
+          "2d607d74-c570-4e8c-93a3-bb50598ccfc1",
+          "2e8216fb-ca71-465d-9331-62e0bd93ee6f",
+          "2ee29f08-516b-4379-a611-16d5c8b79c89",
+          "33b9d888-d861-4447-8f47-44fab629fbaf",
+          "3410606f-bb36-477a-a5b4-9bcc27969977",
+          "348807b5-f02b-4e3f-a5b4-4fd35c578069",
+          "352fe940-be4a-4577-a6b4-b91df4f14dd6",
+          "37881e42-1d7a-4f77-b1a5-27cb5fe213a0",
+          "380dcef3-12b9-4b28-ae93-7d58906f4fd7",
+          "3a755e6d-09b8-4567-a685-3a5870cd66fd",
+          "3af19600-3168-4e3f-ae1f-5a2cf7070d96",
+          "3d0e1e6b-7aa9-473d-999e-0beb5c353c9c",
+          "3d94182a-2fc7-448c-9199-f13d805d0b62",
+          "3dcd5477-9f2a-4ead-bb9f-8560c03b2f14",
+          "48001224-36d7-402c-a481-b7ee18aef799",
+          "48bb8583-e782-4b97-9b4b-2d4e7379bba2",
+          "48e40f19-f476-4dc3-bc02-25a22d397b90",
+          "49f12269-3e06-476a-a7e3-a7207785e91c",
+          "49f7fb49-32ca-467b-b49c-acff32ce1e4c",
+          "4b45c6c6-d1bd-4d40-a71b-5a1eee3ba343",
+          "4ccf6943-f147-428c-bd64-9aff7cbb5975",
+          "500ac593-0f82-43c8-bcda-11e65919ce35",
+          "512eed1b-0bac-4dc8-a9a7-8f09c52b1f5b",
+          "548ef326-5522-4fb5-81c3-1edcd0036be5",
+          "5762bf9f-4b41-4d0d-a6a9-8206033fbb87",
+          "58d01401-337c-4ba8-90f7-d2cb3ccf8c09",
+          "599e9b6e-2f35-4c3d-a9d6-227746ba0bb7",
+          "5b123d05-b2b5-42aa-9b74-4728f16d342d",
+          "5d5e6689-a941-4d94-8e7f-2cb61a4baacf",
+          "5db05610-1d22-4648-a0ed-fdd48b6e44d2",
+          "62e44032-f77f-452e-ac30-73d182deaa2f",
+          "634fef01-e588-4854-b137-e618118da63e",
+          "64ee2f37-bfc7-44d9-9ed3-fdd7207ca4db",
+          "68320508-d1f1-430b-ad93-9bcc6e3d23fd",
+          "6984196f-b697-4dd8-84d2-ffb5f7b0d867",
+          "6aad3b4e-9187-40e8-9674-36abffbdb863",
+          "701c6454-a7db-40b2-9713-ec32b13fafd1",
+          "72a38994-1755-4b78-8f8c-d7ef94b291d4",
+          "74eaaec9-d0ab-4bd9-a4e5-a5b4efbd87dd",
+          "76f95ab8-297f-42e4-9945-a525c3ff9423",
+          "7788e485-cfb5-40fa-9767-ece55c4fe7c8",
+          "79522b18-7e8c-414d-aa51-6bf97715453b",
+          "79e00930-e188-4347-8d0c-02e7fca24e20",
+          "7e357bb7-84d9-468f-8d66-1456079e65cb",
+          "7f12135b-373e-4170-a05f-9b73a1fe6571",
+          "7fe6c7b6-29bf-44f1-b45c-bac3dbf4dfb3",
+          "815b6f33-3c5a-485a-91c9-78ce4168ba56",
+          "84db629f-90c9-436b-92cb-23a37a7a3fd6",
+          "8501bd8e-3233-4b40-b08d-c59d9fd9ace2",
+          "85388e99-b08e-4ba2-ac04-dcb1cdd7bc18",
+          "85ab142e-f7fb-4418-936a-85a8f782c48a",
+          "860e186f-ccff-46bb-af95-f43e22b9e44c",
+          "867b41de-d602-4fbf-8ab1-60f62dd905f2",
+          "8a41a23a-261e-442e-9feb-489fc8e1e9c0",
+          "8b2e570d-25ab-4476-80b9-d16454f758be",
+          "8b843e89-7dd8-4266-af14-209251349e12",
+          "8b84f242-48f6-453c-88a3-e4a9021666af",
+          "8c29648f-f2ae-47d3-ae32-f258759d11cc",
+          "8c2fd174-4f18-4196-a8e4-1f5c4239db67",
+          "8c6b2aab-2b21-4596-88db-a6e4b86f1b60",
+          "8d0617ca-57de-484f-80be-4bb885309645",
+          "921ea806-d188-4502-9396-6998a8a38495",
+          "951b0603-955b-4ffa-8e6f-64d41f88e34c",
+          "968c259f-cf03-499e-bbf1-b248101b948d",
+          "983c3553-683f-450b-afd3-411a48b882ed",
+          "98d05533-f9a1-4352-a85c-3f691049866b",
+          "9ef93af6-6197-4a84-8a20-636c1cab39f5",
+          "9f67ddc9-9ace-478a-a9d8-c74421df2af4",
+          "a19bc4b0-10c0-40d0-aa86-dfd672b1e5fc",
+          "a1afd933-5f44-4c8b-b765-9129262f1aed",
+          "a37f7d46-a739-4d57-a19d-44eb1b24b48a",
+          "a3d29741-c5a2-44d2-94ff-32c7520d023c",
+          "a92a0872-6139-4a4e-9ea2-d0fcd6e4b2dc",
+          "ad311112-acc7-4546-9b2b-ead51c0e4408",
+          "af38f879-5873-46b6-9057-835619e54f7a",
+          "b0b218db-a6d5-4459-8adc-5eb893799d9c",
+          "b1a0075a-1ad2-4ce5-8097-918348c07d1c",
+          "b43eb13c-d314-4ffb-bbc3-7fd5191a8584",
+          "b4977ca5-900f-4eb8-800a-ede9340cd446",
+          "bd5ffc93-7c66-42d3-be24-1e012a099a40",
+          "bf047f40-f0e7-4dee-a237-fd59e410ab8c",
+          "c34c3e91-9f5c-4149-9295-16dd874f533b",
+          "c6c46324-3383-4a82-b04e-4db6ab6ef9cd",
+          "c7196d58-32a9-4e51-8d5e-c653f77628d8",
+          "c7de2fb5-0174-42fc-b7aa-f2c5f32b0902",
+          "c801878e-6d7f-4172-abde-00dec6fab71e",
+          "c8183a88-4b12-4012-90c7-eb6c8c76599f",
+          "c88dc24b-7417-46bc-ad06-616544c5d5ab",
+          "c8ac3255-ade9-43d6-8836-47ec0be80ccb",
+          "c9e1c966-3449-44f1-8ae1-8e8e95d182c9",
+          "caa4367c-584f-4920-80b2-1b85baf8e039",
+          "cabf84f1-8d84-4069-bb79-529003e7c013",
+          "d0162673-41e7-4bab-a0f5-34e96a574894",
+          "d058d9b2-62dd-4163-9fd7-5837af695484",
+          "d13534d6-8657-4a18-a590-d4be53c456f1",
+          "d78bf9c9-a1cb-4efa-94af-3a92cc7090e6",
+          "d8560100-f8a3-4438-89ff-b4ba888194ae",
+          "d9bcf4f5-8629-4b8a-b6bb-29875e25daa4",
+          "da14f226-8d22-4a6b-9861-b9f3fcf5af57",
+          "dc951426-30bc-4df2-86e5-733488a5d106",
+          "dd320f2d-c842-4d10-876e-bce05f1f5671",
+          "def1faa3-1196-469b-ae23-d133f3b7a4f3",
+          "e25b0ffd-1ad7-446c-a731-545ff084c61f",
+          "e2c568b9-a1e0-410d-afda-1d5ea52d93e7",
+          "e506bfb3-d25f-41d1-86ac-f7e30550c8be",
+          "e5645888-92fd-42d2-857d-fdbe20fcbaa1",
+          "e76cdf80-c751-45bc-94ab-b8e80cbaeaa2",
+          "e8a520e9-907d-41bf-bc67-9fd5ee20a83b",
+          "eb55bbad-fea8-4574-873c-8479a2ececf7",
+          "ed32e604-ae31-4bd6-b988-c84018dd7ef8",
+          "f39a83a3-4a2f-432a-bbd0-2bff7853764f",
+          "f3cb65a0-3fd9-4a2b-a866-cdb8c41290ba",
+          "f3d45232-43b9-43b3-a1e9-8e2b3a50bc60",
+          "f7fb0bff-0626-48eb-82c3-f23744437a35",
+          "f87a67f7-c72b-40a6-9f9f-32bac14a36d0",
+          "fe64e74b-a0e4-4da3-8466-a24e23823dcf",
+          "fea31c8e-7876-4851-945b-b310894907e6",
+          "fea917f2-209d-43b0-9e40-d71dcb43d109",
+          "fef39adf-649c-44d2-9d99-2db6a4bd2cca"
+        ],
+        "started_at": "2026-09-03T08:51:48.082820+00:00"
+      }
+    ],
+    "reference_at": "2026-09-03T10:17:57+00:00",
+    "schema_version": 2,
+    "timezone": "+02:00",
+    "window_minutes": 120,
+    "workspace": {
+      "git": {
+        "branch": "ship/hardening",
+        "dirty": false,
+        "last_commit": {
+          "hash": "e8eb97d",
+          "message": "test(core): les tests de résolution de projet figent Path.home sur /Users/Yugz",
+          "occurred_at": "2026-09-03T10:17:57+00:00"
+        }
+      },
+      "path": "/Users/Yugz/Projets/Pulse",
+      "project": "Pulse",
+      "resolution": "session"
+    }
+  },
+  "date": "2026-09-03",
+  "id": "eb652ce9f04c4b37",
+  "label": "work-2",
+  "session_raw": {
+    "activity_count": 255,
+    "duration_minutes": 35,
+    "id": "eb652ce9f04c4b37",
+    "is_open": false,
+    "label": "work-2",
+    "last_activity_at": "2026-09-03T10:17:57+00:00",
+    "projects": [
+      "Pulse"
+    ],
+    "reconstruction_version": 2,
+    "source_event_ids": [
+      "005168c0-2568-40d1-afc8-0fc912995481",
+      "00c1a846-f139-46c8-b318-b6274bfe0855",
+      "015894f5-24de-4096-96fb-912fa5856986",
+      "019fb541-9318-4a84-93ab-13a502889633",
+      "03575de5-89c1-42e1-b3e1-036b6ba25fd1",
+      "04bac2fa-da07-4582-8b30-e20b8598941a",
+      "050f4d08-74e6-465b-8aba-37f3531ebadf",
+      "058f2bfd-2b0e-4343-9d75-f7f5516d6968",
+      "0839210e-8cab-4811-9253-af7732771cfa",
+      "0921c870-1de2-48e9-8807-577ceb59e005",
+      "09c09ff5-29d4-4a3f-81d5-de9cf1ce9b5c",
+      "09c23131-bbf6-4ad0-be13-428f843880a2",
+      "09e33015-fc66-4490-9fe5-2b693fdb3f7c",
+      "0a5f5596-ad88-417a-a8d7-09e7d38dbee1",
+      "0c518b27-c38f-49be-81ee-9b23feb7ea0e",
+      "0effed78-3ccf-4a00-ac40-9840fd6f05f0",
+      "102223de-0a8a-47d1-bef0-7d701d15f45d",
+      "1294df02-0d59-4d85-b8c4-202da125eba0",
+      "129bdb29-29ad-4b07-994d-220c715953fc",
+      "13dad5c6-e353-40c3-aeb9-85739700d6a1",
+      "145c1c4e-a78c-4603-9d96-944864d40f4f",
+      "147cd62b-e8ea-43d4-b781-35e05ecca41c",
+      "15fa0f2c-7f6d-44bb-81fa-b1e6d64a63db",
+      "1615373b-59e2-494d-8e28-801fd6e3f3d3",
+      "16bfac6b-3af4-48ec-a38c-a12c03d978dc",
+      "16e06660-9576-4ca8-9d8b-c2118ada6d06",
+      "17b4dcca-e8ab-47c4-b245-f6772724b1ba",
+      "17fcc546-4d6c-4127-9fb1-3f885f6bd6f3",
+      "1984aa43-df27-4c85-b1ba-a4c44f400bd6",
+      "1a9b3ed2-86b5-4335-a027-3c443be2ddf9",
+      "1acd3b3e-e547-431a-99a7-b5bc0daabd13",
+      "1c31968c-014e-4720-a510-9c01bbee2586",
+      "1c4becd1-0284-4fe2-8579-d5295f468b8d",
+      "1dc41a96-e19a-41b6-ab91-7b76f18b8f04",
+      "1ec825bf-6bfe-4a7e-b69c-0741265655ce",
+      "1fa33b17-6d3d-4d53-bb53-a8fd417a1307",
+      "20350fad-e625-4aab-b360-4752a8c0a7a9",
+      "20c15e8f-8c48-4498-8c8c-3f7a7cd11a9a",
+      "20c64ed5-d08e-497c-831a-6175b67d36e3",
+      "22053d4d-5894-4eda-ae6a-05ffd4a886ae",
+      "221bf67c-8307-4482-9052-bc58e1ac4113",
+      "22be6ebc-db33-49a5-a429-a5dd56fb9406",
+      "28f6e272-ff98-41b2-89a9-a079e4ad5489",
+      "2918e13f-49e0-4684-9c3f-9d3a1a0e9053",
+      "2d1afed8-5c2d-4a2a-a038-f982abfd43f8",
+      "2efe1536-56c3-45ba-aebd-065ac132eb03",
+      "2fb86bc3-6348-4593-a25f-cba44812b18a",
+      "2fc0f4cb-b045-4a0d-b117-1579c18f9be8",
+      "325bc50d-ef64-43fa-84eb-ec709bfcd855",
+      "32d87f2a-38eb-457a-9158-2256d63a6164",
+      "3332d94b-35bf-4891-b200-ee9044446b54",
+      "3339200b-5f18-4e5c-9eb1-2b5a4123a149",
+      "36d3cbb5-bf6d-434d-b736-b6847bbc9c3b",
+      "3787638a-ac07-439d-80c9-a4905ad1f46e",
+      "38895fe5-0919-4ace-8fda-a6c9cbfa45ef",
+      "38d12ec2-e31d-431e-9c51-fbca517a67da",
+      "3b5d5d87-7059-42bc-bdc1-86e7c1809de8",
+      "3bdbe240-9390-444f-8eed-d8960c6d3cef",
+      "3d43ae41-463c-4a43-a10b-a2fc6c2f6c9d",
+      "3dd62d5b-507a-40ed-99be-5ab6d2a32c5a",
+      "3ee34ca2-b14e-4dfa-9197-dec82fda48f3",
+      "40b3e1ef-7d32-4c74-a4b6-38a18b350c12",
+      "43165feb-61ea-40e9-b779-5496bb560db9",
+      "4587a768-b3c4-467e-a6eb-06cfe5b3ab4c",
+      "460b5226-239e-4438-bcfb-7fbeb68cc617",
+      "478e497b-4be1-40a9-960b-bb204dc8f0ff",
+      "491a49a1-14cc-4b26-a022-7cf4b760d43c",
+      "4968cde6-eb78-4537-96b4-0e13f681e484",
+      "49b05d6c-f102-4e07-b265-2af54d93eb4e",
+      "4ca79dc5-bf67-49ee-b5fc-81489bc5f99b",
+      "4f51c958-95a4-46e6-a6b1-aa9f331459fe",
+      "504dc09b-607d-46af-97d7-f2de4428eb4d",
+      "517fd158-79c6-4e5f-8326-ead5c5a9334b",
+      "531d3b05-8a83-49a7-84ae-ab1829feb7b9",
+      "5331ab83-fde7-437d-b531-231c3ddddbe1",
+      "53a80728-2dcb-4aa4-85ab-2b005a528626",
+      "5455d1c4-f0e7-4137-8793-a41d02461c63",
+      "5492e1ce-e243-4491-9222-5cf32d1164fd",
+      "54fc39c1-c2d3-4b64-a19c-cad73c3cd2b1",
+      "5511f1fd-5a19-4c80-81a8-dff319e78554",
+      "556548ea-54c0-4e4d-a448-2a6889fa9c03",
+      "559d8cbc-e9be-4b71-ad9a-131a056124b9",
+      "560da2fb-c633-4d9e-bdcc-5f960de0d2fe",
+      "5762f0a9-5f47-429e-b29e-f5c5e25b1e2f",
+      "5c10fb76-2eb1-4bbf-a076-9eb868ce03ed",
+      "5d69a528-60a2-41aa-9a21-fd65f733987d",
+      "5dafbee0-8262-4909-a4ca-cf192e823a64",
+      "5ecb655e-114a-4c1f-9bc5-390be3d7f549",
+      "6027bfb6-71c6-40a1-85ee-4579a445ea52",
+      "60e044a8-c836-4022-a06d-9a487ff80f5d",
+      "610c4105-1cac-4ab9-bc5f-a4999e5981a4",
+      "611ff1e6-abcd-479a-a20a-7279c596ee6d",
+      "6584bd64-b592-48fa-a2f1-b66508b9facf",
+      "65af78d8-0c25-4ecc-ac53-5f81448fe9ed",
+      "66990760-2295-4818-953d-893e82247a91",
+      "66c3d99d-5780-489b-8b88-62de95cf3795",
+      "69c49a06-6ab0-4b9c-a8e0-af0a4f4f79af",
+      "6a80381c-a4d3-4614-9835-21df1d796c89",
+      "6dbea16d-3149-4b16-909f-cb9616a3bcbd",
+      "6f4992da-63a1-44b7-8344-37850570f450",
+      "6f4ce328-f3ad-4217-9d69-462ee36b3ae6",
+      "6fa2a1bf-8e7a-4a9b-a5b9-54819d714a87",
+      "70331d3e-ae93-431b-8f27-9ff062f6a86a",
+      "7274a77a-ecaa-43eb-b051-2a8737f1b00b",
+      "72dff0af-e07d-4459-af29-8101f8886c0b",
+      "74e302a2-5245-4e22-af78-a6aab60c828d",
+      "753ba999-8ec7-4027-8a16-3778e8fb16d5",
+      "75cae8a6-ba5d-4031-a2bb-85739a28c613",
+      "769d2b51-bcb6-49e3-ad51-4254e4e013a0",
+      "778c2338-9883-45e9-9aed-712124eee64b",
+      "77fb7fc5-660f-4507-83d7-9e90d36090bb",
+      "7800042b-ea8d-4d66-97bb-d324b1d5f453",
+      "7a04075b-17fa-40d1-a910-f075e66b9b36",
+      "7a41f2f6-a8d8-4442-b613-4fdcd1ffd371",
+      "7b60fbdd-0794-4e03-9825-0f03cde81eb7",
+      "7b7bf9d2-023a-4025-ac3e-b3e9c8a083ff",
+      "7c462114-7817-4c31-87d5-5c57211ed0bf",
+      "7f375e81-f0e7-47f5-bf4d-bd39815200ec",
+      "7fe3fc3d-1914-4813-b3a8-b43ef17890a1",
+      "802c1925-513a-44d5-9b2c-cad24bdfaa5c",
+      "810c1014-760c-4810-ab71-7dde41760ea8",
+      "8168002b-5aed-4b61-9c4d-b0fba7f07f8b",
+      "81a5c4d5-554b-4b8e-a81e-678b02e0dc06",
+      "8276d6cd-93a3-4e7f-85d0-cf9a5ab398af",
+      "838332f4-8400-4c1c-806a-fe970797824b",
+      "8521d114-3d75-4c86-b143-fcdbaba39254",
+      "859e3481-18f6-4852-8eaa-f31da00ff4ff",
+      "869a25f8-f562-4ff0-a0e7-01a0cf915b82",
+      "88d8bb4d-a0db-45a3-ac22-913349942eb1",
+      "8a3443d0-6519-45fc-ad58-7256e185c733",
+      "8c538228-6117-4a40-bf1c-785d542c69d0",
+      "8e9b422b-49c1-4145-bd4a-37826a21f720",
+      "9029815b-2d67-425e-b91d-fc26b7b573ec",
+      "905562bf-8c46-448c-9494-8551869012c8",
+      "930f0208-63cd-452b-84d4-0c1e89e2c28f",
+      "93263c7a-c1ff-4269-aca0-f420972f5ea6",
+      "934e393a-7feb-4156-b590-434487ae7ae3",
+      "93821cb5-f2fe-4b60-b807-a71fa3c6607c",
+      "93978aee-a6d7-4122-a6bf-ea60f267063e",
+      "9641fdd3-f56b-41bb-8848-46c745f61af4",
+      "9744a19a-b2b1-4829-94f4-320934bcde94",
+      "978726a8-f04c-4b89-af87-2f68f6b0e084",
+      "9904728c-adec-4443-89de-b104b3c8dad5",
+      "99ad37fb-69c7-4455-b910-39afacfe9ac1",
+      "99f4b114-b4dd-4aa4-b39c-63a12ad37fce",
+      "9b8a1ed9-7e62-4188-9482-e84af020e562",
+      "9bb1937b-9a57-4be5-b697-fa263ad35c0b",
+      "9c053fc4-cfff-4740-8bbd-192ef3ca63bf",
+      "9c5e80df-5f08-4893-bf22-b9c79a791bec",
+      "9cfa8e7e-38ad-48e0-84f1-32dcd809cc34",
+      "9df11dff-6e63-46f6-a0f3-f3c53c3a23c8",
+      "a0b84a0b-fb03-401b-afce-d139de231f9e",
+      "a0d0d279-5cad-4eb1-93d0-c41240b9eb88",
+      "a15f8050-91c1-44b9-9f1d-9b4fe0019dcb",
+      "a243375b-9f22-4294-8b25-881c31f3e09d",
+      "a4cd1696-4933-4233-aaf8-8024d2e8beeb",
+      "a67e6b2e-56cb-4cd5-9ce4-f7bbe24214c0",
+      "a72b0944-5d7d-4b51-9d65-849cd9a93e38",
+      "aa619aed-8f1a-46d8-b189-3878d6939a75",
+      "aa85a093-3e11-4f67-ac0a-06567b31cdbf",
+      "ab576509-1af0-4ed3-ac73-7d79a8553f9f",
+      "ab7761c4-e38f-44e2-8015-c3bc20520223",
+      "ab7e0502-c61a-44c6-8128-36b14e57a86e",
+      "ae4fa262-aa22-4884-8b48-14dafb04affe",
+      "aef54e1e-e4c0-4e55-bfae-2c3de4d38cbb",
+      "af0170e4-1dce-4498-95d9-df2673b2be6a",
+      "af023806-204b-45fb-9083-64ebdf510192",
+      "af22153f-b720-4753-b837-eedf3391069c",
+      "af56baa5-f4ee-4949-919d-632cd934f9d5",
+      "b006db14-77ef-4365-a6a2-5f8ab836e375",
+      "b32bcf2c-a79e-44a0-984f-9874cafe1c02",
+      "b53d6d87-e6ed-4258-974b-80a031eeb25a",
+      "b600bcb9-0e56-4c55-b513-e7afbe18e742",
+      "b76ca3eb-3f13-4d74-bc38-71e49a3eb4fa",
+      "b84defb6-4900-4132-b3df-22e849af24bc",
+      "b86223bf-09db-45e2-8e78-1e76de01b4c8",
+      "b8d6ee82-7fc8-41fd-88e1-9c8c28d1ea80",
+      "b935f46f-aadc-457b-975d-3d6d58299aa1",
+      "bbc6bef7-3f69-4ea4-9c6e-5161959b4e8b",
+      "bd687e05-35d9-4f7a-8f79-6968728798d4",
+      "bd6b8e28-148f-42fc-8e8e-50f81113491e",
+      "bf4659a8-1490-46b7-b60c-d5b5b5926c2b",
+      "c000d2bd-22d2-4d0c-954f-55c484299c49",
+      "c09f815c-2eca-40f7-81cd-b61216bcebe8",
+      "c1ea6ddb-9b9c-4d36-92b0-9af7149559b3",
+      "c20aabda-f23d-4880-a87b-6901a485c1a1",
+      "c279b151-eebb-42e4-8d47-97197be2b230",
+      "c2fdeb83-ada9-466d-b0a8-29c840e48c42",
+      "c4d74b28-1dbf-4c8b-b575-4921ec498400",
+      "c4dbf72e-006a-4974-9dd0-815ecf6c624b",
+      "c6570d99-61e3-44b7-aaeb-a4810b8361b8",
+      "c69789d5-fbfb-4c7e-8ca8-cc34b8da1cca",
+      "c834799b-7b3a-4289-9d7d-6bc24bca538b",
+      "c8ae403d-26f8-4beb-9f45-72f53a1d4837",
+      "c8bf9245-9f53-4dc8-a2de-e313e086ded1",
+      "c99e475e-9b0d-4be1-9bad-7dcc414343fa",
+      "ca09167c-fc16-4aaa-8c24-e7fcfcf9c698",
+      "ca0c73fc-4b55-423e-a023-54e30e0a300e",
+      "ca3a5b32-beb1-4326-9e29-7307561bd19b",
+      "cad1de9b-2ce9-47bd-8267-949ca35f8519",
+      "cb559f78-ef80-4c7e-8dca-23e4ffd94e21",
+      "cba994dd-fd87-404c-a5b5-49cc4ca21db2",
+      "cbb46893-a791-47d4-9f38-1695888a0e13",
+      "cd40ff8a-8c67-40d8-820c-23b2912527c5",
+      "cd9feee8-76c0-42cd-a1b6-32c4317d48e0",
+      "cdfcea8e-b87e-442e-ab78-53fc66ed830e",
+      "ce2ccb65-e842-4784-8125-f24fced8fbdf",
+      "ceb6ef02-5392-47d7-8dfe-715f04b0a9c0",
+      "cf4acca0-e8cb-44e8-b62b-5a1c97c5c173",
+      "cf6c9529-ecd9-4dfc-bb5a-7a8c388465d3",
+      "d0520e41-8167-431f-9042-8bf6ff1b5d8b",
+      "d143b6f8-5f1c-46ad-8473-505a386a32e9",
+      "d3a79b40-20b0-4d4f-8647-283a9bad1a98",
+      "d59445c6-8088-47e7-8c89-58a92f42059c",
+      "d6d5eafd-badc-475e-9b23-cc272519d0ab",
+      "d8b33665-078e-421a-a6b9-ebdd7ad9d683",
+      "d8b8483f-f635-4d61-bc68-5be2d4538835",
+      "dd12947c-7b66-4b6d-bd92-67fa43c074f6",
+      "de02627c-c6fe-474a-861e-ad0fbcb7c629",
+      "de607bcf-6e9e-404d-8116-c7a41ee415f8",
+      "df25b7b9-57b2-43b4-bac2-6ddab138d02e",
+      "e052e0de-f814-4e92-8c0e-351a4742c653",
+      "e10cf8a8-0595-44de-bb6a-b23d8e52cc68",
+      "e1966f4f-39d4-4119-ae86-029568b503e2",
+      "e538b5e2-c41e-4f57-a88c-e632dcf49673",
+      "e5ce5258-e143-46e9-8ed9-5cb6cd1ad1b8",
+      "e6494ba1-8634-4dee-9e53-7c9cce698afe",
+      "e6d12919-592c-467c-8c1c-476189ed4a3e",
+      "e8777416-4840-44a3-9982-a5d62ef5405a",
+      "e8c7a7bb-53b0-4999-8ee5-60d88829ea28",
+      "e90cf688-c2f0-481f-9124-dc469251a17f",
+      "eab25f84-5fbf-4046-8230-ab4982696351",
+      "eb476e96-1692-455b-a4b4-4138e0c1f158",
+      "eb77832f-cf55-4e68-bcfe-4debc921553f",
+      "eba9e9a0-f665-4aab-9f06-34bb219d0eee",
+      "ec57540a-977f-4db2-8b99-aebd02a39eb6",
+      "ed5b9a76-c22a-4eb5-b26f-67fa6aa44948",
+      "edd18ab7-0311-4dd2-ba97-660893e956b8",
+      "ee111264-1102-482a-910c-34920bfaec77",
+      "ef003e99-1789-43b9-89e3-43db30e2551c",
+      "efe4435e-0303-4a2c-b0f5-1882f116c328",
+      "f01d8baa-1cfa-4675-8bc5-233ff148b111",
+      "f24d3a1e-627a-43ce-96c3-adc3f95b3efe",
+      "f325b04b-ac6b-4eec-b3d8-0905d205c863",
+      "f3d683d9-b330-41c9-953b-f2090555c23a",
+      "f5743d27-8632-4ca4-bc9b-616578a522a6",
+      "f5c2e625-b893-4a38-9170-89b3d19bf744",
+      "f7381c81-2ac4-483d-a4cc-0ba571d74477",
+      "f77a8a4f-6dcf-4974-9a91-d678dca00f0c",
+      "f7801b34-9e97-4565-8aa3-12bb791d35ec",
+      "fc0f9399-3e1d-4de3-8ff9-65cfe9a14b32",
+      "fc2fbcc1-17ed-4130-b905-b4d718fe5a2f",
+      "fdb921c0-2094-4c27-b37f-5c3584a4e415",
+      "fe4d3b61-0fd2-4e22-a88d-925eaf3af058",
+      "ffd3e9ed-a881-4afd-bce5-8c9ca9b7dd03"
+    ],
+    "started_at": "2026-09-03T09:42:17.388753+00:00",
+    "workspace": "/Users/Yugz/Projets/Pulse",
+    "observations": {
+      "version": 1,
+      "time_origin": "2026-09-03T09:42:17.388753+00:00",
+      "time_unit": "seconds",
+      "timeline": [
+        {
+          "ref": "o1",
+          "kind": "file",
+          "at": 0.0,
+          "path": "docs/specs/2026-09-03-session-summary.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 0.0,
+              "last_at": 0.0,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o2",
+          "kind": "file",
+          "at": 123.163298,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 123.163298,
+              "last_at": 123.163298,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o3",
+          "kind": "file",
+          "at": 123.173767,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 123.173767,
+              "last_at": 123.173767,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o4",
+          "kind": "file",
+          "at": 153.362031,
+          "path": "core/tests_v2/test_trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 153.362031,
+              "last_at": 153.362031,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o5",
+          "kind": "commit",
+          "at": 159.611247,
+          "hash": "ac538fae21e81307636f57879bcb5127f1f72d42",
+          "message": "test(core): invariant — toute activité stockée porte un event_id non vide ; docs 0.5.0\n\nLe repli id:<rowid> de session_identity ne sert qu'aux fixtures : les\ntrois chemins d'écriture (append interne, adaptateur legacy, contrat\ncanonique) et la migration des lignes historiques produisent tous un\nevent_id non vide, et le schéma neuf le déclare NOT NULL.\nREADME de Core : /context/sessions dans la table des routes, encart 0.5.0.\nVISION : version 0.5.0, identité de session stable dans la couche Core.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/session-identity"
+        },
+        {
+          "ref": "o6",
+          "kind": "file",
+          "at": 365.999059,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 365.999059,
+              "last_at": 367.622573,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o7",
+          "kind": "file",
+          "at": 366.083781,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.083781,
+              "last_at": 367.632441,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o8",
+          "kind": "file",
+          "at": 366.093821,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.093821,
+              "last_at": 367.641009,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o9",
+          "kind": "file",
+          "at": 366.101225,
+          "path": "core/daemon_v2/analysis/timeline.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.101225,
+              "last_at": 367.651424,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o10",
+          "kind": "file",
+          "at": 366.216564,
+          "path": "core/daemon_v2/context_snapshot.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.216564,
+              "last_at": 367.661346,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o11",
+          "kind": "file",
+          "at": 366.221239,
+          "path": "core/daemon_v2/ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.221239,
+              "last_at": 367.882927,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o12",
+          "kind": "file",
+          "at": 366.249015,
+          "path": "core/daemon_v2/routes.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.249015,
+              "last_at": 367.911822,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o13",
+          "kind": "file",
+          "at": 366.254956,
+          "path": "core/tests_v2/test_context_snapshot.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.254956,
+              "last_at": 367.996136,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o14",
+          "kind": "file",
+          "at": 366.262087,
+          "path": "core/tests_v2/test_daily_trace.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.262087,
+              "last_at": 368.083008,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o15",
+          "kind": "file",
+          "at": 366.268598,
+          "path": "core/tests_v2/test_ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.268598,
+              "last_at": 368.093959,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o16",
+          "kind": "file",
+          "at": 366.275269,
+          "path": "core/tests_v2/test_routes.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.275269,
+              "last_at": 368.120124,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o17",
+          "kind": "file",
+          "at": 366.284181,
+          "path": "core/tests_v2/test_session_reconstruction.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.284181,
+              "last_at": 368.124095,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o18",
+          "kind": "file",
+          "at": 366.292187,
+          "path": "core/tests_v2/test_trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.292187,
+              "last_at": 368.170179,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o19",
+          "kind": "file",
+          "at": 366.298381,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.298381,
+              "last_at": 368.201181,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o20",
+          "kind": "file",
+          "at": 366.304755,
+          "path": "docs/specs/2026-09-02-context-api.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.304755,
+              "last_at": 368.215545,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o21",
+          "kind": "file",
+          "at": 366.335839,
+          "path": "docs/specs/2026-09-03-session-summary.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 366.335839,
+              "last_at": 368.218885,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "ref": "o22",
+          "kind": "commit",
+          "at": 404.611247,
+          "hash": "4673eedb4df0c974dedbda04017dd07ab7af0d97",
+          "message": "docs: spec du pas 3 en v2 — identité stable, /context/sessions, CLI avant service",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o23",
+          "kind": "command",
+          "at": 405.611247,
+          "command": "cd ~/Projets/Pulse\ngit add docs/specs/2026-09-03-session-summary.md\ngit commit -m \"docs: spec du pas 3 en v2 — identité stable, /context/sessions, CLI avant service\"\ngit push origin main",
+          "cwd": "/Users/Yugz/Projets/Pulse",
+          "started_at": 403.611247,
+          "exit_code": 0,
+          "exit_scope": "whole_command",
+          "test_command": false,
+          "git_snapshot": {
+            "git_root": "/Users/Yugz/Projets/Pulse",
+            "branch": "ship/hardening",
+            "dirty": false
+          }
+        },
+        {
+          "ref": "o24",
+          "kind": "file",
+          "at": 535.227161,
+          "path": "core/daemon_v2/private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 535.227161,
+              "last_at": 535.227161,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o25",
+          "kind": "file",
+          "at": 541.776139,
+          "path": "core/scripts/fix_permissions.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 541.776139,
+              "last_at": 541.776139,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o26",
+          "kind": "file",
+          "at": 577.614917,
+          "path": "core/daemon_v2/agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.614917,
+              "last_at": 577.614917,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o27",
+          "kind": "file",
+          "at": 577.625184,
+          "path": "core/daemon_v2/dev_environment.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.625184,
+              "last_at": 577.625184,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o28",
+          "kind": "file",
+          "at": 577.632994,
+          "path": "core/daemon_v2/file_watcher.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.632994,
+              "last_at": 577.632994,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o29",
+          "kind": "file",
+          "at": 577.640594,
+          "path": "core/daemon_v2/main.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.640594,
+              "last_at": 577.640594,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o30",
+          "kind": "file",
+          "at": 577.648329,
+          "path": "core/daemon_v2/outbox_worker.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.648329,
+              "last_at": 577.648329,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o31",
+          "kind": "file",
+          "at": 577.658756,
+          "path": "core/daemon_v2/producer_outbox.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.658756,
+              "last_at": 577.658756,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o32",
+          "kind": "file",
+          "at": 577.676435,
+          "path": "core/daemon_v2/trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.676435,
+              "last_at": 577.676435,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o33",
+          "kind": "file",
+          "at": 577.68481,
+          "path": "core/scripts/archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.68481,
+              "last_at": 577.68481,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o34",
+          "kind": "file",
+          "at": 577.689599,
+          "path": "core/scripts/install_agent_producers_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.689599,
+              "last_at": 577.689599,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o35",
+          "kind": "file",
+          "at": 577.708807,
+          "path": "core/scripts/install_daemon_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.708807,
+              "last_at": 577.708807,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o36",
+          "kind": "file",
+          "at": 577.750745,
+          "path": "core/scripts/install_observers_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 577.750745,
+              "last_at": 577.750745,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o37",
+          "kind": "file",
+          "at": 602.697377,
+          "path": "core/tests_v2/test_private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 602.697377,
+              "last_at": 602.697377,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o38",
+          "kind": "file",
+          "at": 610.276968,
+          "path": "core/tests_v2/test_producer_outbox.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 610.276968,
+              "last_at": 610.276968,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o39",
+          "kind": "file",
+          "at": 610.286363,
+          "path": "core/tests_v2/test_trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 610.286363,
+              "last_at": 610.286363,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o40",
+          "kind": "commit",
+          "at": 647.611247,
+          "hash": "df7d6a661f784b12574c4347647f6cfa348904a2",
+          "message": "fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600\n\n~/.pulse_v2 et ~/.pulse_core (l'outbox durable vit là, pas sous .pulse_v2)\ncontiennent des commandes, des messages de commit et des transcripts ; ils\nétaient créés avec l'umask ambiant (0755/0644). Module private_files :\numask 077 posé en tête de chaque point d'entrée Python, création explicite\nen 0700 avec chmod correctif sous les racines Pulse seulement, bases\nSQLite ramenées à 0600. scripts/fix_permissions.sh idempotent, appelé par\nles trois installateurs launchd, liste ce qu'il change. Tests par stat.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o41",
+          "kind": "file",
+          "at": 648.17825,
+          "path": "core/daemon_v2/ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 648.17825,
+              "last_at": 648.17825,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o42",
+          "kind": "file",
+          "at": 648.187578,
+          "path": "core/tests_v2/test_ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 648.187578,
+              "last_at": 648.187578,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o43",
+          "kind": "commit",
+          "at": 664.611247,
+          "hash": "99b09c81adfa92ea3e06c1d42a83e5107232ca38",
+          "message": "fix(core): rédaction complète des session_summary — intents, blockers et central_files\n\nSeules les trois chaînes de reprise passaient par redact_command ; les\nlistes de structured sont du texte libre produit par un modèle et suivent\nla même règle, élément par élément. Un chemin normal reste intact.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o44",
+          "kind": "file",
+          "at": 669.927344,
+          "path": "core/daemon_v2/file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 669.927344,
+              "last_at": 669.927344,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o45",
+          "kind": "file",
+          "at": 704.56994,
+          "path": "core/daemon_v2/agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 704.56994,
+              "last_at": 704.56994,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o46",
+          "kind": "file",
+          "at": 704.576945,
+          "path": "core/scripts/archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 704.576945,
+              "last_at": 704.576945,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o47",
+          "kind": "file",
+          "at": 769.115133,
+          "path": "core/tests_v2/test_file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 769.115133,
+              "last_at": 769.115133,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o48",
+          "kind": "file",
+          "at": 769.126735,
+          "path": "core/daemon_v2/ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 769.126735,
+              "last_at": 769.126735,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o49",
+          "kind": "file",
+          "at": 769.13492,
+          "path": "core/daemon_v2/models.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 769.13492,
+              "last_at": 769.13492,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o50",
+          "kind": "file",
+          "at": 769.142932,
+          "path": "core/tests_v2/test_archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 769.142932,
+              "last_at": 769.142932,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o51",
+          "kind": "file",
+          "at": 769.150345,
+          "path": "core/tests_v2/test_ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 769.150345,
+              "last_at": 769.150345,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o52",
+          "kind": "file",
+          "at": 781.364885,
+          "path": ".github/workflows/core.yml",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 781.364885,
+              "last_at": 781.364885,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o53",
+          "kind": "file",
+          "at": 781.373332,
+          "path": "core/requirements-dev.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 781.373332,
+              "last_at": 781.373332,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o54",
+          "kind": "file",
+          "at": 781.381412,
+          "path": "core/requirements.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 781.381412,
+              "last_at": 781.381412,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o55",
+          "kind": "file",
+          "at": 781.390358,
+          "path": "README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 781.390358,
+              "last_at": 781.390358,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o56",
+          "kind": "file",
+          "at": 781.397359,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 781.397359,
+              "last_at": 781.397359,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o57",
+          "kind": "file",
+          "at": 795.61831,
+          "path": "core/tests_v2/test_agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 795.61831,
+              "last_at": 795.61831,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o58",
+          "kind": "file",
+          "at": 805.381162,
+          "path": "docs/decisions/2026-09-03-hardening.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 805.381162,
+              "last_at": 805.381162,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o59",
+          "kind": "file",
+          "at": 818.134335,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 818.134335,
+              "last_at": 818.134335,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o60",
+          "kind": "file",
+          "at": 818.14488,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 818.14488,
+              "last_at": 818.14488,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o61",
+          "kind": "file",
+          "at": 818.155422,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 818.155422,
+              "last_at": 818.155422,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o62",
+          "kind": "commit",
+          "at": 845.611247,
+          "hash": "e25ca67bc32aa8534fbc3a55c28cdeed65720b11",
+          "message": "fix(core): course dans l'archivage des transcripts et l'émission des agent_session\n\nLe hook SessionEnd et le passage horaire pouvaient écrire en même temps\navec des temporaires à nom fixe (FileNotFoundError au renommage). Verrou\nflock par phase (daemon_v2/file_lock.py, 60 s puis abandon propre en\nerreur d'infrastructure, exit 2) autour de l'archivage + manifeste et\nautour de l'émission + manifeste ; temporaires uniques puis os.replace,\nmême sous verrou. Le hook et le wrapper shell ne changent pas. Tests :\ndeux passages concurrents sur le même transcript → une archive, une\nentrée, un événement, zéro exception.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o63",
+          "kind": "commit",
+          "at": 845.611247,
+          "hash": "dc369f99838a9647b39e5d5e7ee8fc93540c7444",
+          "message": "fix(core): versions de schéma supportées explicites à l'ingestion\n\nSUPPORTED_SCHEMA_VERSIONS = {1} dans models.py : une version inconnue est\nrefusée (400, field schema_version) au lieu d'être lue avec les règles de\nla version 1. Le chemin legacy sans version ne change pas.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o64",
+          "kind": "commit",
+          "at": 845.611247,
+          "hash": "4978444c247642a7267eca360eb527d60c639b68",
+          "message": "chore(core): dépendances épinglées — requirements.txt et requirements-dev.txt\n\nVersions exactes de la venv du 2026-09-03 (Python 3.14.6) ; le README\ninstalle par pip install -r. La venv en place ne change pas.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o65",
+          "kind": "commit",
+          "at": 845.611247,
+          "hash": "7df87ceb70880ef6b100ab881dccda637f0361a3",
+          "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14\n\nPush sur main et pull request. Le build Swift de macos_observer/ n'est pas\ndans la CI pour l'instant (commentaire dans le workflow). Badge dans le\nREADME racine.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o66",
+          "kind": "file",
+          "at": 846.267058,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 846.267058,
+              "last_at": 846.267058,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o67",
+          "kind": "commit",
+          "at": 846.611247,
+          "hash": "deada2904804058d9ed251c8f48b131ef6f7b5fe",
+          "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION\n\nPolitique de permissions 0700/0600, versions de schéma explicites,\nauthentification des producteurs locaux reportée (déclencheur : première\naction de la couche Agent), même ligne dans « Plus tard » de la Vision.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o68",
+          "kind": "file",
+          "at": 1226.684282,
+          "path": "README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1226.684282,
+              "last_at": 1226.684282,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o69",
+          "kind": "file",
+          "at": 1227.201089,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.201089,
+              "last_at": 1227.201089,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o70",
+          "kind": "file",
+          "at": 1227.217061,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.217061,
+              "last_at": 1227.217061,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o71",
+          "kind": "file",
+          "at": 1227.225985,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.225985,
+              "last_at": 1227.225985,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o72",
+          "kind": "file",
+          "at": 1227.231763,
+          "path": "core/daemon_v2/agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.231763,
+              "last_at": 1227.231763,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o73",
+          "kind": "file",
+          "at": 1227.235794,
+          "path": "core/daemon_v2/dev_environment.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.235794,
+              "last_at": 1227.235794,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o74",
+          "kind": "file",
+          "at": 1227.243766,
+          "path": "core/daemon_v2/file_watcher.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.243766,
+              "last_at": 1227.243766,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o75",
+          "kind": "file",
+          "at": 1227.249706,
+          "path": "core/daemon_v2/ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.249706,
+              "last_at": 1227.249706,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o76",
+          "kind": "file",
+          "at": 1227.25759,
+          "path": "core/daemon_v2/main.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.25759,
+              "last_at": 1227.25759,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o77",
+          "kind": "file",
+          "at": 1227.319322,
+          "path": "core/daemon_v2/models.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.319322,
+              "last_at": 1227.319322,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o78",
+          "kind": "file",
+          "at": 1227.328615,
+          "path": "core/daemon_v2/outbox_worker.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.328615,
+              "last_at": 1227.328615,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o79",
+          "kind": "file",
+          "at": 1227.332309,
+          "path": "core/daemon_v2/producer_outbox.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.332309,
+              "last_at": 1227.332309,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o80",
+          "kind": "file",
+          "at": 1227.33645,
+          "path": "core/daemon_v2/trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.33645,
+              "last_at": 1227.33645,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o81",
+          "kind": "file",
+          "at": 1227.33929,
+          "path": "core/scripts/archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.33929,
+              "last_at": 1227.33929,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o82",
+          "kind": "file",
+          "at": 1227.342682,
+          "path": "core/scripts/install_agent_producers_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.342682,
+              "last_at": 1227.342682,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o83",
+          "kind": "file",
+          "at": 1227.346589,
+          "path": "core/scripts/install_daemon_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.346589,
+              "last_at": 1227.346589,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o84",
+          "kind": "file",
+          "at": 1227.349973,
+          "path": "core/scripts/install_observers_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.349973,
+              "last_at": 1227.349973,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o85",
+          "kind": "file",
+          "at": 1227.353011,
+          "path": "core/tests_v2/test_agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.353011,
+              "last_at": 1227.353011,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o86",
+          "kind": "file",
+          "at": 1227.356258,
+          "path": "core/tests_v2/test_archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.356258,
+              "last_at": 1227.356258,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o87",
+          "kind": "file",
+          "at": 1227.359048,
+          "path": "core/tests_v2/test_ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.359048,
+              "last_at": 1227.359048,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o88",
+          "kind": "file",
+          "at": 1227.414933,
+          "path": "core/tests_v2/test_producer_outbox.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.414933,
+              "last_at": 1227.414933,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o89",
+          "kind": "file",
+          "at": 1227.42065,
+          "path": "core/tests_v2/test_trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.42065,
+              "last_at": 1227.42065,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o90",
+          "kind": "file",
+          "at": 1227.423581,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.423581,
+              "last_at": 1227.423581,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o91",
+          "kind": "file",
+          "at": 1227.427466,
+          "path": "docs/specs/2026-09-03-session-summary.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1227.427466,
+              "last_at": 1227.427466,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o92",
+          "kind": "file",
+          "at": 1227.431303,
+          "path": ".github/workflows/core.yml",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.431303,
+              "last_at": 1227.431303,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o93",
+          "kind": "file",
+          "at": 1227.441725,
+          "path": "core/daemon_v2/file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.441725,
+              "last_at": 1227.441725,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o94",
+          "kind": "file",
+          "at": 1227.449347,
+          "path": "core/daemon_v2/private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.449347,
+              "last_at": 1227.449347,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o95",
+          "kind": "file",
+          "at": 1227.453972,
+          "path": "core/requirements-dev.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.453972,
+              "last_at": 1227.453972,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o96",
+          "kind": "file",
+          "at": 1227.457993,
+          "path": "core/requirements.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.457993,
+              "last_at": 1227.457993,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o97",
+          "kind": "file",
+          "at": 1227.462852,
+          "path": "core/scripts/fix_permissions.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.462852,
+              "last_at": 1227.462852,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o98",
+          "kind": "file",
+          "at": 1227.466729,
+          "path": "core/tests_v2/test_file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.466729,
+              "last_at": 1227.466729,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o99",
+          "kind": "file",
+          "at": 1227.472973,
+          "path": "core/tests_v2/test_private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.472973,
+              "last_at": 1227.472973,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o100",
+          "kind": "file",
+          "at": 1227.479295,
+          "path": "docs/decisions/2026-09-03-hardening.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1227.479295,
+              "last_at": 1227.479295,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o101",
+          "kind": "commit",
+          "at": 1250.611247,
+          "hash": "382580178f6f8f886b49b9e2ddd96af6c9e19c49",
+          "message": "docs: spec du pas 3 en v2 — identité stable, /context/sessions, CLI avant service",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "main"
+        },
+        {
+          "ref": "o102",
+          "kind": "file",
+          "at": 1251.204927,
+          "path": "docs/specs/2026-09-03-session-summary.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1251.204927,
+              "last_at": 1251.204927,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o103",
+          "kind": "commit",
+          "at": 1253.611247,
+          "hash": "537f1319f1f12e28e7b5d8c619e92715943a52e8",
+          "message": "fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600\n\n~/.pulse_v2 et ~/.pulse_core (l'outbox durable vit là, pas sous .pulse_v2)\ncontiennent des commandes, des messages de commit et des transcripts ; ils\nétaient créés avec l'umask ambiant (0755/0644). Module private_files :\numask 077 posé en tête de chaque point d'entrée Python, création explicite\nen 0700 avec chmod correctif sous les racines Pulse seulement, bases\nSQLite ramenées à 0600. scripts/fix_permissions.sh idempotent, appelé par\nles trois installateurs launchd, liste ce qu'il change. Tests par stat.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o104",
+          "kind": "commit",
+          "at": 1253.611247,
+          "hash": "4bdd213529f95110564ad823c3a7d6310c3122ae",
+          "message": "fix(core): rédaction complète des session_summary — intents, blockers et central_files\n\nSeules les trois chaînes de reprise passaient par redact_command ; les\nlistes de structured sont du texte libre produit par un modèle et suivent\nla même règle, élément par élément. Un chemin normal reste intact.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o105",
+          "kind": "commit",
+          "at": 1253.611247,
+          "hash": "91586394df9c677efb949d8343a14dcfaa40e59f",
+          "message": "fix(core): course dans l'archivage des transcripts et l'émission des agent_session\n\nLe hook SessionEnd et le passage horaire pouvaient écrire en même temps\navec des temporaires à nom fixe (FileNotFoundError au renommage). Verrou\nflock par phase (daemon_v2/file_lock.py, 60 s puis abandon propre en\nerreur d'infrastructure, exit 2) autour de l'archivage + manifeste et\nautour de l'émission + manifeste ; temporaires uniques puis os.replace,\nmême sous verrou. Le hook et le wrapper shell ne changent pas. Tests :\ndeux passages concurrents sur le même transcript → une archive, une\nentrée, un événement, zéro exception.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o106",
+          "kind": "commit",
+          "at": 1253.611247,
+          "hash": "adac9da40820e7b1b765b92fc9f9172425804c6e",
+          "message": "fix(core): versions de schéma supportées explicites à l'ingestion\n\nSUPPORTED_SCHEMA_VERSIONS = {1} dans models.py : une version inconnue est\nrefusée (400, field schema_version) au lieu d'être lue avec les règles de\nla version 1. Le chemin legacy sans version ne change pas.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o107",
+          "kind": "commit",
+          "at": 1253.611247,
+          "hash": "a5e9c235bff20e9390ff6df451c47422da54cfad",
+          "message": "chore(core): dépendances épinglées — requirements.txt et requirements-dev.txt\n\nVersions exactes de la venv du 2026-09-03 (Python 3.14.6) ; le README\ninstalle par pip install -r. La venv en place ne change pas.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o108",
+          "kind": "file",
+          "at": 1253.908744,
+          "path": "core/daemon_v2/private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1253.908744,
+              "last_at": 1253.908744,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o109",
+          "kind": "file",
+          "at": 1254.042211,
+          "path": "core/scripts/fix_permissions.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1254.042211,
+              "last_at": 1254.042211,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o110",
+          "kind": "file",
+          "at": 1254.16465,
+          "path": "core/tests_v2/test_private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1254.16465,
+              "last_at": 1254.16465,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o111",
+          "kind": "file",
+          "at": 1254.17011,
+          "path": "README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.17011,
+              "last_at": 1254.17011,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o112",
+          "kind": "file",
+          "at": 1254.176892,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.176892,
+              "last_at": 1254.176892,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o113",
+          "kind": "file",
+          "at": 1254.182744,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.182744,
+              "last_at": 1254.182744,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o114",
+          "kind": "file",
+          "at": 1254.187834,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.187834,
+              "last_at": 1254.187834,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o115",
+          "kind": "file",
+          "at": 1254.193182,
+          "path": "core/daemon_v2/agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.193182,
+              "last_at": 1254.193182,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o116",
+          "kind": "file",
+          "at": 1254.198483,
+          "path": "core/daemon_v2/dev_environment.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.198483,
+              "last_at": 1254.198483,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o117",
+          "kind": "file",
+          "at": 1254.205716,
+          "path": "core/daemon_v2/file_watcher.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.205716,
+              "last_at": 1254.205716,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o118",
+          "kind": "file",
+          "at": 1254.21029,
+          "path": "core/daemon_v2/ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.21029,
+              "last_at": 1254.21029,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o119",
+          "kind": "file",
+          "at": 1254.215106,
+          "path": "core/daemon_v2/main.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.215106,
+              "last_at": 1254.215106,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o120",
+          "kind": "file",
+          "at": 1254.220927,
+          "path": "core/daemon_v2/models.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.220927,
+              "last_at": 1254.220927,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o121",
+          "kind": "file",
+          "at": 1254.226966,
+          "path": "core/daemon_v2/outbox_worker.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.226966,
+              "last_at": 1254.226966,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o122",
+          "kind": "file",
+          "at": 1254.232013,
+          "path": "core/daemon_v2/producer_outbox.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.232013,
+              "last_at": 1254.232013,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o123",
+          "kind": "file",
+          "at": 1254.239289,
+          "path": "core/daemon_v2/trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.239289,
+              "last_at": 1254.239289,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o124",
+          "kind": "file",
+          "at": 1254.24463,
+          "path": "core/scripts/archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.24463,
+              "last_at": 1254.24463,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o125",
+          "kind": "file",
+          "at": 1254.249661,
+          "path": "core/scripts/install_agent_producers_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.249661,
+              "last_at": 1254.249661,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o126",
+          "kind": "file",
+          "at": 1254.255036,
+          "path": "core/scripts/install_daemon_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.255036,
+              "last_at": 1254.255036,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o127",
+          "kind": "file",
+          "at": 1254.26047,
+          "path": "core/scripts/install_observers_launchd.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.26047,
+              "last_at": 1254.26047,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o128",
+          "kind": "file",
+          "at": 1254.265187,
+          "path": "core/tests_v2/test_agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.265187,
+              "last_at": 1254.265187,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o129",
+          "kind": "file",
+          "at": 1254.270093,
+          "path": "core/tests_v2/test_archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.270093,
+              "last_at": 1254.270093,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o130",
+          "kind": "file",
+          "at": 1254.275032,
+          "path": "core/tests_v2/test_ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.275032,
+              "last_at": 1254.275032,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o131",
+          "kind": "file",
+          "at": 1254.279855,
+          "path": "core/tests_v2/test_producer_outbox.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.279855,
+              "last_at": 1254.279855,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o132",
+          "kind": "file",
+          "at": 1254.284882,
+          "path": "core/tests_v2/test_trace_store.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.284882,
+              "last_at": 1254.284882,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o133",
+          "kind": "file",
+          "at": 1254.290081,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1254.290081,
+              "last_at": 1254.290081,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o134",
+          "kind": "commit",
+          "at": 1254.611247,
+          "hash": "04f61fbbda0b17ce701bcebf4e892f4118150492",
+          "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14\n\nPush sur main et pull request. Le build Swift de macos_observer/ n'est pas\ndans la CI pour l'instant (commentaire dans le workflow). Badge dans le\nREADME racine.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o135",
+          "kind": "commit",
+          "at": 1254.611247,
+          "hash": "d6855c2c2a67a7aea9357a66e1b62f9a6bc76b98",
+          "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION\n\nPolitique de permissions 0700/0600, versions de schéma explicites,\nauthentification des producteurs locaux reportée (déclencheur : première\naction de la couche Agent), même ligne dans « Plus tard » de la Vision.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o136",
+          "kind": "file",
+          "at": 1256.769266,
+          "path": ".github/workflows/core.yml",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1256.769266,
+              "last_at": 1256.769266,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o137",
+          "kind": "file",
+          "at": 1256.839352,
+          "path": "core/daemon_v2/file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1256.839352,
+              "last_at": 1256.839352,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o138",
+          "kind": "file",
+          "at": 1256.86632,
+          "path": "core/requirements-dev.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1256.86632,
+              "last_at": 1256.86632,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o139",
+          "kind": "file",
+          "at": 1256.924758,
+          "path": "core/requirements.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1256.924758,
+              "last_at": 1256.924758,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o140",
+          "kind": "file",
+          "at": 1256.994845,
+          "path": "core/tests_v2/test_file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1256.994845,
+              "last_at": 1256.994845,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o141",
+          "kind": "file",
+          "at": 1257.046814,
+          "path": "docs/decisions/2026-09-03-hardening.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1257.046814,
+              "last_at": 1257.046814,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o142",
+          "kind": "file",
+          "at": 1257.087892,
+          "path": "README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.087892,
+              "last_at": 1257.087892,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o143",
+          "kind": "file",
+          "at": 1257.129905,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.129905,
+              "last_at": 1257.129905,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o144",
+          "kind": "file",
+          "at": 1257.177005,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.177005,
+              "last_at": 1257.177005,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o145",
+          "kind": "file",
+          "at": 1257.196259,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.196259,
+              "last_at": 1257.196259,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o146",
+          "kind": "file",
+          "at": 1257.218769,
+          "path": "core/daemon_v2/agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.218769,
+              "last_at": 1257.218769,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o147",
+          "kind": "file",
+          "at": 1257.251772,
+          "path": "core/daemon_v2/ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.251772,
+              "last_at": 1257.251772,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o148",
+          "kind": "file",
+          "at": 1257.284817,
+          "path": "core/daemon_v2/models.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.284817,
+              "last_at": 1257.284817,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o149",
+          "kind": "file",
+          "at": 1257.31868,
+          "path": "core/scripts/archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.31868,
+              "last_at": 1257.31868,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o150",
+          "kind": "file",
+          "at": 1257.33895,
+          "path": "core/tests_v2/test_agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.33895,
+              "last_at": 1257.33895,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o151",
+          "kind": "file",
+          "at": 1257.363173,
+          "path": "core/tests_v2/test_archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.363173,
+              "last_at": 1257.363173,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o152",
+          "kind": "file",
+          "at": 1257.391458,
+          "path": "core/tests_v2/test_ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.391458,
+              "last_at": 1257.391458,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o153",
+          "kind": "file",
+          "at": 1257.427058,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1257.427058,
+              "last_at": 1257.427058,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o154",
+          "kind": "file",
+          "at": 1284.750267,
+          "path": "core/scripts/fix_permissions.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1284.750267,
+              "last_at": 1284.750267,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o155",
+          "kind": "file",
+          "at": 1284.764965,
+          "path": "core/tests_v2/test_private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1284.764965,
+              "last_at": 1284.764965,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o156",
+          "kind": "commit",
+          "at": 1298.611247,
+          "hash": "2c84bd8f64d5f03136e6959ea57e7fa1b6b49443",
+          "message": "fixup! fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o157",
+          "kind": "commit",
+          "at": 1298.611247,
+          "hash": "24b118d1a61b6bcc89233a01d52311787a1d4b45",
+          "message": "fix(core): permissions locales — umask 077, dossiers 0700, fichiers 0600\n\n~/.pulse_v2 et ~/.pulse_core (l'outbox durable vit là, pas sous .pulse_v2)\ncontiennent des commandes, des messages de commit et des transcripts ; ils\nétaient créés avec l'umask ambiant (0755/0644). Module private_files :\numask 077 posé en tête de chaque point d'entrée Python, création explicite\nen 0700 avec chmod correctif sous les racines Pulse seulement, bases\nSQLite ramenées à 0600. scripts/fix_permissions.sh idempotent, appelé par\nles trois installateurs launchd, liste ce qu'il change. Tests par stat.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o158",
+          "kind": "commit",
+          "at": 1299.611247,
+          "hash": "29180dd893a264060664b94f18e6857bcb199070",
+          "message": "fix(core): rédaction complète des session_summary — intents, blockers et central_files\n\nSeules les trois chaînes de reprise passaient par redact_command ; les\nlistes de structured sont du texte libre produit par un modèle et suivent\nla même règle, élément par élément. Un chemin normal reste intact.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o159",
+          "kind": "commit",
+          "at": 1299.611247,
+          "hash": "e15430a2e285d7e8f48bb05cfb267fb7bda5d26a",
+          "message": "fix(core): course dans l'archivage des transcripts et l'émission des agent_session\n\nLe hook SessionEnd et le passage horaire pouvaient écrire en même temps\navec des temporaires à nom fixe (FileNotFoundError au renommage). Verrou\nflock par phase (daemon_v2/file_lock.py, 60 s puis abandon propre en\nerreur d'infrastructure, exit 2) autour de l'archivage + manifeste et\nautour de l'émission + manifeste ; temporaires uniques puis os.replace,\nmême sous verrou. Le hook et le wrapper shell ne changent pas. Tests :\ndeux passages concurrents sur le même transcript → une archive, une\nentrée, un événement, zéro exception.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o160",
+          "kind": "commit",
+          "at": 1299.611247,
+          "hash": "398f36cc3bc313654a187ef010a1549ad3a06d8f",
+          "message": "fix(core): versions de schéma supportées explicites à l'ingestion\n\nSUPPORTED_SCHEMA_VERSIONS = {1} dans models.py : une version inconnue est\nrefusée (400, field schema_version) au lieu d'être lue avec les règles de\nla version 1. Le chemin legacy sans version ne change pas.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o161",
+          "kind": "commit",
+          "at": 1299.611247,
+          "hash": "474c7796eb073699ecdd02dbab2bfec459aa7e85",
+          "message": "chore(core): dépendances épinglées — requirements.txt et requirements-dev.txt\n\nVersions exactes de la venv du 2026-09-03 (Python 3.14.6) ; le README\ninstalle par pip install -r. La venv en place ne change pas.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o162",
+          "kind": "commit",
+          "at": 1299.611247,
+          "hash": "71f3c3b96cbf31d26db1e2752898833495aaef87",
+          "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14\n\nPush sur main et pull request. Le build Swift de macos_observer/ n'est pas\ndans la CI pour l'instant (commentaire dans le workflow). Badge dans le\nREADME racine.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o163",
+          "kind": "file",
+          "at": 1300.263641,
+          "path": "README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.263641,
+              "last_at": 1300.263641,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o164",
+          "kind": "file",
+          "at": 1300.319028,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.319028,
+              "last_at": 1300.319028,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o165",
+          "kind": "file",
+          "at": 1300.323923,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.323923,
+              "last_at": 1300.323923,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o166",
+          "kind": "file",
+          "at": 1300.328382,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.328382,
+              "last_at": 1300.328382,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o167",
+          "kind": "file",
+          "at": 1300.333574,
+          "path": "core/daemon_v2/agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.333574,
+              "last_at": 1300.333574,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o168",
+          "kind": "file",
+          "at": 1300.340139,
+          "path": "core/daemon_v2/file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.340139,
+              "last_at": 1300.340139,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o169",
+          "kind": "file",
+          "at": 1300.348648,
+          "path": "core/daemon_v2/ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.348648,
+              "last_at": 1300.348648,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o170",
+          "kind": "file",
+          "at": 1300.355091,
+          "path": "core/daemon_v2/models.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.355091,
+              "last_at": 1300.355091,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o171",
+          "kind": "file",
+          "at": 1300.360393,
+          "path": "core/scripts/archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.360393,
+              "last_at": 1300.360393,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o172",
+          "kind": "file",
+          "at": 1300.365343,
+          "path": "core/scripts/fix_permissions.sh",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.365343,
+              "last_at": 1300.365343,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o173",
+          "kind": "file",
+          "at": 1300.371051,
+          "path": "core/tests_v2/test_agent_sessions.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.371051,
+              "last_at": 1300.371051,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o174",
+          "kind": "file",
+          "at": 1300.376708,
+          "path": "core/tests_v2/test_archive_transcripts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.376708,
+              "last_at": 1300.376708,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o175",
+          "kind": "file",
+          "at": 1300.381585,
+          "path": "core/tests_v2/test_file_lock.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.381585,
+              "last_at": 1300.381585,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o176",
+          "kind": "file",
+          "at": 1300.386032,
+          "path": "core/tests_v2/test_ingest.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.386032,
+              "last_at": 1300.386032,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o177",
+          "kind": "file",
+          "at": 1300.391037,
+          "path": "core/tests_v2/test_private_files.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.391037,
+              "last_at": 1300.391037,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o178",
+          "kind": "file",
+          "at": 1300.40032,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1300.40032,
+              "last_at": 1300.40032,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o179",
+          "kind": "file",
+          "at": 1300.405103,
+          "path": ".github/workflows/core.yml",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1300.405103,
+              "last_at": 1300.405103,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o180",
+          "kind": "file",
+          "at": 1300.408829,
+          "path": "core/requirements-dev.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1300.408829,
+              "last_at": 1300.408829,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o181",
+          "kind": "file",
+          "at": 1300.416094,
+          "path": "core/requirements.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1300.416094,
+              "last_at": 1300.416094,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o182",
+          "kind": "file",
+          "at": 1300.420781,
+          "path": "docs/decisions/2026-09-03-hardening.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "deleted",
+              "first_at": 1300.420781,
+              "last_at": 1300.420781,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o183",
+          "kind": "commit",
+          "at": 1300.611247,
+          "hash": "6577b82a7ff3c02096a5e93b023b921fb4767004",
+          "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION\n\nPolitique de permissions 0700/0600, versions de schéma explicites,\nauthentification des producteurs locaux reportée (déclencheur : première\naction de la couche Agent), même ligne dans « Plus tard » de la Vision.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o184",
+          "kind": "file",
+          "at": 1302.189811,
+          "path": ".github/workflows/core.yml",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1302.189811,
+              "last_at": 1302.189811,
+              "count": 1
+            },
+            {
+              "event": "modified",
+              "first_at": 1635.74373,
+              "last_at": 1635.74373,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o185",
+          "kind": "file",
+          "at": 1302.208852,
+          "path": "core/requirements-dev.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1302.208852,
+              "last_at": 1302.208852,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o186",
+          "kind": "file",
+          "at": 1302.215515,
+          "path": "core/requirements.txt",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1302.215515,
+              "last_at": 1302.215515,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o187",
+          "kind": "file",
+          "at": 1302.229464,
+          "path": "docs/decisions/2026-09-03-hardening.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "created",
+              "first_at": 1302.229464,
+              "last_at": 1302.229464,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o188",
+          "kind": "file",
+          "at": 1302.239774,
+          "path": "README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1302.239774,
+              "last_at": 1302.239774,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o189",
+          "kind": "file",
+          "at": 1302.255175,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1302.255175,
+              "last_at": 1302.255175,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o190",
+          "kind": "file",
+          "at": 1302.299717,
+          "path": "core/README.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1302.299717,
+              "last_at": 1302.299717,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o191",
+          "kind": "file",
+          "at": 1302.315896,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1302.315896,
+              "last_at": 1302.315896,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o192",
+          "kind": "file",
+          "at": 1302.326173,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1302.326173,
+              "last_at": 1302.326173,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o193",
+          "kind": "commit",
+          "at": 1646.611247,
+          "hash": "293933655dbfec27138102658f182bcc8c9a1e1d",
+          "message": "fixup! ci: workflow core.yml — pytest sur macos-latest, Python 3.14",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        },
+        {
+          "ref": "o194",
+          "kind": "commit",
+          "at": 1647.611247,
+          "hash": "f30ac8b7d62edc2771c09453219baed5f2a33a5d",
+          "message": "ci: workflow core.yml — pytest sur macos-latest, Python 3.14\n\nPush sur main et pull request. Le build Swift de macos_observer/ n'est pas\ndans la CI pour l'instant (commentaire dans le workflow). Badge dans le\nREADME racine.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o195",
+          "kind": "commit",
+          "at": 1647.611247,
+          "hash": "c58f4db1717cf599452a3ea575c586f666e64237",
+          "message": "docs: Core 0.5.1 — CHANGELOG, note de décision hardening, VISION\n\nPolitique de permissions 0700/0600, versions de schéma explicites,\nauthentification des producteurs locaux reportée (déclencheur : première\naction de la couche Agent), même ligne dans « Plus tard » de la Vision.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "HEAD"
+        },
+        {
+          "ref": "o196",
+          "kind": "file",
+          "at": 1648.877625,
+          "path": ".github/workflows/core.yml",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1648.877625,
+              "last_at": 1648.877625,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o197",
+          "kind": "file",
+          "at": 1648.88485,
+          "path": "core/CHANGELOG.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1648.88485,
+              "last_at": 1648.88485,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o198",
+          "kind": "file",
+          "at": 1648.889797,
+          "path": "core/VERSION",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1648.889797,
+              "last_at": 1648.889797,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o199",
+          "kind": "file",
+          "at": 1648.896922,
+          "path": "docs/VISION.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1648.896922,
+              "last_at": 1648.896922,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o200",
+          "kind": "file",
+          "at": 1648.903934,
+          "path": "docs/decisions/2026-09-03-hardening.md",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 1648.903934,
+              "last_at": 1648.903934,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o201",
+          "kind": "file",
+          "at": 2132.028343,
+          "path": "core/tests_v2/test_project_contracts.py",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "changes": [
+            {
+              "event": "modified",
+              "first_at": 2132.028343,
+              "last_at": 2132.028343,
+              "count": 1
+            }
+          ]
+        },
+        {
+          "ref": "o202",
+          "kind": "commit",
+          "at": 2139.611247,
+          "hash": "e8eb97db1d92e0da27fab910351e801bbcbdcb1a",
+          "message": "test(core): les tests de résolution de projet figent Path.home sur /Users/Yugz\n\nIls codent en dur des chemins sous /Users/Yugz/Projets et le résolveur\nreconnaît un conteneur de projets par Path.home()/Projets : sur un autre\nfoyer (runner CI, HOME=/Users/runner) la règle ne s'appliquait plus.\nmonkeypatch de Path.home dans les deux tests, aucun code touché.\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VnNLuVbmaFdpbHUn8sJeqj",
+          "workspace": "/Users/Yugz/Projets/Pulse",
+          "branch": "ship/hardening"
+        }
+      ],
+      "applications": [
+        {
+          "ref": "app:1",
+          "name": "Claude",
+          "first_at": 14.363247,
+          "last_at": 1979.761247,
+          "activations": 15
+        },
+        {
+          "ref": "app:2",
+          "name": "Finder",
+          "first_at": 29.120247,
+          "last_at": 29.120247,
+          "activations": 1
+        },
+        {
+          "ref": "app:3",
+          "name": "Terminal",
+          "first_at": 38.442247,
+          "last_at": 2103.480247,
+          "activations": 12
+        },
+        {
+          "ref": "app:4",
+          "name": "ChatGPT",
+          "first_at": 97.977247,
+          "last_at": 97.977247,
+          "activations": 1
+        },
+        {
+          "ref": "app:5",
+          "name": "Safari",
+          "first_at": 388.806247,
+          "last_at": 1428.757247,
+          "activations": 6
+        },
+        {
+          "ref": "app:6",
+          "name": "Code",
+          "first_at": 390.479247,
+          "last_at": 390.479247,
+          "activations": 1
+        }
+      ],
+      "last_observed": {
+        "commands": [
+          "o23"
+        ],
+        "files": [
+          "o102",
+          "o190",
+          "o199",
+          "o132",
+          "o197",
+          "o198",
+          "o9",
+          "o10",
+          "o169",
+          "o12",
+          "o13",
+          "o14",
+          "o176",
+          "o16",
+          "o17",
+          "o20",
+          "o108",
+          "o172",
+          "o167",
+          "o116",
+          "o117",
+          "o119",
+          "o121",
+          "o122",
+          "o123",
+          "o171",
+          "o125",
+          "o126",
+          "o127",
+          "o177",
+          "o131",
+          "o168",
+          "o175",
+          "o170",
+          "o174",
+          "o196",
+          "o185",
+          "o186",
+          "o188",
+          "o173",
+          "o200",
+          "o201"
+        ],
+        "git": {
+          "/Users/Yugz/Projets/Pulse": {
+            "commit": "o202",
+            "branch": "o202",
+            "dirty": "o23"
+          }
+        }
+      },
+      "coverage": {
+        "omitted_events": {},
+        "command_output": "not_collected",
+        "commit_files": "not_collected",
+        "remote_push_state": "not_collected"
+      },
+      "sources": {
+        "o1": [
+          "0839210e-8cab-4811-9253-af7732771cfa"
+        ],
+        "app:1": [
+          "eab25f84-5fbf-4046-8230-ab4982696351",
+          "f7801b34-9e97-4565-8aa3-12bb791d35ec",
+          "e052e0de-f814-4e92-8c0e-351a4742c653",
+          "c99e475e-9b0d-4be1-9bad-7dcc414343fa",
+          "cf4acca0-e8cb-44e8-b62b-5a1c97c5c173",
+          "b600bcb9-0e56-4c55-b513-e7afbe18e742",
+          "c20aabda-f23d-4880-a87b-6901a485c1a1",
+          "b32bcf2c-a79e-44a0-984f-9874cafe1c02",
+          "93821cb5-f2fe-4b60-b807-a71fa3c6607c",
+          "4587a768-b3c4-467e-a6eb-06cfe5b3ab4c",
+          "d6d5eafd-badc-475e-9b23-cc272519d0ab",
+          "978726a8-f04c-4b89-af87-2f68f6b0e084",
+          "325bc50d-ef64-43fa-84eb-ec709bfcd855",
+          "145c1c4e-a78c-4603-9d96-944864d40f4f",
+          "df25b7b9-57b2-43b4-bac2-6ddab138d02e"
+        ],
+        "app:2": [
+          "8e9b422b-49c1-4145-bd4a-37826a21f720"
+        ],
+        "app:3": [
+          "eb77832f-cf55-4e68-bcfe-4debc921553f",
+          "0921c870-1de2-48e9-8807-577ceb59e005",
+          "efe4435e-0303-4a2c-b0f5-1882f116c328",
+          "28f6e272-ff98-41b2-89a9-a079e4ad5489",
+          "2918e13f-49e0-4684-9c3f-9d3a1a0e9053",
+          "03575de5-89c1-42e1-b3e1-036b6ba25fd1",
+          "b76ca3eb-3f13-4d74-bc38-71e49a3eb4fa",
+          "c4d74b28-1dbf-4c8b-b575-4921ec498400",
+          "7274a77a-ecaa-43eb-b051-2a8737f1b00b",
+          "ffd3e9ed-a881-4afd-bce5-8c9ca9b7dd03",
+          "3dd62d5b-507a-40ed-99be-5ab6d2a32c5a",
+          "3b5d5d87-7059-42bc-bdc1-86e7c1809de8"
+        ],
+        "app:4": [
+          "a0b84a0b-fb03-401b-afce-d139de231f9e"
+        ],
+        "o2": [
+          "40b3e1ef-7d32-4c74-a4b6-38a18b350c12"
+        ],
+        "o3": [
+          "019fb541-9318-4a84-93ab-13a502889633"
+        ],
+        "o4": [
+          "9bb1937b-9a57-4be5-b697-fa263ad35c0b"
+        ],
+        "o5": [
+          "b86223bf-09db-45e2-8e78-1e76de01b4c8"
+        ],
+        "o6": [
+          "ca3a5b32-beb1-4326-9e29-7307561bd19b",
+          "f325b04b-ac6b-4eec-b3d8-0905d205c863"
+        ],
+        "o7": [
+          "5455d1c4-f0e7-4137-8793-a41d02461c63",
+          "e538b5e2-c41e-4f57-a88c-e632dcf49673"
+        ],
+        "o8": [
+          "20c15e8f-8c48-4498-8c8c-3f7a7cd11a9a",
+          "54fc39c1-c2d3-4b64-a19c-cad73c3cd2b1"
+        ],
+        "o9": [
+          "2fb86bc3-6348-4593-a25f-cba44812b18a",
+          "bf4659a8-1490-46b7-b60c-d5b5b5926c2b"
+        ],
+        "o10": [
+          "d0520e41-8167-431f-9042-8bf6ff1b5d8b",
+          "fc2fbcc1-17ed-4130-b905-b4d718fe5a2f"
+        ],
+        "o11": [
+          "af0170e4-1dce-4498-95d9-df2673b2be6a",
+          "f01d8baa-1cfa-4675-8bc5-233ff148b111"
+        ],
+        "o12": [
+          "af56baa5-f4ee-4949-919d-632cd934f9d5",
+          "a4cd1696-4933-4233-aaf8-8024d2e8beeb"
+        ],
+        "o13": [
+          "e1966f4f-39d4-4119-ae86-029568b503e2",
+          "aa619aed-8f1a-46d8-b189-3878d6939a75"
+        ],
+        "o14": [
+          "15fa0f2c-7f6d-44bb-81fa-b1e6d64a63db",
+          "d143b6f8-5f1c-46ad-8473-505a386a32e9"
+        ],
+        "o15": [
+          "6f4ce328-f3ad-4217-9d69-462ee36b3ae6",
+          "cb559f78-ef80-4c7e-8dca-23e4ffd94e21"
+        ],
+        "o16": [
+          "c69789d5-fbfb-4c7e-8ca8-cc34b8da1cca",
+          "8276d6cd-93a3-4e7f-85d0-cf9a5ab398af"
+        ],
+        "o17": [
+          "20c64ed5-d08e-497c-831a-6175b67d36e3",
+          "1ec825bf-6bfe-4a7e-b69c-0741265655ce"
+        ],
+        "o18": [
+          "5492e1ce-e243-4491-9222-5cf32d1164fd",
+          "65af78d8-0c25-4ecc-ac53-5f81448fe9ed"
+        ],
+        "o19": [
+          "9029815b-2d67-425e-b91d-fc26b7b573ec",
+          "f5c2e625-b893-4a38-9170-89b3d19bf744"
+        ],
+        "o20": [
+          "eba9e9a0-f665-4aab-9f06-34bb219d0eee",
+          "1615373b-59e2-494d-8e28-801fd6e3f3d3"
+        ],
+        "o21": [
+          "802c1925-513a-44d5-9b2c-cad24bdfaa5c",
+          "9641fdd3-f56b-41bb-8848-46c745f61af4"
+        ],
+        "app:5": [
+          "491a49a1-14cc-4b26-a022-7cf4b760d43c",
+          "60e044a8-c836-4022-a06d-9a487ff80f5d",
+          "09c09ff5-29d4-4a3f-81d5-de9cf1ce9b5c",
+          "5331ab83-fde7-437d-b531-231c3ddddbe1",
+          "9cfa8e7e-38ad-48e0-84f1-32dcd809cc34",
+          "1984aa43-df27-4c85-b1ba-a4c44f400bd6"
+        ],
+        "app:6": [
+          "99f4b114-b4dd-4aa4-b39c-63a12ad37fce"
+        ],
+        "o22": [
+          "7a41f2f6-a8d8-4442-b613-4fdcd1ffd371"
+        ],
+        "o23": [
+          "f77a8a4f-6dcf-4974-9a91-d678dca00f0c"
+        ],
+        "o24": [
+          "13dad5c6-e353-40c3-aeb9-85739700d6a1"
+        ],
+        "o25": [
+          "e5ce5258-e143-46e9-8ed9-5cb6cd1ad1b8"
+        ],
+        "o26": [
+          "3332d94b-35bf-4891-b200-ee9044446b54"
+        ],
+        "o27": [
+          "e8777416-4840-44a3-9982-a5d62ef5405a"
+        ],
+        "o28": [
+          "af22153f-b720-4753-b837-eedf3391069c"
+        ],
+        "o29": [
+          "a72b0944-5d7d-4b51-9d65-849cd9a93e38"
+        ],
+        "o30": [
+          "cad1de9b-2ce9-47bd-8267-949ca35f8519"
+        ],
+        "o31": [
+          "6dbea16d-3149-4b16-909f-cb9616a3bcbd"
+        ],
+        "o32": [
+          "00c1a846-f139-46c8-b318-b6274bfe0855"
+        ],
+        "o33": [
+          "b53d6d87-e6ed-4258-974b-80a031eeb25a"
+        ],
+        "o34": [
+          "147cd62b-e8ea-43d4-b781-35e05ecca41c"
+        ],
+        "o35": [
+          "4968cde6-eb78-4537-96b4-0e13f681e484"
+        ],
+        "o36": [
+          "c279b151-eebb-42e4-8d47-97197be2b230"
+        ],
+        "o37": [
+          "a243375b-9f22-4294-8b25-881c31f3e09d"
+        ],
+        "o38": [
+          "b935f46f-aadc-457b-975d-3d6d58299aa1"
+        ],
+        "o39": [
+          "66c3d99d-5780-489b-8b88-62de95cf3795"
+        ],
+        "o40": [
+          "6f4992da-63a1-44b7-8344-37850570f450"
+        ],
+        "o41": [
+          "ef003e99-1789-43b9-89e3-43db30e2551c"
+        ],
+        "o42": [
+          "a15f8050-91c1-44b9-9f1d-9b4fe0019dcb"
+        ],
+        "o43": [
+          "74e302a2-5245-4e22-af78-a6aab60c828d"
+        ],
+        "o44": [
+          "4ca79dc5-bf67-49ee-b5fc-81489bc5f99b"
+        ],
+        "o45": [
+          "22be6ebc-db33-49a5-a429-a5dd56fb9406"
+        ],
+        "o46": [
+          "0effed78-3ccf-4a00-ac40-9840fd6f05f0"
+        ],
+        "o47": [
+          "8168002b-5aed-4b61-9c4d-b0fba7f07f8b"
+        ],
+        "o48": [
+          "88d8bb4d-a0db-45a3-ac22-913349942eb1"
+        ],
+        "o49": [
+          "aa85a093-3e11-4f67-ac0a-06567b31cdbf"
+        ],
+        "o50": [
+          "de607bcf-6e9e-404d-8116-c7a41ee415f8"
+        ],
+        "o51": [
+          "3339200b-5f18-4e5c-9eb1-2b5a4123a149"
+        ],
+        "o52": [
+          "5dafbee0-8262-4909-a4ca-cf192e823a64"
+        ],
+        "o53": [
+          "9b8a1ed9-7e62-4188-9482-e84af020e562"
+        ],
+        "o54": [
+          "ab7761c4-e38f-44e2-8015-c3bc20520223"
+        ],
+        "o55": [
+          "bbc6bef7-3f69-4ea4-9c6e-5161959b4e8b"
+        ],
+        "o56": [
+          "6a80381c-a4d3-4614-9835-21df1d796c89"
+        ],
+        "o57": [
+          "c8bf9245-9f53-4dc8-a2de-e313e086ded1"
+        ],
+        "o58": [
+          "36d3cbb5-bf6d-434d-b736-b6847bbc9c3b"
+        ],
+        "o59": [
+          "1dc41a96-e19a-41b6-ab91-7b76f18b8f04"
+        ],
+        "o60": [
+          "1acd3b3e-e547-431a-99a7-b5bc0daabd13"
+        ],
+        "o61": [
+          "5d69a528-60a2-41aa-9a21-fd65f733987d"
+        ],
+        "o62": [
+          "e6494ba1-8634-4dee-9e53-7c9cce698afe"
+        ],
+        "o63": [
+          "f3d683d9-b330-41c9-953b-f2090555c23a"
+        ],
+        "o64": [
+          "d8b8483f-f635-4d61-bc68-5be2d4538835"
+        ],
+        "o65": [
+          "753ba999-8ec7-4027-8a16-3778e8fb16d5"
+        ],
+        "o66": [
+          "c6570d99-61e3-44b7-aaeb-a4810b8361b8"
+        ],
+        "o67": [
+          "c834799b-7b3a-4289-9d7d-6bc24bca538b"
+        ],
+        "o68": [
+          "17fcc546-4d6c-4127-9fb1-3f885f6bd6f3"
+        ],
+        "o69": [
+          "129bdb29-29ad-4b07-994d-220c715953fc"
+        ],
+        "o70": [
+          "38d12ec2-e31d-431e-9c51-fbca517a67da"
+        ],
+        "o71": [
+          "102223de-0a8a-47d1-bef0-7d701d15f45d"
+        ],
+        "o72": [
+          "0c518b27-c38f-49be-81ee-9b23feb7ea0e"
+        ],
+        "o73": [
+          "6fa2a1bf-8e7a-4a9b-a5b9-54819d714a87"
+        ],
+        "o74": [
+          "5762f0a9-5f47-429e-b29e-f5c5e25b1e2f"
+        ],
+        "o75": [
+          "560da2fb-c633-4d9e-bdcc-5f960de0d2fe"
+        ],
+        "o76": [
+          "3bdbe240-9390-444f-8eed-d8960c6d3cef"
+        ],
+        "o77": [
+          "dd12947c-7b66-4b6d-bd92-67fa43c074f6"
+        ],
+        "o78": [
+          "c1ea6ddb-9b9c-4d36-92b0-9af7149559b3"
+        ],
+        "o79": [
+          "9904728c-adec-4443-89de-b104b3c8dad5"
+        ],
+        "o80": [
+          "015894f5-24de-4096-96fb-912fa5856986"
+        ],
+        "o81": [
+          "3787638a-ac07-439d-80c9-a4905ad1f46e"
+        ],
+        "o82": [
+          "769d2b51-bcb6-49e3-ad51-4254e4e013a0"
+        ],
+        "o83": [
+          "1c4becd1-0284-4fe2-8579-d5295f468b8d"
+        ],
+        "o84": [
+          "1fa33b17-6d3d-4d53-bb53-a8fd417a1307"
+        ],
+        "o85": [
+          "0a5f5596-ad88-417a-a8d7-09e7d38dbee1"
+        ],
+        "o86": [
+          "2fc0f4cb-b045-4a0d-b117-1579c18f9be8"
+        ],
+        "o87": [
+          "16bfac6b-3af4-48ec-a38c-a12c03d978dc"
+        ],
+        "o88": [
+          "6027bfb6-71c6-40a1-85ee-4579a445ea52"
+        ],
+        "o89": [
+          "c4dbf72e-006a-4974-9dd0-815ecf6c624b"
+        ],
+        "o90": [
+          "8521d114-3d75-4c86-b143-fcdbaba39254"
+        ],
+        "o91": [
+          "3ee34ca2-b14e-4dfa-9197-dec82fda48f3"
+        ],
+        "o92": [
+          "70331d3e-ae93-431b-8f27-9ff062f6a86a"
+        ],
+        "o93": [
+          "a0d0d279-5cad-4eb1-93d0-c41240b9eb88"
+        ],
+        "o94": [
+          "810c1014-760c-4810-ab71-7dde41760ea8"
+        ],
+        "o95": [
+          "517fd158-79c6-4e5f-8326-ead5c5a9334b"
+        ],
+        "o96": [
+          "20350fad-e625-4aab-b360-4752a8c0a7a9"
+        ],
+        "o97": [
+          "09c23131-bbf6-4ad0-be13-428f843880a2"
+        ],
+        "o98": [
+          "04bac2fa-da07-4582-8b30-e20b8598941a"
+        ],
+        "o99": [
+          "005168c0-2568-40d1-afc8-0fc912995481"
+        ],
+        "o100": [
+          "9df11dff-6e63-46f6-a0f3-f3c53c3a23c8"
+        ],
+        "o101": [
+          "531d3b05-8a83-49a7-84ae-ab1829feb7b9"
+        ],
+        "o102": [
+          "7fe3fc3d-1914-4813-b3a8-b43ef17890a1"
+        ],
+        "o103": [
+          "ce2ccb65-e842-4784-8125-f24fced8fbdf"
+        ],
+        "o104": [
+          "1a9b3ed2-86b5-4335-a027-3c443be2ddf9"
+        ],
+        "o105": [
+          "cba994dd-fd87-404c-a5b5-49cc4ca21db2"
+        ],
+        "o106": [
+          "050f4d08-74e6-465b-8aba-37f3531ebadf"
+        ],
+        "o107": [
+          "6584bd64-b592-48fa-a2f1-b66508b9facf"
+        ],
+        "o108": [
+          "1c31968c-014e-4720-a510-9c01bbee2586"
+        ],
+        "o109": [
+          "fdb921c0-2094-4c27-b37f-5c3584a4e415"
+        ],
+        "o110": [
+          "cf6c9529-ecd9-4dfc-bb5a-7a8c388465d3"
+        ],
+        "o111": [
+          "7f375e81-f0e7-47f5-bf4d-bd39815200ec"
+        ],
+        "o112": [
+          "16e06660-9576-4ca8-9d8b-c2118ada6d06"
+        ],
+        "o113": [
+          "a67e6b2e-56cb-4cd5-9ce4-f7bbe24214c0"
+        ],
+        "o114": [
+          "93263c7a-c1ff-4269-aca0-f420972f5ea6"
+        ],
+        "o115": [
+          "c8ae403d-26f8-4beb-9f45-72f53a1d4837"
+        ],
+        "o116": [
+          "b8d6ee82-7fc8-41fd-88e1-9c8c28d1ea80"
+        ],
+        "o117": [
+          "de02627c-c6fe-474a-861e-ad0fbcb7c629"
+        ],
+        "o118": [
+          "cdfcea8e-b87e-442e-ab78-53fc66ed830e"
+        ],
+        "o119": [
+          "cd9feee8-76c0-42cd-a1b6-32c4317d48e0"
+        ],
+        "o120": [
+          "838332f4-8400-4c1c-806a-fe970797824b"
+        ],
+        "o121": [
+          "7b60fbdd-0794-4e03-9825-0f03cde81eb7"
+        ],
+        "o122": [
+          "7800042b-ea8d-4d66-97bb-d324b1d5f453"
+        ],
+        "o123": [
+          "ab7e0502-c61a-44c6-8128-36b14e57a86e"
+        ],
+        "o124": [
+          "058f2bfd-2b0e-4343-9d75-f7f5516d6968"
+        ],
+        "o125": [
+          "cd40ff8a-8c67-40d8-820c-23b2912527c5"
+        ],
+        "o126": [
+          "69c49a06-6ab0-4b9c-a8e0-af0a4f4f79af"
+        ],
+        "o127": [
+          "7c462114-7817-4c31-87d5-5c57211ed0bf"
+        ],
+        "o128": [
+          "c000d2bd-22d2-4d0c-954f-55c484299c49"
+        ],
+        "o129": [
+          "4f51c958-95a4-46e6-a6b1-aa9f331459fe"
+        ],
+        "o130": [
+          "8a3443d0-6519-45fc-ad58-7256e185c733"
+        ],
+        "o131": [
+          "5511f1fd-5a19-4c80-81a8-dff319e78554"
+        ],
+        "o132": [
+          "504dc09b-607d-46af-97d7-f2de4428eb4d"
+        ],
+        "o133": [
+          "9744a19a-b2b1-4829-94f4-320934bcde94"
+        ],
+        "o134": [
+          "221bf67c-8307-4482-9052-bc58e1ac4113"
+        ],
+        "o135": [
+          "f5743d27-8632-4ca4-bc9b-616578a522a6"
+        ],
+        "o136": [
+          "ca0c73fc-4b55-423e-a023-54e30e0a300e"
+        ],
+        "o137": [
+          "e10cf8a8-0595-44de-bb6a-b23d8e52cc68"
+        ],
+        "o138": [
+          "5ecb655e-114a-4c1f-9bc5-390be3d7f549"
+        ],
+        "o139": [
+          "81a5c4d5-554b-4b8e-a81e-678b02e0dc06"
+        ],
+        "o140": [
+          "ca09167c-fc16-4aaa-8c24-e7fcfcf9c698"
+        ],
+        "o141": [
+          "930f0208-63cd-452b-84d4-0c1e89e2c28f"
+        ],
+        "o142": [
+          "cbb46893-a791-47d4-9f38-1695888a0e13"
+        ],
+        "o143": [
+          "17b4dcca-e8ab-47c4-b245-f6772724b1ba"
+        ],
+        "o144": [
+          "43165feb-61ea-40e9-b779-5496bb560db9"
+        ],
+        "o145": [
+          "460b5226-239e-4438-bcfb-7fbeb68cc617"
+        ],
+        "o146": [
+          "eb476e96-1692-455b-a4b4-4138e0c1f158"
+        ],
+        "o147": [
+          "d59445c6-8088-47e7-8c89-58a92f42059c"
+        ],
+        "o148": [
+          "22053d4d-5894-4eda-ae6a-05ffd4a886ae"
+        ],
+        "o149": [
+          "75cae8a6-ba5d-4031-a2bb-85739a28c613"
+        ],
+        "o150": [
+          "9c053fc4-cfff-4740-8bbd-192ef3ca63bf"
+        ],
+        "o151": [
+          "c09f815c-2eca-40f7-81cd-b61216bcebe8"
+        ],
+        "o152": [
+          "8c538228-6117-4a40-bf1c-785d542c69d0"
+        ],
+        "o153": [
+          "fc0f9399-3e1d-4de3-8ff9-65cfe9a14b32"
+        ],
+        "o154": [
+          "934e393a-7feb-4156-b590-434487ae7ae3"
+        ],
+        "o155": [
+          "2d1afed8-5c2d-4a2a-a038-f982abfd43f8"
+        ],
+        "o156": [
+          "478e497b-4be1-40a9-960b-bb204dc8f0ff"
+        ],
+        "o157": [
+          "559d8cbc-e9be-4b71-ad9a-131a056124b9"
+        ],
+        "o158": [
+          "ec57540a-977f-4db2-8b99-aebd02a39eb6"
+        ],
+        "o159": [
+          "f24d3a1e-627a-43ce-96c3-adc3f95b3efe"
+        ],
+        "o160": [
+          "bd687e05-35d9-4f7a-8f79-6968728798d4"
+        ],
+        "o161": [
+          "e6d12919-592c-467c-8c1c-476189ed4a3e"
+        ],
+        "o162": [
+          "66990760-2295-4818-953d-893e82247a91"
+        ],
+        "o163": [
+          "7b7bf9d2-023a-4025-ac3e-b3e9c8a083ff"
+        ],
+        "o164": [
+          "72dff0af-e07d-4459-af29-8101f8886c0b"
+        ],
+        "o165": [
+          "aef54e1e-e4c0-4e55-bfae-2c3de4d38cbb"
+        ],
+        "o166": [
+          "bd6b8e28-148f-42fc-8e8e-50f81113491e"
+        ],
+        "o167": [
+          "32d87f2a-38eb-457a-9158-2256d63a6164"
+        ],
+        "o168": [
+          "ab576509-1af0-4ed3-ac73-7d79a8553f9f"
+        ],
+        "o169": [
+          "99ad37fb-69c7-4455-b910-39afacfe9ac1"
+        ],
+        "o170": [
+          "77fb7fc5-660f-4507-83d7-9e90d36090bb"
+        ],
+        "o171": [
+          "9c5e80df-5f08-4893-bf22-b9c79a791bec"
+        ],
+        "o172": [
+          "ee111264-1102-482a-910c-34920bfaec77"
+        ],
+        "o173": [
+          "c2fdeb83-ada9-466d-b0a8-29c840e48c42"
+        ],
+        "o174": [
+          "38895fe5-0919-4ace-8fda-a6c9cbfa45ef"
+        ],
+        "o175": [
+          "3d43ae41-463c-4a43-a10b-a2fc6c2f6c9d"
+        ],
+        "o176": [
+          "1294df02-0d59-4d85-b8c4-202da125eba0"
+        ],
+        "o177": [
+          "09e33015-fc66-4490-9fe5-2b693fdb3f7c"
+        ],
+        "o178": [
+          "859e3481-18f6-4852-8eaa-f31da00ff4ff"
+        ],
+        "o179": [
+          "ae4fa262-aa22-4884-8b48-14dafb04affe"
+        ],
+        "o180": [
+          "d8b33665-078e-421a-a6b9-ebdd7ad9d683"
+        ],
+        "o181": [
+          "edd18ab7-0311-4dd2-ba97-660893e956b8"
+        ],
+        "o182": [
+          "b84defb6-4900-4132-b3df-22e849af24bc"
+        ],
+        "o183": [
+          "e90cf688-c2f0-481f-9124-dc469251a17f"
+        ],
+        "o184": [
+          "611ff1e6-abcd-479a-a20a-7279c596ee6d",
+          "556548ea-54c0-4e4d-a448-2a6889fa9c03"
+        ],
+        "o185": [
+          "778c2338-9883-45e9-9aed-712124eee64b"
+        ],
+        "o186": [
+          "5c10fb76-2eb1-4bbf-a076-9eb868ce03ed"
+        ],
+        "o187": [
+          "f7381c81-2ac4-483d-a4cc-0ba571d74477"
+        ],
+        "o188": [
+          "49b05d6c-f102-4e07-b265-2af54d93eb4e"
+        ],
+        "o189": [
+          "53a80728-2dcb-4aa4-85ab-2b005a528626"
+        ],
+        "o190": [
+          "610c4105-1cac-4ab9-bc5f-a4999e5981a4"
+        ],
+        "o191": [
+          "d3a79b40-20b0-4d4f-8647-283a9bad1a98"
+        ],
+        "o192": [
+          "93978aee-a6d7-4122-a6bf-ea60f267063e"
+        ],
+        "o193": [
+          "ceb6ef02-5392-47d7-8dfe-715f04b0a9c0"
+        ],
+        "o194": [
+          "905562bf-8c46-448c-9494-8551869012c8"
+        ],
+        "o195": [
+          "fe4d3b61-0fd2-4e22-a88d-925eaf3af058"
+        ],
+        "o196": [
+          "2efe1536-56c3-45ba-aebd-065ac132eb03"
+        ],
+        "o197": [
+          "e8c7a7bb-53b0-4999-8ee5-60d88829ea28"
+        ],
+        "o198": [
+          "7a04075b-17fa-40d1-a910-f075e66b9b36"
+        ],
+        "o199": [
+          "af023806-204b-45fb-9083-64ebdf510192"
+        ],
+        "o200": [
+          "869a25f8-f562-4ff0-a0e7-01a0cf915b82"
+        ],
+        "o201": [
+          "ed5b9a76-c22a-4eb5-b26f-67fa6aa44948"
+        ],
+        "o202": [
+          "b006db14-77ef-4365-a6a2-5f8ab836e375"
+        ]
+      }
+    }
+  },
+  "why": "git dense : 29 commits dans la session."
+}
