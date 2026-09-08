@@ -81,7 +81,7 @@ class ProviderSummarizer:
             if version == 3:
                 raise SummarizerInputRefused("Cette entrée exige prompt_version = 'v5'. Les prompts v1–v4 sont historiques.")
             if version == 2 and prompt_version_of(self.prompt_path) != "v4":
-                raise SummarizerError("Cette entrée exige prompt_version = 'v4'. Les prompts v1–v3 sont historiques.")
+                raise SummarizerInputRefused("Cette entrée exige prompt_version = 'v4'. Les prompts v1–v3 sont historiques.")
         request = CompletionRequest(
             system=self.system,
             prompt=model_input,
