@@ -5,11 +5,13 @@ Elle lit les sessions closes exposées par Pulse Core, les fait résumer par un
 modèle local, et réémet le résumé vers Core comme événement `session_summary`.
 Core ne sait pas qu'elle existe.
 
-Depuis le 2026-09-08, le journal et `/context/sessions` proviennent du même
-chargement et de la même reconstruction Core. Intelligence conserve le hash
-stable de session, ses sources et la version 3 ; elle ne reconstruit ni ne
-réattribue les sessions. Aucun changement du format d’entrée LLM dans ce
-chantier ([décision](../docs/decisions/2026-09-08-reconstruction-unique-des-sessions.md)).
+Le journal et `/context/sessions` partagent la reconstruction Core v3. Core
+expose les observations ordonnées v1 dans son API v3. Intelligence les transmet
+sans UUID sources et ajoute des relations de résultats de commandes, bornées
+à la session : entrée v3, prompt v5. L'état actuel reste explicitement inconnu.
+Voir la [décision courante](../docs/decisions/2026-09-08-reprise-fondee.md) et le
+[rapport d'évaluation](../docs/audits/2026-09-08-reprise-fondee/README.md).
+Aucun service ni réglage personnel n'est activé par ce chantier.
 
 ## En bref
 
@@ -42,6 +44,7 @@ les défauts de `config.py` s'appliquent.
 core_url      = "http://127.0.0.1:8765"
 llm_provider  = "mlx"
 model_id      = "mlx-community/Qwen3.8-27B-4bit"
+prompt_version = "v5"         # reprise fondée ; v1–v4 historiques
 llm_max_tokens = 2048          # sous 2048, des sessions denses sont tronquées
 ```
 
@@ -78,7 +81,7 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `llm_max_tokens` | `2048` | plafond de génération |
 | `llm_max_input_tokens` | `30000` | au-delà, le modèle local refuse (mémoire) |
 | `llm_temperature` | `null` | absente = non envoyée (le modèle local reste alors en argmax) ; `0.0` réduit l'aléa de l'échantillonnage, sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés |
-| `prompt_version` | `v2` | version du prompt (`prompts/session_summary_<v>.md`) ; `v1` reste disponible, `v3` produit des points `open` référencés (voir plus bas) |
+| `prompt_version` | `v5` | reprise bornée à la session ; v1–v4 refusent cette nouvelle entrée |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
 | `min_session_minutes` | `10` | une session plus courte n'est pas candidate |
 | `min_session_activities` | `30` | une session moins active n'est pas candidate |
@@ -186,53 +189,43 @@ l'état local à l'émission ; un résumé antérieur à cet enregistrement affi
 « inconnue », jamais « aucune ». Un préfixe ambigu est refusé avec la liste
 des sessions qu'il désigne.
 
-### `open` v3 : des points étayés
+### `open` : observations et interprétations
 
-Avec `prompt_version = "v3"`, `open` n'est plus une phrase libre mais une
-liste de points, chacun d'une nature déclarée et étayé par des références de
-l'entrée :
+Un point ouvert est un constat utile à la reprise, positivement appuyé et
+sans résolution correspondante observée dans la session. Il n'est pas une
+recommandation ni une affirmation sur l'état actuel. Deux appuis :
 
-```json
-{"text": "Aucun push observé pour les commits a1b2c3 et d4e5f6",
- "kind": "observed", "evidence": ["commit:a1b2c3", "commit:d4e5f6"]}
-{"text": "La configuration de llm_max_tokens reste à valider",
- "kind": "carried_over", "evidence": [], "carried_from": "previous_summary:1",
- "reason_kept": "aucun événement sur config.toml depuis le résumé précédent"}
-{"text": "L'agent devait vérifier l'état de la PR #28",
- "kind": "requested", "evidence": ["agent_request:0"]}
-```
+- `command_failure` : référence au dernier échec d'une commande exacte dans
+  son cwd, sans résolution observée. Le code concerne le processus global.
+- `recorded_statement` : déclaration explicite dans un commit, avec citation
+  exacte. Sa pertinence est interprétée ; la citation ne prouve pas sa vérité.
 
-Le validateur rejette la note entière si : `kind` est inconnu ; un point
-`observed` n'a pas de preuve, cite une référence absente de l'entrée ou
-s'appuie sur une annexe ; un point `carried_over` ne désigne pas un point
-réel de `previous_summary` ou n'a pas de `reason_kept` ; un point
-`requested` cite autre chose que `agent_request:<i>` ; un texte reprend un
-point de `previous_summary` sans `kind: carried_over` (D1) ; un point
-`observed` affirme qu'un push n'a pas été effectué (D5 — Core n'observe pas
-les pushs) ; un point `observed` affirme qu'un fichier n'est pas commité
-(« aucun commit ne le nomme », « sans commit associé ») alors que la session
-montre au moins un commit (D6 — la vue donne le message d'un commit, jamais
-ses fichiers ; sans aucun commit dans la vue, le point reste permis). Les
-références s'écrivent `<type>:<clé>` avec la clé telle que
-Core la sert : `path:`, `commit:`, `event:`, `app:`, `test_passed:`,
-`test_failed:`, `error:`, `signal:`, `agent_request:0`,
-`previous_summary:<i>` (le i-ième point du `open` reçu, listé dans
-`previous_summary.open_items` de l'entrée). Aucune référence n'existe pour
-une absence.
+`resumption.command_outcomes` distingue `resolved_observed`,
+`unresolved_observed` et `unknown`. `as_of` borne l'interprétation à la session.
+Un résultat ultérieur 0 n'établit une résolution que pour le même processus
+identifié, sans chevauchement avec l'échec. Fichiers, Git, distant et contenu
+des commits ne se résolvent pas par corrélation.
 
-Core ne change pas : il reçoit `reprise.open` rendu en texte (une phrase par
-point, la raison d'une reprise entre parenthèses, une phrase fixe pour une
-liste vide) et recopie `details.open_items` — nature, preuves,
-`carried_from`, jamais de texte libre hors des champs qu'il rédige. Les
-résumés v1/v2 déjà en base gardent leur `open` en chaîne ; `show` les affiche
-comme avant et, pour un résumé v3, liste sous `open` chaque point avec sa
-nature et ses preuves.
+Les anciens résumés sont du contexte `previous_model_interpretation`, daté,
+non admissible comme preuve. Les demandes initiales d'agent restent des intentions
+à accomplissement inconnu. `carried_over` et `requested` ne sont plus produits
+par v5 ; une liste vide est normale. Les lectures et rejeux historiques restent
+possibles sans aucune conversion des événements.
 
-Les attentes annotées des quatre sessions D1/D3/D5 sont dans
-`eval/expected/` ; après un passage `eval` en v3, l'écart par session est
-imprimé (retrouvé, manquant, interdit, en plus), et
-`PULSE_EVAL_RUN=<dossier> pytest -m slow tests/test_expectations.py` le rejoue
-comme test.
+Le validateur contrôle le schéma, les types de références, la relation de
+résultat et la présence littérale d'une citation (espaces et retours à la ligne normalisés). Il ne vérifie pas la cause,
+le sens de la citation ou l'utilité d'un point. Aucune regex sémantique ne s'y
+substitue. La qualité du modèle est mesurée séparément.
+
+Core conserve le texte rendu et masqué dans `reprise.open`, les métadonnées
+fermées dans `open_items` (`kind`, `evidence`, `scope: session_end`), ainsi que
+`observation_version` et `observation_sources`. Les citations libres ne sont
+pas recopiées hors du champ masqué.
+
+Une configuration épinglant v1–v4 doit choisir v5 pour générer avec l'entrée
+courante. Les anciennes vues Core restent lisibles en `legacy_aggregates`,
+sans chronologie inventée. Le défaut de code v5 ne constitue pas une validation
+de qualité pour l'usage quotidien : consulter le verdict du rapport.
 
 Si Core a accepté un résumé mais que sa relecture après émission a échoué,
 `show` récupère la copie manquante par son identifiant enregistré, même après
@@ -242,7 +235,7 @@ la commande sort en erreur (code 2) au lieu d'afficher un ancien résumé.
 
 ### `eval` — comparer un modèle sur le corpus gelé
 
-Passe le modèle courant sur les 14 sessions de `eval/` (dix gelées et quatre
+Passe le modèle courant sur les 14 sessions de `eval/observed/` (dix gelées et quatre
 cas supplémentaires issus du dogfooding), écrit un
 résultat par session sous `eval/out/<provider>-<modèle>/` plus un `meta.json`.
 Ne touche pas Core, ne dépend pas de la trace. Sert à juger un modèle ou un
@@ -292,15 +285,15 @@ Un `session_summary` a deux moitiés :
 
 - **`reprise`** — trois phrases écrites pour vous, à la deuxième personne :
   `doing` (ce sur quoi vous travailliez), `stopped_at` (où vous vous êtes
-  arrêté), `open` (ce qui reste ouvert). C'est ce que `show … --md` affiche.
+  arrêté), `open` (constats utiles à reprendre, bornés aux observations de la session). C'est ce que `show … --md` affiche.
 - **`structured`** — de quoi filtrer et relier : `project`, `intents`,
   `central_files` (uniquement des chemins **réellement vus** dans la session —
   un chemin inventé fait rejeter le résumé), `blockers`, et `confidence`
   (`high` si commits + tests + fichiers concordent, `medium` si des fichiers
   sans commit, `low` si surtout du bruit d'apps).
 
-Un `confidence: low` ou une `reprise` vague veut souvent dire que la session
-elle-même était diffuse — pas que le résumé a raté.
+La confiance annoncée par le modèle ne suffit pas à juger la justesse :
+une sortie précise peut inventer un état, même lorsque les observations sont exactes.
 
 ## Principes (spec §3)
 
@@ -323,8 +316,8 @@ uv pip install -e '.[dev]'          # ajouter ',mlx' pour le modèle local
 .venv/bin/python -m pytest -m slow  # charge le vrai modèle MLX
 ```
 
-Les tests `slow` partagent un chargement des poids et vérifient les prompts v1
-et v2 sur une session réelle du corpus : génération, absence de balises de
+Les tests `slow` partagent un chargement des poids et vérifient les prompts
+archivés sur leur ancien contrat ainsi que v5 sur une session réelle du corpus : génération, absence de balises de
 raisonnement et sortie conforme au contrat. Un troisième test vérifie le refus
 de l'entrée de stress avec le vrai tokenizer ; un garde de test interdit de
 lancer la génération si ce refus régresse. Ces tests ne mesurent pas à eux
