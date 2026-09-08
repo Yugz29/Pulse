@@ -1,5 +1,11 @@
 # Spec — Context API (`GET /context`)
 
+> **Statut historique — 2026-09-08.** Les exemples de sessions agrégées,
+> d'entrée modèle intacte et de prompts v1–v3 ci-dessous décrivent le contrat
+> antérieur. La projection courante et la compatibilité de lecture sont
+> définies dans la [décision observations ordonnées](../decisions/2026-09-08-observations-ordonnees.md).
+> Le stockage des anciens résumés et leur rejeu restent valides.
+
 > **Statut : spécification historique de livraison, complétée depuis.**
 > Depuis le 2026-09-08, le chargement/reconstruction est partagé avec le journal,
 > `session_tracker.py` n’existe plus et une session fermée à minuit n’est plus

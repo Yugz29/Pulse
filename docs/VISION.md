@@ -190,6 +190,15 @@ problème réel.
 
 ## Décisions prises
 
+- **2026-09-08** — Reprise fondée : observations de fin de session distinctes
+  de l'état actuel, anciens résumés non admissibles comme preuves, entrée v3
+  et prompt v5 ; évaluation et verdict d'usage dans le rapport
+  ([décision](decisions/2026-09-08-reprise-fondee.md)).
+
+- **2026-09-08** — Observations de travail ordonnées : contexte v3, provenance
+  hors prompt, entrée Intelligence v2 et prompt v4 ; régressions d'interprétation
+  documentées, aucun déploiement personnel ([décision](decisions/2026-09-08-observations-ordonnees.md)).
+
 - **2026-09-08** — Reconstruction unique des sessions de travail : stockage
   sans attribution de session, événements plats, moteur déterministe commun
   au journal et au contexte ; identité v3 conservée, export journal v2

@@ -1,5 +1,13 @@
 # Spec — LLMProvider et branchement du vrai modèle — v2
 
+> **Statut historique — 2026-09-08.** Les exemples de sessions agrégées,
+> d'entrée modèle intacte et de prompts v1–v3 ci-dessous décrivent le contrat
+> antérieur. La projection courante et la compatibilité de lecture sont
+> définies dans la [décision observations ordonnées](../decisions/2026-09-08-observations-ordonnees.md).
+> L’entrée v3, le prompt v5 et la politique de `open` sont désormais décrits
+> dans la [décision reprise fondée](../decisions/2026-09-08-reprise-fondee.md).
+> Le stockage des anciens résumés et leur rejeu restent valides.
+
 **Date :** 2026-09-05
 **Chantier :** étape 3 du §12 de [`2026-09-03-session-summary.md`](2026-09-03-session-summary.md)
 **Statut :** validée, à implémenter

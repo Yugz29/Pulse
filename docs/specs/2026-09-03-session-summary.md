@@ -1,5 +1,13 @@
 # Spec — Résumé de session (`intelligence/`) — v2
 
+> **Statut historique — 2026-09-08.** Les exemples de sessions agrégées,
+> d'entrée modèle intacte et de prompts v1–v3 ci-dessous décrivent le contrat
+> antérieur. La projection courante et la compatibilité de lecture sont
+> définies dans la [décision observations ordonnées](../decisions/2026-09-08-observations-ordonnees.md).
+> L’entrée v3, le prompt v5 et la politique de `open` sont désormais décrits
+> dans la [décision reprise fondée](../decisions/2026-09-08-reprise-fondee.md).
+> Le stockage des anciens résumés et leur rejeu restent valides.
+
 Pas 3 de la roadmap V3 (voir `docs/VISION.md`). Premier code de la couche Intelligence, premier événement de mémoire de niveau 2.
 
 **v2 du 2026-09-03** — réécrit après relecture externe. Changements par rapport à la v1 : identité de session stable (hash des sources) à la place de l'ordinal `work-N` ; Intelligence lit `GET /context/sessions` et ne reconstruit rien ; rédaction de tout le texte libre produit par le modèle ; livraison en CLI batch avant tout service résident ; corpus d'évaluation gelé dès le premier prototype. Dépend de Core ≥ 0.5.0 (`ship/session-identity`) et de la PR `hardening`.
