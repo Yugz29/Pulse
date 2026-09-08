@@ -223,12 +223,12 @@ def test_rows_dated_after_the_reference_instant_do_not_change_the_answer(tmp_pat
 # --- Cas nominaux -----------------------------------------------------------
 
 
-def test_open_session_fills_every_block_with_bounded_facts(tmp_path):
+def test_open_session_exposes_ordered_work_observations(tmp_path):
     store = make_store(tmp_path, *working_session())
 
     result = snapshot(store)
 
-    assert result["schema_version"] == 2
+    assert result["schema_version"] == 3
     assert result["reference_at"] == "2026-09-02T14:00:00+00:00"
     assert result["window_minutes"] == 120
     assert result["timezone"] == "UTC"
@@ -262,32 +262,12 @@ def test_open_session_fills_every_block_with_bounded_facts(tmp_path):
     assert session["projects"] == ["Pulse"]
     # The Terminal activation at -60 precedes the first work signal: it is
     # unresolved activity, not part of the session.
-    assert session["apps"] == [
-        {"name": "Code", "activations": 1},
-        {"name": "Terminal", "activations": 1},
-    ]
-    assert session["files"] == {
-        "created": ["docs/VISION.md"],
-        "modified": ["core/README.md", ".gitignore"],
-        "deleted": [],
-        "truncated": False,
-    }
-    assert session["git"] == {
-        "commits": [{"hash": "6264d1a", "message": "chore: restructuration"}],
-        "push_observed": True,
-    }
-    assert session["terminal"] == {
-        "tests_passed": ["pytest -q"],
-        "tests_failed": ["make test"],
-        "errors": ["make test", "git push origin main --tags"],
-        "truncated": False,
-    }
-    assert session["signals"] == [
-        "app_activated",
-        "file_changed",
-        "git_commit",
-        "terminal_finished",
-    ]
+    facts = session["observations"]["timeline"]
+    assert {f["path"] for f in facts if f["kind"] == "file"} == {"docs/VISION.md", "core/README.md", ".gitignore"}
+    commands = [f for f in facts if f["kind"] == "command"]
+    assert [(f["command"], f["exit_code"]) for f in commands] == [("pytest -q", 0), ("make test", 1), ("git push origin main --tags", 1), ("make dev", 130)]
+    assert [f["message"].splitlines()[0] for f in facts if f["kind"] == "commit"] == ["chore: restructuration"]
+    assert set(session["observations"]["sources"]) == {f["ref"] for f in facts + session["observations"]["applications"]}
     assert result["recent_sessions"] == []
     assert result["isolated_signals"] == []
     assert result["last_agent_session"] is None
@@ -422,10 +402,13 @@ def test_last_session_summary_ignores_the_window_and_prefers_the_latest(tmp_path
     result = snapshot(store)
 
     assert result["current_session"] is None
+    assert result["last_session_summary"].pop("event_id")
     assert result["last_session_summary"] == {
         "id": "bbbbbbbbbbbbbbbb",
         "label": "work-2",
         "session_ended_at": "2026-09-01T13:00:00+00:00",
+        "origin": "model_interpretation",
+        "workspace": PULSE,
         "reprise": {"doing": "Hier, régénéré en v2.", "stopped_at": "—", "open": "—"},
         "confidence": "medium",
         "age_minutes": 1500,
@@ -468,6 +451,7 @@ def test_old_agent_session_survives_the_window_alone(tmp_path):
     assert result["current_session"] is None
     assert result["recent_sessions"] == []
     assert result["isolated_signals"] == []
+    assert result["last_agent_session"].pop("event_id")
     assert result["last_agent_session"] == {
         "agent": "claude-code",
         "started_at": "2026-08-31T12:10:00+00:00",
@@ -498,7 +482,7 @@ def test_session_without_resolved_workspace_is_still_returned(tmp_path):
     session = result["current_session"]
     assert session is not None
     assert session["projects"] == []
-    assert session["files"]["modified"] == ["/tmp/notes.txt"]
+    assert [f["path"] for f in session["observations"]["timeline"] if f["kind"] == "file"] == ["/tmp/notes.txt"]
 
 
 def test_two_workspaces_in_one_session_expose_both_and_pick_the_dominant(tmp_path):
@@ -563,9 +547,8 @@ def test_interrupted_command_is_not_an_error(tmp_path):
         terminal(-5, "python broken.py", exit_code=2),
     )
 
-    terminal_block = snapshot(store)["current_session"]["terminal"]
-
-    assert terminal_block["errors"] == ["python broken.py"]
+    commands = [f for f in snapshot(store)["current_session"]["observations"]["timeline"] if f["kind"] == "command"]
+    assert [f["exit_code"] for f in commands] == [0, 130, 2]
 
 
 def test_pasted_prompt_never_appears_in_the_answer(tmp_path):
@@ -594,7 +577,7 @@ def test_pasted_prompt_never_appears_in_the_answer(tmp_path):
     assert "prompt collé" not in rendered
 
 
-def test_files_are_bounded_to_twenty_per_category(tmp_path):
+def test_file_observations_preserve_more_than_twenty_paths(tmp_path):
     activities = [terminal(-40, "pytest -q")]
     activities += [
         file_changed(-30 + index // 10, f"src/module_{index:02d}.py")
@@ -602,15 +585,13 @@ def test_files_are_bounded_to_twenty_per_category(tmp_path):
     ]
     store = make_store(tmp_path, *activities)
 
-    files = snapshot(store)["current_session"]["files"]
-
-    assert len(files["modified"]) == 20
-    assert files["modified"][0] == "src/module_00.py"
-    assert files["truncated"] is True
-    assert files["created"] == [] and files["deleted"] == []
+    files = [f for f in snapshot(store)["current_session"]["observations"]["timeline"] if f["kind"] == "file"]
+    assert len(files) == 25
+    assert files[0]["path"] == "src/module_00.py"
+    assert files[-1]["path"] == "src/module_24.py"
 
 
-def test_apps_are_ranked_by_activations_then_name_and_bounded_to_five(tmp_path):
+def test_app_counts_keep_intervals_without_truncation(tmp_path):
     activities = [terminal(-30, "pytest -q"), file_changed(-29, "a.py")]
     for minute, name in enumerate(
         ["Zed", "Code", "Terminal", "Code", "Safari", "Mail", "Notes", "Terminal"]
@@ -619,15 +600,9 @@ def test_apps_are_ranked_by_activations_then_name_and_bounded_to_five(tmp_path):
     activities.append(file_changed(-10, "b.py"))  # confirms the activations
     store = make_store(tmp_path, *activities)
 
-    apps = snapshot(store)["current_session"]["apps"]
-
-    assert apps == [
-        {"name": "Code", "activations": 2},
-        {"name": "Terminal", "activations": 2},
-        {"name": "Mail", "activations": 1},
-        {"name": "Notes", "activations": 1},
-        {"name": "Safari", "activations": 1},
-    ]
+    apps = snapshot(store)["current_session"]["observations"]["applications"]
+    assert {a["name"]: a["activations"] for a in apps} == {"Zed": 1, "Code": 2, "Terminal": 2, "Safari": 1, "Mail": 1, "Notes": 1}
+    assert all(a["first_at"] <= a["last_at"] for a in apps)
 
 
 def test_invalid_inputs_are_rejected(tmp_path):
@@ -655,7 +630,7 @@ def test_route_returns_schema_version_one_with_sorted_keys(tmp_path):
     assert response.status_code == 200
     assert response.mimetype == "application/json"
     body = response.get_json()
-    assert body["schema_version"] == 2
+    assert body["schema_version"] == 3
     assert body["window_minutes"] == 120
     ordered = json.loads(
         response.get_data(as_text=True),
@@ -772,7 +747,7 @@ def test_day_sessions_match_the_current_session_form_and_exclude_open_ones(tmp_p
         store, reference_at=at(-95), local_timezone=timezone.utc
     )
 
-    assert day["schema_version"] == 2
+    assert day["schema_version"] == 3
     assert day["date"] == "2026-09-02"
     assert day["reconstruction_version"] == 3
     assert [s["label"] for s in day["sessions"]] == ["work-1"]
@@ -815,7 +790,7 @@ def test_day_sessions_route(tmp_path):
 
     assert response.status_code == 200
     body = response.get_json()
-    assert body["date"] == "2026-09-02" and body["schema_version"] == 2
+    assert body["date"] == "2026-09-02" and body["schema_version"] == 3
     assert len(body["sessions"]) == 1
     assert body["sessions"][0]["is_open"] is False
     assert len(body["sessions"][0]["id"]) == 16
@@ -950,3 +925,11 @@ def test_a_day_boundary_session_is_recent_and_closed_in_every_view(tmp_path):
     assert result["current_session"] is None
     assert len(yesterday) == 1 and yesterday[0]["is_open"] is False
     assert [s["id"] for s in result["recent_sessions"]] == [yesterday[0]["id"]]
+
+
+def test_previous_summary_workspace_keeps_legacy_object_readable(tmp_path):
+    activity = session_summary(-30, session_id='aaaaaaaaaaaaaaaa')
+    activity.details['workspace'] = {'workspace_root': PULSE}
+    result = snapshot(make_store(tmp_path, activity))['last_session_summary']
+    assert result['workspace'] == PULSE
+    assert result['origin'] == 'model_interpretation'

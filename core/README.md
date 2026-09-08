@@ -295,8 +295,7 @@ Les événements sont dans la liste plate `activities`. Les anciens groupes
 reconstruction déterministe, dont la version reste 3. Le journal et `/context`
 partagent cette reconstruction et son statut de fermeture, même à minuit.
 Les événements datés après la référence restent en base et ne sont pas encore
-inclus dans la vue. L’API `/context/sessions` et l’entrée Intelligence restent
-inchangées. Voir la [décision détaillée](../docs/decisions/2026-09-08-reconstruction-unique-des-sessions.md).
+inclus dans la vue. Le chantier suivant fait évoluer leur projection, décrit ci-dessous. Voir la [décision détaillée](../docs/decisions/2026-09-08-reconstruction-unique-des-sessions.md).
 
 Le store ne calcule plus de session à l’écriture. Les anciennes bases gardent
 leur colonne `session_id` et ses valeurs sans les utiliser ; les nouvelles
@@ -385,11 +384,18 @@ curl http://127.0.0.1:8765/trace/today.md
 
 `GET /context` répond à « que se passe-t-il en ce moment ? » à partir de
 `trace.db` uniquement : aucun modèle, aucune lecture du disque ni de Git au
-rendu. La réponse (`schema_version: 2`) contient le workspace résolu et ses
-faits git persistés, la session courante (durée, projets, apps, fichiers,
-commits, tests, erreurs, signaux), les sessions récentes fermées, les signaux
-isolés, le dernier `agent_session` et le dernier `session_summary`. C'est le contrat stable que la couche
-Intelligence consomme (voir `../docs/specs/2026-09-02-context-api.md`).
+rendu. La réponse (`schema_version: 3`) contient le workspace résolu,
+la session courante et ses `observations` : commandes complètes, transitions
+de fichiers, commits complets, activations d'applications agrégées et dernières
+références observées. `observations.sources` conserve la provenance hors du
+prompt Intelligence. Les horodatages de la projection sont des secondes depuis
+`time_origin` ; les événements bruts restent inchangés. Les compteurs récents
+utilisent cette même projection (échecs d'exécutions, bruit fichiers exclu).
+Le dernier agent est compatible avec le workspace résolu, ou d'attribution
+inconnue. Le dernier résumé expose son origine de modèle et son workspace ;
+Intelligence le traite comme une interprétation antérieure, sans valeur de
+preuve indépendante. Voir la [projection des observations](../docs/decisions/2026-09-08-observations-ordonnees.md)
+et la [politique de reprise courante](../docs/decisions/2026-09-08-reprise-fondee.md).
 
 ```bash
 curl -s http://127.0.0.1:8765/context | jq .current_session.projects

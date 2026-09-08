@@ -18,37 +18,26 @@ from .analysis.projects import (
     is_weak_workspace,
     persisted_workspace_identity,
 )
-from .analysis.terminal import (
-    is_interrupted_exit,
-    is_test_command,
-    parse_git_command,
-    useful_command_lines,
-)
+from .analysis.terminal import useful_command_lines
 from .analysis.timeline import (
     RECONSTRUCTION_VERSION,
-    app_activation_counts,
     display_file_path,
     is_strong_work_activity,
 )
-from .models import SUPPORTED_ACTIVITY_TYPES
 from .daily_trace import build_daily_trace
 from .runtime_config import reconstruction_timezone
 from .trace_store import TraceStore
+from .work_observations import project_work_observations
 
 
-# 2 depuis Core 0.5.0 : l'id de session est un hash stable, plus un ordinal.
-SCHEMA_VERSION = 2
+# 3 : ordered work observations replace lossy current-session aggregates.
+SCHEMA_VERSION = 3
 DEFAULT_WINDOW_MINUTES = 120
 MIN_WINDOW_MINUTES = 5
 MAX_WINDOW_MINUTES = 1440
 
-MAX_APPS = 5
-MAX_FILES_PER_CATEGORY = 20
-MAX_TERMINAL_LINES = 10
 MAX_RECENT_SESSIONS = 3
 MAX_ISOLATED_SIGNALS = 10
-
-FILE_CATEGORIES = ("created", "modified", "deleted")
 
 
 def build_context_snapshot(
@@ -124,7 +113,7 @@ def build_context_snapshot(
             sessions, current, window_start
         ),
         "isolated_signals": _isolated_signals(sessions, window_start),
-        "last_agent_session": _last_agent_session(store, reference_utc),
+        "last_agent_session": _last_agent_session(store, reference_utc, workspace_root=workspace_root),
         "last_session_summary": _last_session_summary(store, reference_utc),
     }
 
@@ -138,7 +127,7 @@ def build_day_sessions(
 ) -> dict[str, Any]:
     """Closed work sessions of one local day, in the exact current_session form.
 
-    Same code and same bounds (20 files, 10 terminal lines, 5 apps) as
+    Same ordered observations and provenance as
     ``current_session``: a consumer that stores session ids reads this route
     and never reconstructs anything itself. Rows dated after ``reference_at``
     are excluded, so the answer for a fixed instant is stable.
@@ -395,72 +384,6 @@ def _commit_view(activity: dict[str, Any]) -> dict[str, str] | None:
     return {"hash": commit_hash[:7], "message": first_line}
 
 
-def _terminal_facts(
-    activities: list[dict[str, Any]],
-) -> tuple[list[str], list[str], list[str], bool]:
-    """(tests passed, tests failed, error lines, push observed).
-
-    Same rules as the daily summary: only useful lines (pasted prompts and
-    Pulse inspection commands excluded), an interrupted command (exit 130)
-    is not an error.
-    """
-    passed: list[str] = []
-    failed: list[str] = []
-    errors: list[str] = []
-    push_observed = False
-    for activity in activities:
-        if activity["type"] != "terminal_finished":
-            continue
-        details = activity.get("details", {})
-        lines = useful_command_lines(details.get("command"))
-        if not lines:
-            continue
-        exit_code = details.get("exit_code")
-        succeeded = exit_code == 0
-        for line in lines:
-            if is_test_command(line):
-                target = passed if succeeded else failed
-                if line not in target:
-                    target.append(line)
-            if parse_git_command(line).action == "push":
-                push_observed = True
-        if (
-            isinstance(exit_code, int)
-            and not isinstance(exit_code, bool)
-            and exit_code != 0
-            and not is_interrupted_exit(exit_code)
-        ):
-            for line in lines:
-                if line not in errors:
-                    errors.append(line)
-    return passed, failed, errors, push_observed
-
-
-def _file_facts(
-    activities: list[dict[str, Any]],
-) -> tuple[dict[str, list[str]], int]:
-    """Display paths per category, deduplicated, in order of first appearance."""
-    files: dict[str, list[str]] = {category: [] for category in FILE_CATEGORIES}
-    distinct: set[str] = set()
-    for activity in activities:
-        if activity["type"] != "file_changed":
-            continue
-        details = activity.get("details", {})
-        path = details.get("path")
-        event = details.get("event", details.get("change"))
-        if not isinstance(path, str) or not path or event not in files:
-            continue
-        distinct.add(path)
-        display_path = display_file_path(path, details.get("workspace"))
-        if display_path not in files[event]:
-            files[event].append(display_path)
-    return files, len(distinct)
-
-
-def _bounded(values: list[str], limit: int) -> tuple[list[str], bool]:
-    return values[:limit], len(values) > limit
-
-
 def _identity_fields(session: dict[str, Any]) -> dict[str, Any]:
     """Stable identity (Core 0.5.0): the hash is the key, the label is display."""
     return {
@@ -477,35 +400,6 @@ def _current_session_view(
     is_open: bool = True,
 ) -> dict[str, Any]:
     activities = session["activities"]
-    apps = sorted(
-        app_activation_counts(session).items(),
-        key=lambda item: (-item[1], item[0]),
-    )[:MAX_APPS]
-    files, _distinct = _file_facts(activities)
-    bounded_files: dict[str, Any] = {}
-    files_truncated = False
-    for category in FILE_CATEGORIES:
-        bounded_files[category], truncated = _bounded(
-            files[category], MAX_FILES_PER_CATEGORY
-        )
-        files_truncated = files_truncated or truncated
-    bounded_files["truncated"] = files_truncated
-
-    passed, failed, errors, push_observed = _terminal_facts(activities)
-    tests_passed, truncated_passed = _bounded(passed, MAX_TERMINAL_LINES)
-    tests_failed, truncated_failed = _bounded(failed, MAX_TERMINAL_LINES)
-    error_lines, truncated_errors = _bounded(errors, MAX_TERMINAL_LINES)
-
-    commits = [
-        commit
-        for commit in (
-            _commit_view(activity)
-            for activity in activities
-            if activity["type"] == "git_commit"
-        )
-        if commit is not None
-    ]
-    present_types = {activity["type"] for activity in activities}
     return {
         **_identity_fields(session),
         "started_at": _utc(session["started_at"]),
@@ -514,30 +408,16 @@ def _current_session_view(
         "is_open": is_open,
         "activity_count": len(activities),
         "projects": [name for _root, name, _count in _session_projects(session)],
-        "apps": [{"name": name, "activations": count} for name, count in apps],
-        "files": bounded_files,
-        "git": {"commits": commits, "push_observed": push_observed},
-        "terminal": {
-            "tests_passed": tests_passed,
-            "tests_failed": tests_failed,
-            "errors": error_lines,
-            "truncated": truncated_passed or truncated_failed or truncated_errors,
-        },
-        "signals": [
-            activity_type
-            for activity_type in sorted(SUPPORTED_ACTIVITY_TYPES)
-            if activity_type in present_types
-        ],
+        "workspace": session.get("workspace_root"),
+        "observations": project_work_observations(activities),
     }
 
 
 def _recent_session_view(session: dict[str, Any]) -> dict[str, Any]:
-    activities = session["activities"]
-    _files, distinct_files = _file_facts(activities)
-    _passed, failed, errors, _push = _terminal_facts(activities)
-    commit_count = sum(
-        1 for activity in activities if activity["type"] == "git_commit"
-    )
+    observations = project_work_observations(session["activities"])
+    facts = observations["timeline"]
+    failures = [fact for fact in facts if fact["kind"] == "command"
+                and type(fact.get("exit_code")) is int and fact["exit_code"] not in (0, 130)]
     return {
         **_identity_fields(session),
         "started_at": _utc(session["started_at"]),
@@ -545,10 +425,10 @@ def _recent_session_view(session: dict[str, Any]) -> dict[str, Any]:
         "duration_minutes": _duration_minutes(session),
         "projects": [name for _root, name, _count in _session_projects(session)],
         "headline": {
-            "commits": commit_count,
-            "files_changed": distinct_files,
-            "tests_failed": len(failed),
-            "errors": len(errors),
+            "commits": sum(fact["kind"] == "commit" for fact in facts),
+            "files_changed": len(observations["last_observed"]["files"]),
+            "tests_failed": sum(fact["test_command"] for fact in failures),
+            "errors": len(failures),
         },
     }
 
@@ -652,11 +532,17 @@ def _last_session_summary(
         ended = stored.occurred_at
     reprise = details.get("reprise", {})
     structured = details.get("structured", {})
+    workspace = details.get("workspace")
+    if isinstance(workspace, dict):
+        workspace = workspace.get("workspace_root")
     age_seconds = (reference_at - ended.astimezone(timezone.utc)).total_seconds()
     return {
+        "event_id": stored.event_id,
         "id": details.get("session_id"),
         "label": details.get("session_label"),
         "session_ended_at": _utc(ended),
+        "origin": "model_interpretation",
+        "workspace": workspace if isinstance(workspace, str) and workspace else None,
         "reprise": {
             key: reprise.get(key) for key in ("doing", "stopped_at", "open")
         },
@@ -671,8 +557,10 @@ def _last_session_summary(
 def _last_agent_session(
     store: TraceStore,
     reference_at: datetime,
+    *,
+    workspace_root: str | None = None,
 ) -> dict[str, Any] | None:
-    stored = store.latest_activity_of_type("agent_session", before=reference_at)
+    stored = store.latest_activity_of_type("agent_session", before=reference_at, workspace_root=workspace_root)
     if stored is None:
         return None
     details = stored.details
@@ -693,6 +581,7 @@ def _last_agent_session(
         workspace = workspace.get("workspace_root")
     age_seconds = (reference_at - ended.astimezone(timezone.utc)).total_seconds()
     return {
+        "event_id": stored.event_id,
         "agent": details.get("source_tool"),
         "started_at": _utc(started),
         "ended_at": _utc(ended),
