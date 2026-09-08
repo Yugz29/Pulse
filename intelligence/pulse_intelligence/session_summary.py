@@ -26,6 +26,7 @@ from .session_input import (
     build_model_input,
     input_hash,
     input_paths,
+    input_provenance,
     input_references,
     serialize_input,
     uses_open_items,
@@ -103,50 +104,12 @@ def _string_list(value: Any, *, name: str, limit: int) -> list[str]:
 
 
 _TRAILING_CARRY_NOTE = re.compile(r"\s*\(repris\s*:[^()]*\)\s*$")
-# D5 : le push n'est pas observable par Core (`push_observed` n'est jamais
-# vrai, aucun événement `git_push`). Un point qui affirme qu'il n'a pas eu
-# lieu transforme un silence en fait ; « non observé » reste permis.
-_PUSH = re.compile(r"push|pouss", re.IGNORECASE)
-_ASSERTED_NOT_DONE = re.compile(
-    r"(?:pas|non|jamais)\s+(?:encore\s+)?(?:été\s+)?(?:effectué|fait|réalisé|poussé)"
-    r"|ne\s+sont\s+pas\s+pouss|n['’]est\s+pas\s+pouss|non\s+pouss",
-    re.IGNORECASE,
-)
-
-
 def normalize_open_text(text: str) -> str:
     """La forme sous laquelle deux points se comparent (règle D1) : sans la
     note de reprise du rendu, sans ponctuation finale, sans casse."""
     cleaned = " ".join(text.split()).rstrip(" .;!?")
     cleaned = _TRAILING_CARRY_NOTE.sub("", cleaned).rstrip(" .;!?")
     return cleaned.casefold()
-
-
-def asserts_unobservable_push(text: str) -> bool:
-    """« Le push n'a pas été effectué » : un fait affirmé sur un événement
-    que la vue ne peut pas montrer. « Aucun push observé » n'en est pas un."""
-    return bool(_PUSH.search(text)) and bool(_ASSERTED_NOT_DONE.search(text))
-
-
-# D6 (dogfooding, jour 3) : la vue donne le hash et le message d'un commit,
-# jamais ses fichiers. Qu'aucun message ne nomme un chemin ne dit pas qu'il
-# n'est pas commité ; dès que la session montre un commit, l'affirmer
-# transforme un silence en fait (20 points sur 27 contredits par git le
-# 2026-09-07). Sans aucun commit dans la vue, « modifié sans commit » est
-# un fait, et reste permis.
-_UNCOMMITTED = re.compile(
-    r"aucun\s+commit|sans\s+commit|pas\s+de\s+commit"
-    r"|(?:pas|non)\s+(?:encore\s+)?(?:été\s+)?commit+ée?s?"
-    r"|(?:pas|non)\s+(?:nommée?s?|référencée?s?|citée?s?)\s+(?:dans|par)\s+(?:le|un|les|des)\s+commit",
-    re.IGNORECASE,
-)
-
-
-def asserts_uncommitted_file(text: str) -> bool:
-    """« Modifié et aucun commit de la session ne le nomme », « sans commit
-    associé », « non commité » : une affirmation que la vue ne peut étayer
-    que si elle ne porte aucun commit."""
-    return bool(_UNCOMMITTED.search(text))
 
 
 def render_open_items(items: list[dict[str, Any]]) -> str:
@@ -161,6 +124,10 @@ def render_open_items(items: list[dict[str, Any]]) -> str:
     sentences = []
     for item in items:
         body = item["text"].strip().rstrip(" .;")
+        if item["kind"] == "command_failure":
+            body = "Échec observé, sans résolution correspondante observée en fin de session : " + body
+        elif item["kind"] == "recorded_statement":
+            body = "Point déclaré dans un commit : " + body + f" (« {item['quote']} »)"
         if item["kind"] == "carried_over":
             body += f" (repris : {item['reason_kept'].strip().rstrip(' .;')})"
         sentences.append(body + ".")
@@ -236,17 +203,6 @@ def _open_items(value: Any, references: InputReferences) -> list[dict[str, Any]]
                     raise InvalidModelOutput(
                         f"{name}: un point observed ne s'étaye pas sur une annexe ({', '.join(annexed)})"
                     )
-                if asserts_unobservable_push(text):
-                    raise InvalidModelOutput(
-                        f"{name}: affirme un push non effectué, que la vue ne peut pas montrer "
-                        "(formuler « non observé »)"
-                    )
-                if references.commits and asserts_uncommitted_file(text):
-                    raise InvalidModelOutput(
-                        f"{name}: affirme qu'un fichier n'est pas commité alors que la session "
-                        f"montre {len(references.commits)} commit(s) dont la vue ne liste pas "
-                        "les fichiers"
-                    )
             else:  # requested
                 if not evidence or any(ref not in references.agent_requests for ref in evidence):
                     raise InvalidModelOutput(
@@ -259,6 +215,52 @@ def _open_items(value: Any, references: InputReferences) -> list[dict[str, Any]]
                 raise InvalidModelOutput(
                     f"{name}: texte identique à previous_summary:{match} sans kind carried_over"
                 )
+        items.append(item)
+    return items
+
+
+def _resumption_items(value: Any, references: InputReferences) -> list[dict[str, Any]]:
+    """Current contract: positive support, with a bounded observation scope.
+
+    Type and temporal relations can be checked without interpreting prose.
+    A literal quotation proves its presence, not that it describes an open
+    problem. Relevance, scope of the text and causality still need evaluation.
+    """
+    if not isinstance(value, list) or len(value) > MAX_OPEN_ITEMS:
+        raise InvalidModelOutput("reprise.open doit être une liste de 0 à 5 points")
+    eligible_failures = {o["last"] for o in references.outcomes if o["status"] == "unresolved_observed"}
+    items = []
+    seen = set()
+    for index, raw in enumerate(value):
+        name = f"reprise.open[{index}]"
+        if not isinstance(raw, dict) or set(raw) - {"text", "kind", "evidence", "quote"}:
+            raise InvalidModelOutput(f"{name}: objet ou clés invalides")
+        text = _bounded_string(raw.get("text"), name=f"{name}.text")
+        kind = raw.get("kind")
+        evidence = _references(raw.get("evidence"), name=f"{name}.evidence", references=references)
+        if len(evidence) != 1:
+            raise InvalidModelOutput(f"{name}: une observation d'appui exacte est requise")
+        fact = (references.observations or {}).get(evidence[0], {})
+        item = {"text": text, "kind": kind, "evidence": evidence}
+        if kind == "command_failure":
+            if fact.get("kind") != "command" or evidence[0] not in eligible_failures:
+                raise InvalidModelOutput(f"{name}: dernier échec sans résolution observée requis")
+            if "quote" in raw:
+                raise InvalidModelOutput(f"{name}: quote ne concerne que recorded_statement")
+        elif kind == "recorded_statement":
+            quote = _bounded_string(raw.get("quote"), name=f"{name}.quote")
+            # Whitespace reflow is typography, not a different statement.
+            # Words, case and punctuation must still be a literal substring.
+            message = " ".join((fact.get("message") or "").split())
+            if fact.get("kind") != "commit" or " ".join(quote.split()) not in message:
+                raise InvalidModelOutput(f"{name}: citation exacte d'un message de commit requise")
+            item["quote"] = quote
+        else:
+            raise InvalidModelOutput(f"{name}.kind: command_failure ou recorded_statement requis")
+        key = (kind, evidence[0], item.get("quote"))
+        if key in seen:
+            raise InvalidModelOutput(f"{name}: appui dupliqué")
+        seen.add(key)
         items.append(item)
     return items
 
@@ -297,7 +299,8 @@ def parse_model_output(
     if references is None:
         cleaned_reprise["open"] = _bounded_string(reprise.get("open"), name="reprise.open")
     else:
-        open_items = _open_items(reprise.get("open"), references)
+        validator = _resumption_items if references.observations is not None else _open_items
+        open_items = validator(reprise.get("open"), references)
         cleaned_reprise["open"] = render_open_items(open_items)
 
     structured = payload.get("structured")
@@ -349,6 +352,8 @@ def open_items_for_core(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     exported = []
     for item in items:
         entry: dict[str, Any] = {"kind": item["kind"], "evidence": list(item["evidence"])}
+        if item["kind"] in {"command_failure", "recorded_statement"}:
+            entry["scope"] = "session_end"
         if item["kind"] == "carried_over":
             entry["carried_from"] = item["carried_from"]
         exported.append(entry)
@@ -377,6 +382,7 @@ def build_event(
     generation_ms: int,
     context_hash: str,
     workspace: str | None,
+    observation_sources: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     details: dict[str, Any] = {
         "session_id": session.id,
@@ -396,6 +402,10 @@ def build_event(
         "reprise": dict(parsed.reprise),
         "structured": dict(parsed.structured),
     }
+    observations = session.raw.get("observations")
+    if isinstance(observations, dict):
+        details["observation_version"] = observations["version"]
+        details["observation_sources"] = observation_sources if observation_sources is not None else observations["sources"]
     if parsed.open_items is not None:
         details["open_items"] = open_items_for_core(parsed.open_items)
     if workspace:
@@ -644,6 +654,7 @@ def summarize_session(
         generation_ms=generation_ms,
         context_hash=input_hash(serialized),
         workspace=workspace_path,
+        observation_sources=input_provenance(session, context, model_input),
     )
     if dry_run:
         return Outcome(session.id, "dry_run", event_id, event=event)
