@@ -4,6 +4,47 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.6.0.0] - 2026-09-09
+
+Observations de travail ordonnées, notes de décision
+`docs/decisions/2026-09-08-observations-ordonnees.md` et
+`docs/decisions/2026-09-08-reprise-fondee.md`. Le gel fonctionnel est levé pour
+cette frontière précise : le contrat `GET /context` change de version.
+
+### Modifié
+- `GET /context` et `GET /context/sessions` passent en `schema_version: 3`.
+  Les clés de session `files`, `terminal`, `git`, `apps` et `signals` sont
+  remplacées par `observations` : commandes complètes avec cwd et code de
+  sortie global, transitions de fichiers avec intervalles, commits complets,
+  activations d'applications, dernières références observées, couverture de
+  collecte et provenance `sources` (event_id exacts). Plus de coupe à 20
+  fichiers, 10 lignes de terminal ou 5 applications. `workspace` est exposé
+  sur chaque session.
+- Les en-têtes des sessions récentes comptent les exécutions en échec (dont
+  commandes de test simples, interruptions 130 exclues) et les fichiers de la
+  projection, bruit d'outillage écarté.
+- Le dernier `agent_session` retenu est le plus récent compatible avec le
+  workspace résolu, ou d'attribution inconnue ; un agent d'un autre projet ne
+  masque plus un agent compatible. `last_agent_session` et
+  `last_session_summary` exposent leur `event_id` ; le résumé expose en plus
+  `origin` et `workspace`.
+- L'ingestion d'un `session_summary` valide `observation_version` et
+  `observation_sources` quand ils sont présents : références fermées, ids de
+  source exacts, aucun texte non masqué.
+
+### Ajouté
+- `daemon_v2/work_observations.py` : projection pure et versionnée
+  (`observation_version: 1`) d'une session reconstruite, sans I/O ni lecture
+  de Git.
+- `daemon_v2/file_policy.py` : politique de bruit fichiers partagée entre le
+  collecteur et la projection.
+
+### Déploiement
+- Mise à jour coordonnée avec Intelligence : une Intelligence antérieure
+  refuse `schema_version: 3` ; l'Intelligence `model-v3` lit les deux
+  versions. Déployer Core puis Intelligence, ou les deux ensemble. Les bases,
+  résumés stockés et payloads pending existants restent lisibles tels quels.
+
 ## [0.5.6.0] - 2026-09-05
 
 Lot hardening ouvert au retour de migration, note de décision
