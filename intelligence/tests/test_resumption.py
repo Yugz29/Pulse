@@ -122,3 +122,28 @@ def test_new_generation_and_pending_recovery_keep_scope_and_provenance(fake_core
     assert details['observation_sources']['o1']==['event-o1']
     again=summarize_session(session,client=client,summarizer=model,config=config,state=state,now=REFERENCE)
     assert again.status=='already_known' and len(model.calls)==1
+
+
+def test_v6_generates_without_annexes_under_its_own_identity(fake_core,client,config,state):
+    from pulse_intelligence.provider_summarizer import prompt_path_for
+    from pulse_intelligence.session_summary import summary_event_id
+    session=entry([command('o1',1,0)]); old=previous(session)
+    agent=dict(workspace='/work/Pulse',started_at=session.started_at.isoformat(),
+               ended_at=session.ended_at.isoformat(),summary='Implement X',event_id='agent-source')
+    from conftest import context_view
+    ctx={**context_view(reference_at=session.ended_at),'last_session_summary':old,'last_agent_session':agent}
+    assert build_model_input(session,ctx,references=True)['previous_summary'] is not None  # v5 l'aurait reçue
+    fake_core.add_context(session.ended_at,ctx)
+    output=json.loads(valid_output());output['structured']['central_files']=[];output['reprise']['open']=[]
+    model=FakeSummarizer(json.dumps(output),model_id=config.model_id)
+    v6=replace(config,prompt_version='v6')
+    result=summarize_session(session,client=client,summarizer=model,config=v6,state=state,now=REFERENCE)
+    assert result.status=='created'
+    assert result.event_id==summary_event_id(session.id,'v6',config.model_id)!=summary_event_id(session.id,'v5',config.model_id)
+    details=fake_core.posts[0]['details']
+    assert details['prompt_version']=='v6'
+    assert 'previous_summary:0' not in details['observation_sources'] and 'agent_request:0' not in details['observation_sources']
+    # L'annexe est enregistrée absente, pas inconnue : `show` rend « aucune annexe ».
+    assert 'previous_summary' in state.emitted[result.event_id] and state.emitted[result.event_id]['previous_summary'] is None
+    prompt=prompt_path_for('v6').read_text(encoding='utf-8')
+    assert 'annexe' not in prompt and 'previous_summary' not in prompt and 'agent_session' not in prompt

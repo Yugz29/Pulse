@@ -27,6 +27,7 @@ from .session_input import (
     input_paths,
     input_references,
     serialize_input,
+    uses_annexes,
     uses_open_items,
 )
 from .session_summary import InvalidModelOutput, ParsedSummary, parse_model_output
@@ -120,11 +121,13 @@ def evaluate(
 
     # Le schéma de `open` suit le prompt, comme en production : l'entrée est
     # référencée et la sortie validée au schéma v3 dès que le prompt l'attend.
-    referenced = uses_open_items(prompt_version_of(summarizer.prompt_path))
+    prompt_version = prompt_version_of(summarizer.prompt_path)
+    referenced = uses_open_items(prompt_version)
+    annexes = uses_annexes(prompt_version)
     outcomes: list[EvalOutcome] = []
     for entry in entries:
         session = entry.view
-        model_input = build_model_input(session, entry.context, references=referenced)
+        model_input = build_model_input(session, entry.context, references=referenced, annexes=annexes)
         serialized = serialize_input(model_input)
 
         try:
