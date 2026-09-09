@@ -198,8 +198,10 @@ def test_no_provider_is_chosen_by_default():
 
 
 def test_default_prompt_version_is_the_current_one_and_resolves_to_a_file():
-    # v5 accompagne la reprise fondée ; les prompts historiques restent livrés.
-    assert Config().prompt_version == "v5"
+    # v6 : reprise fondée sans annexes (dogfooding jour 5) ; v5 et les
+    # prompts historiques restent livrés.
+    assert Config().prompt_version == "v6"
+    assert prompt_path_for("v6").is_file() and prompt_path_for("v5").is_file()
     assert prompt_path_for("v2").is_file() and prompt_path_for("v1").is_file()
 
 
@@ -296,4 +298,4 @@ def test_fake_provider_ignores_the_id_of_the_annexed_previous_summary():
 def current_prompt_for_provider_tests(monkeypatch):
     """Exercise real provider wiring against the current input contract."""
     from pulse_intelligence.config import config_home
-    (config_home() / "config.toml").write_text('prompt_version = "v5"\n')
+    (config_home() / "config.toml").write_text('prompt_version = "v6"\n')
