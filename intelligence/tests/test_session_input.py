@@ -230,3 +230,21 @@ def test_input_references_are_empty_without_annexes_or_facts():
 
     assert references.refs == frozenset()
     assert references.previous_open == () and references.agent_requests == ()
+
+
+def test_v6_input_carries_no_annex_even_when_core_has_both():
+    from pulse_intelligence.session_input import uses_annexes
+
+    session = view()
+    context = _annexed_context(session)
+    with_annexes = build_model_input(session, context, references=True)
+    without = build_model_input(session, context, references=True, annexes=False)
+
+    assert with_annexes["previous_summary"] is not None and with_annexes["agent_session"] is not None
+    assert without["previous_summary"] is None and without["agent_session"] is None
+    # Même forme d'entrée : les clés restent, comme quand Core n'a rien.
+    assert set(without) == set(with_annexes)
+    assert without["session"] == with_annexes["session"]
+    refs = input_references(without).refs
+    assert "previous_summary:0" not in refs and "agent_request:0" not in refs
+    assert uses_annexes("v5") and uses_open_items("v6") and not uses_annexes("v6")

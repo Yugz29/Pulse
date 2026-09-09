@@ -29,6 +29,7 @@ from .session_input import (
     input_provenance,
     input_references,
     serialize_input,
+    uses_annexes,
     uses_open_items,
 )
 from .state import JobState
@@ -615,7 +616,9 @@ def summarize_session(
 
     context = client.get_context(at=session.ended_at)
     referenced = uses_open_items(config.prompt_version)
-    model_input = build_model_input(session, context, references=referenced)
+    model_input = build_model_input(
+        session, context, references=referenced, annexes=uses_annexes(config.prompt_version)
+    )
     serialized = serialize_input(model_input)
     workspace = context.get("workspace") or {}
     workspace_path = workspace.get("path") if isinstance(workspace, dict) else None

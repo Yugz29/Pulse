@@ -32,6 +32,17 @@ def uses_open_items(prompt_version: str) -> bool:
     return prompt_version not in LEGACY_OPEN_PROMPT_VERSIONS
 
 
+# v6 : même contrat de sortie que v5, entrée sans annexes. Sous v5 les annexes
+# étaient lisibles mais jamais citables (`_resumption_items`), et le modèle
+# recopiait `doing` / `stopped_at` du résumé précédent (dogfooding, jour 5).
+PROMPT_VERSIONS_WITHOUT_ANNEXES = frozenset({"v6"})
+
+
+def uses_annexes(prompt_version: str) -> bool:
+    """Le prompt reçoit-il `previous_summary` et `agent_session` ?"""
+    return prompt_version not in PROMPT_VERSIONS_WITHOUT_ANNEXES
+
+
 # Un point par phrase : fin de phrase suivie d'un blanc, ou point-virgule.
 _OPEN_BOUNDARY = re.compile(r"(?<=[.!?])\s+|\s*;\s+")
 
@@ -132,9 +143,13 @@ def agent_session_annex(
 
 
 def build_model_input(
-    session: SessionView, context: dict[str, Any], *, references: bool = False
+    session: SessionView, context: dict[str, Any], *, references: bool = False, annexes: bool = True
 ) -> dict[str, Any]:
-    """Only useful observations reach the model; never event UUIDs."""
+    """Only useful observations reach the model; never event UUIDs.
+
+    ``annexes=False`` (prompt v6) : les deux clés restent présentes et valent
+    None, comme quand Core n'a rien — aucun cas spécial en aval.
+    """
     raw = session.raw
     visible = {key: copy.deepcopy(raw.get(key)) for key in (
         "id", "started_at", "last_activity_at", "duration_minutes", "projects", "workspace"
@@ -155,8 +170,8 @@ def build_model_input(
             "current_state": "unknown",
             "command_outcomes": command_outcomes((observations or {}).get("timeline", [])),
         },
-        "previous_summary": previous_summary_annex(context, session, references=references),
-        "agent_session": agent_session_annex(context, session, references=references),
+        "previous_summary": previous_summary_annex(context, session, references=references) if annexes else None,
+        "agent_session": agent_session_annex(context, session, references=references) if annexes else None,
     }
 
 
