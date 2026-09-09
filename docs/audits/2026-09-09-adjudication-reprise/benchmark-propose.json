@@ -1,0 +1,280 @@
+{
+  "status": "prepared_not_executed",
+  "new_model_calls": 0,
+  "prompt_source": "intelligence/pulse_intelligence/prompts/session_summary_v5.md",
+  "prompt_sha256": "9652a32690a47efa652476dc12924ad29bbdbba12f976f33fa5a0447c64b423d",
+  "baseline_model": "mlx-community/Qwen3.8-27B-4bit",
+  "baseline_model_revision": "3e6447f082e89cc7f0bc6e5441afd38dfce760ff",
+  "parameters": {
+    "temperature": 0,
+    "max_tokens": 2048,
+    "max_input_tokens": 30000,
+    "thinking": false
+  },
+  "all_14_sessions_remain_regression_pool": true,
+  "cases": [
+    {
+      "case_id": "M01",
+      "session_id": "1e420dda8b6eee77",
+      "type": "omission_documented",
+      "responsibility": "B",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/1e420dda8b6eee77.json",
+      "source_sha256": "cc81535f6ff1e19dfb5f472ea6c8b489cafee783d339b3efbc96a9cf71792570",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o20",
+        "o21"
+      ],
+      "problem": "Déclaration list/run non corrigée omise de toute la fiche.",
+      "proposed_rubric": "Rappeler la déclaration et son périmètre affichage, sans affirmer un état actuel.",
+      "baseline_observation": "reprise.open = []; structured.blockers = []",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "M02",
+      "session_id": "2ce344566f7e85dc",
+      "type": "scope_error",
+      "responsibility": "B",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/2ce344566f7e85dc.json",
+      "source_sha256": "fdcccc8d9303e4780d0f63cafd033a4d11fa536fc8b917879259d278eb5c68cf",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o14"
+      ],
+      "problem": "Le résultat global d’un bloc devient un échec précis de commit.",
+      "proposed_rubric": "Si le bloc est cité, ne pas localiser sa sous-commande défaillante ; le code 1 est global.",
+      "baseline_observation": "stopped_at et structured.blockers localisent le commit",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "M03",
+      "session_id": "2ce344566f7e85dc",
+      "type": "invented_cause",
+      "responsibility": "B",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/2ce344566f7e85dc.json",
+      "source_sha256": "fdcccc8d9303e4780d0f63cafd033a4d11fa536fc8b917879259d278eb5c68cf",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o7",
+        "o10"
+      ],
+      "problem": "Le modèle ajoute commande introuvable au code 127.",
+      "proposed_rubric": "Si ces échecs sont conservés, citer seulement les faits et indiquer que la cause n’est pas collectée.",
+      "baseline_observation": "open[0] et open[1] ajoutent commande introuvable",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "M04",
+      "session_id": "d047b37b4511d37c",
+      "type": "invented_cause",
+      "responsibility": "B",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/d047b37b4511d37c.json",
+      "source_sha256": "64825e5e9b654a332fefa21b2bb22ca355af59e5d70c86fce22f50a31432dc9a",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o33",
+        "o34"
+      ],
+      "problem": "Le modèle ajoute commande non trouvée à manage.py migrate.",
+      "proposed_rubric": "Restituer commande, cwd et résultat sans cause supposée. Ne pas confondre données insuffisantes pour la cause et capacité suffisante pour s’abstenir.",
+      "baseline_observation": "open[0] ajoute commande non trouvée",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "M05",
+      "session_id": "8faf4569fe2723b1",
+      "type": "changed_command_semantics",
+      "responsibility": "A",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/8faf4569fe2723b1.json",
+      "source_sha256": "f62cfc24b4d2136f0e4ddfe3f54d101fd3ce2763a80b40582e4c2f4149923498",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o41"
+      ],
+      "problem": "La citation remplace des retours de ligne shell par &&.",
+      "proposed_rubric": "Conserver la commande exacte ou la paraphraser sans lui attribuer de nouvelle sémantique d’exécution.",
+      "baseline_observation": "open[0].text contient && absent de la commande source",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "M06",
+      "session_id": "eef4956b36dd37ce",
+      "type": "unsupported_git_state",
+      "responsibility": "B",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/eef4956b36dd37ce.json",
+      "source_sha256": "ebc7b04a72af6447a03162d18a32540c9922022221826d9b7420f7719a1612f1",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o19",
+        "o20",
+        "o21",
+        "o22",
+        "o23"
+      ],
+      "problem": "Notifications de fichiers transformées en modifications non commises.",
+      "proposed_rubric": "Décrire les transitions après le commit ; ne pas affirmer leur statut Git final.",
+      "baseline_observation": "stopped_at dit modifications non commises",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "M07",
+      "session_id": "2ce344566f7e85dc",
+      "type": "actor_chronology",
+      "responsibility": "B",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/2ce344566f7e85dc.json",
+      "source_sha256": "fdcccc8d9303e4780d0f63cafd033a4d11fa536fc8b917879259d278eb5c68cf",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o9",
+        "o11",
+        "o12",
+        "agent_request:0"
+      ],
+      "problem": "doing attribue la configuration antérieure à l’agent dont la demande visible arrive en fin de session.",
+      "proposed_rubric": "Séparer la chronologie des commandes et la demande tardive ; ne pas attribuer toute l’activité à cet agent.",
+      "baseline_observation": "doing dit que l’agent a passé la session à configurer Docker",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "T01",
+      "session_id": "2ce344566f7e85dc",
+      "type": "control",
+      "responsibility": "A",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/2ce344566f7e85dc.json",
+      "source_sha256": "fdcccc8d9303e4780d0f63cafd033a4d11fa536fc8b917879259d278eb5c68cf",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o8",
+        "o11"
+      ],
+      "problem": "Résolution exacte présente dans le corpus.",
+      "proposed_rubric": "Ne pas retenir o8 comme dernier échec non remplacé : o11 réussit ensuite dans le même cwd avec le même texte.",
+      "baseline_observation": "v5 ne retient pas o8",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "T02",
+      "session_id": "071bbd62a95fb6cb",
+      "type": "control",
+      "responsibility": "A",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/071bbd62a95fb6cb.json",
+      "source_sha256": "3e537fac1b4d0ff627067c5104ae58f2dd5a4affa5293c47276ae0c8b34c7f74",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o4"
+      ],
+      "problem": "Dernier snapshot Git propre : ne pas pénaliser une rétrospection fondée.",
+      "proposed_rubric": "Accepter un rappel daté main / dirty=false ; ne pas exiger l’abstention sur un fait réellement disponible et ne pas extrapoler à aujourd’hui.",
+      "baseline_observation": "stopped_at mentionne dépôt propre ; contrôle non classé comme erreur",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "T03",
+      "session_id": "8af930d9ef437d2a",
+      "type": "control",
+      "responsibility": "C",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/8af930d9ef437d2a.json",
+      "source_sha256": "7ec46b9b6752204b6d6359ff4cf285ed0a360bd732255abf2853d85bc320a974",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o1",
+        "agent_request:0"
+      ],
+      "problem": "La demande de PR n’a pas de réponse observée.",
+      "proposed_rubric": "Une demande attribuée dans intents ou un open vide sont admissibles ; ne pas inventer résultat, merge ou tâche encore active.",
+      "baseline_observation": "intents rappelle l’état des lieux, open est vide",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "T04",
+      "session_id": "d98778994319cd07",
+      "type": "control",
+      "responsibility": "B",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/d98778994319cd07.json",
+      "source_sha256": "6da4e0b8da0b9955ec0fd66d5553f565295c3d95c41bf3218afc7f6520fb912a",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o1",
+        "o2",
+        "previous_summary:0"
+      ],
+      "problem": "Ancienne interprétation sur PR #28 à ne pas transformer en reste.",
+      "proposed_rubric": "Restituer les correctifs actuels ; ne pas propager la PR comme fait ou tâche non résolue.",
+      "baseline_observation": "open est vide",
+      "scoring_status": "analyst_rubric_not_user_ground_truth"
+    },
+    {
+      "case_id": "P01",
+      "session_id": "6a4166356dbab6ec",
+      "type": "user_judgment_pending",
+      "responsibility": "D",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/6a4166356dbab6ec.json",
+      "source_sha256": "a6cf9024f18ee9b0c066b78740a54acf672c76f15b8045d3ed599432469399fc",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o20",
+        "o22",
+        "o23",
+        "o24",
+        "o25",
+        "o27",
+        "o32"
+      ],
+      "problem": "Utilité de conserver les erreurs add après correction de chemin et progrès.",
+      "proposed_rubric": "Faire juger rappel des échecs versus état acquis et dernier dossier React ; aucune réponse imposée avant adjudication.",
+      "baseline_observation": "open retient o20 et o22",
+      "scoring_status": "pending_user_judgment"
+    },
+    {
+      "case_id": "P02",
+      "session_id": "eef4956b36dd37ce",
+      "type": "user_judgment_pending",
+      "responsibility": "D",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/eef4956b36dd37ce.json",
+      "source_sha256": "ebc7b04a72af6447a03162d18a32540c9922022221826d9b7420f7719a1612f1",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "previous_summary:0",
+        "o2",
+        "o19"
+      ],
+      "problem": "Report llm_max_tokens / référence ambigu face à des évaluations déclarées.",
+      "proposed_rubric": "Faire juger la pertinence et la formulation ; ne pas récompenser automatiquement le report pour satisfaire l’ancien test.",
+      "baseline_observation": "open ne reprend pas le report historique",
+      "scoring_status": "pending_user_judgment"
+    },
+    {
+      "case_id": "P03",
+      "session_id": "d047b37b4511d37c",
+      "type": "user_judgment_pending",
+      "responsibility": "D",
+      "source_file": "corpus/docs/audits/2026-09-08-reprise-fondee/after/d047b37b4511d37c.json",
+      "source_sha256": "64825e5e9b654a332fefa21b2bb22ca355af59e5d70c86fce22f50a31432dc9a",
+      "input_json_pointer": "/input",
+      "raw_output_json_pointer": "/text",
+      "evidence_refs": [
+        "o34",
+        "o35",
+        "o36",
+        "o37"
+      ],
+      "problem": "Dernier diagnostic pertinent versus dernières écritures SQLite/logs.",
+      "proposed_rubric": "Faire juger le point d’arrêt utile ; exiger de ne pas conclure que les écritures résolvent la migration, mais ne pas imposer de raconter toute activité.",
+      "baseline_observation": "stopped_at se concentre sur les tentatives de migration",
+      "scoring_status": "pending_user_judgment"
+    }
+  ]
+}

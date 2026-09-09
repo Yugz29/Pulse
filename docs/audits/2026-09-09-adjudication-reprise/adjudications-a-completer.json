@@ -1,0 +1,849 @@
+{
+  "status": "proposal_not_ground_truth",
+  "schema_version": "draft-1",
+  "user_responses_received": 0,
+  "sessions": [
+    {
+      "session_id": "7bbaca7882c3d766",
+      "label": "work-6",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/01-7bbaca7882c3d766.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Le tag exact palier-2-project-context-stabilized et sa qualification partielle.",
+          "references": [
+            "o5"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "La stabilisation de l’archive de qualification et la documentation passive Git/projet.",
+          "references": [
+            "o1",
+            "o4"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Les commandes utilisées pour consulter les traces du jour et de la veille.",
+          "references": [
+            "o2"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Le résultat distant du tag reste inconnu malgré le retour 0 du bloc.",
+          "references": [
+            "o5"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Une proposition de poursuivre le palier 2, à juger comme inférence et non intention observée.",
+          "references": [
+            "o5"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "8faf4569fe2723b1",
+      "label": "work-1",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/02-8faf4569fe2723b1.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Les trois axes : analyse Swift, gestion des scans et performances du graphe/couplage.",
+          "references": [
+            "o15",
+            "o34",
+            "o58",
+            "o69"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Les fichiers de reprise, dont GraphView.tsx pour le rendu.",
+          "references": [
+            "o17",
+            "o40",
+            "o53",
+            "o73"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Les derniers blocs Git réussis et le dernier serveur de développement interrompu.",
+          "references": [
+            "o65",
+            "o69",
+            "o74",
+            "o77"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "L’ancien bloc terminé avec 128, conservé avec son texte shell exact.",
+          "references": [
+            "o41"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Mesurer les performances après la session : recommandation possible, non demandée dans les traces.",
+          "references": [
+            "o58",
+            "o69"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "6a4166356dbab6ec",
+      "label": "work-1",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/03-6a4166356dbab6ec.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Lint, build et deploy Vue ont retourné 0, sans preuve du rendu distant.",
+          "references": [
+            "o8",
+            "o11",
+            "o14"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le correctif visant les sous-dossiers React/Vue, puis commit et push réussis.",
+          "references": [
+            "o23",
+            "o24",
+            "o25"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Le dernier contexte concret : inspection de front_end-frameworks/react/src.",
+          "references": [
+            "o31",
+            "o32"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Les deux erreurs git add intermédiaires.",
+          "references": [
+            "o20",
+            "o22"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Vérifier le rendu du site distant : suggestion éventuelle, pas tâche observée.",
+          "references": [
+            "o14",
+            "o24"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "2ce344566f7e85dc",
+      "label": "work-3",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/04-2ce344566f7e85dc.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "La partie DevNote : deux blocs add/commit réussis sur la recherche et les chemins de documents.",
+          "references": [
+            "o2",
+            "o3"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Les dernières validations de configuration : check-setup.sh et hello-world terminés avec code 0.",
+          "references": [
+            "o11",
+            "o12"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Le bloc Git final terminé avec code 1, sans sous-commande fautive connue.",
+          "references": [
+            "o14"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "La demande tardive de gitignore, accomplissement inconnu.",
+          "references": [
+            "agent_request:0"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Les anciennes tentatives check-setup échouées, avec leurs répertoires respectifs.",
+          "references": [
+            "o7",
+            "o8",
+            "o10"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "247f2062410ca5a9",
+      "label": "work-4",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/05-247f2062410ca5a9.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Le but atteint selon le commit : rendre visibles fichiers et applications en mode service.",
+          "references": [
+            "o3"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le mode multi-workspaces et l’emplacement déclaré watched_workspaces.",
+          "references": [
+            "o3"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Les contrôles rapportés : launchd, second workspace et événement d’application.",
+          "references": [
+            "o3"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Les points d’entrée : file_watcher.py et install_observers_launchd.sh.",
+          "references": [
+            "o6",
+            "o10"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Le dernier état de branche enregistré, sans conclure à une fusion.",
+          "references": [
+            "o20"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "d047b37b4511d37c",
+      "label": "work-6",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/06-d047b37b4511d37c.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Le périmètre jetons API : backend, client Python et interface.",
+          "references": [
+            "o4",
+            "o20",
+            "o24"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "La dernière commande de migration, son cwd enregistré et son code 2.",
+          "references": [
+            "o34"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "La migration 0002_apitoken.py et les tests associés comme points d’entrée.",
+          "references": [
+            "o15",
+            "o16",
+            "o17",
+            "o18",
+            "o19"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Le fait que la cause et l’application effective de la migration sont inconnues.",
+          "references": [
+            "o32",
+            "o34",
+            "o35"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Diagnostiquer cette migration en premier : priorité possible à confirmer.",
+          "references": [
+            "o34"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "071bbd62a95fb6cb",
+      "label": "work-1",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/07-071bbd62a95fb6cb.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Les deux fichiers ayant eu de l’activité : journal DevNote et base SQLite.",
+          "references": [
+            "o2",
+            "o3"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le dernier snapshot Git : main, propre à cet instant.",
+          "references": [
+            "o4"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Les applications activées, sans prétendre connaître leur contenu.",
+          "references": [
+            "app:1",
+            "app:3",
+            "app:4",
+            "app:5"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Un rappel disant simplement que le sujet de travail n’est pas identifiable avec ces traces.",
+          "references": [
+            "o1",
+            "o2",
+            "o3",
+            "o4"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "3cabaefb759dae36",
+      "label": "work-6",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/08-3cabaefb759dae36.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Le chemin context_snapshot → GET /context → /status et status.sh.",
+          "references": [
+            "o7",
+            "o10",
+            "o14"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le contrat déterministe et les bornes de window et at décrits dans les commits.",
+          "references": [
+            "o7",
+            "o10"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Les fichiers principaux pour poursuivre : context_snapshot.py, routes.py, tests associés.",
+          "references": [
+            "o5",
+            "o6",
+            "o8"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Les notifications de documentation après le dernier commit, sans les qualifier de non commises.",
+          "references": [
+            "o15",
+            "o21"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "eb652ce9f04c4b37",
+      "label": "work-2",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/09-eb652ce9f04c4b37.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Les acquis rapportés : permissions, masquage, verrous et versions d’ingestion.",
+          "references": [
+            "o40",
+            "o43",
+            "o62",
+            "o63"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "L’authentification des producteurs reportée à la première action Agent.",
+          "references": [
+            "o67"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Le build Swift explicitement hors du workflow CI décrit.",
+          "references": [
+            "o65"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Le dernier correctif de tests autour de Path.home.",
+          "references": [
+            "o202"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "La liste complète des commits répétés, plutôt qu’un rappel compact des changements.",
+          "references": [
+            "o40",
+            "o103",
+            "o157"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "cda6ccce898d3e88",
+      "label": "work-3",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/10-cda6ccce898d3e88.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Le déclencheur : outbox neuve et plusieurs premiers connecteurs simultanés.",
+          "references": [
+            "o34"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le correctif : busy_timeout avant WAL et tentatives bornées.",
+          "references": [
+            "o34"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Les validations et chiffres rapportés par le commit, explicitement attribués.",
+          "references": [
+            "o34"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Les fichiers producer_outbox.py / test_producer_outbox.py et le jalon 0.5.2.",
+          "references": [
+            "o12",
+            "o21",
+            "o35"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "8af930d9ef437d2a",
+      "label": "work-2",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/11-8af930d9ef437d2a.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "La demande d’état des lieux après migration, explicitement attribuée à votre message.",
+          "references": [
+            "agent_request:0"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le fait que la migration était dite terminée dans ce message.",
+          "references": [
+            "agent_request:0"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "L’inspection de l’arborescence intelligence/, sans résultat détaillé disponible.",
+          "references": [
+            "o1"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "La question PR #28 comme question sans réponse visible, pas comme PR encore ouverte.",
+          "references": [
+            "agent_request:0"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Aucune fiche substantielle pour cette session pauvre en observations.",
+          "references": [
+            "o1"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "d98778994319cd07",
+      "label": "work-24",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/12-d98778994319cd07.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "Pourquoi le test de verrou était fragile sur une machine lente.",
+          "references": [
+            "o1"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le choix d’une seule horloge CLI injectable et la raison de ne pas déplacer les fixtures.",
+          "references": [
+            "o2"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "Les deux commits et la branche ship/ci-green comme ancres.",
+          "references": [
+            "o1",
+            "o2"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "La demande d’état des lieux PR #28, uniquement comme demande antérieure.",
+          "references": [
+            "agent_request:0"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "L’ancien « modifications non commises » comme simple affirmation d’un modèle, à ne pas traiter comme fait.",
+          "references": [
+            "previous_summary:0"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "1e420dda8b6eee77",
+      "label": "work-26",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/13-1e420dda8b6eee77.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "La divergence list/run déclarée non corrigée et sa limite : affichage seulement.",
+          "references": [
+            "o20"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "La décision de ne pas imposer les variables du provider à une commande de lecture seule.",
+          "references": [
+            "o20"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "La consigne pour le futur rapport d’eval : exposer les paramètres retirés.",
+          "references": [
+            "o21"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Le dernier correctif : négocier temperature refusé et rendre les tests hermétiques, selon le commit.",
+          "references": [
+            "o21"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "La demande initiale d’état des lieux / PR #28, rappelée seulement comme demande.",
+          "references": [
+            "agent_request:0"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "eef4956b36dd37ce",
+      "label": "work-3",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/14-eef4956b36dd37ce.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "text": "D1 à juger au jour 2, comme intention déclarée dans le commit.",
+          "references": [
+            "o19"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C2",
+          "text": "Le passage du watcher de Pulse/core à la racine Pulse et la correction déclarée de D2.",
+          "references": [
+            "o8",
+            "o13"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C3",
+          "text": "La limite signalée : eval/out n’est pas couvert par le filtre d’ignore.",
+          "references": [
+            "o13"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C4",
+          "text": "Le report llm_max_tokens / passage de référence comme interprétation antérieure non confirmée.",
+          "references": [
+            "previous_summary:0"
+          ],
+          "user_rating": null
+        },
+        {
+          "id": "C5",
+          "text": "Les comparaisons de modèles et du prompt rapportées par les commits.",
+          "references": [
+            "o2",
+            "o19"
+          ],
+          "user_rating": null
+        }
+      ],
+      "adjudicated_items": null
+    }
+  ]
+}
