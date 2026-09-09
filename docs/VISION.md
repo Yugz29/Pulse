@@ -83,7 +83,7 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, version 0.5.6, gel levé** (`core/`). Daemon Flask
+**État actuel : existe, version 0.6.0.0, gel levé** (`core/`). Daemon Flask
 et SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
 (FSEvents), applications (Swift), hook Git, sessions d'agents Claude Code /
 Codex en événements dérivés, services résidents sous launchd, vue HTML
@@ -113,10 +113,14 @@ events → sessions → context snapshots → summaries
 sélection, validation, émission idempotente, état local. Trois providers
 derrière une interface `LLMProvider` : faux, endpoint compatible OpenAI
 (référence de comparaison), et **MLX local** — `Qwen3.8-27B-4bit` retenu pour
-le dogfooding sur un corpus gelé de dix sessions. Le modèle est une brique
+le dogfooding, puis évalué sur quatorze sessions avec l'entrée v3 et le
+prompt v5. Le modèle est une brique
 remplaçable d'une ligne de config ; Pulse ne dépend d'aucun runtime
-d'inférence spécifique. Reste : cinq jours de dogfooding (étape 4), puis le
-service résident sous condition (étape 5).
+d'inférence spécifique. La v5 est livrée mais sa fiabilité quotidienne sans
+relecture n'est pas acquise : 14/14 sorties valides, 2/4 attentes humaines
+satisfaites lors du dernier rejeu. Reste : valider des reprises justes et
+utiles en dogfooding (étape 4), puis le service résident sous condition
+(étape 5). L'état opérationnel est suivi dans `docs/dogfooding.md`.
 
 ### Agent — décider et utiliser des outils
 
@@ -141,7 +145,8 @@ Deux types de mémoire pour commencer :
   indéfiniment, aucune purge. Les transcripts d'agents n'y entrent jamais en
   brut : événement dérivé `agent_session` plus archive zstd séparée.
 - **Résumés** : contrat, CLI et stockage comme événements dérivés livrés sur le
-  même patron que `agent_session` ; génération par le vrai modèle à construire.
+  même patron que `agent_session` ; génération par le modèle local livrée,
+  qualité de reprise encore à valider.
 
 Les mémoires sémantique, épisodique et long terme viendront quand il y aura des
 résumés à indexer, pas avant.

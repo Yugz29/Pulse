@@ -7,7 +7,39 @@ les reprises lues et jugées, les défauts trouvés. Critère de sortie (spec du
 justes et utiles** → service résident (étape 5) ; sinon on itère le prompt ou le
 modèle sur le corpus `eval/`, et le service attend.
 
-## Reprise
+## Point d'état — 2026-09-09
+
+Vérification du dépôt à `8c282e2`, des commits récents, du code et de l'état
+local, sans génération de modèle ni modification de configuration.
+**Verdict : socle opérationnel ; reprise v5 livrée mais utilité encore à
+valider ; lot automatique actuellement incompatible avec la configuration.**
+
+- Core tourne, watchers fichiers/apps et worker actifs ; outbox : 0 pending,
+  0 dead-letter. Le producteur d'agents est périodique (une heure), dernier
+  code de sortie 0 ; son absence de processus entre deux passages est normale.
+- La config personnelle épinglait `prompt_version = "v3"` (ligne retirée le
+  09 à 21:25, jour 5 : le défaut du code s'applique). Le constructeur
+  courant produit l'entrée v3, qui exige le prompt v5 ou v6 (défaut v6
+  depuis la PR #83). Le journal du 09 à
+  06:45 confirme 10 candidates refusées, 0 nouveau résumé et 1 pending rejoué
+  comme doublon ; launchd rapporte le code 3. Le 08, le lot avait été interrompu
+  par un timeout Core après deux créations. La collecte Core reste active.
+- Tests exécutés : Core **598 réussis** ; Intelligence **261 réussis,
+  8 tests MLX exclus**. Le premier essai Intelligence était bloqué par les
+  sockets du bac à sable ; le rejeu avec accès aux serveurs locaux passe.
+  Aucun nouveau jugement de modèle : les 14/14 valides et 2/4 attentes
+  humaines de la v5 restent les résultats historiques du dernier rejeu.
+- Suite recommandée : essai v5 contrôlé avec relecture avant reprise du lot
+  quotidien ; commencer par quelques cas utiles des fiches existantes pour
+  juger rappels et omissions, puis décider du format de reprise. Service
+  résident, mémoire sémantique et proactivité restent des étapes ultérieures.
+
+Rejeu technique : depuis `core/`, `.venv/bin/python -m pytest tests_v2 -q`
+et `make status` ; depuis `intelligence/`, `.venv/bin/python -m pytest -q`.
+État opérationnel : `~/.pulse_intelligence/config.toml`,
+`~/.pulse_intelligence/logs/run.log` et `launchctl print` pour les jobs Pulse.
+
+## Reprise — état historique à la fin du 2026-09-07
 
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
 reprise du matin suivant : le lot launchd de 06:30 résume les sessions de la
@@ -579,3 +611,80 @@ v3, dans cet ordre : le `requested` qui affirme un état (« non couvert »,
 - Sujet posé dans `intelligence/TODOS.md` : les résumés héritent de
   l'immutabilité de `trace.db` par effet de bord ; piste d'une filiation
   `supersedes` / `superseded_by` côté Intelligence, avant l'étape 5.
+
+## Jour 5 — 2026-09-09
+
+**Contexte.** Lot launchd de 06:45 : 10 candidates refusées à la tentative 1
+(« Cette entrée exige prompt_version = 'v5' ») — la config épinglait v3 alors
+que Core 0.6.0 sert le schéma 3. Le jour 4 (08) n'a pas été jugé : son lot a
+créé 2 résumés puis Core est tombé en timeout à 09:56.
+
+**Passage manuel de 21:26.** Ligne `prompt_version = "v3"` retirée de
+`config.toml` (défaut du code : v5), rien d'autre. `run --once` : 11
+candidates (9 du 08, `1eb35865` et `a1040f4f` du 09), **11/11 créées, 0
+échec, 0 given_up**, 6 min 38 s chargement compris, 23 à 43 s par session.
+Pas de timeout Core. Machine pendant le passage : mémoire libre de 87 % à
+23 % au plus bas, processus Intelligence 5,2 Go de RSS, charge ≤ 2,8. Une
+première tentative a été interrompue à la main à 21:25 avant la première
+sortie (relance hors du shell d'outil) : aucun budget d'échec consommé, aucun
+pending. Les 10 compteurs d'échec de l'identité v3 restent dans `state.json`,
+entrées mortes sans effet.
+
+**Défaut du jour : la recopie change de champ.** `open` est vide 11/11 (texte
+fixe du rendu). Mais **6 résumés sur 11 recopient mot pour mot `doing` et
+`stopped_at` de l'annexe `previous_summary`** : `66859fef`, `b19a6fc3`,
+`a6474bfc`, `4e2aae08` héritent de `901a5aaf` ; `96c8f48e` de `c64cb39d` ;
+`a1040f4f` de `1eb35865`. L'annexe est marquée `evidence_eligible=false` et le
+prompt la dit « interprétation antérieure, faillible » ; le modèle s'en sert
+comme gabarit dès que la session n'a ni commit ni terminal (agent qui édite
+des fichiers, aucune app). D1, chassé de `open` par la v5, revient dans
+`doing` / `stopped_at`. Les cinq résumés justes sont les cinq sessions à
+commits ou premières de chaîne.
+
+**Relecture, session par session.**
+
+- `d4dc40e0` (00:13–01:06, 3 commits). Juste : `doing` (D6, doc, archive de
+  l'eval) et `stopped_at` sur 3504d4d, dernier commit vu ; `open` vide.
+  Manque : le merge de la PR #77 à 00:20, hors vue. Trop : rien.
+- `9346b55d` (01:30–01:47, 2 commits). Juste : reconstruction unique,
+  dernier commit 48162d1. Manque : le merge de la PR #78 à 01:39, hors vue.
+  Trop : rien.
+- `901a5aaf` (10:05–10:19, fichiers seuls). Juste : `doing` générique mais
+  exact, `stopped_at` « sans commit ni test ». Manque : nommer
+  `file_policy.py` et le prompt v4, les deux nouveautés. Trop : « fichiers de
+  configuration » (`config.py` modifié, rien créé).
+- `66859fef` (10:22–10:42). Recopie. Juste : `central_files`. Manque : la
+  capture du corpus (`intelligence/eval/observed/*.json`, 20 créés), l'objet
+  réel de la session. Trop : `doing` et `stopped_at` hérités.
+- `b19a6fc3` (10:44–11:01). Recopie. Juste : `central_files`. Manque : la
+  décision `observations-ordonnees.md` et son audit, créés ici. Trop :
+  hérités.
+- `a6474bfc` (15:51–16:06). Recopie, `confidence` low, **`central_files`
+  vide** alors que la session crée `resumption.py`, le prompt v5,
+  `test_resumption.py` et la décision reprise fondée. Manque : tout. Trop :
+  hérités. Le pire des onze.
+- `4e2aae08` (16:54–16:59). Recopie. Juste : `central_files`. Manque : le
+  rejeu before/after de l'audit reprise fondée (20 créés, 9 supprimés).
+  Trop : hérités.
+- `c64cb39d` (23:40–23:46). Juste : `doing` (scénarios d'audit, tests
+  d'intégration), `stopped_at` sans commit. Manque : rien pour six minutes.
+  Trop : rien.
+- `96c8f48e` (23:49–23:54). Recopie. Juste : `central_files` (README et
+  `validation.md` de l'audit, décision, `core/README.md`). Manque : que la
+  session écrit de la doc, pas des scénarios. Trop : hérités.
+- `1eb35865` (09, 00:07–01:01, 21 commits). Juste : `doing` (refonte v3,
+  prompts v4/v5, `corpus/`, 0.6.0.0), `central_files`. Manque : la vraie fin,
+  PR #79 à #82 mergées entre 00:45 et 01:01 (hors vue) ; `stopped_at` cite le
+  premier commit (wip 65367d5, 00:25) comme dernier. Trop : « sans rapport
+  final de vérification du travail d'Astra » — la demande d'agent (annexe)
+  rendue comme un reste : D3 dans `stopped_at`.
+- `a1040f4f` (09, 19:50–20:01, 2 commits). Recopie, `confidence` low.
+  Juste : `central_files` (audits déplacés vers `corpus/audits-retired`).
+  Manque : ses deux commits pourtant dans la vue (9691e73 adjudication,
+  8c282e2 levée du gel), donc toute la session ; « 14 fiches à compléter »
+  dans le message de 9691e73 aurait pu porter un `open`. Trop : `doing`,
+  `stopped_at` et `intents` qui décrivent la nuit précédente.
+
+**À trancher.** L'annexe `previous_summary` fait plus de mal que de bien
+sous v5 : 6 recopies, 0 apport visible. La retirer de l'entrée, ou n'en
+garder que `open`, est un choix de prompt/entrée qui passe par une PR.
