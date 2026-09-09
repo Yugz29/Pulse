@@ -12,7 +12,7 @@ modèle sur le corpus `eval/`, et le service attend.
 Vérification du dépôt à `8c282e2`, des commits récents, du code et de l'état
 local, sans génération de modèle ni modification de configuration.
 **Verdict : socle opérationnel ; reprise v5 livrée mais utilité encore à
-valider ; lot automatique actuellement incompatible avec la configuration.**
+valider.**
 
 - Core tourne, watchers fichiers/apps et worker actifs ; outbox : 0 pending,
   0 dead-letter. Le producteur d'agents est périodique (une heure), dernier
@@ -688,3 +688,12 @@ commits ou premières de chaîne.
 **À trancher.** L'annexe `previous_summary` fait plus de mal que de bien
 sous v5 : 6 recopies, 0 apport visible. La retirer de l'entrée, ou n'en
 garder que `open`, est un choix de prompt/entrée qui passe par une PR.
+
+**Tranché le soir même : prompt v6 = v5 sans annexes** (PR #83, mergée).
+Sous v5, `previous_summary:0` et `agent_request:0` étaient lisibles mais
+jamais citables ; v6 retire les deux annexes de l'entrée et leurs mentions
+du prompt, `build_model_input(annexes=False)`. Dry-run v6 sur les 11
+sessions du 08–09 : **11/11 décrivent leur propre session**, contre 5/11
+sous v5 ; les 4 justes sous v5 le restent. Défaut de `Config` passé à v6 ;
+la config de production reste sans `prompt_version`. Aucune réémission
+des sessions du 08. `open` vide 11/11 reste un sujet ouvert, hors PR #83.
