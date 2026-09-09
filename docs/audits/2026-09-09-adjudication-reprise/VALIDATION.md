@@ -38,6 +38,10 @@ entières.
 - **14 cas de benchmark préparés** : 7 erreurs, 4 contrôles, 3 sondes d’utilité
   sans notation avant vos réponses. Références et empreintes vérifiées.
 - Les références des propositions existent dans la session ou l’annexe citée.
+- **Hors de ce périmètre de vérification :** les fiches 15 à 18, ajoutées le
+  2026-09-09 au soir (jour 5), sur des sessions des 8 et 9 septembre. Elles
+  portent la vue Core, le résumé v5 émis et un dry-run v6 non émis, sans
+  rappel proposé ni annotation historique.
   Les JSON sont lisibles et les liens relatifs des nouveaux documents résolus.
 - Aucune exécution de tests de production n’était nécessaire : aucun code ni
   comportement n’a changé. Les vérifications concernent les documents, leurs

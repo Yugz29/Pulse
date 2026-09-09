@@ -844,6 +844,74 @@
         }
       ],
       "adjudicated_items": null
+    },
+    {
+      "session_id": "a6474bfccd65bfc8",
+      "label": "work-8",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/15-a6474bfccd65bfc8.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "a1040f4f6d863fc6",
+      "label": "work-7",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/16-a1040f4f6d863fc6.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "1eb35865547b0cca",
+      "label": "work-1",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/17-1eb35865547b0cca.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [],
+      "adjudicated_items": null
+    },
+    {
+      "session_id": "d4dc40e0839bb5a4",
+      "label": "work-1",
+      "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/18-d4dc40e0839bb5a4.md",
+      "status": "awaiting_user",
+      "answers": {
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
+        "E": null
+      },
+      "recall_confidence": null,
+      "resume_horizon": null,
+      "candidates": [],
+      "adjudicated_items": null
     }
   ]
 }

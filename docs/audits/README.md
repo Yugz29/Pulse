@@ -10,7 +10,7 @@ réponse de l'utilisateur** garde un dossier ici.
 
 | Audit | Ce qui est attendu |
 | --- | --- |
-| [`2026-09-09-adjudication-reprise/`](2026-09-09-adjudication-reprise/) | Vos réponses aux 14 fiches (`fiches/`, questions A–E) : vérité terrain sur ce qui aide vraiment à reprendre. Commencer par 13, 14, 03, 04 ; répondre A et B avant de lire la sortie du modèle. |
+| [`2026-09-09-adjudication-reprise/`](2026-09-09-adjudication-reprise/) | Vos réponses aux 18 fiches (`fiches/`, questions A–E) : vérité terrain sur ce qui aide vraiment à reprendre. Commencer par 13, 14, 03, 04 ; répondre A et B avant de lire la sortie du modèle. Les fiches 15 à 18, ajoutées le soir du jour 5, portent sur des sessions des 8 et 9 septembre et comparent v5 émis et dry-run v6. |
 
 ## Clos
 

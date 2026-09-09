@@ -1,8 +1,10 @@
-# Les 14 fiches à juger
+# Les 18 fiches à juger
 
 Les réponses sont laissées vierges. Vous pouvez compléter les fiches en Markdown ou répondre ici avec le numéro de fiche et A–E. Le fichier JSON proposé contient les mêmes emplacements, tous à `null` : il ne constitue pas une nouvelle vérité terrain.
 
 **Premier lot conseillé :** `1e420dda` (omission explicite), `eef4956b` (report contestable), `6a416635` (incidents dépassés), `2ce34456` (plusieurs projets et intention tardive). Puis les dix autres, y compris les sessions sans incident.
+
+**Fiches 15 à 18, ajoutées le 2026-09-09 (jour 5).** Sessions récentes des 8 et 9 septembre, encore fraîches en mémoire, avec deux sorties de modèle à comparer : le résumé v5 réellement émis et un dry-run v6 sans annexes, non émis. Elles ne proposent aucun rappel : la section C y est libre.
 
 Pour limiter l’influence du modèle, commencez par A et B sans ouvrir sa sortie ; jugez ensuite C, D et E. Une session oubliée reste non adjudiquée. Une suggestion de la fiche n’est pas une consigne de travail.
 
@@ -22,6 +24,10 @@ Pour limiter l’influence du modèle, commencez par A et B sans ouvrir sa sorti
 | [12](fiches/12-d98778994319cd07.md) | `d9877899` | Pulse — tests de verrou et horloge de la CLI |
 | [13](fiches/13-1e420dda8b6eee77.md) | `1e420dda` | Pulse — providers et divergence list/run |
 | [14](fiches/14-eef4956b36dd37ce.md) | `eef4956b` | Pulse — dogfooding, périmètre du watcher et prompt v2 |
+| [15](fiches/15-a6474bfccd65bfc8.md) | `a6474bfc` | Pulse — reprise fondée : resumption.py, prompt v5, décision |
+| [16](fiches/16-a1040f4f6d863fc6.md) | `a1040f4f` | Pulse — levée du gel, audits clos, adjudication |
+| [17](fiches/17-1eb35865547b0cca.md) | `1eb35865` | Pulse — observations v3, prompts v4/v5, Core 0.6.0.0 |
+| [18](fiches/18-d4dc40e0839bb5a4.md) | `d4dc40e0` | Pulse — D6 corrigé, dogfooding jour 3 |
 
 Les horaires des fiches sont en Europe/Paris, avec les bornes UTC conservées. La notion de reprise visée est celle que vous auriez souhaitée quelques heures ou jours après la session, pas une affirmation sur l’état du dépôt aujourd’hui.
 

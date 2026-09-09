@@ -4,7 +4,7 @@
 
 C’est une recommandation de conception **à éprouver par votre adjudication**, pas un changement de production. Aucun code, prompt, configuration ou corpus existant n’est modifié. Aucun modèle n’est lancé. La mission prépare la vérité terrain ; elle ne peut pas inventer les réponses qui la constitueront.
 
-**À utiliser maintenant : [les 14 fiches d’adjudication](FICHES.md).** Elles contiennent les faits courts, la sortie v5 complète, les annotations historiques, les intentions et inconnues, puis vos questions A–E. 67 rappels sont proposés sans sélection ; les 70 réponses A–E restent vierges. Commencer par list/run, le report de llm_max_tokens, les erreurs add et la session multi-projets.
+**À utiliser maintenant : [les 18 fiches d’adjudication](FICHES.md).** Elles contiennent les faits courts, la sortie v5 complète, les annotations historiques, les intentions et inconnues, puis vos questions A–E. 67 rappels sont proposés sans sélection ; les 90 réponses A–E restent vierges. Les fiches 15 à 18, ajoutées le 2026-09-09 au soir, ne proposent aucun rappel. Commencer par list/run, le report de llm_max_tokens, les erreurs add et la session multi-projets.
 
 Autres livrables : [omissions et responsabilités](OMISSIONS.md), [format d’annotation proposé](ANNOTATION-PROPOSEE.md), [KPI](KPI.md), [collecte](COLLECTE.md), [benchmark futur](BENCHMARK.md), [provenance et validations](VALIDATION.md). Aucun des tableaux de l’analyste ne vaut réponse de l’utilisateur.
 
@@ -138,6 +138,6 @@ Un futur essai devra changer le modèle en gardant observations et prompt consta
 
 ## 14. Prochaine mission technique
 
-**Construire un évaluateur hors production de reprise, à partir des 14 fiches adjudiquées et du format validé.** Il devra comparer la fiche entière aux informations essentielles, distinguer ce qui était accessible au modèle, conserver les erreurs de portée et mesurer la reprise correcte sans récompenser une sortie vide.
+**Construire un évaluateur hors production de reprise, à partir des fiches adjudiquées et du format validé.** Il devra comparer la fiche entière aux informations essentielles, distinguer ce qui était accessible au modèle, conserver les erreurs de portée et mesurer la reprise correcte sans récompenser une sortie vide.
 
 Prérequis : vos réponses et la confirmation des annotations proposées. Cette unique mission peut être menée sans modifier le contrat de génération. Elle doit précéder tout nouveau chantier sur le prompt, la collecte ou le modèle. Elle n’est pas implémentée ici.

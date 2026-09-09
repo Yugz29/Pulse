@@ -1,6 +1,6 @@
 # Proposition de vérité terrain — aucun format migré
 
-Statut : **draft-1**, à discuter après vos réponses. `eval/observed`, `eval/expected` et leurs anciens scores restent intacts. Les 14 fiches et `adjudications-a-completer.json` sont des dossiers en attente, pas des exemples de vérité terrain remplis par l’IA.
+Statut : **draft-1**, à discuter après vos réponses. `eval/observed`, `eval/expected` et leurs anciens scores restent intacts. Les fiches et `adjudications-a-completer.json` sont des dossiers en attente, pas des exemples de vérité terrain remplis par l’IA.
 
 ## Unité : une information utile à retrouver, pas une phrase dans open
 
