@@ -174,11 +174,13 @@ reconstruction de travail est effectuée en lecture, commune au journal et à
 **Priority:** P4 (veille)
 **Depends on:** Aucun — item sentinelle, ne pas implémenter
 
-## Hors gel
+## Reconstruction et contrat `/context`
 
 Observations du dogfooding (`docs/dogfooding.md`) qui touchent la
-reconstruction des sessions, donc le périmètre fonctionnel gelé (0.5.6). Parquées
-ici, par ordre de priorité, pas de correctif sans décision.
+reconstruction des sessions ou le contrat `/context`. Parquées ici sous le
+gel de Core (0.5.6), levé le 2026-09-09 : elles sont désormais réalisables
+selon la règle de contrat d'`AGENTS.md` (décision datée + bump de version
+quand un contrat consommé change). Ordre de priorité conservé.
 
 ### Fragmentation des sessions : `core/` détecté comme projet distinct de Pulse
 
@@ -191,7 +193,7 @@ remonte à un fragment plutôt qu'à la session précédente.
 
 **Effort:** M
 **Priority:** P2
-**Depends on:** Décision sur le gel (changement de la qualification projet)
+**Depends on:** Décision datée (changement de la qualification projet, identité de session)
 
 ### Une session ouverte par un commit ne voit pas ses fichiers
 
@@ -211,7 +213,7 @@ de nouveau dans la trace).
 
 **Effort:** M
 **Priority:** P3
-**Depends on:** Décision sur le gel
+**Depends on:** Décision datée si l'événement `git_commit` s'enrichit ; sinon reconstruction seule
 
 ### La vue de session devrait rendre l'état net par chemin, pas trois listes cumulées
 
@@ -228,7 +230,7 @@ brutes à côté.
 
 **Effort:** M
 **Priority:** P3
-**Depends on:** Décision sur le gel (changement du contrat `GET /context`)
+**Depends on:** Décision datée + bump du schéma `GET /context` (les observations ordonnées v1 du 2026-09-08 couvrent déjà une partie du besoin)
 
 ### Hook `pre-push` → événement `git_push` ; `push_observed` n'est jamais vrai
 
@@ -239,12 +241,12 @@ effectué » figure dans 9 `open` sur 9 au 2026-09-06, y compris pour des
 commits poussés depuis des heures — le modèle lit « non observé » comme
 « non fait ». Remède côté Core : un hook `pre-push` (même mécanique que le
 hook de commit) émettant `git_push` avec branche, dépôt et plage de commits ;
-nouveau type d'événement, donc hors gel. En attendant, la consigne se traite
-côté prompt (v3).
+nouveau type d'événement. En attendant, la consigne se traite côté prompt
+(v3 à v5 : un silence de collecte n'est pas un point ouvert).
 
 **Effort:** S
 **Priority:** P3
-**Depends on:** Décision sur le gel (nouveau type d'événement)
+**Depends on:** Décision datée (nouveau type d'événement, version d'observations)
 
 ## Completed
 

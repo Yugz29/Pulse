@@ -8,7 +8,8 @@ Date : 2026-09-08. Décision et implémentation du deuxième chantier autorisé 
 Core et Intelligence. Le gel fonctionnel est levé pour cette frontière précise.
 **Statut : représentation implémentée et testée ; qualité de `open` non validée
 pour activation en dogfooding.** Aucun service personnel n'a été modifié.
-Voir le [rejeu complet](../audits/2026-09-08-observations-ordonnees/README.md).
+Le rejeu complet a été retiré du dépôt le 2026-09-09 (voir
+[`docs/audits/README.md`](../audits/README.md) et l'historique Git).
 
 ## Problème constaté
 

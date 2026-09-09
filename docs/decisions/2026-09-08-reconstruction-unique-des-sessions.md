@@ -148,10 +148,11 @@ Mesures sur cette machine, bases SQLite temporaires avec mêmes colonnes et
 index que le code de chaque version. Historique prérempli hors chronométrage ;
 25 insertions canoniques distinctes par taille, normalisation hors mesure,
 connexion/transaction/commit inclus. Ni donnée personnelle ni daemon actif.
-Script et données : [`benchmark.py`](../audits/2026-09-08-session-reconstruction/benchmark.py),
-[`before.json`](../audits/2026-09-08-session-reconstruction/before.json),
-[`after.json`](../audits/2026-09-08-session-reconstruction/after.json). Exécution
-depuis la racine : `PYTHONPATH=core core/.venv/bin/python docs/audits/2026-09-08-session-reconstruction/benchmark.py`.
+Script : [`tools/benchmark_session_reconstruction.py`](../../tools/benchmark_session_reconstruction.py).
+Exécution depuis la racine :
+`PYTHONPATH=core core/.venv/bin/python tools/benchmark_session_reconstruction.py`.
+Les mesures brutes (`before.json`, `after.json`) ont été retirées du dépôt le
+2026-09-09 (historique Git) ; le tableau ci-dessous les résume.
 
 Un passage par version, à interpréter comme ordre de grandeur, sans promesse
 sur la latence en production. Le cas vide inclut surtout les coûts de fichiers.

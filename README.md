@@ -10,12 +10,12 @@ sur la machine.
 ## Structure du repo
 
 - `core/` — Pulse Core, la couche observation (daemon Python, watchers,
-  SQLite, observateur macOS, Context API `GET /context`). Gelée sur son
-  périmètre fonctionnel en 0.5.6.
-  Historique git conservé.
+  SQLite, observateur macOS, Context API `GET /context`). Collecte sans
+  dépendre d'un modèle ; ses contrats consommés évoluent par décision datée
+  et version (voir `AGENTS.md`). Historique git conservé.
 - `intelligence/` — couche Intelligence (résumés de session, mémoire). CLI
-  complète avec faux modèle livrée sur le contrat de `/context` ; modèle MLX
-  et service résident encore à construire.
+  complète, trois providers (faux, endpoint OpenAI, MLX local) ; résumés
+  générés en dogfooding, service résident encore à construire.
 - `docs/VISION.md` — document canonique : principe, architecture, roadmap,
   décisions.
 - `docs/decisions/` — notes de décision datées.
@@ -33,4 +33,5 @@ Installation, services launchd, tests et commandes : voir
 
 ## Direction
 
-Lire [`docs/VISION.md`](docs/VISION.md) avant toute contribution.
+Lire [`docs/VISION.md`](docs/VISION.md) avant toute contribution ; les
+consignes de travail sont dans [`AGENTS.md`](AGENTS.md).

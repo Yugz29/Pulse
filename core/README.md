@@ -1,9 +1,11 @@
 # Pulse Core
 
-> **Core est gelé** (version 0.5.4 : Context API au pas 2, type
-> `session_summary` et identité stable des sessions au pas 3) — aucune autre évolution fonctionnelle n'est
-> prévue dans cette couche. La direction du projet, les couches à construire et la roadmap
-> sont dans [`../docs/VISION.md`](../docs/VISION.md).
+> Pulse Core est la couche observation : il collecte et conserve les faits
+> sans dépendre d'un modèle. Son périmètre fonctionnel a été gelé de la 0.2.0
+> à la 0.5.6 ; le gel est levé depuis le 2026-09-09 au profit d'une règle de
+> contrat (voir [`../AGENTS.md`](../AGENTS.md), « Contrats de Core »). La
+> direction du projet, les couches à construire et la roadmap sont dans
+> [`../docs/VISION.md`](../docs/VISION.md).
 
 Pulse V2 observe l’activité locale de développement, conserve une trace locale en append-only, regroupe les événements en sessions et reconstruit une vue lisible de la journée en cours.
 

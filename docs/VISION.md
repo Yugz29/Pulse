@@ -83,17 +83,22 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, gelé sur son périmètre fonctionnel, version 0.5.6**
-(`core/`). Daemon Flask et SQLite append-only (`~/.pulse_v2/trace.db`),
-watchers terminal, fichiers (FSEvents), applications (Swift), hook Git,
-sessions d'agents Claude Code / Codex en événements dérivés, services
-résidents sous launchd, vue HTML locale.
-Identité de session stable par hash des événements sources (0.5.0).
-Le Context API (`GET /context`, pas 2 de la roadmap) est livré en 0.3.0 ; le
-type d'événement `session_summary` (0.4.0) et l'identité stable des sessions
-(0.5.0) sont les seuls **ajouts** du pas 3 côté Core. Les versions suivantes
-(0.5.1 à 0.5.6) sont des lots de correctifs sans ajout fonctionnel : le gel
-porte sur le périmètre, pas sur les corrections.
+**État actuel : existe, version 0.5.6, gel levé** (`core/`). Daemon Flask
+et SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
+(FSEvents), applications (Swift), hook Git, sessions d'agents Claude Code /
+Codex en événements dérivés, services résidents sous launchd, vue HTML
+locale. Identité de session stable par hash des événements sources (0.5.0),
+reconstruction unique et déterministe (`reconstruction_version` 3),
+observations ordonnées exposées par `/context` (schéma 3).
+
+Le périmètre fonctionnel de Core a été gelé du 2026-09-02 (0.2.0) au
+2026-09-09 : le temps de stabiliser le contrat `/context` et de livrer la
+première boucle IA. Les trois chantiers du 2026-09-08 (reconstruction unique,
+observations ordonnées, reprise fondée) ont montré que Core et Intelligence
+doivent évoluer ensemble. Le gel est remplacé par une règle de contrat
+(`AGENTS.md`, « Contrats de Core ») : un changement de contrat consommé
+demande une décision datée, un bump de version et la mise à jour des
+consommateurs. L'invariant demeure : Core collecte sans dépendre d'un modèle.
 
 ### Intelligence — transformer les faits en contexte
 
@@ -155,7 +160,8 @@ résumés à indexer, pas avant.
 ## Roadmap en trois pas
 
 1. **Geler Core à 0.2.** Décidé le 2026-09-02, sur la 0.2.0 sortie le
-   2026-08-31. Core ne bouge plus, sauf pour le pas 2.
+   2026-08-31. Fait ; gel levé le 2026-09-09 une fois les pas 2 et 3 livrés
+   (voir « Core — la vérité factuelle »).
 2. **Context API.** `GET /context` déterministe, sans LLM : activité courante,
    projet, session, historique récent. C'est le contrat stable que les couches
    supérieures consomment. Livré le 2026-09-02 (Core 0.3.0), spec dans
@@ -189,6 +195,12 @@ problème réel.
   première action de la couche Agent (décision du 2026-09-03).
 
 ## Décisions prises
+
+- **2026-09-09** — Gel de Core levé, consignes de travail unifiées dans
+  `AGENTS.md` (`CLAUDE.md` l'importe) : autonomie technique bornée au chantier
+  demandé, règle de contrat pour Core à la place des interdictions par
+  répertoire, GitNexus et skills facultatifs, la Vision reste canonique
+  ([décision](decisions/2026-09-09-assouplissement-instructions.md)).
 
 - **2026-09-08** — Reprise fondée : observations de fin de session distinctes
   de l'état actuel, anciens résumés non admissibles comme preuves, entrée v3

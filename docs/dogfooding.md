@@ -439,7 +439,7 @@ Les 12 sessions enchaînées ont reçu une annexe (`work-1` ouvre sa journée).
 - **D3, 2 cas nets + 1 faible.** L'annexe `agent_session` de 14:45 à 22:07
   dit « Cette session ne traite QUE le défaut 10 ». À 22:07, work-25 écrit
   « le défaut 10 n'a pas été traité », alors qu'il l'a été en work-13 (PR
-  #56 mergée 15:32) et que `docs/audits/2026-09-06-suivi.md`, dans la vue,
+  #56 mergée 15:32) et que le suivi d'audit du 06 (retiré du dépôt le 09-09), dans la vue,
   l'affiche mergé. work-27 le reporte ; work-1 reformule la mission de
   l'agent en « validation non confirmée ».
 - **D4, 1 cas** : work-2 lit le commit a8ba1c8 comme « reste à vérifier ».
@@ -458,8 +458,8 @@ prompt v3, eval MLX, rapport). La mission disait « commits atomiques, pas
 de push » et ne nommait aucune branche ; la session a travaillé sur `main`
 tel que checkout. Le push d'`origin/main` à 02:21:38 a été fait hors de la
 session (aucune commande push dans sa transcription). Validation : suite
-rapide 239 tests, 6 tests `slow` avec MLX, eval 14/14, rapport
-`docs/audits/2026-09-07-validation-open-v3.md`. **Aucune PR, aucune
+rapide 239 tests, 6 tests `slow` avec MLX, eval 14/14 (rapport de validation
+retiré du dépôt le 09-09, voir `docs/audits/README.md`). **Aucune PR, aucune
 relecture.** v2 et v3 sont épinglés par hash dans les tests ; le défaut de
 `Config` reste v2, rien n'est activé.
 
@@ -537,8 +537,8 @@ Correctif en branche `ship/intelligence-prompt-v3-d6`, mergé à 00:20 le 08 :
   acceptée sur le corpus). L'attente d'`eef4956b` passe le point « sans
   commit qui les nomme » d'`optional` à `must_not`.
 
-**Corpus, MLX, argmax, 14 entrées** (archive
-`docs/audits/2026-09-08-eval-v3-d6/`) :
+**Corpus, MLX, argmax, 14 entrées** (archive retirée du dépôt le 09-09,
+voir `docs/audits/README.md`) :
 
 | | nuit du 07 (v3) | v3 + D6 |
 | --- | --- | --- |

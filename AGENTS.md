@@ -1,54 +1,105 @@
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+# Pulse — cadre de travail
 
-This project is indexed by GitNexus as **Pulse_Core** (1 435 nodes, 4 763 edges, 123 execution flows — index à la racine du repo unique, code sous `core/`).
+## Mission et autonomie
 
-> Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
+- La demande de l'utilisateur définit l'objectif et le périmètre du chantier
+  en cours. Les consignes de ce fichier et de `docs/VISION.md` restent en
+  vigueur pendant le chantier ; si elles sont fausses ou dépassées, on les met
+  à jour explicitement plutôt que de les contourner.
+- Une autorisation donnée dans la conversation vaut pour le chantier nommé.
+  Elle ne s'étend pas d'elle-même au chantier suivant ni à une session
+  ultérieure.
+- Décider et réaliser les changements réversibles nécessaires à la mission,
+  dans `core/`, `intelligence/`, les tests, les scripts et la documentation.
+  Aucun répertoire n'est gelé par principe.
+- Les responsabilités peuvent évoluer : déplacer, fusionner, renommer ou
+  supprimer du code versionné et adapter les contrats internes si cela
+  simplifie le système. Préserver le travail local préexistant de l'utilisateur.
+- Rester dans l'objectif demandé. Ne pas transformer un correctif en chantier
+  général ni ajouter une fonctionnalité sans rapport avec la mission.
+- Résoudre les choix techniques ordinaires sans validation fichier par fichier.
+  Poser une question seulement si une information ou une autorisation manque
+  réellement : données menacées, rupture externe, nouvelle destination de
+  données, action irréversible, ou choix produit non couvert par la demande.
 
-## Always Do
+## Propriétés à préserver
 
-- **MUST run impact analysis before editing.** Use `impact({target: "symbolName", direction: "upstream"})` (MCP) or `node .gitnexus/run.cjs impact "symbolName" --direction upstream --repo .` (CLI fallback); report callers, processes, and risk. Never substitute grep for graph analysis.
-- **MUST analyze graph changes before committing.** Use `detect_changes({scope: "all"})` (MCP) or `node .gitnexus/run.cjs detect-changes --scope all --repo .` (CLI fallback). `partial: true` or `truncated: true` is not a clean check — a zero means unseen, not unaffected; re-run it. For regression review: `detect_changes({scope: "compare", base_ref: "main"})` or `node .gitnexus/run.cjs detect-changes --scope compare --base-ref "main" --repo .`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- **MUST treat `risk: UNKNOWN` as unresolved, not as low.** An empty caller set is not evidence the symbol is unused — it can also mean the callers are not resolvable by the index (plain-object property access, dynamic dispatch, cross-language calls). `impact` pairs `UNKNOWN` with a `riskNote` saying so. Confirm with a text search before treating the symbol as safe to change or delete; do not proceed on the strength of a zero.
-- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
-- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
+- Core observe et conserve les faits sans dépendre d'Intelligence ni d'un modèle.
+  Une panne ou une lenteur de l'IA ne doit pas empêcher la collecte.
+- Préserver les événements historiques, leur provenance et les mécanismes
+  de livraison et de rattrapage. Une compatibilité de lecture peut remplacer
+  un ancien mécanisme d'écriture devenu inutile.
+- Préserver le masquage, les permissions, les protections des archives et
+  le fonctionnement local. Ne pas introduire de transmission de données
+  vers un nouveau destinataire sans autorisation couvrant cette transmission.
+- Vérifier les consommateurs avant de qualifier un contrat d'externe.
+  Faire évoluer les interfaces internes avec leurs appelants ; préparer une
+  transition explicite pour un contrat réellement consommé à l'extérieur.
+- Une suppression de code versionné n'est pas une suppression de données
+  utilisateur. Les données, archives et changements locaux non sauvegardés
+  demandent une protection adaptée ; ne pas les écraser pour simplifier le code.
 
-## Never Do
+## Contrats de Core
 
-- NEVER edit a function, class, or method before MCP/CLI impact analysis.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis, and never read `UNKNOWN` as an all-clear — it means the walk could not answer, which is the one verdict that requires confirming by other means.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit before MCP/CLI graph change analysis.
+Le gel fonctionnel de Core est levé (décision du 2026-09-09). À sa place,
+une règle de contrat :
 
-## Resources
+- Un changement de Core qui touche un contrat consommé — `GET /context` et
+  `/context/sessions`, format d'export du journal, identité de session,
+  `reconstruction_version`, version des observations, schéma de `trace.db` —
+  exige une note datée dans `docs/decisions/`, un bump de la version
+  concernée et la mise à jour des consommateurs dans le même chantier.
+- Les correctifs, le ménage interne, les tests et les scripts ne demandent
+  rien de plus que les tests verts.
+- Les versions et les schémas existants restent lisibles : une base, un
+  export ou un résumé anciens se relisent sans modèle et sans migration
+  destructive.
 
-| Resource | Use for |
-| --- | --- |
-| `gitnexus://repo/Pulse_Core/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Pulse_Core/clusters` | All functional areas |
-| `gitnexus://repo/Pulse_Core/processes` | All execution flows |
-| `gitnexus://repo/Pulse_Core/process/{name}` | Step-by-step execution trace |
+## Méthode et validation
 
-## CLI
+- Lire le code concerné et vérifier ses consommateurs avant de le modifier.
+  Choisir les moyens adaptés : recherche textuelle, analyse statique, tests,
+  GitNexus. Aucun outil particulier n'est un passage obligé.
+- Utiliser les skills pertinents lorsqu'ils apportent une aide concrète et
+  sont disponibles. Pas de routage automatique ni de chaîne de revues imposée.
+  Leurs procédures ne créent pas d'autorisation supplémentaire à demander
+  lorsque la mission couvre déjà l'action.
+- Un graphe incomplet ou sans résultat ne prouve pas l'absence d'impact.
+  Compléter par le code et les tests ; signaler les limites restantes sans
+  répéter indéfiniment une analyse qui ne peut pas les lever.
+- Si GitNexus est réindexé, utiliser `analyze --index-only` : `analyze` seul
+  régénère les blocs de consignes dans ce fichier et dans `CLAUDE.md`. Un bloc
+  généré ne remplace pas ce cadre.
+- Adapter les tests aux propriétés et comportements voulus. Exécuter les
+  vérifications pertinentes pour le changement ; élargir selon les risques.
+  Pour Core, lancer les tests depuis `core/` avec `make test` ou
+  `.venv/bin/python -m pytest tests_v2`.
+- Expliquer le résultat, les validations réellement exécutées et les limites.
+  Signaler les conséquences concrètes d'un risque, pas seulement un score d'outil.
 
-| Task | Read this skill file |
-| --- | --- |
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus-cli/SKILL.md` |
+## Documentation et actions externes
 
-<!-- gitnexus:end -->
-
-# Pulse — règles du repo unique
-
-Voir `CLAUDE.md` (même contenu, référence unique) et `docs/VISION.md`.
-En bref : `core/` (Pulse Core) est gelé sur son périmètre fonctionnel (0.5.6 ;
-le gel interdit les ajouts, pas les correctifs) — ne pas toucher à
-`core/daemon_v2/`, `core/tests_v2/`, `core/scripts/`, `core/macos_observer/` ;
-pas de `git push` ni de suppression sans accord explicite ; le nouveau code va
-dans `intelligence/`.
+- `docs/VISION.md` est le document canonique de direction ; en cas de
+  contradiction avec un autre document du dépôt, il prime. Quand un chantier
+  le rend faux, le mettre à jour dans le même chantier. Une ancienne limite
+  de chantier consignée dans une décision n'est pas une interdiction
+  permanente : c'est la Vision qui dit ce qui est en vigueur.
+- Mettre à jour les documents rendus faux par le changement. Une note de
+  décision sert aux choix durables qui méritent une justification, pas à
+  chaque détail.
+- Conserver les spécifications et décisions historiques en indiquant ce qui
+  les remplace.
+- Un audit ou une évaluation aboutit à une note de décision ou à une entrée
+  de `docs/dogfooding.md`, avec verdict et paramètres de rejeu. Ses données
+  de travail (prompts archivés, taxonomies, revues, rejeux, sorties de modèle,
+  logs) vont dans `corpus/`, hors dépôt. Un dossier sous `docs/audits/` ne
+  sert qu'à ce qui attend une réponse de l'utilisateur ; il est retiré une
+  fois la réponse consignée.
+- Le code versionné devenu inutile peut être supprimé ; Git en garde
+  l'historique. L'archivage hors dépôt reste réservé à ce que l'utilisateur
+  désigne (Lab, traces, corpus), pas au code mort ordinaire.
+- Push, publication, déploiement, rupture externe ou action irréversible :
+  vérifier que l'autorisation existante couvre l'action. Si elle manque,
+  préparer le résultat révisable puis poser une question précise ; continuer
+  les travaux indépendants. Ne pas redemander une autorisation déjà donnée
+  pour la même action dans le même chantier.

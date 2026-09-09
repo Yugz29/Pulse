@@ -9,8 +9,9 @@ ordonnées. Les événements et le corpus gelé ne sont pas modifiés.
 La relecture de 21 points dans 14 sorties v4 identifie trois sources majeures :
 absence de collecte transformée en recommandation, état passé affirmé au présent,
 interprétation précédente propagée sans preuve. Une sortie cite même dirty=false
-pour affirmer dirty=true. Voir la taxonomie détaillée dans
-`docs/audits/2026-09-08-reprise-fondee/taxonomy-v4.md`.
+pour affirmer dirty=true. La taxonomie détaillée (`taxonomy-v4.md`) est dans le
+rapport d'audit retiré du dépôt le 2026-09-09 (voir `docs/audits/README.md`,
+historique Git).
 
 Le contrat précédent autorisait `carried_over` avec une simple raison rédigée
 par le modèle et zéro observation. Nommer la propagation ne la rendait pas fondée.
@@ -87,7 +88,8 @@ en retouchant l'annotation ou en masquant un échec.
 Les 14 entrées gelées ont été rejouées avec le même modèle local et les mêmes
 paramètres, puis les huit scénarios contradictoires. Résultats : 14/14 sorties
 acceptées, 8/8 cibles contradictoires vérifiées, mais 2/4 critères humains
-satisfaits. Le [rapport complet](../audits/2026-09-08-reprise-fondee/README.md)
+satisfaits. Le rapport complet (retiré du dépôt le 2026-09-09, voir
+[`docs/audits/README.md`](../audits/README.md) et l'historique Git)
 distingue format, appui, résolution et utilité et conclut **non** à la fiabilité
 quotidienne sans relecture.
 Ne pas activer un service ou changer une configuration personnelle pendant ce
