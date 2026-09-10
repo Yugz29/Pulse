@@ -697,3 +697,30 @@ sessions du 08–09 : **11/11 décrivent leur propre session**, contre 5/11
 sous v5 ; les 4 justes sous v5 le restent. Défaut de `Config` passé à v6 ;
 la config de production reste sans `prompt_version`. Aucune réémission
 des sessions du 08. `open` vide 11/11 reste un sujet ouvert, hors PR #83.
+
+## Jour 6 — 2026-09-10
+
+**Lot launchd de 06:42, premier passage réel sous v6.** 3 candidates, **3/3
+créées, 0 échec** : `1eb35865` et `a1040f4f` réémises sous v6 (l'identité
+d'un résumé inclut la version du prompt ; les 9 sessions du 08 ne sont pas
+réémises, la sélection ne remonte qu'à la veille), plus `f8aab73b`
+(09, 20:43–20:58, prompt v6 et fiches 15 à 18). **Les trois décrivent leur
+propre session**, ce que le dry-run de la veille annonçait : `1eb35865`
+donne la refonte v3, file_policy, prompts v4/v5 ; `a1040f4f` cite son
+dernier commit 9691e73 au lieu de la nuit précédente ; `f8aab73b` cite
+01062ea. `open` vide 3/3, texte fixe du rendu.
+
+**Durée faussée par la veille du Mac.** Lancé à 06:42 pendant un réveil
+sombre, le lot n'a avancé que par tranches de deux à trois minutes tous les
+quarts d'heure (DarkWake, `pmset -g log`) et s'est terminé à 13:48 : sept
+heures pour trois sessions, `generation_ms` de 2 à 3 h par session. Ce
+n'est pas Intelligence qui est lente, c'est la machine qui dort ; les
+durées enregistrées ce jour-là ne se comparent pas aux 23 à 43 s du 09.
+Même cause que la veille du jour 3.
+
+**Adjudication des 18 fiches**, faite le soir même : réponses,
+registre des trous de collecte et synthèse dans
+`docs/audits/2026-09-09-adjudication-reprise/`. Résultat qui compte pour
+le journal : `open` vide n'est pas le validateur (0 rejet en production,
+14/14 replays où le brut du modèle égale le validé), c'est le modèle sous
+le prompt. Rejeu en trois variantes décidé le 11, pas encore lancé.

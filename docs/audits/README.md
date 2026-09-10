@@ -10,7 +10,7 @@ réponse de l'utilisateur** garde un dossier ici.
 
 | Audit | Ce qui est attendu |
 | --- | --- |
-| [`2026-09-09-adjudication-reprise/`](2026-09-09-adjudication-reprise/) | Vos réponses aux 18 fiches (`fiches/`, questions A–E) : vérité terrain sur ce qui aide vraiment à reprendre. Commencer par 13, 14, 03, 04 ; répondre A et B avant de lire la sortie du modèle. Les fiches 15 à 18, ajoutées le soir du jour 5, portent sur des sessions des 8 et 9 septembre et comparent v5 émis et dry-run v6. |
+| [`2026-09-09-adjudication-reprise/`](2026-09-09-adjudication-reprise/) | Les 18 fiches sont répondues (2026-09-10) et la synthèse lue (2026-09-11, décisions consignées dans [`SYNTHESE.md`](2026-09-09-adjudication-reprise/SYNTHESE.md)). Les réponses restent ici comme **vérité terrain reconstruite** tant que le format d'annotation n'est pas validé. Le dossier attend le rejeu sur `open` (trois variantes du prompt v6, en batch) avant de se clore. |
 
 ## Clos
 

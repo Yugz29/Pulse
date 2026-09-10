@@ -134,6 +134,8 @@ reconstruction de travail est effectuée en lecture, commune au journal et à
 
 **What:** Second étage du chantier hooks (le premier, SessionEnd, est livré) : un hook `PostToolUse` pour donner à Pulse un signal d'activité agent en quasi-temps réel pendant la session — aujourd'hui le journal ne voit une session qu'à sa fin. À cadrer avant d'implémenter : quel événement dérivé (heartbeat de session active ? activité outil agrégée ?), quel débit acceptable (un hook par appel d'outil est fréquent — il faudra agréger côté hook), et ce que le rendu en ferait.
 
+**Référence (2026-09-11) :** à l'adjudication du 2026-09-10, 5 fiches sur 18 citent les commandes de l'agent invisibles au hook shell (06, 08, 09, 10, 15 de `docs/audits/2026-09-09-adjudication-reprise/`) ; fiche 06, c'est presque sûrement par là que la migration Django est passée. Reste P3 : ce hook donne les commandes, pas le contenu des sessions d'agent, dont la rétention est confirmée comme frontière.
+
 **Effort:** M
 **Priority:** P3
 **Depends on:** Retour d'usage du hook SessionEnd
@@ -232,21 +234,47 @@ brutes à côté.
 **Priority:** P3
 **Depends on:** Décision datée + bump du schéma `GET /context` (les observations ordonnées v1 du 2026-09-08 couvrent déjà une partie du besoin)
 
-### Hook `pre-push` → événement `git_push` ; `push_observed` n'est jamais vrai
+### Hooks `pre-push` et `post-merge` → événements `git_push` et `git_merge` ; ni push ni merge observés
 
-**What:** Core n'observe pas les pushs : aucun producteur n'émet de
-`git_push`, donc `git.push_observed` vaut toujours `false`. Effet sur
-Intelligence (défaut D5, `docs/dogfooding.md`) : « le push n'a pas été
-effectué » figure dans 9 `open` sur 9 au 2026-09-06, y compris pour des
-commits poussés depuis des heures — le modèle lit « non observé » comme
-« non fait ». Remède côté Core : un hook `pre-push` (même mécanique que le
-hook de commit) émettant `git_push` avec branche, dépôt et plage de commits ;
-nouveau type d'événement. En attendant, la consigne se traite côté prompt
-(v3 à v5 : un silence de collecte n'est pas un point ouvert).
+**What:** Core n'observe ni les pushs ni les merges : aucun producteur n'émet
+de `git_push`, donc `git.push_observed` vaut toujours `false`, et l'avancée
+de `main` sur la machine (merge local, `git pull` après merge distant) n'est
+pas un fait de la vue. Effet sur Intelligence : défaut D5 (« le push n'a pas
+été effectué » dans 9 `open` sur 9 au 2026-09-06), et, à l'adjudication du
+2026-09-10, **le trou de collecte le plus cité : 13 fiches sur 18** (01, 02,
+04, 05, 08, 09, 10, 12, 13, 14, 16, 17, 18 de
+`docs/audits/2026-09-09-adjudication-reprise/`). L'état de merge d'une PR est
+l'information de reprise que l'utilisateur cherche en premier, et la vue la
+plus juste (« main, propre ») ne peut que la suggérer.
+
+Remède côté Core, sans appel à GitHub : un hook `pre-push` (même mécanique
+que le hook de commit) émettant `git_push` avec branche, dépôt et plage de
+commits ; et l'observation locale des merges, par hook `post-merge` /
+`post-checkout` ou par lecture du reflog, émettant `git_merge` quand `main`
+avance. Deux nouveaux types d'événements. Élargi aux merges et remonté de P3 à
+P2 le 2026-09-11 sur décision de l'utilisateur après lecture de la synthèse.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Décision datée (nouveaux types d'événements, version d'observations)
+
+### `pulse note "…"` → événement `recorded_statement` horodaté
+
+**What:** Ce qui se décide hors de la machine n'existe pas pour Core : une
+bascule de projet décidée dans un chat, un jugement « le résumé est juste »,
+une relecture externe, le regel de Core. À l'adjudication du 2026-09-10,
+**7 fiches sur 18** citent ce trou (04, 08, 09, 13, 14, 16, 17), et le cas le
+plus grave du corpus en vient : fiche 04, un résumé pourtant exact devient
+faux dans l'heure parce que la reprise a été décidée ailleurs. Remède : une
+commande explicite, `pulse note "…"`, qui émet un `recorded_statement`
+horodaté, attribué à l'utilisateur, dans le workspace courant. Pas de capture
+de conversation : l'utilisateur dépose lui-même ce qu'il veut voir dans la
+reprise. Nouveau type d'événement ; Intelligence le traite comme une
+déclaration citable, au même titre qu'un message de commit.
 
 **Effort:** S
-**Priority:** P3
-**Depends on:** Décision datée (nouveau type d'événement, version d'observations)
+**Priority:** P2
+**Depends on:** Décision datée (nouveau type d'événement) ; ajouté le 2026-09-11
 
 ## Completed
 
