@@ -1,6 +1,6 @@
 # 08 — Pulse — Context API et ses consommateurs
 
-[Retour au parcours](../FICHES.md) · **À compléter : aucune réponse utilisateur préremplie.**
+[Retour au parcours](../FICHES.md) · **Répondu le 2026-09-10.** Note de provenance : Reconstruction externe (spec du Context API rédigée avec Fable le 2 sept., échanges du jour), pas souvenir spontané. Fiabilité : bonne.
 
 ## Session
 
@@ -62,39 +62,52 @@ Pensez à une reprise après plusieurs heures ou plusieurs jours. Les questions 
 
 ### A — Où en étais-tu réellement ?
 
-Réponse : ______________________________________________
+Réponse (2026-09-10) : Pas 2 de la roadmap V3, livré en 14 minutes de commits : c'est le workflow /ship de gstack qui déroule, sur la spec validée plus tôt dans la journée (docs/specs/2026-09-02-context-api.md). Quatre commits sur ship/context-api : lecture bornée par un instant dans TraceStore, module pur context_snapshot déterministe (même base + même at + même window → même JSON), route GET /context avec window 5–1440 et at, puis /status et status.sh comme premiers consommateurs. La rafale de docs à 17:20 (AGENTS, CLAUDE, README, CHANGELOG, VERSION, VISION), c'est le bump de version 0.3.0 en cours, pas encore committé à 17:21.
 
 ### B — Qu’est-ce qui restait réellement à faire ?
 
-Réponse : ______________________________________________
+Réponse (2026-09-10) : Committer les docs, ouvrir et merger la PR (devenue #27), et Core se regèle après cette version (seul changement prévu depuis le gel). Le lendemain : PR #28, exclure .gitnexus/ du watcher (0.3.1), puis la spec du pas 3.
 
 ### C — Parmi les éléments suivants, lesquels aurais-tu voulu revoir au moment de reprendre ?
 
 Pour chaque proposition, écrivez **essentiel / utile / inutile / nuisible / je ne sais pas**. Vous pouvez corriger le texte. Aucun élément n’est sélectionné par défaut.
 
 - **C1** — Le chemin context_snapshot → GET /context → /status et status.sh. (sources : o7, o10, o14)
-  Jugement / correction : ______________________________
+  Jugement / correction : **essentiel**. 
 - **C2** — Le contrat déterministe et les bornes de window et at décrits dans les commits. (sources : o7, o10)
-  Jugement / correction : ______________________________
+  Jugement / correction : **utile**. Le contrat vit dans la spec, mais les bornes de window/at sont ce qu'on oublie.
 - **C3** — Les fichiers principaux pour poursuivre : context_snapshot.py, routes.py, tests associés. (sources : o5, o6, o8)
-  Jugement / correction : ______________________________
+  Jugement / correction : **utile**. 
 - **C4** — Les notifications de documentation après le dernier commit, sans les qualifier de non commises. (sources : o15, o21)
-  Jugement / correction : ______________________________
+  Jugement / correction : **utile**. Et bien géré : pas de « non commises ».
 
-Autre information importante non proposée : ______________________________
+Autre information importante non proposée : 
+  - **Utile** — Les docs modifiées = bump 0.3.0 (VERSION touché), donc un jalon, pas des retouches.
+  - **Essentiel** — Core regelé après : non observable, mais c'est l'information de reprise qui compte le plus.
 
-Aucune de ces informations, si applicable : ______________________________
+Corrections : Aucune. Sortie juste.
+
+Aucune de ces informations, si applicable : sans objet
 
 ### D — Y avait-il quelque chose que Pulse ne pouvait pas savoir avec sa collecte actuelle ?
 
-Réponse : ______________________________________________
+Réponse (2026-09-10) :
+
+- Les tests (« aucun résultat collecté ») : lancés par l'agent, invisibles (PostToolUse).
+- Le merge de la PR.
+- Le regel de Core : décision, hors machine.
+- La spec elle-même si elle n'est pas dans la vue.
+
+Les trous de collecte sont agrégés dans [`D-backlog.md`](../D-backlog.md).
 
 ### E — Quelle sortie aurait été idéale ?
 
-Réponse libre : ______________________________________________
+Réponse libre (2026-09-10), idéale : Pas 2 de la roadmap V3 livré : Context API, lecture bornée dans TraceStore, module pur context_snapshot déterministe, route GET /context (window 5–1440, at), /status et status.sh premiers consommateurs ; quatre commits sur ship/context-api, docs/VERSION/CHANGELOG en cours de mise à jour pour 0.3.0. Reste : committer les docs, ouvrir/merger la PR, puis Core regelé ; PR suivante : exclure .gitnexus/ du watcher.
 
-Horizon imaginé pour cette reprise (heures / jours) : __________________
-Fiabilité de votre souvenir (sûr / partiel / je ne sais plus) : __________________
+Atteignable : Quatre commits sur ship/context-api (17:13–17:20) : lecture bornée latest_activity_of_type, module context_snapshot déterministe, route GET /context avec validation de window et at, /status et status.sh consommateurs. Puis AGENTS.md, CLAUDE.md, README, CHANGELOG, VERSION, VISION.md modifiés, dernières observations, VERSION touché. Aucun résultat de test observé. Aucun point ouvert observé.
+
+Horizon imaginé pour cette reprise (heures / jours) : le lendemain
+Fiabilité de votre souvenir (sûr / partiel / je ne sais plus) : reconstruction externe ; bonne
 
 <details>
 <summary>Éléments pour approfondir après vos réponses : intentions, limites, anciennes annotations</summary>

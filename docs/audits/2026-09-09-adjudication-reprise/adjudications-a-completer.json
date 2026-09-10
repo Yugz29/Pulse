@@ -1,22 +1,69 @@
 {
-  "status": "proposal_not_ground_truth",
+  "status": "reconstructed_ground_truth_not_validated_format",
   "schema_version": "draft-1",
-  "user_responses_received": 0,
+  "user_responses_received": 18,
   "sessions": [
     {
       "session_id": "7bbaca7882c3d766",
       "label": "work-6",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/01-7bbaca7882c3d766.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Je ne sais plus. Ce que la vue seule permet de dire, sans souvenir : c'est une clôture de jalon, commit de stabilisation, make test, vérification du rendu de la trace (les deux curl sur le port 5000, c'est l'ancien daemon, avant 8765), README, puis tag annoté palier-2-project-context-stabilized. Le git status final est un contrôle de propreté après le tag.",
+          "recall": "nulle ; lecture de la vue seule",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Je ne sais plus. Le message du tag dit « partially stabilized » : je savais donc qu'il restait du travail sur le contexte projet, mais la vue ne dit pas lequel, et moi non plus.",
+          "recall": "nulle ; lecture de la vue seule",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "utile",
+            "C3": "inutile",
+            "C4": "utile, faible",
+            "C5": "nuisible"
+          },
+          "missing": [
+            {
+              "text": "Le tag exact et sa qualification partielle. Les curl sur le port 5000 sont des contrôles du rendu de la trace (ancien daemon).",
+              "importance": "essentiel"
+            }
+          ],
+          "corrections": "« après l'activation de l'environnement virtuel » dans stopped_at n'existe pas dans la vue. C'est un détail inventé, à traiter comme tel.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Ce qui restait pour le palier 2 : dans ma tête, nulle part sur la machine.",
+            "Le contenu du README : message de commit seulement.",
+            "Résultat distant des pushs."
+          ],
+          "gaps": [
+            {
+              "id": "user_intent_unrecorded",
+              "label": "Intention non écrite (dans la tête de l'utilisateur)"
+            },
+            {
+              "id": "commit_content",
+              "label": "Contenu des commits"
+            },
+            {
+              "id": "push_merge",
+              "label": "Pushs et merges (D5)"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Pulse Core : commit « make project qualification archive stable », make test, vérification des traces du jour et de la veille, README « document passive git and project analysis », tag annoté palier-2-project-context-stabilized (« partially stabilized ») poussé. Arrêt sur git status. Aucun point ouvert observé ; le tag lui-même dit que la stabilisation est partielle.",
+          "same": true
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "nulle",
+      "resume_horizon": "inconnu",
       "candidates": [
         {
           "id": "C1",
@@ -24,7 +71,8 @@
           "references": [
             "o5"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Le nom du jalon et « partially » sont les deux seules informations de reprise de cette session. Le tag est absent de la sortie."
         },
         {
           "id": "C2",
@@ -33,7 +81,8 @@
             "o1",
             "o4"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": ""
         },
         {
           "id": "C3",
@@ -41,7 +90,8 @@
           "references": [
             "o2"
           ],
-          "user_rating": null
+          "user_rating": "inutile",
+          "user_comment": "Commandes de vérification, pas d'information de reprise."
         },
         {
           "id": "C4",
@@ -49,7 +99,8 @@
           "references": [
             "o5"
           ],
-          "user_rating": null
+          "user_rating": "utile, faible",
+          "user_comment": "Le push du tag est en code 0, c'est déjà une preuve raisonnable."
         },
         {
           "id": "C5",
@@ -57,25 +108,69 @@
           "references": [
             "o5"
           ],
-          "user_rating": null
+          "user_rating": "nuisible",
+          "user_comment": "Inférence, pas intention observée."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Aucun souvenir et aucune reconstruction externe pour cette période (session antérieure à mi-août). Fiabilité : nulle. Jugée sur les seuls faits de la vue, en mode rapide."
     },
     {
       "session_id": "8faf4569fe2723b1",
       "label": "work-1",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/02-8faf4569fe2723b1.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Je ne sais plus. La vue dit : trois axes en une nuit, support Swift minimal, correction des scans, performances du graphe et du couplage Git, huit commits, puis serveur de dev arrêté au clavier.",
+          "recall": "nulle",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Je ne sais plus. Le seul reste visible : le commit « fix: serialize project scans » a échoué (128) et n'a pas été recommitté sous ce nom.",
+          "recall": "nulle",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "utile",
+            "C3": "utile",
+            "C4": "utile comme question, nuisible tel que produit",
+            "C5": "inutile"
+          },
+          "missing": [],
+          "corrections": null,
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Ce qu'était le 128 (sortie de commande non collectée).",
+            "Si le correctif de sérialisation est passé dans un commit suivant : il faudrait la liste des fichiers par commit.",
+            "Résultat des pushs."
+          ],
+          "gaps": [
+            {
+              "id": "command_output",
+              "label": "Résultats des commandes"
+            },
+            {
+              "id": "commit_content",
+              "label": "Contenu des commits (fichiers par commit)"
+            },
+            {
+              "id": "push_merge",
+              "label": "Pushs et merges (D5)"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Cortex : support Swift minimal (swiftParser.ts) committé et poussé ; scans : résultats obsolètes ignorés (commit), sérialisation des scans tentée à 01:16, git en 128, pas recommittée sous ce nom ensuite ; performances : rendu de GraphView optimisé, logs de churn, cache du couplage par HEAD, logs de timing (quatre commits). Arrêt sur npm run dev interrompu au clavier à 02:01. Point ouvert : le commit « serialize project scans » a-t-il abouti ?",
+          "same": true
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "nulle",
+      "resume_horizon": "inconnu",
       "candidates": [
         {
           "id": "C1",
@@ -86,7 +181,8 @@
             "o58",
             "o69"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": ""
         },
         {
           "id": "C2",
@@ -97,7 +193,8 @@
             "o53",
             "o73"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "GraphView.tsx modifié à 01:34 et absent des cinq chemins retenus, à corriger."
         },
         {
           "id": "C3",
@@ -108,7 +205,8 @@
             "o74",
             "o77"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Le 130 est un arrêt normal du serveur de dev, pas un échec : à ne pas présenter comme tel."
         },
         {
           "id": "C4",
@@ -116,7 +214,8 @@
           "references": [
             "o41"
           ],
-          "user_rating": null
+          "user_rating": "utile comme question, nuisible tel que produit",
+          "user_comment": "Utile comme question (« la sérialisation des scans a-t-elle été committée ? ») ; nuisible tel que produit : une citation réécrite avec des && absents n'est plus une citation."
         },
         {
           "id": "C5",
@@ -125,25 +224,77 @@
             "o58",
             "o69"
           ],
-          "user_rating": null
+          "user_rating": "inutile",
+          "user_comment": ""
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Aucun souvenir, aucune reconstruction externe (Cortex, juillet, antérieure à mi-août). Vue seule. Fiabilité : nulle."
     },
     {
       "session_id": "6a4166356dbab6ec",
       "label": "work-1",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/03-6a4166356dbab6ec.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Fin de la Task 0 (project setup) du projet Vue : scaffold Vite + Vue + Tailwind + Lucide Vue + ESLint, homepage temporaire, lint/build/deploy verts (11:04–11:17). Le vrai sujet de la matinée était le déploiement GitHub Pages : react et vue devaient être publiés chacun dans leur sous-dossier de la branche gh-pages pour ne pas s'écraser mutuellement (gh-pages -e <dossier> --add), d'où le commit de 11:47 « deploy react & vue into separate gh-pages subfolders ». Les deux git add en code 128 sont des erreurs de chemin (lancés depuis front_end-frameworks avec des chemins relatifs faux), corrigés dans la foulée. .gitignore du vue ajusté à 11:49. Task 0 terminée, tout poussé, Git propre. La dernière commande, ls -R src dans react à 12:05, c'est le début de la Task 1 : je regardais la structure du projet React source (App.jsx, components/{cards,layout,sections,ui}, data/, sections/, services/) pour planifier la migration.",
+          "recall": "reconstruction externe, bonne sur le contenu, horodatage approximatif",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Toute la Task 1 : reproduire l'appli React en Vue, mêmes fonctionnalités/structure/UX, en SFC .vue avec lucide-vue-next. L'ordre de migration a été fixé juste après (probablement dans la reprise) : data → services → components/ui → cards → layout → Hero → sections (Contact en dernier pour le formulaire) → App.vue → main.js. Puis la Task 2 (comparison.md React/Vue) et le quizz de fin de projet.",
+          "recall": "reconstruction externe",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "utile",
+            "C2": "essentiel",
+            "C3": "essentiel",
+            "C4": "nuisible",
+            "C5": "inutile"
+          },
+          "missing": [],
+          "missing_note": "Aucune information observée ne manque. Ce qui manque est de l'interprétation : ls -R src dans react n'est pas « un listage », c'est l'ouverture de la migration React → Vue (Task 1). Pulse ne peut pas le savoir, et sous v5 il ne doit pas le deviner : c'est un trou, pas un défaut du résumé.",
+          "open_note": "Les deux échecs git add auraient dû être résolus, mais je vois pourquoi ils ne l'ont pas été. La règle v5 dit qu'un code 0 ultérieur n'établit une résolution que pour la même commande exacte dans son cwd. Or la reprise réussie de 11:47 est une commande différente : le chemin a été corrigé. Une commande relancée corrigée n'est jamais « la même » : la règle ne peut pas voir une résolution par correction. À noter pour la synthèse, ça va revenir sur toutes les sessions où je corrige une faute de frappe.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "text": "La session Claude Code qui a trouvé la solution gh-pages -e --add : invisible le 11 août, le hook SessionEnd n'existait pas avant fin août. La fiche dit « sans agent », il y en avait un. La sortie de ls -R src : la liste de fichiers qui portait toute l'intention de la reprise ; Pulse voit la commande et son code, pas ce qu'elle a affiché. La vérification du site distant dans le navigateur : si elle a eu lieu, aucune trace exploitable. Le cadre du projet (Task 0 → Task 1 → Task 2) vit sur l'intranet Holberton, pas sur la machine.",
+          "gaps": [
+            {
+              "id": "agent_session_before_hook",
+              "label": "Sessions d'agent antérieures au hook SessionEnd (fin août) : invisibles",
+              "boundary": false,
+              "note": "limite historique, pas un trou actuel"
+            },
+            {
+              "id": "command_output",
+              "label": "Résultats des commandes non observés (seulement la commande et son code)",
+              "boundary": false
+            },
+            {
+              "id": "browser_activity",
+              "label": "Vérifications dans le navigateur sans trace exploitable",
+              "boundary": false
+            },
+            {
+              "id": "external_project_frame",
+              "label": "Cadre du projet hors machine (intranet, énoncé de tâches)",
+              "boundary": true
+            }
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "E": {
+          "ideal": "Task 0 du projet Vue terminée : scaffold Vite/Vue/Tailwind/Lucide/ESLint, lint/build/deploy verts, déploiement GitHub Pages réglé, react et vue publiés dans des sous-dossiers séparés de gh-pages (gh-pages -e <dossier> --add), commit et push faits, .gitignore ajusté, Git propre. Arrêt sur l'inspection de react/src : ouverture de la Task 1, migration de l'app React vers Vue. Reste : toute la Task 1 (data → services → ui → cards → layout → Hero → sections → App.vue), puis la Task 2 (comparison.md).",
+          "reachable": "Projet Vue configuré (Tailwind, ESLint, gh-pages), lint/build/deploy code 0 ; déploiement corrigé pour séparer React et Vue en sous-dossiers de gh-pages, commit et push code 0, .gitignore du vue mis à jour. Arrêt sur ls -R src dans react, Git propre. Aucun point ouvert observé : les deux git add en échec sont suivis d'un add corrigé, d'un commit et d'un push réussis.",
+          "answered_at": "2026-09-10"
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur le contenu, horodatage approximatif",
+      "resume_horizon": "Le jour même ou le lendemain : la migration était quasi terminée le 14 août.",
       "candidates": [
         {
           "id": "C1",
@@ -153,7 +304,8 @@
             "o11",
             "o14"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Savoir que la Task 0 est verte suffit pour reprendre ; la réserve « sans preuve du rendu distant » est honnête et juste."
         },
         {
           "id": "C2",
@@ -163,7 +315,8 @@
             "o24",
             "o25"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Le vrai résultat de la matinée, et une contrainte durable : gh-pages -e <dossier> --add a été réutilisé tel quel pour le projet Svelte trois jours plus tard."
         },
         {
           "id": "C3",
@@ -172,7 +325,8 @@
             "o31",
             "o32"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "C'est la reprise elle-même : le début de la Task 1."
         },
         {
           "id": "C4",
@@ -181,7 +335,8 @@
             "o20",
             "o22"
           ],
-          "user_rating": null
+          "user_rating": "nuisible",
+          "user_comment": "Nuisible en open. Résolus deux minutes plus tard par un add corrigé, un commit et un push. Les garder en point ouvert, c'est exactement ce qu'un open ne doit pas faire."
         },
         {
           "id": "C5",
@@ -190,25 +345,108 @@
             "o14",
             "o24"
           ],
-          "user_rating": null
+          "user_rating": "inutile",
+          "user_comment": "Recommandation, pas fait observé ; le modèle a eu raison de ne pas la sortir."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Réponses issues d'une reconstruction externe (échanges avec Fable entre le 11 et le 14 août sur le projet Vue), pas d'un souvenir spontané. Fiabilité : bonne sur le contenu ; les notes de l'époque ne sont pas horodatées à la session près."
     },
     {
       "session_id": "2ce344566f7e85dc",
       "label": "work-3",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/04-2ce344566f7e85dc.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "DevNote (fiabilité partielle) : je fermais un petit chantier de recherche, deux commits à 21:29, exposer le chemin de dossier des documents et snippets dans les résultats, puis ouvrir les documents/snippets imbriqués là où ils vivent. Correctif dans la continuité des dossiers imbriqués livrés à cette période. Deux commits d'affilée puis bascule immédiate = chantier terminé, pas interrompu. Mon workflow de l'époque : Claude Code implémente, je teste, je committe moi-même ; ces commits sont la validation finale. Pas de push observé, je ne sais pas s'il a suivi. DevOps (fiabilité bonne) : je démarrais le projet Holberton « DevOps Culture & Git collaboration ». Le dossier de hash dans Downloads est l'archive de départ du projet (téléchargée depuis l'intranet), qui contient check-setup.sh. Le 127 à 21:36 : le script n'était pas dans le repo. Le 1 à 21:39 : premier passage en échec, quelque chose manquait dans l'environnement (Docker, probablement). Le 0 à 21:49 après la faute de frappe, puis docker run hello-world OK. Ensuite commit du check d'environnement et des README racine + projet dans devops_culture_git. Le code global 1 sur le bloc de 21:55 : un des deux commits chaînés a échoué, je ne sais pas lequel, plausiblement « rien à committer » sur l'un d'eux. Puis cd .. : session close.",
+          "recall": "reconstruction externe ; bonne sur DevOps, partielle sur DevNote",
+          "uncertain": [
+            "push DevNote après la session",
+            "lequel des deux commits de 21:55 a échoué"
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "DevNote : rien de cette session. DevOps : tout le projet (CALMS, les 4 métriques DORA, le workflow PR, les conventional commits, la résolution de merge conflicts, le post-mortem blameless, livrables Markdown en anglais, README à la racine, revue QA manuelle à demander à la fin). Mais ce projet se fait à trois, et dans l'heure qui a suivi la session (vers 22:30–22:40, dans le chat) j'ai décidé de le mettre en pause pour cette raison et d'enchaîner sur « Docker Fundamentals ». Donc la vraie reprise n'était pas DevOps Culture : c'était Docker. Le hello-world de 21:49 en était déjà la vérification.",
+          "recall": "reconstruction externe",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "essentiel",
+            "C3": "utile",
+            "C4": "utile comme point à accomplissement inconnu, nuisible comme doing",
+            "C5": "nuisible"
+          },
+          "missing": [
+            {
+              "text": "L'ordre et la structure : DevNote d'abord, puis DevOps, deux projets enchaînés, pas un.",
+              "importance": "essentiel",
+              "knowledge_basis": [
+                "core_observation"
+              ],
+              "availability_to_model": "current_input"
+            },
+            {
+              "text": "L'inversion de l'acteur : « l'agent a passé la session à… » est faux, c'est l'utilisateur qui a tout fait à la main, l'agent n'a existé que 17 secondes. Le doing prend le prompt d'agent comme cadre de la session entière : D3 sous sa forme pure, qui ne contamine pas seulement open mais réécrit doing et stopped_at.",
+              "importance": "essentiel",
+              "knowledge_basis": [
+                "core_observation",
+                "user_recollection"
+              ],
+              "availability_to_model": "current_input"
+            }
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "text": "La bascule vers Docker Fundamentals, décidée dans le chat dans l'heure qui a suivi : un résumé parfait aurait donné DevOps Culture comme reprise et aurait été faux avant minuit ; cas le plus fort du registre « jugements en conversation ». Quelle sous-commande du bloc de 21:55 a échoué : un seul code global pour quatre commandes chaînées. Ce qu'est le dossier de hash dans Downloads (l'archive de départ Holberton) : Pulse voit un chemin, pas sa nature. La contrainte « projet à trois », sur l'intranet. Si le .gitignore a été créé : vérifié le 2026-09-10 dans la capture, 16 observations, toutes des commandes, aucun événement de fichier ; le dépôt n'était pas sous watcher le 22 août, donc trou de périmètre. Push non observé.",
+          "gaps": [
+            {
+              "id": "user_statement",
+              "label": "Déclarations et jugements faits en conversation, hors machine",
+              "boundary": false,
+              "note": "cas le plus fort : décision de bascule de projet dans l'heure"
+            },
+            {
+              "id": "chained_block_subcommand",
+              "label": "Bloc de commandes chaînées : un seul code global, sous-commande fautive inconnue",
+              "boundary": false
+            },
+            {
+              "id": "path_nature",
+              "label": "Nature d'un chemin (archive de départ dans Downloads) non connue",
+              "boundary": false
+            },
+            {
+              "id": "watcher_perimeter",
+              "label": "Dépôt hors périmètre du watcher : aucun événement de fichier",
+              "boundary": false,
+              "note": "vérifié : 0 événement de fichier dans la capture"
+            },
+            {
+              "id": "push_merge",
+              "label": "Pushs et merges non observés (D5)",
+              "boundary": false
+            },
+            {
+              "id": "external_project_frame",
+              "label": "Cadre du projet hors machine (intranet, contrainte « à trois »)",
+              "boundary": true
+            }
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "E": {
+          "ideal": "Deux projets. DevNote : chantier recherche clos, chemin de dossier exposé dans les résultats, documents et snippets imbriqués ouverts à leur place ; deux commits, push non observé. DevOps Culture & Git collaboration : démarrage, archive de départ dans Downloads, check-setup.sh vert après un premier échec, docker run hello-world OK ; commit du check d'environnement et des README racine/projet dans devops_culture_git, un des deux commits chaînés a échoué (lequel ?). .gitignore demandé à l'agent en fin de session. Arrêt sur cd ... Reste : vérifier les commits README et le .gitignore. Le projet se fait à trois : bascule vers Docker Fundamentals décidée juste après.",
+          "reachable": "Deux projets. DevNote (21:29) : deux commits feat(search): expose the folder path… et fix(search): open nested documents…, code 0, push non observé. DevOps (21:36–21:55) : check-setup.sh code 0 à 21:49 dans le dossier Downloads après un échec ; docker run hello-world code 0 ; bloc de deux add/commits dans devops_culture_git (chore: verify local environment setup, docs: add root and project README files), code global 1, sous-commande fautive inconnue. Session d'agent de 17 s : demande de .gitignore dans holbertonschool-devops-formation, accomplissement inconnu. Arrêt sur cd ... Points ouverts : le bloc Git en échec ; le .gitignore.",
+          "answered_at": "2026-09-10"
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur DevOps, partielle sur DevNote",
+      "resume_horizon": "La décision de bascule a été prise dans l'heure, hors machine. La reprise sur Docker, dans les jours suivants.",
       "candidates": [
         {
           "id": "C1",
@@ -217,7 +455,8 @@
             "o2",
             "o3"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Un tiers de la session et un projet entier, absents. Rien n'y restait à faire, mais un résumé multi-projets qui efface un projet est faux, pas incomplet."
         },
         {
           "id": "C2",
@@ -226,7 +465,8 @@
             "o11",
             "o12"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Le résultat de la session côté DevOps : environnement validé, Docker fonctionnel."
         },
         {
           "id": "C3",
@@ -234,7 +474,8 @@
           "references": [
             "o14"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Vrai inconnu, à vérifier à la reprise : lequel des deux commits est passé, les README sont-ils bien committés."
         },
         {
           "id": "C4",
@@ -242,7 +483,8 @@
           "references": [
             "agent_request:0"
           ],
-          "user_rating": null
+          "user_rating": "utile comme point à accomplissement inconnu, nuisible comme doing",
+          "user_comment": "Une session d'agent de 17 secondes en fin de session ne peut pas être le cadre de 28 minutes de travail."
         },
         {
           "id": "C5",
@@ -252,25 +494,74 @@
             "o8",
             "o10"
           ],
-          "user_rating": null
+          "user_rating": "nuisible",
+          "user_comment": "Le 127 de 21:36 (mauvais répertoire) et la faute de frappe de 21:48 sont dépassés par le succès de 21:49 ; les garder en open, c'est du bruit. Le code 1 de 21:39 a bien été résolu par la règle (même commande, même cwd) : la règle marche quand la commande est identique, et rate encore quand elle est corrigée (fiche 03)."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Réponses issues d'une reconstruction externe (échanges avec Fable le 22 août au soir, juste après la session, et notes DevNote de la période), pas d'un souvenir spontané. Fiabilité : bonne sur la partie DevOps, partielle sur DevNote."
     },
     {
       "session_id": "247f2062410ca5a9",
       "label": "work-4",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/05-247f2062410ca5a9.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Fin du chantier « résidence launchd » : watcher fichiers multi-workspaces et observateur d'apps tournent en mode service, avec bascule mode-dev / mode-service. C'était le prérequis de la roadmap (avec le hook SessionEnd, livré peu avant) pour la menu bar app. Le commit de 19:55 sur ship/launchd-observers est la livraison ; la rafale de fichiers de 20:02 (script d'installation supprimé puis créé, file_watcher.py) ressemble à un changement de branche, pas à du travail ; et à 20:24 le snapshot dit main, propre : la branche a très probablement été mergée dans la session. Puis bascule immédiate sur DevNote (fiche 06).",
+          "recall": "reconstruction externe ; bonne sur le contenu, moyenne sur le merge",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Rien sur ce chantier. Ensuite : la release 0.2.0 (CHANGELOG daté du 31 août), la menu bar app v1 (état de Pulse + bascule de mode), PostToolUse en P3.",
+          "recall": "reconstruction externe ; bonne sur le contenu, moyenne sur le merge",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "utile",
+            "C3": "utile",
+            "C4": "utile",
+            "C5": "essentiel"
+          },
+          "missing": [
+            {
+              "text": "La rafale de 20:02 est un artefact de bascule de branche, à ne pas compter comme des modifications.",
+              "importance": "utile"
+            }
+          ],
+          "corrections": "« L'agent a finalisé… » et « après avoir lancé l'agent Claude » : l'annexe agent, c'est /login. Ce n'est ni une étape de travail ni l'auteur de la livraison. D3 en version légère.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Le merge (main avancé) : D5.",
+            "La nature de la rafale de 20:02 (checkout ou édition, Core ne distingue pas ; déjà en core/TODOS.md, état net par chemin).",
+            "Que /login n'est pas une session de travail."
+          ],
+          "gaps": [
+            {
+              "id": "push_merge",
+              "label": "Pushs et merges (D5)"
+            },
+            {
+              "id": "checkout_vs_edit",
+              "label": "Bascule de branche indistinguable d'une édition"
+            },
+            {
+              "id": "agent_session_trivial",
+              "label": "Session d'agent triviale (/login, /model) prise pour du travail"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Résidence launchd livrée : watcher multi-workspaces + observateur d'apps sous launchd en mode service, contrôles faits (launchd, second workspace, événement d'app), watched_workspaces déclaré dans ~/.pulse_v2. Commit sur ship/launchd-observers, puis main propre à 20:24, branche mergée. Reste : release 0.2.0, menu bar app v1, PostToolUse.",
+          "reachable": "Commit 3f44230a sur ship/launchd-observers : observateurs résidents sous launchd (watcher multi-workspaces + apps), contrôles décrits dans le message. Rafale de fichiers à 20:02, git branch, arrêt sur cd .. avec snapshot main propre. Aucun point ouvert observé. Session d'agent : /login seulement."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur le contenu, moyenne sur le merge",
+      "resume_horizon": "Bascule sur DevNote trois minutes après ; reprise Pulse dans les jours suivants.",
       "candidates": [
         {
           "id": "C1",
@@ -278,7 +569,8 @@
           "references": [
             "o3"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": ""
         },
         {
           "id": "C2",
@@ -286,7 +578,8 @@
           "references": [
             "o3"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "L'emplacement de watched_workspaces s'est révélé décisif six jours plus tard (jour 1 du dogfooding)."
         },
         {
           "id": "C3",
@@ -294,7 +587,8 @@
           "references": [
             "o3"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Preuve que c'est vérifié, pas une action."
         },
         {
           "id": "C4",
@@ -303,7 +597,8 @@
             "o6",
             "o10"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": ""
         },
         {
           "id": "C5",
@@ -311,25 +606,83 @@
           "references": [
             "o20"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Et bien fait : « main, propre » sans conclure au merge, c'est exactement le niveau de prudence voulu."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (échanges avec Fable fin août sur la résidence launchd), pas souvenir spontané. Fiabilité : bonne sur le contenu, moyenne sur le merge."
     },
     {
       "session_id": "d047b37b4511d37c",
       "label": "work-6",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/06-d047b37b4511d37c.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Lancement du chantier « accès automatisé » de DevNote : jeton API personnel à durée de vie longue et révocable, plus un client pour les endpoints DRF existants, pour que Claude Code (et un jour Pulse, comme outil optionnel) puisse lire et écrire dans DevNote sans contourner la logique métier. Implémenté par Claude Code entre 20:49 et 20:55 : modèle et migration 0002_apitoken, commande de gestion, tests, client Python devnote_client.py, panneau Settings côté React. Rien de committé, je committe moi-même après avoir testé. À 21:31 j'ai voulu appliquer la migration à la main et je me suis emmêlé dans les chemins : manage.py vit dans backend/, les deux essais depuis la racine sont des « fichier introuvable » (127, puis 2 avec python3) ; l'essai depuis backend/ avec le venv sort en 2 pour une raison que la vue ne donne pas. Puis db.sqlite3 et les logs bougent à 21:34 : la migration a très probablement été appliquée, par l'agent, ou par une commande que Pulse n'a pas vue. Je ne me souviens pas laquelle.",
+          "recall": "reconstruction externe ; bonne sur le périmètre, moyenne sur l'état final",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Vérifier l'état de la migration (showmigrations), tester le flux de bout en bout (créer un jeton par la commande de gestion, appeler l'API avec le client Python, vérifier l'UI), valider, puis committer.",
+          "recall": "reconstruction externe ; bonne sur le périmètre, moyenne sur l'état final",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "utile",
+            "C3": "utile",
+            "C4": "essentiel",
+            "C5": "utile comme constat"
+          },
+          "missing": [
+            {
+              "text": "Aucun commit dans la session : tout est en attente de validation.",
+              "importance": "essentiel"
+            },
+            {
+              "text": "Le dernier fait n'est pas un échec terminal, c'est la base qui bouge.",
+              "importance": "essentiel"
+            }
+          ],
+          "corrections": "blockers « échec de la migration » est probablement faux vu la base modifiée ; « commande non trouvée » est une interprétation du 127 (juste ici, mais non collectée).",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Les commandes propres de l'agent : l'outil Bash de Claude Code n'est pas vu par le hook shell (PostToolUse, P3). C'est presque sûrement là que la migration est passée.",
+            "La cause du code 2 dans backend/ (sortie non collectée).",
+            "Le contenu de la session d'agent au-delà de /model.",
+            "Si j'ai testé l'UI."
+          ],
+          "gaps": [
+            {
+              "id": "agent_bash_unseen",
+              "label": "Commandes exécutées par l'agent (outil Bash) invisibles au hook shell"
+            },
+            {
+              "id": "command_output",
+              "label": "Résultats des commandes"
+            },
+            {
+              "id": "agent_session_content",
+              "label": "Contenu de la session d'agent au-delà du premier prompt"
+            },
+            {
+              "id": "browser_activity",
+              "label": "Tests d'UI sans trace"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Chantier jetons API DevNote lancé : modèle + migration 0002 + commande de gestion + tests côté Django, client Python, panneau Settings côté React, implémenté par Claude Code, rien de committé. Tentatives manuelles de migration : deux depuis la racine (manage.py est dans backend/), une depuis backend/ en code 2 ; base et logs modifiés juste après, migration probablement appliquée par l'agent. Reste : showmigrations, tester le flux complet, valider, committer.",
+          "reachable": "Fichiers créés 20:49–20:55 (tokens.py, migration 0002_apitoken.py, tests, devnote_client.py, SettingsPanel.jsx modifié), aucun commit. 21:31–21:33 : quatre tentatives de migrate, deux depuis la racine (127, 2), une depuis backend/ après activation du venv (2), une en python3 depuis la racine (2). 21:34–21:35 : db.sqlite3 et devnote.log modifiés, devnote.log.1 créé, dernières observations. Point ouvert : état de la migration inconnu, dernier essai terminal en échec mais la base a changé après. Session d'agent en cours (premier prompt /model)."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur le périmètre, moyenne sur l'état final",
+      "resume_horizon": "Inconnu, DevNote tournait en parallèle de Pulse.",
       "candidates": [
         {
           "id": "C1",
@@ -339,7 +692,8 @@
             "o20",
             "o24"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": ""
         },
         {
           "id": "C2",
@@ -347,7 +701,8 @@
           "references": [
             "o34"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "À corriger : « depuis la racine, où manage.py n'existe pas » ; le code 2 est un fichier introuvable, pas une erreur Django."
         },
         {
           "id": "C3",
@@ -359,7 +714,8 @@
             "o18",
             "o19"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": ""
         },
         {
           "id": "C4",
@@ -369,7 +725,8 @@
             "o34",
             "o35"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "À compléter : la base et les logs ont changé après les échecs, donc la migration a vraisemblablement été appliquée par une autre voie. C'est l'information n°1 de la reprise."
         },
         {
           "id": "C5",
@@ -377,25 +734,68 @@
           "references": [
             "o34"
           ],
-          "user_rating": null
+          "user_rating": "utile comme constat",
+          "user_comment": "« état de la migration inconnu, à vérifier », pas comme priorité prescrite."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (chantier décrit à Fable vers 20:50 ce soir-là, pendant la session), pas souvenir spontané. Fiabilité : bonne sur le périmètre, moyenne sur l'état final."
     },
     {
       "session_id": "071bbd62a95fb6cb",
       "label": "work-1",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/07-071bbd62a95fb6cb.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Je ne sais plus. La vue ne décrit pas une session de développement : aucune commande entre le cd et le cd .., aucun fichier de code touché, et les deux fichiers qui bougent (devnote.log, db.sqlite3) sont ceux qu'un backend DevNote en marche modifie tout seul quand on utilise l'app. Safari + Notes + Acrobat, c'est une session d'usage : j'ai probablement utilisé DevNote comme app de notes pendant que je lisais autre chose. La base qui bouge, c'est une note ou un todo écrit, pas du code.",
+          "recall": "nulle ; lecture de la vue",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Rien. Il n'y avait pas de travail sur DevNote à reprendre.",
+          "recall": "nulle ; lecture de la vue",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "inutile",
+            "C2": "utile, faible",
+            "C3": "utile",
+            "C4": "essentiel"
+          },
+          "missing": [],
+          "corrections": "Les deux intents sont inventés : rien n'enregistre une intention de « consulter les journaux ». Nuisible. confidence: medium est trop haut pour quatre événements et zéro commande de travail. En amont : fallait-il résumer cette session ? 37 minutes, zéro commande de travail ; elle passe le seuil de 30 activités parce que les activations d'apps comptent. Le filtre de candidature devrait peut-être exiger au moins une commande ou un fichier de code.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Ce que j'ai fait dans DevNote : l'app est à moi, c'est exactement le cas où la brique pourrait dire à Pulse « une note a été écrite » ; le chantier jetons API sert à ça.",
+            "Comment le backend a été lancé : aucune commande vue (alias, GUI ?).",
+            "Les URL de Safari."
+          ],
+          "gaps": [
+            {
+              "id": "own_app_events",
+              "label": "Événements applicatifs d'une app à soi (DevNote)"
+            },
+            {
+              "id": "process_launch_unseen",
+              "label": "Lancement d'un processus hors shell (alias, GUI)"
+            },
+            {
+              "id": "browser_activity",
+              "label": "URL du navigateur"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Aucun travail identifiable sur DevNote : entrée dans le dépôt, backend actif (journal et base modifiés), navigateur, Notes et Acrobat utilisés, retour au home 37 minutes plus tard, dépôt propre sur main. Rien à reprendre.",
+          "same": true
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "nulle ; lecture de la vue",
+      "resume_horizon": "sans objet",
       "candidates": [
         {
           "id": "C1",
@@ -404,7 +804,8 @@
             "o2",
             "o3"
           ],
-          "user_rating": null
+          "user_rating": "inutile",
+          "user_comment": "Fichiers d'exécution, pas fichiers de travail ; les citer comme central_files laisse croire à un chantier."
         },
         {
           "id": "C2",
@@ -412,7 +813,8 @@
           "references": [
             "o4"
           ],
-          "user_rating": null
+          "user_rating": "utile, faible",
+          "user_comment": "Confirme qu'il n'y avait rien en cours."
         },
         {
           "id": "C3",
@@ -423,7 +825,8 @@
             "app:4",
             "app:5"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Le seul indice sur la nature de la session."
         },
         {
           "id": "C4",
@@ -434,25 +837,78 @@
             "o3",
             "o4"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "La bonne sortie pour cette session : dire qu'il n'y a rien à reprendre."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Aucun souvenir ; pas de reconstruction pour ce créneau. Lecture de la vue, pas un souvenir."
     },
     {
       "session_id": "3cabaefb759dae36",
       "label": "work-6",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/08-3cabaefb759dae36.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Pas 2 de la roadmap V3, livré en 14 minutes de commits : c'est le workflow /ship de gstack qui déroule, sur la spec validée plus tôt dans la journée (docs/specs/2026-09-02-context-api.md). Quatre commits sur ship/context-api : lecture bornée par un instant dans TraceStore, module pur context_snapshot déterministe (même base + même at + même window → même JSON), route GET /context avec window 5–1440 et at, puis /status et status.sh comme premiers consommateurs. La rafale de docs à 17:20 (AGENTS, CLAUDE, README, CHANGELOG, VERSION, VISION), c'est le bump de version 0.3.0 en cours, pas encore committé à 17:21.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Committer les docs, ouvrir et merger la PR (devenue #27), et Core se regèle après cette version (seul changement prévu depuis le gel). Le lendemain : PR #28, exclure .gitnexus/ du watcher (0.3.1), puis la spec du pas 3.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "utile",
+            "C3": "utile",
+            "C4": "utile"
+          },
+          "missing": [
+            {
+              "text": "Les docs modifiées = bump 0.3.0 (VERSION touché), donc un jalon, pas des retouches.",
+              "importance": "utile"
+            },
+            {
+              "text": "Core regelé après : non observable, mais c'est l'information de reprise qui compte le plus.",
+              "importance": "essentiel"
+            }
+          ],
+          "corrections": "Aucune. Sortie juste.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Les tests (« aucun résultat collecté ») : lancés par l'agent, invisibles (PostToolUse).",
+            "Le merge de la PR.",
+            "Le regel de Core : décision, hors machine.",
+            "La spec elle-même si elle n'est pas dans la vue."
+          ],
+          "gaps": [
+            {
+              "id": "agent_bash_unseen",
+              "label": "Commandes de l'agent invisibles"
+            },
+            {
+              "id": "push_merge",
+              "label": "Merges (D5)"
+            },
+            {
+              "id": "user_statement",
+              "label": "Décision hors machine (regel)"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Pas 2 de la roadmap V3 livré : Context API, lecture bornée dans TraceStore, module pur context_snapshot déterministe, route GET /context (window 5–1440, at), /status et status.sh premiers consommateurs ; quatre commits sur ship/context-api, docs/VERSION/CHANGELOG en cours de mise à jour pour 0.3.0. Reste : committer les docs, ouvrir/merger la PR, puis Core regelé ; PR suivante : exclure .gitnexus/ du watcher.",
+          "reachable": "Quatre commits sur ship/context-api (17:13–17:20) : lecture bornée latest_activity_of_type, module context_snapshot déterministe, route GET /context avec validation de window et at, /status et status.sh consommateurs. Puis AGENTS.md, CLAUDE.md, README, CHANGELOG, VERSION, VISION.md modifiés, dernières observations, VERSION touché. Aucun résultat de test observé. Aucun point ouvert observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne",
+      "resume_horizon": "le lendemain",
       "candidates": [
         {
           "id": "C1",
@@ -462,7 +918,8 @@
             "o10",
             "o14"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": ""
         },
         {
           "id": "C2",
@@ -471,7 +928,8 @@
             "o7",
             "o10"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Le contrat vit dans la spec, mais les bornes de window/at sont ce qu'on oublie."
         },
         {
           "id": "C3",
@@ -481,7 +939,8 @@
             "o6",
             "o8"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": ""
         },
         {
           "id": "C4",
@@ -490,25 +949,83 @@
             "o15",
             "o21"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Et bien géré : pas de « non commises »."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (spec du Context API rédigée avec Fable le 2 sept., échanges du jour), pas souvenir spontané. Fiabilité : bonne."
     },
     {
       "session_id": "eb652ce9f04c4b37",
       "label": "work-2",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/09-eb652ce9f04c4b37.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Deux fils dans la même demi-heure. D'abord, sur main à 11:49 : la spec du pas 3 réécrite en v2 (Intelligence ne reconstruit rien, identité stable des sessions, /context/sessions, CLI batch avant tout service résident, corpus gelé de 10 sessions), réponse à la relecture externe de Codex, qui avait trouvé que work-N était une clé instable. Ensuite, sur ship/hardening : le lot 0.5.1 issu de la même relecture, umask 077 et 0700/0600, rédaction complète des session_summary (intents, blockers, central_files), verrou flock sur l'archivage des transcripts et l'émission des agent_session, versions de schéma explicites à l'ingestion, dépendances épinglées, CI GitHub. Les messages répétés sous des hashes différents, c'est un rebase. Deux décisions de périmètre déclarées dans les commits : l'authentification des producteurs locaux reportée à la première action de la couche Agent, et le build Swift hors CI pour l'instant. Arrêt à 12:18 sur un correctif de tests (Path.home figé sur /Users/Yugz dans les tests de résolution de projet).",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Merger la PR hardening, puis enchaîner les correctifs suivants de la même relecture : course WAL de l'outbox (fiche 10, seize minutes après), agent_session hors identité, fermeture monotone, 0.5.2 à 0.5.5 le même jour.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "essentiel",
+            "C3": "utile",
+            "C4": "utile",
+            "C5": "nuisible"
+          },
+          "missing": [
+            {
+              "text": "Les deux décisions de périmètre (auth reportée, Swift hors CI).",
+              "importance": "essentiel"
+            },
+            {
+              "text": "La spec v2 du pas 3 sur main.",
+              "importance": "essentiel"
+            }
+          ],
+          "corrections": "Le doing rate un fil entier : la spec v2 du pas 3 sur main, qui n'est pas du hardening. Deux fils, un seul résumé.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "La relecture Codex qui motive tout : échange avec un outil externe, pas un fait machine.",
+            "Le rebase comme tel : Core voit des commits, pas qu'ils réécrivent les précédents (reflog).",
+            "Les résultats de tests (agent).",
+            "Le merge."
+          ],
+          "gaps": [
+            {
+              "id": "user_statement",
+              "label": "Échange hors machine (relecture Codex)"
+            },
+            {
+              "id": "rebase_unseen",
+              "label": "Rebase indistinguable de nouveaux commits"
+            },
+            {
+              "id": "agent_bash_unseen",
+              "label": "Tests de l'agent"
+            },
+            {
+              "id": "push_merge",
+              "label": "Merges (D5)"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Deux fils : spec du pas 3 réécrite en v2 et poussée sur main (identité stable, /context/sessions, CLI avant service) ; PR hardening 0.5.1 sur ship/hardening : umask 077 / 0700 / 0600, rédaction complète des session_summary, verrou flock sur archivage et émission agent_session, versions de schéma explicites, dépendances épinglées, CI GitHub (pytest macOS, sans le build Swift). Décision : authentification des producteurs reportée à la couche Agent. Arrêt sur un correctif de tests (Path.home figé). Reste : merger, puis les correctifs suivants de la relecture (course WAL de l'outbox…).",
+          "reachable": "Commit et push sur main à 11:49 : spec du pas 3 en v2 (identité stable, /context/sessions, CLI avant service). Puis sur ship/hardening, après rebase : permissions locales, rédaction complète des résumés, course archivage/émission, versions de schéma explicites, CI core.yml (pytest macOS, build Swift exclu selon le message), docs 0.5.1. Le message des docs reporte l'authentification des producteurs à la couche Agent. Dernier commit e8eb97db : tests figeant Path.home sur /Users/Yugz. Aucun point ouvert observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne",
+      "resume_horizon": "seize minutes",
       "candidates": [
         {
           "id": "C1",
@@ -519,7 +1036,8 @@
             "o62",
             "o63"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": ""
         },
         {
           "id": "C2",
@@ -527,7 +1045,8 @@
           "references": [
             "o67"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Décision déclarée dans un commit, exactement le recorded_statement que v5 est censé capter, et elle est absente."
         },
         {
           "id": "C3",
@@ -535,7 +1054,8 @@
           "references": [
             "o65"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Trou connu de la CI, les tests Swift ne tournent qu'en local."
         },
         {
           "id": "C4",
@@ -543,7 +1063,8 @@
           "references": [
             "o202"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "« /Users/Yugz en dur » est devenu un item P4 six jours plus tard."
         },
         {
           "id": "C5",
@@ -553,25 +1074,77 @@
             "o103",
             "o157"
           ],
-          "user_rating": null
+          "user_rating": "nuisible",
+          "user_comment": "29 commits avec doublons de rebase, c'est du bruit ; le rappel compact est le bon choix."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (relecture Codex et spec v2 du pas 3 discutées avec Fable le 3 sept.), pas souvenir spontané. Fiabilité : bonne."
     },
     {
       "session_id": "cda6ccce898d3e88",
       "label": "work-3",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/10-cda6ccce898d3e88.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Correctif court entre deux PR de la relecture. Course au passage en WAL d'une outbox neuve quand plusieurs producteurs démarrent en même temps : le PRAGMA journal_mode=WAL prend un verrou exclusif que le busy handler ne couvre pas ; reproduit avec make reset puis dev.sh (« database is locked » 13 fois sur 40). Correctif : busy_timeout posé avant le pragma, jusqu'à 20 tentatives à 50 ms ; test à quatre créateurs sur dix bases neuves, bouclé 20 fois sans échec. Commit sur ship/outbox-race, docs 0.5.2. Les 35 notifications de fichiers à 12:34, c'est le passage de ship/hardening à ship/outbox-race.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Merger, puis correctif suivant de la relecture : agent_session hors identité des sessions (0.5.3, le même après-midi).",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "essentiel",
+            "C3": "utile",
+            "C4": "utile"
+          },
+          "missing": [
+            {
+              "text": "Le déclencheur et la limite (rapport).",
+              "importance": "essentiel"
+            },
+            {
+              "text": "Les 35 notifications sont un changement de branche, pas des modifications.",
+              "importance": "utile"
+            }
+          ],
+          "corrections": "Aucune fausse affirmation, mais la sortie est plus pauvre que le commit : elle jette la condition de reproduction et la limite du correctif, qui étaient dans le message. Quand le commit est riche, le résumé doit le suivre.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Le merge.",
+            "Les résultats de tests (agent).",
+            "Que la rafale de 12:34 est un checkout."
+          ],
+          "gaps": [
+            {
+              "id": "push_merge",
+              "label": "Merges (D5)"
+            },
+            {
+              "id": "agent_bash_unseen",
+              "label": "Tests de l'agent"
+            },
+            {
+              "id": "checkout_vs_edit",
+              "label": "Checkout pris pour des modifications"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Correctif court entre deux PR : course au passage en WAL d'une outbox neuve quand plusieurs producteurs démarrent ensemble (make reset puis dev.sh : « database is locked » 13/40) ; busy_timeout avant le pragma, 20 tentatives à 50 ms, test à quatre créateurs sur dix bases bouclé 20 fois sans échec. Commit sur ship/outbox-race + docs 0.5.2. Reste : merger, puis agent_session hors identité.",
+          "reachable": "Commit a11e7b53 sur ship/outbox-race : course au passage en WAL d'une outbox neuve (déclencheur, validations et chiffres décrits dans le message), puis commit 2beaf51a docs Core 0.5.2, CHANGELOG et VERSION modifiés après. producer_outbox.py et son test modifiés parmi 35 notifications à 12:34. Aucun point ouvert observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne",
+      "resume_horizon": "dans l'heure",
       "candidates": [
         {
           "id": "C1",
@@ -579,7 +1152,8 @@
           "references": [
             "o34"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Sans le déclencheur, le correctif n'est pas vérifiable."
         },
         {
           "id": "C2",
@@ -587,7 +1161,8 @@
           "references": [
             "o34"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": ""
         },
         {
           "id": "C3",
@@ -595,7 +1170,8 @@
           "references": [
             "o34"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "À condition de rester attribués au commit : chiffres rapportés, pas observés."
         },
         {
           "id": "C4",
@@ -605,25 +1181,70 @@
             "o21",
             "o35"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": ""
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (même journée), pas souvenir spontané. Fiabilité : bonne, le commit dit tout."
     },
     {
       "session_id": "8af930d9ef437d2a",
       "label": "work-2",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/11-8af930d9ef437d2a.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Première session de Pulse sur le nouveau MacBook Pro. « Migration » dans ma demande, c'est la migration de machine, pas une migration de données. Je demandais à Claude Code un état des lieux complet avant de reprendre : état git, PR #28 (mergée ou non, je ne savais plus depuis l'autre Mac), où en était le pas 3. Le ls -R intelligence/ est la reconnaissance du terrain. Rien d'autre à faire dans cette session : elle sert à savoir où on en est.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Tout ce que l'état des lieux a déclenché dans les heures suivantes : récupérer l'historique ~/.pulse_v2 de l'ancien Mac et le fusionner dans la base active (16 803 événements), le lot hardening 0.5.6 (crash de réentrance Swift, faux négatif de make status, casse des chemins /Users/yugz → /Users/Yugz), la CI rouge (fiche 12), puis reprendre le pas 3 à l'étape 3.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "utile",
+            "C3": "inutile",
+            "C4": "essentiel",
+            "C5": "utile"
+          },
+          "missing": [
+            {
+              "text": "Que « migration » = nouvelle machine. Le modèle ne pouvait pas le savoir.",
+              "importance": "utile"
+            }
+          ],
+          "corrections": "« L'agent a effectué… » : le ls est passé par mon shell, donc c'est moi. Détail, mais c'est la troisième fois que l'acteur est inversé.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Les réponses de l'agent : le transcript archivé n'est pas ingéré, seul le premier prompt l'est (politique de rétention voulue).",
+            "La nature de la migration.",
+            "Tout ce qui a suivi."
+          ],
+          "gaps": [
+            {
+              "id": "agent_session_content",
+              "label": "Contenu de la session d'agent au-delà du premier prompt (rétention voulue)"
+            },
+            {
+              "id": "external_context",
+              "label": "Contexte externe (nouvelle machine)"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Première session sur la nouvelle machine : état des lieux demandé à l'agent (git, PR #28, pas 3), inspection de intelligence/. Rien à reprendre ici ; la suite dépend des réponses de l'agent (historique de trace à fusionner, hardening, CI).",
+          "reachable": "Une commande : ls -R ~/Projets/Pulse/intelligence/. Session d'agent : demande d'état des lieux après migration (git, PR #28), réponses non observées. Aucun point ouvert observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne",
+      "resume_horizon": "deux heures (fiche 12 à 22:04)",
       "candidates": [
         {
           "id": "C1",
@@ -631,7 +1252,8 @@
           "references": [
             "agent_request:0"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "C'est la reprise elle-même : nouvelle machine, je cherche mes marques."
         },
         {
           "id": "C2",
@@ -639,7 +1261,8 @@
           "references": [
             "agent_request:0"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Sans « nouvelle machine », la demande est incompréhensible."
         },
         {
           "id": "C3",
@@ -647,7 +1270,8 @@
           "references": [
             "o1"
           ],
-          "user_rating": null
+          "user_rating": "inutile",
+          "user_comment": ""
         },
         {
           "id": "C4",
@@ -655,7 +1279,8 @@
           "references": [
             "agent_request:0"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Comme question sans réponse visible ; le modèle l'a bien mise en intent, pas en fait."
         },
         {
           "id": "C5",
@@ -663,25 +1288,74 @@
           "references": [
             "o1"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Une session pauvre doit donner un résumé pauvre ; confidence: low est juste."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (état des lieux fait avec Fable le 5 sept. au soir), pas souvenir spontané. Fiabilité : bonne."
     },
     {
       "session_id": "d98778994319cd07",
       "label": "work-24",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/12-d98778994319cd07.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "La CI rouge héritée, découverte après les PR #40/#41 du retour de migration. Deux causes indépendantes, un commit chacune, à deux secondes d'intervalle (c'est /ship qui pose les commits) : le test du verrou du hook terminal bornait l'attente par le haut et cassait sur le runner GitHub, plus lent que ma machine, borne haute supprimée ; et cinq tests de la CLI Intelligence lisaient l'heure réelle, donc passaient le 3 septembre et échouaient le 5 sans qu'une ligne ait bougé, une seule horloge cli._now(), remplacée par une fixture, pas de freezegun. Ce deuxième point est documenté dans intelligence/TODOS.md, section Completed.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Ouvrir la PR (#42), attendre la CI verte, merger : main vert à 627 tests le soir même. Puis committer la spec llm-provider directement sur main et attaquer l'étape 3 (fiche 13, cinq minutes plus tard).",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "utile",
+            "C2": "utile",
+            "C3": "essentiel",
+            "C4": "inutile",
+            "C5": "essentiel"
+          },
+          "missing": [
+            {
+              "text": "Que c'est la CI héritée de la migration : le résultat rouge vient de GitHub, pas de la machine.",
+              "importance": "utile"
+            }
+          ],
+          "corrections": "Aucune. Le hash de 40 caractères est cosmétique.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Pourquoi la CI était rouge : résultats GitHub Actions, externes.",
+            "Le merge de #42 et le compte de tests.",
+            "Que deux commits en deux secondes = /ship."
+          ],
+          "gaps": [
+            {
+              "id": "remote_ci",
+              "label": "Résultats de CI distants"
+            },
+            {
+              "id": "push_merge",
+              "label": "Merges (D5)"
+            },
+            {
+              "id": "tooling_signature",
+              "label": "Signature d'un outil (/ship) non reconnue"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "CI rouge héritée corrigée sur ship/ci-green : borne haute du test de verrou terminal supprimée (runner plus lent), une seule horloge injectable dans la CLI Intelligence (cinq tests dépendaient de la date). Reste : PR, CI verte, merge ; puis spec llm-provider et étape 3.",
+          "reachable": "Deux commits sur ship/ci-green (22:04) : test(core): ne plus borner par le haut l'attente du verrou terminal, fix(intelligence): une seule horloge dans la CLI, injectable par les tests. Aucun fichier ni commande observés. Aucun point ouvert observé. Le résumé précédent affirmait des modifications non committées : interprétation antérieure, non retenue."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne",
+      "resume_horizon": "cinq minutes",
       "candidates": [
         {
           "id": "C1",
@@ -689,7 +1363,8 @@
           "references": [
             "o1"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "« Machine lente » est la raison, le commit la suggère."
         },
         {
           "id": "C2",
@@ -697,7 +1372,8 @@
           "references": [
             "o2"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "La raison de ne pas décaler les fixtures (ça n'aurait fait que reporter la panne de quelques mois) est dans TODOS, pas dans le commit."
         },
         {
           "id": "C3",
@@ -706,7 +1382,8 @@
             "o1",
             "o2"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": ""
         },
         {
           "id": "C4",
@@ -714,7 +1391,8 @@
           "references": [
             "agent_request:0"
           ],
-          "user_rating": null
+          "user_rating": "inutile",
+          "user_comment": "Demande périmée, déjà traitée dans la fiche 11."
         },
         {
           "id": "C5",
@@ -722,25 +1400,92 @@
           "references": [
             "previous_summary:0"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Comme principe, et v5 l'applique : « non commises » n'a pas été repris. D1 passe ici."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (même soirée), pas souvenir spontané. Fiabilité : bonne."
     },
     {
       "session_id": "1e420dda8b6eee77",
       "label": "work-26",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/13-1e420dda8b6eee77.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Je ne me souviens plus.",
+          "recall": "je ne sais plus",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Je ne me souviens plus.",
+          "recall": "je ne sais plus",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "utile",
+            "C2": "inutile",
+            "C3": "essentiel",
+            "C4": "essentiel",
+            "C5": "inutile, voire nuisible"
+          },
+          "missing": [
+            {
+              "text": "Le plan en 4 PR de la spec v2 : à 23:50, #43 et #44 mergées, #45 committée non mergée ; restaient deux PR (corpus eval/ de 10 sessions à empiler sur #45, puis MLXProvider) et deux spikes hors PR (Qwen en texte seul, plafond mémoire). C'est le vrai open, et il est vide.",
+              "importance": "essentiel",
+              "knowledge_basis": [
+                "user_recollection",
+                "actor_statement"
+              ],
+              "availability_to_model": "partly_outside_capture"
+            },
+            {
+              "text": "Le premier vrai résumé de session produit via le provider distant pendant cette session, jugé juste : le jalon de la soirée.",
+              "importance": "essentiel",
+              "knowledge_basis": [
+                "user_recollection"
+              ],
+              "availability_to_model": "outside_capture"
+            }
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "text": "L'état de merge de #43/#44/#45 : Core n'observe ni les pushs ni les merges (D5). Le jugement « juste » sur le premier résumé distant : fait en conversation, pas sur la machine. Le contenu des deux specs committées à 22:22 et 22:39 : aucun fichier dans la vue, Pulse a vu les messages de commit, pas ce qu'ils contenaient. La config d'accès distant dans ~/.config/pulse/llm.env, hors repo : invisible par construction, frontière à garder, pas un trou à combler.",
+          "gaps": [
+            {
+              "id": "push_merge",
+              "label": "Pushs et merges non observés (D5)",
+              "boundary": false
+            },
+            {
+              "id": "user_statement",
+              "label": "Déclarations et jugements faits en conversation, hors machine",
+              "boundary": false
+            },
+            {
+              "id": "commit_content",
+              "label": "Contenu des commits (fichiers, corps du message) non observé, seulement le titre",
+              "boundary": false
+            },
+            {
+              "id": "secret_outside_repo",
+              "label": "Secret hors repo (~/.config/pulse/llm.env)",
+              "boundary": true
+            }
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "E": {
+          "ideal": "Spec LLMProvider v2 posée et committée. #43 (couche LLMProvider + FakeProvider) et #44 (OpenAICompatibleProvider) mergées. Premier vrai résumé de session produit via le provider distant, jugé juste. Arrêt sur #45 (négociation de paramètre refusé, temperature rendue optionnelle, tests hermétiques) : committée, à merger. Reste : empiler la PR corpus eval/ (10 sessions) sur #45, puis MLXProvider ; spikes A et B avant MLX ; porter dropped_parameters dans le meta.json d'eval. Divergence list/run consignée « non corrigée », à traiter plus tard.",
+          "reachable": "La même sortie sans les merges et sans le jugement « juste » : ces informations (merges, jugement, contenu des specs) sont hors de portée de Pulse aujourd'hui.",
+          "answered_at": "2026-09-10"
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "je ne sais plus",
+      "resume_horizon": "Dès le lendemain, un résumé est utile. Dans la journée même, cela dépend de deux choses : bascule vers un autre projet entre temps, et durée d'inactivité. Plus le délai et le nombre de bascules sont grands, plus le résumé compte.",
       "candidates": [
         {
           "id": "C1",
@@ -748,7 +1493,8 @@
           "references": [
             "o20"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Point ouvert réel mais mineur : P3, cas hypothétique de surcharge PULSE_LLM_MODEL, jamais observé en cinq jours."
         },
         {
           "id": "C2",
@@ -756,7 +1502,8 @@
           "references": [
             "o20"
           ],
-          "user_rating": null
+          "user_rating": "inutile",
+          "user_comment": "Justification du TODO, vit dans intelligence/TODOS.md ; pas besoin de la relire pour reprendre."
         },
         {
           "id": "C3",
@@ -764,7 +1511,8 @@
           "references": [
             "o21"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Action concrète à faire dans la PR suivante (dropped_parameters dans le meta.json d'eval) ; le modèle l'a laissée tomber."
         },
         {
           "id": "C4",
@@ -772,7 +1520,8 @@
           "references": [
             "o21"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Juste comme point d'arrêt. Manque : la PR #45 était committée mais pas mergée."
         },
         {
           "id": "C5",
@@ -780,25 +1529,112 @@
           "references": [
             "agent_request:0"
           ],
-          "user_rating": null
+          "user_rating": "inutile, voire nuisible",
+          "user_comment": "Début de session, pas la reprise : pattern D3."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Réponses C/D/E fondées sur une reconstruction externe (échange avec Fable le 5 au soir, lecture de intelligence/TODOS.md), pas sur un souvenir spontané."
     },
     {
       "session_id": "eef4956b36dd37ce",
       "label": "work-3",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/14-eef4956b36dd37ce.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Fin de l'étape 3 et jour 1 du dogfooding, enchaînés dans la même nuit. Le spike B venait de conclure : la plus grosse session réelle (~6 400 tokens) passe à 19,8 Go, mais l'entrée synthétique de 60k fait OOM Metal vers 28 Go ; d'où le commit de 01:29, MLXProvider refuse avant le prefill au-delà de llm_max_input_tokens (30 000), et le critère « tenir 60k » requalifié en plafond connu. À 01:38, verdict de l'étape 3 : Qwen3.8-27B-4bit retenu pour le dogfooding, réversible d'une ligne de config, avec deux réserves écrites (hallucination de chemins sur sessions sans fichier, plafond mémoire ~30-40k) ; note docs/decisions/2026-09-06-modele-local-qwen.md + VISION.md. #46 et #47 mergées à ce stade. Puis premier vrai passage sur ma trace : run --once à 01:45, 7/7 résumés créés, doing/stopped_at/intents jugés justes. Le show 1e420dda à 01:48 a révélé le premier défaut, D1 : le open de Qwen recopie celui du previous_summary au lieu de le réévaluer. Deuxième constat : watched_workspaces ne couvrait que Pulse/core, élargi à la racine ~/Projets/Pulse à 01:51 (.venv/.build ignorés OK, eval/out non ignoré noté), watcher redémarré. Journal docs/dogfooding.md ouvert, jour 1 committé à 01:55. Fin de session sur le prompt v2 (02:23, branche ship/prompt-v2) : consigne sur previous_summary, interdit durci sur les chemins inventés, exemple à 0 fichier. Le v2 a été mesuré sur le corpus (Qwen 8/10 → 10/10, référence 9/10 → 10/10, aucune frilosité), mais je ne sais pas si la mesure est tombée avant 02:24 ou dans la reprise du matin. Le commit v2 était fait, pas mergé.",
+          "recall": "reconstruction externe, bonne sur l'enchaînement",
+          "uncertain": [
+            "moment de la mesure du v2 (avant 02:24 ou le matin)"
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Ouvrir et merger la PR prompt v2 (devenue #48 le lendemain). Passer la config de dogfooding en prompt_version = \"v2\" ; je ne sais plus si c'était fait dans la session ou juste après. Juger D1 au jour 2 sur un cas réel, puisque non mesurable sur le corpus (aucune session gelée ne porte de previous_summary) ; TODO d'ajouter hors gel une session réelle avec annexe. Traiter eval/out non ignoré par le watcher. Puis dogfooding jours 2 à 5, étape 5 (service résident) conditionnée à 4 reprises justes sur 5.",
+          "recall": "reconstruction externe",
+          "uncertain": [
+            "config passée en v2 dans la session ou juste après"
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "ratings": {
+            "C1": "essentiel",
+            "C2": "utile",
+            "C3": "utile",
+            "C4": "nuisible",
+            "C5": "utile"
+          },
+          "missing": [
+            {
+              "text": "La session commence par la clôture de l'étape 3 : spike B (plafond 30 000 tokens, refus avant prefill à 01:29) et verdict Qwen à 01:38, avant d'ouvrir le jour 1. Le doing du modèle ne parle que du prompt v2 et rate la moitié de la nuit.",
+              "importance": "essentiel",
+              "knowledge_basis": [
+                "core_observation",
+                "user_recollection"
+              ],
+              "availability_to_model": "current_input"
+            },
+            {
+              "text": "Le résultat du jour 1 : run --once 7/7 créés, doing/stopped_at/intents jugés justes, et D1 découvert en lisant show 1e420dda. C'est l'origine du v2, absente du résumé.",
+              "importance": "essentiel",
+              "knowledge_basis": [
+                "user_recollection"
+              ],
+              "availability_to_model": "partly_outside_capture"
+            },
+            {
+              "text": "La PR v2 committée, pas mergée.",
+              "importance": "utile",
+              "knowledge_basis": [
+                "user_recollection"
+              ],
+              "availability_to_model": "outside_capture"
+            }
+          ],
+          "stopped_at_note": "« non commises » est une affirmation que la vue ne permet pas (d'accord avec le rapport). Le fait sous-jacent est juste (modifiées à 02:24, après le commit de 02:23) ; la formulation fondée serait « modifiées après le dernier commit ».",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "text": "Les chiffres de l'eval v2 sur le corpus : Pulse voit la commande et son code 0, pas les résultats ; et je ne sais pas si cette mesure est tombée dans la session. Le jugement « 7/7 justes » et la découverte de D1 : faits en lisant la sortie de show, en conversation, pas sur la machine. L'état de merge (v2 non mergée, #46/#47 mergées) : D5. ~/.pulse_intelligence/config.toml est hors watched_workspaces, donc le passage en prompt_version = \"v2\" est invisible, quel que soit le moment. Si les modifications de 02:24 ont été committées ensuite.",
+          "gaps": [
+            {
+              "id": "command_output",
+              "label": "Résultats des commandes non observés (seulement la commande et son code)",
+              "boundary": false
+            },
+            {
+              "id": "user_statement",
+              "label": "Déclarations et jugements faits en conversation, hors machine",
+              "boundary": false
+            },
+            {
+              "id": "push_merge",
+              "label": "Pushs et merges non observés (D5)",
+              "boundary": false
+            },
+            {
+              "id": "config_outside_workspace",
+              "label": "Config hors workspace observé (~/.pulse_intelligence/config.toml)",
+              "boundary": false
+            },
+            {
+              "id": "post_session_commit",
+              "label": "Devenir des modifications après la fin de session (committées ou non)",
+              "boundary": false
+            }
+          ],
+          "answered_at": "2026-09-10"
+        },
+        "E": {
+          "ideal": "Étape 3 bouclée : spike B fixe le plafond à 30 000 tokens (refus avant prefill), Qwen3.8-27B-4bit retenu pour le dogfooding, note de décision et VISION à jour. Jour 1 du dogfooding : run --once 7/7 créés, reprises jugées justes ; D1 trouvé sur 1e420dda (le open recopie le previous_summary) ; watcher élargi de Pulse/core à la racine. Arrêt sur le commit prompt v2 (ship/prompt-v2), dogfooding.md et le prompt retouchés après. Reste : ouvrir et merger la PR v2, passer la config en v2, juger D1 au jour 2 sur cas réel (ajouter une session avec annexe au corpus hors gel), ignorer eval/out.",
+          "reachable": "Trois commits ferment l'étape 3 (plafond llm_max_input_tokens, décision Qwen) puis ouvrent le jour 1 (run --once code 0, show 1e420dda, journal committé à 01:55) ; watched_workspaces élargi de Pulse/core à Pulse, watcher redémarré. Arrêt sur le commit prompt v2 (ship/prompt-v2, 02:23) ; dogfooding.md et le prompt modifiés après. Point ouvert déclaré dans le commit : D1 à juger au jour 2. Non observable : merges, config, résultats des commandes.",
+          "answered_at": "2026-09-10"
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur l'enchaînement, incertaine sur deux points",
+      "resume_horizon": "Quelques heures : reprise le 6 au matin, PR #48 mergée dans la journée.",
       "candidates": [
         {
           "id": "C1",
@@ -806,7 +1642,8 @@
           "references": [
             "o19"
           ],
-          "user_rating": null
+          "user_rating": "essentiel",
+          "user_comment": "Le vrai point ouvert de la session ; pour une fois le modèle l'a trouvé et cité juste."
         },
         {
           "id": "C2",
@@ -815,7 +1652,8 @@
             "o8",
             "o13"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Fait et effectif, pas d'action à reprendre ; mais savoir que le watcher couvre désormais tout le repo change ce que les résumés suivants vont voir."
         },
         {
           "id": "C3",
@@ -823,7 +1661,8 @@
           "references": [
             "o13"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Petit reste réel : eval/out non ignoré, le watcher transforme les sorties d'eval en activités. Réglé plus tard par contournement (sortie hors dépôt), donc c'était bien à traiter."
         },
         {
           "id": "C4",
@@ -831,7 +1670,8 @@
           "references": [
             "previous_summary:0"
           ],
-          "user_rating": null
+          "user_rating": "nuisible",
+          "user_comment": "À 02:24 c'était résolu : llm_max_tokens passé à 2048 et passage de référence fait (9/10) dans la PR corpus, mergée avant cette session. Le reporter aurait été exactement D1. Le modèle a eu raison de ne pas le reprendre."
         },
         {
           "id": "C5",
@@ -840,78 +1680,466 @@
             "o2",
             "o19"
           ],
-          "user_rating": null
+          "user_rating": "utile",
+          "user_comment": "Le verdict Qwen est une décision prise, elle vit dans docs/decisions/ ; les chiffres v2 (8/10 → 10/10 Qwen, 9/10 → 10/10 référence) sont du contexte, pas une action."
         }
       ],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Réponses A/B issues d'une reconstruction externe (chat avec Fable le 6 au matin), pas d'un souvenir spontané. Fiabilité : bonne sur l'enchaînement, incertaine sur deux points signalés (moment de la mesure du v2 ; passage de la config en v2 dans la session ou après)."
     },
     {
       "session_id": "a6474bfccd65bfc8",
       "label": "work-8",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/15-a6474bfccd65bfc8.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Une tranche de 15 minutes du chantier « observations v3 / reprise fondée » mené par Astral (Codex), pas par moi. Cette tranche pose la « reprise fondée » : resumption.py et ses tests (un open borné aux observations de la session, command_outcomes resolved/unresolved/unknown, plus de regex D5/D6), le prompt v5, la note de décision 2026-09-08-reprise-fondee.md, et la taxonomie v4 qui sert à l'adjudication des audits, celle qu'on utilise en ce moment. Côté Core, context_snapshot.py est touché : Core modifié sous gel, c'est le contournement qu'on a relevé à la relecture. Rien de committé, tout fait partie des 156 fichiers en WIP sur main.",
+          "recall": "reconstruction externe ; bonne sur le cadre, moyenne sur la tranche",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Le reste du lot Astral, puis ma relecture avec Fable : sécuriser sur branche + WIP, sortir le corpus JSON (2,1 Mo) du dépôt public, découper en trois PR (Core / Intelligence / Docs), réécrire CLAUDE.md beaucoup plus court, et statuer sur le gel, levé le 9 (fiche 16).",
+          "recall": "reconstruction externe ; bonne sur le cadre, moyenne sur la tranche",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "free_items": [
+            {
+              "importance": "essentiel",
+              "text": "L'acteur : un agent externe, pas moi",
+              "v5": "non, recopié",
+              "v6": "non, neutre (« développement »)"
+            },
+            {
+              "importance": "essentiel",
+              "text": "Rien de committé, WIP",
+              "v5": "oui, par recopie",
+              "v6": "oui"
+            },
+            {
+              "importance": "essentiel",
+              "text": "Le prompt v5 créé",
+              "v5": "non",
+              "v6": "oui"
+            },
+            {
+              "importance": "essentiel",
+              "text": "La note de décision « reprise fondée » créée : une décision enregistrée, le cœur du changement",
+              "v5": "non",
+              "v6": "non"
+            },
+            {
+              "importance": "utile",
+              "text": "La taxonomie v4 pour l'adjudication",
+              "v5": "non",
+              "v6": "en intent"
+            },
+            {
+              "importance": "essentiel",
+              "text": "context_snapshot.py côté Core touché sous gel",
+              "v5": "rien",
+              "v6": "listé en central_files sans voir la frontière"
+            },
+            {
+              "importance": "nuisible",
+              "text": "Le doing/stopped_at recopiés de la session du matin (901a5aaf) : D1 dans sa forme la plus grave, tout le résumé est celui d'une autre session",
+              "v5": "recopie",
+              "v6": "corrigé"
+            },
+            {
+              "importance": "nuisible",
+              "text": "central_files vides avec 27 fichiers dans la vue",
+              "v5": "vides",
+              "v6": "cinq, justes"
+            }
+          ],
+          "missing_note": "L'acteur, la décision, la frontière Core.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Qu'Astral est l'auteur : session Codex non attribuée ou pas encore émise, commandes de l'agent invisibles.",
+            "Le contenu de la note de décision : Pulse ne lit pas les fichiers.",
+            "Si des tests ont tourné.",
+            "Surtout : cette session est une tranche d'un chantier de plusieurs heures. La sessionnisation découpe un lot cohérent en morceaux qui, chacun, ressemblent à « des fichiers modifiés ». C'est le trou de la fragmentation déjà en P2 dans core/TODOS.md, vu d'en haut."
+          ],
+          "gaps": [
+            {
+              "id": "external_agent_actor",
+              "label": "Agent externe (Codex/Astral) non attribué comme acteur"
+            },
+            {
+              "id": "file_content",
+              "label": "Contenu des fichiers non lu (note de décision)"
+            },
+            {
+              "id": "agent_bash_unseen",
+              "label": "Tests de l'agent"
+            },
+            {
+              "id": "session_fragmentation",
+              "label": "Fragmentation d'un chantier en tranches de session (P2 core/TODOS.md)"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Chantier Astral « reprise fondée » en cours, sans commit (WIP sur main avec le reste du lot v3) : resumption.py + tests (open borné aux observations, command_outcomes), prompt v5, note de décision 2026-09-08-reprise-fondee.md, taxonomie v4 pour l'adjudication ; côté Core, context_snapshot.py touché, Core modifié sous gel. Reste : relire le lot, sécuriser sur branche, découper en trois PR, sortir le corpus, statuer sur le gel.",
+          "reachable": "Vingt-sept modifications de fichiers, aucun commit ni commande : créés resumption.py, session_summary_v5.md, test_resumption.py, 2026-09-08-reprise-fondee.md, taxonomie v4 (json, md) ; modifiés context_snapshot.py (Core) et, côté Intelligence, config, fake provider, provider_summarizer, session_input, session_summary, evaluation, sept tests. Rien de committé à la fin de la session. Aucun point ouvert observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur le cadre, moyenne sur la tranche",
+      "resume_horizon": "Le chantier a continué dans la foulée ; ma relecture, le soir et le lendemain.",
       "candidates": [],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (lot Astral relu avec Fable les 8-9 sept.), pas souvenir spontané. Fiabilité : bonne sur le cadre, moyenne sur cette tranche précise ; ce n'est pas moi qui touchais les fichiers."
     },
     {
       "session_id": "a1040f4f6d863fc6",
       "label": "work-7",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/16-a1040f4f6d863fc6.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Clôture de la relecture du lot Astral. Trois décisions matérialisées : le gel de Core levé et consigné (décision du 9), AGENTS.md unifié et les instructions allégées (2026-09-09-assouplissement-instructions.md ; trop d'instructions s'était avéré contre-productif avec les agents), les audits clos retirés de docs/audits/ vers corpus/docs/audits-retired/, corpus/ sort du dépôt public via .gitignore, c'est la décision « garder le corpus privé ». dogfooding.md mis à jour (jour 5). Et le second commit génère le kit d'adjudication : 14 fiches à compléter, le message le dit en toutes lettres. ChatGPT et Claude ouverts en parallèle : je discutais du lot pendant que je le rangeais.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Répondre aux 14 fiches (90 réponses A–E). Quarante minutes plus tard, autre session : prompt v6 après le constat des 6/11 recopies, fiches 15 à 18 ajoutées, PR #83. C'est ce qu'on fait ce soir.",
+          "recall": "reconstruction externe ; bonne",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "free_items": [
+            {
+              "importance": "essentiel",
+              "text": "Gel de Core levé",
+              "v5": "rien",
+              "v6": "en intent"
+            },
+            {
+              "importance": "essentiel",
+              "text": "14 fiches à compléter : point ouvert déclaré dans un commit, le recorded_statement parfait, et open est vide dans les deux. Le cas le plus net de « open vide » de tout le corpus",
+              "v5": "open vide",
+              "v6": "open vide"
+            },
+            {
+              "importance": "utile",
+              "text": "Audits clos déplacés hors de docs/",
+              "v5": "« migration des audits vers corpus/ » par recopie de la veille, vrai par accident",
+              "v6": "juste"
+            },
+            {
+              "importance": "utile",
+              "text": "AGENTS.md unifié, instructions allégées",
+              "v5": "non",
+              "v6": "oui"
+            },
+            {
+              "importance": "utile",
+              "text": "dogfooding.md jour 5",
+              "v5": "non",
+              "v6": "non"
+            },
+            {
+              "importance": "nuisible",
+              "text": "« version 0.6.0.0 », « refonte majeure du pipeline v3 », « rapport final d'Astra » : recopiés de 1eb35865, ils décrivent la nuit précédente ; VERSION n'est même pas dans la vue",
+              "v5": "présents",
+              "v6": "absents"
+            },
+            {
+              "importance": "inutile, voire trompeur",
+              "text": "central_files = cinq audits retirés : fichiers déplacés, pas travaillés ; la troncature à 20 créés / 20 supprimés fait passer le rangement pour le sujet de la session",
+              "v5": "oui",
+              "v6": "oui"
+            },
+            {
+              "importance": "essentiel",
+              "text": "stopped_at citant le dernier commit avec son hash",
+              "v5": "non (commit de la veille)",
+              "v6": "juste"
+            }
+          ],
+          "missing_note": "La nature de la session (clôture de relecture), le jour 5, et le point ouvert « 14 fiches ».",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Le contenu des échanges dans ChatGPT et Claude : apps activées, rien de plus.",
+            "Push et merge.",
+            "Que 20 créés + 20 supprimés = un déplacement (git mv), pas quarante changements.",
+            "Ce que la troncature à 20 a caché parmi les fichiers réellement modifiés."
+          ],
+          "gaps": [
+            {
+              "id": "user_statement",
+              "label": "Échanges en conversation (ChatGPT, Claude)"
+            },
+            {
+              "id": "push_merge",
+              "label": "Pushs et merges (D5)"
+            },
+            {
+              "id": "rename_as_create_delete",
+              "label": "Déplacement (git mv) vu comme création + suppression"
+            },
+            {
+              "id": "file_list_truncation",
+              "label": "Troncature des listes de fichiers à 20 masque les fichiers travaillés"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Clôture de la relecture du lot Astral : gel de Core levé et consigné, AGENTS.md unifié et instructions allégées, audits clos retirés de docs/ vers corpus/ (hors dépôt public), dogfooding jour 5, kit d'adjudication généré, 14 fiches à compléter. Deux commits, push non observé. Reste : répondre aux 14 fiches, puis prompt v6.",
+          "reachable": "Deux commits : « docs: lever le gel de Core, unifier AGENTS.md, retirer les audits clos », puis « docs: adjudication de la reprise, 14 fiches à compléter » (9691e73, dernier). Vingt audits déplacés de docs/audits/ vers corpus/docs/audits-retired/ (listes tronquées), onze fichiers modifiés dont AGENTS.md, README, VISION, dogfooding.md, quatre décisions, .gitignore, README Intelligence. Applications : Code, ChatGPT, Claude. Point ouvert déclaré dans le commit : 14 fiches à compléter. Push non observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne",
+      "resume_horizon": "quarante minutes",
       "candidates": [],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (soirée d'avant-hier, discutée avec Fable), pas souvenir spontané. Fiabilité : bonne."
     },
     {
       "session_id": "1eb35865547b0cca",
       "label": "work-1",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/17-1eb35865547b0cca.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Ce n'est pas une session de développement : c'est la sécurisation et le découpage du lot Astral, exécutés avec Claude Code à partir de ma demande « vérifier le travail d'Astra ». Dans l'ordre : snapshot WIP de l'arbre complet (le filet de sécurité, premier commit), traces d'audit sorties du dépôt vers corpus/ (décision « garder le corpus privé », .gitignore modifié), puis commits par couche : Core (file_policy extrait, observations ordonnées, /context schema_version 3, bump 0.6.0.0), Intelligence (corpus gelé, entrée v3, prompts v4/v5, tests, refus déterministe d'un prompt archivé, README), docs (décisions, rapports). Les sept commits réémis sous de nouveaux hashes, c'est le rebase qui remet les couches dans l'ordre. Dernier commit : un test Core cassé par le passage de minuit local pendant la session, rendu robuste. Le bump 0.6.0.0 change le contrat /context : Core modifié sous gel, la levée formelle n'arrive que le lendemain soir (fiche 16).",
+          "recall": "reconstruction externe ; bonne sur la nature, moyenne sur l'ordre",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Ouvrir et merger les PR par couche, lever le gel et le consigner, alléger CLAUDE.md, retirer les audits clos, puis générer le kit d'adjudication : tout ça, c'est la fiche 16, dix-neuf heures plus tard.",
+          "recall": "reconstruction externe ; bonne sur la nature, moyenne sur l'ordre",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "free_items": [
+            {
+              "importance": "essentiel",
+              "text": "La nature de la session : sécurisation et découpage, pas développement",
+              "v5": "« refonte majeure »",
+              "v6": "« développement » ; les deux prennent le contenu du lot pour le travail de la session"
+            },
+            {
+              "importance": "utile",
+              "text": "Le snapshot WIP comme filet",
+              "v5": "en fait le point d'arrêt alors que c'est le premier commit de la vue : nuisible",
+              "v6": "non"
+            },
+            {
+              "importance": "essentiel",
+              "text": "Traces d'audit sorties du dépôt (décision de confidentialité)",
+              "v5": "oui",
+              "v6": "non"
+            },
+            {
+              "importance": "essentiel",
+              "text": "Bump 0.6.0.0 et schema_version 3, contrat changé sous gel",
+              "v5": "a la version",
+              "v6": "a le schéma en intent ; aucun ne voit la frontière"
+            },
+            {
+              "importance": "utile",
+              "text": "Le rebase comme réordonnancement, pas du travail en double ; la vue présente 21 commits dont 8 doublons sans le dire",
+              "v5": "non",
+              "v6": "non"
+            },
+            {
+              "importance": "utile",
+              "text": "Le dernier commit, test cassé par minuit local",
+              "v5": "cite le premier commit",
+              "v6": "cite l'avant-dernier"
+            },
+            {
+              "importance": "utile comme intention, nuisible dans stopped_at",
+              "text": "Ma demande « vérifier le travail d'Astra » ; « sans rapport final de vérification » est une affirmation non fondée",
+              "v5": "la porte, avec l'affirmation non fondée",
+              "v6": "absente (annexe retirée)"
+            },
+            {
+              "importance": "utile",
+              "text": "Push non observé",
+              "v5": "oui",
+              "v6": "non"
+            },
+            {
+              "importance": "utile",
+              "text": "central_files (cinq, identiques), justes",
+              "v5": "oui",
+              "v6": "oui"
+            }
+          ],
+          "missing_note": "La nature de la session, le rebase, minuit, la frontière Core.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Que le rebase réordonne (reflog).",
+            "Les PR ouvertes ou mergées.",
+            "Ce que « vérifier » a produit (réponses de l'agent).",
+            "Les échanges ChatGPT/Claude en parallèle.",
+            "La troncature à 20 : les vingt « modifiés » sont tous Core et docs ; les fichiers Intelligence réellement touchés sont hors vue, alors que six commits les concernent."
+          ],
+          "gaps": [
+            {
+              "id": "rebase_unseen",
+              "label": "Rebase"
+            },
+            {
+              "id": "push_merge",
+              "label": "PR et merges"
+            },
+            {
+              "id": "agent_session_content",
+              "label": "Réponses de l'agent"
+            },
+            {
+              "id": "user_statement",
+              "label": "Échanges en conversation"
+            },
+            {
+              "id": "file_list_truncation",
+              "label": "Troncature à 20 masquant les fichiers Intelligence"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Sécurisation et découpage du lot Astral avec Claude Code : snapshot WIP, traces d'audit sorties vers corpus/, puis commits par couche : Core (file_policy, observations ordonnées, /context schema 3, bump 0.6.0.0 : contrat changé, gel à lever formellement), Intelligence (corpus, entrée v3, prompts v4/v5, tests, README), docs (décisions, rapports), rebase pour l'ordre. Dernier commit : test Core robuste au passage de minuit local, cassé pendant la session. Push non observé. Reste : PR par couche, lever et consigner le gel, alléger CLAUDE.md, puis évaluer open.",
+          "reachable": "Vingt-et-un commits dont huit réémis sous nouveaux hashes : wip snapshot (premier), déplacement des traces d'audit vers corpus/, file_policy.py extrait, observations ordonnées + schema_version 3, bump 0.6.0.0, six commits Intelligence (corpus, entrée v3, prompts v4/v5, tests, refus déterministe, README), deux docs ; dernier commit e801ba7 : test de bloc contexte robuste autour de minuit local. Vingt audits déplacés docs/ → corpus/, .gitignore, spec Context API, VISION modifiés (listes tronquées). Session d'agent : demande de vérification du travail d'Astra, réponses non observées. Push non observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur la nature, moyenne sur l'ordre",
+      "resume_horizon": "le soir même",
       "candidates": [],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (décisions prises avec Fable à la relecture du lot Astral, 8 sept. au soir), pas souvenir spontané. Fiabilité : bonne sur la nature de la session, moyenne sur l'ordre exact dans la nuit."
     },
     {
       "session_id": "d4dc40e0839bb5a4",
       "label": "work-1",
       "card": "docs/audits/2026-09-09-adjudication-reprise/fiches/18-d4dc40e0839bb5a4.md",
-      "status": "awaiting_user",
+      "status": "answered_pending_items",
       "answers": {
-        "A": null,
-        "B": null,
-        "C": null,
-        "D": null,
-        "E": null
+        "A": {
+          "text": "Fin du jour 3. Le lot launchd du 7 jugé avec Fable : D1 requalifié, pas une recopie, un report sans réévaluation d'un point non observable ; D3/D4/D5 confirmés récurrents malgré la v2 ; et D6 trouvé : le modèle déclare un fichier « non commité » alors que la session montre un commit. Règle de rejet ajoutée au validateur (premier commit), eval rejouée puis archivée sous docs/audits/2026-09-08-eval-v3-d6 (les 18 fichiers créés puis déplacés, c'est ça), README documenté, dogfooding.md jour 3 écrit. Prompt v3 activé, en sachant qu'une part des open régénérés serait fausse (D6 non couvert par le prompt seul) ; c'est consigné dans dogfooding.md, et c'est devenu l'entrée « immutabilité subie » de intelligence/TODOS.md. PR #77 mergée à 00:20, hors vue. Les cinq fichiers Core modifiés (projects.py, timeline.py, context_snapshot.py, daily_trace.py, models.py) ne sont couverts par aucun des trois commits : c'est un chantier parallèle en cours, vraisemblablement le début de la « reconstruction unique des sessions » d'Astral, validée le 8, mais je ne suis pas sûr.",
+          "recall": "reconstruction externe ; bonne sur Intelligence, faible sur les fichiers Core",
+          "answered_at": "2026-09-10"
+        },
+        "B": {
+          "text": "Vérifier la provenance du commit v3 sur main (7865f0f, arrivé sans passer par la PR #54) et fermer #54 comme obsolète ; premier lot launchd sous v3 le matin du 8 (jour 4) ; le chantier Core parallèle.",
+          "recall": "reconstruction externe ; bonne sur Intelligence, faible sur les fichiers Core",
+          "answered_at": "2026-09-10"
+        },
+        "C": {
+          "free_items": [
+            {
+              "importance": "essentiel",
+              "text": "D6 trouvé, règle de rejet ajoutée",
+              "v5": "oui",
+              "v6": "oui, explicite la règle, mieux"
+            },
+            {
+              "importance": "essentiel",
+              "text": "v3 activé, uniquement grâce au message de commit : l'activation vit dans ~/.pulse_intelligence/config.toml, hors vue",
+              "v5": "oui",
+              "v6": "oui"
+            },
+            {
+              "importance": "utile",
+              "text": "D1 requalifié",
+              "v5": "oui (« qualifie D1 », du commit)",
+              "v6": "non"
+            },
+            {
+              "importance": "utile",
+              "text": "Lot launchd jugé, jour 3",
+              "v5": "oui",
+              "v6": "oui"
+            },
+            {
+              "importance": "utile",
+              "text": "Eval archivée",
+              "v5": "oui",
+              "v6": "oui"
+            },
+            {
+              "importance": "essentiel",
+              "text": "Cinq fichiers Core modifiés sans commit : un second fil en vol, central_files ne liste qu'Intelligence",
+              "v5": "absent",
+              "v6": "absent"
+            },
+            {
+              "importance": "utile",
+              "text": "PR #77 mergée (hors vue)",
+              "v5": "non",
+              "v6": "non"
+            },
+            {
+              "importance": "utile",
+              "text": "La décision « v3 activé en sachant qu'une part des open sera fausse », dans dogfooding.md",
+              "v5": "non",
+              "v6": "non"
+            },
+            {
+              "importance": "inutile",
+              "text": "v6 « sans état final inspecté » : n'affirme rien d'observable",
+              "v5": "—",
+              "v6": "présent"
+            },
+            {
+              "importance": "inutile",
+              "text": "Apps (DeepL, Safari, ChatGPT)",
+              "v5": "—",
+              "v6": "—"
+            }
+          ],
+          "missing_note": "Le fil Core en vol ; la décision assumée ; #54 à fermer.",
+          "answered_at": "2026-09-10"
+        },
+        "D": {
+          "items": [
+            "Le merge de #77.",
+            "La config (prompt_version = \"v3\") hors workspace ; le commit l'a sauvée cette fois.",
+            "Le contenu de dogfooding.md (la décision et sa limite assumée).",
+            "À quel chantier appartiennent les fichiers Core, et qui les touche (agent parallèle).",
+            "« Deux fils, un seul résumé » une fois de plus."
+          ],
+          "gaps": [
+            {
+              "id": "push_merge",
+              "label": "Merges (D5)"
+            },
+            {
+              "id": "config_outside_workspace",
+              "label": "Config hors workspace"
+            },
+            {
+              "id": "file_content",
+              "label": "Contenu des fichiers (dogfooding.md)"
+            },
+            {
+              "id": "external_agent_actor",
+              "label": "Agent parallèle non attribué"
+            }
+          ]
+        },
+        "E": {
+          "ideal": "Dogfooding jour 3 : lot launchd du 7 jugé, D1 requalifié (report d'un point non observable, pas recopie), D3/D4/D5 confirmés, D6 trouvé (un point observé déclare un fichier non commité alors que la session montre un commit), règle de rejet ajoutée au validateur, eval rejouée et archivée, README à jour, prompt v3 activé en sachant qu'une part des open régénérés sera fausse. Trois commits, PR #77 mergée. Côté Core, cinq fichiers modifiés hors commit (chantier parallèle). Reste : fermer #54, lot launchd du 8 sous v3, chantier Core.",
+          "reachable": "Trois commits : fix(intelligence) règle D6 (2d34ca8), docs D6 + archive de l'eval 2026-09-08 (1c115f9), docs dogfooding jour 3, lot launchd jugé, D1 requalifié, D6 trouvé et corrigé, v3 activé (3504d4d, dernier). Dix-huit fichiers d'eval créés puis déplacés sous docs/audits/2026-09-08-eval-v3-d6. Modifiés : README Intelligence, annotation eef4956b, prompt v3, session_input, session_summary, test_open_v3_contract, dogfooding.md ; côté Core projects.py, timeline.py, context_snapshot.py, daily_trace.py, models.py, sans commit les couvrant. Push non observé."
+        }
       },
-      "recall_confidence": null,
-      "resume_horizon": null,
+      "recall_confidence": "reconstruction externe ; bonne sur Intelligence, faible sur les fichiers Core",
+      "resume_horizon": "le lendemain matin",
       "candidates": [],
-      "adjudicated_items": null
+      "adjudicated_items": null,
+      "provenance_note": "Reconstruction externe (jour 3 du dogfooding analysé avec Fable le 7 au soir), pas souvenir spontané. Fiabilité : bonne sur Intelligence, faible sur les fichiers Core."
     }
-  ]
+  ],
+  "protocol_note": "Changé le 2026-09-10 après quatre fiches : l'utilisateur ne se souvient d'aucune session, ses réponses viennent d'une reconstruction externe ; l'aveugle A/B avant la sortie du modèle ne protège plus rien. Les 14 fiches restantes sont traitées par lots de 3 à 4, chaque fiche complète d'un coup (faits, sortie du modèle, propositions C), réponses A à E par lot. Les sessions antérieures à mi-août n'ont aucune reconstruction externe : jugées sur la vue seule, en mode rapide.",
+  "ground_truth_label": "vérité terrain reconstruite (2026-09-10) : aucune réponse de souvenir spontané ; 14 fiches depuis une reconstruction externe, 4 depuis la vue seule. Pas versée dans eval/expected tant que le format ANNOTATION-PROPOSEE.md n'est pas validé (décision du 2026-09-11)."
 }

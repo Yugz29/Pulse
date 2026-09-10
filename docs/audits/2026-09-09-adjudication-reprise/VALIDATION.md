@@ -80,3 +80,10 @@ distants n’ont pas été inspectés pour combler artificiellement ces inconnue
 Aucun modèle nouveau ou existant n’a été exécuté, aucun téléchargement ni appel
 à un service distant demandé. La collecte personnelle et la configuration de
 production sont inchangées.
+
+## Complément du 2026-09-11 : réponses reçues et vérifications de la synthèse
+
+- Les 90 réponses A–E des 18 fiches ont été données par l'utilisateur le 2026-09-10 et consignées dans les fiches et `adjudications-a-completer.json` (`user_responses_received` = 18, `status` = `answered_pending_items`). `adjudicated_items` reste `null` : aucun élément atomique n'a encore été confirmé au format `ANNOTATION-PROPOSEE.md`.
+- Provenance : aucune réponse ne vient d'un souvenir spontané ; 14 fiches depuis une reconstruction externe, 4 depuis la vue seule. Noté fiche par fiche (`provenance_note`).
+- Vérifications faites pour `SYNTHESE.md` §3.2, sans modification de code : lecture de `_resumption_items` et de la gestion de `InvalidModelOutput` dans `session_summary.py` ; comptage des occurrences de rejet dans `~/.pulse_intelligence/logs/run.log` (0) ; comparaison `raw_output` / `open_items` sur les 14 replays archivés (identiques). Vérification pour la fiche 04 : la capture `eval/observed/2ce344566f7e85dc.json` contient 16 observations, toutes des commandes, aucun événement de fichier.
+- Aucun modèle exécuté, aucun rejeu, aucun commit.
