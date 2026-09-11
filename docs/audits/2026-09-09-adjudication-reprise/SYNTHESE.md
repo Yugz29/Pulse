@@ -171,6 +171,26 @@ remplit, c'est l'exemple ; sinon, c'est le modèle ou la consigne de
 prudence. Aucune donnée nouvelle, aucun changement de collecte, un
 prompt versionné en PR comme d'habitude.
 
+### 3.3 Complément du 2026-09-11 au soir : les fiches 15 à 18 n'avaient pas d'appui citable
+
+Constat fait en préparant le rejeu, sans rien modifier en production. Le
+Core de production (launchd `com.pulse.daemon`) tourne sans redémarrage
+depuis le 06 à 23:56 ; le schéma 3 est sur main depuis le 09 à 00:35
+(2ed558b). Il sert donc encore `schema_version 2` : la vue héritée
+`files / git / terminal`, sans `observations`. Intelligence accepte ce
+schéma en lecture et bascule sur `legacy_aggregates`, sans `oN`.
+
+Preuve : le hash d'entrée des cinq résumés v6 émis en production
+(1eb35865, a1040f4f, f8aab73b le 10 ; 32ca64e5, d283f6dd le 11) est
+identique, à l'octet, à l'entrée reconstruite depuis la vue schéma 2
+servie aujourd'hui. Sans référence citable, ni `command_failure` ni
+`recorded_statement` ne peuvent passer le validateur : **pour les fiches
+15 à 18, `open` vide est forcé par l'entrée, pas choisi par le modèle.**
+La conclusion de 3.2 reste valable pour les fiches 01 à 14, dont les
+replays ont reçu l'export schéma 3 de `eval/observed`. Le rejeu utilise
+pour 16 une vue schéma 3 figée depuis un Core jetable (code de main, copie
+de `trace.db`). Verdict du rejeu : `docs/dogfooding.md`, jour 7.
+
 ## Décisions de l'utilisateur, 2026-09-11
 
 1. **Rejeu sur `open` : oui**, trois variantes du prompt v6 sur les quatre

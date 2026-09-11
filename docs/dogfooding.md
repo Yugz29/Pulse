@@ -724,3 +724,66 @@ registre des trous de collecte et synthèse dans
 le journal : `open` vide n'est pas le validateur (0 rejet en production,
 14/14 replays où le brut du modèle égale le validé), c'est le modèle sous
 le prompt. Rejeu en trois variantes décidé le 11, pas encore lancé.
+
+## Jour 7 — 2026-09-11
+
+**Le Core de production servait encore le schéma 2.** Constaté en
+préparant le rejeu : le daemon launchd (`com.pulse.daemon`, KeepAlive)
+tourne sans redémarrage depuis le 06 à 23:56, et le schéma 3 est sur main
+depuis le 09 à 00:35 (2ed558b). Il sert la vue héritée `files / git /
+terminal`, sans `observations` ; Intelligence l'accepte en lecture et
+bascule sur `legacy_aggregates`, donc sans aucune référence `oN`. Preuve :
+le hash d'entrée des cinq résumés v6 émis en production (1eb35865,
+a1040f4f, f8aab73b le 10 ; 32ca64e5, d283f6dd le 11) est identique à
+l'entrée reconstruite aujourd'hui depuis la vue schéma 2. Conséquence pour
+le jour 6 : `open` vide 3/3 n'était pas un choix du modèle, c'était une
+entrée sans rien de citable. La conclusion de la synthèse (§3.2) reste
+valable pour les fiches 01 à 14, rejouées sur l'export schéma 3 de
+`eval/observed` ; complément §3.3. Un merge Core ne change rien en
+production tant que le daemon n'est pas redémarré : à ajouter à la
+procédure de déploiement, redémarrage non fait (production, à décider).
+
+**Rejeu `open` en trois variantes de v6, décidé le matin, fait le soir.**
+Paramètres : Qwen3.8-27B-4bit (mlx), `llm_max_tokens = 2048`, température
+absente (argmax), entrée constante, 4 prompts × 4 sessions, 16/16 sorties
+valides, 23 minutes de lot à 19:56–20:24 (50 à 213 s par session, Mac
+éveillé). Sessions : 09 `eb652ce9`, 13 `1e420dda` et 14 `eef4956b` telles
+quelles depuis `eval/observed` ; 16 `a1040f4f` figée sous le schéma 3
+depuis un Core jetable (code de main, copie `sqlite3 .backup` de
+`trace.db`, port 8799, arrêté ensuite), contexte à fin − 1 s. Prompts :
+`v6` témoin ; `v6-sans-phrase` (sans « [] est préférable à un reste
+hypothétique ») ; `v6-sans-exemple` (l'exemple `"open": []` du gabarit
+remplacé par un objet `recorded_statement`) ; `v6-sans-phrase-ni-exemple`.
+Données de travail : `corpus/docs/audits/2026-09-11-rejeu-open/`
+(entrées, configs, `run-batch.sh`, sorties, `run.log`).
+
+| Session | attendu (adjudication) | v6 | sans phrase | sans exemple | sans les deux |
+| --- | --- | --- | --- | --- | --- |
+| 09 | auth reportée (o67…), Swift hors CI (o65…) | [] | [] | [] | **2** : o194 Swift hors CI, o195 auth reportée |
+| 13 | list/run « Non corrigé » (o20) | [] | [] | **1** : o20 | **1** : o20 |
+| 16 | « 14 fiches à compléter » (o85) | [] | [] | **1** : o85 | **1** : o85 |
+| 14 (contrôle) | D1 capté sous v5 (carried_over) | [] | **1** : o19 « D1 n'est pas mesurable… à juger au jour 2 » | **1** : o19 | **1** : o19 |
+
+Tous les points produits sont des `recorded_statement`, citation exacte,
+validés du premier coup ; aucun `command_failure`, aucun point hors
+attente. Sur 09, la variante complète cite les dernières occurrences
+après rebase (o194, o195), pas les premières.
+
+**Verdict : c'est l'exemple `"open": []` du gabarit qui vide `open`.**
+Retirer la phrase seule ne change presque rien (1/4, sur le contrôle) ;
+remplacer l'exemple remplit 3/4 ; les deux ensemble remplissent 4/4 avec
+exactement les déclarations que l'adjudication jugeait essentielles ou
+utiles (fiche 09 C2 et C3, fiche 13 o20, fiche 16 T6). Le modèle sait
+sélectionner une déclaration de commit dès que le gabarit ne lui montre
+pas une liste vide comme sortie type. Les autres champs bougent avec le
+prompt (intitulés d'`intents`, un `central_files` de plus sur 14 et 16,
+`confidence` high → medium sur 16 sous les deux variantes à exemple) :
+rien de faux repéré à la lecture, à juger par l'utilisateur.
+
+**Rien n'est activé.** Les trois variantes sont livrées comme prompts
+versionnés (PR `ship/intelligence-rejeu-open-v6`), aucune n'est le
+défaut ; `config.toml` de production reste sans `prompt_version`. Suite
+possible, à décider : faire de `v6-sans-phrase-ni-exemple` un v7 et le
+passer sur les 14 sessions de `eval/observed` avant activation ; et
+redémarrer le Core de production, sans quoi un v7 ne recevrait toujours
+rien de citable.
