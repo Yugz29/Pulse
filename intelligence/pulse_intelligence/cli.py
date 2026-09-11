@@ -52,6 +52,11 @@ EXIT_GIVEN_UP = 4
 # `run` et `summarize` : un autre passage tient déjà l'état (décision
 # 2026-09-06, exécution unique). Sortie immédiate, rien n'est attendu.
 EXIT_LOCKED = 5
+# Le passage a lu une vue héritée : Core sert un schéma plus ancien que
+# l'attendu (daemon jamais redémarré après un merge), les résumés sont émis
+# sans observations ni `open` citable. Le plus grave des codes : chaque
+# résumé du passage est dégradé, pas seulement une candidate.
+EXIT_LEGACY_VIEW = 6
 PRIVATE_UMASK = 0o077
 
 
@@ -308,6 +313,13 @@ def run_run(args: argparse.Namespace, config: Config, client: CoreClient, state:
             print(f"passage interrompu : {report.error}", file=sys.stderr)
             return EXIT_INFRASTRUCTURE
         if args.once:
+            if report.legacy_view:
+                print(
+                    "passage sur la vue héritée : résumés émis sans observations "
+                    "(voir l'avertissement schema_version ci-dessus)",
+                    file=sys.stderr,
+                )
+                return EXIT_LEGACY_VIEW
             if report.count("given_up"):
                 return EXIT_GIVEN_UP
             if report.count("failed"):
