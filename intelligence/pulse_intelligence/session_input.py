@@ -39,8 +39,12 @@ def uses_open_items(prompt_version: str) -> bool:
 # de v6 à entrée constante, sans la phrase « [] est préférable à un reste
 # hypothétique », sans l'exemple `"open": []`, ou sans les deux. Même entrée
 # que v6, sinon la comparaison ne dit rien.
+# v7 : la variante complète du rejeu (sans la phrase ni l'exemple `[]`),
+# enregistrée le 2026-09-11 pour la mesure sur les 14 sessions du corpus.
+# Pas le défaut : `Config.prompt_version` reste v6 tant que la mesure n'est
+# pas jugée.
 PROMPT_VERSIONS_WITHOUT_ANNEXES = frozenset({
-    "v6", "v6-sans-phrase", "v6-sans-exemple", "v6-sans-phrase-ni-exemple",
+    "v6", "v6-sans-phrase", "v6-sans-exemple", "v6-sans-phrase-ni-exemple", "v7",
 })
 
 
