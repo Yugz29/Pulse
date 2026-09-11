@@ -41,6 +41,19 @@ et `make status` ; depuis `intelligence/`, `.venv/bin/python -m pytest -q`.
 
 ## Reprise — état historique à la fin du 2026-09-07
 
+**Reprise au 2026-09-11 au soir (ajout du jour 7).** Core de production
+redémarré à 20:48:19 (`launchctl kickstart -k gui/501/com.pulse.daemon`,
+pid 51875, code de main) : `GET /context` sert `schema_version 3`. Le
+jugement suivant se fait sur le **lot launchd du 2026-09-12 à 06:30**, pas
+sur une requalification des fiches 15 à 18 ni sur un v7 : chaque résumé
+créé devra porter un `input_hash` différent des cinq résumés v6 émis
+depuis l'entrée héritée (1eb35865 `5707e25d…`, a1040f4f `60757890…`,
+f8aab73b `b06105c1…`, 32ca64e5 `2a93c8bd…`, d283f6dd `00f5198c…`), et
+son entrée devra contenir `observations` et non `legacy_aggregates`.
+`open` reste attendu vide sous v6 (gabarit `"open": []`, jour 7) ; ce
+n'est pas le critère de demain.
+
+
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
 reprise du matin suivant : le lot launchd de 06:30 résume les sessions de la
 veille, on les lit et on les juge dans la journée. Le 2026-09-06 est le
