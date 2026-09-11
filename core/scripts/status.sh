@@ -94,6 +94,13 @@ fi
 
 echo ""
 echo "Services launchd"
+# Un service démarré avant le dernier commit touchant le code de core/
+# (branche courante, date de commit : avec un merge en rebase c'est
+# l'heure d'arrivée sur main) tourne sur de l'ancien code : STALE, à
+# redémarrer. Le daemon a servi le schéma 2 du 2026-09-06 au 11 sans que
+# rien ne le montre. TODOS, CHANGELOG et README ne comptent pas.
+code_changed_epoch="$(git -C "$repo_root" log -1 --format=%ct -- \
+  daemon_v2 scripts macos_observer requirements.txt requirements-dev.txt 2>/dev/null || true)"
 for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers \
              com.pulse.file-watcher com.pulse.app-observer; do
   info="$(launchctl print "gui/$(id -u)/$label" 2>/dev/null)"
@@ -103,7 +110,12 @@ for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers 
   fi
   pid="$(printf '%s' "$info" | grep 'pid = ' | grep -o '[0-9]*' || true)"
   state="$(printf '%s' "$info" | grep -m1 'state = ' | sed 's/.*state = //')"
-  printf '  %-28s: %s%s\n' "$label" "$state" "${pid:+ (pid $pid)}"
+  stale=""
+  if [[ -n "$pid" && -n "$code_changed_epoch" ]]; then
+    stale="$("$python" -m daemon_v2.service_staleness "$pid" "$code_changed_epoch" 2>/dev/null || true)"
+  fi
+  printf '  %-28s: %s%s%s\n' "$label" "$state" "${pid:+ (pid $pid)}" \
+    "${stale:+ — STALE : démarré avant le dernier commit core/, à redémarrer}"
 done
 
 echo ""
