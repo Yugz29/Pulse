@@ -44,7 +44,7 @@ les défauts de `config.py` s'appliquent.
 core_url      = "http://127.0.0.1:8765"
 llm_provider  = "mlx"
 model_id      = "mlx-community/Qwen3.8-27B-4bit"
-prompt_version = "v5"         # reprise fondée ; v1–v4 historiques
+prompt_version = "v6"         # reprise fondée sans annexes ; v5 avec annexes, v1–v4 historiques
 llm_max_tokens = 2048          # sous 2048, des sessions denses sont tronquées
 ```
 
@@ -81,7 +81,7 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `llm_max_tokens` | `2048` | plafond de génération |
 | `llm_max_input_tokens` | `30000` | au-delà, le modèle local refuse (mémoire) |
 | `llm_temperature` | `null` | absente = non envoyée (le modèle local reste alors en argmax) ; `0.0` réduit l'aléa de l'échantillonnage, sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés |
-| `prompt_version` | `v5` | reprise bornée à la session ; v1–v4 refusent cette nouvelle entrée |
+| `prompt_version` | `v6` | reprise bornée à la session, sans annexes ; `v5` reçoit les annexes ; v1–v4 refusent cette entrée. `v6-sans-phrase`, `v6-sans-exemple`, `v6-sans-phrase-ni-exemple` : variantes du rejeu `open` du 2026-09-11 (`docs/dogfooding.md`, jour 7), pas des défauts |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
 | `min_session_minutes` | `10` | une session plus courte n'est pas candidate |
 | `min_session_activities` | `30` | une session moins active n'est pas candidate |
