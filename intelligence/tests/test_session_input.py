@@ -272,3 +272,14 @@ def test_v6_open_replay_variants_share_the_v6_input():
         assert ('"open": []' in text) is has_empty_example, version
         if not has_empty_example:
             assert '"kind": "recorded_statement"' in text
+
+
+def test_v7_is_the_full_replay_variant_and_not_the_default():
+    from pulse_intelligence.config import Config
+    from pulse_intelligence.provider_summarizer import prompt_path_for
+    from pulse_intelligence.session_input import uses_annexes
+
+    v7 = prompt_path_for("v7").read_text(encoding="utf-8")
+    assert v7 == prompt_path_for("v6-sans-phrase-ni-exemple").read_text(encoding="utf-8")
+    assert uses_open_items("v7") and not uses_annexes("v7")
+    assert Config().prompt_version == "v6"
