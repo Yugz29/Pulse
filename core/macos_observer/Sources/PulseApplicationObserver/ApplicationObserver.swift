@@ -59,9 +59,7 @@ final class ApplicationObserver: @unchecked Sendable {
         do {
             try recorder.record(context)
         } catch {
-            FileHandle.standardError.write(
-                Data("Pulse ApplicationObserver: \(error)\n".utf8)
-            )
+            ObserverLog.write("Pulse ApplicationObserver: \(error)")
         }
     }
 

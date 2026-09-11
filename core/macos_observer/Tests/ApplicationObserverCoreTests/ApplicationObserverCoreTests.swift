@@ -336,3 +336,21 @@ func outboxBridgeDoesNotPumpTheRunLoopWhileWaiting() throws {
     CFRunLoopRunInMode(.defaultMode, 0.5, false)
     #expect(flag.didRun == true, "le bloc n'était pas réellement en attente")
 }
+
+// Journal de l'observateur : chaque ligne porte un horodatage ISO 8601 en
+// heure locale. Sans lui, les quatre « Fatal access conflict detected » du
+// journal restaient indatables (constat du 2026-09-11).
+@Test
+func logLineStartsWithLocalIso8601Timestamp() {
+    let date = Date(timeIntervalSince1970: 1_789_152_499)  // 2026-09-11T18:48:19Z
+    let paris = TimeZone(identifier: "Europe/Paris")!
+    let line = ObserverLog.line("[macos-observer] received screen lock notification", at: date, timeZone: paris)
+    #expect(line == "2026-09-11T20:48:19+02:00 [macos-observer] received screen lock notification\n")
+}
+
+@Test
+func logLineKeepsUtcOffsetOfTheGivenZone() {
+    let date = Date(timeIntervalSince1970: 0)
+    let utc = TimeZone(secondsFromGMT: 0)!
+    #expect(ObserverLog.line("x", at: date, timeZone: utc) == "1970-01-01T00:00:00Z x\n")
+}

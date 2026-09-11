@@ -63,9 +63,7 @@ final class SystemObserver: @unchecked Sendable {
             try bridge.enqueue(payload: payload)
             deduplicator.record(event)
         } catch {
-            FileHandle.standardError.write(
-                Data("Pulse SystemObserver: \(error)\n".utf8)
-            )
+            ObserverLog.write("Pulse SystemObserver: \(error)")
         }
     }
 
@@ -73,13 +71,13 @@ final class SystemObserver: @unchecked Sendable {
         let message: String
         switch event {
         case .screenLocked:
-            message = "[macos-observer] received screen lock notification\n"
+            message = "[macos-observer] received screen lock notification"
         case .screenUnlocked:
-            message = "[macos-observer] received screen unlock notification\n"
+            message = "[macos-observer] received screen unlock notification"
         default:
             return
         }
-        FileHandle.standardError.write(Data(message.utf8))
+        ObserverLog.write(message)
     }
 
     deinit {
