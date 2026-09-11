@@ -20,7 +20,7 @@ from typing import Any
 from . import PRODUCER_NAME, __version__
 from .config import Config
 from .core_client import CoreClient, CoreError, CoreUnavailable
-from .selection import SessionView, select_candidates
+from .selection import SessionView, legacy_view_served, select_candidates
 from .session_input import (
     InputReferences,
     build_model_input,
@@ -688,6 +688,10 @@ class PassReport:
     # Payloads `pending` rejoués par le vidage de la file, avant la sélection
     # (défaut 4 de l'audit, issue #62). Leurs Outcome sont dans `outcomes`.
     replayed: int = 0
+    # Le passage a lu une vue héritée (Core à un schéma plus ancien que
+    # l'attendu) : les résumés sont produits sans observations ni `open`
+    # citable. `run --once` le rend par un code de sortie dédié.
+    legacy_view: bool = False
 
     def count(self, status: str) -> int:
         return sum(1 for outcome in self.outcomes if outcome.status == status)
@@ -775,7 +779,10 @@ def run_pass(
             return PassReport(
                 candidates=len(candidates), outcomes=outcomes, error=str(exc), replayed=replayed
             )
-    return PassReport(candidates=len(candidates), outcomes=outcomes, replayed=replayed)
+    return PassReport(
+        candidates=len(candidates), outcomes=outcomes, replayed=replayed,
+        legacy_view=legacy_view_served(),
+    )
 
 
 def _replay_pending(

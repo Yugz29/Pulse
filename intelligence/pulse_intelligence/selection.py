@@ -15,7 +15,7 @@ from typing import Any
 
 from . import KNOWN_RECONSTRUCTION_VERSION
 from .config import Config
-from .core_client import CoreClient
+from .core_client import CoreClient, EXPECTED_SCHEMA_VERSION
 from .state import JobState
 
 
@@ -37,6 +37,39 @@ def check_reconstruction_version(served: Any, *, source: str = "Core") -> str | 
     )
     print(message, file=sys.stderr)
     return message
+
+
+_announced_schemas: set[Any] = set()
+_served_schema: Any = None
+
+
+def check_schema_version(served: Any, *, source: str = "Core") -> str | None:
+    """Le schéma du Context API servi face à celui attendu (`EXPECTED_SCHEMA_VERSION`).
+
+    Un schéma plus ancien est accepté en lecture, mais la vue n'a pas
+    d'`observations` : `build_model_input` replie sur `legacy_aggregates`,
+    sans chronologie ni référence citable, donc sans `open` possible. Ce
+    repli a été silencieux du 2026-09-06 au 11 (daemon jamais redémarré
+    après le merge du schéma 3). Avertissement sur stderr, une fois par
+    schéma et par processus ; rend le texte émis, ou ``None``."""
+    global _served_schema
+    _served_schema = served
+    if served == EXPECTED_SCHEMA_VERSION or served in _announced_schemas:
+        return None
+    _announced_schemas.add(served)
+    message = (
+        f"⚠ {source} sert le Context API schema_version {served}, attendu {EXPECTED_SCHEMA_VERSION} : "
+        "vue héritée sans observations, les résumés replient sur legacy_aggregates "
+        "(aucun point open citable). Daemon Core à redémarrer si son code est plus récent."
+    )
+    print(message, file=sys.stderr)
+    return message
+
+
+def legacy_view_served() -> bool:
+    """Le dernier `/context/sessions` lu dans ce processus venait-il d'un
+    schéma plus ancien que l'attendu ?"""
+    return isinstance(_served_schema, int) and _served_schema < EXPECTED_SCHEMA_VERSION
 
 
 def _instant(value: str) -> datetime:
@@ -117,6 +150,7 @@ def fetch_sessions(
     # Au premier contact avec Core, donc au démarrage de `list`, `summarize`,
     # `run` et `show <id>` : la version servie face à celle connue du code.
     check_reconstruction_version(body.get("reconstruction_version"))
+    check_schema_version(body.get("schema_version"))
     return [SessionView(raw=session, day=day) for session in body.get("sessions", [])]
 
 

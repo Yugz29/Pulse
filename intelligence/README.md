@@ -148,6 +148,7 @@ Code de sortie de `run --once`, le plus grave gagne :
 | au moins une candidate `failed` (réessayée au passage suivant) | 3 |
 | au moins une candidate `given_up` (abandonnée, intervention nécessaire) | 4 |
 | un autre `run` ou `summarize` tient déjà l'état (`state.json.lock`) : sortie immédiate, rien n'est lu ni écrit | 5 |
+| Core sert un `schema_version` plus ancien que l'attendu (vue héritée sans `observations` : résumés émis sans `open` citable, avertissement sur stderr ; daemon Core à redémarrer) | 6 |
 
 Reprendre une session abandonnée : `pulse-intel summarize <id> --retry` efface
 son budget d'échecs (sous ses deux formes de clé, session et identité), rejoue

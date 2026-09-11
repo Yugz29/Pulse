@@ -163,6 +163,9 @@ class FakeCore:
     fail_readbacks: int = 0
     context_requests: int = 0
     url: str = ""
+    # Le schéma que `/context/sessions` déclare : 3 comme Core 0.6.0.0 ;
+    # un test le rabaisse à 2 pour jouer un daemon jamais redémarré.
+    schema_version: int = 3
 
     def add_sessions(self, day: str, *views: dict[str, Any]) -> None:
         self.sessions_by_date.setdefault(day, []).extend(views)
@@ -196,7 +199,7 @@ class FakeCore:
             self.requested_dates.append(day)
             return jsonify(
                 {
-                    "schema_version": 2,
+                    "schema_version": self.schema_version,
                     "date": day,
                     "reconstruction_version": 1,
                     "sessions": self.sessions_by_date.get(day, []),
