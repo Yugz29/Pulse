@@ -53,6 +53,30 @@ son entrée devra contenir `observations` et non `legacy_aggregates`.
 `open` reste attendu vide sous v6 (gabarit `"open": []`, jour 7) ; ce
 n'est pas le critère de demain.
 
+**Clôture du 2026-09-11, 22:00.** Mergées le soir : #85 (repli sur la vue
+héritée bruyant, code de sortie 6), #86 (`make status` écrit STALE), #88
+(prompt v7 enregistré, v6 reste le défaut), #87 (journal Swift horodaté).
+Observateur reconstruit et réinstallé, daemon, outbox-worker et
+file-watcher relancés sur le code mergé, `make status` sans STALE.
+Mesures hors dépôt dans `corpus/docs/audits/2026-09-11-rejeu-open/` :
+`v7-corpus/` (14/14 valides, 13 points : 9 `command_failure`, 4
+`recorded_statement`) et `v7-superseded/`. **PR #89 poussée sans merge** :
+état net des commandes, `superseded_observed` avec `superseded_by` dans
+`command_outcomes`, validateur inchangé sur `unresolved_observed`. Mesure
+v7-superseded conforme à l'attendu : 4 disparitions (03 : o16→o17,
+o20→o23, o22→o23 ; 04 : o10→o11), 9 points restants dont 5
+`command_failure` (04 : o7, o14 ; 02 : o41 ; 06 : o33, o34) et 4
+`recorded_statement` (13 : o20 ; 09 : o194, o195 ; 14 : o19). Sans verdict.
+Deux questions ouvertes pour la revue de #89 : filtrer les
+`superseded_observed` de l'entrée du modèle ou les décrire dans un v7.1 ;
+le doublon d'interpréteur en 06 (`manage.py migrate` puis `python3
+manage.py migrate`, deux points pour un même échec).
+
+**Ordre de demain, 2026-09-12.** Lot launchd de 06:30 (critère ci-dessus)
+→ jour 8 → revue et merge de #89 → jugement des 9 points restants contre
+les fiches → requalification des fiches 15 à 18 → décision v7.
+
+
 
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
 reprise du matin suivant : le lot launchd de 06:30 résume les sessions de la
