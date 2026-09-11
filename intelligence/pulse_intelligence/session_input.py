@@ -35,7 +35,13 @@ def uses_open_items(prompt_version: str) -> bool:
 # v6 : même contrat de sortie que v5, entrée sans annexes. Sous v5 les annexes
 # étaient lisibles mais jamais citables (`_resumption_items`), et le modèle
 # recopiait `doing` / `stopped_at` du résumé précédent (dogfooding, jour 5).
-PROMPT_VERSIONS_WITHOUT_ANNEXES = frozenset({"v6"})
+# Rejeu `open` du 2026-09-11 (adjudication, synthèse §3.2) : trois variantes
+# de v6 à entrée constante, sans la phrase « [] est préférable à un reste
+# hypothétique », sans l'exemple `"open": []`, ou sans les deux. Même entrée
+# que v6, sinon la comparaison ne dit rien.
+PROMPT_VERSIONS_WITHOUT_ANNEXES = frozenset({
+    "v6", "v6-sans-phrase", "v6-sans-exemple", "v6-sans-phrase-ni-exemple",
+})
 
 
 def uses_annexes(prompt_version: str) -> bool:
