@@ -248,3 +248,27 @@ def test_v6_input_carries_no_annex_even_when_core_has_both():
     refs = input_references(without).refs
     assert "previous_summary:0" not in refs and "agent_request:0" not in refs
     assert uses_annexes("v5") and uses_open_items("v6") and not uses_annexes("v6")
+
+
+def test_v6_open_replay_variants_share_the_v6_input():
+    # Rejeu `open` du 2026-09-11 : les trois variantes reçoivent exactement
+    # l'entrée de v6 (sans annexes, points référencés), et ne diffèrent que
+    # par la phrase « [] est préférable » et l'exemple `"open": []`.
+    from pulse_intelligence.provider_summarizer import prompt_path_for
+    from pulse_intelligence.session_input import uses_annexes
+
+    v6 = prompt_path_for("v6").read_text(encoding="utf-8")
+    phrase = "[] est préférable à un reste hypothétique."
+    assert phrase in v6 and '"open": []' in v6
+    expected = {
+        "v6-sans-phrase": (False, True),
+        "v6-sans-exemple": (True, False),
+        "v6-sans-phrase-ni-exemple": (False, False),
+    }
+    for version, (has_phrase, has_empty_example) in expected.items():
+        assert uses_open_items(version) and not uses_annexes(version)
+        text = prompt_path_for(version).read_text(encoding="utf-8")
+        assert (phrase in text) is has_phrase, version
+        assert ('"open": []' in text) is has_empty_example, version
+        if not has_empty_example:
+            assert '"kind": "recorded_statement"' in text
