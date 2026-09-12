@@ -72,6 +72,26 @@ le regroupement, jamais en silence total.
 **Priority:** P2
 **Depends on:** Aucun
 
+### make mode-service : bootstrap trop rapide après bootout (EIO)
+
+**What:** `scripts/pulse_mode.sh` (`load_services`) enchaîne `launchctl
+bootout` puis `launchctl bootstrap` sans attendre que le service soit
+réellement sorti. Quand le daemon met un instant à s'arrêter, le bootstrap
+échoue (« Bootstrap failed: 5: Input/output error »), le script s'arrête et
+le daemon n'est pas relancé : une minute d'indisponibilité constatée le
+2026-09-12 vers 12:56 (relance manuelle par `launchctl bootstrap`), deuxième
+occurrence. Le worker et les observateurs, plus loin dans le script, ne sont
+pas rechargés non plus.
+
+**Piste:** attendre la sortie effective du service avant le bootstrap
+(`launchctl print` en boucle courte jusqu'à « Could not find service », ou
+`launchctl kickstart -k` quand le plist est déjà chargé), puis relancer les
+services restants même si l'un d'eux échoue, avec un état final explicite.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
 ## Hygiène du dépôt
 
 ### Chemins `/Users/<user>` en dur dans un dépôt public

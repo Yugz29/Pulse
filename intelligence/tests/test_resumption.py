@@ -147,3 +147,32 @@ def test_v6_generates_without_annexes_under_its_own_identity(fake_core,client,co
     assert 'previous_summary' in state.emitted[result.event_id] and state.emitted[result.event_id]['previous_summary'] is None
     prompt=prompt_path_for('v6').read_text(encoding='utf-8')
     assert 'annexe' not in prompt and 'previous_summary' not in prompt and 'agent_session' not in prompt
+
+
+def test_window_facts_are_visible_but_never_evidence_for_open():
+    """Verrou de la décision du 2026-09-12 : un fait `window` (fenêtre au
+    premier plan) est dans l'entrée, jamais un appui d'`open`, tant qu'aucune
+    version de prompt ne le décrit."""
+    window = dict(ref='o2', kind='window', at=10, app='Safari', title='Pull request #89',
+                  url='https://github.com/org/repo/pull/89', document='/work/Pulse/docs/plan.pdf')
+    commit = dict(ref='o3', kind='commit', at=20, hash='a'*40, message='fix auth\n\nTODO: rotate key',
+                  workspace='/work/Pulse', branch='main')
+    session = entry([command('o1', 1, 0), window, commit])
+    model_input = build_model_input(session, {}, references=True)
+    timeline = model_input['session']['observations']['timeline']
+    assert [f['kind'] for f in timeline] == ['command', 'window', 'commit']
+    assert timeline[1]['title'] == 'Pull request #89'
+    references = input_references(model_input)
+    assert 'o2' in references and references.observations['o2']['kind'] == 'window'
+    # Le document d'une fenêtre n'est pas un chemin citable dans central_files.
+    assert '/work/Pulse/docs/plan.pdf' not in input_paths(session)
+    for item in (dict(text='La PR 89 reste à relire.', kind='command_failure', evidence=['o2']),
+                 dict(text='La PR 89 reste à relire.', kind='recorded_statement', evidence=['o2'],
+                      quote='Pull request #89')):
+        with pytest.raises(InvalidModelOutput):
+            parse_items(session, [item])
+    parsed = parse_items(session, [
+        dict(text='pytest échoue encore.', kind='command_failure', evidence=['o1']),
+        dict(text='Clé à faire tourner.', kind='recorded_statement', evidence=['o3'], quote='rotate key'),
+    ])
+    assert [i['evidence'] for i in parsed.open_items] == [['o1'], ['o3']]

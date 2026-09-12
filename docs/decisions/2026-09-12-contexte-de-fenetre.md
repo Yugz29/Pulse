@@ -107,6 +107,32 @@ sur un projet. La preuve de travail reste le terminal, les fichiers et Git.
   autres observations ; le prompt v6 ne les décrit pas. À évaluer au prochain
   rejeu, pas dans ce chantier.
 
+## Addendum du 2026-09-12 : éligibilité dans l'entrée du modèle
+
+Question posée : les faits `window` sont-ils une preuve admissible pour
+`open` dans Intelligence ? Réponse : non, par construction, et c'est
+désormais verrouillé.
+
+- `evidence_eligible: False` n'est pas un attribut des faits : c'est le
+  marqueur des deux annexes (`previous_summary`, `agent_session`) dans
+  `session_input.py`. Les faits de la ligne de temps n'en portent pas.
+- `input_references` (`session_input.py`) rend chaque `ref` de la ligne de
+  temps citable, faits `window` compris ; le modèle peut donc écrire `o7`.
+- Le validateur du contrat courant, `_resumption_items`
+  (`session_summary.py`), n'accepte qu'un appui par point et seulement deux
+  genres : `command_failure` exige un fait `command` qui soit le dernier
+  échec sans résolution observée ; `recorded_statement` exige un fait
+  `commit` et une citation littérale de son message. Un fait `window` est
+  rejeté dans les deux cas. `input_paths` ne retient que les faits `file` :
+  le `document` d'une fenêtre n'est pas citable dans `central_files`.
+- Les faits `window` restent dans la ligne de temps de l'entrée, donc
+  utilisables pour `doing`.
+
+Verrou : `test_window_facts_are_visible_but_never_evidence_for_open`
+(`intelligence/tests/test_resumption.py`) et un commentaire dans
+`_resumption_items`. À rouvrir seulement avec une version de prompt qui
+décrit les faits `window` et dit ce qu'ils peuvent étayer.
+
 ## Rejeu et vérification
 
 - Tests : `swift test` dans `core/macos_observer` (réduction d'URL,
