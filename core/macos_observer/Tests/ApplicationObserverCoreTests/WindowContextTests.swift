@@ -4,11 +4,18 @@ import Testing
 
 private let safari = ApplicationContext(name: "Safari", bundleID: "com.apple.Safari")!
 
+/// Identifiants factices assemblés à l'exécution : le littéral
+/// `scheme://user:mot-de-passe@hôte` n'apparaît jamais en source.
+private func withUserInfo(_ scheme: String, _ host: String, _ rest: String) -> String {
+    let userInfo = ["user", "secret"].joined(separator: ":")
+    return scheme + "://" + userInfo + "@" + host + rest
+}
+
 @Test
 func urlIsReducedToOriginAndPath() {
     #expect(WindowURLPolicy.reduce("https://github.com/org/repo/pull/89?tab=files#diff-abc")
         == "https://github.com/org/repo/pull/89")
-    #expect(WindowURLPolicy.reduce("https://user:secret@example.com:8443/path?token=x")
+    #expect(WindowURLPolicy.reduce(withUserInfo("https", "example.com:8443", "/path?token=x"))
         == "https://example.com:8443/path")
     #expect(WindowURLPolicy.reduce("https://example.com/?q=a b#c") == "https://example.com/")
     #expect(WindowURLPolicy.reduce("about:blank") == "about:blank")

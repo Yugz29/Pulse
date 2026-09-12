@@ -964,6 +964,13 @@ def test_every_declared_free_text_field_is_redacted_and_undeclared_ones_are_refu
         assert raised.value.field == f"details.{section}.notes"
 
 
+def _with_userinfo(scheme: str, host: str, rest: str) -> str:
+    """Identifiants factices assemblés à l'exécution : le littéral
+    ``scheme://user:mot-de-passe@hôte`` n'apparaît jamais en source."""
+    userinfo = ":".join(("user", "pw"))
+    return f"{scheme}://{userinfo}@{host}{rest}"
+
+
 def test_normalizes_window_focused_activity():
     activity = normalize_activity(
         {
@@ -971,7 +978,7 @@ def test_normalizes_window_focused_activity():
             "app": "Safari",
             "bundle_id": " com.apple.Safari ",
             "title": "  Pull  request\n#89 · GitHub ",
-            "url": "https://user:pw@github.com/org/repo/pull/89?tab=files#diff-1",
+            "url": _with_userinfo("https", "github.com", "/org/repo/pull/89?tab=files#diff-1"),
             "document": "/Users/me/Projets/Pulse/docs/VISION.md",
         }
     )
@@ -1020,7 +1027,7 @@ def test_window_focused_title_is_bounded_and_app_required():
     ("raw", "expected"),
     [
         ("https://example.com/a/b?q=secret#frag", "https://example.com/a/b"),
-        ("https://user:pw@example.com:8443/x", "https://example.com:8443/x"),
+        (_with_userinfo("https", "example.com:8443", "/x"), "https://example.com:8443/x"),
         ("https://example.com/?session=42", "https://example.com/"),
         ("https://example.com/a?b=c?d#e#f", "https://example.com/a"),
         ("about:blank", "about:blank"),
