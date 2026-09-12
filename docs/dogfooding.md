@@ -76,6 +76,10 @@ manage.py migrate`, deux points pour un même échec).
 → jour 8 → revue et merge de #89 → jugement des 9 points restants contre
 les fiches → requalification des fiches 15 à 18 → décision v7.
 
+**Reprise au 2026-09-12 (ajout du jour 8).** Lot de 06:30 jugé : premier
+lot à entrée schéma 3, **3/3 vraies, 0/3 utiles**, `open` vide 3/3 ;
+verdicts et compteur dans « Jour 8 » en fin de journal.
+
 
 
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
@@ -824,3 +828,38 @@ possible, à décider : faire de `v6-sans-phrase-ni-exemple` un v7 et le
 passer sur les 14 sessions de `eval/observed` avant activation ; et
 redémarrer le Core de production, sans quoi un v7 ne recevrait toujours
 rien de citable.
+
+## Jour 8 — 2026-09-12
+
+**Contexte.** Premier lot à entrée schéma 3 : les trois `input_hash`
+(`0dd080f9…`, `ff789af5…`, `6d93a857…`) diffèrent des cinq résumés hérités,
+`observation_sources` présentes (27, 25 et 45 références),
+`observation_version` 1. Lot launchd 06:33 → 12:10, veille du Mac
+04:00 → 12:08 : `generation_ms` non significatif (2 h 46 min pour le premier,
+puis 1 min 58 s et 1 min 02 s). 4 candidates, 3 créées, 1 rejetée. Prompt v6,
+`Qwen3.8-27B-4bit`, `confidence: high` 3/3, `open` vide 3/3.
+
+**Verdicts (lecture humaine).**
+
+| Session | Verdict | Détail |
+| --- | --- | --- |
+| work-12 `cc4aa106` | **à moitié** | `doing` juste sur le fond mais fond le constat « prod au schéma 2 » dans l'action du rejeu ; `stopped_at` juste ; `open` vide alors que le point ouvert réel était le redémarrage du Core de production (fait à 21:29). |
+| work-13 `a48ebc2f` | **juste, inutile** | `doing` et `stopped_at` exacts ; `open` vide alors que le lot corpus tournait et que trois PR attendaient, rien dans les faits ne le portait. Attribution au worktree `/private/tmp/…/intelligence-legacy-view-loud` au lieu de `~/Projets/Pulse`. |
+| work-18 `1320b475` | **juste, inutile** | `doing` juste ; `stopped_at` juste avec une inférence (« signalant la fin ») ; `open` vide alors que #89 venait d'être poussée sans merge. |
+| work-5 `057a0f56` | **rejeté** | Validateur : `central_files: config.yml absent de l'entrée`. Le nom figure dans trois faits `command` (o1, o2, o6), le workspace `conflit-demo` n'est pas surveillé, donc aucun fait `file`. |
+
+**Bilan.** 3/3 vraies, 0/3 utiles. `doing` et `stopped_at` fiables sous v6 ;
+`open` vide systématique, ce qui confirme le rejeu du 11 (l'exemple
+`"open": []` du gabarit).
+
+**Compteur étape 4.** La règle (spec du 2026-09-03, §12) : « au terme des
+cinq jours, quatre reprises sur cinq jugées justes **et** utiles ». Jour 8 :
+0/3 justes et utiles. La spec ne dit pas comment compter une reprise vraie
+mais inutile (comme un échec au critère, ou hors compte), ni quels lots
+forment les « cinq jours » depuis le changement d'entrée (schéma 3) et de
+prompt (v6). Question ouverte, non tranchée ici.
+
+**TODOS ouverts par ce jour** (sans traitement) : attribution d'une session à
+un worktree git (`core/TODOS.md`) ; conservation de la sortie brute d'une
+tentative rejetée, et admissibilité dans `central_files` d'un chemin présent
+dans un fait `command` (`intelligence/TODOS.md`).

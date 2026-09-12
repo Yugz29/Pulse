@@ -70,6 +70,37 @@
 **Priority:** P2
 **Depends on:** —
 
+### Conserver la sortie brute d'une tentative rejetée
+
+**What:** Quand `parse_model_output` rejette une sortie, il ne reste que le
+message du validateur dans `run.log` et un compteur dans `state.json`
+(`failures`). La sortie du modèle n'est conservée nulle part : le diagnostic
+exige un rejeu (`summarize --dry-run`), donc une nouvelle génération, sur une
+entrée qui peut avoir changé. Cas du 2026-09-12 : `057a0f5602f4f62e`
+(work-5 du 11), rejet `central_files: config.yml absent de l'entrée`, contenu
+produit inconnu. À décider : où la garder (`run.log`, `state.json`, fichier
+hors dépôt) et combien de temps, en tenant compte de ce qu'une sortie rejetée
+n'est pas rédigée par Core.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
+### `central_files` n'accepte que les faits `file`
+
+**What:** `input_paths` ne retient que les chemins des faits `file` de la
+ligne de temps. Un chemin littéralement présent dans un fait `command`
+observé (`cat config.yml`, `git add config.yml`, work-5 du 2026-09-11) n'est
+donc pas admissible dans `central_files`, alors que le modèle l'a lu dans
+l'entrée. Le workspace n'était pas surveillé, aucun `file_changed`. À
+décider, pas à implémenter : admettre un chemin cité tel quel dans une
+commande observée, avec quelle forme (relative au `cwd` de la commande ?) et
+quelle garantie contre l'invention.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Décision sur l'admissibilité
+
 ## Completed
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`
