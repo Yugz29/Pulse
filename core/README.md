@@ -769,6 +769,14 @@ le filtre de bruit des `file_changed`. Les applications de
 trousseaux et gestionnaires de mots de passe, réglages système) ne
 produisent aucun `window_focused` ; leur `app_activated` reste le nom seul.
 
+Les titres à répétition (spinner d’un terminal, compteur) ne font pas un
+événement par seconde : le dédoublonnage compare le titre sans ses glyphes
+de progression, et au plus un `window_focused` par application toutes les
+30 secondes, le dernier état retenu étant émis à l’échéance ou quand
+l’application quitte le premier plan. Les domaines de
+`~/.pulse_v2/ignored_domains` (messageries web par défaut) sont refusés à
+l’ingestion, ni titre ni URL.
+
 `window_focused` est un contexte faible, comme `app_activated` : il ne
 démarre ni ne prolonge une session et ne prouve aucun workspace. Il est
 projeté en faits `window` dans les observations (`observation_version` 2)

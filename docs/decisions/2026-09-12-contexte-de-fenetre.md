@@ -107,6 +107,42 @@ sur un projet. La preuve de travail reste le terminal, les fichiers et Git.
   autres observations ; le prompt v6 ne les décrit pas. À évaluer au prochain
   rejeu, pas dans ce chantier.
 
+## Addendum du 2026-09-12 (soir) : titres à répétition et messagerie web
+
+Vérification d'une heure : Terminal a produit 2 032 `window_focused` pour
+sept titres réels. Le titre de la fenêtre porte le spinner de Claude Code
+(`◐`/`◑` alternés chaque seconde), chaque alternance est un `AXTitleChanged`
+et un contexte différent du précédent. Deux correctifs côté observateur,
+aucun au rendu :
+
+- **Normalisation avant comparaison** (`WindowContext.key`) : les glyphes
+  de progression et symboles décoratifs (motifs braille, formes
+  géométriques, dingbats, symboles divers, point médian, puce, catégorie
+  Unicode « autre symbole ») sont retirés du titre pour le dédoublonnage.
+  Le titre stocké reste le titre affiché.
+- **Filet d'intervalle, 30 secondes par application**
+  (`WindowEventRecorder.defaultMinimumInterval`) : un contexte arrivé moins
+  de 30 s après le dernier événement de la même application est retenu, pas
+  perdu ; le dernier état retenu est émis à l'échéance, ou dès que
+  l'application quitte le premier plan. Choix du seuil sur l'heure réelle :
+  la normalisation seule laisse 36 vrais changements de sous-commande, 30 s
+  les ramène à 26 et 60 s à 20 ; 30 s est le plus petit filet sous le
+  critère de 30 par heure, et un onglet tenu 30 secondes est toujours
+  enregistré. Un test rejoue les 30 instants réels de changement de la
+  première heure.
+
+Messagerie web : deux titres Safari portaient l'adresse du compte
+(`… - yannduzelier@gmail.com - Gmail`), hors de portée de la liste
+d'applications. **Liste de domaines ignorés** `~/.pulse_v2/ignored_domains`
+(créée par l'installeur : `mail.google.com`, `outlook.office.com`,
+`outlook.live.com`, `mail.proton.me` ; un hôte couvre ses sous-domaines ;
+le fichier remplace la liste par défaut, relu quand il change), appliquée
+**à l'ingestion** dans Core comme le reste de la rédaction
+(`daemon_v2/window_policy.py`) : un `window_focused` dont l'URL réduite est
+sur un domaine ignoré est refusé en 204, ni titre ni URL n'entrent en base ;
+l'`app_activated` du navigateur reste. Limite : un onglet de messagerie sans
+URL capturée (titre seul) n'est pas reconnu.
+
 ## Addendum du 2026-09-12 : éligibilité dans l'entrée du modèle
 
 Question posée : les faits `window` sont-ils une preuve admissible pour

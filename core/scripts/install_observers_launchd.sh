@@ -38,6 +38,7 @@ log_dir="$HOME/.pulse_v2/logs"
 bin_dir="$HOME/.pulse_v2/bin"
 workspaces_file="$HOME/.pulse_v2/watched_workspaces"
 ignored_apps_file="$HOME/.pulse_v2/ignored_applications"
+ignored_domains_file="$HOME/.pulse_v2/ignored_domains"
 marker="pulse-observer-services: managed"
 watcher_label="com.pulse.file-watcher"
 observer_label="com.pulse.app-observer"
@@ -109,6 +110,19 @@ me.proton.pass.electron
 Proton Pass
 IGNORED_APPS
   echo "Liste d'applications ignorées créée: $ignored_apps_file (à éditer)"
+fi
+
+if [[ ! -f "$ignored_domains_file" ]]; then
+  cat > "$ignored_domains_file" <<'IGNORED_DOMAINS'
+# Domaines dont Pulse n'observe jamais la fenêtre (ni titre ni URL) ; lu par
+# le daemon à l'ingestion, un hôte par ligne (ses sous-domaines compris),
+# # commentaires. Ce fichier remplace la liste par défaut ; relu quand il change.
+mail.google.com
+outlook.office.com
+outlook.live.com
+mail.proton.me
+IGNORED_DOMAINS
+  echo "Liste de domaines ignorés créée: $ignored_domains_file (à éditer)"
 fi
 
 echo "Construction de l'observateur d'applications (release)"
@@ -196,5 +210,6 @@ write_and_load "$observer_label" "app_observer.log" "  <key>ProgramArguments</ke
 echo "Journaux: $log_dir/file_watcher.log, $log_dir/app_observer.log"
 echo "Workspaces observés: $workspaces_file"
 echo "Applications ignorées (fenêtre): $ignored_apps_file"
+echo "Domaines ignorés (fenêtre, à l'ingestion): $ignored_domains_file"
 echo "Contexte de fenêtre: accorder l'Accessibilité à $bin_dir/PulseApplicationObserver"
 echo "  (Réglages Système › Confidentialité et sécurité › Accessibilité)"

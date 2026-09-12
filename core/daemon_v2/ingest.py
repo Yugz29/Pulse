@@ -12,6 +12,7 @@ from .analysis.terminal import (
     pasted_prompt_placeholder,
 )
 from .file_policy import is_noise_path
+from .window_policy import is_ignored_host
 from .models import (
     Activity,
     CanonicalEvent,
@@ -661,6 +662,10 @@ def normalize_activity(payload: Any) -> Activity:
         if isinstance(url, str):
             reduced_url = reduce_window_url(url)
             if reduced_url is not None:
+                # Messagerie web et autres domaines ignorés : ni titre ni
+                # URL n'entrent en base, l'app_activated du navigateur reste.
+                if is_ignored_host(urlsplit(reduced_url).hostname):
+                    raise IgnoredActivity("window of an ignored domain")
                 details["url"] = reduced_url
         source = "application"
         summary = f"Window {app}: {title}" if title else f"Window {app}"

@@ -33,6 +33,59 @@ public struct WindowContext: Equatable, Sendable {
         title != nil || document != nil || url != nil
     }
 
+    /// Identité de comparaison : le titre y est débarrassé des glyphes de
+    /// progression. Un spinner (◐◑, ⠋⠙, ✳✶…) qui tourne chaque seconde dans
+    /// le titre d'un terminal n'est pas un changement de fenêtre. Le titre
+    /// stocké reste le titre affiché.
+    public struct Key: Equatable, Sendable {
+        public let app: String
+        public let bundleID: String?
+        public let title: String?
+        public let document: String?
+        public let url: String?
+    }
+
+    public var key: Key {
+        Key(
+            app: app,
+            bundleID: bundleID,
+            title: title.flatMap(Self.comparisonTitle),
+            document: document,
+            url: url
+        )
+    }
+
+    /// Clé de l'application pour le filet d'intervalle : bundle, sinon nom.
+    public var applicationKey: String {
+        bundleID ?? app
+    }
+
+    /// Le titre sans ses glyphes de progression ni ses symboles décoratifs,
+    /// espaces repliés. `nil` s'il ne reste rien.
+    public static func comparisonTitle(_ title: String) -> String? {
+        let kept = title.unicodeScalars.map { scalar -> Character in
+            Self.isProgressGlyph(scalar) ? " " : Character(scalar)
+        }
+        let collapsed = String(kept)
+            .split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+            .joined(separator: " ")
+        return collapsed.isEmpty ? nil : collapsed
+    }
+
+    private static func isProgressGlyph(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x2800...0x28FF,   // motifs braille (spinners ⠋⠙⠹)
+             0x25A0...0x25FF,   // formes géométriques (◐◑◒◓ ◂▸ ■□)
+             0x2700...0x27BF,   // dingbats (✳ ✶ ✻ ✽ ✢)
+             0x2B00...0x2BFF,   // symboles et flèches divers
+             0x2300...0x23FF,   // techniques (⌛ ⏳)
+             0x00B7, 0x2022, 0x2026:  // point médian, puce, points de suspension
+            return true
+        default:
+            return scalar.properties.generalCategory == .otherSymbol
+        }
+    }
+
     static func normalizedTitle(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let collapsed = raw
