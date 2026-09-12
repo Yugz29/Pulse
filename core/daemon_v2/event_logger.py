@@ -65,6 +65,14 @@ def _event_label(
     details = activity.details if isinstance(activity.details, dict) else {}
     if activity.activity_type == "app_activated":
         return activity.activity_type, _safe_text(details.get("app"))
+    if activity.activity_type == "window_focused":
+        return activity.activity_type, _truncate(
+            " · ".join(
+                _safe_text(details.get(key))
+                for key in ("app", "title", "document", "url")
+                if details.get(key)
+            )
+        )
     if activity.activity_type == "file_changed":
         return activity.activity_type, _file_summary(details)
     if activity.activity_type == "terminal_finished":

@@ -37,6 +37,7 @@ plist_dir="$HOME/Library/LaunchAgents"
 log_dir="$HOME/.pulse_v2/logs"
 bin_dir="$HOME/.pulse_v2/bin"
 workspaces_file="$HOME/.pulse_v2/watched_workspaces"
+ignored_apps_file="$HOME/.pulse_v2/ignored_applications"
 marker="pulse-observer-services: managed"
 watcher_label="com.pulse.file-watcher"
 observer_label="com.pulse.app-observer"
@@ -61,6 +62,53 @@ if [[ ! -f "$workspaces_file" ]]; then
 $repo_root
 EOF
   echo "Liste de workspaces créée: $workspaces_file (à éditer)"
+fi
+
+if [[ ! -f "$ignored_apps_file" ]]; then
+  cat > "$ignored_apps_file" <<'IGNORED_APPS'
+# Applications dont Pulse n'observe jamais la fenêtre (titre, document, URL).
+# Un identifiant de bundle ou un nom d'application par ligne, # commentaires.
+# Ce fichier remplace la liste par défaut de l'observateur. Après édition :
+#   launchctl kickstart -k gui/$(id -u)/com.pulse.app-observer
+com.apple.MobileSMS
+Messages
+com.apple.mail
+Mail
+com.apple.FaceTime
+FaceTime
+com.apple.keychainaccess
+Keychain Access
+Trousseaux d’accès
+com.apple.Passwords
+Passwords
+Mots de passe
+com.apple.systempreferences
+System Settings
+System Preferences
+Réglages Système
+Préférences Système
+com.1password.1password
+com.agilebits.onepassword7
+com.agilebits.onepassword-osx
+1Password
+com.bitwarden.desktop
+Bitwarden
+org.keepassxc.keepassxc
+KeePassXC
+com.dashlane.dashlanephonefinal
+Dashlane
+com.lastpass.LastPass
+LastPass
+in.sinew.Enpass-Desktop
+Enpass
+com.markmcguill.strongbox
+Strongbox
+com.nordpass.macos
+NordPass
+me.proton.pass.electron
+Proton Pass
+IGNORED_APPS
+  echo "Liste d'applications ignorées créée: $ignored_apps_file (à éditer)"
 fi
 
 echo "Construction de l'observateur d'applications (release)"
@@ -147,3 +195,6 @@ write_and_load "$observer_label" "app_observer.log" "  <key>ProgramArguments</ke
 
 echo "Journaux: $log_dir/file_watcher.log, $log_dir/app_observer.log"
 echo "Workspaces observés: $workspaces_file"
+echo "Applications ignorées (fenêtre): $ignored_apps_file"
+echo "Contexte de fenêtre: accorder l'Accessibilité à $bin_dir/PulseApplicationObserver"
+echo "  (Réglages Système › Confidentialité et sécurité › Accessibilité)"

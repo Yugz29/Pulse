@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..models import WEAK_CONTEXT_TYPES
 from .terminal import useful_command_lines
 
 
@@ -281,7 +282,7 @@ def persisted_workspace_identity(
 def last_observed_workspace(trace: dict[str, Any]) -> str | None:
     workspace = None
     for activity in trace["activities"]:
-        if activity["type"] == "app_activated":
+        if activity["type"] in WEAK_CONTEXT_TYPES:
             continue
         details = activity.get("details", {})
         useful_activity = (

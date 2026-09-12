@@ -5,11 +5,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from .analysis.terminal import (
     is_pasted_prompt_command,
     pasted_prompt_placeholder,
 )
+from .file_policy import is_noise_path
 from .models import (
     Activity,
     CanonicalEvent,
@@ -271,6 +273,59 @@ def _shell_continuation_state(
         elif character in {"'", '"'}:
             open_quote = character
     return open_quote, escaped
+
+
+# Titre de fenêtre : borné et sur une ligne, comme côté observateur.
+_MAX_WINDOW_TITLE_LENGTH = 300
+
+
+def reduce_window_url(value: str) -> str | None:
+    """Réduit une URL observée à son origine et son chemin.
+
+    Ni identifiants, ni paramètres, ni fragment : ce qui suit ``?`` ou ``#``
+    porte des jetons, des recherches et des identifiants de session. C'est
+    ici que la garantie tient, quel que soit le producteur.
+    """
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    # Coupe au texte avant de parser : une requête mal formée ne doit pas
+    # survivre à un parseur indulgent.
+    trimmed = trimmed.split("#", 1)[0].split("?", 1)[0]
+    try:
+        parts = urlsplit(trimmed)
+    except ValueError:
+        return None
+    if not parts.scheme:
+        return None
+    netloc = parts.netloc
+    if "@" in netloc:
+        netloc = netloc.rsplit("@", 1)[1]
+    reduced = urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+    if reduced in {f"{parts.scheme}:", f"{parts.scheme}://"}:
+        return None
+    return reduced
+
+
+def _normalize_window_title(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    collapsed = " ".join(value.split())
+    if not collapsed:
+        return None
+    return redact_command(collapsed)[:_MAX_WINDOW_TITLE_LENGTH]
+
+
+def _normalize_window_document(value: Any) -> str | None:
+    """Le document d'une fenêtre passe par le filtre de bruit des
+    ``file_changed`` : un fichier de ``.venv`` ou de ``node_modules`` n'entre
+    pas en base parce qu'une fenêtre l'affiche."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    path = Path(value.strip()).expanduser().absolute()
+    if is_noise_path(path):
+        return None
+    return str(path)
 
 
 def filter_terminal_command(command: str) -> str | None:
@@ -588,6 +643,27 @@ def normalize_activity(payload: Any) -> Activity:
             details["title"] = _required_string(payload, "title")
         source = "application"
         summary = f"Activated {app}"
+    elif activity_type == "window_focused":
+        app = _required_string(payload, "app")
+        details = {"app": app}
+        bundle_id = payload.get("bundle_id")
+        if isinstance(bundle_id, str) and bundle_id.strip():
+            details["bundle_id"] = bundle_id.strip()
+        # Chaque champ libre est réduit ici, jamais recopié tel quel :
+        # titre rédigé et borné, document filtré, URL sans paramètres.
+        title = _normalize_window_title(payload.get("title"))
+        if title is not None:
+            details["title"] = title
+        document = _normalize_window_document(payload.get("document"))
+        if document is not None:
+            details["document"] = document
+        url = payload.get("url")
+        if isinstance(url, str):
+            reduced_url = reduce_window_url(url)
+            if reduced_url is not None:
+                details["url"] = reduced_url
+        source = "application"
+        summary = f"Window {app}: {title}" if title else f"Window {app}"
     else:
         assert activity_type in SYSTEM_ACTIVITY_TYPES
         details = {}

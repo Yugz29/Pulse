@@ -1189,3 +1189,28 @@ def test_background_activity_alone_is_not_an_empty_day(tmp_path):
     assert (
         "- 09:30–09:30 · 1 commit (Pulse\\_Core) — mise en veille à 09:00, reprise à 09:40"
     ) in markdown
+
+
+def test_window_context_never_starts_a_session_but_joins_nearby_work():
+    sessions, unresolved = reconstruct(
+        event("window_focused", 0, {"app": "Safari", "title": "Docs"})
+    )
+    assert sessions == []
+    assert len(unresolved) == 1
+
+    sessions, unresolved = reconstruct(
+        event("terminal_finished", 0, {"command": "git status", "git_root": PULSE}, event_id=1),
+        event("window_focused", 3, {"app": "Safari", "title": "Docs"}, event_id=2),
+        event("terminal_finished", 6, {"command": "pytest", "git_root": PULSE}, event_id=3),
+        event("window_focused", 8, {"app": "Finder", "title": "Bureau"}, event_id=4),
+    )
+    assert unresolved == []
+    assert len(sessions) == 1
+    # Comme une activation d'application : rattachée entre deux travaux
+    # forts, jamais au-delà du dernier (voir le test des activations
+    # traînantes).
+    assert [a["type"] for a in sessions[0]["activities"]] == [
+        "terminal_finished", "window_focused", "terminal_finished",
+    ]
+    assert sessions[0]["workspace_root"] == PULSE
+    assert sessions[0]["applications"] == []

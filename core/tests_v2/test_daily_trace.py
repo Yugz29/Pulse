@@ -2355,3 +2355,78 @@ def test_session_summary_is_never_an_unattributed_activity(tmp_path):
     markdown = render_daily_trace_markdown(trace)
     assert "Activités non attribuées : 0" in markdown
     assert "## Session 2" not in markdown
+
+
+def test_renders_window_context_per_window_in_markdown_and_html(tmp_path):
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    first_at = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    activities = [
+        Activity(
+            "terminal_finished",
+            first_at,
+            "terminal",
+            "Command succeeded: git status",
+            {"command": "git status", "exit_code": 0, "cwd": "/project"},
+        ),
+        Activity(
+            "app_activated",
+            first_at + timedelta(minutes=1),
+            "application",
+            "Activated Safari",
+            {"app": "Safari"},
+        ),
+        Activity(
+            "window_focused",
+            first_at + timedelta(minutes=1),
+            "application",
+            "Window Safari: Pull request #89 <GitHub>",
+            {
+                "app": "Safari",
+                "title": "Pull request #89 <GitHub>",
+                "url": "https://github.com/org/repo/pull/89",
+            },
+        ),
+        Activity(
+            "window_focused",
+            first_at + timedelta(minutes=2),
+            "application",
+            "Window Preview: plan.pdf",
+            {"app": "Preview", "title": "plan.pdf", "document": "/project/docs/plan.pdf"},
+        ),
+        Activity(
+            "terminal_finished",
+            first_at + timedelta(minutes=3),
+            "terminal",
+            "Command succeeded: echo ok",
+            {"command": "echo ok", "exit_code": 0, "cwd": "/project"},
+        ),
+    ]
+    for activity in activities:
+        store.append(activity)
+
+    trace = build_daily_trace(store, date(2026, 7, 3), timezone.utc)
+    markdown = render_daily_trace_markdown(trace)
+    html = render_daily_trace_html(trace)
+
+    assert trace["work_session_count"] == 1
+    current = build_current_state(trace)
+    assert current["app"] == "Safari"
+    assert current["last_activity_type"] == "terminal_finished"
+    assert "- Apps actives : Safari" in markdown
+    assert (
+        "- Fenêtre Safari — Pull request #89 <GitHub> · `https://github.com/org/repo/pull/89`"
+        in markdown
+    )
+    assert "- Fenêtre Preview — plan.pdf · `/project/docs/plan.pdf`" in markdown
+    assert '<span class="type">fenêtre</span>' in html
+    assert (
+        "<strong>Safari</strong> — Pull request #89 &lt;GitHub&gt; · "
+        '<span class="window-url"><code>https://github.com/org/repo/pull/89</code></span>'
+        in html
+    )
+    assert (
+        "<strong>Preview</strong> — plan.pdf · "
+        '<span class="window-document"><code>/project/docs/plan.pdf</code></span>'
+        in html
+    )
+    assert '<a href="https://github.com' not in html

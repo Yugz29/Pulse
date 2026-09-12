@@ -12,11 +12,13 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
-from .file_policy import should_ignore
+from .file_policy import is_noise_path, should_ignore
 from .analysis.terminal import is_test_command, useful_command_lines
 from .analysis.timeline import display_file_path
 
-OBSERVATION_VERSION = 1
+# 2 : faits `window` (fenêtre au premier plan : app, titre, document, URL
+# réduite), décision du 2026-09-12. Additif ; les autres genres ne changent pas.
+OBSERVATION_VERSION = 2
 
 
 def _utc(value: str) -> str:
@@ -98,6 +100,22 @@ def project_work_observations(activities: list[dict[str, Any]]) -> dict[str, Any
             apps[name]["activations"] += 1
             apps[name]["last_at"] = at
             sources[apps[name]["ref"]].append(event_id)
+        elif kind == "window_focused":
+            name = details.get("app")
+            if not name:
+                excluded[kind] = excluded.get(kind, 0) + 1
+                continue
+            fields: dict[str, Any] = {"app": name}
+            for key in ("title", "url"):
+                value = details.get(key)
+                if isinstance(value, str) and value:
+                    fields[key] = value
+            document = details.get("document")
+            # Same noise policy as file facts: a window showing a build
+            # artefact is not evidence of work on it.
+            if isinstance(document, str) and document and not is_noise_path(Path(document)):
+                fields["document"] = document
+            add("window", at, event_id, **fields)
         elif kind == "terminal_finished":
             files.clear()  # Even an omitted inspection command is a barrier.
             command = details.get("command", "")

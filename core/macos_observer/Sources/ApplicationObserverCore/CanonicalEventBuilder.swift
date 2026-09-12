@@ -22,6 +22,22 @@ private struct ApplicationDetailsPayload: Codable {
     }
 }
 
+private struct WindowDetailsPayload: Codable {
+    let app: String
+    let bundleID: String?
+    let title: String?
+    let document: String?
+    let url: String?
+
+    enum CodingKeys: String, CodingKey {
+        case app
+        case bundleID = "bundle_id"
+        case title
+        case document
+        case url
+    }
+}
+
 private struct CanonicalEventPayload<Details: Codable>: Codable {
     let eventID: String
     let schemaVersion: Int
@@ -42,7 +58,8 @@ private struct CanonicalEventPayload<Details: Codable>: Codable {
 
 public struct CanonicalEventBuilder: Sendable {
     public static let producerName = "pulse-macos-application-observer"
-    public static let producerVersion = "1"
+    // 2 : contexte de fenêtre (`window_focused`), décision du 2026-09-12.
+    public static let producerVersion = "2"
 
     private let instanceID: String
 
@@ -72,6 +89,34 @@ public struct CanonicalEventBuilder: Sendable {
             details: ApplicationDetailsPayload(
                 app: context.app,
                 bundleID: context.bundleID
+            )
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(event)
+    }
+
+    public func build(
+        window: WindowContext,
+        occurredAt: Date = Date(),
+        eventID: UUID = UUID()
+    ) throws -> Data {
+        let event = CanonicalEventPayload(
+            eventID: eventID.uuidString.lowercased(),
+            schemaVersion: 1,
+            type: "window_focused",
+            producer: ProducerPayload(
+                name: Self.producerName,
+                version: Self.producerVersion,
+                instanceID: instanceID
+            ),
+            occurredAt: Self.timestamp(occurredAt),
+            details: WindowDetailsPayload(
+                app: window.app,
+                bundleID: window.bundleID,
+                title: window.title,
+                document: window.document,
+                url: window.url
             )
         )
         let encoder = JSONEncoder()
