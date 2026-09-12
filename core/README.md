@@ -34,6 +34,8 @@ dérivé de la couche Intelligence :
 - `terminal_finished` depuis le watcher Zsh du terminal ;
 - `file_changed` depuis le watcher de fichiers du workspace ;
 - `app_activated` depuis le watcher macOS de l’application active ;
+- `window_focused` depuis le même observateur : titre, document et URL
+  réduite de la fenêtre au premier plan (voir « Observateur d’application ») ;
 - `git_commit` depuis un hook `post-commit` local (voir « Hook Git » plus bas),
   déclenché quel que soit le client à l’origine du commit (terminal, VS Code,
   ou tout autre outil Git), avec le hash, la branche, le message complet et
@@ -640,7 +642,14 @@ Sans eux, le journal est aveugle aux fichiers et aux applications dès que
   gui/$(id -u)/com.pulse.file-watcher`. Une entrée disparue est ignorée
   avec un avertissement, elle n'aveugle pas les autres workspaces.
 - `com.pulse.app-observer` fait tourner `PulseApplicationObserver` (build
-  release copié dans `~/.pulse_v2/bin`, hors de `.build`).
+  release copié dans `~/.pulse_v2/bin`, hors de `.build`). Le contexte de
+  fenêtre demande l’autorisation Accessibilité pour ce binaire (Réglages
+  Système › Confidentialité et sécurité › Accessibilité) ; sans elle,
+  l’observateur le journalise une fois et continue avec `app_activated`.
+  La liste des applications dont la fenêtre n’est jamais observée vit dans
+  `~/.pulse_v2/ignored_applications` (créée par l’installeur, un
+  identifiant de bundle ou un nom par ligne, `#` commentaires) ; après
+  édition : `launchctl kickstart -k gui/$(id -u)/com.pulse.app-observer`.
 
 Les deux écrivent dans l'outbox durable : un daemon éteint ne perd rien.
 Conséquence assumée : le watcher résident voit les écritures des agents
@@ -737,6 +746,33 @@ utilisent `unresolved_sessions`.
 
 Sur macOS, `make dev` lance `PulseApplicationObserver`, fondé sur
 `NSWorkspace`. L’ancien watcher Python n’est plus lancé par le superviseur.
+
+### Contexte de fenêtre (`window_focused`)
+
+Depuis 0.7.0.0 (décision du 2026-09-12), le même observateur lit la fenêtre
+au premier plan via Accessibility, à chaque activation d’application et à
+chaque changement de fenêtre ou de titre signalé par l’application
+(`AXObserver`, aucune interrogation périodique) :
+
+- `title` : `AXTitle` de la fenêtre, toutes applications ;
+- `document` : `AXDocument` quand l’application l’expose (chemin local) ;
+- `url` : pour Safari, Chrome et les navigateurs Chromium, l’`AXURL` de la
+  zone web de l’onglet actif — ni AppleScript, ni autorisation
+  d’automatisation supplémentaire.
+
+Rédaction, à l’ingestion et quel que soit le producteur : jamais de contenu
+de fenêtre ni de capture d’écran ; le titre passe par `redact_command`, sur
+une ligne, 300 caractères au plus ; l’URL est réduite à son origine et son
+chemin (ni identifiants, ni paramètres, ni fragment) ; le document passe par
+le filtre de bruit des `file_changed`. Les applications de
+`~/.pulse_v2/ignored_applications` (messagerie, courrier, appels,
+trousseaux et gestionnaires de mots de passe, réglages système) ne
+produisent aucun `window_focused` ; leur `app_activated` reste le nom seul.
+
+`window_focused` est un contexte faible, comme `app_activated` : il ne
+démarre ni ne prolonge une session et ne prouve aucun workspace. Il est
+projeté en faits `window` dans les observations (`observation_version` 2)
+et rendu ligne par ligne (« fenêtre ») dans le journal HTML et Markdown.
 
 ## Limites actuelles
 
