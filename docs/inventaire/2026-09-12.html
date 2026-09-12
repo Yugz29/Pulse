@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventaire Pulse 2026-09-12</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1d1b;--mut:#6b6b66;--line:#ddd9d0;--card:#ffffff;--acc:#1f6f8b;--acc2:#b4531f;--ok:#2e7d4f;--warn:#b8860b;--bad:#b03a2e;--chip:#eeebe3;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#161614;--fg:#e8e6e0;--mut:#a09e96;--line:#33322e;--card:#1f1f1c;--acc:#6fb7d3;--acc2:#e0865a;--ok:#6fc492;--warn:#e0b84a;--bad:#e2705f;--chip:#2a2a26}}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans);padding:0 20px 80px}
+main{max-width:1180px;margin:0 auto}
+h1{font-size:26px;margin:24px 0 4px}
+h2{font-size:20px;margin:40px 0 10px;padding-top:14px;border-top:2px solid var(--line)}
+h3{font-size:16px;margin:18px 0 6px}
+p{margin:6px 0}
+a{color:var(--acc)}
+.sub{color:var(--mut)}
+code,.m,kbd{font-family:var(--mono);font-size:.92em}
+code{background:var(--chip);padding:1px 4px;border-radius:3px}
+pre{background:var(--chip);padding:10px 12px;border-radius:6px;overflow-x:auto;font-size:12.5px;line-height:1.4;margin:8px 0}
+pre.txt{white-space:pre-wrap}
+.m{border-bottom:1px dotted var(--acc);cursor:help;font-variant-numeric:tabular-nums}
+.cmd{display:none;color:var(--mut);font-family:var(--mono);font-size:11.5px;margin-left:6px;word-break:break-all}
+body.showcmd .cmd{display:inline}
+body.showcmd .m{border-bottom:none}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13.5px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mut);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wrap{overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;background:var(--card);margin:8px 0;padding:0}
+details>summary{cursor:pointer;padding:9px 14px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
+details>summary::before{content:"▸";color:var(--mut);font-size:12px;transition:transform .15s}
+details[open]>summary::before{transform:rotate(90deg)}
+details>summary .tag{margin-left:auto}
+details>.body{padding:4px 14px 12px;border-top:1px solid var(--line)}
+details details{margin:6px 0}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--chip);color:var(--mut);font-weight:500;white-space:nowrap}
+.tag.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.tag.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
+.tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.tag.op{background:color-mix(in srgb,var(--acc2) 18%,transparent);color:var(--acc2)}
+.tag.comp{background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:10px 0}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.tile .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.tile .l{color:var(--mut);font-size:12.5px}
+.top{background:var(--card);border:2px solid var(--acc2);border-radius:10px;padding:14px 18px;margin:16px 0}
+.top h2{border:0;margin:0 0 8px;padding:0}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar input{flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);font:inherit}
+.bar button{padding:5px 10px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--fg);cursor:pointer;font:13px var(--sans)}
+.bar button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.bar .sp{color:var(--mut);font-size:12.5px}
+.hide{display:none!important}
+mark{background:color-mix(in srgb,var(--warn) 40%,transparent);color:inherit;padding:0 1px}
+.opinion{border-left:3px solid var(--acc2);padding-left:10px;color:var(--fg)}
+.opinion::before{content:"Opinion — ";color:var(--acc2);font-weight:600}
+.flow{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;overflow-x:auto}
+.flow svg{display:block;min-width:1100px;max-width:100%;font-family:var(--sans)}
+.flow .node{cursor:pointer}
+.flow .node rect{fill:var(--chip);stroke:var(--line);stroke-width:1.2;rx:7}
+.flow .node:hover rect,.flow .node.sel rect{stroke:var(--acc);stroke-width:2;fill:color-mix(in srgb,var(--acc) 12%,var(--chip))}
+.flow .node text{fill:var(--fg);font-size:11.5px}
+.flow .node .k{font-size:10px;fill:var(--mut)}
+.flow .edge{stroke:var(--mut);stroke-width:1.3;fill:none;marker-end:url(#arr)}
+.flow .lane{fill:none;stroke:var(--line);stroke-dasharray:3 4}
+.flow .lanet{fill:var(--mut);font-size:10.5px;letter-spacing:.05em}
+#nodepanel{margin-top:8px}
+#nodepanel .body{padding:10px 14px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:3px 14px;font-size:13.5px}
+.kv dt{color:var(--mut)}
+.kv dd{margin:0}
+ul{margin:4px 0;padding-left:22px}
+li{margin:2px 0}
+.small{font-size:12.5px;color:var(--mut)}
+.spark{display:inline-block;vertical-align:middle}
+.hint{font-size:12.5px;color:var(--mut);margin:4px 0 10px}
+@media (max-width:600px){body{padding:0 16px 60px}.kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>Pulse — inventaire du 2026-09-12</h1>
+<p class="sub">Lecture seule, mesures faites entre 02:41 et 03:05 (Europe/Paris) le 12 septembre 2026 sur le poste de production (Apple M3 Max, 36 Go, macOS 26.6.2). Chaque chiffre porte la commande qui l'a produit : survoler un nombre souligné, ou activer « commandes » dans la barre. Les opinions sont marquées comme telles. Aucun code, aucune config, aucune mémoire de projet n'a été modifié.</p>
+<div class="bar" id="bar">
+  <input id="q" type="search" placeholder="Rechercher dans la page (ouvre les panneaux qui contiennent le terme)…" aria-label="Rechercher">
+  <span class="sp" id="count"></span>
+  <button id="showcmd" title="Afficher la commande de chaque mesure en clair">commandes</button>
+  <button id="openall">tout déplier</button>
+  <button id="closeall">tout replier</button>
+</div>
+
+<section id="produit" class="top" data-comp="intelligence core launchd">
+<h2>0 · Le produit : le lot launchd de 06:30 n'a pas tourné</h2>
+<p>Au moment de l'inventaire il est <span class="m" title="date">02:41</span> : le déclencheur calendaire de <code>com.pulse.intelligence-run</code> (06:30) n'a pas encore eu lieu aujourd'hui. Il n'existe donc <strong>pas de reprise produite ce matin</strong>. launchd compte <span class="m" title="launchctl print gui/$(id -u)/com.pulse.intelligence-run | grep -E 'runs|last exit'">5 exécutions, dernier code de sortie 0</span> ; le journal <code>~/.pulse_intelligence/logs/run.log</code> s'arrête à la ligne <span class="m" title="tail -3 ~/.pulse_intelligence/logs/run.log">[2026-09-11 10:03:00] candidates=2 created=2</span>.</p>
+<p>Ce que le lot de ce matin trouvera : <span class="m" title="cd intelligence && .venv/bin/pulse-intel list">4 sessions candidates du 11 septembre</span> (work-5 conflit-demo 7 min · work-12 Pulse 17 min · work-13 Pulse 16 min · work-18 Pulse 34 min) sur 19 sessions reconstruites, les 15 autres « trop courtes ». Ce sera le premier lot lu depuis le schéma 3 : le Core de production a été redémarré le <span class="m" title="ps -o lstart= -p 55094">11 sept. à 21:29</span> et sert <span class="m" title="curl -s http://127.0.0.1:8765/context | python3 -c 'import json,sys;print(json.load(sys.stdin)[&quot;schema_version&quot;])'">schema_version 3</span> (mesuré maintenant). L'input_hash de ces quatre reprises devra donc différer des cinq hérités ci-dessous ; la comparaison se fera après 06:30.</p>
+
+<details open data-comp="intelligence">
+<summary>Dernière reprise existante (lot du 11 sept., 06:39 → 10:03) — texte intégral</summary>
+<div class="body">
+<p class="small">Session <code>d283f6dd77528730</code> work-2 du 2026-09-10, 22:50–23:31 locale, 59 événements sources · prompt v6 · mlx-community/Qwen3.8-27B-4bit · generation_ms <span class="m" title="sqlite3 ~/.pulse_v2/trace.db &quot;SELECT details_json FROM activities WHERE type='session_summary' ORDER BY recorded_at DESC LIMIT 1&quot;">1 990 196</span> (33 min) · c'est aussi le <code>last_session_summary</code> que renvoie <code>GET /context</code> maintenant (age_minutes 1633).</p>
+<dl class="kv">
+<dt>doing</dt><dd>L'activité observée porte sur la modification de fichiers de l'audit d'adjudication du 2026-09-09, incluant la fiche 14 et le backlog D.</dd>
+<dt>stopped_at</dt><dd>La session s'est terminée après la modification de la fiche 14-eef4956b36dd37ce.md, sans commit ni test observé.</dd>
+<dt>open</dt><dd>Aucun point ouvert étayé par les faits de la session.</dd>
+<dt>open_items</dt><dd><code>[]</code></dd>
+<dt>intents</dt><dd>Mettre à jour les fiches d'adjudication · Réviser le backlog D · Compléter le fichier adjudications-a-completer.json</dd>
+<dt>central_files</dt><dd>docs/audits/2026-09-09-adjudication-reprise/adjudications-a-completer.json · fiches/14-eef4956b36dd37ce.md · D-backlog.md · FICHES.md · fiches/03-6a4166356dbab6ec.md</dd>
+<dt>confidence</dt><dd>medium · blockers : aucun · project : Pulse</dd>
+<dt>input_hash</dt><dd><code>00f5198ce892200f948c9b6987761080a1f6b4135d84b651b8369be172580927</code></dd>
+</dl>
+</div>
+</details>
+
+<details open data-comp="intelligence">
+<summary>Les cinq résumés v6 hérités (entrée schéma 2, vue <code>legacy_aggregates</code>) — input_hash et texte</summary>
+<div class="body">
+<p class="small">Requête : <code>sqlite3 ~/.pulse_v2/trace.db "SELECT details_json FROM activities WHERE type='session_summary' AND json_extract(details_json,'$.prompt_version')='v6' ORDER BY recorded_at"</code>. Les cinq ont <code>open_items: []</code>, <code>confidence: medium</code>, <code>reconstruction_version: 3</code>. Le hash <code>607578…</code> de a1040f4f est celui que la mémoire de session du 11 identifie comme égal à l'entrée reconstruite depuis la vue schéma 2 : la preuve que ces cinq lots ont lu la vue héritée.</p>
+<div class="wrap"><table>
+<tr><th>session</th><th>lot</th><th>gen. (s)</th><th>input_hash</th><th>doing / stopped_at / open</th></tr>
+<tr><td><code>1eb35865547b0cca</code><br>work-1 · 09-09 22:07–23:01 · 879 évts</td><td>10 sept. 06:42</td><td class="n">9 878</td><td><code>5707e25de58f5426492859903f75381baec2202d6feed07876a5e3bcbf81e8ae</code></td><td><b>doing</b> Développement de l'API Context v3 et du module intelligence avec observations ordonnées et validation des items ouverts.<br><b>stopped_at</b> Dernière activité observée à 23:01:21 UTC, après le commit de documentation des décisions sur les observations ordonnées.<br><b>open</b> Aucun point ouvert étayé par les faits de la session.</td></tr>
+<tr><td><code>a1040f4f6d863fc6</code><br>work-7 · 09-09 17:50–18:01 · 113 évts</td><td>10 sept. 06:42</td><td class="n">8 183</td><td><code>607578900d1d25f593761fe0626cc1c83b09341c0cf12cef413835e41681b4dd</code></td><td><b>doing</b> Reconstruction de la documentation et des audits du projet Pulse, incluant le déplacement des audits clos et l'adjudication de la reprise.<br><b>stopped_at</b> Le dernier commit observé est 'docs: adjudication de la reprise, 14 fiches à compléter' (9691e73).<br><b>open</b> Aucun point ouvert étayé par les faits de la session.</td></tr>
+<tr><td><code>f8aab73b47c5b78b</code><br>work-11 · 09-09 20:43–20:58 · 47 évts</td><td>10 sept. 06:42</td><td class="n">7 483</td><td><code>b06105c1fd74c378c6fa840427a3431ba211f1e99c110ac8d9e28055e8b046c6</code></td><td><b>doing</b> Mise à jour de la documentation et des prompts de l'agent Pulse, incluant la finalisation du prompt v6 et la création de fiches d'audit.<br><b>stopped_at</b> Le dernier commit observé (01062ea) a référencé les fiches 15 à 18 dans le parcours et le JSON, clôturant la session.<br><b>open</b> Aucun point ouvert étayé par les faits de la session.</td></tr>
+<tr><td><code>32ca64e553d648bd</code><br>work-1 · 09-10 19:55–20:22 · 28 évts</td><td>11 sept. 06:39</td><td class="n">10 235</td><td><code>2a93c8bda1025769faa7c96e933e82bb80f9af7afbdbbc2659db082189137671</code></td><td><b>doing</b> Mise à jour des documents d'audit d'adjudication, incluant la création d'un backlog et la modification de fiches et de listes de tâches.<br><b>stopped_at</b> La session s'est terminée après la modification des fichiers de documentation d'audit, sans commit Git observé.<br><b>open</b> Aucun point ouvert étayé par les faits de la session.</td></tr>
+<tr><td><code>d283f6dd77528730</code><br>work-2 · 09-10 20:50–21:31 · 59 évts</td><td>11 sept. 06:39</td><td class="n">1 990</td><td><code>00f5198ce892200f948c9b6987761080a1f6b4135d84b651b8369be172580927</code></td><td>(texte intégral ci-dessus)</td></tr>
+</table></div>
+<p class="small">Les temps de génération (7 500 à 10 200 s par résumé sous launchd) ne sont pas des temps de calcul : le même modèle a produit 11 résumés v5 en 6 min 44 s lors du passage manuel du 9 sept. à 21:26 (23 à 43 s chacun, Mac éveillé). Voir « Ce que ça coûte », « Durée des lots ».</p>
+</div>
+</details>
+</section>
+<section id="flux">
+<h2>1 · Le flux, mesuré</h2>
+<p class="hint">Cliquer un nœud ouvre sa fiche sous le schéma : rôle, chemin du code, état actuel, chiffres mesurés maintenant. Les chiffres « 24 h / 7 j / total » viennent de <code>trace.db</code> (colonne <code>occurred_at_utc</code>), la latence est <code>recorded_at − occurred_at_utc</code> (traversée outbox → worker → daemon).</p>
+<div class="flow" data-comp="core intelligence observateur hooks launchd">
+<svg viewBox="0 0 1110 330" width="1110" height="330" role="img" aria-label="Schéma du flux Pulse">
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke" style="fill:var(--mut)"/></marker></defs>
+<text class="lanet" x="10" y="22">OBSERVATION</text>
+<line class="lane" x1="10" y1="112" x2="1100" y2="112"/>
+<text class="lanet" x="10" y="132">CORE · ~/.pulse_core → ~/.pulse_v2 → 127.0.0.1:8765</text>
+<line class="lane" x1="10" y1="222" x2="1100" y2="222"/>
+<text class="lanet" x="10" y="243">INTELLIGENCE · ~/.pulse_intelligence</text>
+<!-- row 1 -->
+<g class="node" data-node="obs"><rect x="20" y="36" width="150" height="46"/><text x="95" y="55" text-anchor="middle">Observateur Swift</text><text class="k" x="95" y="71" text-anchor="middle">app_activated · lock/sleep</text></g>
+<g class="node" data-node="fw"><rect x="200" y="36" width="150" height="46"/><text x="275" y="55" text-anchor="middle">File-watcher</text><text class="k" x="275" y="71" text-anchor="middle">file_changed (FSEvents)</text></g>
+<g class="node" data-node="zsh"><rect x="380" y="36" width="150" height="46"/><text x="455" y="55" text-anchor="middle">Hook zsh</text><text class="k" x="455" y="71" text-anchor="middle">terminal_finished</text></g>
+<g class="node" data-node="git"><rect x="560" y="36" width="150" height="46"/><text x="635" y="55" text-anchor="middle">Hook post-commit</text><text class="k" x="635" y="71" text-anchor="middle">git_commit</text></g>
+<g class="node" data-node="note"><rect x="740" y="36" width="150" height="46" stroke-dasharray="4 3"/><text x="815" y="55" text-anchor="middle">pulse note</text><text class="k" x="815" y="71" text-anchor="middle">n'existe pas (backlog P2)</text></g>
+<g class="node" data-node="agents"><rect x="920" y="36" width="170" height="46"/><text x="1005" y="55" text-anchor="middle">Producteur agents</text><text class="k" x="1005" y="71" text-anchor="middle">agent_session · horaire + SessionEnd</text></g>
+<!-- bus -->
+<path class="edge" d="M95 82 V100"/><path class="edge" d="M275 82 V100"/><path class="edge" d="M455 82 V100"/><path class="edge" d="M635 82 V100"/><path class="edge" d="M1005 82 V100"/>
+<line x1="95" y1="100" x2="1005" y2="100" style="stroke:var(--mut);stroke-width:1.3"/>
+<path class="edge" d="M95 100 V146"/>
+<!-- row 2 -->
+<g class="node" data-node="outbox"><rect x="20" y="148" width="150" height="46"/><text x="95" y="167" text-anchor="middle">Outbox SQLite</text><text class="k" x="95" y="183" text-anchor="middle">~/.pulse_core/outbox.sqlite3</text></g>
+<g class="node" data-node="worker"><rect x="200" y="148" width="150" height="46"/><text x="275" y="167" text-anchor="middle">Outbox worker</text><text class="k" x="275" y="183" text-anchor="middle">poll 1 s · POST /activities</text></g>
+<g class="node" data-node="daemon"><rect x="380" y="148" width="150" height="46"/><text x="455" y="167" text-anchor="middle">Daemon Flask</text><text class="k" x="455" y="183" text-anchor="middle">normalise · rédige · insère</text></g>
+<g class="node" data-node="sqlite"><rect x="560" y="148" width="150" height="46"/><text x="635" y="167" text-anchor="middle">trace.db</text><text class="k" x="635" y="183" text-anchor="middle">append-only · 21 935 lignes</text></g>
+<g class="node" data-node="recon"><rect x="740" y="148" width="150" height="46"/><text x="815" y="167" text-anchor="middle">reconstruct_session_views</text><text class="k" x="815" y="183" text-anchor="middle">reconstruction_version 3</text></g>
+<g class="node" data-node="ctx"><rect x="920" y="148" width="170" height="46"/><text x="1005" y="167" text-anchor="middle">GET /context</text><text class="k" x="1005" y="183" text-anchor="middle">schema_version 3 · /context/sessions</text></g>
+<path class="edge" d="M170 171 H198"/><path class="edge" d="M350 171 H378"/><path class="edge" d="M530 171 H558"/><path class="edge" d="M710 171 H738"/><path class="edge" d="M890 171 H918"/>
+<!-- ctx -> sel -->
+<path class="edge" d="M1005 194 V214 H240 V258"/>
+<!-- row 3 -->
+<g class="node" data-node="job"><rect x="10" y="260" width="140" height="46"/><text x="80" y="279" text-anchor="middle">Job launchd 06:30</text><text class="k" x="80" y="295" text-anchor="middle">pulse-intel run --once</text></g>
+<g class="node" data-node="sel"><rect x="165" y="260" width="150" height="46"/><text x="240" y="279" text-anchor="middle">Sélection sessions</text><text class="k" x="240" y="295" text-anchor="middle">≥10 min ou ≥30 act. · close</text></g>
+<g class="node" data-node="prompt"><rect x="330" y="260" width="140" height="46"/><text x="400" y="279" text-anchor="middle">Prompt v6</text><text class="k" x="400" y="295" text-anchor="middle">entrée v3 · v7 enregistré</text></g>
+<g class="node" data-node="qwen"><rect x="485" y="260" width="150" height="46"/><text x="560" y="279" text-anchor="middle">Qwen3.8-27B-4bit</text><text class="k" x="560" y="295" text-anchor="middle">mlx-lm 0.31.3 · 15 Go</text></g>
+<g class="node" data-node="valid"><rect x="650" y="260" width="130" height="46"/><text x="715" y="279" text-anchor="middle">Validateur</text><text class="k" x="715" y="295" text-anchor="middle">parse_model_output</text></g>
+<g class="node" data-node="store"><rect x="795" y="260" width="150" height="46"/><text x="870" y="279" text-anchor="middle">Stockage résumés</text><text class="k" x="870" y="295" text-anchor="middle">session_summary → Core</text></g>
+<g class="node" data-node="show"><rect x="960" y="260" width="130" height="46"/><text x="1025" y="279" text-anchor="middle">pulse-intel show</text><text class="k" x="1025" y="295" text-anchor="middle">latest · id · --md</text></g>
+<path class="edge" d="M150 283 H163"/><path class="edge" d="M315 283 H328"/><path class="edge" d="M470 283 H483"/><path class="edge" d="M635 283 H648"/><path class="edge" d="M780 283 H793"/><path class="edge" d="M945 283 H958"/>
+<!-- store -> daemon (POST) -->
+<path class="edge" d="M870 260 V236 H470 V196" stroke-dasharray="5 4"/>
+<text class="k" x="480" y="232" style="fill:var(--mut);font-size:10px">POST /activities (session_summary)</text>
+</svg>
+</div>
+<details id="nodepanel" data-comp="core intelligence observateur hooks launchd"><summary>Nœud : (cliquer un nœud du schéma)</summary><div class="body"><p class="small">Aucun nœud sélectionné.</p></div></details>
+
+<details data-comp="core observateur hooks" open>
+<summary>Tableau récapitulatif : événements par type, 24 h / 7 j / total, dernier événement, latence</summary>
+<div class="body">
+<p class="small">Comptes : <code>sqlite3 ~/.pulse_v2/trace.db "SELECT type, COUNT(*), SUM(occurred_at_utc &gt;= strftime('%Y-%m-%dT%H:%M:%S','now','-7 days')), SUM(occurred_at_utc &gt;= strftime('%Y-%m-%dT%H:%M:%S','now','-1 day')), MIN(occurred_at_utc), MAX(occurred_at_utc) FROM activities GROUP BY type"</code>. Latence : script Python sur la même base, médiane et p95 de <code>recorded_at − occurred_at_utc</code> sur 24 h (résumés et sessions d'agents exclus : leur <code>occurred_at</code> est la fin de session, pas l'émission).</p>
+<div class="wrap"><table>
+<tr><th>type</th><th>producteur</th><th class="n">24 h</th><th class="n">7 j</th><th class="n">total</th><th>premier</th><th>dernier (UTC)</th><th class="n">latence méd. 24 h</th><th class="n">p95</th></tr>
+<tr><td>file_changed</td><td>pulse-file-watcher 1.0</td><td class="n">128</td><td class="n">9 288</td><td class="n">12 910</td><td>2026-07-03</td><td>2026-09-11T20:02:05</td><td class="n">0,41 s</td><td class="n">1,07 s</td></tr>
+<tr><td>app_activated</td><td>pulse-macos-application-observer 1</td><td class="n">460</td><td class="n">2 203</td><td class="n">6 873</td><td>2026-07-03</td><td>2026-09-12T00:42:44</td><td class="n">0,85 s</td><td class="n">1,33 s</td></tr>
+<tr><td>terminal_finished</td><td>pulse-zsh 1.0</td><td class="n">27</td><td class="n">164</td><td class="n">1 086</td><td>2026-07-03</td><td>2026-09-11T21:26:17</td><td class="n">1,21 s</td><td class="n">1,86 s</td></tr>
+<tr><td>git_commit</td><td>pulse-git-hook 1.0</td><td class="n">9</td><td class="n">175</td><td class="n">300</td><td>2026-08-25</td><td>2026-09-11T20:02:04</td><td class="n">2,13 s</td><td class="n">4,05 s</td></tr>
+<tr><td>agent_session</td><td>pulse-agent-sessions 1.0</td><td class="n">2</td><td class="n">34</td><td class="n">198</td><td>2025-10-08</td><td>2026-09-11T17:48:05</td><td class="n">—</td><td class="n">—</td></tr>
+<tr><td>screen_locked</td><td>observateur Swift</td><td class="n">14</td><td class="n">93</td><td class="n">144</td><td>2026-07-23</td><td>2026-09-11T23:43:02</td><td class="n">0,54 s</td><td class="n">1,34 s</td></tr>
+<tr><td>screen_unlocked</td><td>observateur Swift</td><td class="n">15</td><td class="n">93</td><td class="n">143</td><td>2026-07-23</td><td>2026-09-12T00:38:30</td><td class="n">1,21 s</td><td class="n">2,97 s</td></tr>
+<tr><td>system_sleep</td><td>observateur Swift</td><td class="n">10</td><td class="n">81</td><td class="n">117</td><td>2026-07-23</td><td>2026-09-11T23:43:03</td><td class="n">0,67 s</td><td class="n">1,30 s</td></tr>
+<tr><td>system_wake</td><td>observateur Swift</td><td class="n">11</td><td class="n">81</td><td class="n">116</td><td>2026-07-23</td><td>2026-09-12T00:38:29</td><td class="n">1,13 s</td><td class="n">2,02 s</td></tr>
+<tr><td>session_summary</td><td>pulse-intelligence 0.1.0</td><td class="n">0</td><td class="n">48</td><td class="n">48</td><td>2026-09-05</td><td>2026-09-10T21:31:59 (fin de session)</td><td class="n">—</td><td class="n">—</td></tr>
+<tr><th>total</th><th></th><th class="n">676</th><th class="n">12 260</th><th class="n">21 935</th><th>2025-10-08 (agent_session migré)</th><th>2026-09-12T00:42:44</th><th></th><th></th></tr>
+</table></div>
+<p class="small">Par producteur et schéma (<code>SELECT schema_version, producer_name, producer_version, COUNT(*) … GROUP BY 1,2,3</code>) : pulse-file-watcher 11 988 · pulse-legacy-migrated (schéma 0, fusion de l'ancienne machine du 5 sept.) 4 357 · observateur macOS 3 939 · pulse-zsh 788 · pulse-legacy (payload plat, adaptateur) 318 · pulse-git-hook 299 · pulse-agent-sessions 198 · pulse-intelligence 48. Latence 7 j : identique à 24 h sauf <code>file_changed</code>, médiane <span class="m" title="script Python : médiane de recorded_at − occurred_at_utc par jour, type file_changed">49 s</span> à cause du 5 sept. (6 957 événements, médiane 75 s, max 194 s : file d'attente outbox pendant la fusion de traces et une purge de <code>DevNote</code>, 7 193 <code>deleted</code> sur 7 j) ; le 8 sept. 2,8 s (1 180 événements, p95 17 s) ; les autres jours &lt; 1,7 s.</p>
+</div>
+</details>
+<div class="hide" id="nodefiches">
+<div id="node-obs" data-title="Observateur Swift (PulseApplicationObserver)">
+<p><b>Rôle.</b> S'abonne à <code>NSWorkspace.didActivateApplicationNotification</code> et aux notifications veille/réveil et verrouillage/déverrouillage, filtre la vraie application frontale, déduplique, et construit un événement canonique <code>app_activated</code> (ou <code>system_sleep|system_wake|screen_locked|screen_unlocked</code>, details vides). Il n'écrit jamais dans SQLite lui-même : il lance un sous-processus <code>python -m daemon_v2.producer_outbox enqueue-json</code> qui dépose le JSON dans l'outbox.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/macos_observer/Sources/PulseApplicationObserver/main.swift</code> → <code>ApplicationObserverCore/{ApplicationObserver, SystemObserver, CanonicalEventBuilder, OutboxBridge}.swift</code> · producteur <code>pulse-macos-application-observer</code> v1 · swift-tools 6.0, macOS 13+ · 578 lignes de sources, 356 de tests (17 <code>@Test</code>)</dd>
+<dt>État</dt><dd><span class="tag ok">running</span> pid 55075 · <code>com.pulse.app-observer</code> KeepAlive, runs 1, jamais sorti · démarré <span class="m" title="ps -o lstart= -p 55075">11 sept. 21:28:59</span> · binaire <code>~/.pulse_v2/bin/PulseApplicationObserver</code> <span class="m" title="ls -la ~/.pulse_v2/bin">273 416 o</span>, construit le 11 sept. 21:28 · journal <code>app_observer.log</code> 354 lignes, dernière : <span class="m" title="tail -1 ~/.pulse_v2/logs/app_observer.log">2026-09-12T02:38:30+02:00 received screen unlock notification</span></dd>
+<dt>Chiffres</dt><dd>app_activated <span class="m" title="sqlite3 ~/.pulse_v2/trace.db (voir tableau récapitulatif)">460 / 2 203 / 6 873</span> (24 h / 7 j / total) · lock+unlock+sleep+wake <span class="m" title="somme des quatre types, même requête">50 / 348 / 520</span> · dernier événement <span class="m" title="MAX(occurred_at_utc) WHERE type='app_activated'">2026-09-12T00:42:44Z</span> (Activated Safari) · apps les plus activées sur 7 j : Claude 609, Terminal 497, Safari 237, Code 160, ChatGPT 153, Finder 148 · latence médiane 24 h 0,85 s</dd>
+<dt>Ressources</dt><dd>RSS <span class="m" title="ps -o rss -p 55075">13,3 Mo</span> · CPU cumulé <span class="m" title="ps -o time -p 55075">0,25 s</span> sur 5 h 17 · 0,0 % sur trois échantillons <code>top</code></dd>
+</dl>
+</div>
+
+<div id="node-fw" data-title="File-watcher (daemon_v2.file_watcher)">
+<p><b>Rôle.</b> Un <code>watchdog.observers.Observer</code> (FSEvents) marque les chemins sales sur chaque workspace déclaré ; toutes les 1,0 s il compare <code>(mtime_ns, size)</code> à un instantané pour décider <code>created|modified|deleted</code>, filtre par <code>file_policy</code>, et met en file <code>file_changed</code>. Le snapshot n'avance qu'après un enqueue réussi ; un observer mort lève une exception pour que KeepAlive relance.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/daemon_v2/file_watcher.py:watch</code>, <code>DirtyPathCollector.dispatch</code>, <code>flush_workspace</code>, <code>detect_changes</code> · <code>file_policy.py:should_ignore</code> · producteur <code>pulse-file-watcher</code> 1.0</dd>
+<dt>État</dt><dd><span class="tag ok">running</span> pid 55090 · <code>com.pulse.file-watcher</code> KeepAlive, runs 2 · workspaces (<code>cat ~/.pulse_v2/watched_workspaces</code>) : <code>~/Projets/Pulse</code>, <code>~/Projets/DevNote</code>, <code>~/Projets/Cortex</code> · journal 30 lignes, dernière « Watching files in /Users/Yugz/Projets/Cortex »</dd>
+<dt>Chiffres</dt><dd>file_changed <span class="m" title="voir tableau récapitulatif">128 / 9 288 / 12 910</span> · dernier <span class="m" title="MAX(occurred_at_utc) WHERE type='file_changed'">2026-09-11T20:02:05Z</span> · sur 7 j : <span class="m" title="python3 : Counter(details.event) sur file_changed depuis 2026-09-05">deleted 7 193, modified 1 386, created 709</span> ; par workspace DevNote 6 814, Pulse 2 321, Pulse/core 141, Cortex 12 · latence médiane 24 h 0,41 s (7 j : 49 s, dominé par le 5 sept.)</dd>
+<dt>Ressources</dt><dd>RSS <span class="m" title="ps -o rss -p 55090">45,2 Mo</span> · CPU cumulé <span class="m" title="ps -o time -p 55090">4,15 s</span> sur 5 h 17 · 0,0 % au repos</dd>
+</dl>
+</div>
+
+<div id="node-zsh" data-title="Hook zsh (terminal_finished)">
+<p><b>Rôle.</b> <code>preexec</code> mémorise commande, <code>$PWD</code> et heure de départ ; <code>precmd</code> lit <code>$?</code> et pipe un JSON vers <code>python -m daemon_v2.producer_outbox enqueue-terminal</code>. Le masquage (commandes ignorées dont les curl internes Pulse, options sensibles, <code>ENV=secret</code>, jetons, prompts collés remplacés par un placeholder) se fait côté Python avant toute écriture, et le producteur ajoute <code>details.git</code> et <code>details.workspace</code>.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/scripts/pulse_terminal_watcher.zsh</code> (58 lignes) · <code>producer_outbox.py:build_terminal_event</code> · <code>ingest.filter_terminal_command</code>, <code>ingest.redact_command</code> · producteur <code>pulse-zsh</code> 1.0</dd>
+<dt>État</dt><dd><span class="tag ok">chargé</span> <span class="m" title="grep -n pulse ~/.zshrc">~/.zshrc ligne 1</span> source le script · ne tourne que dans les Zsh interactives (pas de pid)</dd>
+<dt>Chiffres</dt><dd>terminal_finished <span class="m" title="voir tableau récapitulatif">27 / 164 / 1 086</span> · dernier <span class="m" title="MAX(occurred_at_utc) WHERE type='terminal_finished'">2026-09-11T21:26:17Z</span> · codes de sortie sur 7 j : <span class="m" title="python3 : Counter(details.exit_code) sur terminal_finished depuis 2026-09-05">0 ×142, 1 ×12, 127 ×4, 130 ×3, 2 ×2, 128 ×1</span> · champs stockés : command, cwd, exit_code, started_at, finished_at, git, workspace · latence médiane 24 h 1,21 s</dd>
+</dl>
+</div>
+
+<div id="node-git" data-title="Hook git post-commit (git_commit)">
+<p><b>Rôle.</b> Un wrapper <code>.git/hooks/post-commit</code> marqué <code># pulse-git-hook: managed</code> exécute <code>pulse_git_hook.sh</code>, qui lit HEAD (hash, branche, message complet, date, shortstat) et met en file un <code>git_commit</code>. Best-effort, sort toujours 0 : un échec de Pulse ne bloque jamais un commit.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/scripts/pulse_git_hook.sh</code>, <code>core/scripts/install_git_hook.sh &lt;repo&gt;</code> · <code>producer_outbox enqueue-git-commit</code> · producteur <code>pulse-git-hook</code> 1.0</dd>
+<dt>État</dt><dd><span class="tag ok">installé</span> dans <span class="m" title="ls -la ~/Projets/{Pulse,DevNote,Cortex}/.git/hooks/post-commit">Pulse et Cortex</span> (5 sept.) · <span class="tag warn">absent</span> dans DevNote (workspace pourtant observé par le watcher)</dd>
+<dt>Chiffres</dt><dd>git_commit <span class="m" title="voir tableau récapitulatif">9 / 175 / 300</span> · dernier <span class="m" title="MAX(occurred_at_utc) WHERE type='git_commit'">2026-09-11T20:02:04Z</span> · champs : branch, commit_hash, files_changed, insertions, deletions, message, repository, git_root · latence médiane 24 h 2,13 s (le hook fait plusieurs appels git)</dd>
+</dl>
+</div>
+
+<div id="node-note" data-title="pulse note (n'existe pas)">
+<p><b>Rôle prévu.</b> Une commande <code>pulse note "…"</code> qui émettrait un événement <code>recorded_statement</code> horodaté, pour capter les déclarations faites en conversation ou dans la tête de l'utilisateur (registre D : D-02, 7 fiches ; D-15).</p>
+<dl class="kv">
+<dt>État</dt><dd><span class="tag bad">inexistant</span> · <span class="m" title="grep -rn -i '\bnote\b' core/scripts core/daemon_v2 ; grep -rn recorded_statement core/daemon_v2/*.py">aucune occurrence dans le code</span> · item P2 ajouté le 2026-09-11 dans <code>core/TODOS.md</code> (ligne 261), dépend d'une décision datée (nouveau type d'événement, <code>SUPPORTED_ACTIVITY_TYPES</code> n'a pas <code>recorded_statement</code>)</dd>
+<dt>Nuance</dt><dd>Le validateur Intelligence connaît déjà une <em>kind</em> <code>recorded_statement</code> pour <code>open</code> (déclaration observée dans un commit ou une commande) : c'est un genre de preuve, pas un événement Core.</dd>
+</dl>
+</div>
+
+<div id="node-agents" data-title="Producteur des sessions d'agents (agent_session)">
+<p><b>Rôle.</b> Chaque heure (<code>com.pulse.agent-producers</code>) et à chaque fin de session Claude Code (hook SessionEnd), le script archive les transcripts <code>.jsonl</code> en zstd niveau 9 dans <code>~/.pulse_v2/transcript_archive/</code> puis <code>daemon_v2.agent_sessions</code> émet un <code>agent_session</code> par session stable (60 min sans écriture, sauf mode <code>--transcript</code> du hook). Le résumé est déterministe, calculé une fois et jamais ré-émis ; le brut n'entre jamais dans <code>trace.db</code>.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/scripts/pulse_agent_producers.sh</code>, <code>pulse_session_end_hook.sh</code>, <code>core/scripts/archive_transcripts.py</code>, <code>daemon_v2/agent_sessions.py:emit_agent_sessions</code> · producteur <code>pulse-agent-sessions</code> 1.0 · <code>event_id = uuid5("pulse-agent-session:{tool}:{session_id}")</code></dd>
+<dt>État</dt><dd><span class="tag ok">planifié</span> launchd runs <span class="m" title="launchctl print gui/$(id -u)/com.pulse.agent-producers | grep -E 'runs|last exit'">54, dernier code 0</span>, intervalle 3 600 s · hook SessionEnd déclaré dans <span class="m" title="grep -n pulse ~/.claude/settings.json">~/.claude/settings.json</span> · dernier passage horaire (<code>agent_producers.log</code>, 522 lignes) : Emitted 1, Already emitted 17, Grown after emit 16 · dernier hook (<code>session_end_hook.log</code>, 11 sept. 19:45) : Bytes 282 857 → 60 905 (22 %), Emitted 1</dd>
+<dt>Chiffres</dt><dd>agent_session <span class="m" title="voir tableau récapitulatif">2 / 34 / 198</span> (<span class="m" title="SELECT json_extract(details_json,'$.source_tool'), COUNT(*) FROM activities WHERE type='agent_session' GROUP BY 1">codex 143, claude-code 55</span>) · dernier <span class="m" title="MAX(occurred_at_utc) WHERE type='agent_session'">2026-09-11T17:48:05Z</span> · archive <span class="m" title="find ~/.pulse_v2/transcript_archive -name '*.zst' | wc -l ; du -sh">217 fichiers .zst, 224 Mo</span> (codex 167 Mo, claude 57 Mo) · manifeste <code>agent_sessions_manifest.json</code> 63 688 o</dd>
+</dl>
+</div>
+
+<div id="node-outbox" data-title="Outbox durable (~/.pulse_core/outbox.sqlite3)">
+<p><b>Rôle.</b> Un seul fichier SQLite en WAL où tous les producteurs déposent leurs événements (tables <code>events</code>, <code>dead_letters</code>, <code>producer_metadata</code>), ce qui rend la collecte indépendante de la disponibilité du daemon. La CLI <code>producer_outbox</code> sert aussi à inspecter, rejouer ou purger les dead-letters.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/daemon_v2/producer_outbox.py</code> (<code>ProducerOutbox</code>, <code>default_outbox_path</code>, surchargeable <code>PULSE_CORE_OUTBOX_PATH</code>) · sous-commandes enqueue-terminal, enqueue-json, enqueue-git-commit, instance-id, inspect-dead-letter, clear-dead-letter, replay-dead-letter, status</dd>
+<dt>État</dt><dd><span class="tag ok">vide</span> events <span class="m" title="sqlite3 ~/.pulse_core/outbox.sqlite3 'SELECT COUNT(*) FROM events; SELECT COUNT(*) FROM dead_letters'">0</span>, dead_letters 0 (identique à <code>make status</code> : Pending 0, Dead-letter 0)</dd>
+<dt>Chiffres</dt><dd>fichier <span class="m" title="ls -la ~/.pulse_core">3 944 448 o</span> = <span class="m" title="sqlite3 ~/.pulse_core/outbox.sqlite3 'PRAGMA page_count; PRAGMA freelist_count'">963 pages dont 955 libres</span> : la taille est celle de la pointe du 5 sept., jamais rendue au système (pas de VACUUM) · verrou <code>outbox.sqlite3.worker.lock</code></dd>
+</dl>
+</div>
+
+<div id="node-worker" data-title="Outbox worker (daemon_v2.outbox_worker)">
+<p><b>Rôle.</b> Boucle FIFO stricte : toutes les 1,0 s il prend le plus ancien événement et le POSTe sur <code>/activities</code>. Erreur de connexion → backoff <code>min(2^tentatives, 300 s)</code> sans compter vers le plafond ; 408/429/5xx → 20 tentatives HTTP puis dead-letter ; autre 4xx → dead-letter immédiate ; 204 « ignoré » compte comme succès.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/daemon_v2/outbox_worker.py:run_forever</code>, <code>OutboxWorker.process_one</code>, <code>_retry</code>, <code>_retry_or_expire</code> · <code>MAX_BACKOFF_SECONDS = 300</code>, <code>MAX_DELIVERY_ATTEMPTS = 20</code>, <code>poll_interval = 1.0</code></dd>
+<dt>État</dt><dd><span class="tag ok">running</span> pid 55086 · <code>com.pulse.outbox-worker</code> KeepAlive, runs 3 · journal <code>outbox_worker.log</code> <span class="m" title="wc -l ~/.pulse_v2/logs/outbox_worker.log">12 197 lignes</span>, <span class="m" title="grep -ciE 'error|dead|retry|échec' ~/.pulse_v2/logs/outbox_worker.log">0 ligne d'erreur</span>, dernière <span class="m" title="tail -1 ~/.pulse_v2/logs/outbox_worker.log">2026-09-12T00:42:45+00:00 delivery: sent</span></dd>
+<dt>Chiffres</dt><dd>Latence de bout en bout (dépôt → insertion) sur 24 h : médiane 0,4 à 1,2 s selon le type, p95 ≤ 4 s ; max 115 s pour un <code>screen_locked</code> (le Mac s'est endormi entre le dépôt et la livraison). Le 5 sept. (fusion + 6 957 file_changed) : médiane 75 s, max 194 s. C'est le processus Core qui consomme le plus de CPU : <span class="m" title="ps -o time -p 55086">23,16 s</span> cumulées sur 5 h 17 (réveil chaque seconde), 0,2 à 0,4 % dans <code>top</code></dd>
+<dt>Ressources</dt><dd>RSS <span class="m" title="ps -o rss -p 55086">34,7 Mo</span></dd>
+</dl>
+</div>
+
+<div id="node-daemon" data-title="Daemon Flask (daemon_v2.main)">
+<p><b>Rôle.</b> Serveur Flask de développement lié à <code>127.0.0.1:8765</code>. <code>POST /activities</code> normalise (schéma 1, producteur, <code>occurred_at</code> avec fuseau, clés réservées refusées), rédige les textes libres (commande, message de commit, premier prompt, tous les champs d'un <code>session_summary</code>) et insère dans <code>trace.db</code> ; 201 créé, 200 doublon, 204 ignoré, 400 invalide, 409 conflit. Les payloads plats passent par l'adaptateur <code>pulse-legacy</code> (event_id serveur, pas d'idempotence).</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/daemon_v2/main.py:create_app</code> · <code>routes.py</code> (blueprint <code>pulse</code>, 14 routes) · <code>ingest.py:normalize_event</code>, <code>_normalize_canonical_event</code>, <code>adapt_legacy_payload</code> · <code>trace_store.py:TraceStore.append_event</code> · <code>event_logger.py</code></dd>
+<dt>État</dt><dd><span class="tag ok">running</span> pid 55094 · <code>com.pulse.daemon</code> KeepAlive, runs 3 · démarré <span class="m" title="ps -o lstart= -p 55094">11 sept. 21:29:17</span>, donc <span class="tag ok">pas STALE</span> vis-à-vis du dernier commit Core (287e3d7, 21:28:10) · <code>make status</code> : running, 14 événements du jour, 0 session affichée</dd>
+<dt>Chiffres</dt><dd><code>daemon.log</code> <span class="m" title="wc -l ~/.pulse_v2/logs/daemon.log">12 815 lignes</span> depuis le 5 sept. dont <span class="m" title="grep -c 'POST /activities' ~/.pulse_v2/logs/daemon.log ; grep 'POST /activities' … | grep -oE '&quot; [0-9]{3} ' | sort | uniq -c">12 248 POST /activities (12 245 × 201, 3 × 200)</span> · lignes par jour : 05 → 7 567, 06 → 1 517, 07 → 460, 08 → 866, 09 → 1 418, 10 → 171, 11 → 739 · lectures : GET /status 35, GET /context 27, GET / 17, /days 6 · Python 3.14.7, Flask 3.1.3, watchdog 6.0.0</dd>
+<dt>Ressources</dt><dd>RSS <span class="m" title="ps -o rss -p 55094 (avant / après l'appel /days de cet inventaire)">49,5 Mo → 67,8 Mo</span> après un <code>GET /days</code> · CPU cumulé <span class="m" title="ps -o time -p 55094">2,61 s → 12,27 s</span> : le seul <code>/days</code> de cet inventaire a coûté ~9,5 s de CPU · 0,0 % au repos</dd>
+</dl>
+</div>
+
+<div id="node-sqlite" data-title="trace.db (~/.pulse_v2/trace.db)">
+<p><b>Rôle.</b> La vérité factuelle : une table <code>activities</code> append-only (triggers qui refusent UPDATE et DELETE), index unique sur <code>event_id</code>, index sur <code>occurred_at_utc</code> et <code>session_id</code>, mode WAL. Chaque ligne garde le JSON de <code>details</code>, la provenance (producteur, version, instance) et <code>recorded_at</code> en UTC.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/daemon_v2/trace_store.py</code> · <code>models.py</code> : 10 types acceptés, <code>SUPPORTED_SCHEMA_VERSIONS = {1}</code> · <code>PRAGMA user_version</code> = 0 (pas de versionnage de schéma SQLite)</dd>
+<dt>État</dt><dd>21 935 lignes · 97 jours distincts · WAL <span class="m" title="ls -la ~/.pulse_v2/trace.db*">0 o</span>, shm 32 Ko · permissions 0600 · copie <code>trace.backup-20260905-201049.db</code> 5,9 Mo (avant fusion)</dd>
+<dt>Chiffres</dt><dd>fichier <span class="m" title="ls -la ~/.pulse_v2/trace.db ; PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count">16 330 752 o = 3 987 pages × 4 096, 0 libre</span> · par objet (<span class="m" title="sqlite3 ~/.pulse_v2/trace.db 'SELECT name, SUM(pgsize) FROM dbstat GROUP BY name'">dbstat</span>) : activities 13 303 808 · idx_activities_session_id 1 019 904 · idx_activities_occurred_at_utc 1 003 520 · idx_activities_event_id 995 328 · schéma+séquence 8 192 · soit 744 o par événement, index compris · poids des <code>details</code> par type : file_changed 5,19 Mo (167 o/évt), app_activated 1,21 Mo, terminal_finished 0,80 Mo (502 o/évt), git_commit 0,33 Mo (853 o/évt), agent_session 0,21 Mo, session_summary 74 Ko (1 285 o/évt)</dd>
+</dl>
+</div>
+
+<div id="node-recon" data-title="reconstruct_session_views (analysis/timeline.py)">
+<p><b>Rôle.</b> Trie les activités par <code>(occurred_at, id)</code>, regroupe les signaux forts (terminal, fichier, commit) avec une coupure à 30 min, ferme une session sur verrouillage ou veille (fermeture monotone, activité suivante classée « arrière-plan »), et donne à chaque session une identité = sha256 des event_id sources tronqué à 16 hex. Aucune lecture disque ni horloge hors le paramètre <code>now</code> : même base, même <code>at</code> → même résultat, seul <code>generated_at</code> change.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/daemon_v2/analysis/timeline.py:reconstruct_session_views</code> · <code>RECONSTRUCTION_VERSION = 3</code> (ligne 47) · <code>WORK_SESSION_GAP = 30 min</code> · <code>session_summary</code> et <code>agent_session</code> exclus de l'identité · consommé par <code>daily_trace.build_daily_trace</code>, <code>context_snapshot</code>, renderers · tests <code>test_session_reconstruction.py</code> (46 def test_)</dd>
+<dt>Durées mesurées maintenant</dt><dd><code>GET /context/sessions?date=2026-09-11</code> (19 sessions, 91 567 o) : <span class="m" title="curl -s -o /dev/null -w '%{time_total}' 'http://127.0.0.1:8765/context/sessions?date=2026-09-11'">0,079 s</span> · <code>?date=2026-09-05</code> (jour de la fusion) : <span class="m" title="curl … ?date=2026-09-05">0,327 s</span> · <code>/day/2026-09-11</code> : 0,253 s · <code>/day/2026-09-05</code> : 1,00 s · <code>/days</code> (index des 97 jours, chacun reconstruit) : <span class="m" title="curl -s -o /dev/null -w '%{time_total}' http://127.0.0.1:8765/days">8,53 s</span> · <code>daemon.log</code> ne journalise aucune durée (mesure par curl seulement)</dd>
+<dt>Sortie</dt><dd>sessions <code>work-N</code> avec <code>observations</code> (timeline ordonnée <code>oN</code>, applications, <code>last_observed</code>, <code>coverage</code>, <code>sources</code>), sessions <code>isolated</code> et <code>background</code>, <code>end_reason</code></dd>
+</dl>
+</div>
+
+<div id="node-ctx" data-title="GET /context et /context/sessions (schéma 3)">
+<p><b>Rôle.</b> Le contrat consommé par Intelligence et par <code>make status</code> : session courante avec observations ordonnées, jusqu'à 3 sessions récentes avec en-tête (commits, fichiers, tests rouges, erreurs), signaux isolés, dernier <code>agent_session</code> compatible avec le workspace, dernier <code>session_summary</code>. <code>/context/sessions?date=</code> renvoie les sessions closes d'un jour dans la même forme.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>core/daemon_v2/context_snapshot.py:build_context_snapshot</code>, <code>build_day_sessions</code> · <code>SCHEMA_VERSION = 3</code> · <code>work_observations.py:project_work_observations</code> (<code>OBSERVATION_VERSION = 1</code>) · spec <code>docs/specs/2026-09-02-context-api.md</code> + décisions 2026-09-08 · tests <code>test_context_snapshot.py</code> (34), <code>test_routes.py</code> (30), <code>test_work_observations.py</code> (13)</dd>
+<dt>État maintenant</dt><dd><span class="tag ok">schema_version 3</span> · <code>current_session: null</code>, <code>recent_sessions: []</code>, <code>workspace: null</code> (aucune activité forte depuis 2 h) · <code>last_agent_session</code> claude-code 17:48→20:02 (age 282 min) · <code>last_session_summary</code> d283f6dd (age 1 633 min) · fuseau Europe/Paris, fenêtre 120 min</dd>
+<dt>Chiffres</dt><dd><code>GET /context</code> : <span class="m" title="for i in 1 2 3; do curl -s -o /dev/null -w '%{time_total}s %{size_download}B' http://127.0.0.1:8765/context; done">0,013 / 0,015 / 0,020 s, 1 257 o</span> · <code>/context?at=2026-09-11T20:00:00Z</code> : 0,052 s, 6 679 o (session work-19 avec 3 observations) · <code>/context/sessions</code> (aujourd'hui) : 0,005 s, 0 session · coverage déclarée <code>not_collected</code> pour command_output, commit_files, remote_push_state</dd>
+</dl>
+</div>
+
+<div id="node-job" data-title="Job launchd com.pulse.intelligence-run (06:30)">
+<p><b>Rôle.</b> <code>StartCalendarInterval</code> 06:30, <code>RunAtLoad false</code> : lance <code>pulse_intel_run.sh</code> qui exécute <code>.venv/bin/pulse-intel run --once</code> dans <code>intelligence/</code>, sortie et erreurs dans <code>~/.pulse_intelligence/logs/run.log</code>. Si le Mac dort à 06:30, launchd déclenche au réveil suivant, et la génération s'interrompt à chaque rendormissement.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>intelligence/scripts/pulse_intel_run.sh</code>, <code>install_run_launchd.sh</code> (heure via <code>PULSE_INTEL_RUN_HOUR/MINUTE</code>) · plist du 6 sept. 10:21 · verrou <code>state.json.lock</code> (flock, code 5 si pris)</dd>
+<dt>État</dt><dd><span class="tag warn">pas encore tourné aujourd'hui</span> (il est 02:41) · launchd runs <span class="m" title="launchctl print gui/$(id -u)/com.pulse.intelligence-run">5, dernier code 0</span> · 4 candidates l'attendent</dd>
+<dt>Historique des lots</dt><dd>
+<div class="wrap"><table>
+<tr><th>départ</th><th>fin</th><th class="n">durée</th><th>résultat</th></tr>
+<tr><td>07 sept. 06:42 (launchd)</td><td>09:32</td><td class="n">2 h 50</td><td>candidates 13, created 13</td></tr>
+<tr><td>08 sept. 06:45 (launchd)</td><td>09:56</td><td class="n">3 h 12</td><td>candidates 6, created 2 (Core en timeout, jour 4 non jugé)</td></tr>
+<tr><td>09 sept. 06:45 (launchd)</td><td>06:45</td><td class="n">2 s</td><td>candidates 10, created 0, failed 10, replayed 1 (code 3)</td></tr>
+<tr><td>09 sept. 21:26 (manuel, Mac éveillé)</td><td>21:33</td><td class="n">6 min 44</td><td>candidates 11, created 11 (v5)</td></tr>
+<tr><td>10 sept. 06:42 (launchd)</td><td>13:48</td><td class="n">7 h 06</td><td>candidates 3, created 3 (v6) · 2 événements sleep/wake dans la fenêtre</td></tr>
+<tr><td>11 sept. 06:39 (launchd)</td><td>10:03</td><td class="n">3 h 24</td><td>candidates 2, created 2 (v6) · réveil 10:02, rendormi 10:03</td></tr>
+</table></div>
+<span class="small">Source : <code>~/.pulse_intelligence/logs/run.log</code>, lignes <code>[date] run --once</code> et <code>candidates=</code> ; veille/réveil depuis <code>trace.db</code> (types system_sleep/system_wake dans la fenêtre).</span></dd>
+</dl>
+</div>
+
+<div id="node-sel" data-title="Sélection des sessions (selection.py)">
+<p><b>Rôle.</b> Lit <code>/context/sessions</code> pour aujourd'hui et la veille (<code>lookback_days = 1</code>), après avoir vérifié <code>reconstruction_version</code> = 3 et <code>schema_version</code> = 3 (sinon vue héritée → code 6 depuis PR #85). Une session close est candidate si elle dure ≥ 10 min <em>ou</em> compte ≥ 30 activités, et si le triplet (session, prompt, modèle) n'a pas déjà un résumé. Pas de délai « close depuis X » côté Intelligence : la clôture vient du gap de 30 min de Core.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>intelligence/pulse_intelligence/selection.py:classify</code> (<code>min_session_minutes 10</code>, <code>min_session_activities 30</code>) · <code>core_client.py:fetch_sessions</code>, <code>check_reconstruction_version</code>, <code>check_schema_version</code> · <code>session_summary.py:run_pass</code> (<code>MAX_ATTEMPTS = 3</code> puis <code>given_up</code>)</dd>
+<dt>État maintenant</dt><dd><span class="m" title="cd intelligence && .venv/bin/pulse-intel list">19 sessions le 11 sept., 4 candidates, 15 « trop courtes »</span> · candidates : work-5 conflit-demo 12:51–12:58 (7 min, 32 act.) · work-12 Pulse 20:08–20:26 (17 min, 28 act.) · work-13 Pulse 20:50–21:06 (16 min, 30 act.) · work-18 Pulse 21:18–21:52 (34 min, 63 act.) · 0 session close aujourd'hui</dd>
+<dt>Chiffres</dt><dd>Sessions résumées à ce jour : 48 résumés pour <span class="m" title="python3 : len({e['event']['details']['session_id'] for e in state.emitted.values()})">des sessions du 5 au 10 sept.</span> · <code>state.json</code> : emitted 48, pending 0, failures 10 (1 tentative chacune, lot du 9 sept. 06:45), failed 0</dd>
+</dl>
+</div>
+
+<div id="node-prompt" data-title="Prompt v6 (prompts/session_summary_v6.md)">
+<p><b>Rôle.</b> Le gabarit versionné qui reçoit l'entrée v3 (session, observations ordonnées <code>oN</code>, chemins autorisés) et demande un JSON <code>reprise{doing, stopped_at, open[]}</code> + <code>structured{intents, central_files, blockers, confidence, project}</code>. v6 = v5 sans les annexes <code>previous_summary</code>/<code>agent_request</code> (PR #83). v7 (PR #88, 11 sept.) retire la phrase et l'exemple <code>"open": []</code> qui vidaient <code>open</code> ; il est enregistré mais pas activé.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>intelligence/pulse_intelligence/prompts/</code> : <span class="m" title="ls intelligence/pulse_intelligence/prompts/">10 fichiers, 734 lignes</span> (v1…v7, v6-sans-phrase, v6-sans-exemple, v6-sans-phrase-ni-exemple) · défaut <code>config.py:29 prompt_version = "v6"</code>, non surchargé par <code>~/.pulse_intelligence/config.toml</code> · <code>provider_summarizer.py:prompt_path_for</code> · v1–v4 refusés sur entrée v3</dd>
+<dt>Résumés stockés par prompt_version</dt><dd><span class="m" title="sqlite3 ~/.pulse_v2/trace.db &quot;SELECT json_extract(details_json,'$.prompt_version'), COUNT(*) FROM activities WHERE type='session_summary' GROUP BY 1&quot;">v1 : 7 · v2 : 22 · v3 : 3 · v4 : 0 · v5 : 11 · v6 : 5 · v7 : 0</span> — tous avec <code>model_id = mlx-community/Qwen3.8-27B-4bit</code></dd>
+<dt>Rejeu du 11 sept.</dt><dd>4 prompts × 4 sessions, 16/16 valides : v6 0/4 <code>open</code> rempli, v6-sans-phrase 1/4, v6-sans-exemple 3/4, v6-sans-phrase-ni-exemple 4/4 (données <code>corpus/docs/audits/2026-09-11-rejeu-open/</code>, verdict <code>docs/dogfooding.md</code> jour 7)</dd>
+</dl>
+</div>
+
+<div id="node-qwen" data-title="Qwen3.8-27B-4bit via mlx-lm (llm/mlx.py)">
+<p><b>Rôle.</b> <code>MLXProvider</code> charge le modèle une fois par processus (<code>mlx_lm.load</code>), refuse toute entrée au-delà de 30 000 tokens avant le prefill (OOM Metal mesuré à 60k), génère sans <em>thinking</em> avec <code>max_tokens</code> 2 048, en argmax si la température est absente. Le modèle est une brique remplaçable par une ligne de config.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>intelligence/pulse_intelligence/llm/mlx.py:MLXProvider</code> · <code>DEFAULT_MAX_INPUT_TOKENS = 30000</code> · config réelle : <code>llm_provider = "mlx"</code>, <code>model_id = "mlx-community/Qwen3.8-27B-4bit"</code>, <code>llm_max_tokens = 2048</code> · runtime <span class="m" title="intelligence/.venv/bin/python -c 'import importlib.metadata as m; print(m.version(&quot;mlx&quot;), m.version(&quot;mlx-lm&quot;))'">mlx 0.32.2, mlx-lm 0.31.3</span>, transformers 5.16.1, Python 3.14.7</dd>
+<dt>Sur disque</dt><dd><span class="m" title="du -sh ~/.cache/huggingface/hub/models--mlx-community--Qwen3.8-27B-4bit">15 Go</span> dans le cache Hugging Face · un second modèle non configuré, <code>Qwen3.5-9B-4bit</code>, occupe 5,6 Go (plan B de la décision du 6 sept.) · cache total 21 Go</dd>
+<dt>Temps de génération (<code>generation_ms</code> des résumés)</dt><dd>Mac éveillé : v1 19–41 s, v5 23–43 s (11 résumés en 6 min 44 le 9 sept.) · sous launchd avec veille : v6 <span class="m" title="SELECT MIN/AVG/MAX(json_extract(details_json,'$.generation_ms')) … WHERE prompt_version='v6'">1 990 à 10 235 s</span> (moyenne 7 554 s), v3 jusqu'à 11 380 s. Les entrées v6 comptent en moyenne 225 événements sources contre 137 pour v5.</dd>
+<dt>RAM pendant un lot</dt><dd><span class="tag warn">non mesurée maintenant</span> (aucune mesure dans <code>run.log</code> : <span class="m" title="grep -ciE 'mémoire|memory|RSS|peak|GB' ~/.pulse_intelligence/logs/run.log">0 ligne</span> ; pas de lancement du modèle pour cet inventaire). Valeurs consignées : décision du 6 sept. « 14 Go de poids, pic 19,77 Go, OOM à 60k tokens » ; <code>docs/dogfooding.md</code> jour 5 « mémoire libre de 87 % à 23 %, processus Intelligence 5,2 Go de RSS » (le reste étant en mémoire partagée Metal). Plancher physique : les 15 Go de poids sur disque, sur 36 Go de RAM totale.</dd>
+</dl>
+</div>
+
+<div id="node-valid" data-title="Validateur (session_summary.py:parse_model_output)">
+<p><b>Rôle.</b> Retire une éventuelle fence <code>```json</code>, exige un objet JSON, borne <code>doing</code> et <code>stopped_at</code> à 300 caractères, valide chaque item de <code>open</code> (≤ 5 ; genre <code>unresolved_observed</code> / <code>recorded_statement</code> / <code>command_failure</code> avec preuves <code>oN</code> existantes), <code>confidence ∈ {high, medium, low}</code>, <code>intents ≤ 3</code>, <code>central_files ≤ 5</code> dont chacun doit figurer dans <code>allowed_paths</code> de l'entrée, <code>blockers ≤ 3</code>. Tout écart → <code>InvalidModelOutput</code>, rien n'est écrit, jamais réparé.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>intelligence/pulse_intelligence/session_summary.py:parse_model_output</code>, <code>_open_items</code>, <code>_resumption_items</code> · <code>MAX_STRING_LENGTH = 300</code>, <code>MAX_OPEN_ITEMS = 5</code> · tests <code>test_open_v3_contract.py</code> (24), <code>test_resumption.py</code> (9), <code>test_expectations.py</code> (8) · Core revalide à l'ingestion (<code>ingest.py</code>, références et rédaction)</dd>
+<dt>Chiffres</dt><dd>Sorties acceptées en production : 48/48 stockées · évaluations : 14/14 valides (v5, décision du 8 sept.), 16/16 valides au rejeu du 11 · échecs enregistrés : <span class="m" title="python3 -c 'import json;print(json.load(open(&quot;/Users/Yugz/.pulse_intelligence/state.json&quot;))[&quot;failures&quot;])'">10 event_id avec 1 tentative</span>, tous du lot du 9 sept. 06:45 (10 <code>failed</code> en 2 s : entrée refusée, pas le modèle)</dd>
+<dt>Ce qu'il ne vérifie pas</dt><dd>La véracité : la décision du 8 sept. note que « le validateur ne sait pas si une citation signifie vraiment un reste » ; l'adjudication du 10 compte sous v5 2 justes, 8 partielles, 4 fausses sur 14.</dd>
+</dl>
+</div>
+
+<div id="node-store" data-title="Stockage des résumés (session_summary → Core)">
+<p><b>Rôle.</b> Construit un événement canonique <code>session_summary</code> (<code>occurred_at</code> = fin de session, <code>details</code> avec session, hash d'entrée, prompt, modèle, durée, reprise, structured, sources d'observation) et le POSTe sur <code>/activities</code>. Idempotent par <code>event_id = uuid5("pulse-session-summary:{session}:{prompt}:{model}")</code> ; un 409 relit l'événement existant. L'état local <code>state.json</code> gèle le payload avant l'envoi (pending → emitted).</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>session_summary.py:build_event</code>, <code>_emit</code>, <code>_recover_after_conflict</code> · <code>core_client.py:post_activity</code> · <code>state.py:JobState</code> (0600, verrou) · décision 2026-09-06 rédaction des champs libres (la copie de référence est l'événement accepté par Core)</dd>
+<dt>État</dt><dd><code>~/.pulse_intelligence/state.json</code> <span class="m" title="ls -la ~/.pulse_intelligence">127 951 o</span>, emitted 48 = 48 lignes <code>session_summary</code> dans <code>trace.db</code> (cohérent) · dernier stocké le 11 sept. 08:03 UTC (d283f6dd)</dd>
+<dt>Chiffres</dt><dd>48 résumés, 74 Ko de <code>details</code> (1 285 o chacun) · par prompt v1 7, v2 22, v3 3, v5 11, v6 5 · générés du 5 sept. 23:42 au 11 sept. 08:03 UTC · plusieurs résumés coexistent pour une même session (un par prompt) sans règle de préséance (intelligence/TODOS P2)</dd>
+</dl>
+</div>
+
+<div id="node-show" data-title="pulse-intel show">
+<p><b>Rôle.</b> <code>show latest</code> lit <code>GET /context → last_session_summary</code> (Core fait foi) ; <code>show &lt;id ou préfixe&gt;</code> résout dans <code>state.emitted</code> puis récupère l'événement par <code>GET /activities/&lt;event_id&gt;</code>. <code>--all</code> liste les versions coexistantes, <code>--md</code> les trois lignes de reprise, <code>--json</code> l'événement complet. C'est aujourd'hui la seule surface lisible des résumés.</p>
+<dl class="kv">
+<dt>Code</dt><dd><code>intelligence/pulse_intelligence/cli.py:run_show</code>, <code>_resolve_target</code>, <code>_read_show_entries</code>, <code>_reprise_markdown</code> · sous-commandes de <code>pulse-intel</code> : list, summarize, run, show, eval (pas de <code>status</code>)</dd>
+<dt>Sortie mesurée</dt><dd><pre class="txt">$ pulse-intel show d283f6dd77528730
+session         d283f6dd77528730  work-2  2026-09-10 22:50–23:31
+résumé          v6  mlx-community/Qwen3.8-27B-4bit  généré 2026-09-11 06:39
+confidence      medium
+doing           L'activité observée porte sur la modification de fichiers de l'audit d'adjudication du 2026-09-09, incluant la fiche 14 et le backlog D.
+stopped_at      La session s'est terminée après la modification de la fiche 14-eef4956b36dd37ce.md, sans commit ni test observé.
+open            Aucun point ouvert étayé par les faits de la session.
+  ↳ reçu        (aucune annexe previous_summary)
+central_files   docs/audits/…/adjudications-a-completer.json, …/fiches/14-eef4956b36dd37ce.md, …/D-backlog.md, …/FICHES.md, …/fiches/03-6a4166356dbab6ec.md</pre></dd>
+</dl>
+</div>
+</div>
+</section>
+<section id="cout">
+<h2>2 · Ce que ça coûte</h2>
+<div class="grid" data-comp="core intelligence corpus">
+<div class="tile"><div class="v"><span class="m" title="du -sh ~/.pulse_v2">249 Mo</span></div><div class="l">~/.pulse_v2 (dont archive de transcripts 224 Mo, trace.db 16 Mo)</div></div>
+<div class="tile"><div class="v"><span class="m" title="du -sh ~/.cache/huggingface/hub/models--mlx-community--Qwen3.8-27B-4bit">15 Go</span></div><div class="l">modèle Qwen3.8-27B-4bit sur disque (+5,6 Go de Qwen3.5-9B non configuré)</div></div>
+<div class="tile"><div class="v"><span class="m" title="ps -o rss -p 55094,55086,55090,55075 (somme)">143 Mo</span></div><div class="l">RSS des 4 services résidents au repos</div></div>
+<div class="tile"><div class="v"><span class="m" title="top -l 3 -s 4 -pid … ; ps -o time">≈ 0 %</span></div><div class="l">CPU au repos : 39,8 s cumulées sur 5 h 17 pour les 4 processus</div></div>
+<div class="tile"><div class="v"><span class="m" title="16 330 752 o / 70 jours depuis le premier recorded_at (2026-07-03)">233 Ko/j</span></div><div class="l">croissance moyenne de trace.db depuis le premier enregistrement local</div></div>
+</div>
+
+<details open data-comp="core intelligence corpus observateur docs">
+<summary>Espace disque, poste par poste</summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>poste</th><th class="n">taille</th><th>détail</th><th>commande</th></tr>
+<tr><td>trace.db</td><td class="n">16,3 Mo</td><td>activities 13,30 Mo · trois index 3,02 Mo · 0 page libre · WAL 0 o</td><td><code>ls -la ~/.pulse_v2/trace.db ; sqlite3 … dbstat</code></td></tr>
+<tr><td>trace.backup-20260905-201049.db</td><td class="n">5,9 Mo</td><td>copie d'avant la fusion des traces (5 sept.)</td><td><code>du -sh</code></td></tr>
+<tr><td>outbox.sqlite3</td><td class="n">3,9 Mo</td><td>0 événement ; 955 pages libres sur 963 (jamais compacté)</td><td><code>ls -la ~/.pulse_core ; PRAGMA freelist_count</code></td></tr>
+<tr><td>journaux Core <code>~/.pulse_v2/logs</code></td><td class="n">2,6 Mo</td><td>daemon.log 1 082 825 · outbox_worker.log 499 995 · app_observer.log 27 120 · agent_producers.log 14 909 · session_end_hook.log 6 034 · file_watcher.log 1 379 (octets) · aucune rotation</td><td><code>ls -la ~/.pulse_v2/logs</code></td></tr>
+<tr><td>journal Intelligence</td><td class="n">10,6 Ko</td><td><code>~/.pulse_intelligence/logs/run.log</code> · state.json 128 Ko · total 152 Ko</td><td><code>ls -la ~/.pulse_intelligence/logs ; du -sh ~/.pulse_intelligence</code></td></tr>
+<tr><td>archive des transcripts</td><td class="n">224 Mo</td><td>217 .zst : codex 167 Mo, claude-code 57 Mo · + copie de sauvegarde 392 Ko</td><td><code>du -sh ~/.pulse_v2/transcript_archive/*</code></td></tr>
+<tr><td>corpus/ (hors dépôt)</td><td class="n">2,4 Mo</td><td>233 fichiers : 195 json, 23 md, 5 toml, 5 log, 3 sh · 6 audits + 7 audits retirés · non sauvegardé ailleurs (non tranché)</td><td><code>du -sh corpus ; find corpus -type f | wc -l</code></td></tr>
+<tr><td>modèle Qwen3.8-27B-4bit</td><td class="n">15 Go</td><td>cache Hugging Face · Qwen3.5-9B-4bit 5,6 Go en plus (non utilisé par la config) · hub 21 Go</td><td><code>du -sh ~/.cache/huggingface/hub/models--*</code></td></tr>
+<tr><td>core/.venv</td><td class="n">16 Mo</td><td>Python 3.14.7, Flask 3.1.3, watchdog 6.0.0, pytest 9.1.1</td><td><code>du -sh core/.venv</code></td></tr>
+<tr><td>intelligence/.venv</td><td class="n">346 Mo</td><td>mlx 0.32.2, mlx-lm 0.31.3, transformers 5.16.1, numpy 2.5.2</td><td><code>du -sh intelligence/.venv</code></td></tr>
+<tr><td>binaire observateur</td><td class="n">268 Ko</td><td><code>~/.pulse_v2/bin/PulseApplicationObserver</code> (273 416 o) · le répertoire de build Swift <code>core/macos_observer/.build</code> pèse 709 Mo</td><td><code>du -sh ~/.pulse_v2/bin/PulseApplicationObserver core/macos_observer/.build</code></td></tr>
+<tr><td>dépôt git</td><td class="n">4,5 Mo</td><td><code>.git</code> · index GitNexus <code>.gitnexus</code> 124 Mo (hors dépôt)</td><td><code>du -sh .git .gitnexus</code></td></tr>
+<tr><th>total données Pulse (hors modèle, venvs, builds)</th><th class="n">≈ 256 Mo</th><th>dont 224 Mo de transcripts compressés ; la trace factuelle proprement dite pèse 16 Mo</th><th></th></tr>
+</table></div>
+</div>
+</details>
+
+<details open data-comp="core observateur">
+<summary>RAM et CPU des processus vivants, maintenant</summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>service</th><th class="n">pid</th><th class="n">RSS</th><th class="n">CPU cumulé</th><th class="n">élapsed</th><th class="n">top ×3 (4 s)</th><th>démarré</th></tr>
+<tr><td>com.pulse.daemon</td><td class="n">55094</td><td class="n">49,5 Mo → 67,8 Mo</td><td class="n">2,61 s → 12,27 s</td><td class="n">5 h 17</td><td class="n">0,0 %</td><td>11 sept. 21:29:17</td></tr>
+<tr><td>com.pulse.outbox-worker</td><td class="n">55086</td><td class="n">34,7 Mo</td><td class="n">23,16 s</td><td class="n">5 h 17</td><td class="n">0,2–0,4 %</td><td>11 sept. 21:29:17</td></tr>
+<tr><td>com.pulse.file-watcher</td><td class="n">55090</td><td class="n">45,2 Mo</td><td class="n">4,15 s</td><td class="n">5 h 17</td><td class="n">0,0 %</td><td>11 sept. 21:29:17</td></tr>
+<tr><td>com.pulse.app-observer</td><td class="n">55075</td><td class="n">13,3 Mo</td><td class="n">0,25 s</td><td class="n">5 h 17</td><td class="n">0,0 %</td><td>11 sept. 21:28:59</td></tr>
+<tr><th>total</th><th></th><th class="n">143 Mo (161 après /days)</th><th class="n">39,8 s</th><th></th><th></th><th></th></tr>
+</table></div>
+<p class="small">Commandes : <code>ps -o pid,rss,time,etime,lstart -p 55094,55086,55090,55075</code> ; <code>top -l 3 -s 4 -stats pid,cpu,mem,command -pid …</code>. Les deux valeurs du daemon encadrent l'appel <code>GET /days</code> fait pour cet inventaire (8,5 s de mur, ~9,5 s de CPU, +18 Mo de RSS). Le worker est le plus actif au repos parce qu'il se réveille chaque seconde. Charge machine au moment de la mesure : load 2,12 (autres processus). Les jobs <code>agent-producers</code> et <code>intelligence-run</code> ne sont pas résidents.</p>
+<p><b>RAM du modèle pendant un lot :</b> <span class="tag warn">non mesurée</span> dans cet inventaire (mesurer exigerait de charger le modèle, ce qui n'a pas été fait) et absente de <code>run.log</code>. Valeurs consignées ailleurs : décision du 2026-09-06 « 14 Go de poids, pic 19,77 Go, OOM à 60k tokens » ; dogfooding jour 5 « processus Intelligence 5,2 Go de RSS, mémoire libre de 87 % à 23 % ». Sur cette machine (36 Go), un lot immobilise donc plus de la moitié de la RAM pendant sa durée.</p>
+</div>
+</details>
+
+<details open data-comp="core">
+<summary>Croissance de la base : par jour sur 30 jours, projection à 6 mois</summary>
+<div class="body">
+<p class="small">Requête : <code>SELECT substr(recorded_at,1,10), COUNT(*), SUM(length(details_json)+length(summary)+length(event_id)+length(session_id)+64) FROM activities WHERE recorded_at &gt;= date('now','-30 days') GROUP BY 1</code>. La colonne « octets » est la charge utile approximative ; sur disque chaque événement coûte 744 o en moyenne, index compris (16 330 752 / 21 935).</p>
+<div class="wrap"><table>
+<tr><th>jour (recorded_at)</th><th class="n">événements</th><th class="n">octets utiles</th><th>note</th></tr>
+<tr><td>2026-08-25</td><td class="n">471</td><td class="n">440 453</td><td></td></tr>
+<tr><td>2026-08-29</td><td class="n">99</td><td class="n">56 988</td><td></td></tr>
+<tr><td>2026-08-30</td><td class="n">277</td><td class="n">223 719</td><td></td></tr>
+<tr><td>2026-08-31</td><td class="n">584</td><td class="n">209 199</td><td></td></tr>
+<tr><td>2026-09-01</td><td class="n">6</td><td class="n">992</td><td></td></tr>
+<tr><td>2026-09-02</td><td class="n">1 890</td><td class="n">613 206</td><td>restructuration du dépôt</td></tr>
+<tr><td>2026-09-03</td><td class="n">979</td><td class="n">337 633</td><td></td></tr>
+<tr><td>2026-09-04</td><td class="n">199</td><td class="n">41 525</td><td></td></tr>
+<tr><td>2026-09-05</td><td class="n">7 668</td><td class="n">3 377 050</td><td>fusion de la trace de l'ancienne machine + 6 957 file_changed (purge DevNote)</td></tr>
+<tr><td>2026-09-06</td><td class="n">1 434</td><td class="n">490 414</td><td>97 commits ce jour-là</td></tr>
+<tr><td>2026-09-07</td><td class="n">424</td><td class="n">149 467</td><td></td></tr>
+<tr><td>2026-09-08</td><td class="n">1 475</td><td class="n">522 261</td><td></td></tr>
+<tr><td>2026-09-09</td><td class="n">408</td><td class="n">141 072</td><td></td></tr>
+<tr><td>2026-09-10</td><td class="n">169</td><td class="n">51 182</td><td></td></tr>
+<tr><td>2026-09-11</td><td class="n">673</td><td class="n">186 525</td><td></td></tr>
+<tr><td>2026-09-12 (02:41)</td><td class="n">9</td><td class="n">1 417</td><td></td></tr>
+<tr><th>16 jours actifs sur 30</th><th class="n">16 765</th><th class="n">6 843 103</th><th>aucun événement les 14 autres jours (machine éteinte ou watchers absents avant le 5 sept.)</th></tr>
+</table></div>
+<div class="wrap"><table>
+<tr><th>hypothèse de rythme</th><th class="n">évts/jour</th><th class="n">sur disque/jour</th><th class="n">+ 6 mois (182 j)</th><th class="n">base à 6 mois</th></tr>
+<tr><td>30 derniers jours, fusion du 5 sept. comprise</td><td class="n">559</td><td class="n">416 Ko</td><td class="n">+ 76 Mo</td><td class="n">≈ 92 Mo</td></tr>
+<tr><td>30 derniers jours, sans le 5 sept.</td><td class="n">314</td><td class="n">233 Ko</td><td class="n">+ 42 Mo</td><td class="n">≈ 59 Mo</td></tr>
+<tr><td>6 derniers jours pleins (06 → 11)</td><td class="n">764</td><td class="n">568 Ko</td><td class="n">+ 103 Mo</td><td class="n">≈ 120 Mo</td></tr>
+</table></div>
+<p class="small">Calcul : évts/jour × 744 o × 182. Le seuil de réexamen de la décision de rétention (500 Mo) n'est atteint dans aucune hypothèse avant plusieurs années. Les journaux Core, sans rotation, croissent d'environ 1,6 Mo par semaine (2,6 Mo depuis le 5 sept.), soit un rythme comparable à celui de la base.</p>
+</div>
+</details>
+
+<details open data-comp="intelligence launchd">
+<summary>Durée des lots Intelligence : calcul contre veille</summary>
+<div class="body">
+<p>Le même modèle, la même machine, deux régimes mesurés dans <code>run.log</code> et <code>generation_ms</code> :</p>
+<ul>
+<li><b>Mac éveillé</b> (passage manuel du 9 sept. 21:26) : 11 résumés v5 en 6 min 44 s, soit <span class="m" title="SELECT MIN/AVG/MAX(generation_ms) WHERE prompt_version='v5'">23 à 43 s par résumé, moyenne 34 s</span>.</li>
+<li><b>Sous launchd à 06:30, Mac en veille</b> : 3 résumés en 7 h 06 le 10 sept., 2 résumés en 3 h 24 le 11 sept. ; <code>generation_ms</code> de 1 990 à 10 235 s par résumé. Les événements <code>system_wake</code>/<code>system_sleep</code> de la base montrent des réveils brefs dans ces fenêtres (10 sept. 09:27 UTC : réveil puis rendormissement 5 s plus tard ; 11 sept. 10:02–10:03 UTC). Le lot avance par tranches de DarkWake.</li>
+</ul>
+<p class="small">Conséquence mesurable : la reprise du matin est disponible vers 10:00–14:00 au lieu de 06:35, et <code>generation_ms</code> ne mesure plus le modèle. Aucune piste n'est consignée dans le dépôt (trou G6, section 6).</p>
+</div>
+</details>
+</section>
+<section id="composants">
+<h2>3 · Inventaire des composants</h2>
+<p class="hint">Dépôt <code>github.com/Yugz29/Pulse</code>, HEAD <code>e4bfe95</code> (11 sept. 22:02), <span class="m" title="git rev-list --count HEAD">398 commits</span> depuis <span class="m" title="git log --reverse --format='%h %ci %s' | head -1">d7ecf33 du 3 juillet 2026</span>, <span class="m" title="git ls-files | wc -l">259 fichiers suivis</span> (core 98, intelligence 94, docs 56, tools 4), <span class="m" title="git log --since=2026-09-05 --format=%h | wc -l">171 commits depuis le 5 sept.</span> Lignes de code = <code>wc -l</code> brut, <code>.venv</code>, <code>__pycache__</code>, <code>.build</code> exclus ; tests comptés par <code>pytest --collect-only</code> (non exécutés ici).</p>
+
+<details open data-comp="core">
+<summary>Core · 0.6.0.0 <span class="tag comp">core/</span></summary>
+<div class="body">
+<dl class="kv">
+<dt>Version</dt><dd><code>core/VERSION</code> = 0.6.0.0 (bump <code>b91f71b</code> du 9 sept., Context API schéma 3) · CHANGELOG 414 lignes, dernière entrée [0.6.0.0] 2026-09-09</dd>
+<dt>Lignes</dt><dd>daemon_v2 <span class="m" title="find core/daemon_v2 -name '*.py' -not -path '*/__pycache__/*' | xargs wc -l | tail -1">9 054</span> Python (22 modules + analysis/{projects,terminal,timeline} + renderers/{html,markdown}) · scripts 597 Python + 1 055 Bash + 58 Zsh · tests_v2 <span class="m" title="find core/tests_v2 -name '*.py' | xargs wc -l | tail -1">12 609</span></dd>
+<dt>Tests</dt><dd><span class="m" title="cd core && .venv/bin/python -m pytest tests_v2 --collect-only -q | tail -1">604 collectés</span> dans 31 fichiers · CI <code>.github/workflows/core.yml</code></dd>
+<dt>Dernier commit</dt><dd><code>287e3d7</code> 11 sept. 21:28 « fix(core): make status signale STALE un service plus vieux que le code » (daemon_v2, scripts, tests_v2)</dd>
+<dt>Expose</dt><dd>HTTP sur 127.0.0.1:8765 : <code>GET /</code> (journal du jour, HTML) · <code>/status</code> · <code>/context</code> · <code>/context/sessions</code> · <code>POST /activities</code> · <code>GET /activities/&lt;event_id&gt;</code> · <code>/trace/today[.json|.md]</code> · <code>/trace/days</code> · <code>/days</code> · <code>/day/&lt;date&gt;</code> · <code>/trace/&lt;date&gt;[.md]</code> · Makefile : dev, dev-reload, mode-dev, mode-service, test, status, logs, reset, help · types acceptés : agent_session, app_activated, file_changed, terminal_finished, git_commit, session_summary, screen_locked, screen_unlocked, system_sleep, system_wake</dd>
+<dt>Contrats consommés</dt><dd><code>/context</code> schéma 3 · <code>reconstruction_version</code> 3 · <code>OBSERVATION_VERSION</code> 1 · export journal v2 · identité de session v3 · schéma <code>trace.db</code> (user_version 0)</dd>
+</dl>
+</div>
+</details>
+
+<details open data-comp="intelligence">
+<summary>Intelligence · 0.1.0 <span class="tag comp">intelligence/</span></summary>
+<div class="body">
+<dl class="kv">
+<dt>Version</dt><dd><code>pyproject.toml</code> version 0.1.0 · <code>PRODUCER_NAME = pulse-intelligence</code> · <code>KNOWN_RECONSTRUCTION_VERSION = 3</code> · entrée v3</dd>
+<dt>Lignes</dt><dd>pulse_intelligence <span class="m" title="find intelligence/pulse_intelligence -name '*.py' | xargs wc -l | tail -1">3 752</span> Python (cli, config, core_client, evaluation, provider_summarizer, resumption, selection, session_input, session_summary, state, summarizer, llm/{fake, mlx, openai_compatible, provider}) · prompts 10 fichiers, 734 lignes · tests <span class="m" title="find intelligence/tests -name '*.py' | xargs wc -l | tail -1">5 695</span> · scripts 141 (3 .sh) · eval/ 35 fichiers (corpus 14, observed 14, expected 4, stress 1)</dd>
+<dt>Tests</dt><dd><span class="m" title="cd intelligence && .venv/bin/pulse-intel … ; .venv/bin/python -m pytest tests --collect-only -q | tail -1">269 collectés, 8 désélectionnés (marqueur slow = modèle MLX)</span> dans 24 fichiers · CI <code>.github/workflows/intelligence.yml</code></dd>
+<dt>Dernier commit</dt><dd><code>db51236</code> 11 sept. 21:28 « feat(intelligence): prompt v7, la variante complète du rejeu open » · eval/ : <code>3380991</code> 9 sept. (corpus de 14 sessions figé depuis le schéma 3) · scripts : <code>6470373</code> 6 sept.</dd>
+<dt>Expose</dt><dd>CLI <code>pulse-intel</code> : list, summarize, run [--once], show, eval · codes de sortie 0 ok · 1 usage/config · 2 Core injoignable · 3 passage partiel · 4 given_up · 5 verrou tenu · 6 vue héritée (schéma &lt; 3) · producteur d'événements <code>session_summary</code> vers Core · trois providers (fake, openai_compatible, mlx), <code>llm_provider</code> vide par défaut = refus de démarrer</dd>
+<dt>Config de production</dt><dd><code>~/.pulse_intelligence/config.toml</code> (9 sept. 21:24) : core_url 127.0.0.1:8765, llm_provider mlx, model_id mlx-community/Qwen3.8-27B-4bit, llm_max_tokens 2048 ; <code>prompt_version</code> absent → v6 du code</dd>
+</dl>
+</div>
+</details>
+
+<details open data-comp="observateur">
+<summary>Observateur Swift · producteur v1 <span class="tag comp">core/macos_observer/</span></summary>
+<div class="body">
+<dl class="kv">
+<dt>Version</dt><dd><code>producerVersion = "1"</code>, schema_version 1 · Package swift-tools 6.0, macOS 13+ · compilé avec Swift 6.3.3</dd>
+<dt>Lignes</dt><dd><span class="m" title="find core/macos_observer -name '*.swift' -not -path '*/.build/*' | xargs wc -l">959 Swift</span> : sources 578, tests 356, Package.swift 25</dd>
+<dt>Tests</dt><dd><span class="m" title="grep -c '^@Test' core/macos_observer/Tests/ApplicationObserverCoreTests/ApplicationObserverCoreTests.swift">17 fonctions @Test</span> (Swift Testing, non lancées ici ; CHANGELOG 0.5.6 parle de 15)</dd>
+<dt>Dernier commit</dt><dd><code>47b97ad</code> 11 sept. 21:28 « fix(observer): horodater chaque ligne du journal »</dd>
+<dt>Expose</dt><dd>événements app_activated, screen_locked, screen_unlocked, system_sleep, system_wake via <code>producer_outbox enqueue-json</code> · journal stderr horodaté · binaire installé 273 416 o</dd>
+</dl>
+</div>
+</details>
+
+<details open data-comp="scripts">
+<summary>Scripts · 22 fichiers <span class="tag comp">core/scripts · intelligence/scripts · tools/</span></summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>script</th><th>rôle (en-tête)</th></tr>
+<tr><td>core/scripts/dev.sh</td><td>lance daemon, worker, file_watcher et observateur au premier plan</td></tr>
+<tr><td>core/scripts/dev_reload.py</td><td>superviseur de dev avec rechargement par polling</td></tr>
+<tr><td>core/scripts/status.sh</td><td><code>make status</code> : /status + /context, 5 services launchd avec détection STALE, compteurs outbox</td></tr>
+<tr><td>core/scripts/install_daemon_launchd.sh</td><td>génère et charge com.pulse.daemon + com.pulse.outbox-worker (--uninstall)</td></tr>
+<tr><td>core/scripts/install_observers_launchd.sh</td><td>génère et charge com.pulse.file-watcher + com.pulse.app-observer</td></tr>
+<tr><td>core/scripts/install_agent_producers_launchd.sh</td><td>génère et charge com.pulse.agent-producers (horaire)</td></tr>
+<tr><td>core/scripts/install_git_hook.sh &lt;repo&gt;</td><td>écrit le wrapper post-commit marqué <code># pulse-git-hook: managed</code></td></tr>
+<tr><td>core/scripts/pulse_git_hook.sh</td><td>émet git_commit depuis HEAD</td></tr>
+<tr><td>core/scripts/pulse_terminal_watcher.zsh</td><td>preexec/precmd → terminal_finished</td></tr>
+<tr><td>core/scripts/pulse_session_end_hook.sh</td><td>hook SessionEnd Claude Code : archive puis émission ciblée agent_session</td></tr>
+<tr><td>core/scripts/pulse_agent_producers.sh</td><td>passage horaire : archive zstd puis daemon_v2.agent_sessions ; exit 0/2</td></tr>
+<tr><td>core/scripts/archive_transcripts.py</td><td>copie zstd niveau 9 des .jsonl Claude Code / Codex + manifeste, lecture seule des sources</td></tr>
+<tr><td>core/scripts/audit_secrets.py</td><td>audit lecture seule : applique redact_command à chaque texte stocké, compte les écarts</td></tr>
+<tr><td>core/scripts/pulse_mode.sh {dev|service|status}</td><td>bascule launchd ↔ hot reload</td></tr>
+<tr><td>core/scripts/fix_permissions.sh</td><td>0700/0600 sur ~/.pulse_v2 et ~/.pulse_core</td></tr>
+<tr><td>core/scripts/reset-dev.sh</td><td>réinitialise la trace de dev</td></tr>
+<tr><td>intelligence/scripts/pulse_intel_run.sh</td><td>un <code>pulse-intel run --once</code> via le venv absolu, pour launchd</td></tr>
+<tr><td>intelligence/scripts/install_run_launchd.sh</td><td>génère com.pulse.intelligence-run (PULSE_INTEL_RUN_HOUR/MINUTE, défaut 6:30)</td></tr>
+<tr><td>intelligence/scripts/fix_permissions.sh</td><td>0700/0600 sur ~/.pulse_intelligence</td></tr>
+<tr><td>tools/benchmark_session_reconstruction.py (31 l.)</td><td>bench d'insertion à 0/1k/10k/50k lignes, base temporaire</td></tr>
+<tr><td>tools/normalize_legacy_trace.py (599 l.)</td><td>normalise une copie d'une ancienne base (chemins, casse)</td></tr>
+<tr><td>tools/merge_traces.py (128 l.)</td><td>fusion ancienne base normalisée + base active, INSERT OR IGNORE sur event_id</td></tr>
+<tr><td>tools/rename_archive_tree.sh (27 l.)</td><td>renomme l'arborescence d'archive pour la casse</td></tr>
+</table></div>
+<p class="small">tools/ : 785 lignes, dernier commit <code>8c282e2</code> 9 sept. · <code>cloc</code> absent de la machine, comptage <code>wc -l</code>.</p>
+</div>
+</details>
+
+<details open data-comp="launchd">
+<summary>Services launchd · six plists (la demande en comptait cinq : le sixième est le job Intelligence) <span class="tag comp">~/Library/LaunchAgents/</span></summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>label</th><th>programme</th><th>cadence</th><th>état maintenant</th><th>journal</th><th>généré par · date du plist</th></tr>
+<tr><td>com.pulse.daemon</td><td><code>core/.venv/bin/python -m daemon_v2.main</code></td><td>RunAtLoad + KeepAlive</td><td><span class="tag ok">running</span> pid 55094, runs 3</td><td>daemon.log</td><td>install_daemon_launchd.sh · 5 sept. 14:09</td></tr>
+<tr><td>com.pulse.outbox-worker</td><td><code>python -m daemon_v2.outbox_worker</code></td><td>RunAtLoad + KeepAlive</td><td><span class="tag ok">running</span> pid 55086, runs 3</td><td>outbox_worker.log</td><td>install_daemon_launchd.sh · 5 sept. 14:09</td></tr>
+<tr><td>com.pulse.file-watcher</td><td><code>python -m daemon_v2.file_watcher --config ~/.pulse_v2/watched_workspaces</code></td><td>RunAtLoad + KeepAlive</td><td><span class="tag ok">running</span> pid 55090, runs 2</td><td>file_watcher.log</td><td>install_observers_launchd.sh · 11 sept. 21:28</td></tr>
+<tr><td>com.pulse.app-observer</td><td><code>~/.pulse_v2/bin/PulseApplicationObserver</code></td><td>RunAtLoad + KeepAlive</td><td><span class="tag ok">running</span> pid 55075, runs 1</td><td>app_observer.log</td><td>install_observers_launchd.sh · 11 sept. 21:28</td></tr>
+<tr><td>com.pulse.agent-producers</td><td><code>core/scripts/pulse_agent_producers.sh</code></td><td>RunAtLoad + StartInterval 3 600 s</td><td><span class="tag ok">planifié</span> runs 54, dernier code 0</td><td>agent_producers.log</td><td>install_agent_producers_launchd.sh · 5 sept. 14:10</td></tr>
+<tr><td>com.pulse.intelligence-run</td><td><code>intelligence/scripts/pulse_intel_run.sh</code></td><td>StartCalendarInterval 06:30, RunAtLoad false</td><td><span class="tag warn">pas encore tourné le 12</span> runs 5, dernier code 0</td><td>~/.pulse_intelligence/logs/run.log</td><td>install_run_launchd.sh · 6 sept. 10:21</td></tr>
+</table></div>
+<p class="small"><code>launchctl list | grep pulse</code> ; <code>launchctl print gui/$(id -u)/com.pulse.&lt;label&gt;</code>. Tous en <code>ProcessType Background</code>. Le daemon a été démarré 67 s après le dernier commit Core : <code>make status</code> ne signale aucun STALE.</p>
+</div>
+</details>
+
+<details open data-comp="hooks">
+<summary>Hooks · trois points d'entrée vérifiés sur la machine <span class="tag comp">zsh · git · Claude Code</span></summary>
+<div class="body">
+<ul>
+<li><b>Terminal</b> : <code>~/.zshrc</code> ligne 1 source <code>core/scripts/pulse_terminal_watcher.zsh</code> (<span class="m" title="grep -n pulse ~/.zshrc">vérifié</span>). Ne capte que les Zsh interactives ; les commandes lancées par un agent (Bash de Claude Code) ou par une application n'y passent pas (D-12, D-18).</li>
+<li><b>Git post-commit</b> : installé dans <code>~/Projets/Pulse</code> et <code>~/Projets/Cortex</code> (5 sept.), <span class="tag warn">absent de ~/Projets/DevNote</span> alors que ce workspace est observé par le watcher (<span class="m" title="ls -la ~/Projets/{Pulse,DevNote,Cortex}/.git/hooks/post-commit">vérifié</span>). Aucun hook pre-push ni post-merge (C15).</li>
+<li><b>Claude Code SessionEnd</b> : <code>~/.claude/settings.json</code> → <code>core/scripts/pulse_session_end_hook.sh</code> (<span class="m" title="grep -n pulse ~/.claude/settings.json">vérifié</span>) ; dernier passage le 11 sept. 19:45, 1 émis. Pas de hook PostToolUse (C7). Codex : pas de hook, sessions reprises par le passage horaire uniquement.</li>
+</ul>
+</div>
+</details>
+
+<details open data-comp="corpus">
+<summary>Corpus · hors dépôt, non sauvegardé <span class="tag comp">corpus/</span></summary>
+<div class="body">
+<p>Ignoré par git (<code>.gitignore</code> ligne <code>corpus/</code>), 233 fichiers, 2,4 Mo : <code>corpus/docs/audits/</code> (2026-09-07-validation-mlx, 2026-09-07-validation-open-v3, 2026-09-08-eval-v3-d6, 2026-09-08-observations-ordonnees, 2026-09-08-reprise-fondee, 2026-09-11-rejeu-open avec v7-corpus et v7-superseded) et <code>corpus/docs/audits-retired/</code> (7 audits clos dont 2026-09-08-session-reconstruction et 2026-09-09-assouplissement-instructions). Contient les entrées de modèle, sorties, rejeux, taxonomies. Aucune copie ailleurs n'est référencée dans le dépôt ni dans les mémoires ; la sauvegarde est listée comme non tranchée depuis le 10 sept. Le corpus d'évaluation versionné, lui, est dans <code>intelligence/eval/</code> (14 sessions <code>observed</code>, 4 <code>expected</code>) et contient des chemins <code>/Users/Yugz/…</code> (C4).</p>
+</div>
+</details>
+
+<details open data-comp="docs">
+<summary>Documentation · 58 fichiers, 73 511 mots <span class="tag comp">docs/ · README · TODOS · CHANGELOG</span></summary>
+<div class="body">
+<dl class="kv">
+<dt>Volume</dt><dd><span class="m" title="find docs -type f | wc -l ; cat $(find docs -name '*.md') | wc -w">58 fichiers, 53 Markdown, 73 511 mots, 7 447 lignes</span> · VISION.md 306 lignes (dernier commit <code>d759560</code> 9 sept.) · dogfooding.md 826 lignes (jours 1, 2, 3, 5, 6, 7 ; pas de jour 4) · decisions/ 18 notes du 2026-08-30 au 2026-09-09 · specs/ 3 · sources/ 1 · audits/2026-09-09-adjudication-reprise/ 33 fichiers (18 fiches, SYNTHESE, D-backlog, VALIDATION, KPI, BENCHMARK, COLLECTE, ANNOTATION-PROPOSEE) en attente</dd>
+<dt>Hors docs/</dt><dd>README.md 38 lignes · core/README.md 769 · core/CHANGELOG.md 414 · core/TODOS.md 447 · intelligence/README.md 355 · intelligence/TODOS.md 89 · AGENTS.md (cadre de travail) importé par CLAUDE.md</dd>
+<dt>Dernier commit</dt><dd><code>e4bfe95</code> 11 sept. 22:02 « docs: clôture du 2026-09-11, PR #89 en attente, ordre du 12 »</dd>
+<dt>Branches et PR</dt><dd>7 branches locales (main, fix/intelligence-legacy-view-loud, fix/intelligence-superseded-commands, fix/observer-log-timestamps, fix/status-stale-services, ship/intelligence-prompt-v7, ship/intelligence-rejeu-open-v6) · <span class="m" title="gh pr list --state open">1 PR ouverte : #89</span> « fix(intelligence): état net des commandes, échec dépassé = superseded_observed », MERGEABLE, aucune revue · 2 tags (palier-2-project-context-stabilized, v0.3.0-restructure)</dd>
+</dl>
+</div>
+</details>
+</section>
+<section id="vision">
+<h2>4 · Vision vs réalité</h2>
+<p class="hint">Source : <code>docs/VISION.md</code> (canonique), confronté aux commits, tests et notes. Preuves par <code>git log --oneline -- &lt;chemin&gt;</code>, <code>grep -c "def test_"</code>, lecture des décisions.</p>
+
+<details open data-comp="docs core intelligence">
+<summary>Roadmap V3 : les trois pas, puis les étapes 4 et 5</summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>#</th><th>étape</th><th>statut</th><th>preuve</th></tr>
+<tr><td>1</td><td>Geler Core à 0.2</td><td><span class="tag ok">livrée, puis levée</span></td><td>Gel décidé le 02 sept. (<code>decisions/2026-09-02-cadrage-v3-et-restructuration.md</code>), levé le 09 (<code>2026-09-09-assouplissement-instructions.md</code>, commit <code>8c282e2</code>). <code>core/VERSION</code> : 0.2.0 → 0.6.0.0.</td></tr>
+<tr><td>2</td><td>Context API <code>GET /context</code> déterministe</td><td><span class="tag ok">livrée</span></td><td>Core 0.3.0 (<code>870e2c6</code>, PR #27, décision <code>2026-09-03-context-api.md</code>) ; schéma 3 par <code>2ed558b</code> (PR #80) et bump <code>b91f71b</code>. <code>context_snapshot.py:34 SCHEMA_VERSION = 3</code>. Tests : test_context_snapshot 34, test_routes 30, test_work_observations 13, test_session_reconstruction 46. Servi en production depuis le 11 sept. 21:29 (mesuré).</td></tr>
+<tr><td>3</td><td>Première boucle IA (résumé local, événement dérivé)</td><td><span class="tag ok">livrée techniquement</span> <span class="tag warn">qualité non validée</span></td><td>Commits <code>d84621e</code>…<code>229cb20</code> (squelette), <code>2eb70e6</code> (OpenAI-compatible), <code>1e893f6</code> (MLXProvider), <code>37a6165</code> (Core 0.4.0, type session_summary). 48 résumés en base, lots launchd les 07, 08, 09, 10, 11. Verdict qualité (<code>2026-09-08-reprise-fondee.md</code>) : « 14/14 acceptées … 2/4 critères humains satisfaits … non à la fiabilité quotidienne sans relecture ».</td></tr>
+<tr><td>4</td><td>Validation en dogfooding (5 jours, 4 reprises sur 5 justes et utiles)</td><td><span class="tag warn">partielle, verdict non rendu</span></td><td>Critère dans <code>specs/2026-09-03-session-summary.md</code> §12. Journal : jours 1, 2, 3, 5, 6, 7 ; jour 4 non jugé (« Core est tombé en timeout à 09:56 »). Adjudication des 18 fiches le 10 sept. (<code>49565c5</code>) : sous v5 2 justes, 8 partielles, 4 fausses sur 14 ; v6 partiel 4/4 « supprime les résumés faux par recopie ; ne rend aucun résumé juste ». <code>VALIDATION.md</code> : <code>adjudicated_items</code> reste null. Rejeu open le 11 : 4/4 avec v6-sans-phrase-ni-exemple ; v7 enregistré (<code>db51236</code>) mais <code>config.py:29</code> reste v6. Ordre du 12 : lot 06:30 → jour 8 → #89 → 9 points → fiches 15-18 → décision v7.</td></tr>
+<tr><td>5</td><td>Service résident Intelligence (port 8767, KeepAlive)</td><td><span class="tag bad">pas commencée</span></td><td>Conditionnée à l'étape 4 (spec §8, §12 ; <code>2026-09-05-llm-provider.md</code> §12 « port 8767 réservé, non utilisé »). Sur la machine : une tâche calendaire <code>run --once</code> (<code>b2fbfe3</code>), aucun <code>com.pulse.intelligence</code> KeepAlive ; README racine « service résident encore à construire ».</td></tr>
+</table></div>
+</div>
+</details>
+
+<details open data-comp="docs">
+<summary>« Plus tard » : six éléments, aucun commencé</summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>élément</th><th>statut</th><th>preuve</th></tr>
+<tr><td>Model Router</td><td><span class="tag bad">pas commencé</span></td><td><code>grep -rln -i "model_router\|embedding\|semantic_memory" core/daemon_v2 intelligence/pulse_intelligence</code> → 0 fichier ; un seul provider à la fois (<code>cli.py:175</code>).</td></tr>
+<tr><td>Mémoires sémantique, épisodique, long terme</td><td><span class="tag bad">pas commencé</span></td><td>Même grep → 0 ; spec session-summary §2 « Aucune mémoire sémantique, aucun embedding ».</td></tr>
+<tr><td>Proactivité</td><td><span class="tag bad">pas commencé</span></td><td>Spec §2 « Aucune proactivité, aucune notification » ; aucun module.</td></tr>
+<tr><td>Cortex, DevNote, Quest 3</td><td><span class="tag bad">hors périmètre</span></td><td>Décision du 02 sept. ; D-17 dépend d'un chantier DevNote externe.</td></tr>
+<tr><td>Sources supplémentaires (presse-papiers, titre de fenêtre, inactivité IOKit)</td><td><span class="tag bad">pas commencé</span></td><td><code>grep -rn -i "pasteboard\|AXUIElement\|IOKit\|windowTitle" core/macos_observer/Sources</code> → 0.</td></tr>
+<tr><td>Authentification des producteurs locaux</td><td><span class="tag bad">reportée</span></td><td><code>2026-09-03-hardening.md</code> : déclencheur = première action de la couche Agent ; <code>grep -rn -i "authoriz\|api_key\|token" core/daemon_v2/routes.py</code> → 0.</td></tr>
+</table></div>
+</div>
+</details>
+
+<details open data-comp="docs core intelligence">
+<summary>Les promesses de la Vision, une par une</summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>promesse</th><th>verdict</th><th>preuve</th><th>contre-exemple ou nuance</th></tr>
+<tr><td>Core ne dépend d'aucun modèle ; si toute l'IA s'arrête, Core continue</td><td><span class="tag ok">tenue</span></td><td><code>grep -rn -i "mlx\|openai\|llm" core/daemon_v2 core/requirements.txt</code> → rien d'exécutable ; test inverse <code>intelligence/tests/test_isolation.py::test_nothing_from_core_is_imported</code> ; du 06 au 11 Core servait le schéma 2 pendant qu'Intelligence tournait, collecte inchangée ; lot du 09 refusé, collecte active.</td><td>Core connaît le type <code>session_summary</code> (validation, rédaction) : contrat consommateur, pas dépendance. Jour 4 : Core en timeout à 09:56 pendant un lot, cause non consignée.</td></tr>
+<tr><td>Déterministe avant LLM (<code>/context</code> sans modèle, reconstruction déterministe)</td><td><span class="tag ok">tenue</span></td><td>Spec context-api §4 « octet pour octet » ; test <code>test_context_snapshot.py:199 test_two_identical_calls_only_differ_by_generated_at</code> ; décision du 08 sept. : 169 appels, 169 résultats identiques ; fuseau explicite depuis <code>43e84ee</code>.</td><td>Le tri <code>(occurred_at, id SQLite)</code> dépend des ids lors d'un import ; limite consignée.</td></tr>
+<tr><td>« Ne ment pas » (reprise fondée, anciens résumés non admissibles, validateur)</td><td><span class="tag warn">partiellement</span></td><td>Décision <code>2026-09-08-reprise-fondee.md</code> ; <code>session_input.py</code> <code>evidence_eligible: False</code> pour les annexes ; validateur des preuves (PR #77) ; tests test_open_v3_contract 24, test_resumption 9 ; Core revalide les références.</td><td>Adjudication : v5 4 fausses sur 14 ; T7 « détails inventés » ; T4 « acteur inversé » ; jour 5 : 6/11 recopient <code>previous_summary</code> (réglé par retrait de l'annexe en v6) ; <code>intelligence/TODOS.md</code> : « on émet sciemment des interprétations partiellement fausses que rien ne pourra déclasser ». <code>open</code> vide des fiches 15-18 forcé par l'entrée schéma 2.</td></tr>
+<tr><td>Pas d'interface avant stabilisation du contexte</td><td><span class="tag ok">tenue</span></td><td>Seule UI : le HTML local de Core (<code>routes.py</code> : <code>/</code>, <code>/days</code>, <code>/day/&lt;date&gt;</code>) ; Intelligence en CLI ; Lab SwiftUI archivé (tag <code>archive/lab-2026-09</code>).</td><td>Conséquence : les résumés n'ont aucune surface hors CLI (section 5).</td></tr>
+<tr><td>Local (boucle 127.0.0.1, provider distant optionnel)</td><td><span class="tag ok">tenue</span></td><td><code>runtime_config.py:11 DEFAULT_CORE_HOST = "127.0.0.1"</code> ; décision du 03 sept. ; production <code>llm_provider = "mlx"</code> ; <code>llm/openai_compatible.py</code> « n'est pas le provider de production ».</td><td>Le corpus gelé a été envoyé une fois à une référence distante (<code>claude-sonnet-5</code>, décision du 06 sept.), borné au corpus d'évaluation.</td></tr>
+<tr><td>Faible consommation</td><td><span class="tag warn">Core oui, Intelligence non</span></td><td>Mesuré maintenant : 143 Mo de RSS et ≈ 0 % CPU pour les 4 services ; base 233 Ko/jour.</td><td>Un lot Intelligence : 15 Go de poids, pic consigné 19,77 Go sur 36 Go ; durée 3 à 7 h sous launchd à cause de la veille. Aucune mesure CPU/batterie consignée dans le dépôt (<code>grep -n -i "cpu\|batter" core/README.md</code> → 0).</td></tr>
+<tr><td>Aucune décision irréversible prise par un modèle</td><td><span class="tag warn">partiellement</span></td><td>Pas de couche Agent ; la seule sortie de modèle est un <code>session_summary</code> validé, rédigé, jamais réparé (spec llm-provider §3).</td><td>L'événement entre dans <code>trace.db</code> append-only (triggers <code>trace_store.py:48-57</code>) : une interprétation fausse est irrévocable (intelligence/TODOS P2, filiation <code>supersedes</code> non livrée).</td></tr>
+<tr><td>Transcripts jamais en brut</td><td><span class="tag ok">tenue</span></td><td><code>agent_sessions.py:1-3</code> ; archive zstd séparée ; tests test_agent_sessions 22, test_archive_transcripts 10 ; frontière reconfirmée le 11 sept. (D-19).</td><td>Le premier prompt (≤ 280 car., rédigé) est stocké ; <code>VALIDATION.md</code> : les transcripts complets n'ont pas été inspectés.</td></tr>
+<tr><td>Brut conservé indéfiniment</td><td><span class="tag ok">tenue</span></td><td>Décision <code>2026-08-30-retention-trace-db.md</code> ; triggers append-only ; test <code>test_trace_store.py:31 test_activities_are_append_only</code> ; sentinelle de seuils (500 Mo, &gt; 1 s, audit &gt; 60 s, archive &gt; 2 Go).</td><td>Migration du 05 sept. = base neuve réécrite hors place, 168 empreintes non reproductibles laissées ; backfill 10A a levé puis recréé les triggers (ajout de colonne, pas de purge).</td></tr>
+</table></div>
+<p class="small">Bilan : 5 promesses tenues, 1 tenue avec option distante bornée, 3 partielles (factuel, faible consommation, irréversibilité). Roadmap : pas 1-3 livrés, étape 4 en cours sans verdict, étape 5 et les six « plus tard » non commencés.</p>
+</div>
+</details>
+</section>
+<section id="surfaces">
+<h2>5 · Ce que je vois aujourd'hui</h2>
+<details open data-comp="core intelligence scripts">
+<summary>Surfaces existantes pour l'utilisateur</summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>surface</th><th>ce qu'elle montre</th><th>source</th></tr>
+<tr><td><code>make status</code></td><td>daemon, URL, base, événements du jour (14), sessions affichées (0), dernier événement, workspace principal, contexte (session en cours · projets), les 5 services launchd avec STALE, Pending/Dead-letter de l'outbox</td><td><code>core/scripts/status.sh</code> → <code>/status</code>, <code>/context</code>, <code>launchctl</code>, <code>service_staleness</code></td></tr>
+<tr><td><code>make logs</code></td><td><code>tail -F</code> de daemon.log, outbox_worker.log, agent_producers.log</td><td>Makefile · app_observer.log, file_watcher.log, session_end_hook.log et run.log ne sont pas suivis par cette cible</td></tr>
+<tr><td><code>http://127.0.0.1:8765/</code></td><td>journal vivant du jour : « Maintenant » (projet probable, app active, dernière commande, fichiers récents), « Reprise » (dernier test OK/échec, dernière erreur, git local), « Aujourd'hui », « État système », une section par session avec résumé factuel déterministe et timeline (apps regroupées, fichiers ×N par minute, commandes avec code), sessions d'agent, arrière-plan verrouillé, activités isolées</td><td><code>renderers/html.py:render_daily_trace_html</code></td></tr>
+<tr><td><code>/days</code>, <code>/day/&lt;date&gt;</code></td><td>index des 97 jours avec résumé compact par projet (8,5 s à produire) ; archive d'un jour</td><td><code>render_available_days_html</code></td></tr>
+<tr><td><code>/trace/today[.json|.md]</code>, <code>/trace/&lt;date&gt;[.md]</code>, <code>/trace/days</code></td><td>la trace du jour en JSON ou Markdown, événements unitaires compris</td><td><code>routes.py</code>, <code>renderers/markdown.py</code></td></tr>
+<tr><td><code>/status</code>, <code>/context</code>, <code>/context/sessions</code>, <code>/activities/&lt;id&gt;</code></td><td>JSON brut : statut, contexte schéma 3, sessions closes d'un jour, un événement stocké</td><td><code>routes.py</code></td></tr>
+<tr><td><code>pulse-intel list [--json]</code></td><td>sessions closes du jour et de la veille, candidate ou non avec la raison (19 lignes ce matin)</td><td><code>cli.py</code>, <code>selection.py</code></td></tr>
+<tr><td><code>pulse-intel show latest | &lt;id&gt; [--md|--json|--all]</code></td><td>un résumé : session, prompt, modèle, confidence, doing, stopped_at, open, central_files</td><td><code>cli.py:run_show</code></td></tr>
+<tr><td><code>pulse-intel run --once</code>, <code>summarize --dry-run</code>, <code>eval</code></td><td>compte-rendu d'un passage (candidates/created/failed/given_up), sortie du modèle sans émission, rapport d'évaluation sur le corpus gelé</td><td><code>cli.py</code></td></tr>
+<tr><td><code>python -m daemon_v2.producer_outbox status | inspect-dead-letter</code></td><td>état et contenu de l'outbox</td><td><code>producer_outbox.py</code></td></tr>
+<tr><td><code>pulse_mode.sh status</code>, <code>audit_secrets.py</code></td><td>mode launchd/dev ; comptes d'écarts de rédaction</td><td><code>core/scripts</code></td></tr>
+<tr><td>journaux bruts</td><td>daemon.log (requêtes HTTP, ingestion), outbox_worker.log (une ligne par livraison), app_observer.log, agent_producers.log, session_end_hook.log, run.log</td><td><code>~/.pulse_v2/logs</code>, <code>~/.pulse_intelligence/logs</code></td></tr>
+</table></div>
+</div>
+</details>
+
+<details open data-comp="core intelligence">
+<summary>Ce que Pulse produit et qui n'a pas de surface (vérifié dans <code>renderers/html.py</code>, <code>renderers/markdown.py</code>, <code>analysis/timeline.py</code>)</summary>
+<div class="body">
+<div class="wrap"><table>
+<tr><th>produit</th><th class="n">volume</th><th>où c'est</th><th>ce qui manque</th></tr>
+<tr><td><b>Résumés de session du modèle</b> (<code>session_summary</code>)</td><td class="n">48</td><td>trace.db · <code>/context.last_session_summary</code> (le dernier seulement) · <code>pulse-intel show</code> par identifiant</td><td>Exclus de la reconstruction (<code>timeline.py:596-606</code>, « jamais rendu ») ; <code>grep session_summary core/daemon_v2/renderers/</code> → 0. Aucune liste par jour ni par session, aucune lecture sans connaître un id ou taper <code>show latest</code>. Le « Résumé de session » du HTML est le résumé factuel déterministe, pas celui du modèle. 43 des 48 sont des versions v1–v5 dont rien ne dit qu'elles sont remplacées.</td></tr>
+<tr><td><code>open_items</code>, <code>observation_sources</code>, <code>input_hash</code>, <code>generation_ms</code> des résumés</td><td class="n">48</td><td><code>/activities/&lt;event_id&gt;</code>, <code>show --json</code></td><td>Pas rendus.</td></tr>
+<tr><td><b>Observations ordonnées du schéma 3</b> (timeline <code>oN</code>, <code>last_observed</code>, <code>coverage</code>, <code>sources</code>)</td><td class="n">toutes les sessions</td><td>JSON <code>/context</code>, <code>/context/sessions</code></td><td>Le HTML n'appelle pas <code>project_work_observations</code> (<code>grep observations renderers/html.py</code> → 0) : l'état net par fichier, les derniers commandes/fichiers/git observés et la couverture déclarée ne sont visibles que par curl.</td></tr>
+<tr><td><code>recent_sessions.headline</code> (commits, fichiers, tests rouges, erreurs), <code>isolated_signals</code>, <code>workspace.git.dirty</code></td><td class="n">≤ 3 sessions</td><td><code>/context</code></td><td>Pas rendus.</td></tr>
+<tr><td><b>Statuts des commandes</b> (exit_code)</td><td class="n">1 086 · 7 j : 22 échecs sur 164</td><td>chaque commande dans le HTML porte « succeeded / failed (N) » ; « Reprise » donne la dernière erreur ; le résumé factuel compte tests passés/échoués par projet</td><td>Aucun agrégat (taux d'échec, commandes corrigées, tests rouges par session) ; les commandes chaînées n'ont qu'un code global (D-09) ; la sortie n'est pas collectée (<code>coverage.command_output = not_collected</code>).</td></tr>
+<tr><td><b>Observations de fichiers unitaires</b> (<code>file_changed</code>)</td><td class="n">12 910</td><td>regroupées ×N par minute et workspace dans le HTML ; unitaires dans <code>/trace/&lt;date&gt;</code> et <code>/activities/&lt;id&gt;</code></td><td>Pas d'état net par chemin (C14), pas de <code>renamed</code> (C8), pas de vue par fichier dans le temps.</td></tr>
+<tr><td><b>Activations d'applications</b></td><td class="n">6 873</td><td>une ligne « Apps actives » par session (top 5), Finder/loginwindow/CleanMyMac filtrés</td><td>Pas de durée par application, pas de timeline de présence.</td></tr>
+<tr><td><b>Sessions d'agents</b> (<code>agent_session</code>)</td><td class="n">198 (codex 143, claude-code 55)</td><td>section « Sessions d'agent » (heure, outil, headline) ; <code>/context.last_agent_session</code></td><td><code>first_prompt</code>, compteurs de messages, <code>transcript_path</code>, <code>grown_after_emit</code> : JSON seulement ; l'archive de 217 transcripts (224 Mo) n'a aucun index consultable hors <code>manifest.json</code>.</td></tr>
+<tr><td><b>Veille, réveil, verrouillage</b></td><td class="n">520</td><td>bornes de session (<code>end_reason</code>), section « arrière-plan (écran verrouillé) »</td><td>Pas de timeline de présence ; le verrou de la veille n'est pas connu du jour suivant (N4).</td></tr>
+<tr><td>Sessions <code>isolated</code> et <code>background</code></td><td class="n">variable</td><td>sections dédiées du HTML</td><td>Sans identité ni résumé.</td></tr>
+<tr><td>Outbox : pending et dead-letters</td><td class="n">0 / 0</td><td>comptes dans <code>make status</code></td><td>Contenu par <code>inspect-dead-letter</code> seulement.</td></tr>
+<tr><td><code>state.json</code> d'Intelligence (failures 10, pending, given_up)</td><td class="n">10 échecs</td><td><code>pulse-intel list</code> (raison), stderr de <code>run</code></td><td>Aucune vue ; les 10 échecs du 9 sept. ne sont visibles qu'en lisant le fichier.</td></tr>
+<tr><td>Journal d'ingestion (rejected, conflict), <code>producer_instance_id</code>, <code>producer_version</code>, <code>recorded_at</code></td><td class="n">21 935</td><td>daemon.log ; base</td><td>Jamais rendus ; la latence de collecte mesurée ici n'existe nulle part dans Pulse.</td></tr>
+<tr><td>Vue multi-jours (semaine, projet)</td><td class="n">97 jours</td><td><code>/days</code> liste jour par jour</td><td>Aucune agrégation au-delà du jour (spec context-api §8, hors périmètre).</td></tr>
+</table></div>
+</div>
+</details>
+</section>
+<section id="trous">
+<h2>6 · Les trous connus, tous</h2>
+<p class="hint">Sources lues intégralement : <code>core/TODOS.md</code> (C1–C16), <code>intelligence/TODOS.md</code> (I1–I6), <code>docs/dogfooding.md</code> (G1–G16), <code>docs/audits/2026-09-09-adjudication-reprise/D-backlog.md</code> (D-01–D-25 : 3 transférées + les 22 restantes), <code>SYNTHESE.md</code> (T1–T12), le dossier d'audit et <code>docs/audits/README.md</code> (A1–A10), les 18 notes de décision (N1–N15), les 3 specs (S1–S7), CHANGELOG et README (R1–R5), les mémoires de session (M1–M10), les marqueurs dans le code. Numérotation locale à cette page. Les identifiants entre parenthèses renvoient au même trou vu depuis un autre document. Marqueurs : <code>grep -rn -E "TODO|FIXME|XXX" core/daemon_v2 core/scripts core/macos_observer intelligence/pulse_intelligence</code> → une seule ligne, un commentaire sans dette (<code>status.sh:101</code>).</p>
+
+<details open data-comp="core hooks observateur">
+<summary>Fiabilité de la collecte <span class="tag">24 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>C1</td><td>Réentrance fatale de PulseApplicationObserver (P1)</td><td>core/TODOS « Hardening 0.5.6 », 2026-09-05</td><td><span class="tag ok">clos non consigné</span> : CHANGELOG 0.5.6, PR #41 ; TODOS le liste encore ; état de <code>swift test</code> sous Xcode non revérifié</td></tr>
+<tr><td>C3 (N7)</td><td>Résolution de casse : watcher et <code>is_private_path</code> ; 19 autres points sensibles à la casse</td><td>core/TODOS, décision 2026-09-05 réouverture</td><td><span class="tag ok">clos non consigné</span> pour les 2 points (<code>0f4cfc4</code>, <code>92c8c7a</code>) · <span class="tag">différé</span> pour les 19 autres</td></tr>
+<tr><td>C5</td><td><code>TraceStore._connect</code> : ordre pragma / busy_timeout (P4)</td><td>core/TODOS Daemon V2</td><td><span class="tag">différé</span> (déclencheur : deux daemons sur base neuve)</td></tr>
+<tr><td>C6 (N2)</td><td>Segments de reprise pour <code>agent_session</code> quand <code>grown_after_emit</code> se répète (P3) — 16 « grown » au dernier passage</td><td>core/TODOS ; décision 2026-08-31</td><td><span class="tag">différé</span></td></tr>
+<tr><td>C7 (D-12)</td><td>Hook PostToolUse Claude Code : commandes lancées par l'agent invisibles au hook shell (P3, 5 fiches)</td><td>core/TODOS ; registre D 2026-09-10 ; référence ajoutée 2026-09-11</td><td><span class="tag op">ouvert, pas commencé</span></td></tr>
+<tr><td>C8 (D-23)</td><td>Kind <code>renamed</code> pour le watcher ; <code>git mv</code> vu comme création + suppression (P4)</td><td>core/TODOS ; fiche 16</td><td><span class="tag">différé</span></td></tr>
+<tr><td>C9</td><td>Enqueue outbox par lot (P4)</td><td>core/TODOS</td><td><span class="tag">différé</span></td></tr>
+<tr><td>C15 (D-01, D-16)</td><td>Hooks pre-push / post-merge → <code>git_push</code>, <code>git_merge</code> ; rebase indistinguable de nouveaux commits (P2, 13 fiches)</td><td>core/TODOS, remonté 2026-09-11 ; registre D</td><td><span class="tag op">ouvert, pas commencé</span> : <code>grep -rn "git_push\|pre-push\|post-merge" core/daemon_v2 core/scripts</code> → seulement <code>push_observed</code> depuis le terminal</td></tr>
+<tr><td>C16 (D-02, D-15)</td><td><code>pulse note "…"</code> → <code>recorded_statement</code> ; déclarations faites en conversation ou dans la tête de l'utilisateur (P2, 7 fiches)</td><td>core/TODOS, ajouté 2026-09-11 ; registre D</td><td><span class="tag op">ouvert, pas commencé</span> ; dépend d'une décision datée (nouveau type)</td></tr>
+<tr><td>G2</td><td><code>eval/out</code> non ignoré par le watcher (<code>out</code> absent de <code>IGNORED_DIRECTORY_NAMES</code>)</td><td>dogfooding jour 1, 2026-09-06</td><td><span class="tag op">ouvert, contourné</span> (README : <code>--out /private/tmp/…</code>)</td></tr>
+<tr><td>D-03</td><td>Contenu des commits non observé (fichiers du commit) — 3 fiches</td><td>D-backlog 2026-09-10</td><td><span class="tag op">ouvert</span> ; le message complet est là depuis le schéma 3, les fichiers restent <code>coverage.commit_files = not_collected</code></td></tr>
+<tr><td>D-04 (A10)</td><td>Résultats des commandes non observés (commande et code seulement) — 4 fiches ; court diagnostic stderr proposé</td><td>D-backlog ; COLLECTE.md</td><td><span class="tag op">ouvert</span>, « aucune piste retenue », 0 gain confirmé sur 2 sessions ; expérimentation en attente de confirmation</td></tr>
+<tr><td>D-05</td><td>Config hors workspace observé (<code>~/.pulse_intelligence/config.toml</code>) — 2 fiches</td><td>D-backlog</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>D-06</td><td>Devenir des modifications après la fin de session — 1 fiche</td><td>D-backlog</td><td><span class="tag op">ouvert</span>, lié à D-03</td></tr>
+<tr><td>D-09</td><td>Bloc de commandes chaînées : un seul code global — 1 fiche</td><td>D-backlog</td><td><span class="tag op">ouvert</span> (contrat <code>exit_scope: whole_command</code> assumé)</td></tr>
+<tr><td>D-10</td><td>Nature d'un chemin non connue (archive dans Downloads) — 1 fiche</td><td>D-backlog</td><td><span class="tag op">ouvert</span>, note</td></tr>
+<tr><td>D-11</td><td>Dépôt hors périmètre du watcher — 1 fiche</td><td>D-backlog</td><td>trou de périmètre, 0 événement vérifié · constat de cette page : DevNote observé par le watcher mais sans hook post-commit</td></tr>
+<tr><td>D-18</td><td>Lancement d'un processus hors shell (alias, GUI) — 1 fiche</td><td>D-backlog</td><td><span class="tag op">ouvert</span>, note</td></tr>
+<tr><td>N6</td><td>Migration du 5 sept. : copie prise à chaud sans <code>-wal</code> ; 168 empreintes non reproductibles ; <code>PATH_RULES</code> en dur</td><td>décision 2026-09-05-migration-trace-ancienne-machine</td><td>historique, limite consignée</td></tr>
+<tr><td>R2</td><td>Limites assumées du README Core : coupure fixe 30 min ; projet courant par heuristiques ; masquage sans parsing shell ; commit sans hook invisible</td><td>core/README « Limites actuelles »</td><td>assumées</td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="intelligence">
+<summary>Qualité des reprises : prompt, modèle, sélection <span class="tag">31 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>G5 (M1, T6)</td><td><code>open</code> vide 11/11 puis 5/5 en production ; cause = exemple <code>"open": []</code> du gabarit</td><td>dogfooding jours 5-7, 2026-09-09 → 11</td><td><span class="tag warn">diagnostiqué</span> (4/4 sans phrase ni exemple), v7 enregistré PR #88, <b>non activé</b> ; « décision v7 » dans l'ordre du 12</td></tr>
+<tr><td>G9</td><td>Lot launchd du 12 sept. 06:30 → jour 8 (critère : input_hash ≠ des cinq hérités, entrée avec <code>observations</code>)</td><td>clôture du 11, dogfooding</td><td><span class="tag warn">à faire</span> ; pas encore tourné à 02:41</td></tr>
+<tr><td>G10</td><td>Requalification des fiches 15 à 18 (open vide forcé par l'entrée schéma 2)</td><td>ordre du 12</td><td><span class="tag op">en attente</span></td></tr>
+<tr><td>G11</td><td>Jugement des 9 points restants (<code>v7-superseded</code>) contre les fiches</td><td>ordre du 12</td><td><span class="tag op">en attente</span>, sans verdict</td></tr>
+<tr><td>G12 (M6, T1)</td><td>PR #89 : état net des commandes, échec dépassé = <code>superseded_observed</code> ; deux questions ouvertes : filtrer ou décrire <code>superseded_observed</code> (v7.1) ; doublon d'interpréteur fiche 06 (<code>manage.py migrate</code> / <code>python3 manage.py migrate</code>)</td><td>clôture du 11 ; mémoire</td><td><span class="tag op">PR OPEN, mergeable, aucune revue</span></td></tr>
+<tr><td>G1</td><td>Relever ou non <code>llm_max_input_tokens</code> (30 000, marge 1,3×)</td><td>dogfooding jours 1-3, « Décisions en attente de moi »</td><td><span class="tag op">en attente</span></td></tr>
+<tr><td>G13 (N10)</td><td>Spike B v2 (pic mémoire 21-30k tokens) à remesurer après deux <code>GPU Hang Error</code> ; critère 60k tokens non tenu → plafond ; hallucination sur session sans fichier ; plan B 9B</td><td>décision 2026-09-06-modele-local-qwen</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>I2</td><td><code>list</code> et <code>run</code> ne jugent pas « déjà résumée » avec le même modèle (repli <code>fake/summarizer</code>, <code>cli.py:186,225,562</code>) (P3)</td><td>intelligence/TODOS</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>I4 (G3)</td><td>Deux résumés d'une même session coexistent, règle de préséance à définir (P2) — 48 résumés pour moins de 48 sessions</td><td>intelligence/TODOS ; dogfooding jours 2-3</td><td><span class="tag op">ouvert</span>, renvoyé à l'étape 5</td></tr>
+<tr><td>I6</td><td><code>details.workspace</code> désigne la session suivante (<code>session_summary.py:623-659</code> prend <code>context.workspace.path</code> sans vérifier <code>current_session.id</code>) (P2)</td><td>intelligence/TODOS, 2026-09-07</td><td><span class="tag op">ouvert, non corrigé</span></td></tr>
+<tr><td>D-14</td><td>Session d'agent triviale (<code>/login</code>, <code>/model</code>) prise pour du travail — 3 fiches</td><td>D-backlog</td><td><span class="tag op">ouvert</span> côté entrée ; symptôme masqué par v6 sans qualifier la session</td></tr>
+<tr><td>D-21 (T4)</td><td>Agent externe (Codex/Astral) non attribué comme acteur — 2 fiches ; acteur inversé (04, 05, 11, 17 ; 15, 18)</td><td>D-backlog ; SYNTHESE</td><td><span class="tag op">ouvert</span> ; v6 retire l'annexe « sans régler l'attribution »</td></tr>
+<tr><td>T2 (M8)</td><td>Filtre de candidature : une session de 37 min sans commande passe par le seuil de 30 activités atteint par les activations d'apps</td><td>SYNTHESE 2026-09-10 ; mémoire</td><td><span class="tag op">ouvert</span>, « attend un chantier propre » ; <code>selection.py:183</code> inchangé</td></tr>
+<tr><td>T3</td><td>Deux fils de travail, un seul résumé (fiches 04, 09, 14, 18)</td><td>SYNTHESE</td><td><span class="tag op">ouvert</span>, aucun chantier</td></tr>
+<tr><td>T5</td><td>Commit riche appauvri par le résumé (10, 09, 01)</td><td>SYNTHESE</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>T7</td><td>Détails inventés (01, 07, 17, 06) : « après l'activation de l'environnement virtuel » absent de la vue</td><td>SYNTHESE</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>T8</td><td>Dernier diagnostic terminal pris pour dernière activité (06)</td><td>SYNTHESE</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>T9</td><td>Checkout, déplacement, rebase pris pour du travail</td><td>SYNTHESE</td><td><span class="tag op">ouvert</span>, dépend de C14, C8, D-16</td></tr>
+<tr><td>T10</td><td>Recopie de <code>previous_summary</code> (D1)</td><td>SYNTHESE</td><td><span class="tag ok">réglé par v6</span> « par retrait de l'annexe, pas par meilleure réévaluation »</td></tr>
+<tr><td>T11</td><td>Point d'arrêt mal choisi : ni v5 ni v6 ne prend le dernier commit (17)</td><td>SYNTHESE</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>T12</td><td>Règle de prudence bien appliquée (05, 08, 11, 12, 14)</td><td>SYNTHESE</td><td>à préserver</td></tr>
+<tr><td>A6</td><td>Benchmark futur (7 M + 4 T + 3 P) « préparé, non exécuté »</td><td>BENCHMARK.md, audit 2026-09-09</td><td><span class="tag bad">pas commencé</span></td></tr>
+<tr><td>A7</td><td>Scinder <code>open</code> en appuyé / inféré (recommandation B)</td><td>README de l'audit §10</td><td><span class="tag">non tranché</span> (opinion de l'analyste, pas décision)</td></tr>
+<tr><td>N13</td><td>« Ne pas confondre ce défaut de contrat avec une validation produit » ; propagation des erreurs du résumé précédent</td><td>décision 2026-09-08-observations-ordonnees</td><td>partiel (réglé v6 par retrait)</td></tr>
+<tr><td>N14</td><td>Attente <code>eef4956b</code> (<code>carried_over</code>) insatisfiable par politique ; 2/4 ; verdict d'usage renvoyé au rapport final</td><td>décision 2026-09-08-reprise-fondee</td><td><span class="tag op">ouvert</span> (= étape 4)</td></tr>
+<tr><td>S7</td><td>Reproductibilité non garantie tant que prompt, modèle, poids et runtime ne sont pas figés ; <code>temperature</code> non envoyée par défaut</td><td>spec 2026-09-05-llm-provider §5</td><td>limite assumée</td></tr>
+<tr><td>M9</td><td>« v6 n'est pas validé produit » ; étape 5 conditionnée</td><td>mémoire core-gel-leve…, 2026-09-10</td><td>= étape 4 / 5</td></tr>
+<tr><td>G14</td><td>Écart de process : 15 commits directs sur main la nuit du 06 (prompt v3)</td><td>dogfooding jour 3</td><td><span class="tag ok">clos</span>, règle en mémoire</td></tr>
+<tr><td>G15</td><td>Session réelle à <code>previous_summary</code> à ajouter au corpus</td><td>dogfooding jour 1</td><td><span class="tag ok">clos</span> (TODOS Intelligence Completed 09-06)</td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="core intelligence">
+<summary>Contrat <code>/context</code>, reconstruction et versions <span class="tag">15 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>C12 (D-22)</td><td><code>core/</code> détecté comme projet distinct de <code>Pulse</code> ; fragmentation d'un chantier en tranches (P2)</td><td>core/TODOS « Reconstruction et contrat », dogfooding 2026-09-05 ; fiche 15</td><td><span class="tag op">ouvert</span>, « Depends on : décision datée »</td></tr>
+<tr><td>C13</td><td>Session ouverte par un commit ne voit pas ses fichiers (cas <code>eadb7573</code>) (P3)</td><td>core/TODOS</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>C14 (D-13)</td><td>État net par chemin plutôt que trois listes cumulées ; bascule de branche indistinguable d'une édition (P3, fiches 05, 10, 16)</td><td>core/TODOS ; registre D</td><td><span class="tag op">ouvert</span> (observations ordonnées v1 en couvrent une partie)</td></tr>
+<tr><td>I5</td><td>Résumés héritent de l'immutabilité de <code>trace.db</code> ; filiation <code>supersedes</code> absente (P2)</td><td>intelligence/TODOS, jour 3</td><td><span class="tag op">ouvert</span> (« avant l'étape 5 »)</td></tr>
+<tr><td>D-24</td><td>Troncature des listes de fichiers à 20 — 2 fiches</td><td>D-backlog</td><td><span class="tag ok">clos non consigné</span> : CHANGELOG 0.6.0.0 « plus de coupe à 20 fichiers » ; les fiches 16/17 venaient du Core prod au schéma 2</td></tr>
+<tr><td>A9</td><td><code>central_files</code> limité aux observations de fichiers (chemins des commandes/commits exclus)</td><td>README de l'audit §6</td><td><span class="tag">non tranché</span></td></tr>
+<tr><td>N3</td><td><code>agent_session</code> hors identité : deux grappes ne sont plus pontées ; réexamen si un autre type arrive en retard</td><td>décision 2026-09-03-agent-session-hors-identite</td><td>différé</td></tr>
+<tr><td>N4</td><td>Fermeture monotone : verrou de la veille inconnu du jour suivant ; verrou/reprise non rendus ; arrière-plan à exposer dans <code>/context</code> « quand un consommateur le demande »</td><td>décision 2026-09-03-fermeture-monotone ; CHANGELOG 0.5.4</td><td>différé</td></tr>
+<tr><td>N9 (S2)</td><td>Fuseau de reconstruction : historique antérieur non migré (ids proches de minuit peuvent changer) ; changer <code>PULSE_RECONSTRUCTION_TZ</code> change les ids</td><td>décision 2026-09-06-fuseau ; spec context-api §11</td><td>différé, limite documentée</td></tr>
+<tr><td>N12</td><td>Reconstruction unique : aucun cache, « les grandes lectures journalières et le statut peuvent encore coûter cher » (mesuré ici : <code>/days</code> 8,5 s) ; identité change sur événement tardif ; minuit non redessiné ; downgrade impossible</td><td>décision 2026-09-08-reconstruction-unique</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>S3</td><td>Rattrapage des sessions jamais traitées (politique de curseur) non livré ; <code>lookback_days = 1</code> : une session close après le passage n'est prise que le lendemain</td><td>spec 2026-09-03-session-summary §7</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>S1</td><td>Migration du renderer HTML vers <code>/context</code> ; résumé généré ; streaming ; historique multi-jours</td><td>spec 2026-09-02-context-api §8</td><td>hors périmètre, non fait</td></tr>
+<tr><td>S4</td><td>Affichage des résumés dans le HTML ; résumé de journée ; LLM-as-judge ; notifications</td><td>spec 2026-09-03-session-summary §13</td><td>hors périmètre</td></tr>
+<tr><td>S6</td><td>Model Router ; service résident 8767 ; streaming ; réparation automatique</td><td>spec 2026-09-05-llm-provider §12</td><td>hors périmètre</td></tr>
+<tr><td>N11 (S5)</td><td>Entrées <code>emitted</code> sans <code>origin</code> non migrées ; rédaction sur motifs connus « ne garantit pas l'absence de tout secret »</td><td>décision 2026-09-06-redaction-champs-libres</td><td>limite assumée</td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="launchd core intelligence">
+<summary>Exploitation : services, redémarrage, veille <span class="tag">7 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>G6 (G16, M5)</td><td>Lot launchd étiré par la veille du Mac (DarkWake par tranches : 7 h 06 pour 3 sessions le 10, 3 h 24 pour 2 le 11 ; fenêtre 06:30 « nominale que Mac éveillé et branché ») ; <code>generation_ms</code> faussé</td><td>dogfooding jours 3 et 6 ; mémoire</td><td><span class="tag op">ouvert</span>, aucune piste consignée</td></tr>
+<tr><td>G7 (M7, R1)</td><td>Core de production non redémarré après merge : schéma 2 servi du 06 au 11 ; le CHANGELOG 0.6.0.0 « Déploiement » ne décrit pas le redémarrage</td><td>dogfooding jour 7 ; mémoire ; CHANGELOG</td><td><span class="tag ok">redémarré</span> (mesuré : daemon du 11 sept. 21:29, schéma 3 servi) ; garde-fous livrés PR #85 (code 6) et #86 (STALE) ; <span class="tag op">procédure de déploiement à écrire</span></td></tr>
+<tr><td>G8</td><td>Jour 4 (08 sept.) non jugé : Core en timeout à 09:56 pendant le lot (6 candidates, 2 créées)</td><td>dogfooding jour 5</td><td><span class="tag op">non consigné comme item</span>, cause non analysée</td></tr>
+<tr><td>C2</td><td><code>status.sh</code> faux négatif <code>--max-time 2</code> (P2)</td><td>core/TODOS Hardening 0.5.6</td><td><span class="tag ok">clos non consigné</span> (<code>425a739</code>, CHANGELOG 0.5.6)</td></tr>
+<tr><td>N8</td><td>Exécution unique : <code>flock</code> local au système de fichiers ; scénario inter-processus initialement sans test automatisé ; file avec attribution exclusive si plusieurs producteurs</td><td>décision 2026-09-06-execution-unique</td><td>partiel : <code>tests/test_cli_process_lock.py</code> couvre depuis le cas inter-processus</td></tr>
+<tr><td>—</td><td>Constat de cette page : journaux Core sans rotation (2,6 Mo en 7 jours, daemon.log 1,08 Mo) ; outbox 955 pages libres sur 963 jamais rendues</td><td>mesure du 2026-09-12</td><td>non listé dans le dépôt</td></tr>
+<tr><td>—</td><td>Constat de cette page : <code>make logs</code> ne suit pas app_observer.log, file_watcher.log, session_end_hook.log ni run.log</td><td>Makefile</td><td>non listé dans le dépôt</td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="corpus intelligence core">
+<summary>Données et corpus : anonymisation, sauvegarde, rétention <span class="tag">10 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>C4 (M2)</td><td>Chemins <code>/Users/Yugz</code> en dur dans un dépôt public : <span class="m" title="grep -rl '/Users/Yugz' core/tests_v2 intelligence/tests intelligence/eval docs core/README.md | wc -l">49 fichiers</span> (+7 en <code>/Users/yugz</code>) ; anonymisation des fixtures (<code>eval/observed</code>, <code>eval/corpus</code>, <code>corpus/</code>) ; hook <code>gstack-redact-prepush</code> le signale en MEDIUM</td><td>core/TODOS « Hygiène » 2026-09-05 ; mémoires</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>M4</td><td>Sauvegarde de <code>corpus/</code> (hors git, non régénérable : entrées, sorties de modèle, rejeux) — 233 fichiers, 2,4 Mo</td><td>mémoire core-gel-leve…, 2026-09-10</td><td><span class="tag op">ouvert, aucun item dans le dépôt</span></td></tr>
+<tr><td>A1 (M3)</td><td>Couplage tests ↔ <code>eval/observed</code> (<code>evaluation.py:37 DEFAULT_CORPUS</code>, <code>test_evaluation.py:80</code> exige 14 sessions) ; bloque la sortie du corpus vers <code>corpus/</code></td><td>docs/audits/README « Dette connue »</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>A3</td><td>Format d'annotation (<code>ANNOTATION-PROPOSEE.md</code> draft-1) non validé ; <code>adjudicated_items: null</code> ; rien dans <code>eval/expected</code> depuis l'adjudication</td><td>VALIDATION.md, SYNTHESE « Décisions » 4</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>A8</td><td>Vérité terrain = vérité reconstruite ; aveugle A/B abandonné après 4 fiches</td><td>SYNTHESE, FICHES</td><td>limite consignée</td></tr>
+<tr><td>D-08</td><td>Sessions d'agent antérieures au hook SessionEnd (fin août) — 1 fiche</td><td>D-backlog</td><td>limite historique du corpus, « ne pas compter »</td></tr>
+<tr><td>C11 (N1)</td><td>Réexamen de la rétention de <code>trace.db</code> sur seuils falsifiables ; compaction <code>app_activated</code> en premier levier</td><td>core/TODOS sentinelle ; décision 2026-08-30</td><td>veille (mesuré ici : 16,3 Mo, 233 Ko/jour, seuil 500 Mo hors de portée à 6 mois)</td></tr>
+<tr><td>N6</td><td>Chemins relatifs à <code>$HOME</code> comme option ouverte après la migration</td><td>décision 2026-09-05</td><td>ouvert</td></tr>
+<tr><td>—</td><td>Constat de cette page : 5,6 Go de Qwen3.5-9B-4bit dans le cache HF sans usage configuré (plan B)</td><td>mesure du 2026-09-12</td><td>non listé</td></tr>
+<tr><td>—</td><td>Constat de cette page : <code>core/macos_observer/.build</code> 709 Mo, <code>.gitnexus</code> 124 Mo (artefacts locaux)</td><td>mesure du 2026-09-12</td><td>non listé</td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="core intelligence">
+<summary>Tests et CI <span class="tag">5 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>A1</td><td>Couplage tests ↔ corpus (voir Données)</td><td>audits README</td><td><span class="tag op">ouvert</span></td></tr>
+<tr><td>I3</td><td>Annexe <code>previous_summary</code> dépend du fuseau de la machine (<code>session_input.py:99 ended.astimezone().date()</code>) (P3)</td><td>intelligence/TODOS, PR #53</td><td><span class="tag op">ouvert dans le code</span>, sans effet sous v6 (annexes retirées)</td></tr>
+<tr><td>A4</td><td>« Évaluateur hors production de reprise » (mission recommandée)</td><td>README de l'audit §14</td><td><span class="tag bad">pas commencé</span></td></tr>
+<tr><td>M10</td><td>Réindexer GitNexus après chaque merge (index en retard reproché par l'audit du 06)</td><td>mémoire merge-reindex-puis-impact</td><td>habitude ; état de l'index non vérifié ici</td></tr>
+<tr><td>C1</td><td><code>swift test</code> échoue sans Xcode complet ; 17 tests Swift non lancés par la CI</td><td>core/TODOS</td><td>non revérifié</td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="docs">
+<summary>Documentation <span class="tag">6 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>A2</td><td>Dossier <code>docs/audits/2026-09-09-adjudication-reprise/</code> « attend le rejeu sur open avant de se clore » : rejeu fait le 11, dossier toujours présent (33 fichiers)</td><td>docs/audits/README</td><td><span class="tag op">à clore ou requalifier</span></td></tr>
+<tr><td>R1</td><td>CHANGELOG 0.6.0.0 « Déploiement » sans redémarrage du daemon</td><td>core/CHANGELOG</td><td><span class="tag op">ouvert</span> (= G7)</td></tr>
+<tr><td>R3</td><td>core/README « Pulse ne produit pas encore de synthèse intelligente » et « Suite Intelligence inchangée : 62 tests » : périmés</td><td>core/README Palier 1, 0.5.6</td><td><span class="tag op">périmé</span></td></tr>
+<tr><td>R4</td><td>intelligence/README « corpus capturé sous la v2 » contredit docs/audits/README (« 14 sessions, Context API v3 »)</td><td>intelligence/README</td><td><span class="tag op">probablement périmé</span></td></tr>
+<tr><td>R5</td><td>intelligence/README « une liste <code>open</code> vide est normale » contredit la synthèse du jour 7 (artefact du gabarit)</td><td>intelligence/README § open</td><td><span class="tag op">à réécrire après décision v7</span> (opinion)</td></tr>
+<tr><td>C1–C3</td><td>Trois items clos listés encore ouverts dans core/TODOS</td><td>core/TODOS</td><td><span class="tag op">à consigner</span></td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="core">
+<summary>Sécurité et permissions <span class="tag">4 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>N5</td><td>Authentification des producteurs locaux reportée : tout <code>POST /activities</code> sur 127.0.0.1 est accepté</td><td>décision 2026-09-03-hardening ; VISION « Plus tard »</td><td><span class="tag">reportée</span> (déclencheur : première action Agent)</td></tr>
+<tr><td>D-19</td><td>Contenu de la session d'agent au-delà du premier prompt — 3 fiches</td><td>D-backlog</td><td><span class="tag ok">frontière confirmée 2026-09-11</span> (rétention inchangée)</td></tr>
+<tr><td>D-25</td><td>Contenu des fichiers non lu (note de décision, dogfooding.md) — 2 fiches</td><td>D-backlog</td><td><span class="tag ok">frontière confirmée</span></td></tr>
+<tr><td>C4</td><td>Chemins personnels dans un dépôt public (voir Données)</td><td>core/TODOS</td><td><span class="tag op">ouvert</span></td></tr>
+</table></div></div>
+</details>
+
+<details open data-comp="docs">
+<summary>Autre <span class="tag">11 trous</span></summary>
+<div class="body"><div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th>origine</th><th>état</th></tr>
+<tr><td>C10</td><td>Raisonnement Claude.ai (web) non capturable</td><td>core/TODOS sentinelle</td><td>décision produit, différé</td></tr>
+<tr><td>I1</td><td><code>show &lt;id&gt;</code> lit l'état local avant Core (P3)</td><td>intelligence/TODOS</td><td>différé (étape 5)</td></tr>
+<tr><td>D-07</td><td>Vérifications dans le navigateur sans trace — 3 fiches</td><td>D-backlog</td><td><span class="tag ok">frontière confirmée 2026-09-11</span> (pas d'URL)</td></tr>
+<tr><td>D-15</td><td>Intention non écrite, dans la tête de l'utilisateur — 1 fiche</td><td>D-backlog</td><td>« pas un trou de collecte », rejoint <code>pulse note</code></td></tr>
+<tr><td>D-17</td><td>Événements applicatifs d'une app à soi (DevNote) — 1 fiche</td><td>D-backlog</td><td>dépend d'un chantier externe (jetons API DevNote)</td></tr>
+<tr><td>D-20</td><td>Résultats de CI distants (GitHub Actions) — 1 fiche</td><td>D-backlog</td><td>« pas une frontière (décision du 2026-09-11) ; aucune piste »</td></tr>
+<tr><td>G4</td><td><code>checkout main</code> non expliqué le 07 à 23:48:30</td><td>dogfooding jour 3</td><td>« à élucider si ça se reproduit »</td></tr>
+<tr><td>A5</td><td>KPI « temps jusqu'à une reprise correcte » : aucune mesure utilisateur</td><td>KPI.md</td><td><span class="tag bad">pas commencé</span></td></tr>
+<tr><td>—</td><td>Frontières hors compte du registre D : secret hors repo <code>~/.config/pulse/llm.env</code> (fiche 13) ; cadre du projet hors machine (fiches 03, 04)</td><td>D-backlog</td><td>frontières à garder</td></tr>
+<tr><td>—</td><td>Constat de cette page : <code>pulse-intel</code> n'a pas de sous-commande <code>status</code> (la demande d'inventaire en supposait une)</td><td>mesure du 2026-09-12</td><td>—</td></tr>
+<tr><td>—</td><td>Constat de cette page : <code>/trace.json</code>, <code>/trace.md</code>, <code>/health</code> répondent 404 (les routes réelles sont <code>/trace/today.json</code>, <code>/trace/today.md</code>, <code>/status</code>)</td><td>mesure du 2026-09-12</td><td>—</td></tr>
+</table></div></div>
+</details>
+
+<details data-comp="docs intelligence core">
+<summary>Le registre D intégral, dans l'ordre du fichier (25 lignes : 3 transférées dans core/TODOS + 22 restantes)</summary>
+<div class="body">
+<p class="small"><code>cat docs/audits/2026-09-09-adjudication-reprise/D-backlog.md</code> ; SYNTHESE.md:210 « Les 22 autres trous restent dans D-backlog.md ». Le fichier n'a pas d'identifiants : D-01…D-25 = ordre du fichier. « fiches » = nombre de fiches d'adjudication qui citent le trou.</p>
+<div class="wrap"><table>
+<tr><th>id</th><th>trou</th><th class="n">fiches</th><th>état au 12</th></tr>
+<tr><td>D-01</td><td>Pushs et merges non observés (D5)</td><td class="n">13</td><td>→ core/TODOS C15 (P2), pas commencé</td></tr>
+<tr><td>D-02</td><td>Déclarations et jugements faits en conversation, hors machine</td><td class="n">7</td><td>→ core/TODOS C16 (<code>pulse note</code>, P2), pas commencé</td></tr>
+<tr><td>D-03</td><td>Contenu des commits non observé (seulement le titre)</td><td class="n">3</td><td>ouvert ; message complet déjà là, fichiers du commit absents</td></tr>
+<tr><td>D-04</td><td>Résultats des commandes non observés</td><td class="n">4</td><td>ouvert, aucune piste retenue</td></tr>
+<tr><td>D-05</td><td>Config hors workspace observé</td><td class="n">2</td><td>ouvert</td></tr>
+<tr><td>D-06</td><td>Devenir des modifications après la fin de session</td><td class="n">1</td><td>ouvert, lié à D-03</td></tr>
+<tr><td>D-07</td><td>Vérifications dans le navigateur sans trace</td><td class="n">3</td><td>frontière confirmée 2026-09-11</td></tr>
+<tr><td>D-08</td><td>Sessions d'agent antérieures au hook SessionEnd</td><td class="n">1</td><td>limite historique, ne pas compter</td></tr>
+<tr><td>D-09</td><td>Bloc de commandes chaînées : un seul code global</td><td class="n">1</td><td>ouvert, contrat assumé</td></tr>
+<tr><td>D-10</td><td>Nature d'un chemin non connue</td><td class="n">1</td><td>ouvert, note</td></tr>
+<tr><td>D-11</td><td>Dépôt hors périmètre du watcher</td><td class="n">1</td><td>trou de périmètre</td></tr>
+<tr><td>D-12</td><td>Commandes exécutées par l'agent invisibles au hook shell</td><td class="n">5</td><td>→ core/TODOS C7 (PostToolUse, P3)</td></tr>
+<tr><td>D-13</td><td>Bascule de branche indistinguable d'une édition</td><td class="n">2</td><td>ouvert, couvert par C14</td></tr>
+<tr><td>D-14</td><td>Session d'agent triviale prise pour du travail</td><td class="n">3</td><td>ouvert côté entrée</td></tr>
+<tr><td>D-15</td><td>Intention non écrite</td><td class="n">1</td><td>pas un trou de collecte</td></tr>
+<tr><td>D-16</td><td>Rebase indistinguable de nouveaux commits</td><td class="n">2</td><td>ouvert, rejoint C15</td></tr>
+<tr><td>D-17</td><td>Événements applicatifs d'une app à soi (DevNote)</td><td class="n">1</td><td>dépend d'un chantier externe</td></tr>
+<tr><td>D-18</td><td>Lancement d'un processus hors shell</td><td class="n">1</td><td>ouvert, note</td></tr>
+<tr><td>D-19</td><td>Contenu de la session d'agent au-delà du premier prompt</td><td class="n">3</td><td>frontière confirmée 2026-09-11</td></tr>
+<tr><td>D-20</td><td>Résultats de CI distants</td><td class="n">1</td><td>pas une frontière, aucune piste</td></tr>
+<tr><td>D-21</td><td>Agent externe non attribué comme acteur</td><td class="n">2</td><td>ouvert, lié à T4</td></tr>
+<tr><td>D-22</td><td>Fragmentation d'un chantier en tranches de session</td><td class="n">1</td><td>déjà C12 (P2)</td></tr>
+<tr><td>D-23</td><td><code>git mv</code> vu comme création + suppression</td><td class="n">1</td><td>déjà C8 (P4)</td></tr>
+<tr><td>D-24</td><td>Troncature des listes de fichiers à 20</td><td class="n">2</td><td>clos non consigné (0.6.0.0)</td></tr>
+<tr><td>D-25</td><td>Contenu des fichiers non lu</td><td class="n">2</td><td>frontière confirmée</td></tr>
+</table></div>
+</div>
+</details>
+</section>
+<section id="candidats">
+<h2>7 · Candidats, sans décision</h2>
+<p class="hint">Cinq changements qui, d'après les sections 1 à 6, modifieraient le plus l'usage quotidien. Sans ordre, sans priorité : les effets sont chiffrés, l'estimation d'effort est une opinion. Rien n'est ouvert, rien n'est décidé.</p>
+<details open data-comp="intelligence launchd">
+<summary>A · Faire tourner le lot Intelligence Mac éveillé <span class="tag">opinion d'effort : 1 à 3 h</span></summary>
+<div class="body">
+<p><b>Les chiffres.</b> Le même modèle produit un résumé en 23 à 43 s quand le Mac est éveillé (11 en 6 min 44 le 9 sept.) et met 3 h 24 à 7 h 06 pour 2 ou 3 résumés sous launchd à 06:30, parce que la génération n'avance que par tranches de réveil. La reprise du matin arrive donc entre 10:00 et 14:00 au lieu de 06:35, et <code>generation_ms</code> ne mesure plus rien. Un lot au réveil de l'utilisateur, ou empêché de dormir le temps de 4 résumés (≈ 3 min), rendrait la reprise disponible à l'ouverture de session.</p>
+<p class="opinion">effort de l'ordre de 1 à 3 h : un choix de déclencheur (réveil de session, <code>caffeinate</code> pendant le passage, ou heure alignée sur un réveil planifié) et la note de décision qui va avec. Le trou G6 n'a aucune piste consignée aujourd'hui.</p>
+</div>
+</details>
+<details open data-comp="core intelligence">
+<summary>B · Donner une surface aux résumés <span class="tag">opinion d'effort : 1 à 2 jours</span></summary>
+<div class="body">
+<p><b>Les chiffres.</b> 48 résumés stockés, 0 rendus : le HTML les exclut explicitement, <code>/context</code> n'expose que le dernier, et <code>pulse-intel show</code> exige un identifiant ou <code>latest</code>. Les observations ordonnées du schéma 3 (état net des fichiers, dernières commandes, couverture) ne sont lisibles qu'en JSON. Le journal HTML, lui, est consulté : 17 <code>GET /</code> et 6 <code>/days</code> dans daemon.log depuis le 5 sept., contre 27 <code>/context</code> presque tous faits par Intelligence ou <code>make status</code>.</p>
+<p class="opinion">effort de 1 à 2 jours pour une section « Reprise du modèle » par session dans le HTML existant (avec sa version de prompt et un marquage des versions coexistantes), ou une page <code>/summaries</code> ; la spec session-summary §13 l'a rangé hors périmètre en attendant la validation de l'étape 4, ce qui reste un choix à trancher.</p>
+</div>
+</details>
+<details open data-comp="intelligence">
+<summary>C · Décider v7 (ou non) et clore l'étape 4 <span class="tag">opinion d'effort : ½ journée de jugement + 1 lot</span></summary>
+<div class="body">
+<p><b>Les chiffres.</b> En production, <code>open</code> est vide dans 5 résumés v6 sur 5 (et 11/11 en dry-run) ; au rejeu du 11, la variante sans phrase ni exemple remplit 4/4 avec exactement les déclarations attendues, 16/16 sorties valides. v7 est enregistré (PR #88) mais le défaut reste v6 ; l'adjudication compte sous v5 2 justes, 8 partielles, 4 fausses sur 14, et le verdict de l'étape 4 n'est pas rendu depuis le 10 sept. L'ordre du 12 est déjà écrit : lot 06:30 → jour 8 → #89 → 9 points → fiches 15-18 → décision v7.</p>
+<p class="opinion">effort d'une demi-journée de jugement humain (9 points, fiches 15-18, revue de #89) plus un lot v7 ; c'est le seul candidat qui débloque l'étape 5 (service résident), conditionnée à ce verdict.</p>
+</div>
+</details>
+<details open data-comp="hooks core">
+<summary>D · Observer les pushs et merges, et poser le hook manquant sur DevNote <span class="tag">opinion d'effort : ½ à 1 jour (+ 5 min pour DevNote)</span></summary>
+<div class="body">
+<p><b>Les chiffres.</b> 13 des 18 fiches d'adjudication citent des pushs ou merges non observés (D-01, le trou le plus cité du registre) ; <code>coverage.remote_push_state</code> est déclaré <code>not_collected</code> sur chaque session ; un rebase est indistinguable de nouveaux commits (D-16). DevNote est le workspace le plus bruyant du watcher (6 814 <code>file_changed</code> sur 7 j) et n'a aucun <code>git_commit</code> parce que le hook post-commit n'y est pas installé.</p>
+<p class="opinion">effort d'une demi-journée à un jour pour deux hooks (pre-push, post-merge) sur le patron de <code>pulse_git_hook.sh</code> avec deux nouveaux types d'événements, donc une note de décision et un bump ; <code>install_git_hook.sh ~/Projets/DevNote</code> prend cinq minutes et ne demande rien.</p>
+</div>
+</details>
+<details open data-comp="core intelligence">
+<summary>E · <code>pulse note</code>, l'événement déclaré <span class="tag">opinion d'effort : 1 jour</span></summary>
+<div class="body">
+<p><b>Les chiffres.</b> 7 fiches sur 18 pointent une déclaration faite en conversation ou dans la tête de l'utilisateur, que rien sur la machine ne capte (D-02, D-15) ; le validateur Intelligence sait déjà consommer un genre <code>recorded_statement</code> pour <code>open</code>, mais Core n'a pas ce type d'événement et la commande n'existe pas (0 occurrence dans le code). C'est le seul candidat qui ajoute une entrée volontaire de l'utilisateur au flux, à contre-courant du principe « Pulse connaît le contexte avant qu'on lui parle » : à peser.</p>
+<p class="opinion">effort d'environ un jour : décision datée pour le nouveau type, validation et rédaction côté Core, projection dans les observations, prise en compte côté Intelligence, tests des deux côtés.</p>
+</div>
+</details>
+<p class="small">Non retenus parmi les cinq, mais chiffrés plus haut : rotation des journaux et compaction de l'outbox (section 2), sauvegarde de <code>corpus/</code> (M4), procédure de déploiement écrite (G7), filtre de candidature (T2), la mémoire de v1–v5 sans règle de préséance (I4).</p>
+<p class="small">Fin de l'inventaire. Page générée le 2026-09-12 entre 02:41 et 03:20, dépôt à <code>e4bfe95</code> ; les relevés de code et de documentation ont été délégués à deux agents de lecture, les mesures d'exécution faites directement. Aucun fichier du dépôt, aucune configuration, aucune mémoire de projet n'a été modifié en dehors de cette page.</p>
+</section>
+</main>
+<script>
+(function(){
+  // --- filtre par composant
+  var comps=['core','intelligence','observateur','scripts','launchd','hooks','corpus','docs'];
+  var active=null;
+  var bar=document.getElementById('bar');
+  var q=document.getElementById('q');
+  var count=document.getElementById('count');
+  function applyFilter(){
+    var term=(q.value||'').trim().toLowerCase();
+    var shown=0, total=0;
+    document.querySelectorAll('[data-comp]').forEach(function(el){
+      total++;
+      var okComp=!active || (el.getAttribute('data-comp')||'').split(' ').indexOf(active)>=0;
+      var okTerm=!term || el.textContent.toLowerCase().indexOf(term)>=0;
+      var vis=okComp&&okTerm;
+      el.classList.toggle('hide',!vis);
+      if(vis){shown++; if(term && el.tagName==='DETAILS') el.open=true;}
+    });
+    // sections vides
+    document.querySelectorAll('section').forEach(function(s){
+      var any=s.querySelector('[data-comp]:not(.hide)');
+      var hasFiltered=s.querySelector('[data-comp]');
+      s.classList.toggle('hide', !!(hasFiltered && !any && (active||term)));
+    });
+    count.textContent = (active||term) ? (shown+' / '+total+' blocs') : (total+' blocs');
+    highlight(term);
+  }
+  var marked=[];
+  function highlight(term){
+    marked.forEach(function(m){var p=m.parentNode; p.replaceChild(document.createTextNode(m.textContent),m); p.normalize();});
+    marked=[];
+    if(!term||term.length<2) return;
+    var walker=document.createTreeWalker(document.querySelector('main'),NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      if(!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      var p=n.parentNode; if(!p||p.closest('.hide')||p.closest('script,style,svg,summary')) return NodeFilter.FILTER_REJECT;
+      return n.nodeValue.toLowerCase().indexOf(term)>=0?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;}});
+    var nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.slice(0,400).forEach(function(n){
+      var i=n.nodeValue.toLowerCase().indexOf(term); if(i<0) return;
+      var after=n.splitText(i); after.splitText(term.length);
+      var m=document.createElement('mark'); m.textContent=after.nodeValue; after.parentNode.replaceChild(m,after); marked.push(m);
+    });
+  }
+  comps.forEach(function(c){
+    var b=document.createElement('button'); b.textContent=c; b.setAttribute('data-c',c);
+    b.onclick=function(){active=(active===c)?null:c; bar.querySelectorAll('button[data-c]').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-c')===active);}); applyFilter();};
+    bar.insertBefore(b,count);
+  });
+  q.addEventListener('input',applyFilter);
+  document.getElementById('showcmd').onclick=function(){document.body.classList.toggle('showcmd'); this.classList.toggle('on');};
+  document.getElementById('openall').onclick=function(){document.querySelectorAll('details').forEach(function(d){d.open=true;});};
+  document.getElementById('closeall').onclick=function(){document.querySelectorAll('details').forEach(function(d){d.open=false;});};
+  // --- schéma cliquable
+  var panel=document.getElementById('nodepanel');
+  var body=panel.querySelector('.body');
+  var title=panel.querySelector('summary');
+  document.querySelectorAll('.flow .node').forEach(function(n){
+    n.addEventListener('click',function(){
+      var id=n.getAttribute('data-node');
+      var src=document.getElementById('node-'+id);
+      document.querySelectorAll('.flow .node').forEach(function(x){x.classList.remove('sel');});
+      n.classList.add('sel');
+      title.textContent='Nœud : '+(src?src.getAttribute('data-title'):id);
+      body.innerHTML=src?src.innerHTML:'<p>Pas de fiche.</p>';
+      panel.open=true; panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+    });
+  });
+  // ancre -> ouvrir les details parents
+  function openTarget(){var h=location.hash; if(!h) return; var el=document.querySelector(h); if(!el) return; var p=el; while(p){ if(p.tagName==='DETAILS') p.open=true; p=p.parentElement;} }
+  window.addEventListener('hashchange',openTarget); openTarget();
+  applyFilter();
+})();
+</script>
+</body>
+</html>
