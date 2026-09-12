@@ -78,6 +78,14 @@ deux commits de worktree à l'intérieur.
   sur 30 jours.
 - La durée d'un fragment se mesure entre ses propres événements : un
   fragment de un événement suivi d'un long silence n'est jamais une session.
+- Consommateur mis à jour dans le même chantier : Intelligence épingle la
+  version de reconstruction validée (`KNOWN_RECONSTRUCTION_VERSION`,
+  `pulse_intelligence/__init__.py`), annoncée au démarrage si Core sert
+  autre chose et inscrite dans le `meta.json` d'`eval` ; elle passe à 4, et
+  le test `test_known_version_matches_core_code` lit la source de Core pour
+  le garantir. Le corpus figé `eval/observed` (capturé en reconstruction 2)
+  et ses `input_hash` ne changent pas : ce sont des exports, pas des vues
+  recalculées.
 - L'identité (`id`) d'une session reste le hash de ses événements sources ;
   le regroupement change, donc les identités des jours regroupés changent.
   Les résumés existants portent `reconstruction_version: 3` et restent

@@ -22,6 +22,10 @@ change ; le schéma de `/context` et l'export du journal ne changent pas).
   à l'identique au fragment en attente.
 - Mesure sur 30 jours : 183 → 137 sessions, 88 → 47 trop courtes, médiane
   8 → 14 min, 60 → 14 coupures `workspace_changed`, 26 fragments absorbés.
+- Consommateur : Intelligence passe `KNOWN_RECONSTRUCTION_VERSION` à 4
+  (`pulse_intelligence/__init__.py`), sinon chaque lot annonce « Core sert la
+  reconstruction v4, validé sur v3 ». Le corpus figé `eval/observed` reste en
+  reconstruction 2, inchangé.
 
 ## [0.7.0.0] - 2026-09-12
 

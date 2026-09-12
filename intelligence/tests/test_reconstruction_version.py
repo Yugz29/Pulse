@@ -13,8 +13,9 @@ from pulse_intelligence.selection import check_reconstruction_version, fetch_ses
 
 
 def test_known_version_matches_core_code():
-    """La constante suit `RECONSTRUCTION_VERSION` de Core (3 depuis le 2026-09-06)
-    sans l'importer : lue dans la source, comme un lecteur le ferait."""
+    """La constante suit `RECONSTRUCTION_VERSION` de Core (3 depuis le 2026-09-06,
+    4 depuis le 2026-09-12) sans l'importer : lue dans la source, comme un
+    lecteur le ferait."""
     from pathlib import Path
 
     source = Path(__file__).resolve().parents[2] / "core" / "daemon_v2" / "analysis" / "timeline.py"
