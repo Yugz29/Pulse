@@ -256,7 +256,7 @@ def test_open_session_exposes_ordered_work_observations(tmp_path):
     assert session["label"] == "work-1"
     assert session["source_event_ids"] == sorted(session["source_event_ids"])
     assert len(session["source_event_ids"]) == session["activity_count"]
-    assert session["reconstruction_version"] == 3
+    assert session["reconstruction_version"] == 4
     assert session["started_at"] == "2026-09-02T13:02:00+00:00"
     assert session["last_activity_at"] == "2026-09-02T13:55:00+00:00"
     assert session["duration_minutes"] == 53
@@ -292,7 +292,7 @@ def test_window_keeps_the_closed_session_out_of_the_current_one(tmp_path):
     assert recent["label"] == "work-1" and result["current_session"]["label"] == "work-2"
     assert recent["id"] != result["current_session"]["id"]
     assert len(recent["source_event_ids"]) == 5
-    assert recent["reconstruction_version"] == 3
+    assert recent["reconstruction_version"] == 4
     assert recent["started_at"] == "2026-09-02T12:10:00+00:00"
     assert recent["ended_at"] == "2026-09-02T12:30:00+00:00"
     assert recent["duration_minutes"] == 20
@@ -761,7 +761,7 @@ def test_day_sessions_match_the_current_session_form_and_exclude_open_ones(tmp_p
 
     assert day["schema_version"] == 3
     assert day["date"] == "2026-09-02"
-    assert day["reconstruction_version"] == 3
+    assert day["reconstruction_version"] == 4
     assert [s["label"] for s in day["sessions"]] == ["work-1"]
     closed = day["sessions"][0]
     assert closed["is_open"] is False
@@ -850,7 +850,7 @@ def test_a_session_closed_by_a_lock_never_reopens_for_the_context_api(tmp_path):
     assert result["isolated_signals"] == []
     assert listed_after == listed_before
     assert listed_after[0]["is_open"] is False
-    assert listed_after[0]["reconstruction_version"] == 3
+    assert listed_after[0]["reconstruction_version"] == 4
 
     # Après un vrai déverrouillage, le travail suivant est une autre session,
     # et la première ne bouge toujours pas.

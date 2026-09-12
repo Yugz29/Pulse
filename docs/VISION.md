@@ -83,13 +83,14 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, version 0.7.0.0, gel levé** (`core/`). Daemon Flask
+**État actuel : existe, version 0.8.0.0, gel levé** (`core/`). Daemon Flask
 et SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
 (FSEvents), applications et fenêtres (Swift, Accessibility), hook Git,
 sessions d'agents Claude Code / Codex en événements dérivés, services
 résidents sous launchd, vue HTML locale. Identité de session stable par hash
 des événements sources (0.5.0), reconstruction unique et déterministe
-(`reconstruction_version` 3), observations ordonnées exposées par `/context`
+(`reconstruction_version` 4, seuil avant split), observations ordonnées
+exposées par `/context`
 (schéma 3, `observation_version` 2).
 
 Le périmètre fonctionnel de Core a été gelé du 2026-09-02 (0.2.0) au
@@ -202,6 +203,11 @@ problème réel.
   première action de la couche Agent (décision du 2026-09-03).
 
 ## Décisions prises
+
+- **2026-09-12** — Seuil avant split : un fragment d'un autre workspace ne
+  devient une session que s'il dure 2 minutes et compte 2 activités fortes,
+  sinon il est absorbé en gardant son workspace ; `reconstruction_version` 4,
+  Core 0.8.0.0 ([décision](decisions/2026-09-12-seuil-avant-split.md)).
 
 - **2026-09-12** — Contexte de fenêtre : l'observateur Swift capte titre,
   document et URL réduite de la fenêtre au premier plan via Accessibility,

@@ -101,7 +101,7 @@ def test_the_same_day_read_in_winter_and_in_summer_gives_the_same_sessions(tmp_p
     assert [s["id"] for s in winter["sessions"]] == [s["id"] for s in summer["sessions"]]
     assert len(winter["sessions"]) == 1
     assert winter["timezone"] == summer["timezone"] == "Europe/Paris"
-    assert winter["reconstruction_version"] == summer["reconstruction_version"] == 3
+    assert winter["reconstruction_version"] == summer["reconstruction_version"] == 4
 
 
 @pytest.mark.parametrize(

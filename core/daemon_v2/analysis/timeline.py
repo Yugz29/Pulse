@@ -45,7 +45,13 @@ RESUME_LOCK_TYPES = {resume: lock for lock, resume in LOCK_RESUME_TYPES.items()}
 # 3 depuis le 2026-09-06 : fuseau de reconstruction explicite (ZoneInfo) à la
 # place du décalage fixe du moment ; les sessions proches de minuit peuvent
 # changer d'identifiant au premier replay, variation prévue par la décision.
-RECONSTRUCTION_VERSION = 3
+# 4 : seuil avant split (décision du 2026-09-12) — un fragment d'un autre
+# workspace ne ferme la session en cours que s'il dure SPLIT_MIN_DURATION et
+# compte SPLIT_MIN_STRONG activités fortes ; sinon il est absorbé, avec son
+# workspace.
+RECONSTRUCTION_VERSION = 4
+SPLIT_MIN_DURATION = timedelta(minutes=2)
+SPLIT_MIN_STRONG = 2
 SESSION_IDENTITY_HEX_LENGTH = 16
 
 
@@ -321,6 +327,44 @@ def _session_from_activities(
     }
 
 
+def _workspace_relation(
+    current_root: str | None,
+    current_confidence: str | None,
+    current_observed_at: datetime,
+    incoming: WorkspaceIdentity,
+    occurred_at: datetime,
+) -> str:
+    """same, promote ou split entre un workspace tenu (session en cours ou
+    fragment en attente) et un événement entrant. Mêmes règles pour les
+    deux : une commande à faible confiance ne quitte jamais un dépôt sûr."""
+    if incoming.root is None:
+        return "same"
+    if current_root is None:
+        return "promote"
+    if incoming.root == current_root:
+        return (
+            "promote"
+            if current_confidence == "low"
+            and incoming.confidence in {"medium", "high"}
+            else "same"
+        )
+    if current_confidence == "high" and incoming.confidence == "low":
+        return "same"
+    if (
+        current_confidence == "low"
+        and incoming.confidence in {"medium", "high"}
+        and occurred_at - current_observed_at <= WORKSPACE_PROMOTION_WINDOW
+    ):
+        current_path = Path(current_root).expanduser()
+        incoming_path = Path(incoming.root).expanduser()
+        if (
+            current_path in incoming_path.parents
+            or incoming_path in current_path.parents
+        ):
+            return "promote"
+    return "split"
+
+
 def reconstruct_session_views(
     activities: list[dict[str, Any]],
     *,
@@ -348,6 +392,9 @@ def reconstruct_session_views(
     work_sessions: list[dict[str, Any]] = []
     assigned_ids: set[int] = set()
     current: dict[str, Any] | None = None
+    # Fragment d'un autre workspace en attente de qualification (seuil avant
+    # split) : ses événements ne sont ni dans `current` ni dans une session.
+    pending_split: dict[str, Any] | None = None
     work_label_count = 0
     # Verrouillages / mises en veille sans reprise vue : type → instant.
     open_locks: dict[str, datetime] = {}
@@ -477,35 +524,13 @@ def reconstruct_session_views(
     ) -> str:
         """Return same, promote, or split for the active session."""
         assert current is not None
-        current_root = current["workspace_root"]
-        current_confidence = current["workspace_confidence"]
-        if incoming.root is None:
-            return "same"
-        if current_root is None:
-            return "promote"
-        if incoming.root == current_root:
-            return (
-                "promote"
-                if current_confidence == "low"
-                and incoming.confidence in {"medium", "high"}
-                else "same"
-            )
-        if current_confidence == "high" and incoming.confidence == "low":
-            return "same"
-        if (
-            current_confidence == "low"
-            and incoming.confidence in {"medium", "high"}
-            and occurred_at - current["workspace_observed_at"]
-            <= WORKSPACE_PROMOTION_WINDOW
-        ):
-            current_path = Path(current_root).expanduser()
-            incoming_path = Path(incoming.root).expanduser()
-            if (
-                current_path in incoming_path.parents
-                or incoming_path in current_path.parents
-            ):
-                return "promote"
-        return "split"
+        return _workspace_relation(
+            current["workspace_root"],
+            current["workspace_confidence"],
+            current["workspace_observed_at"],
+            incoming,
+            occurred_at,
+        )
 
     def promote_workspace(
         incoming: WorkspaceIdentity,
@@ -523,6 +548,81 @@ def reconstruct_session_views(
         current["activities"].extend(current["pending_unresolved"])
         current["pending_unresolved"] = []
 
+    def last_work_at() -> datetime:
+        """Dernier travail observé, fragment en attente compris."""
+        assert current is not None
+        if pending_split is not None:
+            return max(current["last_work_at"], pending_split["last_at"])
+        return current["last_work_at"]
+
+    def open_pending_split(
+        activity: dict[str, Any],
+        workspace: WorkspaceIdentity,
+        occurred_at: datetime,
+    ) -> None:
+        nonlocal pending_split
+        pending_split = {
+            "workspace": workspace,
+            "activities": [activity],
+            "first_at": occurred_at,
+            "last_at": occurred_at,
+        }
+
+    def pending_split_qualifies() -> bool:
+        assert pending_split is not None
+        # M est la condition première : un fragment de 0 minute n'est jamais
+        # une session, quel que soit le nombre d'activités fortes.
+        return (
+            pending_split["last_at"] - pending_split["first_at"]
+            >= SPLIT_MIN_DURATION
+            and len(pending_split["activities"]) >= SPLIT_MIN_STRONG
+        )
+
+    def absorb_pending_split() -> None:
+        """Le fragment n'est pas une session : ses événements rejoignent la
+        session en cours, chacun avec son propre workspace (rendu et
+        observations le gardent)."""
+        nonlocal pending_split
+        assert current is not None and pending_split is not None
+        confirm_pending_unresolved()
+        current["activities"].extend(pending_split["activities"])
+        current["last_work_at"] = max(
+            current["last_work_at"], pending_split["last_at"]
+        )
+        pending_split = None
+
+    def confirm_pending_split() -> None:
+        """Le fragment est une session : la précédente se ferme à l'instant
+        de son premier événement, comme avant le seuil."""
+        nonlocal pending_split, current
+        assert current is not None and pending_split is not None
+        fragment = pending_split
+        pending_split = None
+        carried = [
+            weak
+            for weak in current["pending_unresolved"]
+            if datetime.fromisoformat(weak["occurred_at"]) >= fragment["first_at"]
+        ]
+        current["pending_unresolved"] = [
+            weak for weak in current["pending_unresolved"] if weak not in carried
+        ]
+        close_current(fragment["first_at"], "workspace_changed")
+        start_session(fragment["activities"][0], fragment["first_at"])
+        assert current is not None
+        if fragment["workspace"].root != current["workspace_root"]:
+            promote_workspace(fragment["workspace"], fragment["first_at"])
+        current["activities"].extend(fragment["activities"][1:])
+        current["last_work_at"] = fragment["last_at"]
+        current["pending_unresolved"] = carried
+
+    def resolve_pending_split() -> None:
+        if pending_split is None:
+            return
+        if pending_split_qualifies():
+            confirm_pending_split()
+        else:
+            absorb_pending_split()
+
     for activity in activities:
         occurred_at = datetime.fromisoformat(activity["occurred_at"])
         activity_type = activity["type"]
@@ -530,8 +630,9 @@ def reconstruct_session_views(
 
         if (
             current is not None
-            and occurred_at - current["last_work_at"] > WORK_SESSION_GAP
+            and occurred_at - last_work_at() > WORK_SESSION_GAP
         ):
+            resolve_pending_split()
             close_current(current["last_work_at"], "inactivity")
 
         if activity_type in LOCK_RESUME_TYPES:
@@ -539,6 +640,7 @@ def reconstruct_session_views(
             # travail observé, et ne rouvrira jamais. Un second verrouillage
             # du même type (doublon) garde l'instant du premier.
             if current is not None:
+                resolve_pending_split()
                 close_current(current["last_work_at"], activity_type)
             open_locks.setdefault(activity_type, occurred_at)
             continue
@@ -573,10 +675,33 @@ def reconstruct_session_views(
             if current is None:
                 start_session(activity, occurred_at)
                 continue
+            if pending_split is not None:
+                fragment = pending_split["workspace"]
+                relation = _workspace_relation(
+                    fragment.root,
+                    fragment.confidence,
+                    pending_split["first_at"],
+                    workspace,
+                    occurred_at,
+                )
+                if relation != "split":
+                    # Le fragment continue ; dès qu'il dure et pèse assez,
+                    # c'est une session et la précédente se ferme.
+                    if relation == "promote":
+                        pending_split["workspace"] = workspace
+                    pending_split["activities"].append(activity)
+                    pending_split["last_at"] = occurred_at
+                    if pending_split_qualifies():
+                        confirm_pending_split()
+                    continue
+                # Retour à la session en cours, ou troisième workspace : le
+                # fragment n'a pas atteint le seuil, il est absorbé.
+                absorb_pending_split()
             transition = workspace_transition(workspace, occurred_at)
             if transition == "split":
-                close_current(occurred_at, "workspace_changed")
-                start_session(activity, occurred_at)
+                open_pending_split(activity, workspace, occurred_at)
+                if pending_split_qualifies():
+                    confirm_pending_split()
                 continue
             confirm_pending_unresolved()
             if transition == "promote":
@@ -588,11 +713,12 @@ def reconstruct_session_views(
         if activity_type in WEAK_CONTEXT_TYPES:
             if (
                 current is not None
-                and occurred_at - current["last_work_at"] <= WEAK_CONTEXT_WINDOW
+                and occurred_at - last_work_at() <= WEAK_CONTEXT_WINDOW
             ):
                 current["pending_unresolved"].append(activity)
 
     if current is not None:
+        resolve_pending_split()
         current_day = now.astimezone(zone).date()
         if day != current_day:
             reason = "day_boundary"

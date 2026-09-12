@@ -886,11 +886,13 @@ def test_renders_deterministic_daily_summary_in_markdown_and_html(tmp_path):
         "Workspace : /project/Pulse",
         "App active : Terminal",
         "Dernière commande : `git push`",
-        "Session active depuis : 10:04",
+        # Reconstruction 4 : les deux fichiers de /other en trente secondes ne
+        # font pas une session, ils sont absorbés ; une seule session.
+        "Session active depuis : 10:00",
         "Dernière activité utile : terminal\\_finished — git push",
         "## Aujourd’hui",
-        "Sessions de travail : 3",
-        "Activités non attribuées : 3",
+        "Sessions de travail : 1",
+        "Activités non attribuées : 1",
         "Événements : 9",
         "Commandes terminal : 1",
         "Fichiers modifiés : 5",
@@ -904,11 +906,11 @@ def test_renders_deterministic_daily_summary_in_markdown_and_html(tmp_path):
         "<dt>Workspace</dt><dd>/project/Pulse</dd>",
         "<dt>App active</dt><dd>Terminal</dd>",
         "<dt>Dernière commande</dt><dd>git push</dd>",
-        "<dt>Session active depuis</dt><dd>10:04</dd>",
+        "<dt>Session active depuis</dt><dd>10:00</dd>",
         "<dt>Dernière activité utile</dt><dd>terminal_finished — git push</dd>",
         "<h2>Aujourd’hui</h2>",
-        "<dt>Sessions de travail</dt><dd>3</dd>",
-        "<dt>Activités non attribuées</dt><dd>3</dd>",
+        "<dt>Sessions de travail</dt><dd>1</dd>",
+        "<dt>Activités non attribuées</dt><dd>1</dd>",
         "<dt>Événements</dt><dd>9</dd>",
         "<dt>Commandes terminal</dt><dd>1</dd>",
         "<dt>Fichiers modifiés</dt><dd>5</dd>",
@@ -1915,7 +1917,10 @@ def test_timeline_marks_project_changes_but_keeps_weak_cwd_as_detail(tmp_path):
     html = render_daily_trace_html(trace)
     timeline_lines = markdown.splitlines()
 
-    assert trace["work_session_count"] == 3
+    # Reconstruction 4 : le fichier Pulse_Sandbox isolé ne coupe plus la
+    # session ; il y reste avec son propre projet, marqué par un séparateur
+    # (variante B de la décision du 2026-09-12).
+    assert trace["work_session_count"] == 1
     assert timeline_lines.count("### Pulse\\_V2") == 2
     assert timeline_lines.count("### Pulse\\_Sandbox") == 1
     assert "### TEST" not in timeline_lines
@@ -1926,11 +1931,11 @@ def test_timeline_marks_project_changes_but_keeps_weak_cwd_as_detail(tmp_path):
         in html
     )
     assert (
-        '<a class="nav-project" href="#session-2-projet-1">'
+        '<a class="nav-project" href="#session-1-projet-2">'
         "Pulse_Sandbox</a>"
     ) in html
     assert (
-        '<a class="nav-project" href="#session-3-projet-1">Pulse_V2</a>'
+        '<a class="nav-project" href="#session-1-projet-3">Pulse_V2</a>'
         in html
     )
     assert (
@@ -1939,10 +1944,10 @@ def test_timeline_marks_project_changes_but_keeps_weak_cwd_as_detail(tmp_path):
     )
     assert (
         'class="project-separator" '
-        'id="session-2-projet-1">Pulse_Sandbox</li>'
+        'id="session-1-projet-2">Pulse_Sandbox</li>'
     ) in html
     assert (
-        'class="project-separator" id="session-3-projet-1">Pulse_V2</li>'
+        'class="project-separator" id="session-1-projet-3">Pulse_V2</li>'
         in html
     )
     assert 'class="nav-project"' in html

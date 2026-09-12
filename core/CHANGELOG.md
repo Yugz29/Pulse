@@ -4,6 +4,25 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.0.0] - 2026-09-12
+
+Seuil avant split, note de décision
+`docs/decisions/2026-09-12-seuil-avant-split.md`. Contrat consommé :
+`reconstruction_version` passe de 3 à 4 (le regroupement des sessions
+change ; le schéma de `/context` et l'export du journal ne changent pas).
+
+### Modifié
+- Un événement fort d'un autre workspace n'ouvre plus une session sur-le-champ :
+  il ouvre un fragment en attente, qui ne devient une session (et ne ferme la
+  précédente, à l'instant de son premier événement) que s'il dure au moins
+  2 minutes entre ses événements forts **et** en compte au moins 2. Sinon il
+  est absorbé par la session en cours, en gardant son workspace dans le rendu
+  (séparateur de projet), dans les observations et dans `projects`.
+- Les règles de relation entre workspaces (`_workspace_relation`) s'appliquent
+  à l'identique au fragment en attente.
+- Mesure sur 30 jours : 183 → 137 sessions, 88 → 47 trop courtes, médiane
+  8 → 14 min, 60 → 14 coupures `workspace_changed`, 26 fragments absorbés.
+
 ## [0.7.0.0] - 2026-09-12
 
 Contexte de fenêtre : l'observateur Swift capte ce que l'utilisateur regarde,
