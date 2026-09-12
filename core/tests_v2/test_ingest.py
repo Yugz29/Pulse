@@ -1040,3 +1040,61 @@ def test_window_focused_title_is_bounded_and_app_required():
 )
 def test_reduce_window_url_never_keeps_query_fragment_or_credentials(raw, expected):
     assert reduce_window_url(raw) == expected
+
+
+
+@pytest.fixture
+def ignored_domains_file(tmp_path, monkeypatch):
+    from daemon_v2 import window_policy
+
+    path = tmp_path / "ignored_domains"
+    monkeypatch.setenv("PULSE_V2_IGNORED_DOMAINS", str(path))
+    monkeypatch.setattr(window_policy, "_cache", None)
+    return path
+
+
+def _window(url: str, title: str = "Boîte de réception (12) - moi@example.com - Gmail"):
+    return {"type": "window_focused", "app": "Safari", "title": title, "url": url}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://mail.google.com/mail/u/0/",
+        "https://MAIL.GOOGLE.COM/mail/u/1/#inbox",
+        "https://outlook.office.com/mail/",
+        "https://outlook.live.com/mail/0/",
+        "https://mail.proton.me/u/0/inbox",
+        "https://something.mail.google.com/x",
+    ],
+)
+def test_window_focused_on_a_default_ignored_domain_is_ignored(ignored_domains_file, url):
+    with pytest.raises(IgnoredActivity):
+        normalize_activity(_window(url))
+
+
+def test_window_focused_on_other_domains_is_kept(ignored_domains_file):
+    activity = normalize_activity(_window("https://github.com/org/repo/pull/89", "PR #89"))
+    assert activity.details["url"] == "https://github.com/org/repo/pull/89"
+    # Un suffixe qui ressemble n'est pas un sous-domaine.
+    kept = normalize_activity(_window("https://notmail.google.com/a", "Docs"))
+    assert kept.details["url"] == "https://notmail.google.com/a"
+
+
+def test_ignored_domains_file_replaces_the_defaults(ignored_domains_file):
+    ignored_domains_file.write_text("# perso\nexample.org\n")
+    with pytest.raises(IgnoredActivity):
+        normalize_activity(_window("https://app.example.org/inbox"))
+    kept = normalize_activity(_window("https://mail.google.com/mail/u/0/"))
+    assert kept.details["url"] == "https://mail.google.com/mail/u/0/"
+    # Un fichier vide n'ignore rien ; relu quand il change.
+    ignored_domains_file.write_text("")
+    import os
+    os.utime(ignored_domains_file, (2_000_000_000, 2_000_000_000))
+    kept = normalize_activity(_window("https://app.example.org/inbox"))
+    assert kept.details["url"] == "https://app.example.org/inbox"
+
+
+def test_window_focused_without_url_cannot_be_matched_to_a_domain(ignored_domains_file):
+    activity = normalize_activity({"type": "window_focused", "app": "Safari", "title": "Personnel — Gmail"})
+    assert activity.details == {"app": "Safari", "title": "Personnel — Gmail"}

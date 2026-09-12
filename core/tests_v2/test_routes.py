@@ -1214,3 +1214,33 @@ def test_project_and_every_free_text_field_come_back_redacted(tmp_path):
     details = client.get(f"/activities/{payload['event_id']}").get_json()["details"]
     assert details["structured"]["project"] == "TOKEN=[REDACTED]"
     assert details["reprise"]["doing"] == "Tu réglais TOKEN=[REDACTED] dans la config."
+
+
+
+def test_window_focused_on_an_ignored_domain_returns_204(tmp_path, monkeypatch):
+    from daemon_v2 import window_policy
+
+    monkeypatch.setenv("PULSE_V2_IGNORED_DOMAINS", str(tmp_path / "absent"))
+    monkeypatch.setattr(window_policy, "_cache", None)
+    app = create_app(tmp_path / "trace.db")
+    response = app.test_client().post(
+        "/activities",
+        json={
+            "event_id": "window-gmail",
+            "schema_version": 1,
+            "type": "window_focused",
+            "producer": {"name": "tests", "version": "2", "instance_id": "t"},
+            "occurred_at": "2026-09-12T14:00:00+00:00",
+            "details": {
+                "app": "Safari",
+                "title": "Inbox - moi@example.com - Gmail",
+                "url": "https://mail.google.com/mail/u/0/#inbox",
+            },
+        },
+    )
+    assert response.status_code == 204
+    import sqlite3
+    stored = sqlite3.connect(tmp_path / "trace.db").execute(
+        "select count(*) from activities"
+    ).fetchone()[0]
+    assert stored == 0

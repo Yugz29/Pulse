@@ -59,6 +59,7 @@ final class WindowObserver: @unchecked Sendable {
     private var observedApplication: ApplicationContext?
     private var observedProcessID: pid_t = 0
     private var pendingRead: DispatchWorkItem?
+    private var pendingFlush: DispatchWorkItem?
     private var accessibilityTrusted = false
     private var accessibilityWarned = false
 
@@ -86,13 +87,39 @@ final class WindowObserver: @unchecked Sendable {
     func stop() {
         pendingRead?.cancel()
         pendingRead = nil
+        flushHeld(force: true)
         detach()
+    }
+
+    private func flushHeld(force: Bool) {
+        pendingFlush?.cancel()
+        pendingFlush = nil
+        do {
+            _ = try recorder.flush(force: force)
+        } catch {
+            ObserverLog.write("Pulse WindowObserver: \(error)")
+        }
+        if recorder.hasHeldContext {
+            scheduleFlush(after: WindowEventRecorder.defaultMinimumInterval)
+        }
+    }
+
+    private func scheduleFlush(after delay: TimeInterval) {
+        pendingFlush?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.flushHeld(force: false)
+        }
+        pendingFlush = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     /// Appelé sur le thread principal par `ApplicationObserver` à chaque
     /// activation retenue. Attache l'observateur au nouveau processus et
     /// programme une première lecture de sa fenêtre.
     func track(_ application: NSRunningApplication, context: ApplicationContext) {
+        // L'application quitte le premier plan : son dernier état retenu
+        // part maintenant, l'intervalle ne retient jamais un état final.
+        flushHeld(force: true)
         detach()
         guard accessibilityAvailable() else { return }
         guard !ignoredApplications.contains(context) else {
@@ -225,7 +252,9 @@ final class WindowObserver: @unchecked Sendable {
             return
         }
         do {
-            try recorder.record(context)
+            if case .held(let retryAfter) = try recorder.record(context) {
+                scheduleFlush(after: retryAfter)
+            }
         } catch {
             ObserverLog.write("Pulse WindowObserver: \(error)")
         }

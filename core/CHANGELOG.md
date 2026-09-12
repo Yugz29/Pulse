@@ -35,6 +35,15 @@ existante ne change).
 - Fait `window` dans les observations (`app`, `title`, `document`, `url`),
   provenance `sources` comme les autres faits ; ligne « fenêtre » par
   fenêtre dans le journal HTML et Markdown, sans lien cliquable.
+- Titres à répétition : le dédoublonnage compare le titre sans ses glyphes
+  de progression (spinner de Claude Code dans Terminal : 2 032 événements
+  pour sept titres en une heure), et un filet de 30 s par application
+  retient le dernier état au lieu de l'émettre à chaque seconde. Le titre
+  stocké reste le titre affiché.
+- Domaines ignorés `~/.pulse_v2/ignored_domains` (créée par l'installeur :
+  messageries web Gmail, Outlook, Proton), appliqués à l'ingestion : un
+  `window_focused` sur ces domaines est refusé en 204, l'`app_activated`
+  du navigateur reste.
 
 ### Modifié
 - `window_focused` est un contexte faible comme `app_activated`
