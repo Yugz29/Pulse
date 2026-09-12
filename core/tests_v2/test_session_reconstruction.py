@@ -352,6 +352,9 @@ def test_inactivity_separates_sessions_without_inventing_work_time():
 
 
 def test_workspace_change_splits_projects_at_the_new_event():
+    # Depuis le seuil avant split (reconstruction 4), le nouveau workspace
+    # doit durer 2 minutes et compter 2 activités fortes ; la coupure tombe
+    # alors sur son premier événement, comme avant.
     sessions, _passive = reconstruct(
         event("file_changed", 0, {**workspace(PULSE), "path": f"{PULSE}/a.py"}),
         event(
@@ -359,6 +362,12 @@ def test_workspace_change_splits_projects_at_the_new_event():
             15,
             {**workspace(DEVNOTE), "path": f"{DEVNOTE}/app.js"},
             2,
+        ),
+        event(
+            "file_changed",
+            18,
+            {**workspace(DEVNOTE), "path": f"{DEVNOTE}/index.js"},
+            3,
         ),
     )
 
@@ -527,6 +536,12 @@ def test_unresolved_applications_are_not_assigned_across_workspace_change():
             3,
             {**workspace(DEVNOTE), "command": "npm test"},
             4,
+        ),
+        event(
+            "terminal_finished",
+            6,
+            {**workspace(DEVNOTE), "command": "npm test"},
+            5,
         ),
     )
 
@@ -774,7 +789,7 @@ def test_late_event_moves_labels_but_never_the_session_identity(tmp_path):
     assert [s["label"] for s in before] == ["work-1"]
     afternoon_id = before[0]["id"]
     assert len(afternoon_id) == 16 and int(afternoon_id, 16) >= 0
-    assert before[0]["reconstruction_version"] == 3
+    assert before[0]["reconstruction_version"] == 4
     assert len(before[0]["source_event_ids"]) == 2
 
     # Un événement arrive après coup, daté du matin.
@@ -998,7 +1013,7 @@ def test_lock_closes_the_session_at_once_on_its_last_work(lock_type):
     assert session["started_at"] == BASE.isoformat()
     assert session["ended_at"] == (BASE + timedelta(minutes=5)).isoformat()
     assert session["source_event_ids"] == ["fixture:1", "fixture:2"]
-    assert session["reconstruction_version"] == 3
+    assert session["reconstruction_version"] == 4
     assert unresolved == []
 
 
@@ -1214,3 +1229,136 @@ def test_window_context_never_starts_a_session_but_joins_nearby_work():
     ]
     assert sessions[0]["workspace_root"] == PULSE
     assert sessions[0]["applications"] == []
+
+
+# Seuil avant split (décision du 2026-09-12, reconstruction 4) : un
+# événement fort d'un autre workspace ne ferme la session en cours que si le
+# fragment entrant dure au moins 2 minutes ET compte au moins 2 activités
+# fortes. En dessous, il est absorbé par la session en cours et garde son
+# workspace dans le rendu et les observations.
+PULSE_ROOT = "/work/Pulse"
+CORTEX_ROOT = "/work/Cortex"
+DEVNOTE_ROOT = "/work/DevNote"
+WORKTREE = "/private/tmp/scratchpad/wt/observer-log-timestamps"
+
+
+def _strong(event_type: str, minutes: float, root: str, event_id: int) -> dict:
+    details = {**workspace(root)}
+    if event_type == "terminal_finished":
+        details.update({"command": "make test", "exit_code": 0, "cwd": root})
+    elif event_type == "file_changed":
+        details.update({"path": f"{root}/file_{event_id}.py", "event": "modified"})
+    else:
+        details.update({"commit_hash": "a" * 40, "message": "fix", "git_root": root})
+    return event(event_type, minutes, details, event_id=event_id)
+
+
+def _late():
+    return BASE + timedelta(hours=3)
+
+
+def test_zero_minute_burst_from_another_workspace_is_absorbed():
+    # 6 septembre 12:12 : quatre fichiers Cortex écrits dans la même seconde,
+    # puis un fichier Pulse, une commande Cortex isolée, et Pulse reprend.
+    sessions, unresolved = reconstruct(
+        _strong("terminal_finished", 0, PULSE_ROOT, 1),
+        _strong("file_changed", 5, PULSE_ROOT, 2),
+        *[_strong("file_changed", 6, CORTEX_ROOT, i) for i in (3, 4, 5, 6)],
+        _strong("file_changed", 8, PULSE_ROOT, 7),
+        _strong("terminal_finished", 20, CORTEX_ROOT, 8),
+        _strong("terminal_finished", 22, PULSE_ROOT, 9),
+        _strong("terminal_finished", 30, PULSE_ROOT, 10),
+        now=_late(),
+    )
+    assert unresolved == []
+    assert len(sessions) == 1
+    session = sessions[0]
+    assert session["workspace_root"] == PULSE_ROOT
+    assert session["end_reason"] != "workspace_changed"
+    assert len(session["activities"]) == 10
+    absorbed = [
+        a for a in session["activities"]
+        if a["details"]["workspace"]["workspace_root"] == CORTEX_ROOT
+    ]
+    assert len(absorbed) == 5
+    assert session["started_at"] < session["ended_at"]
+
+
+def test_worktree_commits_do_not_split_the_evening_sessions():
+    # 11 septembre, soirée : deux commits depuis des worktrees d'agent
+    # coupaient Pulse en six sessions ; le verrouillage reste la seule coupure.
+    sessions, unresolved = reconstruct(
+        _strong("terminal_finished", 0, PULSE_ROOT, 1),
+        _strong("terminal_finished", 10, PULSE_ROOT, 2),
+        _strong("terminal_finished", 16, PULSE_ROOT, 3),
+        _strong("git_commit", 16, WORKTREE, 4),
+        _strong("file_changed", 17, PULSE_ROOT, 5),
+        event("screen_locked", 18, event_id=6),
+        event("screen_unlocked", 22, event_id=7),
+        _strong("terminal_finished", 23, PULSE_ROOT, 8),
+        _strong("terminal_finished", 27, PULSE_ROOT, 9),
+        _strong("git_commit", 28, WORKTREE, 10),
+        _strong("terminal_finished", 28, PULSE_ROOT, 11),
+        _strong("terminal_finished", 40, PULSE_ROOT, 12),
+        _strong("terminal_finished", 62, PULSE_ROOT, 13),
+        now=_late(),
+    )
+    assert unresolved == []
+    assert [s["end_reason"] for s in sessions] == ["screen_locked", "inactivity"]
+    assert [len(s["activities"]) for s in sessions] == [5, 6]
+    assert all(s["workspace_root"] == PULSE_ROOT for s in sessions)
+    commits = [a for s in sessions for a in s["activities"] if a["type"] == "git_commit"]
+    assert [c["details"]["git_root"] for c in commits] == [WORKTREE, WORKTREE]
+
+
+def test_real_switch_of_eight_minutes_still_splits():
+    # 3 septembre 17:08 : huit minutes dans DevNote, deux commandes ; c'est
+    # une vraie bascule, rien ne doit bouger.
+    sessions, _unresolved = reconstruct(
+        _strong("terminal_finished", 0, PULSE_ROOT, 1),
+        _strong("terminal_finished", 6, PULSE_ROOT, 2),
+        _strong("terminal_finished", 13, DEVNOTE_ROOT, 3),
+        _strong("terminal_finished", 21, DEVNOTE_ROOT, 4),
+        _strong("terminal_finished", 21.5, PULSE_ROOT, 5),
+        _strong("terminal_finished", 29, PULSE_ROOT, 6),
+        now=_late(),
+    )
+    assert [s["workspace_root"] for s in sessions] == [PULSE_ROOT, DEVNOTE_ROOT, PULSE_ROOT]
+    assert [s["end_reason"] for s in sessions] == [
+        "workspace_changed", "workspace_changed", "inactivity",
+    ]
+    assert sessions[1]["started_at"] == (BASE + timedelta(minutes=13)).isoformat()
+
+
+def test_fragment_needs_both_two_minutes_and_two_strong_activities():
+    # Une commande seule, même quinze minutes plus tard, n'est pas une session.
+    lonely, _ = reconstruct(
+        _strong("terminal_finished", 0, PULSE_ROOT, 1),
+        _strong("terminal_finished", 5, PULSE_ROOT, 2),
+        _strong("terminal_finished", 6, CORTEX_ROOT, 3),
+        _strong("terminal_finished", 12, PULSE_ROOT, 4),
+        now=_late(),
+    )
+    assert len(lonely) == 1 and len(lonely[0]["activities"]) == 4
+    # Deux commandes en trente secondes non plus : M est la condition première.
+    burst, _ = reconstruct(
+        _strong("terminal_finished", 0, PULSE_ROOT, 1),
+        _strong("terminal_finished", 5, PULSE_ROOT, 2),
+        _strong("terminal_finished", 6, CORTEX_ROOT, 3),
+        _strong("terminal_finished", 6.5, CORTEX_ROOT, 4),
+        _strong("terminal_finished", 8, PULSE_ROOT, 5),
+        now=_late(),
+    )
+    assert len(burst) == 1 and len(burst[0]["activities"]) == 5
+    # Deux commandes sur trois minutes : le fragment devient une session,
+    # fermée à l'instant de son premier événement, même sans retour à Pulse.
+    real, _ = reconstruct(
+        _strong("terminal_finished", 0, PULSE_ROOT, 1),
+        _strong("terminal_finished", 5, PULSE_ROOT, 2),
+        _strong("terminal_finished", 6, CORTEX_ROOT, 3),
+        _strong("terminal_finished", 9, CORTEX_ROOT, 4),
+        now=_late(),
+    )
+    assert [s["workspace_root"] for s in real] == [PULSE_ROOT, CORTEX_ROOT]
+    assert real[0]["end_reason"] == "workspace_changed"
+    assert real[0]["ended_at"] == real[1]["started_at"]
