@@ -132,7 +132,7 @@ aucun au rendu :
   première heure.
 
 Messagerie web : deux titres Safari portaient l'adresse du compte
-(`… - yannduzelier@gmail.com - Gmail`), hors de portée de la liste
+(`… - <adresse du compte> - Gmail`), hors de portée de la liste
 d'applications. **Liste de domaines ignorés** `~/.pulse_v2/ignored_domains`
 (créée par l'installeur : `mail.google.com`, `outlook.office.com`,
 `outlook.live.com`, `mail.proton.me` ; un hôte couvre ses sous-domaines ;
