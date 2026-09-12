@@ -96,6 +96,25 @@ l'entrée, visibles pour `doing`, non éligibles pour `open`. Note :
 **Le compteur de l'étape 4 repart au premier lot v7 à entrée schéma 3, Mac
 éveillé.**
 
+**Clôture du 2026-09-12, 15:10.** Mergées en rebase, CI verte à chaque
+étape : #90 (contexte de fenêtre `window_focused`, Core 0.7.0.0), #91
+(tests de réentrance de `observe(_:)`, entrée TODOS close), #92 (seuil
+avant split, `reconstruction_version` 4, Core 0.8.0.0,
+`KNOWN_RECONSTRUCTION_VERSION` 4 côté Intelligence). Prod sur `main`
+depuis 15:02 : daemon, worker, file-watcher et observateur relancés,
+`make status` sans STALE, `GET /context` en schéma 3,
+`observation_version` 2, `reconstruction_version` 4 sur les vues servies.
+v7 actif (`prompt_version = "v7"` en config). Contexte de fenêtre en
+production avec l'autorisation Accessibilité, normalisation du titre avant
+dédoublonnage et filet de 30 s par application (31 `window_focused` sur
+15 minutes d'usage réel, Terminal 4) ; domaines de messagerie web refusés
+à l'ingestion. GitNexus réindexé.
+
+**Prochaine étape : lot du 2026-09-13 à 06:30**, premier lot v7 à entrée
+schéma 3 et reconstruction 4 → jour 9, premier jour du compteur.
+Chantiers suivants décidés, non commencés : règle « même `git_common_dir`
+= même projet », puis état net par chemin.
+
 
 
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
