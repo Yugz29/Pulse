@@ -71,6 +71,9 @@ du workspace reste une vue d'affichage, distincte des observations datées.
   avoir des intervalles qui se chevauchent : aucun ordre total n'est inventé.
 - Pour un commit : hash et message complets, date, dépôt et branche observés.
 - `applications` : nombres et intervalles d'activation, références `app:1`… ;
+- depuis le 2026-09-12 (`observation_version` 2) : faits `window` dans la
+  ligne de temps, `app`, `title`, `document`, `url` réduite
+  ([décision](2026-09-12-contexte-de-fenetre.md)) ;
   aucun travail ou intention n'est déduit de l'application active.
 - `last_observed.commands` : dernière référence par commande exacte et cwd.
   `files` : dernière série par chemin absolu. `git` : dernière référence de

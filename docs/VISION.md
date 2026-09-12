@@ -83,13 +83,14 @@ modèle : si toute l'IA est arrêtée, Core continue de fonctionner. Faible
 consommation, données structurées et versionnées, API locale stable, aucune
 décision irréversible prise par un modèle.
 
-**État actuel : existe, version 0.6.0.0, gel levé** (`core/`). Daemon Flask
+**État actuel : existe, version 0.7.0.0, gel levé** (`core/`). Daemon Flask
 et SQLite append-only (`~/.pulse_v2/trace.db`), watchers terminal, fichiers
-(FSEvents), applications (Swift), hook Git, sessions d'agents Claude Code /
-Codex en événements dérivés, services résidents sous launchd, vue HTML
-locale. Identité de session stable par hash des événements sources (0.5.0),
-reconstruction unique et déterministe (`reconstruction_version` 3),
-observations ordonnées exposées par `/context` (schéma 3).
+(FSEvents), applications et fenêtres (Swift, Accessibility), hook Git,
+sessions d'agents Claude Code / Codex en événements dérivés, services
+résidents sous launchd, vue HTML locale. Identité de session stable par hash
+des événements sources (0.5.0), reconstruction unique et déterministe
+(`reconstruction_version` 3), observations ordonnées exposées par `/context`
+(schéma 3, `observation_version` 2).
 
 Le périmètre fonctionnel de Core a été gelé du 2026-09-02 (0.2.0) au
 2026-09-09 : le temps de stabiliser le contrat `/context` et de livrer la
@@ -194,12 +195,19 @@ problème réel.
   sont absentes. Le Quest n'exécute rien de lourd, c'est au mieux une interface
   distante.
 - **Sources d'observation supplémentaires** présentes dans Lab et absentes de
-  Core : presse-papiers, titre de fenêtre active via Accessibility, inactivité
-  via IOKit. À reconsidérer si un besoin de contexte les réclame.
+  Core : presse-papiers, inactivité via IOKit. À reconsidérer si un besoin de
+  contexte les réclame. Le titre de fenêtre via Accessibility est entré dans
+  Core le 2026-09-12 (`window_focused`).
 - **Authentification des producteurs locaux** : reportée, déclencheur =
   première action de la couche Agent (décision du 2026-09-03).
 
 ## Décisions prises
+
+- **2026-09-12** — Contexte de fenêtre : l'observateur Swift capte titre,
+  document et URL réduite de la fenêtre au premier plan via Accessibility,
+  nouveau type `window_focused`, contexte faible, rédaction à l'ingestion,
+  applications ignorées configurables ; `observation_version` 2, Core 0.7.0.0
+  ([décision](decisions/2026-09-12-contexte-de-fenetre.md)).
 
 - **2026-09-09** — Gel de Core levé, consignes de travail unifiées dans
   `AGENTS.md` (`CLAUDE.md` l'importe) : autonomie technique bornée au chantier
