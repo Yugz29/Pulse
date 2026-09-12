@@ -92,6 +92,26 @@ services restants même si l'un d'eux échoue, avec un état final explicite.
 **Priority:** P2
 **Depends on:** Aucun
 
+### Observateur signé ad hoc : chaque rebuild invalide l'Accessibilité
+
+**What:** `PulseApplicationObserver` est signé ad hoc par le linker
+(`codesign -dv` : `Signature=adhoc`, pas de TeamIdentifier). TCC identifie un
+binaire ad hoc par son hash de code : un rebuild (`install_observers_launchd.sh`)
+change le hash et l'autorisation Accessibilité accordée à la version
+précédente ne s'applique plus, sans message. Constaté le 2026-09-12 : binaire
+reconstruit à 12:59 après une première installation à 12:57, autorisation à
+refaire, `AXIsProcessTrusted()` reste faux entre-temps et le contexte de
+fenêtre est muet.
+
+**Piste:** signer avec une identité stable (certificat de signature de code
+auto-signé dans le trousseau de connexion, `codesign --sign "Pulse Observer"
+--identifier com.pulse.app-observer`) dans l'installeur, pour que l'entrée TCC
+survive aux rebuilds ; documenter la création du certificat une fois.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
 ## Hygiène du dépôt
 
 ### Chemins `/Users/<user>` en dur dans un dépôt public
