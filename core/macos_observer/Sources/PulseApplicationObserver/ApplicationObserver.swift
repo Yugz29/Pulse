@@ -11,8 +11,17 @@ final class ApplicationObserver: @unchecked Sendable {
     private let windowObserver: WindowObserver
     private var activationToken: NSObjectProtocol?
 
-    init(repositoryRoot: URL, windowObserver: WindowObserver) throws {
-        let bridge = OutboxBridge(repositoryRoot: repositoryRoot)
+    /// `pythonExecutable` : point d'injection des tests (pont lent, sans
+    /// Core) ; `nil` en production, le pont choisit le Python du dépôt.
+    init(
+        repositoryRoot: URL,
+        windowObserver: WindowObserver,
+        pythonExecutable: URL? = nil
+    ) throws {
+        let bridge = OutboxBridge(
+            repositoryRoot: repositoryRoot,
+            pythonExecutable: pythonExecutable
+        )
         self.recorder = try ApplicationEventRecorder(
             builder: CanonicalEventBuilder(instanceID: bridge.instanceID()),
             enqueue: bridge.enqueue
@@ -51,7 +60,8 @@ final class ApplicationObserver: @unchecked Sendable {
         }
     }
 
-    private func observe(_ application: NSRunningApplication) {
+    // Interne, pas privé : les tests de réentrance l'appellent directement.
+    func observe(_ application: NSRunningApplication) {
         guard let context = ApplicationContext(
             name: application.localizedName,
             bundleID: application.bundleIdentifier

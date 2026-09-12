@@ -12,8 +12,11 @@ final class SystemObserver: @unchecked Sendable {
     private var workspaceTokens: [NSObjectProtocol] = []
     private var distributedTokens: [NSObjectProtocol] = []
 
-    init(repositoryRoot: URL) throws {
-        let bridge = OutboxBridge(repositoryRoot: repositoryRoot)
+    init(repositoryRoot: URL, pythonExecutable: URL? = nil) throws {
+        let bridge = OutboxBridge(
+            repositoryRoot: repositoryRoot,
+            pythonExecutable: pythonExecutable
+        )
         self.bridge = bridge
         self.builder = try CanonicalEventBuilder(instanceID: bridge.instanceID())
     }
@@ -52,7 +55,8 @@ final class SystemObserver: @unchecked Sendable {
         distributedTokens.removeAll()
     }
 
-    private func observe(_ notificationName: Notification.Name) {
+    // Interne, pas privé : les tests de réentrance l'appellent directement.
+    func observe(_ notificationName: Notification.Name) {
         guard let event = projector.event(for: notificationName) else {
             return
         }

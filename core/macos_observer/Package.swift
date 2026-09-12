@@ -19,7 +19,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ApplicationObserverCoreTests",
-            dependencies: ["ApplicationObserverCore"]
+            dependencies: ["ApplicationObserverCore", "PulseApplicationObserver"]
         ),
     ]
 )
