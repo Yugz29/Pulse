@@ -101,6 +101,61 @@ quelle garantie contre l'invention.
 **Priority:** P3
 **Depends on:** Décision sur l'admissibilité
 
+### Citation de `command_failure` non littérale
+
+**What:** Sur 02 o41 (rejeu v7-superseded), le point `command_failure`
+réécrit la commande citée : `git add . && git commit -m "…" && git push`
+alors que le fait contient trois lignes sans `&&`. La fiche juge la
+citation réécrite nuisible telle que produite. `recorded_statement` exige
+une citation littérale du message de commit ; `command_failure` n'exige
+rien du texte. À décider : exiger la citation exacte de la commande (ou de
+sa première ligne utile) comme pour `recorded_statement`, ou rendre la
+commande par le validateur et non par le modèle.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Décision v7 du 2026-09-12 (limite connue)
+
+### Clause cwd de `superseded_observed` trop stricte (cas 04 o7)
+
+**What:** Un échec n'est dépassé que par un succès similaire dans le même
+cwd connu. Sur 04, `bash check-setup.sh` échoue en 127 dans un répertoire
+(mauvais dossier) puis réussit dans un autre : l'échec reste
+`unresolved_observed`, citable, et v7 le cite ; la fiche le juge nuisible.
+Relâcher la clause risque de clore un échec par un succès sans rapport. À
+décider sur des cas réels : même dépôt (`git_root`) plutôt que même cwd,
+ou description dans le prompt.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Cas réels sous v7
+
+### Reports au backlog dans les messages de commit cités comme points (09)
+
+**What:** v7 cite en `recorded_statement` des phrases de commit qui sont
+des reports (« le build Swift n'est pas dans la CI pour l'instant »,
+« authentification des producteurs locaux reportée ») : justes, inutiles à
+la reprise selon la fiche 09. Un report explicite n'est pas un point
+ouvert de la session. À décider : décrire la distinction dans une version
+ultérieure du prompt, ou l'accepter comme bruit borné (deux points max).
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Jours réels sous v7
+
+### Préfixe d'interpréteur : deux clés pour une même commande (06 o33/o34)
+
+**What:** `manage.py migrate` (127) puis `python3 manage.py migrate` (2),
+17 s d'écart, même cwd : deux clés dans `command_outcomes`, deux points
+`command_failure`, la fiche juge le premier nuisible (doublon). La
+similarité de #89 compare la tête de commande, qu'un préfixe
+d'interpréteur change. À décider : normaliser la tête (`python3`, `bash`,
+`node`, `sh` suivis d'un script), ou décrire le doublon dans le prompt.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Décision v7 du 2026-09-12 (question ouverte)
+
 ## Completed
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`

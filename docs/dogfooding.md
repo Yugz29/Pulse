@@ -80,6 +80,22 @@ les fiches → requalification des fiches 15 à 18 → décision v7.
 lot à entrée schéma 3, **3/3 vraies, 0/3 utiles**, `open` vide 3/3 ;
 verdicts et compteur dans « Jour 8 » en fin de journal.
 
+**Décision v7, 2026-09-12 (après-midi).** Jugement des 9 points
+`v7-superseded` contre les fiches d'adjudication : **4 justes et utiles**
+(14 o19 ; 04 o14 ; 02 o41, avec citation réécrite ; 13 o20, mineur),
+**1 à moitié** (06 o34, manque « la base a changé après »), **2 justes
+inutiles** (09 o194 et o195 : reports au backlog cités comme points),
+**2 nuisibles** (04 o7 : dépassé par un succès dans un autre cwd ; 06 o33 :
+doublon d'interpréteur). Aucun point inventé. Fiches 15 à 18 : jugées sur
+entrée schéma 2, invalides. **Décision : v7 activé tel quel**
+(`prompt_version = "v7"` dans la config de production, le défaut du code
+reste v6), les deux nuisibles restent des limites connues à observer sur les
+jours réels. #89 mergée : les `superseded_observed` ne sont pas filtrés de
+l'entrée, visibles pour `doing`, non éligibles pour `open`. Note :
+[`decisions/2026-09-12-prompt-v7.md`](decisions/2026-09-12-prompt-v7.md).
+**Le compteur de l'étape 4 repart au premier lot v7 à entrée schéma 3, Mac
+éveillé.**
+
 
 
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
@@ -863,3 +879,9 @@ prompt (v6). Question ouverte, non tranchée ici.
 un worktree git (`core/TODOS.md`) ; conservation de la sortie brute d'une
 tentative rejetée, et admissibilité dans `central_files` d'un chemin présent
 dans un fait `command` (`intelligence/TODOS.md`).
+
+**Décision v7 (après-midi) et compteur.** Verdict des 9 points
+`v7-superseded` et activation dans la section « Reprise » ci-dessus. Le
+compteur de l'étape 4 ne cumule pas les lots v6 : **il repart au premier lot
+v7 à entrée schéma 3, Mac éveillé**. Les jours 5 à 8 sous v6 restent des
+mesures, pas des jours du critère.
