@@ -316,6 +316,23 @@ déclaration citable, au même titre qu'un message de commit.
 **Priority:** P2
 **Depends on:** Décision datée (nouveau type d'événement) ; ajouté le 2026-09-11
 
+### Attribution d'une session à un worktree git plutôt qu'au dépôt principal
+
+**What:** Le résumé de `a48ebc2f6a7fbc95` (work-13 du 2026-09-11) porte
+`workspace: /private/tmp/claude-501/…/scratchpad/wt/intelligence-legacy-view-loud`,
+un worktree git temporaire, alors que `GET /context/sessions` sert aujourd'hui
+la même session avec `workspace: /Users/Yugz/Projets/Pulse`. Constaté le
+2026-09-12 (jour 8 du dogfooding). Le worktree d'un agent porte le même dépôt,
+la même branche de travail et le même projet ; l'attribuer comme un workspace
+distinct disperse la session et son résumé. À examiner : le résolveur de
+workspace face à `git worktree` (racine commune via `git rev-parse
+--git-common-dir`), et ce que le résumé doit porter quand la session a été
+servie avec un workspace puis un autre.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Aucun
+
 ## Completed
 
 ### CI rouge : le test du verrou terminal assertait la vitesse du runner

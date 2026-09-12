@@ -70,6 +70,92 @@
 **Priority:** P2
 **Depends on:** —
 
+### Conserver la sortie brute d'une tentative rejetée
+
+**What:** Quand `parse_model_output` rejette une sortie, il ne reste que le
+message du validateur dans `run.log` et un compteur dans `state.json`
+(`failures`). La sortie du modèle n'est conservée nulle part : le diagnostic
+exige un rejeu (`summarize --dry-run`), donc une nouvelle génération, sur une
+entrée qui peut avoir changé. Cas du 2026-09-12 : `057a0f5602f4f62e`
+(work-5 du 11), rejet `central_files: config.yml absent de l'entrée`, contenu
+produit inconnu. À décider : où la garder (`run.log`, `state.json`, fichier
+hors dépôt) et combien de temps, en tenant compte de ce qu'une sortie rejetée
+n'est pas rédigée par Core.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
+### `central_files` n'accepte que les faits `file`
+
+**What:** `input_paths` ne retient que les chemins des faits `file` de la
+ligne de temps. Un chemin littéralement présent dans un fait `command`
+observé (`cat config.yml`, `git add config.yml`, work-5 du 2026-09-11) n'est
+donc pas admissible dans `central_files`, alors que le modèle l'a lu dans
+l'entrée. Le workspace n'était pas surveillé, aucun `file_changed`. À
+décider, pas à implémenter : admettre un chemin cité tel quel dans une
+commande observée, avec quelle forme (relative au `cwd` de la commande ?) et
+quelle garantie contre l'invention.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Décision sur l'admissibilité
+
+### Citation de `command_failure` non littérale
+
+**What:** Sur 02 o41 (rejeu v7-superseded), le point `command_failure`
+réécrit la commande citée : `git add . && git commit -m "…" && git push`
+alors que le fait contient trois lignes sans `&&`. La fiche juge la
+citation réécrite nuisible telle que produite. `recorded_statement` exige
+une citation littérale du message de commit ; `command_failure` n'exige
+rien du texte. À décider : exiger la citation exacte de la commande (ou de
+sa première ligne utile) comme pour `recorded_statement`, ou rendre la
+commande par le validateur et non par le modèle.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Décision v7 du 2026-09-12 (limite connue)
+
+### Clause cwd de `superseded_observed` trop stricte (cas 04 o7)
+
+**What:** Un échec n'est dépassé que par un succès similaire dans le même
+cwd connu. Sur 04, `bash check-setup.sh` échoue en 127 dans un répertoire
+(mauvais dossier) puis réussit dans un autre : l'échec reste
+`unresolved_observed`, citable, et v7 le cite ; la fiche le juge nuisible.
+Relâcher la clause risque de clore un échec par un succès sans rapport. À
+décider sur des cas réels : même dépôt (`git_root`) plutôt que même cwd,
+ou description dans le prompt.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Cas réels sous v7
+
+### Reports au backlog dans les messages de commit cités comme points (09)
+
+**What:** v7 cite en `recorded_statement` des phrases de commit qui sont
+des reports (« le build Swift n'est pas dans la CI pour l'instant »,
+« authentification des producteurs locaux reportée ») : justes, inutiles à
+la reprise selon la fiche 09. Un report explicite n'est pas un point
+ouvert de la session. À décider : décrire la distinction dans une version
+ultérieure du prompt, ou l'accepter comme bruit borné (deux points max).
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Jours réels sous v7
+
+### Préfixe d'interpréteur : deux clés pour une même commande (06 o33/o34)
+
+**What:** `manage.py migrate` (127) puis `python3 manage.py migrate` (2),
+17 s d'écart, même cwd : deux clés dans `command_outcomes`, deux points
+`command_failure`, la fiche juge le premier nuisible (doublon). La
+similarité de #89 compare la tête de commande, qu'un préfixe
+d'interpréteur change. À décider : normaliser la tête (`python3`, `bash`,
+`node`, `sh` suivis d'un script), ou décrire le doublon dans le prompt.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Décision v7 du 2026-09-12 (question ouverte)
+
 ## Completed
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`
