@@ -177,7 +177,7 @@ func canonicalPayloadContainsOnlyAllowedApplicationDetails() throws {
     #expect(payload["type"] as? String == "app_activated")
     #expect((payload["occurred_at"] as? String)?.hasSuffix("Z") == true)
     #expect(producer["name"] as? String == "pulse-macos-application-observer")
-    #expect(producer["version"] as? String == "1")
+    #expect(producer["version"] as? String == "2")
     #expect(producer["instance_id"] as? String == "stable-instance")
     #expect(details["app"] as? String == "Visual Studio Code")
     #expect(details["bundle_id"] as? String == "com.microsoft.VSCode")

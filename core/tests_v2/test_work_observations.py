@@ -132,3 +132,21 @@ def test_mismatched_historical_workspace_is_unknown_instead_of_discarded():
     assert result['timeline'][0]['path'] == '/work/Other/auth.py'
     assert result['timeline'][0]['workspace'] is None
     assert result['coverage']['omitted_events'] == {}
+
+
+def test_window_facts_keep_title_and_url_and_filter_noise_documents():
+    events = [command(1, 0),
+              event(2, "window_focused", app="Safari", title="PR #89", url="https://github.com/org/repo/pull/89"),
+              event(3, "window_focused", app="Code", document="/work/Pulse/node_modules/x/index.js"),
+              event(4, "window_focused", app="Preview", document="/work/Pulse/docs/plan.pdf"),
+              event(5, "window_focused", title="sans app")]
+    result = project_work_observations(events)
+    assert result["version"] == 2
+    assert [f["kind"] for f in result["timeline"]] == ["command", "window", "window", "window"]
+    assert result["timeline"][1] == {"ref": "o2", "kind": "window", "at": 60.0, "app": "Safari",
+                                     "title": "PR #89", "url": "https://github.com/org/repo/pull/89"}
+    assert "document" not in result["timeline"][2]
+    assert result["timeline"][3]["document"] == "/work/Pulse/docs/plan.pdf"
+    assert result["coverage"]["omitted_events"] == {"window_focused": 1}
+    assert result["sources"]["o2"] == ["event-2"]
+    assert result["applications"] == []

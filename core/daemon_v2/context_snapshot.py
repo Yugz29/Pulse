@@ -25,6 +25,7 @@ from .analysis.timeline import (
     is_strong_work_activity,
 )
 from .daily_trace import build_daily_trace
+from .models import WEAK_CONTEXT_TYPES
 from .runtime_config import reconstruction_timezone
 from .trace_store import TraceStore
 from .work_observations import project_work_observations
@@ -246,7 +247,7 @@ def _activity_identity(activity: dict[str, Any]) -> WorkspaceIdentity | None:
 
 
 def _is_useful_for_workspace(activity: dict[str, Any]) -> bool:
-    if activity["type"] == "app_activated":
+    if activity["type"] in WEAK_CONTEXT_TYPES:
         return False
     if activity["type"] == "terminal_finished":
         return bool(

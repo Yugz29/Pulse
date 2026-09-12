@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..models import WEAK_CONTEXT_TYPES
 from .projects import (
     WorkspaceIdentity,
     activity_project_root,
@@ -183,6 +184,22 @@ def app_activation_counts(session: dict[str, Any]) -> dict[str, int]:
 
 def _ranked_apps(counts: dict[str, int], limit: int = 5) -> list[tuple[str, int]]:
     return sorted(counts.items(), key=lambda item: -item[1])[:limit]
+
+
+def unresolved_app_names(session: dict[str, Any]) -> list[str]:
+    """Applications d'un groupe non attribué : les activations classées,
+    sinon celles des fenêtres observées, dans l'ordre d'apparition."""
+    ranked = [app for app, _count in _ranked_apps(app_activation_counts(session))]
+    if ranked:
+        return ranked
+    names: list[str] = []
+    for activity in session["activities"]:
+        if activity["type"] != "window_focused":
+            continue
+        app = activity.get("details", {}).get("app")
+        if app and app not in IGNORED_APP_NAMES_FOR_RENDERING and app not in names:
+            names.append(app)
+    return names
 
 
 def is_strong_work_activity(activity: dict[str, Any]) -> bool:
@@ -568,7 +585,7 @@ def reconstruct_session_views(
             current["last_work_at"] = occurred_at
             continue
 
-        if activity_type == "app_activated":
+        if activity_type in WEAK_CONTEXT_TYPES:
             if (
                 current is not None
                 and occurred_at - current["last_work_at"] <= WEAK_CONTEXT_WINDOW
@@ -605,7 +622,7 @@ def reconstruct_session_views(
             "agent_session",
         }
         and not (
-            activity["type"] == "app_activated"
+            activity["type"] in WEAK_CONTEXT_TYPES
             and activity.get("details", {}).get("app")
             in IGNORED_APP_NAMES_FOR_RENDERING
         )

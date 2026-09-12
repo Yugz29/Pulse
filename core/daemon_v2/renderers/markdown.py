@@ -20,6 +20,7 @@ from ..analysis.timeline import (
     _trace_timezone,
     _is_strong_work_activity,
     isolated_sessions,
+    unresolved_app_names,
 )
 from ..daily_trace import (
     SummaryFact,
@@ -317,6 +318,15 @@ def render_daily_trace_markdown(
                 ]
                 lines.append(f"- Apps actives : {', '.join(apps)}")
                 continue
+            elif activity["type"] == "window_focused":
+                window = _markdown_text(str(details.get("app", "")))
+                if isinstance(details.get("title"), str) and details["title"]:
+                    window += f" — {_markdown_text(details['title'])}"
+                for key in ("document", "url"):
+                    if isinstance(details.get(key), str) and details[key]:
+                        window += f" · `{details[key].replace('`', '')}`"
+                lines.append(f"- Fenêtre {window}")
+                continue
             elif activity["type"] == "file_changed" and event and path:
                 if id(activity) not in file_change_groups:
                     continue
@@ -454,10 +464,7 @@ def render_daily_trace_markdown(
                 session
             )
             unresolved_apps = [
-                _markdown_text(app)
-                for app, _count in _ranked_apps(
-                    _app_activation_counts(session)
-                )
+                _markdown_text(app) for app in unresolved_app_names(session)
             ]
             lines.append(
                 f"- {_display_time(unresolved_started_at, trace_zone)} · "

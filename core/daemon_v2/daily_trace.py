@@ -398,6 +398,9 @@ def build_current_state(trace: dict[str, Any]) -> dict[str, Any]:
             app = details.get("app")
             if app and app not in IGNORED_APP_NAMES_FOR_RENDERING:
                 last_app = app
+        elif activity["type"] == "window_focused":
+            # Contexte de fenêtre : ni dernière activité utile, ni application.
+            pass
         else:
             useful_activity = (
                 activity["type"] != "terminal_finished"

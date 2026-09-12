@@ -4,6 +4,52 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.7.0.0] - 2026-09-12
+
+Contexte de fenêtre : l'observateur Swift capte ce que l'utilisateur regarde,
+note de décision `docs/decisions/2026-09-12-contexte-de-fenetre.md`. Nouveau
+type d'événement consommé par les observations : `observation_version` passe
+à 2, `GET /context` reste au schéma 3 (ajout d'un genre de fait, aucune clé
+existante ne change).
+
+### Ajouté
+- Type d'événement `window_focused` (producteur
+  `pulse-macos-application-observer` version 2) : à chaque activation
+  d'application et à chaque changement de fenêtre ou de titre au premier
+  plan, lu via Accessibility. Détails : `app`, `bundle_id`, `title`
+  (`AXTitle`), `document` (`AXDocument`, chemin local) et `url` (Safari,
+  Chrome et navigateurs Chromium : `AXURL` de la zone web, sans AppleScript
+  ni autorisation d'automatisation). Un seul mécanisme pour toutes les
+  applications ; le cas navigateur ajoute la lecture de l'URL. Événementiel
+  (`AXObserver` sur le processus actif), sans interrogation périodique.
+- Rédaction à l'ingestion, quel que soit le producteur : jamais de contenu
+  de fenêtre ni de capture ; `title` passe par `redact_command`, une ligne,
+  300 caractères ; `url` réduite à origine + chemin (ni identifiants, ni
+  paramètres, ni fragment, `reduce_window_url`) ; `document` passe par le
+  filtre de bruit des `file_changed` (`file_policy.is_noise_path`).
+- Liste d'applications dont la fenêtre n'est jamais observée,
+  `~/.pulse_v2/ignored_applications` (créée par l'installeur) : Messages,
+  Mail, FaceTime, Trousseaux d'accès, Mots de passe, gestionnaires de mots de
+  passe courants, Réglages Système. Aucun `window_focused` pour elles ;
+  `app_activated` (le nom seul) est inchangé.
+- Fait `window` dans les observations (`app`, `title`, `document`, `url`),
+  provenance `sources` comme les autres faits ; ligne « fenêtre » par
+  fenêtre dans le journal HTML et Markdown, sans lien cliquable.
+
+### Modifié
+- `window_focused` est un contexte faible comme `app_activated`
+  (`WEAK_CONTEXT_TYPES`) : ne démarre ni ne prolonge une session, ne prouve
+  aucun workspace, ne compte pas dans « Apps actives ».
+- L'observateur journalise une fois si l'autorisation Accessibilité manque ;
+  `app_activated` et les événements système continuent sans elle.
+
+### Déploiement
+- Déployer Core avant l'observateur : un daemon antérieur refuse
+  `window_focused` en 400 et le worker le met en dead-letter. Accorder
+  l'Accessibilité à `~/.pulse_v2/bin/PulseApplicationObserver` (Réglages
+  Système › Confidentialité et sécurité › Accessibilité) ; sans elle, aucun
+  contexte de fenêtre, aucune autre régression.
+
 ## [0.6.0.0] - 2026-09-09
 
 Observations de travail ordonnées, notes de décision

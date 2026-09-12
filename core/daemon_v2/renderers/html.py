@@ -22,6 +22,7 @@ from ..analysis.timeline import (
     _trace_timezone,
     _is_strong_work_activity,
     isolated_sessions,
+    unresolved_app_names,
 )
 from ..daily_trace import (
     _useful_activity_description,
@@ -37,6 +38,22 @@ from ..daily_trace import (
     build_resume,
     build_session_summary,
 )
+
+
+def _window_html(details: dict[str, Any]) -> str:
+    """Titre, document et URL d'une fenêtre : ce que Core a accepté, rien
+    de plus. Aucun lien cliquable : l'URL est un fait affiché, pas une
+    navigation."""
+    heading = f"<strong>{escape(str(details.get('app', '')))}</strong>"
+    title = details.get("title")
+    if isinstance(title, str) and title:
+        heading += f" — {escape(title)}"
+    extras = [
+        f'<span class="window-{key}"><code>{escape(str(details[key]))}</code></span>'
+        for key in ("document", "url")
+        if isinstance(details.get(key), str) and details[key]
+    ]
+    return heading + "".join(f" · {extra}" for extra in extras)
 
 
 def _html_summary_facts(facts: list[str | tuple[str, list[str]]]) -> str:
@@ -455,6 +472,9 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 ]
                 content = f"Apps actives : {', '.join(apps)}"
                 display_type = "applications"
+            elif activity["type"] == "window_focused":
+                content = _window_html(details)
+                display_type = "fenêtre"
             elif activity["type"] == "file_changed" and event and path:
                 if id(activity) not in file_change_groups:
                     continue
@@ -630,10 +650,7 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 session
             )
             unresolved_apps = [
-                escape(str(app))
-                for app, _count in _ranked_apps(
-                    _app_activation_counts(session)
-                )
+                escape(str(app)) for app in unresolved_app_names(session)
             ]
             unresolved_items.append(
                 f"<li>{escape(_display_time(unresolved_started_at, trace_zone))} · "

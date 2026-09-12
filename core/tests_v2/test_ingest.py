@@ -8,6 +8,7 @@ from daemon_v2.ingest import (
     normalize_activity,
     normalize_event,
     redact_command,
+    reduce_window_url,
 )
 
 
@@ -961,3 +962,74 @@ def test_every_declared_free_text_field_is_redacted_and_undeclared_ones_are_refu
         with pytest.raises(InvalidActivity) as raised:
             normalize_activity(stray)
         assert raised.value.field == f"details.{section}.notes"
+
+
+def test_normalizes_window_focused_activity():
+    activity = normalize_activity(
+        {
+            "type": "window_focused",
+            "app": "Safari",
+            "bundle_id": " com.apple.Safari ",
+            "title": "  Pull  request\n#89 · GitHub ",
+            "url": "https://user:pw@github.com/org/repo/pull/89?tab=files#diff-1",
+            "document": "/Users/me/Projets/Pulse/docs/VISION.md",
+        }
+    )
+
+    assert activity.source == "application"
+    assert activity.details == {
+        "app": "Safari",
+        "bundle_id": "com.apple.Safari",
+        "title": "Pull request #89 · GitHub",
+        "url": "https://github.com/org/repo/pull/89",
+        "document": "/Users/me/Projets/Pulse/docs/VISION.md",
+    }
+    assert activity.summary == "Window Safari: Pull request #89 · GitHub"
+
+
+def test_window_focused_redacts_title_and_drops_noise_document_and_bad_url():
+    activity = normalize_activity(
+        {
+            "type": "window_focused",
+            "app": "Terminal",
+            "title": "export API_KEY=sk-abcdefghijklmnopqrstuvwxyz — zsh",
+            "document": "/Users/me/Projets/Pulse/node_modules/x/index.js",
+            "url": "not a url",
+        }
+    )
+
+    assert activity.details == {
+        "app": "Terminal",
+        "title": "export API_KEY=[REDACTED] — zsh",
+    }
+    assert activity.summary == "Window Terminal: export API_KEY=[REDACTED] — zsh"
+
+
+def test_window_focused_title_is_bounded_and_app_required():
+    activity = normalize_activity(
+        {"type": "window_focused", "app": "Code", "title": "x" * 1_000}
+    )
+    assert len(activity.details["title"]) == 300
+
+    with pytest.raises(InvalidActivity) as raised:
+        normalize_activity({"type": "window_focused", "title": "Sans app"})
+    assert raised.value.field == "app"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://example.com/a/b?q=secret#frag", "https://example.com/a/b"),
+        ("https://user:pw@example.com:8443/x", "https://example.com:8443/x"),
+        ("https://example.com/?session=42", "https://example.com/"),
+        ("https://example.com/a?b=c?d#e#f", "https://example.com/a"),
+        ("about:blank", "about:blank"),
+        ("file:///Users/me/doc.pdf", "file:///Users/me/doc.pdf"),
+        ("   ", None),
+        ("no scheme here", None),
+        ("https://", None),
+        ("https:?token=x", None),
+    ],
+)
+def test_reduce_window_url_never_keeps_query_fragment_or_credentials(raw, expected):
+    assert reduce_window_url(raw) == expected

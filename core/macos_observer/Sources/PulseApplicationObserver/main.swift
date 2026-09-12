@@ -8,9 +8,20 @@ let repositoryRoot = URL(
     isDirectory: true
 )
 
+let ignoredApplicationsURL = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent(".pulse_v2/ignored_applications")
+
 do {
-    let applicationObserver = try ApplicationObserver(repositoryRoot: repositoryRoot)
+    let windowObserver = try WindowObserver(
+        repositoryRoot: repositoryRoot,
+        ignoredApplicationsURL: ignoredApplicationsURL
+    )
+    let applicationObserver = try ApplicationObserver(
+        repositoryRoot: repositoryRoot,
+        windowObserver: windowObserver
+    )
     let systemObserver = try SystemObserver(repositoryRoot: repositoryRoot)
+    windowObserver.start()
     applicationObserver.start()
     systemObserver.start()
 
@@ -21,6 +32,7 @@ do {
     let stop: @Sendable () -> Void = {
         systemObserver.stop()
         applicationObserver.stop()
+        windowObserver.stop()
         exit(0)
     }
     interruptSource.setEventHandler(handler: stop)

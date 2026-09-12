@@ -8,14 +8,16 @@ final class ApplicationObserver: @unchecked Sendable {
     private let notificationCenter = NSWorkspace.shared.notificationCenter
     private let activationFilter = ApplicationActivationFilter()
     private var recorder: ApplicationEventRecorder
+    private let windowObserver: WindowObserver
     private var activationToken: NSObjectProtocol?
 
-    init(repositoryRoot: URL) throws {
+    init(repositoryRoot: URL, windowObserver: WindowObserver) throws {
         let bridge = OutboxBridge(repositoryRoot: repositoryRoot)
         self.recorder = try ApplicationEventRecorder(
             builder: CanonicalEventBuilder(instanceID: bridge.instanceID()),
             enqueue: bridge.enqueue
         )
+        self.windowObserver = windowObserver
     }
 
     func start() {
@@ -61,6 +63,9 @@ final class ApplicationObserver: @unchecked Sendable {
         } catch {
             ObserverLog.write("Pulse ApplicationObserver: \(error)")
         }
+        // La fenêtre est suivie même quand l'activation est un doublon
+        // (même app, autre fenêtre) : c'est le contexte de fenêtre qui change.
+        windowObserver.track(application, context: context)
     }
 
     deinit {

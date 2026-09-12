@@ -211,3 +211,24 @@ def test_route_logging_does_not_change_http_responses(monkeypatch, tmp_path, cap
     assert "[conflict]" in output
     assert "[rejected]" in output
     assert json.dumps(payload) not in output
+
+
+def test_window_focused_logs_app_title_document_and_url(monkeypatch, capsys):
+    monkeypatch.setenv("PULSE_CORE_EVENT_LOG", "1")
+
+    log_ingested_event(
+        activity=activity(
+            "window_focused",
+            {
+                "app": "Safari",
+                "title": "Pull request #89",
+                "url": "https://github.com/org/repo/pull/89",
+            },
+        ),
+        status="created",
+    )
+
+    assert (
+        "window_focused     Safari · Pull request #89 · https://github.com/org/repo/pull/89"
+        in logged_message(capsys)
+    )

@@ -18,9 +18,16 @@ SYSTEM_ACTIVITY_TYPES = {
     "system_sleep",
     "system_wake",
 }
+# Contexte faible : ne démarre ni ne prolonge une session de travail, s'y
+# rattache quand du travail fort l'entoure ; jamais une preuve de workspace.
+WEAK_CONTEXT_TYPES = {"app_activated", "window_focused"}
 SUPPORTED_ACTIVITY_TYPES = {
     "agent_session",
     "app_activated",
+    # Contexte de la fenêtre au premier plan (titre, document, URL réduite),
+    # décision du 2026-09-12. Faible comme app_activated pour la
+    # reconstruction ; jamais de contenu de fenêtre.
+    "window_focused",
     "file_changed",
     "terminal_finished",
     "git_commit",
