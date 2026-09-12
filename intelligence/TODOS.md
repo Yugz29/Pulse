@@ -156,6 +156,24 @@ d'interpréteur change. À décider : normaliser la tête (`python3`, `bash`,
 **Priority:** P3
 **Depends on:** Décision v7 du 2026-09-12 (question ouverte)
 
+### Garde-fous de source pour `schema_version` et `observation_version`
+
+**What:** `test_known_version_matches_core_code` lit `RECONSTRUCTION_VERSION`
+dans la source de Core et fait échouer la CI si `KNOWN_RECONSTRUCTION_VERSION`
+ne suit pas (ce qui a rattrapé le passage à 4 le 2026-09-12). Rien
+d'équivalent pour les deux autres contrats consommés : `EXPECTED_SCHEMA_VERSION`
+(`core_client.py`, 3) n'est vérifié qu'à l'exécution, en refusant une réponse
+d'un autre schéma que 2 ou 3, jamais contre `context_snapshot.SCHEMA_VERSION` ;
+`observation_version` n'a aucune constante côté Intelligence, la valeur servie
+est recopiée dans les résumés sans être comparée à `work_observations.OBSERVATION_VERSION`
+(passée de 1 à 2 le 2026-09-12 sans qu'aucun test Intelligence ne le voie).
+À décider : un test de source par contrat, sur le modèle du premier, et une
+constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
 ## Completed
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`
