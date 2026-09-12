@@ -6,26 +6,6 @@ Lot ouvert le 2026-09-05, note de décision
 `docs/decisions/2026-09-05-reouverture-core-hardening.md`. Le gel de Core porte
 sur son périmètre fonctionnel, pas sur ses correctifs.
 
-### Réentrance fatale de PulseApplicationObserver
-
-**What:** `ApplicationObserver.observe(_:)` est ré-entré pendant que
-`OutboxBridge.run(command:input:)` bloque la boucle principale dans
-`waitUntilExit` — `NSConcreteTask` fait tourner la run loop, qui redélivre
-`didActivateApplicationNotification` sur `.main`. L'accès exclusif à `recorder`
-(`var`, ligne 10) est violé : `Fatal access conflict detected`, SIGABRT.
-Trace complète dans `~/.pulse_v2/logs/app_observer.log`, 4 occurrences le
-2026-09-05. `KeepAlive` relance, donc la perte est bornée aux activations de
-l'intervalle — mais elle est silencieuse côté base. `SystemObserver.observe`
-emprunte le même pont et doit être couvert par la correction.
-
-**Impact (GitNexus):** `ApplicationObserver.observe` 12 impactés / LOW ;
-`OutboxBridge.run` 8 impactés / LOW, appelé par les deux observateurs.
-
-**Effort:** M
-**Priority:** P1
-**Depends on:** Xcode installé sur la machine (`swift test` échoue aujourd'hui
-sur `no such module 'Testing'`, seuls les Command Line Tools sont présents)
-
 ### status.sh annonce le daemon inaccessible alors qu'il répond
 
 **What:** `scripts/status.sh:22` impose `curl --max-time 2` ; `GET /status`
@@ -334,6 +314,43 @@ servie avec un workspace puis un autre.
 **Depends on:** Aucun
 
 ## Completed
+
+### Réentrance fatale de PulseApplicationObserver
+
+**What:** `ApplicationObserver.observe(_:)` est ré-entré pendant que
+`OutboxBridge.run(command:input:)` bloque la boucle principale dans
+`waitUntilExit` — `NSConcreteTask` fait tourner la run loop, qui redélivre
+`didActivateApplicationNotification` sur `.main`. L'accès exclusif à `recorder`
+(`var`, ligne 10) est violé : `Fatal access conflict detected`, SIGABRT.
+Trace complète dans `~/.pulse_v2/logs/app_observer.log`, 4 occurrences le
+2026-09-05. `KeepAlive` relance, donc la perte est bornée aux activations de
+l'intervalle — mais elle est silencieuse côté base. `SystemObserver.observe`
+emprunte le même pont et doit être couvert par la correction.
+
+**Impact (GitNexus):** `ApplicationObserver.observe` 12 impactés / LOW ;
+`OutboxBridge.run` 8 impactés / LOW, appelé par les deux observateurs.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** Xcode installé sur la machine (`swift test` échoue aujourd'hui
+sur `no such module 'Testing'`, seuls les Command Line Tools sont présents)
+
+**Résolution:** corrigé le 2026-09-05 (81a9d40, Core 0.5.6.0) : `OutboxBridge.run`
+attend la fin de son processus par `DispatchSemaphore` signalé dans
+`terminationHandler`, plus par `waitUntilExit`, donc sans faire tourner la
+run loop du thread appelant ; les notifications AppKit restent en file et
+sont livrées après, dans l'ordre. `SystemObserver` passe par le même pont.
+Aucune nouvelle trace « Fatal access conflict detected » depuis, y compris
+après l'ajout de `window_focused` le 2026-09-12 (qui multiplie les passages
+par le pont). Couverture ajoutée le 2026-09-12 (`fix/observer-reentrancy`),
+Xcode disponible : `ObserverReentrancyTests.swift` reproduit un bloc en
+attente sur la run loop pendant l'enqueue, pour `ApplicationObserver.observe`
+(accès exclusif à `recorder`) et `SystemObserver.observe` (ordre des
+événements) ; les deux tests sont rouges contre `waitUntilExit` (crash et
+inversion d'ordre), verts contre le sémaphore, en plus du test du pont
+`outboxBridgeDoesNotPumpTheRunLoopWhileWaiting`.
+
+**Completed:** 2026-09-05 (correctif), 2026-09-12 (couverture)
 
 ### CI rouge : le test du verrou terminal assertait la vitesse du runner
 

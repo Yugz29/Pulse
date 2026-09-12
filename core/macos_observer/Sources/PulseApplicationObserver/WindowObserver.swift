@@ -63,8 +63,15 @@ final class WindowObserver: @unchecked Sendable {
     private var accessibilityTrusted = false
     private var accessibilityWarned = false
 
-    init(repositoryRoot: URL, ignoredApplicationsURL: URL) throws {
-        let bridge = OutboxBridge(repositoryRoot: repositoryRoot)
+    init(
+        repositoryRoot: URL,
+        ignoredApplicationsURL: URL,
+        pythonExecutable: URL? = nil
+    ) throws {
+        let bridge = OutboxBridge(
+            repositoryRoot: repositoryRoot,
+            pythonExecutable: pythonExecutable
+        )
         self.recorder = try WindowEventRecorder(
             builder: CanonicalEventBuilder(instanceID: bridge.instanceID()),
             enqueue: bridge.enqueue
