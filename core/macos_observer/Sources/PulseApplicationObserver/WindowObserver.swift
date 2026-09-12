@@ -71,7 +71,15 @@ final class WindowObserver: @unchecked Sendable {
         self.ignoredApplications = IgnoredApplications.load(from: ignoredApplicationsURL)
     }
 
+    /// Au démarrage, la demande standard : sans autorisation, macOS inscrit
+    /// le binaire dans la liste Accessibilité et propose d'ouvrir les
+    /// Réglages ; il ne reste qu'à cocher. Une fois par démarrage, jamais
+    /// à chaque activation.
     func start() {
+        // Valeur de `kAXTrustedCheckOptionPrompt` : la constante globale
+        // n'est pas lisible en concurrence stricte Swift 6.
+        let options = ["AXTrustedCheckOptionPrompt" as CFString: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
         _ = accessibilityAvailable()
     }
 
