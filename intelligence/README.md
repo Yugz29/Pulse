@@ -7,7 +7,9 @@ Core ne sait pas qu'elle existe.
 
 Le journal et `/context/sessions` partagent la reconstruction Core v3. Core
 expose les observations ordonnées v1 dans son API v3. Intelligence les transmet
-sans UUID sources et ajoute des relations de résultats de commandes, bornées
+sans UUID sources ni faits `window` (qu'aucun prompt ne décrit, addendum du
+2026-09-13 à la [décision contexte de fenêtre](../docs/decisions/2026-09-12-contexte-de-fenetre.md))
+et ajoute des relations de résultats de commandes, bornées
 à la session : entrée v3, prompt v5. L'état actuel reste explicitement inconnu.
 Voir la [décision courante](../docs/decisions/2026-09-08-reprise-fondee.md) et le
 [bilan des évaluations](../docs/audits/README.md).
