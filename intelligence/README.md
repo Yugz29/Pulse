@@ -226,8 +226,12 @@ fermées dans `open_items` (`kind`, `evidence`, `scope: session_end`), ainsi que
 pas recopiées hors du champ masqué.
 
 Une configuration épinglant v1–v4 doit choisir v5 pour générer avec l'entrée
-courante. Les anciennes vues Core restent lisibles en `legacy_aggregates`,
-sans chronologie inventée. Le défaut de code v5 ne constitue pas une validation
+courante. Les prompts v1–v4 sont conservés tels qu'envoyés au modèle : le v3
+annonce encore le rejet D6 (« la note serait rejetée »), supprimé avec les
+filtres lexicaux D5/D6 ([décision observations ordonnées](../docs/decisions/2026-09-08-observations-ordonnees.md)) ;
+une sortie v3 rejouée aujourd'hui n'est plus rejetée pour ce motif. Les
+anciennes vues Core restent lisibles en `legacy_aggregates`, sans chronologie
+inventée. Le défaut de code v5 ne constitue pas une validation
 de qualité pour l'usage quotidien : consulter le verdict du rapport.
 
 Si Core a accepté un résumé mais que sa relecture après émission a échoué,

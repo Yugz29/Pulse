@@ -108,7 +108,7 @@ la vue contredit ou efface un fil).
 | 01 | partiel | — | Tag exact absent ; « environnement virtuel » inventé (T7). |
 | 02 | partiel | — | GraphView.tsx absent ; `open` réécrit avec `&&` ; 130 présenté comme échec. |
 | 03 | partiel | — | Deux `git add` corrigés restent en `open` (T1). Le reste juste. |
-| 04 | **faux** | — | DevNote effacé (T3), acteur inversé (T4), trois échecs dépassés en `open`. La pire des 14. |
+| 04 | **faux** | — | DevNote effacé (T3), acteur inversé (T4), deux échecs dépassés en `open` (o7, o10, C5 nuisible) à côté du bloc Git en échec (o14, C3 utile). La pire des 14. *(Corrigé le 2026-09-13 : « trois échecs dépassés » contredisait la fiche.)* |
 | 05 | partiel | — | « L'agent a finalisé » (T4, D3 léger). « main, propre » bien géré (T12). |
 | 06 | partiel | — | `blockers` probablement faux, dernier échec pris pour dernière activité (T8). |
 | 07 | partiel | — | Intents inventés (T7) ; n'aurait pas dû être résumée (T2). |

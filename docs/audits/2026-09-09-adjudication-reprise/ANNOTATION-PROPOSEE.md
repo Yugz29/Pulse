@@ -71,3 +71,19 @@ Ces catégories ne forment pas une enum exclusive : un fait exact et terminé pe
 Chaque élément confirmé doit avoir une origine, un instant ou une incertitude explicite, une importance décidée par l’utilisateur et un lien vers sa réponse. Chaque source citée doit exister dans la capture indiquée. Une inférence utile doit rester identifiée comme inférence. Une connaissance hors capture ne peut pas être comptée comme échec de raisonnement du modèle à entrée constante. Les réponses manquantes ne sont jamais comptées comme succès, échec, tâche terminée ou absence de besoin.
 
 Aucun parseur, importeur ou validateur de production n’est ajouté dans cette mission.
+
+## Arguments consignés pour la décision de format
+
+- **2026-09-13, fiche 14 (`eef4956b`).** L'attente historique d'`eval/expected`
+  exige le report `carried_over` llm_max_tokens / passage de référence, que la
+  réponse C4 juge nuisible et que git montre réglé au début de la session
+  (détail et preuves dans la [fiche 14](fiches/14-eef4956b36dd37ce.md)). Tant
+  que la décision n°4 du 2026-09-11 tient, l'attente n'est pas corrigée et
+  `eval` compte la session non conforme sous tout prompt v5+, à cause du seul
+  point attendu faux. Sur `v7-corpus`, o19, jugé juste et utile par la
+  décision v7, n'est reconnu par aucune attente et rangé « en plus » (signalé,
+  sans effet sur la conformité) : eval échoue la session sur un point faux et
+  ne crédite pas le point correct. Le format retenu devra dire
+  comment une réponse de vérité terrain remplace ou marque `disputed` une
+  attente historique, sans effacer la série d'origine (procédure, point 4
+  et 5).

@@ -121,6 +121,12 @@ contrôle forme, références et rôles des annexes, sans prétendre prouver une
 interprétation par la présence d'une référence. Les erreurs sémantiques sont
 mesurées dans le rejeu, pas rendues invisibles par un score de JSON valide.
 
+*(Note du 2026-09-13.)* Le prompt v3 (`session_summary_v3.md`) annonce encore
+qu'une note affirmant un fichier non commité « serait rejetée » : c'était vrai
+de `2d34ca8` (2026-09-08, 00:13) jusqu'à la suppression des filtres par
+`7f0501a` (2026-09-09, 00:57). Le texte est conservé tel qu'il a été envoyé au
+modèle ; une sortie v3 rejouée aujourd'hui n'est plus rejetée pour ce motif.
+
 L'identité de session et `reconstruction_version: 3` ne changent pas. Le prompt
 v4 donne aux nouvelles générations une identité de résumé distincte des v1–v3,
 sans écraser leurs événements. `input_hash` reste le hash de l'entrée exacte.

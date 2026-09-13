@@ -919,8 +919,10 @@ dans un fait `command` (`intelligence/TODOS.md`).
 **Décision v7 (après-midi) et compteur.** Verdict des 9 points
 `v7-superseded` et activation dans la section « Reprise » ci-dessus. Le
 compteur de l'étape 4 ne cumule pas les lots v6 : **il repart au premier lot
-v7 à entrée schéma 3, Mac éveillé**. Les jours 5 à 8 sous v6 restent des
-mesures, pas des jours du critère.
+v7 à entrée schéma 3, Mac éveillé**. Les jours 5 à 8 restent des mesures,
+pas des jours du critère. *(Précisé le 2026-09-13 : le jour 5 tournait sous
+v5, les jours 6 à 8 sous v6 ; les jours 5, 6 et 7 avaient une entrée sans
+observations, `open` vide forcé ; erratum dans la décision v7.)*
 
 ## Jour 9 — 2026-09-13
 
