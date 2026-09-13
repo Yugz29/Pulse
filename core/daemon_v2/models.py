@@ -32,7 +32,8 @@ SUPPORTED_ACTIVITY_TYPES = {
     "terminal_finished",
     "git_commit",
     # Dérivé par la couche Intelligence (pas 3) : Core l'accepte, le stocke
-    # et l'expose par /context, sans le rendre.
+    # et l'expose par /context ; le journal HTML le rend à part, jamais dans
+    # la timeline (décision du 2026-09-13).
     "session_summary",
     *SYSTEM_ACTIVITY_TYPES,
 }

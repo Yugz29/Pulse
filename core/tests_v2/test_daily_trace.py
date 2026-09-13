@@ -996,8 +996,13 @@ def test_renders_deterministic_resume_before_today(tmp_path):
         in markdown
     )
     assert "Dernière commande Git observée" not in markdown
-    assert '<a class="nav-main" href="#reprise">Reprise</a>' in html
-    assert '<section class="resume" id="reprise"><h2>Reprise</h2>' in html
+    assert (
+        '<a class="nav-main" href="#faits-de-reprise">Faits de reprise</a>' in html
+    )
+    assert (
+        '<section class="resume" id="faits-de-reprise"><h2>Faits de reprise</h2>'
+        in html
+    )
     resume_html = html.split('<section class="resume"', 1)[1].split(
         "</section>", 1
     )[0]
@@ -1010,8 +1015,8 @@ def test_renders_deterministic_resume_before_today(tmp_path):
         "<dt>Dernier projet observé</dt><dd>Pulse_V2</dd>"
         in resume_html
     )
-    assert html.index('id="maintenant"') < html.index('id="reprise"')
-    assert html.index('id="reprise"') < html.index('id="aujourdhui"')
+    assert html.index('id="maintenant"') < html.index('id="faits-de-reprise"')
+    assert html.index('id="faits-de-reprise"') < html.index('id="aujourdhui"')
 
 
 def test_resume_reports_pushed_changes_with_stale_local_test(

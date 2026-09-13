@@ -741,7 +741,8 @@ def reconstruct_session_views(
             "system_sleep",
             "system_wake",
             # Résumé dérivé (couche Intelligence) : stocké et exposé par
-            # /context, jamais rendu — ni session, ni activité non attribuée.
+            # /context, rendu à part par le journal (session_summaries) —
+            # ni session, ni activité non attribuée.
             "session_summary",
             # Événement dérivé émis après coup : hors identité des sessions
             # (voir is_strong_work_activity), exposé par /context seulement.
