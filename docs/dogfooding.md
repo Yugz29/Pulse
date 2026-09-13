@@ -115,6 +115,16 @@ schéma 3 et reconstruction 4 → jour 9, premier jour du compteur.
 Chantiers suivants décidés, non commencés : règle « même `git_common_dir`
 = même projet », puis état net par chemin.
 
+**Reprise au 2026-09-13 (ajout du jour 9).** Le lot du 13 n'a rien produit :
+1 candidate, 0 créée, entrée refusée au plafond de 30 000 tokens (détail
+dans « Jour 9 »). **Jour 9 non jugeable, compteur de l'étape 4 toujours pas
+démarré, aucun résumé v7 en production.** Mergée l'après-midi : #93
+(résumés de session dans le journal HTML, Core 0.8.1.0), prod relancée à
+17:22. Chantier suivant : filtrage des faits `window` dans l'entrée du
+modèle (Intelligence), avant le prochain lot. La session refusée (`0ababe11`, 12,
+126 min) sort de la fenêtre de sélection au lot du 14 (`lookback_days` 1) :
+elle ne sera pas retentée d'elle-même.
+
 
 
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
@@ -904,3 +914,58 @@ dans un fait `command` (`intelligence/TODOS.md`).
 compteur de l'étape 4 ne cumule pas les lots v6 : **il repart au premier lot
 v7 à entrée schéma 3, Mac éveillé**. Les jours 5 à 8 sous v6 restent des
 mesures, pas des jours du critère.
+
+## Jour 9 — 2026-09-13
+
+**Non jugeable : zéro résumé.** Lot launchd 06:30:34 → 07:31:55, prompt v7,
+entrée schéma 3, reconstruction 4. 1 candidate, 0 créée, 1 échec à la
+tentative 1 : `0ababe11` (work-3 du 12, 12:55–15:01, 126 min, 2 672
+activités, Pulse et DevNote), « entrée de 174548 tokens au-dessus du plafond
+30000 : refusée avant le prefill ». Ce n'est pas la veille du Mac : le refus
+a lieu avant toute génération. **Le compteur de l'étape 4 n'a toujours pas
+démarré ; aucun résumé v7 n'existe encore en production** (51 résumés
+stockés : v1 à v6).
+
+**Cause : les faits `window` historiques du 12.** La timeline de `0ababe11`
+porte 2 451 faits, dont 2 212 `window` (Terminal 2 141). Sans eux, l'entrée
+passe de 173 422 à 25 310 tokens (tokenizer du modèle, prompt non compris),
+sous le plafond : les faits `window` pèsent **85 % des tokens, 86 % des
+caractères**. 2 095 d'entre eux alternent deux titres qui ne diffèrent que
+par le caractère d'animation de Claude Code (`◐` / `◑`), enregistrés de
+13:26 à 14:59 (l'essentiel avant 14:30), avant la normalisation du titre
+(a17e25e, en production à 15:02) : ces faits restent dans la trace. Mesure
+rejouable depuis `intelligence/` :
+`.venv/bin/python ../corpus/docs/audits/2026-09-13-lot-jour-9/breakdown.py 2026-09-12`
+(entrée v7 par `build_model_input`, tokenizer local du modèle, Core de
+production en lecture).
+
+**Les trois autres sessions du 12 sont écartées légitimement.** Critère
+(`intelligence/pulse_intelligence/selection.py`, `classify`) : close, pas
+« trop courte » (moins de 10 min **et** moins de 30 activités), pas déjà
+résumée sous la même version de prompt et le même modèle. Vue du 12 à la
+référence du lot (`at` = 06:30:34) identique à la vue actuelle.
+
+| Session | Bornes | Durée, activités | Raison | Contenu |
+| --- | --- | --- | --- | --- |
+| work-1 `172b2a51` | 03:04 | 0 min, 2 | trop courte | un commit d'agent (inventaire HTML) et son fichier |
+| work-2 `b091edb2` | 12:39–12:49 | 9 min, 24 | trop courte | début du chantier contexte de fenêtre (`claude`, 18 fichiers), coupé par le verrouillage de 12:49 ; agent en arrière-plan jusqu'à 12:53 ; le travail reprend à 12:55 dans work-3, mêmes fichiers |
+| work-4 `a536fd50` | 16:11 | 0 min, 2 | trop courte | un commit d'agent (clôture du 12 dans ce journal) et son fichier |
+
+Rien à reprendre dans work-1 et work-4. Le contenu de work-2 est couvert par
+work-3 : c'est le refus de work-3 qui prive le 12 de reprise, pas la
+sélection.
+
+**Diagnostic `open`, constat sans verdict.** Sur les 14 sessions de
+`eval/observed`, le comptage des restes attendus dans les reprises idéales
+des fiches d'adjudication donne **35 restes, dont 9 étayables par un fait de
+la vue** : les autres sont hors vue (merges, PR, suites décidées hors
+machine, commandes de l'agent). Le plafond d'`open` est donc d'environ un
+quart des restes attendus, et v7 avec l'état net des commandes (#89) en
+capte déjà l'essentiel (jugement des 9 points `v7-superseded` du 12 :
+4 justes et utiles, 1 à moitié, 2 justes inutiles, 2 nuisibles). La suite se
+jouera sur la collecte, pas sur le prompt, et elle attend un vrai lot v7.
+Comptage analyste, non validé point par point. Données :
+`corpus/docs/audits/2026-09-13-diagnostic-open/` (`stored_51.json` lu par
+`GET /activities/<event_id>` sur le Core de production ; `q3_material.txt`
+depuis `adjudications-a-completer.json`, `eval/expected` et les sorties v5,
+v6, `v7-corpus`, `v7-superseded` ; `q3_comptage.md`). Aucun modèle exécuté.
