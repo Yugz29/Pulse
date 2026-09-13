@@ -103,9 +103,11 @@ sur un projet. La preuve de travail reste le terminal, les fichiers et Git.
 - Chrome n'expose sa zone web qu'après avoir activé son arbre
   d'accessibilité, ce que la première lecture déclenche ; la toute première
   fenêtre après un lancement peut donc n'avoir que son titre.
-- Les faits `window` entrent dans l'entrée du modèle d'Intelligence avec les
+- ~~Les faits `window` entrent dans l'entrée du modèle d'Intelligence avec les
   autres observations ; le prompt v6 ne les décrit pas. À évaluer au prochain
-  rejeu, pas dans ce chantier.
+  rejeu, pas dans ce chantier.~~ Remplacé par l'addendum du 2026-09-13 : les
+  faits `window` restent dans la vue de Core mais sont retirés de l'entrée du
+  modèle.
 
 ## Addendum du 2026-09-12 (soir) : titres à répétition et messagerie web
 
@@ -145,6 +147,11 @@ URL capturée (titre seul) n'est pas reconnu.
 
 ## Addendum du 2026-09-12 : éligibilité dans l'entrée du modèle
 
+> **Remplacé par l'addendum du 2026-09-13** (ci-dessous) : les faits `window`
+> ne sont plus dans l'entrée du modèle. La conclusion « jamais un appui
+> d'`open` » tient toujours, par absence plutôt que par refus du validateur ;
+> le verrou est devenu `test_window_facts_are_kept_out_of_model_input`.
+
 Question posée : les faits `window` sont-ils une preuve admissible pour
 `open` dans Intelligence ? Réponse : non, par construction, et c'est
 désormais verrouillé.
@@ -168,6 +175,64 @@ Verrou : `test_window_facts_are_visible_but_never_evidence_for_open`
 (`intelligence/tests/test_resumption.py`) et un commentaire dans
 `_resumption_items`. À rouvrir seulement avec une version de prompt qui
 décrit les faits `window` et dit ce qu'ils peuvent étayer.
+
+## Addendum du 2026-09-13 : faits `window` hors de l'entrée du modèle
+
+**Décision.** Intelligence retire les faits `window` de la ligne de temps
+qu'elle envoie au modèle (`FACT_KINDS_HIDDEN_FROM_MODEL` dans
+`intelligence/pulse_intelligence/session_input.py`), pour toutes les versions
+de prompt, et leurs références de la provenance du résumé
+(`observation_sources`, `input_provenance`). Core ne change pas : les faits
+restent dans `trace.db`, dans les observations de `/context` et
+`/context/sessions` (`observation_version` 2) et dans le journal. Les autres
+faits gardent leur `ref` d'origine, sans renumérotation. Les faits `window`
+reviendront dans l'entrée avec une version de prompt qui les décrit et dit ce
+qu'ils peuvent étayer.
+
+**Pourquoi.** Le lot du 2026-09-13 a refusé la seule grosse session du 12
+(`0ababe11`, 126 min) au plafond du modèle local : 174 548 tokens pour
+30 000. Sa ligne de temps porte 2 212 faits `window` sur 2 451, dont 2 095
+titres de Terminal qui n'alternent que par le spinner de Claude Code,
+enregistrés avant la normalisation du titre (addendum du soir). Aucune version
+de prompt ne décrivait ces faits, aucun rejeu ne les avait évalués, le
+validateur les refusait déjà comme appui d'`open`. Mesure, tokenizer du
+modèle, entrée seule (le prompt et le gabarit ajoutent 1 126 tokens) :
+
+| Entrée de `0ababe11` | Faits `window` | Tokens |
+| --- | --- | --- |
+| Vue complète | 2 212 | 173 422 |
+| Dédoublonnage des faits consécutifs, titre normalisé | 123 | 32 306 |
+| Un fait par contexte distinct | 36 | 27 288 |
+| Retrait (retenu) | 0 | 25 310 |
+
+Même avec la normalisation en production, une session de 12 min du 13 porte
+13 faits `window` pour 800 tokens sur 2 404.
+
+**Écarté.**
+
+- Filtrer dans Core : les observations sont un contrat consommé
+  (`observation_version`, note et consommateurs à mettre à jour), alors que
+  Core observe juste ; c'est Intelligence qui choisit ce qu'elle envoie.
+- Dédoublonner les faits consécutifs : reste au-dessus du plafond.
+- Un fait par contexte distinct : passe sous le plafond, mais casse l'ordre
+  chronologique et envoie des faits qu'aucun prompt ne décrit.
+
+**Conséquences.** `input_version` reste 3 (la forme de l'entrée ne change pas)
+et aucune version de prompt n'est ajoutée : aucun résumé v7 n'existait en
+production, et le corpus `eval/observed` ne contient aucun fait `window`, donc
+les mesures v3 à v7 restent valables. L'identité d'un résumé ne dépend pas de
+l'entrée.
+
+**Limite connue, hors périmètre.** Sans faits `window`, `0ababe11` pèse
+environ 26 400 tokens sur 30 000 : une session plus longue ou plus chargée
+en faits `file` peut encore dépasser le plafond.
+
+**Vérification.** `test_window_facts_are_kept_out_of_model_input` et
+`test_session_of_window_facts_only_gives_an_empty_timeline`
+(`intelligence/tests/test_resumption.py`). Rejeu de la mesure depuis
+`intelligence/` : `.venv/bin/python ../corpus/docs/audits/2026-09-13-lot-jour-9/breakdown.py
+<date>` (hors dépôt), qui donne la vue complète, la vue sans `window` et
+l'entrée construite par le code courant.
 
 ## Rejeu et vérification
 

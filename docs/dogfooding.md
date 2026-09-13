@@ -939,6 +939,12 @@ rejouable depuis `intelligence/` :
 (entrée v7 par `build_model_input`, tokenizer local du modèle, Core de
 production en lecture).
 
+**Limite connue, hors périmètre : le plafond reste serré sans faits
+`window`.** Sans eux, `0ababe11` pèse 25 310 tokens d'entrée plus 1 126 de
+prompt et de gabarit, soit **environ 26 400 tokens sur 30 000** pour une
+session de 126 min. Une session plus longue ou plus chargée en faits `file`
+peut dépasser le plafond sans aucun fait `window`.
+
 **Les trois autres sessions du 12 sont écartées légitimement.** Critère
 (`intelligence/pulse_intelligence/selection.py`, `classify`) : close, pas
 « trop courte » (moins de 10 min **et** moins de 30 activités), pas déjà
