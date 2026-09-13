@@ -125,6 +125,13 @@ modèle (Intelligence), avant le prochain lot. La session refusée (`0ababe11`, 
 126 min) sort de la fenêtre de sélection au lot du 14 (`lookback_days` 1) :
 elle ne sera pas retentée d'elle-même.
 
+**Soir du 2026-09-13.** #94 mergée (faits `window` hors de l'entrée du
+modèle) ; `0ababe11` relancée à la main : **premier résumé v7 en
+production**, jugé dans « Jour 9 ». Deux points à creuser et une limite de
+la CLI y sont consignés. **Cette relance ne compte pas pour l'étape 4** : la
+règle exige un lot launchd, c'était un passage manuel. Le compteur démarrera
+au lot du 2026-09-14 s'il produit un résumé.
+
 
 
 **Convention.** Un « jour » de dogfooding est une **date civile**, jugée à la
@@ -942,8 +949,9 @@ production en lecture).
 **Limite connue, hors périmètre : le plafond reste serré sans faits
 `window`.** Sans eux, `0ababe11` pèse 25 310 tokens d'entrée plus 1 126 de
 prompt et de gabarit, soit **environ 26 400 tokens sur 30 000** pour une
-session de 126 min. Une session plus longue ou plus chargée en faits `file`
-peut dépasser le plafond sans aucun fait `window`.
+session de 126 min (26 436 mesurés à la relance du soir, ci-dessous). Une
+session plus longue ou plus chargée en faits `file` peut dépasser le plafond
+sans aucun fait `window`.
 
 **Les trois autres sessions du 12 sont écartées légitimement.** Critère
 (`intelligence/pulse_intelligence/selection.py`, `classify`) : close, pas
@@ -975,3 +983,75 @@ Comptage analyste, non validé point par point. Données :
 `GET /activities/<event_id>` sur le Core de production ; `q3_material.txt`
 depuis `adjudications-a-completer.json`, `eval/expected` et les sorties v5,
 v6, `v7-corpus`, `v7-superseded` ; `q3_comptage.md`). Aucun modèle exécuté.
+
+### Relance manuelle de `0ababe11` (soir, après #94)
+
+**Premier résumé v7 en production.** #94 mergée à 19:23 (faits `window`
+retirés de l'entrée du modèle, addendum du 2026-09-13 à la décision contexte
+de fenêtre). `pulse-intel summarize 0ababe1191379722 --date 2026-09-12`, sans
+`--retry` (1 échec sur 3), Mac éveillé sur secteur, `caffeinate -i` :
+`created`, event_id `0989d7d2-ada4-5acf-837e-10bfc3ab57ff` (même identité
+que la tentative refusée du matin). Prompt v7, `Qwen3.8-27B-4bit`,
+`max_tokens` 2048, température absente. **26 436 tokens d'entrée réels**
+(25 310 d'entrée, 1 126 de prompt et de gabarit : mesuré, plus déduit,
+avec le tokenizer et le rendu du provider MLX sur l'entrée dont
+l'`input_hash` `3ee44764…` est celui du résumé émis). `generation_ms`
+221 583, **3 min 42 s** chargement compris (19:26:47 → 19:30:29).
+`observation_sources` : 246 références, aucune d'un fait `window`.
+
+**Sortie.**
+
+- `doing` : « Développement du contexte de fenêtre (window_focused) pour
+  l'observateur Pulse, incluant la déduplication des titres et la gestion des
+  domaines ignorés, ainsi que la correction du seuil de split de session. »
+- `stopped_at` : « La session s'est terminée après la modification des
+  fichiers de tests et de documentation (o2450) et l'ajout d'une entrée dans
+  le CHANGELOG (o2423), sans nouvelle commande ou commit ultérieur. »
+  (`o2450` : `intelligence/tests/test_reconstruction_version.py` ; `o2423` :
+  `core/CHANGELOG.md`.)
+- `open` : un point `recorded_statement` sur `o2422` (commit `ea9cde8`,
+  « fix(intelligence): KNOWN_RECONSTRUCTION_VERSION suit Core en 4 »),
+  citation « TODOS pour les garde-fous manquants sur schema_version et
+  observation_version ».
+- `confidence` `high` ; `central_files` : `core/daemon_v2/analysis/timeline.py`,
+  `core/macos_observer/Sources/PulseApplicationObserver/WindowObserver.swift`,
+  `core/daemon_v2/window_policy.py`, `core/daemon_v2/ingest.py`,
+  `intelligence/pulse_intelligence/session_summary.py`.
+
+**Hors compteur.** La relance du soir ne compte pas pour l'étape 4 : la
+règle exige un lot launchd (v7, entrée schéma 3, Mac éveillé), c'était un
+passage manuel. **Le compteur de l'étape 4 démarrera au lot du 2026-09-14
+s'il produit un résumé.**
+
+**Jugement (utilisateur).**
+
+| Champ | Verdict |
+| --- | --- |
+| `doing` | **juste et utile** |
+| `stopped_at` | **exact, sans valeur de reprise** : le dernier fait chronologique n'est pas le dernier fait significatif |
+| `open` | **juste** : premier `recorded_statement` produit en production (le seul point `open` antérieur, v3 du 7, était un `requested`), et c'est la nature que le diagnostic `open` du jour désignait pour les restes hors vue |
+
+**À creuser.**
+
+- **`observation_version` 2 sous `schema_version` 3 : attendu.** Deux
+  versions indépendantes : `schema_version` est celle du Context API
+  (`SCHEMA_VERSION = 3`, `context_snapshot.py`), `observation_version` celle
+  de la projection des faits (`OBSERVATION_VERSION = 2` depuis les faits
+  `window`, Core 0.7.0.0, `work_observations.py`). La projection est calculée
+  à la lecture par le code courant, pas stockée avec la session : les
+  sessions du 11, du 12 et du 13 sont toutes servies en version 2 ce soir. Le
+  lot du jour 8 lisait la version 1 parce que la prod tournait sur un code
+  antérieur aux faits `window` (relancée le 12 à 15:02). Rien de propre à une
+  session du 12.
+- **`summarize` n'enregistre pas les tokens d'entrée, `eval` si.** Le
+  provider les compte (`CompletionResult.prompt_tokens`), mais
+  `Summarizer.summarize` ne rend que le texte : `ProviderSummarizer.summarize`
+  jette le reste, alors qu'`eval` appelle `complete` et garde
+  `prompt_tokens`. Seul un refus au plafond les écrit (dans son message
+  d'échec). Aucun résumé émis ne dit donc à quelle distance du plafond il
+  était.
+
+**Limite de la CLI.** `summarize` exige l'identifiant complet de la session
+(`find_session` compare l'égalité) ; `show` accepte un préfixe. Première
+tentative du soir avec `0ababe11` : « session introuvable sur la période »,
+sans appel au modèle ni changement d'état.
