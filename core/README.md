@@ -97,6 +97,12 @@ intelligente et ne cherche pas à deviner l’intention du travail. Le bloc
 de l’activité locale, comme le dernier test local observé, les derniers fichiers
 observés et un contexte Git local lu passivement au rendu.
 
+Depuis le 2026-09-13, ce bloc s'appelle `Faits de reprise` dans le journal
+HTML (le Markdown garde `Reprise`). La page s'ouvre sur les résumés produits
+par Intelligence, rendus à part et marqués comme interprétation du modèle :
+voir « Vue vivante et vue archive » et
+`docs/decisions/2026-09-13-resumes-dans-le-journal.md`.
+
 - Les prochaines limites connues de ce palier sont :
   - les commandes Git restent aussi observées via le terminal (labellisées
     `git` dans les résumés), mais le contexte Git affiché dans `Reprise` vient
@@ -280,8 +286,10 @@ Ouvrir la page locale de l’activité du jour :
 http://127.0.0.1:8765/
 ```
 
-La page locale affiche les blocs `Maintenant`, `Reprise`, `Aujourd’hui` et
-`État système`, puis une timeline navigable. Elle regroupe les changements de
+La page locale s’ouvre sur `Reprise` (le dernier résumé de session et les
+sessions closes restées sans résumé) et `Résumés` (tous les résumés stockés,
+repliés), puis affiche les blocs `Maintenant`, `Faits de reprise`,
+`Aujourd’hui` et `État système`, puis une timeline navigable. Elle regroupe les changements de
 fichiers par vague de modification, résume les sessions, marque les changements
 de projet et synthétise les applications actives. Un événement fort isolé
 (un `cd` nu, un commit seul) apparaît en une ligne dans la section
@@ -414,8 +422,16 @@ même `at`, même `window` → même JSON, `generated_at` excepté.
 
 La route `/` représente l’état courant. Elle affiche :
 
+- `Reprise` : le résumé que `GET /context` expose comme
+  `last_session_summary` (même sélection), un bandeau s’il date de plus de
+  24 h depuis la fin de sa session, et au-dessus toutes les sessions de
+  travail closes aujourd’hui et hier qu’aucun résumé ne couvre, avant ou
+  après ce résumé ;
+- `Résumés` : tous les `session_summary` stockés, par jour puis par session,
+  repliés, chaque version coexistante visible avec sa `prompt_version` ;
 - `Maintenant` ;
-- `Reprise` ;
+- `Faits de reprise` : les signaux déterministes (dernier test, dernière
+  erreur, git local), ancre `#faits-de-reprise` ;
 - `Aujourd’hui` ;
 - `État système` ;
 - la timeline, ses résumés de session et ses séparateurs de projet ;
@@ -423,7 +439,8 @@ La route `/` représente l’état courant. Elle affiche :
 
 La route `/day/YYYY-MM-DD` représente une archive stable d’une journée. Elle
 affiche `Journal du YYYY-MM-DD`, le résumé du jour et la timeline. Elle
-n’affiche pas `Maintenant`, `Reprise` ni `État système`, et sa navigation se
+n’affiche ni `Reprise`, ni `Résumés`, ni `Maintenant`, ni `Faits de reprise`,
+ni `État système`, et sa navigation se
 termine par `Fin du jour`.
 
 Les vues datées HTML et Markdown sont temporellement stables : elles n’affichent
