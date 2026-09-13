@@ -135,8 +135,11 @@ action avant de l'exécuter lorsqu'elle modifie l'état du système.
 
 ### Interfaces
 
-**État actuel : HTML local existant** (rendu par Core). Interface native
-macOS, CLI et notifications plus tard, une fois le modèle de contexte
+**État actuel : HTML local existant** (rendu par Core). La page d'accueil
+ouvre sur la reprise du dernier résumé, les sessions closes restées sans
+résumé, puis la liste repliée de tous les résumés, au-dessus de la timeline
+([décision](decisions/2026-09-13-resumes-dans-le-journal.md)). Interface
+native macOS, CLI et notifications plus tard, une fois le modèle de contexte
 stabilisé.
 
 ## Mémoire
@@ -148,7 +151,8 @@ Deux types de mémoire pour commencer :
   brut : événement dérivé `agent_session` plus archive zstd séparée.
 - **Résumés** : contrat, CLI et stockage comme événements dérivés livrés sur le
   même patron que `agent_session` ; génération par le modèle local livrée,
-  qualité de reprise encore à valider.
+  qualité de reprise encore à valider ; tous rendus dans le journal HTML,
+  versions coexistantes comprises.
 
 Les mémoires sémantique, épisodique et long terme viendront quand il y aura des
 résumés à indexer, pas avant.
@@ -203,6 +207,13 @@ problème réel.
   première action de la couche Agent (décision du 2026-09-03).
 
 ## Décisions prises
+
+- **2026-09-13** — Résumés dans le journal HTML : zones « Reprise » (même
+  sélection que `last_session_summary`, bandeau au-delà de 24 h, sessions
+  closes sans résumé sur deux jours) et « Résumés » (tous, repliés, chaque
+  `prompt_version` visible) en tête de `GET /` ; l'ancienne section devient
+  « Faits de reprise » ; lecture seule, aucun contrat changé, Core 0.8.1.0
+  ([décision](decisions/2026-09-13-resumes-dans-le-journal.md)).
 
 - **2026-09-12** — Seuil avant split : un fragment d'un autre workspace ne
   devient une session que s'il dure 2 minutes et compte 2 activités fortes,

@@ -30,6 +30,8 @@ Usage prioritaire : la reprise. Le bloc structuré est produit dans le même app
 - Un seul modèle, un seul prompt. Pas de routeur, pas de fallback distant.
 - Pas de résumé de la session en cours.
 - Pas d'interface : JSON et Markdown brut. L'affichage HTML viendra plus tard.
+  *Remplacé le 2026-09-13 : les résumés sont rendus dans le journal HTML de
+  Core ([décision](../decisions/2026-09-13-resumes-dans-le-journal.md)).*
 - Pas d'authentification des producteurs locaux : question à rouvrir quand la couche Agent agira sur ces données (noté dans la Vision, « Plus tard »).
 
 ## 3. Principes
@@ -257,6 +259,7 @@ Critères d'acceptation du pas 3 : (a) le 5 est atteint ; (b) tous les tests pas
 ## 13. Hors périmètre, explicitement
 
 - Affichage définitif des résumés dans le HTML de Core — l'aperçu actuel via `build_current_state` est accepté en attendant.
+  *Remplacé le 2026-09-13 : cet aperçu n'a jamais existé ; les résumés sont rendus en tête de `GET /` ([décision](../decisions/2026-09-13-resumes-dans-le-journal.md)).*
 - Résumé de journée, mémoire sémantique, recherche.
 - Fine-tuning, LoRA, LLM-as-judge.
 - Authentification des producteurs locaux.
