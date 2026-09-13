@@ -149,23 +149,27 @@ def test_v6_generates_without_annexes_under_its_own_identity(fake_core,client,co
     assert 'annexe' not in prompt and 'previous_summary' not in prompt and 'agent_session' not in prompt
 
 
-def test_window_facts_are_visible_but_never_evidence_for_open():
-    """Verrou de la décision du 2026-09-12 : un fait `window` (fenêtre au
-    premier plan) est dans l'entrée, jamais un appui d'`open`, tant qu'aucune
-    version de prompt ne le décrit."""
+def test_window_facts_are_kept_out_of_model_input():
+    """Addendum du 2026-09-13 à la décision contexte de fenêtre : un fait
+    `window` reste dans la vue de Core mais n'entre pas dans l'entrée du
+    modèle, ni dans ses références, ni dans la provenance du résumé, tant
+    qu'aucune version de prompt ne le décrit."""
     window = dict(ref='o2', kind='window', at=10, app='Safari', title='Pull request #89',
                   url='https://github.com/org/repo/pull/89', document='/work/Pulse/docs/plan.pdf')
     commit = dict(ref='o3', kind='commit', at=20, hash='a'*40, message='fix auth\n\nTODO: rotate key',
                   workspace='/work/Pulse', branch='main')
     session = entry([command('o1', 1, 0), window, commit])
+    saved = deepcopy(session.raw)
     model_input = build_model_input(session, {}, references=True)
     timeline = model_input['session']['observations']['timeline']
-    assert [f['kind'] for f in timeline] == ['command', 'window', 'commit']
-    assert timeline[1]['title'] == 'Pull request #89'
+    # Les autres faits gardent leur ordre et leur `ref` d'origine.
+    assert [(f['ref'], f['kind']) for f in timeline] == [('o1', 'command'), ('o3', 'commit')]
+    assert 'Pull request #89' not in json.dumps(model_input)
+    assert session.raw == saved
     references = input_references(model_input)
-    assert 'o2' in references and references.observations['o2']['kind'] == 'window'
-    # Le document d'une fenêtre n'est pas un chemin citable dans central_files.
+    assert 'o2' not in references and set(references.observations) == {'o1', 'o3'}
     assert '/work/Pulse/docs/plan.pdf' not in input_paths(session)
+    assert input_provenance(session, {}, model_input) == {'o1': ['event-o1'], 'o3': ['event-o3']}
     for item in (dict(text='La PR 89 reste à relire.', kind='command_failure', evidence=['o2']),
                  dict(text='La PR 89 reste à relire.', kind='recorded_statement', evidence=['o2'],
                       quote='Pull request #89')):
@@ -176,3 +180,15 @@ def test_window_facts_are_visible_but_never_evidence_for_open():
         dict(text='Clé à faire tourner.', kind='recorded_statement', evidence=['o3'], quote='rotate key'),
     ])
     assert [i['evidence'] for i in parsed.open_items] == [['o1'], ['o3']]
+
+
+def test_session_of_window_facts_only_gives_an_empty_timeline():
+    windows = [dict(ref=f'o{i}', kind='window', at=i, app='Terminal', title=f'Pulse — {g} claude')
+               for i, g in enumerate('◐◑◐', start=1)]
+    session = entry(windows)
+    model_input = build_model_input(session, {}, references=True)
+    assert model_input['session']['observations']['timeline'] == []
+    assert model_input['resumption']['command_outcomes'] == []
+    assert input_references(model_input).refs == frozenset()
+    assert input_provenance(session, {}, model_input) == {}
+    assert parse_items(session, []).open_items == []
