@@ -231,10 +231,10 @@ def _resumption_items(value: Any, references: InputReferences) -> list[dict[str,
         raise InvalidModelOutput("reprise.open doit être une liste de 0 à 5 points")
     # Seuls deux genres de faits étayent un point : un `command` (dernier
     # échec sans résolution observée) et un `commit` (déclaration citée).
-    # Les faits `window` (Core 0.7.0.0, `observation_version` 2) restent
-    # visibles dans la ligne de temps, donc utilisables pour `doing`, mais
-    # ne sont pas éligibles comme appui d'`open` tant qu'aucune version de
-    # prompt ne les décrit (décision du 2026-09-12).
+    # Les faits `window` (Core 0.7.0.0, `observation_version` 2) ne sont plus
+    # dans l'entrée du modèle (`FACT_KINDS_HIDDEN_FROM_MODEL`, addendum du
+    # 2026-09-13) : leur `ref` n'est pas une référence connue. Ils reviendront
+    # avec une version de prompt qui les décrit et dit ce qu'ils étayent.
     eligible_failures = {o["last"] for o in references.outcomes if o["status"] == "unresolved_observed"}
     items = []
     seen = set()

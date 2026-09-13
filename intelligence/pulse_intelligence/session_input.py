@@ -48,6 +48,26 @@ PROMPT_VERSIONS_WITHOUT_ANNEXES = frozenset({
 })
 
 
+# Genres de faits que Core observe mais qu'aucune version de prompt ne décrit :
+# ils restent dans la trace et le journal, pas dans l'entrée du modèle. Les
+# faits `window` (Core 0.7.0.0) sont entrés sans description ; le lot du
+# 2026-09-13 a refusé une session de 126 min à 174 548 tokens, dont 85 % de
+# faits `window` (titres de Terminal au spinner alterné). Ils reviendront avec
+# une version de prompt qui les décrit (décision contexte de fenêtre,
+# addendum du 2026-09-13).
+FACT_KINDS_HIDDEN_FROM_MODEL = frozenset({"window"})
+
+
+def _hidden_refs(observations: Any) -> set[str]:
+    if not isinstance(observations, dict):
+        return set()
+    return {
+        fact["ref"]
+        for fact in observations.get("timeline", [])
+        if fact.get("kind") in FACT_KINDS_HIDDEN_FROM_MODEL
+    }
+
+
 def uses_annexes(prompt_version: str) -> bool:
     """Le prompt reçoit-il `previous_summary` et `agent_session` ?"""
     return prompt_version not in PROMPT_VERSIONS_WITHOUT_ANNEXES
@@ -157,6 +177,10 @@ def build_model_input(
 ) -> dict[str, Any]:
     """Only useful observations reach the model; never event UUIDs.
 
+    Les faits de `FACT_KINDS_HIDDEN_FROM_MODEL` sont retirés de la ligne de
+    temps visible ; les autres gardent leur `ref` d'origine, sans
+    renumérotation (la provenance du résumé s'y rattache).
+
     ``annexes=False`` (prompt v6) : les deux clés restent présentes et valent
     None, comme quand Core n'a rien — aucun cas spécial en aval.
     """
@@ -167,6 +191,10 @@ def build_model_input(
     observations = raw.get("observations")
     if isinstance(observations, dict):
         visible["observations"] = {key: copy.deepcopy(value) for key, value in observations.items() if key != "sources"}
+        visible["observations"]["timeline"] = [
+            fact for fact in visible["observations"].get("timeline", [])
+            if fact.get("kind") not in FACT_KINDS_HIDDEN_FROM_MODEL
+        ]
     else:
         # Targeted read compatibility for frozen corpus / older Core. These
         # lists cannot establish a last result, a file state, or chronology.
@@ -306,7 +334,13 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
 
 def input_provenance(session: SessionView, context: dict[str, Any], model_input: dict[str, Any]) -> dict[str, list[str]]:
     """Source ids for exactly the observations and annexes made visible."""
-    sources = copy.deepcopy((session.raw.get("observations") or {}).get("sources", {}))
+    observations = session.raw.get("observations") or {}
+    hidden = _hidden_refs(observations)
+    sources = {
+        ref: copy.deepcopy(ids)
+        for ref, ids in observations.get("sources", {}).items()
+        if ref not in hidden
+    }
     for key, context_key in (("agent_session", "last_agent_session"), ("previous_summary", "last_session_summary")):
         annex = model_input.get(key)
         source = context.get(context_key)
