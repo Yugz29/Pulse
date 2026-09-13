@@ -27,6 +27,7 @@ from .daily_trace import (
 from .event_logger import log_ingested_event, validation_error_summary
 from .ingest import IgnoredActivity, InvalidActivity, normalize_event
 from .runtime_config import reconstruction_timezone
+from .session_summaries import build_summary_board
 from .trace_store import EventConflictError
 
 
@@ -117,9 +118,22 @@ def _build_status(trace):
 
 @api.get("/")
 def get_home():
-    trace = build_daily_trace(current_app.config["TRACE_STORE"])
+    store = current_app.config["TRACE_STORE"]
+    zone = reconstruction_timezone()
+    now = datetime.now(timezone.utc)
+    trace = build_daily_trace(store, local_timezone=zone, now=now)
+    summary_board = build_summary_board(
+        store,
+        reference_at=now,
+        local_timezone=zone,
+        traces_by_day={date.fromisoformat(trace["date"]): trace},
+    )
     return Response(
-        render_daily_trace_html(trace, system_status=_build_status(trace)),
+        render_daily_trace_html(
+            trace,
+            system_status=_build_status(trace),
+            summary_board=summary_board,
+        ),
         mimetype="text/html",
     )
 

@@ -4,6 +4,35 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.1.0] - 2026-09-13
+
+Les résumés de session dans le journal HTML, note de décision
+`docs/decisions/2026-09-13-resumes-dans-le-journal.md`. Lecture seule, aucun
+contrat consommé ne change : `/context`, `/context/sessions`, export du
+journal, identité de session, `reconstruction_version` et schéma de
+`trace.db` restent identiques.
+
+### Ajouté
+- Zone `Reprise` en tête de `GET /` : le résumé exposé par `/context` comme
+  `last_session_summary`, lu par la même requête, avec `doing`, `stopped_at`
+  et `open` en clair, nature des points ouverts, fichiers centraux, session,
+  bornes, `prompt_version`, `model_id` et date de génération. Bandeau au-delà
+  de 24 h depuis la fin de la session résumée.
+- Liste des sessions de travail closes aujourd'hui et hier qu'aucun résumé
+  ne couvre par identifiant ni par chevauchement de bornes, qu'elles
+  précèdent ou suivent le résumé affiché.
+- Zone `Résumés` : tous les `session_summary` stockés, par jour puis par
+  session, repliés, chaque version coexistante visible avec sa
+  `prompt_version`, la plus récemment générée en premier.
+- `TraceStore.activities_of_type` : tous les événements d'un type avant un
+  instant, dans l'ordre de `latest_activity_of_type`.
+
+### Modifié
+- La section déterministe `Reprise` du journal HTML devient `Faits de
+  reprise`, ancre `#faits-de-reprise` ; `#reprise` désigne la nouvelle zone.
+  L'export Markdown garde `## Reprise`.
+- Les zones ne sont rendues ni dans `/day/<date>` ni dans l'export Markdown.
+
 ## [0.8.0.0] - 2026-09-12
 
 Seuil avant split, note de décision

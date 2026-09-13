@@ -114,6 +114,10 @@ def test_home_route_renders_today_activity_as_html(tmp_path):
     )
     assert '<a class="nav-main" href="#maintenant">Maintenant</a>' in html
     assert '<a class="nav-main" href="#reprise">Reprise</a>' in html
+    assert '<a class="nav-main" href="#resumes">Résumés</a>' in html
+    assert (
+        '<a class="nav-main" href="#faits-de-reprise">Faits de reprise</a>' in html
+    )
     assert (
         '<a class="nav-main nav-live nav-bottom" href="#timeline-live">Direct</a>'
         in html
@@ -122,7 +126,9 @@ def test_home_route_renders_today_activity_as_html(tmp_path):
     assert '<a class="nav-main" href="#etat-systeme">État système</a>' in html
     assert '<a class="nav-session" href="#session-1">Session 1</a>' in html
     assert '<section class="current" id="maintenant">' in html
-    assert '<section class="resume" id="reprise">' in html
+    assert '<section class="model-reprise" id="reprise">' in html
+    assert '<section class="model-summaries" id="resumes">' in html
+    assert '<section class="resume" id="faits-de-reprise">' in html
     assert '<section class="summary" id="aujourdhui">' in html
     assert '<section class="system" id="etat-systeme">' in html
     assert '<section class="session" id="session-1">' in html
@@ -518,6 +524,8 @@ def test_dated_trace_routes_filter_day_and_handle_empty_or_invalid_dates(tmp_pat
     assert '<div id="timeline-end" aria-hidden="true"></div>' in html
     assert 'id="maintenant"' not in html
     assert 'id="reprise"' not in html
+    assert 'id="resumes"' not in html
+    assert 'id="faits-de-reprise"' not in html
     assert 'id="etat-systeme"' not in html
     assert ">Maintenant</a>" not in html
     assert ">Reprise</a>" not in html

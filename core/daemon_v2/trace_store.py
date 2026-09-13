@@ -355,6 +355,31 @@ class TraceStore:
             return None
         return self._row_to_stored_activity(row)
 
+    def activities_of_type(
+        self,
+        activity_type: str,
+        *,
+        before: datetime,
+    ) -> list[StoredActivity]:
+        """Every activity of ``activity_type`` occurred at or before ``before``.
+
+        Same order as :meth:`latest_activity_of_type`, most recent first:
+        its first element is always what that method returns without a
+        workspace. Read-only, without a window: the journal lists every
+        stored ``session_summary``, a few hundred rows at most.
+        """
+        with closing(self._connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM activities
+                WHERE type = ?
+                  AND occurred_at_utc <= ?
+                ORDER BY occurred_at_utc DESC, id DESC
+                """,
+                (activity_type, utc_lexical(before)),
+            ).fetchall()
+        return [self._row_to_stored_activity(row) for row in rows]
+
     def activity_by_event_id(self, event_id: str) -> StoredActivity | None:
         """One stored row by its producer ``event_id``, or ``None``.
 

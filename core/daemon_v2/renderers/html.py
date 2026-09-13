@@ -38,6 +38,9 @@ from ..daily_trace import (
     build_resume,
     build_session_summary,
 )
+from .summaries import CSS as SUMMARY_CSS
+from .summaries import NAVIGATION as SUMMARY_NAVIGATION
+from .summaries import render_summary_zones
 
 
 def _window_html(details: dict[str, Any]) -> str:
@@ -80,7 +83,11 @@ def render_daily_trace_html(
     trace_json_url: str = "/trace/today",
     trace_markdown_url: str = "/trace/today.md",
     archive_mode: bool = False,
+    summary_board: dict[str, Any] | None = None,
 ) -> str:
+    # Zones « Reprise » et « Résumés » : vue vivante seulement, et seulement
+    # quand l'appelant a lu les résumés stockés (``session_summaries``).
+    show_summaries = summary_board is not None and not archive_mode
     summary = build_daily_summary(trace)
     current = build_current_state(trace) if not archive_mode else None
     resume = build_resume(trace) if not archive_mode else []
@@ -119,11 +126,15 @@ def render_daily_trace_html(
             '<a class="nav-main" href="#resume-jour">Résumé du jour</a>'
         )
     else:
+        if show_summaries:
+            navigation.extend(SUMMARY_NAVIGATION)
         navigation.append(
             '<a class="nav-main" href="#maintenant">Maintenant</a>'
         )
         if resume:
-            navigation.append('<a class="nav-main" href="#reprise">Reprise</a>')
+            navigation.append(
+                '<a class="nav-main" href="#faits-de-reprise">Faits de reprise</a>'
+            )
         navigation.append(
             '<a class="nav-main" href="#aujourdhui">Aujourd’hui</a>'
         )
@@ -232,7 +243,9 @@ font-size:.9rem}a{color:var(--link);text-decoration:none}a:hover{text-decoration
 margin-bottom:.55rem}.resume dd{margin-bottom:.45rem}.event{
 grid-template-columns:3.25rem 1fr;gap:.65rem}.content{
 grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
-</style></head><body>""",
+"""
+        + SUMMARY_CSS
+        + """</style></head><body>""",
         '<div class="page-shell">',
         '<nav class="sidebar" aria-label="Navigation de la timeline">',
         "<h2>Navigation</h2>",
@@ -252,6 +265,8 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
         ),
         "</header>",
     ]
+    if show_summaries:
+        body.extend(render_summary_zones(summary_board, trace_zone))
     if not archive_mode:
         body.extend(
             [
@@ -297,7 +312,7 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                     f"<dd>{escape(value)}</dd></dl>"
                 )
         body.append(
-            '<section class="resume" id="reprise"><h2>Reprise</h2>'
+            '<section class="resume" id="faits-de-reprise"><h2>Faits de reprise</h2>'
             f"{''.join(resume_content)}</section>"
         )
     body.extend(
