@@ -4,7 +4,9 @@ Only identical command text in the same known cwd identifies a retry. A later
 successful process must start after the failed one ended. This says nothing
 about individual subcommands, the cause, or the health of the application.
 
-État net des commandes (décision du 2026-09-11, cas « échec dépassé ») : un
+État net des commandes (décision du 2026-09-11, cas « échec dépassé », PR #89 ;
+ratifiée au merge par docs/decisions/2026-09-12-prompt-v7.md, « Règle de la
+PR #89 ») : un
 dernier échec d'une clé exacte est ``superseded_observed`` quand une commande
 *similaire* réussit ensuite dans le même cwd connu. Similaire = même tête
 (premier jeton shlex de la première ligne utile) ; pour git, tête + sous-verbe,
