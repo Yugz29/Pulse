@@ -209,11 +209,13 @@ problème réel.
 ## Décisions prises
 
 - **2026-09-13** — Résumés dans le journal HTML : zones « Reprise » (même
-  sélection que `last_session_summary`, bandeau au-delà de 24 h, sessions
-  closes sans résumé sur deux jours) et « Résumés » (tous, repliés, chaque
+  sélection que `last_session_summary`, bandeau au-delà de 24 h ; sous la
+  carte, en alerte, les seules sessions éligibles d'hier sans résumé, celles
+  d'aujourd'hui et celles sous les seuils de candidature comptées à part
+  depuis l'addendum du 2026-09-14) et « Résumés » (tous, repliés, chaque
   `prompt_version` visible) en tête de `GET /` ; l'ancienne section devient
   « Faits de reprise » ; lecture seule, aucun contrat changé, Core 0.8.1.0
-  ([décision](decisions/2026-09-13-resumes-dans-le-journal.md)).
+  puis 0.8.2.0 ([décision](decisions/2026-09-13-resumes-dans-le-journal.md)).
 
 - **2026-09-12** — Seuil avant split : un fragment d'un autre workspace ne
   devient une session que s'il dure 2 minutes et compte 2 activités fortes,

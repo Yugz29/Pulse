@@ -85,8 +85,8 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `llm_temperature` | `0.0` | envoyée à tous les providers : MLX la passe à `make_sampler`, soit l'argmax à `0.0` ; l'endpoint distant la reçoit, et s'il la refuse le provider la retire une fois et l'inscrit dans `dropped_parameters`. Réduit l'aléa sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés ([décision](../docs/decisions/2026-09-14-temperature-explicite.md)) |
 | `prompt_version` | `v6` | reprise bornée à la session, sans annexes ; `v5` reçoit les annexes ; v1–v4 refusent cette entrée. `v6-sans-phrase`, `v6-sans-exemple`, `v6-sans-phrase-ni-exemple` : variantes du rejeu `open` du 2026-09-11 (`docs/dogfooding.md`, jour 7), pas des défauts |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
-| `min_session_minutes` | `10` | une session plus courte n'est pas candidate |
-| `min_session_activities` | `30` | une session moins active n'est pas candidate |
+| `min_session_minutes` | `10` | une session n'est écartée que si elle est **à la fois** plus courte que ce seuil et moins active que `min_session_activities` : atteindre l'un des deux suffit pour être candidate |
+| `min_session_activities` | `30` | l'autre seuil de la même règle. Le journal de Core (`GET /`) applique ces deux défauts sans lire ce fichier : les changer ici décale son classement des sessions sans résumé |
 | `lookback_days` | `1` | fenêtre : aujourd'hui + N jours en arrière |
 
 ## 2. Les commandes du quotidien
@@ -102,7 +102,7 @@ candidates (`*`) ou non, avec la raison.
 ```
 $ pulse-intel list
 * work-3   2808ac8a3741f38a  2026-09-05 20:27–20:41   13 min   21 act.  core   candidate
-  work-8   1a2b…              2026-09-05 18:02–18:07    5 min    4 act.  Pulse  trop courte (5 min < 10)
+  work-8   1a2b…              2026-09-05 18:02–18:07    5 min    4 act.  Pulse  trop courte (5 min, 4 activités)
 ```
 
 ### `run --once` — résumer toutes les candidates
