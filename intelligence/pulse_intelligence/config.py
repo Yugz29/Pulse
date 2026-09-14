@@ -48,12 +48,14 @@ class Config:
     # Plafond de tokens d'ENTRÉE pour le provider local : au-delà, MLX plante
     # en OOM Metal (spike B). Refusé proprement avant le prefill.
     llm_max_input_tokens: int = 30_000
-    # Absente = non envoyée. Certains modèles derrière un endpoint compatible
-    # refusent le paramètre ; 0.0 se demande, il ne s'impose pas, et il
-    # réduit l'aléa sans garantir la reproductibilité (prompt, modèle, poids
-    # et runtime comptent aussi). La négociation du provider reste le filet
-    # si un modèle refuse une valeur pourtant configurée.
-    llm_temperature: float | None = None
+    # 0.0 par défaut, envoyée à tous les providers (issue #72) : absente, elle
+    # laissait MLX en argmax et l'endpoint distant sur son propre défaut, et
+    # deux modèles mesurés ainsi n'étaient pas comparables. MLX la passe à
+    # `make_sampler(temp=0.0)`, soit l'argmax ; le provider distant l'envoie,
+    # et la retire une fois en le traçant dans `dropped_parameters` si
+    # l'endpoint la refuse. Elle réduit l'aléa sans garantir la
+    # reproductibilité (prompt, modèle, poids et runtime comptent aussi).
+    llm_temperature: float | None = 0.0
 
     def require_model(self) -> "Config":
         """Le choix du modèle est une décision écrite, jamais un défaut."""

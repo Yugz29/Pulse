@@ -150,9 +150,29 @@ def test_the_request_carries_the_two_roles_and_the_generation_settings(endpoint)
 def test_an_absent_temperature_is_not_sent_at_all(endpoint):
     _provider(endpoint).complete(CompletionRequest(system="s", prompt="p"))
 
-    # Non configurée = absente de la requête, pas envoyée à 0.0 : c'est ce
-    # qui évite le 400 des modèles qui refusent le paramètre.
+    # Une requête sans température n'envoie pas le paramètre. La config en
+    # fixe une par défaut (0.0, issue #72) ; un modèle qui la refuse passe
+    # par la négociation, testée plus bas.
     assert "temperature" not in endpoint.requests_seen[0]
+
+
+def test_a_config_without_llm_temperature_sends_zero_to_the_endpoint(monkeypatch, tmp_path, endpoint):
+    """Issue #72 : sans `llm_temperature` dans config.toml, l'endpoint reçoit
+    0.0 explicitement au lieu d'appliquer son propre défaut."""
+    import argparse
+
+    from pulse_intelligence.config import load_config
+
+    monkeypatch.setenv(ENV_BASE_URL, endpoint.url)
+    monkeypatch.setenv(ENV_API_KEY, "jeton-de-test")
+    monkeypatch.setenv(ENV_MODEL, "modele-de-test")
+    path = tmp_path / "config.toml"
+    path.write_text('llm_provider = "openai-compatible"\n', encoding="utf-8")
+
+    result = cli._summarizer(argparse.Namespace(fake=None), load_config(path)).complete("{}")
+
+    assert endpoint.requests_seen[0].get("temperature") == 0.0
+    assert result.dropped_parameters == ()
 
 
 def test_the_token_travels_as_a_bearer_header(endpoint):

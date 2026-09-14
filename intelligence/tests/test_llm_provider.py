@@ -104,18 +104,24 @@ def test_provider_summarizer_sends_no_temperature_unless_configured():
     assert provider.calls[0].temperature is None
 
 
-def test_llm_temperature_loads_as_a_float_and_may_be_absent(tmp_path):
+def test_llm_temperature_loads_as_a_float_and_defaults_to_zero(tmp_path):
     from pulse_intelligence.config import load_config as load
 
     path = tmp_path / "config.toml"
-    path.write_text("llm_temperature = 0\n", encoding="utf-8")
-    assert load(path).llm_temperature == 0.0
+    path.write_text("llm_temperature = 1\n", encoding="utf-8")
+    loaded = load(path).llm_temperature
+    assert loaded == 1.0 and isinstance(loaded, float)
 
     path.write_text('llm_temperature = "froid"\n', encoding="utf-8")
     with pytest.raises(ConfigError, match="nombre"):
         load(path)
 
-    assert Config().llm_temperature is None
+    # Issue #72 : absente de config.toml, la température vaut 0.0 et part
+    # explicitement vers le provider, au lieu de laisser MLX en argmax et
+    # l'endpoint distant sur son propre défaut.
+    path.write_text('llm_provider = "fake"\n', encoding="utf-8")
+    assert load(path).llm_temperature == 0.0
+    assert Config().llm_temperature == 0.0
 
 
 def test_provider_summarizer_keeps_its_model_id_and_max_tokens():
