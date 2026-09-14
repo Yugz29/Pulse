@@ -33,3 +33,23 @@ l'identifiant demandé, pas le modèle servi.
 2026-09-14 pour le modèle de production. Il demanderait donc plus de mémoire
 qu'aujourd'hui. Sa réflexion est active par défaut, et sa fiche le destine à
 l'agent et au code.
+
+## Avertissement `fix_mistral_regex` sur Ministral : faux positif
+
+- **Faux positif.** transformers 5.16.1 annonce une tokenisation fausse en ne
+  lisant que `config.json` : `transformers_version` y vaut `5.0.0.dev0`,
+  antérieur à `5.0.0` selon PEP 440. La regex de `tokenizer.json` est déjà le
+  `pattern` de `tekken.json`, celle que le drapeau substituerait. Le drapeau
+  n'est passé nulle part : sur une copie de Gemma 4 ou de Qwen privée de
+  `transformers_version`, il change la tokenisation (16 et 7 textes sur 16).
+- **Mesure du 2026-09-15.** Avec et sans `fix_mistral_regex=True`, même
+  tokenizer sérialisé et mêmes identifiants de tokens pour Ministral, Gemma 4
+  et le Qwen de production, sur les 14 sessions d'`eval/observed`, le prompt
+  v7 et une ligne d'essai (environ 300 000 tokens par modèle).
+- **Rejeu.** transformers 5.16.1, tokenizers 0.23.2, mlx-lm 0.31.3, hors
+  ligne : `corpus/docs/audits/2026-09-15-benchmark-modeles/regex_flag.py`
+  charge chaque tokenizer par `mlx_lm.utils.load_tokenizer`, avec et sans le
+  drapeau, et compare `backend_tokenizer.to_str()` et les identifiants.
+- **Limite.** Aucune comparaison avec `mistral-common`, non installé : la
+  concordance avec le tokenizer de référence de Mistral repose sur l'identité
+  des regex, pas sur une tokenisation mesurée contre lui.
