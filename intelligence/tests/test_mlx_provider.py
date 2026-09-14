@@ -332,6 +332,24 @@ def test_no_temperature_means_no_sampler_and_says_so(monkeypatch, capsys):
     assert "temperature=absente" in capsys.readouterr().err
 
 
+def test_a_config_without_llm_temperature_asks_mlx_for_zero(monkeypatch, tmp_path, capsys):
+    """Issue #72 : sans `llm_temperature` dans config.toml, le modèle local
+    reçoit 0.0 explicitement, comme l'endpoint distant, et la trace le dit."""
+    import argparse
+
+    from pulse_intelligence.config import load_config
+
+    path = tmp_path / "config.toml"
+    path.write_text('llm_provider = "mlx"\n', encoding="utf-8")
+    gen = _install_fake_mlx(monkeypatch, _Tokenizer(None))
+
+    result = cli._summarizer(argparse.Namespace(fake=None), load_config(path)).complete("{}")
+
+    assert gen.last.get("sampler") == _SamplerMarker(0.0)
+    assert result.dropped_parameters == ()
+    assert "temperature=0.0" in capsys.readouterr().err
+
+
 def test_a_runtime_without_make_sampler_drops_the_temperature_loudly(monkeypatch, capsys):
     """Silence interdit : si le runtime ne sait pas échantillonner, la
     température est listée comme retirée et un avertissement sort sur stderr."""
