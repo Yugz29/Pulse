@@ -21,7 +21,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # Étape 3 du spec : le vrai modèle. Non installé dans le squelette.
-mlx = ["mlx-lm"]
+# Épinglé sur la venv du 2026-09-14 : une comparaison de modèles suppose un
+# runtime connu (échantillonnage, chargement, architectures reconnues).
+mlx = ["mlx-lm==0.31.3", "mlx==0.32.2"]
 # Tests : le faux Core est un serveur Flask de test rejouant des fixtures.
 dev = ["pytest>=8", "flask==3.1.3"]
 
