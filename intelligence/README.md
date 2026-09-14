@@ -81,8 +81,8 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `llm_provider` | `""` | `mlx` \| `openai-compatible` \| `fake` ; vide = refus de démarrer |
 | `model_id` | `""` | identifiant du modèle (entre dans l'identité du résumé) |
 | `llm_max_tokens` | `2048` | plafond de génération |
-| `llm_max_input_tokens` | `30000` | au-delà, le modèle local refuse (mémoire) |
-| `llm_temperature` | `null` | absente = non envoyée (le modèle local reste alors en argmax) ; `0.0` réduit l'aléa de l'échantillonnage, sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés |
+| `llm_max_input_tokens` | `30000` | au-delà, le modèle local refuse (mémoire) ; compté avec le tokenizer du modèle chargé |
+| `llm_temperature` | `0.0` | envoyée à tous les providers : MLX la passe à `make_sampler`, soit l'argmax à `0.0` ; l'endpoint distant la reçoit, et s'il la refuse le provider la retire une fois et l'inscrit dans `dropped_parameters`. Réduit l'aléa sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés ([décision](../docs/decisions/2026-09-14-temperature-explicite.md)) |
 | `prompt_version` | `v6` | reprise bornée à la session, sans annexes ; `v5` reçoit les annexes ; v1–v4 refusent cette entrée. `v6-sans-phrase`, `v6-sans-exemple`, `v6-sans-phrase-ni-exemple` : variantes du rejeu `open` du 2026-09-11 (`docs/dogfooding.md`, jour 7), pas des défauts |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
 | `min_session_minutes` | `10` | une session plus courte n'est pas candidate |
