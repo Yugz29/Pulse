@@ -33,7 +33,7 @@ border:1px solid #303b47;border-radius:5px;font-size:.8rem}
 .prompt-version{display:inline-block;background:#3a2f1c;border:1px solid #6b5630;color:#f0cf95;
 border-radius:999px;padding:0 .45rem;font-size:.76rem;font-weight:700;margin-right:.2rem;
 font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.summary-alert{margin:0 0 1rem;padding:.7rem .9rem;border-radius:8px;background:#3a2023;
+.summary-alert{margin:1rem 0 0;padding:.7rem .9rem;border-radius:8px;background:#3a2023;
 border:1px solid #6d363d;color:#f0c2c6}.summary-alert h3{margin:0 0 .35rem;font-size:.95rem;
 color:#f3cdd1}.summary-alert ul{margin:.2rem 0;padding-left:1.2rem}
 .summary-alert p{margin:.35rem 0 0;font-size:.84rem;color:#d9a9ae}
@@ -64,7 +64,6 @@ def render_summary_zones(board: dict[str, Any], zone: tzinfo) -> list[str]:
 def _render_reprise(board: dict[str, Any], zone: tzinfo) -> str:
     reprise = board["reprise"]
     parts = ['<section class="model-reprise" id="reprise">', "<h2>Reprise</h2>"]
-    parts.append(_render_unsummarized(board, zone))
     if reprise is None:
         parts.append("<p>Aucun résumé de session stocké.</p>")
     else:
@@ -75,16 +74,26 @@ def _render_reprise(board: dict[str, Any], zone: tzinfo) -> str:
                 "</p>"
             )
         parts.append(_render_card(reprise, zone))
+    # La reprise d'abord, les signaux de santé ensuite (addendum du 2026-09-14
+    # à la décision du 13) : l'alerte pour les seules anomalies, puis une
+    # ligne discrète pour les absences attendues.
+    parts.append(_render_missing(board, zone))
+    parts.append(_render_expected_absences(board))
     parts.append("</section>")
     return "".join(parts)
 
 
-def _render_unsummarized(board: dict[str, Any], zone: tzinfo) -> str:
-    sessions = board["unsummarized_sessions"]
+def _render_missing(board: dict[str, Any], zone: tzinfo) -> str:
+    """Sessions éligibles d'un jour passé qu'aucun résumé ne couvre."""
+    sessions = [
+        session
+        for session in board["unsummarized_sessions"]
+        if session["status"] == "missing"
+    ]
     if not sessions:
         return ""
-    scope = " et ".join(board["unsummarized_days"])
-    heading = f"{len(sessions)} session(s) close(s) sans résumé"
+    thresholds = board["candidate_thresholds"]
+    heading = f"{len(sessions)} session(s) éligible(s) sans résumé"
     items = []
     for session in sessions:
         project = f" · {escape(session['project'])}" if session["project"] else ""
@@ -99,11 +108,38 @@ def _render_unsummarized(board: dict[str, Any], zone: tzinfo) -> str:
         '<div class="summary-alert">'
         f"<h3>{escape(heading)}</h3>"
         f"<ul>{''.join(items)}</ul>"
-        f"<p>Journées relues : {escape(scope)}. Core ne sait pas si Intelligence "
-        "a refusé ces sessions, les a écartées ou ne les a pas encore "
-        "traitées : seulement qu’aucun résumé ne les couvre.</p>"
+        "<p>Closes avant aujourd’hui et candidates au résumé (au moins "
+        f"{thresholds['minutes']} min ou {thresholds['activities']} activités) : "
+        "Intelligence aurait dû les résumer. Core ne sait pas si elles ont été "
+        "refusées, abandonnées ou si le lot n’est pas encore passé, seulement "
+        "qu’aucun résumé ne les couvre.</p>"
         "</div>"
     )
+
+
+def _render_expected_absences(board: dict[str, Any]) -> str:
+    """Absences de résumé attendues, comptées et jamais listées : sessions
+    éligibles d'aujourd'hui, que le lot du matin résumera, et sessions sous
+    les seuils de candidature, qui ne le seront jamais."""
+    statuses = [session["status"] for session in board["unsummarized_sessions"]]
+    pending = statuses.count("pending")
+    below = statuses.count("below_threshold")
+    if not pending and not below:
+        return ""
+    thresholds = board["candidate_thresholds"]
+    sentences = []
+    if pending:
+        sentences.append(
+            f"{pending} session(s) éligible(s) d’aujourd’hui, pas encore résumée(s)."
+        )
+    if below:
+        sentences.append(
+            f"{below} session(s) close(s) sous les seuils de candidature "
+            f"(moins de {thresholds['minutes']} min et moins de "
+            f"{thresholds['activities']} activités), sans résumé prévu."
+        )
+    sentences.append(f"Journées relues : {' et '.join(board['unsummarized_days'])}.")
+    return f'<p class="meta">{escape(" ".join(sentences))}</p>'
 
 
 # --- Zone 2 : Résumés ------------------------------------------------------------
