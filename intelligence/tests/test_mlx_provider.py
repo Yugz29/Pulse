@@ -15,7 +15,7 @@ import pytest
 from pulse_intelligence import cli
 from pulse_intelligence.config import Config
 from pulse_intelligence.llm.mlx import DEFAULT_MODEL, MLXProvider
-from pulse_intelligence.llm.provider import CompletionRequest, ProviderError
+from pulse_intelligence.llm.provider import CompletionRequest, ProviderError, ProviderInputRefused
 
 
 class _Tokenizer:
@@ -285,6 +285,61 @@ def test_the_ceiling_is_wired_from_config():
     provider = _provider(Config(llm_provider="mlx", llm_max_input_tokens=12345))
 
     assert provider.max_input_tokens == 12345
+
+
+class _CharTokenizer(_Tokenizer):
+    def encode(self, text: str):
+        return list(text)
+
+
+_CEILING = 200
+# « PROMPT::mot mot … » : 100 mots, 407 caractères. Un tokenizer au mot passe
+# sous le plafond, un tokenizer au caractère le dépasse.
+_TEXT = " ".join(["mot"] * 100)
+
+
+def _install_two_models(monkeypatch, *, production, loaded):
+    """`mlx_lm.load` rend le tokenizer du dépôt demandé : celui du modèle de
+    production (`DEFAULT_MODEL`) diffère de celui du modèle mesuré."""
+    tokenizers = {DEFAULT_MODEL: production, "essai/autre-modele": loaded}
+    module = types.ModuleType("mlx_lm")
+    module.load = lambda model: ("MODEL", tokenizers[model])
+
+    def generate(model, tok, *, prompt, max_tokens, verbose, **kwargs):
+        generate.calls.append(prompt)
+        return "{}"
+
+    generate.calls = []
+    module.generate = generate
+    monkeypatch.setitem(sys.modules, "mlx_lm", module)
+    return generate
+
+
+def test_the_ceiling_refuses_by_the_loaded_tokenizer_what_production_would_accept(monkeypatch):
+    """Le plafond se compte en tokens du modèle chargé : 30 000 tokens Qwen ne
+    sont pas 30 000 tokens Gemma. Ici le tokenizer de production compterait
+    100 tokens, celui du modèle chargé en compte 407 : refus avant le prefill."""
+    gen = _install_two_models(monkeypatch, production=_Tokenizer(None), loaded=_CharTokenizer(None))
+
+    with pytest.raises(ProviderInputRefused, match="entrée de 407 tokens au-dessus du plafond 200"):
+        MLXProvider(model="essai/autre-modele", max_input_tokens=_CEILING).complete(
+            CompletionRequest(system="s", prompt=_TEXT, max_tokens=8)
+        )
+
+    assert gen.calls == []
+
+
+def test_the_ceiling_accepts_by_the_loaded_tokenizer_what_production_would_refuse(monkeypatch):
+    """Sens inverse : le tokenizer de production compterait 407 tokens, celui
+    du modèle chargé 100. L'entrée passe, et le compte rapporté est le sien."""
+    gen = _install_two_models(monkeypatch, production=_CharTokenizer(None), loaded=_Tokenizer(None))
+
+    result = MLXProvider(model="essai/autre-modele", max_input_tokens=_CEILING).complete(
+        CompletionRequest(system="s", prompt=_TEXT, max_tokens=8)
+    )
+
+    assert len(gen.calls) == 1
+    assert result.prompt_tokens == 100
 
 
 # --- température (audit 2026-09-06, défaut 11) --------------------------------------
