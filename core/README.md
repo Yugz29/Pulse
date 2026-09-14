@@ -286,10 +286,12 @@ Ouvrir la page locale de l’activité du jour :
 http://127.0.0.1:8765/
 ```
 
-La page locale s’ouvre sur `Reprise` (le dernier résumé de session et les
-sessions closes restées sans résumé) et `Résumés` (tous les résumés stockés,
-repliés), puis affiche les blocs `Maintenant`, `Faits de reprise`,
-`Aujourd’hui` et `État système`, puis une timeline navigable. Elle regroupe les changements de
+La page locale s’ouvre sur `Reprise` (le dernier résumé de session, puis les
+sessions éligibles d’hier restées sans résumé ; celles d’aujourd’hui et celles
+sous les seuils de candidature d’Intelligence sont seulement comptées) et
+`Résumés` (tous les résumés stockés, repliés), puis affiche les blocs
+`Maintenant`, `Faits de reprise`, `Aujourd’hui` et `État système`, puis une
+timeline navigable. Elle regroupe les changements de
 fichiers par vague de modification, résume les sessions, marque les changements
 de projet et synthétise les applications actives. Un événement fort isolé
 (un `cd` nu, un commit seul) apparaît en une ligne dans la section
