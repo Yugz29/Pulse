@@ -168,6 +168,9 @@ Règles :
   `CompletionResult.dropped_parameters` en garde trace — à reporter dans le
   `meta.json` d'`eval` (§10), un résumé produit sans `0.0` n'étant pas
   reproductible de la même façon.
+  *Remplacé le 2026-09-14 : `llm_temperature` vaut `0.0` par défaut et part
+  vers tous les providers, la négociation restant le filet
+  ([décision](../decisions/2026-09-14-temperature-explicite.md), issue #72).*
 
 ## 6. Les trois providers
 
@@ -294,7 +297,7 @@ style existant :
 | `llm_provider` | str | `""` | `fake` \| `openai-compatible` \| `mlx` ; vide = décision non prise |
 | `llm_base_url` | str | `""` | racine de l'endpoint distant ; `PULSE_LLM_BASE_URL` prime |
 | `llm_max_tokens` | int | `2048` | plafond de génération (voir ci-dessous) |
-| `llm_temperature` | float\|null | `null` | absente = non envoyée ; `0.0` pour un résumé reproductible |
+| `llm_temperature` | float\|null | `null` | absente = non envoyée ; `0.0` pour un résumé reproductible *(remplacé le 2026-09-14 : défaut `0.0`, voir la décision)* |
 
 `llm_max_tokens` vaut **2048 et non 1024** : au passage de référence (PR 3),
 1024 tronquait 3 des 10 sessions réelles — la complétion s'arrêtait avant la
