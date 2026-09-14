@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, timedelta, timezone
 
-from daemon_v2.context_snapshot import build_context_snapshot
+from daemon_v2.context_snapshot import build_context_snapshot, build_day_sessions
 from daemon_v2.daily_trace import build_daily_trace, render_daily_trace_html
 from daemon_v2.main import create_app
 from daemon_v2.models import Activity
@@ -12,6 +12,7 @@ from tests_v2.test_context_snapshot import (
     REFERENCE,
     at,
     make_store,
+    terminal,
     working_session,
 )
 
@@ -72,6 +73,21 @@ def closed_sessions(store, day: date) -> list[dict]:
         for session in trace["work_sessions"]
         if session["activity_kind"] == "work" and session["end_reason"] != "open"
     ]
+
+
+def strong_session(start: int, *, minutes: int, activities: int) -> list[Activity]:
+    """Des commandes seules, de ``start`` à ``start + minutes`` : une session
+    de cette durée et de ce nombre d'activités exactement."""
+    instants = [
+        start + minutes * index / (activities - 1) for index in range(activities - 1)
+    ]
+    return [
+        terminal(instant, f"echo {index}")
+        for index, instant in enumerate([*instants, start + minutes])
+    ]
+
+
+YESTERDAY = (REFERENCE - timedelta(days=1)).date()
 
 
 # --- Lecture du stockage --------------------------------------------------------
@@ -191,9 +207,11 @@ def test_every_unsummarized_closed_session_of_the_two_days_is_listed(tmp_path):
 
     assert result["reprise"]["session_id"] == summarized_morning["id"]
     # Hier est antérieur au résumé affiché : listé quand même.
-    assert [item["id"] for item in result["unsummarized_sessions"]] == [
-        today[1]["id"],
-        yesterday[0]["id"],
+    assert [
+        (item["id"], item["status"]) for item in result["unsummarized_sessions"]
+    ] == [
+        (today[1]["id"], "pending"),
+        (yesterday[0]["id"], "missing"),
     ]
     listed = result["unsummarized_sessions"][0]
     assert listed["ended_at"] == at(-125).isoformat()
@@ -205,25 +223,71 @@ def test_every_unsummarized_closed_session_of_the_two_days_is_listed(tmp_path):
 
 
 def test_a_session_refused_before_the_displayed_summary_is_listed(tmp_path):
+    # Le lot du matin résume la veille : il a refusé la session de 10 h et
+    # résumé celle de 15 h.
     store = make_store(
         tmp_path,
-        *working_session(offset=-300),  # 10 h du cas réel : pas de résumé
-        *working_session(offset=-120),  # 15 h du cas réel : résumée
+        *working_session(offset=-1440 - 300),  # 10 h du cas réel : pas de résumé
+        *working_session(offset=-1440 - 120),  # 15 h du cas réel : résumée
     )
-    refused, summarized = closed_sessions(store, REFERENCE.date())
+    refused, summarized = closed_sessions(store, YESTERDAY)
     store.append(
-        summary(-125, session_id=summarized["id"], started_minutes=-178)
+        summary(-1440 - 125, session_id=summarized["id"], started_minutes=-1440 - 178)
     )
 
     result = board(store)
-    html = render(store)
-    reprise = html.split('id="reprise"', 1)[1].split("</section>", 1)[0]
+    reprise = reprise_zone(store)
 
     assert result["reprise"]["session_id"] == summarized["id"]
     assert _instant(refused["ended_at"]) < _instant(result["reprise"]["session_ended_at"])
-    assert [item["id"] for item in result["unsummarized_sessions"]] == [refused["id"]]
-    assert "1 session(s) close(s) sans résumé" in reprise
+    assert [
+        (item["id"], item["status"]) for item in result["unsummarized_sessions"]
+    ] == [(refused["id"], "missing")]
+    assert "1 session(s) éligible(s) sans résumé" in reprise
     assert refused["id"] in reprise
+
+
+def test_an_eligible_session_of_today_waits_for_the_morning_batch(tmp_path):
+    store = make_store(tmp_path, *working_session(offset=-120))
+    [session] = closed_sessions(store, REFERENCE.date())
+
+    result = board(store)
+    reprise = reprise_zone(store)
+
+    assert [
+        (item["id"], item["status"]) for item in result["unsummarized_sessions"]
+    ] == [(session["id"], "pending")]
+    assert 'class="summary-alert"' not in reprise
+    assert session["id"] not in reprise
+    assert "1 session(s) éligible(s) d’aujourd’hui, pas encore résumée(s)." in reprise
+
+
+def test_a_session_is_set_aside_only_below_both_thresholds(tmp_path):
+    # Spec du 2026-09-03, §7 : candidate si 10 min ou 30 activités.
+    store = make_store(
+        tmp_path,
+        *strong_session(-1440 - 600, minutes=9, activities=29),
+        *strong_session(-1440 - 400, minutes=9, activities=30),
+        *strong_session(-1440 - 200, minutes=10, activities=29),
+    )
+
+    listed = board(store)["unsummarized_sessions"]
+    served = build_day_sessions(
+        store, day=YESTERDAY, reference_at=REFERENCE, local_timezone=timezone.utc
+    )["sessions"]
+
+    assert [
+        (item["duration_minutes"], item["activity_count"], item["status"])
+        for item in listed
+    ] == [(10, 29, "missing"), (9, 30, "missing"), (9, 29, "below_threshold")]
+    # Classées sur les grandeurs que /context/sessions sert à Intelligence.
+    assert sorted(
+        (item["id"], item["duration_minutes"], item["activity_count"])
+        for item in listed
+    ) == sorted(
+        (session["id"], session["duration_minutes"], session["activity_count"])
+        for session in served
+    )
 
 
 def test_without_summary_every_closed_session_of_the_two_days_is_listed(tmp_path):
@@ -237,10 +301,9 @@ def test_without_summary_every_closed_session_of_the_two_days_is_listed(tmp_path
     result = board(store)
 
     assert result["reprise"] is None
-    assert [item["date"] for item in result["unsummarized_sessions"]] == [
-        "2026-09-02",
-        "2026-09-01",
-    ]
+    assert [
+        (item["date"], item["status"]) for item in result["unsummarized_sessions"]
+    ] == [("2026-09-02", "pending"), ("2026-09-01", "missing")]
 
 
 def test_a_session_whose_identity_changed_is_covered_by_an_overlapping_summary(tmp_path):
@@ -291,6 +354,10 @@ def render(store, trace_day=None):
     return render_daily_trace_html(trace, summary_board=board(store))
 
 
+def reprise_zone(store) -> str:
+    return render(store).split('id="reprise"', 1)[1].split("</section>", 1)[0]
+
+
 def test_rendering_escapes_model_text_and_shows_every_prompt_version(tmp_path):
     store = make_store(
         tmp_path,
@@ -336,9 +403,61 @@ def test_rendering_of_the_reprise_zone(tmp_path):
     assert "<code>requested</code> (agent_request:0)" in reprise
     assert "Résumé de plus de 24 h" in reprise
     assert "il y a 1 j 1 h" in reprise
-    assert "1 session(s) close(s) sans résumé" in reprise
+    assert "1 session(s) éligible(s) d’aujourd’hui, pas encore résumée(s)." in reprise
     assert "mlx-community/test-model" in reprise
     assert "interprétation du modèle" in reprise
+
+
+def test_the_reprise_comes_before_the_health_signals(tmp_path):
+    store = make_store(
+        tmp_path,
+        *strong_session(-1440 - 600, minutes=4, activities=10),  # hier, sous les seuils
+        *working_session(offset=-1440 - 120),  # hier, éligible, sans résumé
+        *working_session(offset=-120),  # aujourd'hui, éligible
+        summary(-300, session_id="aaaaaaaaaaaaaaaa", started_minutes=-360),
+    )
+
+    listed = board(store)["unsummarized_sessions"]
+    reprise = reprise_zone(store)
+    alert = reprise.split('class="summary-alert"', 1)[1].split("</div>", 1)[0]
+
+    assert [item["status"] for item in listed] == ["pending", "missing", "below_threshold"]
+    assert (
+        reprise.index("<dt>En cours</dt>")
+        < reprise.index('class="summary-alert"')
+        < reprise.index('<p class="meta">')
+    )
+    assert "1 session(s) éligible(s) sans résumé" in alert
+    assert listed[1]["id"] in alert
+    assert listed[0]["id"] not in reprise and listed[2]["id"] not in reprise
+    assert (
+        '<p class="meta">1 session(s) éligible(s) d’aujourd’hui, pas encore résumée(s). '
+        "1 session(s) close(s) sous les seuils de candidature (moins de 10 min et "
+        "moins de 30 activités), sans résumé prévu. "
+        "Journées relues : 2026-09-02 et 2026-09-01.</p>"
+    ) in reprise
+
+
+def test_sessions_below_the_thresholds_never_raise_the_alert(tmp_path):
+    # Page du 2026-09-14 : des sessions de la veille de 0 à 4 min et de 4 à 19
+    # activités, en rouge avant « En cours », jamais résumables.
+    store = make_store(
+        tmp_path,
+        *strong_session(-1440 - 600, minutes=0, activities=4),
+        *strong_session(-1440 - 400, minutes=4, activities=10),
+        *strong_session(-1440 - 200, minutes=3, activities=19),
+        summary(-300, session_id="aaaaaaaaaaaaaaaa", started_minutes=-360),
+    )
+
+    html = render(store)
+    reprise = reprise_zone(store)
+
+    assert [item["status"] for item in board(store)["unsummarized_sessions"]] == [
+        "below_threshold"
+    ] * 3
+    assert 'class="summary-alert"' not in html
+    assert reprise.index("<dt>En cours</dt>") < reprise.index('<p class="meta">')
+    assert "3 session(s) close(s) sous les seuils de candidature" in reprise
 
 
 def test_zones_come_first_and_the_deterministic_resume_is_renamed(tmp_path):

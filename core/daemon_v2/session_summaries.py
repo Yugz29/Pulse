@@ -11,8 +11,9 @@ relit tels que stockés et les range pour la page d'accueil :
 - ``unsummarized_sessions`` : les sessions de travail closes d'aujourd'hui et
   d'hier qu'aucun résumé ne couvre, qu'elles précèdent ou suivent le résumé
   affiché : une session refusée avant une session résumée le même jour doit
-  rester visible. Core ne connaît pas l'état local d'Intelligence : il ne
-  sait pas si une session a été refusée, jugée trop courte ou pas encore
+  rester visible. Chacune porte ce que cette absence veut dire (``status``,
+  voir ``_absence_status``). Core ne connaît pas l'état local d'Intelligence :
+  d'une session éligible, il ne sait pas si elle a été refusée ou pas encore
   traitée, seulement qu'aucun résumé n'existe pour elle ;
 - ``days`` : tous les résumés, par jour de session puis par session, chaque
   version coexistante conservée, la plus récemment générée en tête. Aucune
@@ -39,6 +40,13 @@ STALE_AFTER = timedelta(hours=24)
 # Jours locaux relus pour les sessions closes sans résumé : aujourd'hui et
 # hier. Chaque jour coûte une reconstruction complète au rendu.
 UNSUMMARIZED_LOOKBACK_DAYS = 2
+# Seuils de candidature d'Intelligence, repris de la spec du 2026-09-03 (§7) :
+# une session close est candidate au résumé si elle dure au moins 10 minutes
+# ou compte au moins 30 activités ; sous les deux, jamais. Core ne lit pas la
+# configuration d'Intelligence : ce sont les défauts de la spec, que la page
+# affiche avec le compte des sessions qu'ils écartent.
+CANDIDATE_MIN_MINUTES = 10
+CANDIDATE_MIN_ACTIVITIES = 30
 
 
 def build_summary_board(
@@ -78,6 +86,10 @@ def build_summary_board(
         "unsummarized_days": [
             day.isoformat() for day in _lookback_days(reference_utc, zone)
         ],
+        "candidate_thresholds": {
+            "minutes": CANDIDATE_MIN_MINUTES,
+            "activities": CANDIDATE_MIN_ACTIVITIES,
+        },
         "days": _group_by_day(views),
     }
 
@@ -168,6 +180,10 @@ def _unsummarized_sessions(
     celles d'un résumé. Le second cas est une session dont l'identité a
     changé avec la reconstruction depuis que le résumé a été produit ; elle
     n'est pas silencieuse, un résumé existe pour ce temps-là.
+
+    Toutes les sessions non couvertes sont rendues, chacune avec son
+    ``status`` : durée et nombre d'activités sont calculés comme dans
+    ``/context/sessions``, la vue qu'Intelligence classe.
     """
     summarized_ids = {view["session_id"] for view in views}
     summarized_bounds = [
@@ -175,8 +191,10 @@ def _unsummarized_sessions(
         for view in views
         if view["session_started_at"]
     ]
+    days = _lookback_days(reference_at, zone)
+    today = days[0]
     found = []
-    for day in reversed(_lookback_days(reference_at, zone)):
+    for day in reversed(days):
         trace = traces_by_day.get(day) or build_daily_trace(
             store, day, zone, now=reference_at
         )
@@ -189,6 +207,8 @@ def _unsummarized_sessions(
                 continue
             if any(started < end and start < ended for start, end in summarized_bounds):
                 continue
+            duration_minutes = max(0, int((ended - started).total_seconds() // 60))
+            activity_count = len(session["activities"])
             found.append(
                 {
                     "id": session["id"],
@@ -196,13 +216,37 @@ def _unsummarized_sessions(
                     "date": day.isoformat(),
                     "started_at": started.astimezone(timezone.utc).isoformat(),
                     "ended_at": ended.astimezone(timezone.utc).isoformat(),
-                    "duration_minutes": max(0, int((ended - started).total_seconds() // 60)),
-                    "activity_count": len(session["activities"]),
+                    "duration_minutes": duration_minutes,
+                    "activity_count": activity_count,
                     "project": session.get("project_name"),
+                    "status": _absence_status(
+                        duration_minutes, activity_count, day=day, today=today
+                    ),
                 }
             )
     found.sort(key=lambda item: (item["ended_at"], item["id"]), reverse=True)
     return found
+
+
+def _absence_status(
+    duration_minutes: int, activity_count: int, *, day: date, today: date
+) -> str:
+    """Ce que l'absence de résumé veut dire pour une session close.
+
+    - ``below_threshold`` : sous les deux seuils de candidature, Intelligence
+      ne la résumera jamais ;
+    - ``pending`` : éligible et d'aujourd'hui, elle attend le lot du matin,
+      qui résume la veille ;
+    - ``missing`` : éligible et d'un jour passé, le lot aurait dû la résumer.
+      Refus, abandon, ou lot pas encore passé entre minuit et sa fin : Core
+      ne sait pas lequel.
+    """
+    if (
+        duration_minutes < CANDIDATE_MIN_MINUTES
+        and activity_count < CANDIDATE_MIN_ACTIVITIES
+    ):
+        return "below_threshold"
+    return "pending" if day == today else "missing"
 
 
 # --- Regroupement -------------------------------------------------------------

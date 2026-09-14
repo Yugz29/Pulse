@@ -4,6 +4,26 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.2.0] - 2026-09-14
+
+Zone `Reprise` : la reprise d'abord, les seules anomalies en alerte. Addendum
+du 2026-09-14 à `docs/decisions/2026-09-13-resumes-dans-le-journal.md`.
+Lecture seule, aucun contrat consommé ne change.
+
+### Corrigé
+- Le bloc rouge des sessions sans résumé passait avant « En cours » et
+  listait des sessions qu'Intelligence ne résume jamais. Il vient désormais
+  sous la carte et ne liste que les sessions éligibles d'hier qu'aucun résumé
+  ne couvre : au moins 10 minutes ou 30 activités, seuils du §7 de la spec du
+  2026-09-03.
+- Les sessions éligibles d'aujourd'hui, qui attendent le lot du matin, et les
+  sessions sous les deux seuils sont comptées dans une ligne grise en bas de
+  zone, seuils affichés.
+
+### Déploiement
+- Relancer le daemon Core : launchd ne recharge pas le code. Aucune
+  coordination avec Intelligence.
+
 ## [0.8.1.0] - 2026-09-13
 
 Les résumés de session dans le journal HTML, note de décision
