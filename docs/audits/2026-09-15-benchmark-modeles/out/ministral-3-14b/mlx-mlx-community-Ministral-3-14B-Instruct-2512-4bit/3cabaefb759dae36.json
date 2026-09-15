@@ -1,0 +1,45 @@
+{
+ "commit_references": {
+  "o10": "commit:59b1a7f",
+  "o14": "commit:eaece45",
+  "o4": "commit:9a53679",
+  "o7": "commit:639d175"
+ },
+ "date": "2026-09-02",
+ "id": "3cabaefb759dae36",
+ "label": "work-6",
+ "open_items": [
+  {
+   "evidence": [
+    "o7"
+   ],
+   "kind": "recorded_statement",
+   "quote": "Réponse à « que se passe-t-il en ce moment ? » calculée depuis trace.db sans modèle, sans lecture du disque ni de git : workspace (résolveur 5A, git persisté), session courante bornée, sessions récentes, signaux isolés, dernier agent_session sans limite de fenêtre.",
+   "text": "Problème ou intention de finaliser la détermination du contexte sans dépendre de modèles ou de lectures externes, comme indiqué dans le commit o7."
+  }
+ ],
+ "reprise": {
+  "doing": "Développement du module Context API dans Pulse, incluant la gestion des sessions, des traces et des snapshots contextuels, avec des commits successifs pour étendre les fonctionnalités de lecture et de routage.",
+  "open": "Point déclaré dans un commit : Problème ou intention de finaliser la détermination du contexte sans dépendre de modèles ou de lectures externes, comme indiqué dans le commit o7 (« Réponse à « que se passe-t-il en ce moment ? » calculée depuis trace.db sans modèle, sans lecture du disque ni de git : workspace (résolveur 5A, git persisté), session courante bornée, sessions récentes, signaux isolés, dernier agent_session sans limite de fenêtre. »).",
+  "stopped_at": "Mise à jour des fichiers de documentation (AGENTS.md, CLAUDE.md, README.md, core/CHANGELOG.md, core/README.md, docs/VISION.md) après la finalisation des commits liés à la route GET /context et à l'intégration du Context API dans /status."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/context_snapshot.py",
+   "core/daemon_v2/routes.py",
+   "core/daemon_v2/trace_store.py",
+   "core/tests_v2/test_context_snapshot.py",
+   "core/tests_v2/test_trace_store.py"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "Implémenter une API Context déterministe pour la lecture des sessions et des traces",
+   "Intégrer le Context API dans les routes existantes (/status, /context)",
+   "Documenter les changements et les fonctionnalités du module core"
+  ],
+  "project": "Pulse"
+ },
+ "why": "La plus grosse (~6500 tok) — sert au spike B. Agent."
+}

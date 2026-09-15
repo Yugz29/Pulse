@@ -97,6 +97,27 @@ décider, pas à implémenter : admettre un chemin cité tel quel dans une
 commande observée, avec quelle forme (relative au `cwd` de la commande ?) et
 quelle garantie contre l'invention.
 
+**Premier cas mesuré sur la forme (benchmark du 2026-09-15, `2ce34456`,
+fiche 04).** Aucun fait `file`. Gemma cite `devops_culture_git/README.md`,
+écrit tel quel dans o14 (`git add README.md devops_culture_git/README.md`),
+bloc lancé depuis `…/holbertonschool-devops-formation/devops_culture_git` et
+terminé en code 1, sortie non collectée.
+
+- Forme littérale, rejouée sans modèle : la sortie passe, point `open` faux
+  compris (il décrit o10 en citant o14). Résolu depuis le cwd de o14, le
+  chemin désigne `…/devops_culture_git/devops_culture_git/README.md`,
+  qu'aucun fait de la session ne montre ; le `README.md` créé par o6 est
+  `…/devops_culture_git/README.md`, que le même texte désigne lu depuis le
+  dossier parent (cwd de o4 et o5). La forme littérale admet donc un chemin
+  qui, résolu là où la commande tourne, ne correspond à rien d'observé.
+- Forme relative au cwd : non rejouée. Elle écarte ce chemin si la citation
+  du modèle doit égaler le chemin résolu, pas si la citation est elle-même
+  résolue depuis le même cwd.
+- Ministral cite aussi `devops_culture_git/0-environment.md` (même bloc, même
+  cas) et `README.md`, qui, résolu depuis ce cwd, désigne le fichier de o6.
+
+Détail et rejeu : `docs/decisions/2026-09-14-benchmark-modeles-en-local.md`.
+
 **Effort:** S
 **Priority:** P3
 **Depends on:** Décision sur l'admissibilité
@@ -111,6 +132,38 @@ une citation littérale du message de commit ; `command_failure` n'exige
 rien du texte. À décider : exiger la citation exacte de la commande (ou de
 sa première ligne utile) comme pour `recorded_statement`, ou rendre la
 commande par le validateur et non par le modèle.
+
+**Cas mesurés au benchmark du 2026-09-15** (prompt v7, `eval/observed`,
+`docs/decisions/2026-09-14-benchmark-modeles-en-local.md`) : quatre points
+`command_failure` valides dont le texte dit plus que la preuve, deux de
+Gemma 4 26B-A4B, deux de Qwen3.8-27B. La vérification est symétrique : elle
+ne départage pas les modèles. Familles déjà relevées par l'audit du
+2026-09-09 (`OMISSIONS.md` E02 à E04, `COLLECTE.md`).
+
+- **Exemple type — Gemma, `8faf4569` (fiche 02), o41** : « Échec de la
+  commande git commit (exit code 128) ». Le code 128 porte sur le bloc entier
+  (`git add .`, `git commit`, `git push`) ; rien n'attribue l'échec à
+  `git commit`. Le texte répond d'avance, et sans preuve, à la question que
+  la fiche 02 jugeait utile (« la sérialisation des scans a-t-elle été
+  committée ? »). Famille E03 (échec de bloc changé en échec certain de
+  commit, déjà vu sur 04 o14), localisation arbitraire que `COLLECTE.md`
+  citait sur o41.
+- **Qwen, `8faf4569`, o41** : le bloc cité avec des `&&` qu'il ne contient
+  pas, cas d'origine de cette entrée (E04) ; fiche 02 : « utile comme
+  question, nuisible tel que produit ».
+- **Gemma, `d047b37b` (fiche 06), o34** : « Les commandes de migration
+  échouent systématiquement avec des codes de sortie différents (127, 2) »,
+  o34 seule en preuve (code 2) ; le 127 est celui de o33, non cité. Recoupe
+  « Préfixe d'interpréteur » (06 o33/o34). La fiche 06 tient pour
+  information n°1 que la migration a vraisemblablement abouti par une autre
+  voie.
+- **Qwen, `d047b37b`, o33** : « a échoué avec le code 127 (commande non
+  trouvée) » ; commande citée exactement, interprétation du 127 ajoutée
+  (E02), « juste ici, mais non collectée » selon la fiche 06.
+
+Trois textes réécrivent ou débordent la commande citée ; le quatrième la cite
+exactement et ajoute une interprétation, qu'une exigence de citation
+littérale n'attraperait pas.
 
 **Effort:** S
 **Priority:** P2

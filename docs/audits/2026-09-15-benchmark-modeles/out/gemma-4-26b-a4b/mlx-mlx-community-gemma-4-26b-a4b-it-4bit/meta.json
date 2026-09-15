@@ -1,0 +1,156 @@
+{
+ "corpus_reconstruction_versions": {
+  "2": 14
+ },
+ "failed": 0,
+ "generated_at": "2026-09-15T08:21:39.112023+00:00",
+ "known_reconstruction_version": 4,
+ "model_id": "mlx-community/gemma-4-26b-a4b-it-4bit",
+ "ok": 13,
+ "prompt_path": "session_summary_v7.md",
+ "provider": "mlx",
+ "rejected": 1,
+ "session_count": 14,
+ "sessions": [
+  {
+   "completion_tokens": 159,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 5471,
+   "id": "071bbd62a95fb6cb",
+   "label": "work-1",
+   "prompt_tokens": 2083,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 168,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 9553,
+   "id": "1e420dda8b6eee77",
+   "label": "work-26",
+   "prompt_tokens": 6494,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 234,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 7534,
+   "id": "247f2062410ca5a9",
+   "label": "work-4",
+   "prompt_tokens": 3980,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 332,
+   "detail": "structured.central_files: devops_culture_git/README.md absent de l'entrée",
+   "dropped_parameters": [],
+   "duration_ms": 7971,
+   "id": "2ce344566f7e85dc",
+   "label": "work-3",
+   "prompt_tokens": 3337,
+   "status": "rejected"
+  },
+  {
+   "completion_tokens": 281,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 8412,
+   "id": "3cabaefb759dae36",
+   "label": "work-6",
+   "prompt_tokens": 4240,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 172,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 9045,
+   "id": "6a4166356dbab6ec",
+   "label": "work-1",
+   "prompt_tokens": 6112,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 176,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 4784,
+   "id": "7bbaca7882c3d766",
+   "label": "work-6",
+   "prompt_tokens": 2331,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 127,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 3260,
+   "id": "8af930d9ef437d2a",
+   "label": "work-2",
+   "prompt_tokens": 1537,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 317,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 14438,
+   "id": "8faf4569fe2723b1",
+   "label": "work-1",
+   "prompt_tokens": 8993,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 242,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 8903,
+   "id": "cda6ccce898d3e88",
+   "label": "work-3",
+   "prompt_tokens": 5098,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 309,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 10876,
+   "id": "d047b37b4511d37c",
+   "label": "work-6",
+   "prompt_tokens": 5994,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 161,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 4597,
+   "id": "d98778994319cd07",
+   "label": "work-24",
+   "prompt_tokens": 2292,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 347,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 36308,
+   "id": "eb652ce9f04c4b37",
+   "label": "work-2",
+   "prompt_tokens": 24865,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 394,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 11403,
+   "id": "eef4956b36dd37ce",
+   "label": "work-3",
+   "prompt_tokens": 5570,
+   "status": "ok"
+  }
+ ]
+}

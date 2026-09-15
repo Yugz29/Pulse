@@ -1,0 +1,24 @@
+{
+ "commit_references": {},
+ "date": "2026-09-02",
+ "id": "071bbd62a95fb6cb",
+ "label": "work-1",
+ "open_items": [],
+ "reprise": {
+  "doing": "Modifications actives sur les fichiers backend/logs/devnote.log et backend/db.sqlite3, avec 24 et 21 événements de modification respectivement, entre les 9 et 583 secondes de la session.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "Dernière commande réussie : changement de répertoire vers le dossier parent (/Users/Yugz/Projets/DevNote) à la 2211e seconde, sans état Git sale."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "backend/logs/devnote.log",
+   "backend/db.sqlite3"
+  ],
+  "confidence": "low",
+  "intents": [],
+  "project": "DevNote"
+ },
+ "why": "Milieu de gamme, DevNote, peu de fichiers."
+}

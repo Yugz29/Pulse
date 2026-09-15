@@ -1,0 +1,10 @@
+{
+ "commit_references": {},
+ "date": "2026-07-05",
+ "detail": "reprise.open[0]: citation exacte d'un message de commit requise",
+ "id": "7bbaca7882c3d766",
+ "label": "work-6",
+ "raw_output": "```json\n{\n  \"reprise\": {\n    \"doing\": \"Stabilisation partielle du contexte du projet via des commits documentaires et un tag de version, avec des tests et des vérifications de traceabilité.\",\n    \"stopped_at\": \"Vérification de l'état Git local (`git status`) à la fin de la session, après l'ajout d'un tag de version et l'activation de l'environnement virtuel.\",\n    \"open\": [\n      {\n        \"text\": \"Déclaration d'une stabilisation partielle du contexte du projet, avec une intention implicite de poursuite ou de validation.\",\n        \"kind\": \"recorded_statement\",\n        \"evidence\": [\"o5\"],\n        \"quote\": \"Palier 2: project context partially stabilized\"\n      }\n    ]\n  },\n  \"structured\": {\n    \"project\": \"core\",\n    \"intents\": [\n      \"Documenter l'analyse passive Git et du projet\",\n      \"Stabiliser partiellement le contexte du projet\",\n      \"Valider la traceabilité via des tests et des commandes de vérification\"\n    ],\n    \"central_files\": [\n      \"README.md\"\n    ],\n    \"blockers\": [],\n    \"confidence\": \"medium\"\n  }\n}\n```",
+ "status": "rejected",
+ "why": "Bruyante : 34 activations d'apps, 1 fichier."
+}

@@ -1,0 +1,70 @@
+{
+ "commit_references": {
+  "o101": "commit:3825801",
+  "o103": "commit:537f131",
+  "o104": "commit:4bdd213",
+  "o105": "commit:9158639",
+  "o106": "commit:adac9da",
+  "o107": "commit:a5e9c23",
+  "o134": "commit:04f61fb",
+  "o135": "commit:d6855c2",
+  "o156": "commit:2c84bd8",
+  "o157": "commit:24b118d",
+  "o158": "commit:29180dd",
+  "o159": "commit:e15430a",
+  "o160": "commit:398f36c",
+  "o161": "commit:474c779",
+  "o162": "commit:71f3c3b",
+  "o183": "commit:6577b82",
+  "o193": "commit:2939336",
+  "o194": "commit:f30ac8b",
+  "o195": "commit:c58f4db",
+  "o202": "commit:e8eb97d",
+  "o22": "commit:4673eed",
+  "o40": "commit:df7d6a6",
+  "o43": "commit:99b09c8",
+  "o5": "commit:ac538fa",
+  "o62": "commit:e25ca67",
+  "o63": "commit:dc369f9",
+  "o64": "commit:4978444",
+  "o65": "commit:7df87ce",
+  "o67": "commit:deada29"
+ },
+ "date": "2026-09-03",
+ "id": "eb652ce9f04c4b37",
+ "label": "work-2",
+ "open_items": [
+  {
+   "evidence": [
+    "o202"
+   ],
+   "kind": "recorded_statement",
+   "quote": "test(core): les tests de résolution de projet figent Path.home sur /Users/Yugz",
+   "text": "Les tests de résolution de projet figent Path.home sur /Users/Yugz."
+  }
+ ],
+ "reprise": {
+  "doing": "Finalisation de la version 0.5.1 de Core et de sa documentation associée (CHANGELOG, VISION, hardening).",
+  "open": "Point déclaré dans un commit : Les tests de résolution de projet figent Path.home sur /Users/Yugz (« test(core): les tests de résolution de projet figent Path.home sur /Users/Yugz »).",
+  "stopped_at": "La session s'est terminée par un fixup de tests concernant la résolution de chemins (Path.home) dans l'environnement de test."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/CHANGELOG.md",
+   "core/README.md",
+   "core/VERSION",
+   "docs/VISION.md",
+   "docs/decisions/2026-09-03-hardening.md"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Hardening de la couche Core (permissions, schémas, verrous)",
+   "Mise à jour de la documentation (CHANGELOG, VISION, décisions)",
+   "Configuration de la CI (GitHub Workflows)"
+  ],
+  "project": "Pulse"
+ },
+ "why": "git dense : 29 commits dans la session."
+}

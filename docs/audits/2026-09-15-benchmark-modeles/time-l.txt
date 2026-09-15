@@ -1,0 +1,64 @@
+# Extrait de corpus/docs/audits/2026-09-15-benchmark-modeles/run.log (hors dépôt), passage du 2026-09-15 :
+# pour chaque modèle, la ligne de lancement, la sortie de /usr/bin/time -l et la ligne de fin, telles quelles.
+[2026-09-15 10:09:15] benchmark (commit 6c3b05c) mlx-lm 0.31.3 mlx 0.32.2 transformers 5.16.1
+[2026-09-15 10:09:15] eval qwen3.8-27b
+      743.93 real        64.96 user        32.24 sys
+         11344445440  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              987800  page reclaims
+                  56  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                4602  voluntary context switches
+             1372754  involuntary context switches
+        515180533004  instructions retired
+        223621090443  cycles elapsed
+         23933267560  peak memory footprint
+[2026-09-15 10:21:38] exit=0 (qwen3.8-27b)
+[2026-09-15 10:21:38] eval gemma-4-26b-a4b
+      147.68 real        25.15 user        14.53 sys
+         13766213632  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              959805  page reclaims
+                  82  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                4735  voluntary context switches
+              762556  involuntary context switches
+        361523256823  instructions retired
+        131832490025  cycles elapsed
+         19318828168  peak memory footprint
+[2026-09-15 10:24:06] exit=1 (gemma-4-26b-a4b)
+[2026-09-15 10:24:06] eval ministral-3-14b
+      470.42 real        33.77 user        21.13 sys
+          8139816960  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              511499  page reclaims
+                  35  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                3502  voluntary context switches
+             1118451  involuntary context switches
+        378373902309  instructions retired
+        145494283397  cycles elapsed
+         17107605816  peak memory footprint
+[2026-09-15 10:31:57] exit=1 (ministral-3-14b)
+[2026-09-15 10:31:57] benchmark terminé

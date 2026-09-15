@@ -1,0 +1,27 @@
+{
+ "commit_references": {},
+ "date": "2026-07-05",
+ "id": "7bbaca7882c3d766",
+ "label": "work-6",
+ "open_items": [],
+ "reprise": {
+  "doing": "Stabilisation du contexte du projet via des commits de documentation et la création d'un tag Git.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "La session s'est terminée avec l'exécution d'un git status."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "README.md"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Stabiliser l'archive de qualification du projet",
+   "Documenter l'analyse de projet et Git passif",
+   "Marquer le palier 2 du contexte projet"
+  ],
+  "project": "core"
+ },
+ "why": "Bruyante : 34 activations d'apps, 1 fichier."
+}

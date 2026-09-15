@@ -1,0 +1,156 @@
+{
+ "corpus_reconstruction_versions": {
+  "2": 14
+ },
+ "failed": 0,
+ "generated_at": "2026-09-15T08:24:06.807539+00:00",
+ "known_reconstruction_version": 4,
+ "model_id": "mlx-community/Ministral-3-14B-Instruct-2512-4bit",
+ "ok": 10,
+ "prompt_path": "session_summary_v7.md",
+ "provider": "mlx",
+ "rejected": 4,
+ "session_count": 14,
+ "sessions": [
+  {
+   "completion_tokens": 180,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 11589,
+   "id": "071bbd62a95fb6cb",
+   "label": "work-1",
+   "prompt_tokens": 2030,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 615,
+   "detail": "structured.central_files: /Users/Yugz/Projets/Pulse/intelligence/llm/ absent de l'entrée",
+   "dropped_parameters": [],
+   "duration_ms": 39737,
+   "id": "1e420dda8b6eee77",
+   "label": "work-26",
+   "prompt_tokens": 6296,
+   "status": "rejected"
+  },
+  {
+   "completion_tokens": 426,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 24540,
+   "id": "247f2062410ca5a9",
+   "label": "work-4",
+   "prompt_tokens": 3852,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 453,
+   "detail": "structured.central_files: devops_culture_git/0-environment.md absent de l'entrée",
+   "dropped_parameters": [],
+   "duration_ms": 23421,
+   "id": "2ce344566f7e85dc",
+   "label": "work-3",
+   "prompt_tokens": 3241,
+   "status": "rejected"
+  },
+  {
+   "completion_tokens": 428,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 25489,
+   "id": "3cabaefb759dae36",
+   "label": "work-6",
+   "prompt_tokens": 4115,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 693,
+   "detail": "reprise.open[0]: dernier échec sans résolution observée requis",
+   "dropped_parameters": [],
+   "duration_ms": 39694,
+   "id": "6a4166356dbab6ec",
+   "label": "work-1",
+   "prompt_tokens": 5815,
+   "status": "rejected"
+  },
+  {
+   "completion_tokens": 259,
+   "detail": "reprise.open[0]: citation exacte d'un message de commit requise",
+   "dropped_parameters": [],
+   "duration_ms": 14948,
+   "id": "7bbaca7882c3d766",
+   "label": "work-6",
+   "prompt_tokens": 2256,
+   "status": "rejected"
+  },
+  {
+   "completion_tokens": 161,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 9303,
+   "id": "8af930d9ef437d2a",
+   "label": "work-2",
+   "prompt_tokens": 1494,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 407,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 43031,
+   "id": "8faf4569fe2723b1",
+   "label": "work-1",
+   "prompt_tokens": 8804,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 459,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 29998,
+   "id": "cda6ccce898d3e88",
+   "label": "work-3",
+   "prompt_tokens": 4954,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 415,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 31830,
+   "id": "d047b37b4511d37c",
+   "label": "work-6",
+   "prompt_tokens": 5846,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 307,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 16107,
+   "id": "d98778994319cd07",
+   "label": "work-24",
+   "prompt_tokens": 2213,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 494,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 122297,
+   "id": "eb652ce9f04c4b37",
+   "label": "work-2",
+   "prompt_tokens": 24273,
+   "status": "ok"
+  },
+  {
+   "completion_tokens": 487,
+   "detail": null,
+   "dropped_parameters": [],
+   "duration_ms": 35153,
+   "id": "eef4956b36dd37ce",
+   "label": "work-3",
+   "prompt_tokens": 5419,
+   "status": "ok"
+  }
+ ]
+}

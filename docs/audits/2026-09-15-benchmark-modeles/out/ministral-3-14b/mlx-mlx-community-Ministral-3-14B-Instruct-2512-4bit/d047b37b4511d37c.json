@@ -1,0 +1,43 @@
+{
+ "commit_references": {},
+ "date": "2026-08-31",
+ "id": "d047b37b4511d37c",
+ "label": "work-6",
+ "open_items": [
+  {
+   "evidence": [
+    "o33"
+   ],
+   "kind": "command_failure",
+   "text": "Échec précis observé lors de l'exécution de `manage.py migrate` dans un environnement virtuel activé, sans succès malgré des réessais."
+  }
+ ],
+ "reprise": {
+  "doing": "Développement d'une fonctionnalité de jetons API dans DevNote, incluant backend (modèles, serializers, commandes, tests) et frontend (composants, services), avec des migrations de base de données et des ajustements de configuration.",
+  "open": "Échec observé, sans résolution correspondante observée en fin de session : Échec précis observé lors de l'exécution de `manage.py migrate` dans un environnement virtuel activé, sans succès malgré des réessais.",
+  "stopped_at": "Échec répété de la commande `manage.py migrate` (codes 127, 2) malgré des tentatives de réactivation de l'environnement virtuel, sans résolution visible ni confirmation de la cause."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [
+   "Échec persistant de `manage.py migrate` malgré des tentatives de réactivation de l'environnement virtuel",
+   "Absence de confirmation sur la cause de l'échec (conflit de dépendances, configuration incorrecte, etc.)",
+   "Pas de commit ou message explicite indiquant une résolution ou une intention de reprise"
+  ],
+  "central_files": [
+   "backend/accounts/tokens.py",
+   "backend/accounts/management/commands/api_token.py",
+   "frontend/src/components/ApiTokenSettings.jsx",
+   "backend/accounts/migrations/0002_apitoken.py",
+   "backend/devnote/settings.py"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "Implémenter une gestion de jetons API côté backend (modèles, commandes, tests)",
+   "Intégrer un composant frontend pour la configuration des jetons API",
+   "Corriger les migrations de base de données"
+  ],
+  "project": "DevNote"
+ },
+ "why": "Août, DevNote, agent."
+}

@@ -1,0 +1,36 @@
+{
+ "commit_references": {
+  "o1": "commit:40316b2",
+  "o2": "commit:7922529"
+ },
+ "date": "2026-09-05",
+ "id": "d98778994319cd07",
+ "label": "work-24",
+ "open_items": [
+  {
+   "evidence": [
+    "o1"
+   ],
+   "kind": "recorded_statement",
+   "quote": "La CI tombait sur la vitesse du runner, pas sur une régression — vert sur main le 2026-09-03, rouge le 2026-09-05 sans qu'une ligne de code ait bougé.",
+   "text": "Problème de timeout CI persistant sur macOS malgré l'ajustement des seuils, sans cause identifiée dans le code."
+  }
+ ],
+ "reprise": {
+  "doing": "Correction de deux problèmes de tests CI dans Pulse : ajustement des seuils de timeout pour le verrou terminal et unification de la gestion de l'horloge CLI pour éviter les décalages de date.",
+  "open": "Point déclaré dans un commit : Problème de timeout CI persistant sur macOS malgré l'ajustement des seuils, sans cause identifiée dans le code (« La CI tombait sur la vitesse du runner, pas sur une régression — vert sur main le 2026-09-03, rouge le 2026-09-05 sans qu'une ligne de code ait bougé. »).",
+  "stopped_at": "Dernier commit enregistré (o2) unifiant la gestion de l'horloge CLI avec une injection centralisée, sans échec ni commande en cours."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "medium",
+  "intents": [
+   "Corriger une assertion CI erronée sur les timeouts du verrou terminal",
+   "Centraliser la gestion de l'horloge dans la CLI pour éviter les incohérences de date"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D3 du jour 2 (work-24 du 2026-09-05, 12 min, 2 activités) : open v2 « L'état de la PR #28 et la migration … n'ont pas été confirmés » tiré de l'annexe agent_session. Ajoutée le 2026-09-06, hors gel. Contexte pris à fin − 1 s."
+}

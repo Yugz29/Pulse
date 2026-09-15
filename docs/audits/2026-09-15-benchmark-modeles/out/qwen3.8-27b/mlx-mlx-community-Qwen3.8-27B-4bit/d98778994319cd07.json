@@ -1,0 +1,27 @@
+{
+ "commit_references": {
+  "o1": "commit:40316b2",
+  "o2": "commit:7922529"
+ },
+ "date": "2026-09-05",
+ "id": "d98778994319cd07",
+ "label": "work-24",
+ "open_items": [],
+ "reprise": {
+  "doing": "Correction de la fiabilité des tests CI du projet Pulse, en supprimant une borne temporelle instable et en unifiant l'injection de l'horloge dans la CLI.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "Commit o2 enregistré sur la branche ship/ci-green, unifiant l'horloge de la CLI via cli._now() pour stabiliser les tests."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "high",
+  "intents": [
+   "Stabiliser les tests CI en supprimant les bornes temporelles instables",
+   "Unifier l'injection de l'horloge dans la CLI pour les tests"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D3 du jour 2 (work-24 du 2026-09-05, 12 min, 2 activités) : open v2 « L'état de la PR #28 et la migration … n'ont pas été confirmés » tiré de l'annexe agent_session. Ajoutée le 2026-09-06, hors gel. Contexte pris à fin − 1 s."
+}

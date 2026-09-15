@@ -1,0 +1,27 @@
+{
+ "commit_references": {
+  "o1": "commit:40316b2",
+  "o2": "commit:7922529"
+ },
+ "date": "2026-09-05",
+ "id": "d98778994319cd07",
+ "label": "work-24",
+ "open_items": [],
+ "reprise": {
+  "doing": "Ajustement des tests de la CLI pour utiliser une horloge injectable afin de garantir la stabilité des tests face au temps qui passe.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "La session s'est terminée avec le commit de résolution des problèmes de sélection de sessions liées à la date."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "high",
+  "intents": [
+   "Stabiliser les tests de la CLI",
+   "Injecter une horloge unique dans la CLI"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D3 du jour 2 (work-24 du 2026-09-05, 12 min, 2 activités) : open v2 « L'état de la PR #28 et la migration … n'ont pas été confirmés » tiré de l'annexe agent_session. Ajoutée le 2026-09-06, hors gel. Contexte pris à fin − 1 s."
+}

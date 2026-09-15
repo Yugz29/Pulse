@@ -1,0 +1,33 @@
+{
+ "commit_references": {
+  "o1": "commit:d6e89cf",
+  "o16": "commit:28f488d",
+  "o17": "commit:2eb70e6",
+  "o2": "commit:2e40ef1",
+  "o20": "commit:f30781f",
+  "o21": "commit:de1d5fe",
+  "o3": "commit:330c3dc"
+ },
+ "date": "2026-09-05",
+ "id": "1e420dda8b6eee77",
+ "label": "work-26",
+ "open_items": [],
+ "reprise": {
+  "doing": "Développement de la couche LLMProvider et de son provider compatible avec l'API OpenAI.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "La session s'est terminée par la résolution d'un problème de négociation de paramètres (temperature) avec un endpoint distant."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "high",
+  "intents": [
+   "Implémentation de la couche LLMProvider",
+   "Développement du provider compatible OpenAI",
+   "Négociation de paramètres avec les endpoints"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 1 (work-26 du 2026-09-05, 88 min) : annexe previous_summary (work-24) que le résumé v1 recopiait. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s pour que l'annexe soit le résumé précédent, pas le sien."
+}

@@ -1,0 +1,33 @@
+{
+ "commit_references": {
+  "o3": "commit:3f44230"
+ },
+ "date": "2026-08-31",
+ "id": "247f2062410ca5a9",
+ "label": "work-4",
+ "open_items": [],
+ "reprise": {
+  "doing": "Mise en place d'observateurs résidents via launchd pour le suivi de fichiers et d'applications.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "La session s'est terminée par une commande de changement de répertoire vers le niveau supérieur."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "daemon_v2/file_watcher.py",
+   "scripts/pulse_mode.sh",
+   "scripts/status.sh",
+   "scripts/install_observers_launchd.sh",
+   "tests_v2/test_file_watcher.py"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Déploiement d'observateurs via launchd",
+   "Gestion multi-workspaces du file_watcher",
+   "Automatisation des agents de surveillance"
+  ],
+  "project": "core"
+ },
+ "why": "2e plus grosse, agent + 1 commit — repli spike B."
+}

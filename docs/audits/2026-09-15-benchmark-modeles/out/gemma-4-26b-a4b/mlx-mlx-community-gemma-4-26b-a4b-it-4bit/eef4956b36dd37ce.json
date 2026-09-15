@@ -1,0 +1,45 @@
+{
+ "commit_references": {
+  "o1": "commit:d255672",
+  "o13": "commit:f77db5f",
+  "o19": "commit:1dc191e",
+  "o2": "commit:fd65d52",
+  "o3": "commit:e10d770"
+ },
+ "date": "2026-09-06",
+ "id": "eef4956b36dd37ce",
+ "label": "work-3",
+ "open_items": [
+  {
+   "evidence": [
+    "o19"
+   ],
+   "kind": "recorded_statement",
+   "quote": "D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) :\nnoté dans intelligence/TODOS.md, à juger au jour 2.",
+   "text": "D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) : noté dans intelligence/TODOS.md, à juger au jour 2."
+  }
+ ],
+ "reprise": {
+  "doing": "Évaluation et ajustement du prompt de résumé (v2) suite aux observations du dogfooding sur la gestion des résumés précédents et des fichiers.",
+  "open": "Point déclaré dans un commit : D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) : noté dans intelligence/TODOS.md, à juger au jour 2 (« D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) :\nnoté dans intelligence/TODOS.md, à juger au jour 2. »).",
+  "stopped_at": "La session s'est terminée après la mise à jour des fichiers de documentation et des prompts suite au déploiement de la version 2."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "docs/dogfooding.md",
+   "docs/specs/2026-09-05-llm-provider.md",
+   "intelligence/TODOS.md",
+   "intelligence/pulse_intelligence/prompts/session_summary_v2.md"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Ajuster le prompt de résumé (v2) pour corriger les défauts de la v1",
+   "Documenter les résultats du dogfooding",
+   "Gérer la configuration du watcher de fichiers"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 2 (work-3 du 2026-09-06, 54 min) : seule session du jour résumée avec annexe (a0aacd1f), dont la v2 recopie encore le open. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s ; reproduit l'input_hash du résumé v2 émis."
+}

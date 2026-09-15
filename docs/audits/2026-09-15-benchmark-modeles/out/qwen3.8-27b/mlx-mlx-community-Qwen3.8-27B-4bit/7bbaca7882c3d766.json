@@ -1,0 +1,27 @@
+{
+ "commit_references": {},
+ "date": "2026-07-05",
+ "id": "7bbaca7882c3d766",
+ "label": "work-6",
+ "open_items": [],
+ "reprise": {
+  "doing": "Stabilisation du contexte projet et documentation passive dans le dépôt Pulse/core.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "Vérification de l'état du dépôt via git status après activation de l'environnement virtuel."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "README.md"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Stabiliser l'archive de qualification du projet",
+   "Documenter l'analyse passive du projet",
+   "Marquer la stabilisation partielle du contexte projet"
+  ],
+  "project": "Pulse/core"
+ },
+ "why": "Bruyante : 34 activations d'apps, 1 fichier."
+}

@@ -1,0 +1,42 @@
+{
+ "commit_references": {
+  "o3": "commit:3f44230"
+ },
+ "date": "2026-08-31",
+ "id": "247f2062410ca5a9",
+ "label": "work-4",
+ "open_items": [
+  {
+   "evidence": [
+    "o3"
+   ],
+   "kind": "recorded_statement",
+   "quote": "Fin de la cécité du mode service : le journal ne voyait ni fichiers ni apps sans make dev (31/08 : files_changed 0, applications []).",
+   "text": "Problème potentiel de persistance des événements fichiers/apps sans `make dev` (mentionné comme résolu dans le commit, mais vérification en conditions réelles non documentée)."
+  }
+ ],
+ "reprise": {
+  "doing": "Développement et test des observateurs résidents sous launchd pour Pulse, incluant la gestion multi-workspaces et l'intégration des agents LaunchAgents (fichiers `install_observers_launchd.sh`, `file_watcher.py`, tests associés).",
+  "open": "Point déclaré dans un commit : Problème potentiel de persistance des événements fichiers/apps sans `make dev` (mentionné comme résolu dans le commit, mais vérification en conditions réelles non documentée) (« Fin de la cécité du mode service : le journal ne voyait ni fichiers ni apps sans make dev (31/08 : files_changed 0, applications []). »).",
+  "stopped_at": "Dernière activité : modification de fichiers de test (`test_agent_sessions.py`, `test_routes.py`) et de scripts (`pulse_mode.sh`, `status.sh`) après un commit majeur sur les observateurs launchd, suivi d'un changement de répertoire hors du projet."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "daemon_v2/file_watcher.py",
+   "scripts/install_observers_launchd.sh",
+   "scripts/pulse_mode.sh",
+   "tests_v2/test_file_watcher.py",
+   "tests_v2/conftest.py"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "Implémenter des observateurs multi-workspaces sous launchd avec gestion des événements persistants",
+   "Intégrer des agents LaunchAgents pour surveiller fichiers et applications",
+   "Valider la résilience des observateurs en conditions réelles (création/suppression de fichiers, activation d'apps)"
+  ],
+  "project": "Pulse/core"
+ },
+ "why": "2e plus grosse, agent + 1 commit — repli spike B."
+}

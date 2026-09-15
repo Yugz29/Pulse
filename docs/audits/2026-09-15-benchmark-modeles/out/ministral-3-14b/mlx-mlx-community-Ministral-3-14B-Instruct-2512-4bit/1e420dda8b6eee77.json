@@ -1,0 +1,18 @@
+{
+ "commit_references": {
+  "o1": "commit:d6e89cf",
+  "o16": "commit:28f488d",
+  "o17": "commit:2eb70e6",
+  "o2": "commit:2e40ef1",
+  "o20": "commit:f30781f",
+  "o21": "commit:de1d5fe",
+  "o3": "commit:330c3dc"
+ },
+ "date": "2026-09-05",
+ "detail": "structured.central_files: /Users/Yugz/Projets/Pulse/intelligence/llm/ absent de l'entrée",
+ "id": "1e420dda8b6eee77",
+ "label": "work-26",
+ "raw_output": "```json\n{\n  \"reprise\": {\n    \"doing\": \"Implémentation de la spécification LLMProvider v2 dans Pulse, incluant une couche LLMProvider, un provider HTTP générique pour endpoints compatibles OpenAI, et la gestion des divergences entre `model_id` et le modèle réellement servi.\",\n    \"stopped_at\": \"Dernier commit documentant la négociation de paramètres refusés par l'endpoint (ex. `temperature` pour le modèle `claude-sonnet-5`), avec des tests hermétiques et une correction de l'affichage des divergences `run_list`/`run_pass`.\",\n    \"open\": [\n      {\n        \"text\": \"Problème de divergence entre `model_id` en configuration et le modèle servi par l'endpoint (`PULSE_LLM_MODEL`), nécessitant une refonte du repli en dur.\",\n        \"kind\": \"recorded_statement\",\n        \"evidence\": [\"o20\"],\n        \"quote\": \"Non corrigé : aligner `list` obligerait une commande de lecture seule à exiger les variables d'environnement du provider. Le repli en dur reste le vrai sujet.\"\n      },\n      {\n        \"text\": \"Paramètre `temperature` refusé par l'endpoint pour le modèle `claude-sonnet-5`, nécessitant une négociation dynamique et un rapport dans `CompletionResult.dropped_parameters`.\",\n        \"kind\": \"recorded_statement\",\n        \"evidence\": [\"o21\"],\n        \"quote\": \"Trouvé par le premier vrai résumé à la main : l'endpoint répondait « `temperature` is deprecated for this model », HTTP 400.\"\n      }\n    ]\n  },\n  \"structured\": {\n    \"project\": \"Pulse\",\n    \"intents\": [\n      \"Implémenter une interface LLMProvider avec trois implémentations (fake, endpoint OpenAI, MLX) et un contrat de sortie strict.\",\n      \"Gérer les divergences entre `model_id` et le modèle réellement servi par l'endpoint.\",\n      \"Corriger les paramètres refusés par l'endpoint (ex. `temperature`) via une négociation dynamique.\"\n    ],\n    \"central_files\": [\n      \"/Users/Yugz/Projets/Pulse/intelligence/llm/\",\n      \"/Users/Yugz/Projets/Pulse/intelligence/summary/\",\n      \"/Users/Yugz/Projets/Pulse/pulse_intelligence/\"\n  ",
+ "status": "rejected",
+ "why": "Cas D1 du jour 1 (work-26 du 2026-09-05, 88 min) : annexe previous_summary (work-24) que le résumé v1 recopiait. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s pour que l'annexe soit le résumé précédent, pas le sien."
+}

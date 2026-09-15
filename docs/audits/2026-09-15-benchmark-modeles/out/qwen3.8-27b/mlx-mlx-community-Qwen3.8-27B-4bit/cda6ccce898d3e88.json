@@ -1,0 +1,34 @@
+{
+ "commit_references": {
+  "o34": "commit:a11e7b5",
+  "o35": "commit:2beaf51"
+ },
+ "date": "2026-09-03",
+ "id": "cda6ccce898d3e88",
+ "label": "work-3",
+ "open_items": [],
+ "reprise": {
+  "doing": "Correction d'une course au passage en WAL d'une outbox SQLite neuve dans le daemon v2 de Pulse, suivie de la mise à jour des métadonnées de version.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "Commit de documentation pour la version 0.5.2 enregistré sur la branche ship/outbox-race, avec modifications ultimes de core/CHANGELOG.md et core/VERSION."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/producer_outbox.py",
+   "core/tests_v2/test_producer_outbox.py",
+   "core/CHANGELOG.md",
+   "core/VERSION",
+   "core/daemon_v2/main.py"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Corriger la course au passage en WAL lors de la création d'une outbox SQLite neuve",
+   "Ajouter un mécanisme de retry avec busy_timeout pour éviter les erreurs 'database is locked'",
+   "Mettre à jour le CHANGELOG et le VERSION pour la sortie 0.5.2"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Courte (~10 min), dense en fichiers."
+}

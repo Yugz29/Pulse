@@ -1,0 +1,74 @@
+{
+ "commit_references": {
+  "o101": "commit:3825801",
+  "o103": "commit:537f131",
+  "o104": "commit:4bdd213",
+  "o105": "commit:9158639",
+  "o106": "commit:adac9da",
+  "o107": "commit:a5e9c23",
+  "o134": "commit:04f61fb",
+  "o135": "commit:d6855c2",
+  "o156": "commit:2c84bd8",
+  "o157": "commit:24b118d",
+  "o158": "commit:29180dd",
+  "o159": "commit:e15430a",
+  "o160": "commit:398f36c",
+  "o161": "commit:474c779",
+  "o162": "commit:71f3c3b",
+  "o183": "commit:6577b82",
+  "o193": "commit:2939336",
+  "o194": "commit:f30ac8b",
+  "o195": "commit:c58f4db",
+  "o202": "commit:e8eb97d",
+  "o22": "commit:4673eed",
+  "o40": "commit:df7d6a6",
+  "o43": "commit:99b09c8",
+  "o5": "commit:ac538fa",
+  "o62": "commit:e25ca67",
+  "o63": "commit:dc369f9",
+  "o64": "commit:4978444",
+  "o65": "commit:7df87ce",
+  "o67": "commit:deada29"
+ },
+ "date": "2026-09-03",
+ "id": "eb652ce9f04c4b37",
+ "label": "work-2",
+ "open_items": [
+  {
+   "evidence": [
+    "o202"
+   ],
+   "kind": "recorded_statement",
+   "quote": "les tests de résolution de projet figent Path.home sur /Users/Yugz\n\nIls codent en dur des chemins sous /Users/Yugz/Projets et le résolveur\nreconnaît un conteneur de projets par Path.home()/Projets : sur un autre\nfoyer (runner CI, HOME=/Users/runner) la règle ne s'appliquait plus.",
+   "text": "Problème de dépendance aux chemins locaux dans les tests de résolution de projet, nécessitant un monkeypatch pour fonctionner en CI."
+  }
+ ],
+ "reprise": {
+  "doing": "Finalisation des corrections de sécurité et de robustesse dans le noyau Pulse (v0.5.1), incluant gestion des permissions locales, verrouillage des fichiers critiques, et amélioration des tests.",
+  "open": "Point déclaré dans un commit : Problème de dépendance aux chemins locaux dans les tests de résolution de projet, nécessitant un monkeypatch pour fonctionner en CI (« les tests de résolution de projet figent Path.home sur /Users/Yugz\n\nIls codent en dur des chemins sous /Users/Yugz/Projets et le résolveur\nreconnaît un conteneur de projets par Path.home()/Projets : sur un autre\nfoyer (runner CI, HOME=/Users/runner) la règle ne s'appliquait plus. »).",
+  "stopped_at": "Ajout d'un test de résolution de projet pour éviter les dépendances à `/Users/Yugz` dans les environnements CI, avec un monkeypatch de `Path.home` dans les tests concernés."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [
+   "Dépendance aux chemins locaux dans les tests de résolution de projet (nécessite un monkeypatch)",
+   "Validation des versions de schéma à l'ingestion non encore déployée en production",
+   "Authentification des producteurs locaux reportée à une future action de la couche Agent"
+  ],
+  "central_files": [
+   "core/daemon_v2/private_files.py",
+   "core/daemon_v2/file_lock.py",
+   "core/tests_v2/test_project_contracts.py",
+   "core/daemon_v2/ingest.py",
+   "core/scripts/fix_permissions.sh"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Améliorer la sécurité des fichiers sensibles (permissions 0700/0600, umask 077)",
+   "Corriger les conflits d'écriture dans les transcripts et sessions",
+   "Rendre les tests indépendants des chemins locaux"
+  ],
+  "project": "Pulse"
+ },
+ "why": "git dense : 29 commits dans la session."
+}

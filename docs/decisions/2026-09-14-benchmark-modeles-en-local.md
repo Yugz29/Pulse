@@ -76,11 +76,14 @@ l'utilisateur ; la production reste sur `mlx-community/Qwen3.8-27B-4bit`.**
 - **Attentes atteignables.** Sur `eef4956b`, l'attente est un point
   `carried_over` repris de `previous_summary:1` ; v7 ne reçoit plus d'annexe
   (`uses_annexes("v7")` est faux), aucun modèle ne peut la satisfaire.
-- **Mesures.** Durées et tokens viennent de `meta.json`, tokens comptés par
-  le tokenizer de chaque modèle. Durée du processus et pic viennent de
-  `/usr/bin/time -l` (`real`, `peak memory footprint` en octets, ici en Go
-  décimaux), pris de la même façon pour les trois. Ce pic ne se compare pas
-  tel quel aux 21,6 Go cités plus haut, dont la méthode n'est pas consignée.
+- **Mesures.** Validité, durées de génération et tokens viennent des
+  `meta.json`, tokens comptés par le tokenizer de chaque modèle ; attentes
+  recalculées par `compare_run` sur les sorties. Durée du processus et pic
+  viennent de `/usr/bin/time -l` (`real`, `peak memory footprint` en octets,
+  ici en Go décimaux), pris de la même façon pour les trois. Ce pic ne se
+  compare pas tel quel aux 21,6 Go cités plus haut, dont la méthode n'est pas
+  consignée. Toutes ces preuves sont versionnées (voir « Rejeu ») et
+  redonnent chaque chiffre du tableau.
 
 ### Rejets
 
@@ -126,34 +129,18 @@ Gemma a deux écarts de contenu :
   vérifie que la preuve est un dernier échec non résolu, pas que le texte la
   décrit.
 
-La même lecture des preuves relève deux points `open` valides de Gemma qui
-disent plus que leur preuve, sans la contredire ; ils restent au jugement du
-comparatif :
-
-- `8faf4569` : l'échec est attribué à `git commit` (code 128), alors que o41
-  est une suite de trois lignes (`git add .`, `git commit`, `git push`) dont
-  le code vaut pour l'ensemble (`exit_scope` `whole_command`).
-- `d047b37b` : « Les commandes de migration échouent systématiquement avec
-  des codes de sortie différents (127, 2) », avec o34 seule en preuve
-  (`python3 manage.py migrate`, code 2) ; le 127 est celui de o33
-  (`manage.py migrate`), non cité.
-
-Côté Qwen, aucun point `open` valide ne contredit sa preuve ; deux en disent
-aussi plus qu'elle : sur `8faf4569`, la suite o41 réécrite avec des `&&`
-(citation réécrite, déjà relevée dans la décision v7 du 2026-09-12, 02 o41) ;
-sur `d047b37b`, le code 127 de o33 lu comme « commande non trouvée », sens
-usuel du code que la vue ne confirme pas (sortie des commandes non collectée).
+Quatre points `open` valides, deux de Gemma et deux de Qwen, disent plus que
+leur preuve ; la vérification est symétrique et ne départage pas les
+modèles : ils sont versés à « Citation de `command_failure` non littérale »
+(`intelligence/TODOS.md`), exemple type Gemma sur `8faf4569`.
 
 **Conséquence pour le TODO `central_files`.** Assouplir la règle ferait
 passer la sortie de Gemma sur `2ce34456` telle quelle, point faux compris :
 repassée au validateur en admettant les chemins cités tels qu'écrits dans une
 commande observée, elle est valide. Le rejet a protégé la production par
 accident, pas par justesse. Ce constat ne tranche pas le TODO, mais il
-appartient à la décision qui le tranchera. Limite du rejeu : il admet le
-chemin tel qu'écrit. Résolu depuis le cwd de o14
-(`…/holbertonschool-devops-formation/devops_culture_git`), ce chemin
-désignerait `…/devops_culture_git/devops_culture_git/README.md` ; la forme
-relative au cwd, que le TODO envisage, n'a pas été rejouée.
+appartient à la décision qui le tranchera ; la forme d'admission mesurée sur
+ce cas est versée à l'entrée du TODO.
 
 ### Conditions observées
 
@@ -183,9 +170,14 @@ relative au cwd, que le TODO envisage, n'a pas été rejouée.
 
 ### Rejeu
 
-- Dossier hors dépôt `corpus/docs/audits/2026-09-15-benchmark-modeles/` :
-  `caffeinate -i ./run-benchmark.sh >> run.log 2>&1` ; sorties
-  `out/<modèle>/…/<session>.json` et `meta.json`, journal `run.log`,
+- **Preuves versionnées**, sous
+  [`docs/audits/2026-09-15-benchmark-modeles/`](../audits/2026-09-15-benchmark-modeles/) :
+  les 14 sorties et le `meta.json` de chaque modèle (`out/`), l'extrait
+  `time-l.txt` de `run.log` (sortie de `/usr/bin/time -l` des trois
+  passages) et le comparatif.
+- **Hors dépôt**, dans `corpus/docs/audits/2026-09-15-benchmark-modeles/` :
+  `run.log`, configs, `run-benchmark.sh` (`caffeinate -i ./run-benchmark.sh
+  >> run.log 2>&1`), `comparatif.py`, `revalider-chemins-commande.py`,
   paramètres dans le README.
 - Rejets `central_files` repassés au validateur sans modèle :
   `cd intelligence && .venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/revalider-chemins-commande.py`.
@@ -193,7 +185,7 @@ relative au cwd, que le TODO envisage, n'a pas été rejouée.
   des deux côtés, sorties côte à côte, sans verdict ; en annexe, `2ce34456`
   avec la sortie rejetée de Gemma, hors compte, o10, o11 et o14 résolus.
   Regénéré depuis `intelligence/` :
-  `.venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif.py > ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`.
+  `.venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif.py > ../docs/audits/2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`.
 
 ### Un changement de modèle relance le compteur de l'étape 4
 

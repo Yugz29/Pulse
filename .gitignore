@@ -25,3 +25,6 @@ cortex-snapshot.json
 corpus/
 docs/audits/**/*.json
 !docs/audits/*/*.json
+# Exception décidée le 2026-09-15 : sorties et meta.json du benchmark de
+# modèles, preuves des chiffres de référence de sa note de décision.
+!docs/audits/2026-09-15-benchmark-modeles/out/**/*.json

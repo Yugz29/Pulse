@@ -1,0 +1,27 @@
+{
+ "commit_references": {},
+ "date": "2026-09-02",
+ "id": "071bbd62a95fb6cb",
+ "label": "work-1",
+ "open_items": [],
+ "reprise": {
+  "doing": "L'utilisateur a navigué dans le projet DevNote, où l'application a généré des journaux et des mises à jour de base de données, avant de quitter le répertoire du projet.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "L'utilisateur a exécuté la commande `cd ..` depuis le répertoire du projet DevNote, quittant ainsi le dossier de travail."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "backend/logs/devnote.log",
+   "backend/db.sqlite3"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "Consulter les journaux et l'état de la base de données de l'application DevNote",
+   "Vérifier l'état Git du projet avant de quitter le répertoire"
+  ],
+  "project": "DevNote"
+ },
+ "why": "Milieu de gamme, DevNote, peu de fichiers."
+}

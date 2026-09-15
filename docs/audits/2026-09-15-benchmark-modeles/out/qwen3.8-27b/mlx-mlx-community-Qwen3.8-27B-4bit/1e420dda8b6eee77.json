@@ -1,0 +1,42 @@
+{
+ "commit_references": {
+  "o1": "commit:d6e89cf",
+  "o16": "commit:28f488d",
+  "o17": "commit:2eb70e6",
+  "o2": "commit:2e40ef1",
+  "o20": "commit:f30781f",
+  "o21": "commit:de1d5fe",
+  "o3": "commit:330c3dc"
+ },
+ "date": "2026-09-05",
+ "id": "1e420dda8b6eee77",
+ "label": "work-26",
+ "open_items": [
+  {
+   "evidence": [
+    "o20"
+   ],
+   "kind": "recorded_statement",
+   "quote": "Non corrigé : aligner `list` obligerait une commande de lecture seule à exiger les variables d'environnement du provider. Le repli en dur reste le vrai sujet.",
+   "text": "Divergence non corrigée entre run_list et run_pass sur l'identification du modèle, consignée dans la documentation."
+  }
+ ],
+ "reprise": {
+  "doing": "Implémentation de la couche LLMProvider pour le module intelligence, incluant la négociation des paramètres refusés par l'endpoint.",
+  "open": "Point déclaré dans un commit : Divergence non corrigée entre run_list et run_pass sur l'identification du modèle, consignée dans la documentation (« Non corrigé : aligner `list` obligerait une commande de lecture seule à exiger les variables d'environnement du provider. Le repli en dur reste le vrai sujet. »).",
+  "stopped_at": "Commit de la correction de la négociation de paramètres sur la branche ship/intelligence-param-negotiation, avec 104 tests."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "high",
+  "intents": [
+   "Aligner la spec LLMProvider v2 sur le code existant",
+   "Implémenter la couche LLMProvider et le pont vers Summarizer",
+   "Corriger la négociation des paramètres refusés par l'endpoint"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 1 (work-26 du 2026-09-05, 88 min) : annexe previous_summary (work-24) que le résumé v1 recopiait. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s pour que l'annexe soit le résumé précédent, pas le sien."
+}

@@ -1,0 +1,45 @@
+{
+ "commit_references": {
+  "o1": "commit:d255672",
+  "o13": "commit:f77db5f",
+  "o19": "commit:1dc191e",
+  "o2": "commit:fd65d52",
+  "o3": "commit:e10d770"
+ },
+ "date": "2026-09-06",
+ "id": "eef4956b36dd37ce",
+ "label": "work-3",
+ "open_items": [
+  {
+   "evidence": [
+    "o19"
+   ],
+   "kind": "recorded_statement",
+   "quote": "D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) : noté dans intelligence/TODOS.md, à juger au jour 2.",
+   "text": "Problème D1 du prompt v2 non mesurable sur le corpus actuel (aucune session avec `previous_summary` à tester)."
+  }
+ ],
+ "reprise": {
+  "doing": "Amélioration des prompts de résumé de session (v2) pour corriger les défauts identifiés en dogfooding (ex: `open` héritant du résumé précédent, gestion des sessions sans fichiers). Tests sur 10 sessions gelées pour valider la v2 (Qwen local 8/10→10/10, référence 9/10→10/10).",
+  "open": "Point déclaré dans un commit : Problème D1 du prompt v2 non mesurable sur le corpus actuel (aucune session avec `previous_summary` à tester) (« D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) : noté dans intelligence/TODOS.md, à juger au jour 2. »).",
+  "stopped_at": "Validation des corrections de prompts en cours, avec des modifications récentes sur `docs/dogfooding.md`, `docs/specs/2026-09-05-llm-provider.md` et `intelligence/TODOS.md` (ajout d'une tâche D1 à évaluer au jour 2)."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "docs/dogfooding.md",
+   "docs/specs/2026-09-05-llm-provider.md",
+   "intelligence/TODOS.md",
+   "intelligence/pulse_intelligence/prompts/session_summary_v2.md"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "Corriger les défauts des prompts de résumé (v1→v2) pour éviter la réutilisation de `open` périmé et gérer les sessions sans fichiers.",
+   "Valider la v2 sur 10 sessions gelées (Qwen local et référence).",
+   "Documenter les réserves et mesures dans `docs/dogfooding.md` et `TODOS.md`."
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 2 (work-3 du 2026-09-06, 54 min) : seule session du jour résumée avec annexe (a0aacd1f), dont la v2 recopie encore le open. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s ; reproduit l'input_hash du résumé v2 émis."
+}

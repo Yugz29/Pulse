@@ -1,0 +1,10 @@
+{
+ "commit_references": {},
+ "date": "2026-08-22",
+ "detail": "structured.central_files: devops_culture_git/0-environment.md absent de l'entrée",
+ "id": "2ce344566f7e85dc",
+ "label": "work-3",
+ "raw_output": "```json\n{\n  \"reprise\": {\n    \"doing\": \"Finalisation des commits Git dans le projet *holbertonschool-devops-formation/devops_culture_git* (ajout de fichiers README et vérification de l'environnement local).\",\n    \"stopped_at\": \"Échec d'un commit Git combiné (ajout de fichiers + message) dans *devops_culture_git* (code 1, o14), sans résolution immédiate.\",\n    \"open\": [\n      {\n        \"text\": \"Échec du script *check-setup.sh* dans un répertoire de téléchargement (code 127, o7), sans cause identifiée.\",\n        \"kind\": \"command_failure\",\n        \"evidence\": [\"o7\"]\n      },\n      {\n        \"text\": \"Échec du commit Git combiné dans *devops_culture_git* (code 1, o14), sans explication sur le contenu ou l'état des fichiers.\",\n        \"kind\": \"command_failure\",\n        \"evidence\": [\"o14\"]\n      }\n    ]\n  },\n  \"structured\": {\n    \"project\": \"holbertonschool-devops-formation/devops_culture_git\",\n    \"intents\": [\n      \"Documenter le projet via des fichiers README\",\n      \"Vérifier la configuration locale (script *check-setup.sh*)\",\n      \"Gérer des commits Git avec messages explicites\"\n    ],\n    \"central_files\": [\n      \"devops_culture_git/0-environment.md\",\n      \"README.md\",\n      \"devops_culture_git/README.md\"\n    ],\n    \"blockers\": [\n      \"Échec récurrent du script *check-setup.sh* (codes 127/1, o7/o8/o10) dans un répertoire externe\",\n      \"Problème de commit Git non résolu dans *devops_culture_git* (o14)\",\n      \"Absence de contexte sur les causes des échecs (sorties non collectées)\"\n    ],\n    \"confidence\": \"medium\"\n  }\n}\n```",
+ "status": "rejected",
+ "why": "La plus ambiguë : 4 projets, 0 fichier."
+}

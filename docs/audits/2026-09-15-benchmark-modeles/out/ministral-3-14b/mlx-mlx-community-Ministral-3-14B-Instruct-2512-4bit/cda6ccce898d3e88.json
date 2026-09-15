@@ -1,0 +1,46 @@
+{
+ "commit_references": {
+  "o34": "commit:a11e7b5",
+  "o35": "commit:2beaf51"
+ },
+ "date": "2026-09-03",
+ "id": "cda6ccce898d3e88",
+ "label": "work-3",
+ "open_items": [
+  {
+   "evidence": [
+    "o34"
+   ],
+   "kind": "recorded_statement",
+   "quote": "Sur une base neuve, deux premiers connecteurs simultanés se disputent le verrou exclusif du PRAGMA journal_mode=WAL, qui ne passe pas par le busy handler : « database is locked », 13 fois sur 40 en local, et le test de concurrence de la CI en dépendait.",
+   "text": "Problème de verrouillage concurrentiel sur PRAGMA journal_mode=WAL persistant sur des bases neuves, nécessitant une validation des retries et des délais de timeout."
+  }
+ ],
+ "reprise": {
+  "doing": "Correction d'une course de verrou en base SQLite lors de la configuration du journal WAL, avec ajout de mécanismes de retry et de timeout pour éviter les blocages « database is locked ».",
+  "open": "Point déclaré dans un commit : Problème de verrouillage concurrentiel sur PRAGMA journal_mode=WAL persistant sur des bases neuves, nécessitant une validation des retries et des délais de timeout (« Sur une base neuve, deux premiers connecteurs simultanés se disputent le verrou exclusif du PRAGMA journal_mode=WAL, qui ne passe pas par le busy handler : « database is locked », 13 fois sur 40 en local, et le test de concurrence de la CI en dépendait. »).",
+  "stopped_at": "Dernier commit documentant la résolution du problème de verrouillage concurrentiel dans `producer_outbox.py` et tests associés, avec mise à jour des versions et changelog."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [
+   "Validation des retries et délais de timeout sur des cas réels de concurrence",
+   "Vérification de l'absence de régression sur les tests CI existants",
+   "Documentation des constantes de module introduites (busy_timeout, délais)"
+  ],
+  "central_files": [
+   "core/daemon_v2/producer_outbox.py",
+   "core/tests_v2/test_producer_outbox.py",
+   "core/VERSION",
+   "core/CHANGELOG.md"
+  ],
+  "confidence": "medium",
+  "intents": [
+   "Corriger une course de verrou SQLite lors de l'initialisation de WAL",
+   "Ajouter des retries et un timeout pour les erreurs « database is locked »",
+   "Valider la solution sur des tests de concurrence (4 créateurs simultanés)"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Courte (~10 min), dense en fichiers."
+}

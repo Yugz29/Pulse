@@ -1,0 +1,46 @@
+{
+ "commit_references": {
+  "o1": "commit:d255672",
+  "o13": "commit:f77db5f",
+  "o19": "commit:1dc191e",
+  "o2": "commit:fd65d52",
+  "o3": "commit:e10d770"
+ },
+ "date": "2026-09-06",
+ "id": "eef4956b36dd37ce",
+ "label": "work-3",
+ "open_items": [
+  {
+   "evidence": [
+    "o19"
+   ],
+   "kind": "recorded_statement",
+   "quote": "D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) : noté dans intelligence/TODOS.md, à juger au jour 2.",
+   "text": "Le défaut D1 (recopie du previous_summary) n'est pas mesurable sur le corpus actuel et doit être jugé au jour 2 du dogfooding."
+  }
+ ],
+ "reprise": {
+  "doing": "Développement du module intelligence de Pulse : implémentation du prompt v2, correction du watcher de fichiers et journalisation du dogfooding jour 1.",
+  "open": "Point déclaré dans un commit : Le défaut D1 (recopie du previous_summary) n'est pas mesurable sur le corpus actuel et doit être jugé au jour 2 du dogfooding (« D1 n'est pas mesurable sur le corpus (aucune session à `previous_summary`) : noté dans intelligence/TODOS.md, à juger au jour 2. »).",
+  "stopped_at": "Modification des fichiers de documentation et du prompt v2 (o20-o23) après le commit o19 sur la branche ship/prompt-v2."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "intelligence/pulse_intelligence/prompts/session_summary_v2.md",
+   "docs/dogfooding.md",
+   "intelligence/TODOS.md",
+   "docs/specs/2026-09-05-llm-provider.md",
+   "core/.python-version"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Améliorer la qualité des résumés de session via le prompt v2",
+   "Corriger la couverture du watcher de fichiers pour la racine du dépôt",
+   "Documenter les décisions et les résultats du dogfooding"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D1 du jour 2 (work-3 du 2026-09-06, 54 min) : seule session du jour résumée avec annexe (a0aacd1f), dont la v2 recopie encore le open. Ajoutée le 2026-09-06, hors gel des dix d'origine. Contexte pris à fin − 1 s ; reproduit l'input_hash du résumé v2 émis."
+}

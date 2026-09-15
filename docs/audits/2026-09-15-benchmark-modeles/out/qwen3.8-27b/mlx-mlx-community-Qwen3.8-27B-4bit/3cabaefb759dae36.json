@@ -1,0 +1,36 @@
+{
+ "commit_references": {
+  "o10": "commit:59b1a7f",
+  "o14": "commit:eaece45",
+  "o4": "commit:9a53679",
+  "o7": "commit:639d175"
+ },
+ "date": "2026-09-02",
+ "id": "3cabaefb759dae36",
+ "label": "work-6",
+ "open_items": [],
+ "reprise": {
+  "doing": "Implémentation du Context API (roadmap V3) : création de context_snapshot.py, ajout de la route GET /context, intégration dans /status et status.sh, et mise à jour de la documentation.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "Mise à jour des fichiers de documentation (AGENTS.md, CLAUDE.md, README.md, CHANGELOG.md, VERSION, VISION.md) après le dernier commit eaece45."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/context_snapshot.py",
+   "core/daemon_v2/routes.py",
+   "core/tests_v2/test_context_snapshot.py",
+   "core/scripts/status.sh",
+   "core/daemon_v2/trace_store.py"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Implémenter le module context_snapshot déterministe",
+   "Exposer la route GET /context avec validation des paramètres",
+   "Consommer le Context API dans /status et status.sh"
+  ],
+  "project": "Pulse"
+ },
+ "why": "La plus grosse (~6500 tok) — sert au spike B. Agent."
+}

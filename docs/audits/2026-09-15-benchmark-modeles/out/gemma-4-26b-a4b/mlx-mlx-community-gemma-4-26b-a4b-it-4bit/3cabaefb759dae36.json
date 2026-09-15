@@ -1,0 +1,36 @@
+{
+ "commit_references": {
+  "o10": "commit:59b1a7f",
+  "o14": "commit:eaece45",
+  "o4": "commit:9a53679",
+  "o7": "commit:639d175"
+ },
+ "date": "2026-09-02",
+ "id": "3cabaefb759dae36",
+ "label": "work-6",
+ "open_items": [],
+ "reprise": {
+  "doing": "Développement de l'API de contexte (Context API) pour extraire des snapshots de l'état du système via TraceStore.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "Mise à jour des fichiers de documentation et de version (README, CHANGELOG, VERSION) après l'intégration de la route /status."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [
+   "core/daemon_v2/context_snapshot.py",
+   "core/daemon_v2/routes.py",
+   "core/scripts/status.sh",
+   "core/tests_v2/test_context_snapshot.py",
+   "docs/specs/2026-09-02-context-api.md"
+  ],
+  "confidence": "high",
+  "intents": [
+   "Implémentation de build_context_snapshot pour un état déterministe",
+   "Exposition de la route GET /context",
+   "Consommation de l'API par /status et status.sh"
+  ],
+  "project": "Pulse"
+ },
+ "why": "La plus grosse (~6500 tok) — sert au spike B. Agent."
+}

@@ -1,0 +1,23 @@
+{
+ "commit_references": {},
+ "date": "2026-09-05",
+ "id": "8af930d9ef437d2a",
+ "label": "work-2",
+ "open_items": [],
+ "reprise": {
+  "doing": "Exploration initiale du répertoire ~/Projets/Pulse/intelligence/ via une commande de répertoire récursif (ls -R) pour cartographier la structure des fichiers.",
+  "open": "Aucun point ouvert étayé par les faits de la session.",
+  "stopped_at": "Commande `ls -R ~/Projets/Pulse/intelligence/` exécutée avec succès (exit_code: 0) à l'instant initial (0.0s), sans observation ultérieure."
+ },
+ "status": "ok",
+ "structured": {
+  "blockers": [],
+  "central_files": [],
+  "confidence": "low",
+  "intents": [
+   "Cartographie des fichiers dans intelligence/"
+  ],
+  "project": "Pulse"
+ },
+ "why": "Cas D3 du jour 2 (work-2 du 2026-09-05, 17 min, 1 activité) : open v2 « L'état de la PR #28 et la branche courante n'ont pas été confirmés » tiré de la demande initiale de l'annexe agent_session. Première session de sa journée, sans previous_summary. Ajoutée le 2026-09-06, hors gel."
+}
