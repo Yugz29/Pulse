@@ -84,6 +84,11 @@ l'utilisateur ; la production reste sur `mlx-community/Qwen3.8-27B-4bit`.**
   compare pas tel quel aux 21,6 Go cités plus haut, dont la méthode n'est pas
   consignée. Toutes ces preuves sont versionnées (voir « Rejeu ») et
   redonnent chaque chiffre du tableau.
+- **Portée.** La mesure ne vaut que pour `eval/observed` en reconstruction 2
+  sous prompt v7 : un refigement du corpus oblige à rejouer l'étalon. Durées
+  et pic dépendent en plus de la machine et des versions du passage (Apple
+  M3 Max 36 Go, mlx-lm 0.31.3, mlx 0.32.2) : un candidat mesuré dans
+  d'autres conditions ne s'y compare pas tel quel.
 
 ### Rejets
 
@@ -170,23 +175,26 @@ ce cas est versée à l'entrée du TODO.
 
 ### Rejeu
 
-- **Preuves versionnées** au commit
-  `a0a7880c1747e22e10d1ef5205e3ed3cad5d25d4`, sous
-  [`docs/audits/2026-09-15-benchmark-modeles/`](../audits/2026-09-15-benchmark-modeles/) :
-  les 14 sorties et le `meta.json` de chaque modèle (`out/`), l'extrait
+- **Preuves versionnées**, à côté de cette note, sous
+  [`2026-09-14-benchmark-modeles-en-local/`](2026-09-14-benchmark-modeles-en-local/) :
+  les 14 sorties et le `meta.json` de chaque modèle (`out/`) et l'extrait
   `time-l.txt` de `run.log` (sortie de `/usr/bin/time -l` des trois
-  passages) et le comparatif. Si le dossier bouge ou disparaît, ce commit
-  les garde : `git show a0a7880:docs/audits/2026-09-15-benchmark-modeles/time-l.txt`.
+  passages). Versionnées d'abord au commit
+  `a0a7880c1747e22e10d1ef5205e3ed3cad5d25d4` sous
+  `docs/audits/2026-09-15-benchmark-modeles/`, où ce commit les garde :
+  `git show a0a7880:docs/audits/2026-09-15-benchmark-modeles/time-l.txt`.
 - **Hors dépôt**, dans `corpus/docs/audits/2026-09-15-benchmark-modeles/` :
   `run.log`, configs, `run-benchmark.sh` (`caffeinate -i ./run-benchmark.sh
   >> run.log 2>&1`), `comparatif.py`, `revalider-chemins-commande.py`,
   paramètres dans le README.
 - Rejets `central_files` repassés au validateur sans modèle :
   `cd intelligence && .venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/revalider-chemins-commande.py`.
-- Matière du jugement : `comparatif-qwen-gemma.md`, les 13 sessions valides
-  des deux côtés, sorties côte à côte, sans verdict ; en annexe, `2ce34456`
-  avec la sortie rejetée de Gemma, hors compte, o10, o11 et o14 résolus.
-  Regénéré depuis `intelligence/` :
+- Matière du jugement : `comparatif-qwen-gemma.md`, sous
+  [`docs/audits/2026-09-15-benchmark-modeles/`](../audits/2026-09-15-benchmark-modeles/),
+  retiré avec ce dossier une fois le verdict consigné : les 13 sessions
+  valides des deux côtés, sorties côte à côte, sans verdict ; en annexe,
+  `2ce34456` avec la sortie rejetée de Gemma, hors compte, o10, o11 et o14
+  résolus. Regénéré depuis `intelligence/` :
   `.venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif.py > ../docs/audits/2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`.
 
 ### Un changement de modèle relance le compteur de l'étape 4

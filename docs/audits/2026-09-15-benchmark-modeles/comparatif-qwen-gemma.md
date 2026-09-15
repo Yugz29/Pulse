@@ -2,9 +2,9 @@
 
 Matière brute pour le jugement humain : les 13 sessions de `intelligence/eval/observed/` valides pour les deux modèles, sorties côte à côte. Aucun verdict, aucun score.
 
-- Passage du 2026-09-15 (`run.log` hors dépôt, `corpus/docs/audits/2026-09-15-benchmark-modeles/`), prompt v7, température 0.0, `llm_max_tokens` 2048 ; sorties copiées ici :
-  - Qwen3.8-27B (étalon) → `out/qwen3.8-27b/mlx-mlx-community-Qwen3.8-27B-4bit/`
-  - Gemma 4 26B-A4B → `out/gemma-4-26b-a4b/mlx-mlx-community-gemma-4-26b-a4b-it-4bit/`
+- Passage du 2026-09-15 (`run.log` hors dépôt, `corpus/docs/audits/2026-09-15-benchmark-modeles/`), prompt v7, température 0.0, `llm_max_tokens` 2048 ; sorties versionnées à côté de la note de décision :
+  - Qwen3.8-27B (étalon) → `docs/decisions/2026-09-14-benchmark-modeles-en-local/out/qwen3.8-27b/mlx-mlx-community-Qwen3.8-27B-4bit/`
+  - Gemma 4 26B-A4B → `docs/decisions/2026-09-14-benchmark-modeles-en-local/out/gemma-4-26b-a4b/mlx-mlx-community-gemma-4-26b-a4b-it-4bit/`
 - En annexe : work-3 `2ce344566f7e85dc` du 2026-08-22, sortie de Gemma rejetée par le validateur, hors compte, à côté de la sortie valide de Qwen.
 - Contexte tiré de la vue figée du corpus (reconstruction 2) : bornes et heures locales, commits, fichiers, commandes (lignes jointes par ⏎) ; `open` tel que validé (`open_items`) ; faits cités résolus en fin de section, message complet pour un commit cité en preuve, statut d'une commande tel que l'entrée du modèle le donne.
 - Sessions dans l'ordre chronologique. Regénérer depuis `intelligence/` (script hors dépôt) : `.venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif.py > ../docs/audits/2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`.

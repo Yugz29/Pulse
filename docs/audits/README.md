@@ -11,7 +11,7 @@ réponse de l'utilisateur** garde un dossier ici.
 | Audit | Ce qui est attendu |
 | --- | --- |
 | [`2026-09-09-adjudication-reprise/`](2026-09-09-adjudication-reprise/) | Les 18 fiches sont répondues (2026-09-10) et la synthèse lue (2026-09-11, décisions consignées dans [`SYNTHESE.md`](2026-09-09-adjudication-reprise/SYNTHESE.md)). Les réponses restent ici comme **vérité terrain reconstruite** tant que le format d'annotation n'est pas validé. Le dossier attend le rejeu sur `open` (trois variantes du prompt v6, en batch) avant de se clore. |
-| [`2026-09-15-benchmark-modeles/`](2026-09-15-benchmark-modeles/) | Le jugement du comparatif Qwen / Gemma, puis le verdict de modèle dans la [note de décision](../decisions/2026-09-14-benchmark-modeles-en-local.md). Le dossier porte aussi, par exception, les sorties, les `meta.json` et l'extrait `time -l` dont la note tire ses chiffres de référence. |
+| [`2026-09-15-benchmark-modeles/`](2026-09-15-benchmark-modeles/) | Le jugement du comparatif Qwen / Gemma, puis le verdict de modèle dans la [note de décision](../decisions/2026-09-14-benchmark-modeles-en-local.md). Les preuves des chiffres de la note, mesure de référence, vivent à côté d'elle, sous [`docs/decisions/2026-09-14-benchmark-modeles-en-local/`](../decisions/2026-09-14-benchmark-modeles-en-local/). |
 
 ## Clos
 
@@ -67,6 +67,6 @@ Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
   des audits retirés (`audits-retired/`). 2,8 Mo le 2026-09-15.
 - Le benchmark du 2026-09-15 l'a rendu concret : les chiffres de référence de
   sa note reposaient sur ce dossier. Les sorties, les `meta.json` et l'extrait
-  `time -l` ont été versionnés à part, sous
-  `2026-09-15-benchmark-modeles/` ; `run.log` et les scripts restent dans
-  `corpus/`.
+  `time -l` ont été versionnés à part, à côté de la note, sous
+  `docs/decisions/2026-09-14-benchmark-modeles-en-local/` ; `run.log` et les
+  scripts restent dans `corpus/`.
