@@ -313,6 +313,29 @@ servie avec un workspace puis un autre.
 **Priority:** P2
 **Depends on:** Aucun
 
+### Rafale de `git checkout` enregistrée comme du travail
+
+**What:** Question ouverte, faits seulement. Un changement de branche
+réécrit d'un coup les fichiers suivis ; le watcher en fait une salve de
+`file_changed` que la vue de session présente comme de l'édition. Cas
+mesuré : work-5 `455cb408` du 2026-09-13 (17:21–17:49), jour 10 du
+dogfooding. De 17:21:26 à 17:21:28, 34 événements `file_changed` portent sur
+exactement les 17 fichiers des deux commits de 14:53 (`e61ccdf` et
+`8a31103`, `34e6db9` et `8648366` sur main) : 13 `modified ×2`, 4 `deleted`
+puis `created`. Le reflog local place `checkout: moving from
+core-html-resumes to main` à 17:21:25 et `pull --ff-only: Fast-forward` à
+17:21:27. Core n'a vu ni l'un ni l'autre : aucun événement de terminal
+pendant la session (3 sur toute la journée du 13), aucun commit,
+`last_observed.git` vide. Pour chaque fichier, la vue ne donne que la nature,
+le nombre et les heures de ses changements. Le résumé v7 en a tiré son
+`doing` (« refonte du daemon v2 ») et ses cinq `central_files` ; verdict de
+l'utilisateur : faux. C'est une question pour Core, pas pour le prompt : avec
+ces faits, aucun modèle ne distingue cette salve d'une vraie salve d'édition.
+
+**Effort:** à estimer
+**Priority:** à décider
+**Depends on:** Aucun
+
 ## Completed
 
 ### Réentrance fatale de PulseApplicationObserver

@@ -1057,3 +1057,62 @@ s'il produit un résumé.**
 (`find_session` compare l'égalité) ; `show` accepte un préfixe. Première
 tentative du soir avec `0ababe11` : « session introuvable sur la période »,
 sans appel au modèle ni changement d'état.
+
+## Jour 10 — 2026-09-14
+
+**Contexte.** Lot launchd 06:32:28 → 14:24:01, prompt v7,
+`Qwen3.8-27B-4bit`, entrée schéma 3, reconstruction 4, `observation_version`
+2, température absente (argmax du runtime ; #96 mergée le soir). 3
+candidates, 3 créées, 0 échec, sur des sessions du 13. Mac en veille pendant
+tout le lot (aucun réveil complet avant 19:43) : `generation_ms` non
+significatif (182,6, 130,0 et 158,9 min).
+
+**Compteur étape 4.** Il démarre à ce jour : la veille du Mac disqualifie la
+mesure de durée, pas le jugement de reprise (décision du 2026-09-15,
+`docs/decisions/2026-09-15-compteur-etape-4-veille-du-mac.md`).
+
+**Verdicts (lecture humaine, 2026-09-15).**
+
+| Session | Verdict | Détail |
+| --- | --- | --- |
+| work-4 `c50774a9` (13, 14:40–14:53) | **juste et utile** | `doing` juste et utile ; `stopped_at` exact ; `open` vide, correct. `central_files` pollué par `core/CHANGELOG.md`, `core/README.md` et `core/VERSION`, qui évincent `test_session_summaries.py` et la note de décision. |
+| work-5 `455cb408` (13, 17:21–17:49) | **faux** | Le `doing` (« refonte du daemon v2 (timeline, traces, sessions) et la création d'audits de diagnostic dans le corpus ») décrit une refonte qui n'a pas eu lieu. Les 17 fichiers changés deux fois de 17:21:26 à 17:21:28 sont la rafale du checkout `core-html-resumes` → `main` (17:21:25) et du `pull --ff-only` qui suit (17:21:27), confirmée par le reflog ; les cinq `central_files` en viennent tous. Le travail réel : le diagnostic dans `corpus/` et cinq passes sur `docs/dogfooding.md`. `stopped_at` vise juste et contredit le `doing`. |
+| work-8 `63c206ed` (13, 19:20–19:43) | **juste et utile**, le meilleur des six | Le `recorded_statement` sur o37 (commit `9fa4c8e`) fonctionne. Réserve : la citation embarque « observation_version 2 sous schéma 3 (attendu) », marqué attendu donc non ouvert ; le modèle a repris la phrase entière sans trancher dedans. |
+
+**TODOS ouverts par ce jour** (sans traitement) : rafale de `git checkout`
+enregistrée comme du travail (`core/TODOS.md`, cas `455cb408`).
+
+## Jour 11 — 2026-09-15
+
+**Contexte.** Lot launchd 06:30:25 → 09:48:12, prompt v7,
+`Qwen3.8-27B-4bit`, entrée schéma 3, reconstruction 4, `observation_version`
+2, premier lot à `temperature=0.0` (#96). 3 candidates, 3 créées, 0 échec ;
+écartées comme trop courtes : work-3 `6f49ffb3` du 14 (0 min) et work-1
+`98171820` du 15 (1 min). Mac en veille 3 h 15 sur 3 h 18, capot fermé :
+`generation_ms` non significatif (190,1, 6,9 et 0,8 min). Le 14 n'a que trois
+sessions, toutes après 22:31 : Mac en veille de 00:53 à 19:43, puis présence
+seule (fenêtres, applications, verrouillage) de 19:57 à 22:28, que la
+reconstruction classe en présence et non en session de travail.
+
+**Verdicts (lecture humaine, 2026-09-15).**
+
+| Session | Verdict | Détail |
+| --- | --- | --- |
+| work-1 `367ea441` (14, 22:31–22:42) | **juste et utile** | « issue #72 » figure dans l'entrée, dans le corps des commits o1 et o4 : aucune invention. |
+| work-2 `00f91935` (14, 23:16–23:24) | **juste et utile** | Même pollution de `central_files` : deux README évincent la note de décision, modifiée quatre fois. |
+| work-2 `84c6dd73` (15, 00:55–01:00) | **juste, inutile à la reprise** | `open` vide alors que le benchmark avait été interrompu en laissant quatre fichiers partiels. Défendable vu l'entrée : l'interruption ne laisse aucun fait qui la dise (`run.log` est modifié à 01:00:11 et les sorties s'arrêtent à la quatrième, mais le contenu n'est pas collecté). |
+
+**Bilan des jours 10 et 11.** 5 justes sur 6, dont 4 utiles ; 1 faux
+(`455cb408`). Compteur de l'étape 4 : 4 reprises justes et utiles sur 6
+depuis son démarrage au jour 10.
+
+**Motifs de la lecture des six résumés.**
+
+- **`open` structurellement vide** : 5 résumés sur 6 à `[]` ; le sixième
+  (`63c206ed`) cite un message de commit de l'utilisateur (`9fa4c8e`, co-écrit
+  en session Claude Code).
+- **`stopped_at` exact partout, utile presque nulle part.**
+- **`central_files` colonisé par les fichiers d'accompagnement** : un README
+  dans 4 résumés sur 6 (`c50774a9`, `63c206ed`, `00f91935`, `84c6dd73`),
+  `CHANGELOG.md` et `VERSION` dans 1 (`c50774a9`), où ils évincent tests et
+  note de décision. Les cinq de `455cb408` viennent de la rafale de checkout.
