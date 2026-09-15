@@ -94,10 +94,13 @@ l'utilisateur ; la production reste sur `mlx-community/Qwen3.8-27B-4bit`.**
   commandes). **Tant que cette règle n'est pas tranchée, ce rejet ne compte
   pas comme un défaut du modèle, et 13/14 ne se compare pas à 14/14 sur ce
   point.** Repassée au validateur sans modèle, en admettant les chemins cités
-  tels quels dans une commande observée, cette sortie est valide.
+  tels quels dans une commande observée, cette sortie est valide, point
+  `open` faux compris (voir « Écarts de contenu »).
 - **Ministral bute au même endroit** sur `2ce34456`
   (`devops_culture_git/0-environment.md`, même commande o14) ; au même rejeu,
-  sa sortie est valide. Ses trois autres rejets sortent de ce cas :
+  sa sortie est valide, alors que son premier point `open` situe o7 « dans un
+  répertoire de téléchargement » (o7 tourne dans `devops_culture_git`). Ses
+  trois autres rejets sortent de ce cas :
   - `1e420dda` : `central_files` cite le dossier `intelligence/llm/` en chemin
     absolu, absent de l'entrée sous cette forme ; `intelligence/llm/`
     n'apparaît que dans le message du commit o3. `eval` tronque la sortie
@@ -107,14 +110,50 @@ l'utilisateur ; la production reste sur `mlx-community/Qwen3.8-27B-4bit`.**
   - `7bbaca78` : `open[0]` est un `recorded_statement` dont la citation vient
     du message d'un tag, dans la commande o5, pas d'un message de commit.
 
-### Écart de contenu
+### Écarts de contenu
 
-**À ce stade, le seul écart de contenu opposable à Gemma est l'attente
-manquée sur `1e420dda`** (work-26 du 2026-09-05) : le point observé sur le
-commit `f30781f` (« consigner la divergence list/run sur le modèle »). Qwen le
-rend en `recorded_statement` avec la citation du commit, Gemma laisse `open`
-vide : 2/3 contre 3/3. Ministral manque la même attente, sa sortie sur
-`1e420dda` étant rejetée.
+Gemma a deux écarts de contenu :
+
+- **Attente manquée sur `1e420dda`** (work-26 du 2026-09-05) : le point
+  observé sur le commit `f30781f` (« consigner la divergence list/run sur le
+  modèle »). Qwen le rend en `recorded_statement` avec la citation du commit,
+  Gemma laisse `open` vide : 2/3 contre 3/3. Ministral manque la même
+  attente, sa sortie sur `1e420dda` étant rejetée.
+- **Preuve qui ne porte pas le texte, sur `2ce34456`** (sortie rejetée) : le
+  deuxième point `open` décrit l'échec o10 (`bash check-setup.s`, code 127,
+  `superseded_observed` par o11) en citant comme preuve o14 (quatre lignes
+  `git add` et `git commit`, code 1, `unresolved_observed`). Le validateur
+  vérifie que la preuve est un dernier échec non résolu, pas que le texte la
+  décrit.
+
+La même lecture des preuves relève deux points `open` valides de Gemma qui
+disent plus que leur preuve, sans la contredire ; ils restent au jugement du
+comparatif :
+
+- `8faf4569` : l'échec est attribué à `git commit` (code 128), alors que o41
+  est une suite de trois lignes (`git add .`, `git commit`, `git push`) dont
+  le code vaut pour l'ensemble (`exit_scope` `whole_command`).
+- `d047b37b` : « Les commandes de migration échouent systématiquement avec
+  des codes de sortie différents (127, 2) », avec o34 seule en preuve
+  (`python3 manage.py migrate`, code 2) ; le 127 est celui de o33
+  (`manage.py migrate`), non cité.
+
+Côté Qwen, aucun point `open` valide ne contredit sa preuve ; deux en disent
+aussi plus qu'elle : sur `8faf4569`, la suite o41 réécrite avec des `&&`
+(citation réécrite, déjà relevée dans la décision v7 du 2026-09-12, 02 o41) ;
+sur `d047b37b`, le code 127 de o33 lu comme « commande non trouvée », sens
+usuel du code que la vue ne confirme pas (sortie des commandes non collectée).
+
+**Conséquence pour le TODO `central_files`.** Assouplir la règle ferait
+passer la sortie de Gemma sur `2ce34456` telle quelle, point faux compris :
+repassée au validateur en admettant les chemins cités tels qu'écrits dans une
+commande observée, elle est valide. Le rejet a protégé la production par
+accident, pas par justesse. Ce constat ne tranche pas le TODO, mais il
+appartient à la décision qui le tranchera. Limite du rejeu : il admet le
+chemin tel qu'écrit. Résolu depuis le cwd de o14
+(`…/holbertonschool-devops-formation/devops_culture_git`), ce chemin
+désignerait `…/devops_culture_git/devops_culture_git/README.md` ; la forme
+relative au cwd, que le TODO envisage, n'a pas été rejouée.
 
 ### Conditions observées
 
@@ -151,8 +190,10 @@ vide : 2/3 contre 3/3. Ministral manque la même attente, sa sortie sur
 - Rejets `central_files` repassés au validateur sans modèle :
   `cd intelligence && .venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/revalider-chemins-commande.py`.
 - Matière du jugement : `comparatif-qwen-gemma.md`, les 13 sessions valides
-  des deux côtés, sorties côte à côte, sans verdict ; regénéré par
-  `/usr/bin/python3 comparatif.py > comparatif-qwen-gemma.md`.
+  des deux côtés, sorties côte à côte, sans verdict ; en annexe, `2ce34456`
+  avec la sortie rejetée de Gemma, hors compte, o10, o11 et o14 résolus.
+  Regénéré depuis `intelligence/` :
+  `.venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif.py > ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`.
 
 ### Un changement de modèle relance le compteur de l'étape 4
 
