@@ -70,3 +70,42 @@ Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
   `time -l` ont été versionnés à part, à côté de la note, sous
   `docs/decisions/2026-09-14-benchmark-modeles-en-local/` ; `run.log` et les
   scripts restent dans `corpus/`.
+
+## Question ouverte : ce que protège le hook de pré-poussée
+
+Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
+
+- `.git/hooks/pre-push` appelle `gstack-redact-prepush` (gstack, hors dépôt,
+  hook « managed »). Il scanne les lignes ajoutées de `<distant>..<local>` ;
+  il ne lit ni les messages de commit, ni l'historique, ni les fichiers
+  binaires.
+- Une alerte HIGH (identifiant) bloque la poussée avant l'envoi. Une alerte
+  MEDIUM (PII, interne) ne bloque pas : le hook n'écrit qu'un nombre, sans
+  fichier, ligne ni chaîne, et la poussée se poursuit dans la même commande.
+- Il scanne en visibilité « private », quelle que soit celle du dépôt.
+- `git push --no-verify` et `GSTACK_REDACT_PREPUSH=skip` le contournent.
+- Le 2026-09-15, sur ce dépôt public, la poussée `6c3b05c..a0a7880` a affiché
+  « 20 MEDIUM finding(s) in pushed diff (PII/internal). Not blocking. » et
+  s'est achevée : les 20 alertes n'ont été listées et lues qu'après
+  publication, par un scan rejoué à part.
+- Depuis le 2026-09-15, `AGENTS.md` fait rejouer ce scan avant `git push` sur
+  un dépôt public.
+
+## Question ouverte : les trailers `Claude-Session` d'un dépôt public
+
+Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
+
+- Le dépôt `Yugz29/Pulse` est public.
+- 234 des 433 messages de commit d'`origin/main` portent une ligne
+  `Claude-Session: https://claude.ai/code/session_…`, pour 18 sessions
+  distinctes, du 2026-08-30 au 2026-09-13.
+- Les faits `commit` des sessions figées recopient ces messages : 49
+  occurrences dans l'arbre d'`origin/main` (`a0a7880`), pour 2 sessions
+  distinctes. 44 sont dans six fichiers d'`intelligence/eval/observed/`, 5 dans
+  `2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`, ajoutées par la
+  poussée du 2026-09-15.
+- Le hook ne lit pas les messages de commit. Sur les lignes ajoutées, son
+  détecteur `env.kv` a signalé les 5 lignes du comparatif en MEDIUM (clé
+  terminée par « Session »).
+- Ce que ces liens ouvrent sans authentification n'est pas établi au
+  2026-09-15 ; l'utilisateur le vérifie.
