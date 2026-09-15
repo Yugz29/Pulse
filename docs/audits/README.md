@@ -103,9 +103,18 @@ Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
   exception est `.env.<suffixe>` précédé d'un point (`.env.local`,
   `.env.staging`, `.env.prod` : aucune alerte) ; un nom précédé d'un tiret bas
   (`my_settings.local`) échappe aussi au motif.
-- Au 2026-09-15, l'arbre suivi ne contient qu'une chaîne de cette forme,
-  celle-là. Toute nouvelle ligne poussée qui cite un tel nom de fichier
-  lèvera la même alerte.
+- Avant ce passage, l'arbre suivi ne contenait qu'une chaîne de cette forme,
+  celle-là ; les exemples ci-dessus en ajoutent dix, que la poussée
+  `d8872b6..f2fd0cd` a signalées. Toute nouvelle ligne poussée qui cite un tel
+  nom de fichier lèvera la même alerte.
+- **Exception décidée par l'utilisateur le 2026-09-15 :** un texte qui
+  documente un détecteur déclenche ce détecteur. La règle de soumission des
+  alertes ne s'applique pas aux passages qui décrivent le hook lui-même. Les
+  10 alertes de la poussée `d8872b6..f2fd0cd`, dues aux exemples ci-dessus,
+  ont été classées fausses d'avance, sans lecture de la liste, après
+  vérification que le scan rejoué n'en levait pas d'autre. Ce fichier porte
+  aussi d'autres questions, qui restent soumises à la règle. L'exception est
+  écrite ici, pas dans `AGENTS.md`, où vit la règle.
 
 ## Question ouverte : les trailers `Claude-Session` d'un dépôt public
 
