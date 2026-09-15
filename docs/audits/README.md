@@ -115,6 +115,11 @@ Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
   vérification que le scan rejoué n'en levait pas d'autre. Ce fichier porte
   aussi d'autres questions, qui restent soumises à la règle. L'exception est
   écrite ici, pas dans `AGENTS.md`, où vit la règle.
+- **Délibérément locale, décision de l'utilisateur le 2026-09-15 :** cette
+  exception n'a pas vocation à monter dans `AGENTS.md`, ne pas le reproposer.
+  Une session future qui soumet quand même ces alertes coûte dix secondes ;
+  une exception permanente mal appliquée peut faire manquer une vraie alerte
+  sur un dépôt public. Le rituel inutile est préféré.
 
 ## Question ouverte : les trailers `Claude-Session` d'un dépôt public
 
