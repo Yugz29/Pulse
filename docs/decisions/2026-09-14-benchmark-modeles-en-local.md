@@ -170,11 +170,13 @@ ce cas est versée à l'entrée du TODO.
 
 ### Rejeu
 
-- **Preuves versionnées**, sous
+- **Preuves versionnées** au commit
+  `a0a7880c1747e22e10d1ef5205e3ed3cad5d25d4`, sous
   [`docs/audits/2026-09-15-benchmark-modeles/`](../audits/2026-09-15-benchmark-modeles/) :
   les 14 sorties et le `meta.json` de chaque modèle (`out/`), l'extrait
   `time-l.txt` de `run.log` (sortie de `/usr/bin/time -l` des trois
-  passages) et le comparatif.
+  passages) et le comparatif. Si le dossier bouge ou disparaît, ce commit
+  les garde : `git show a0a7880:docs/audits/2026-09-15-benchmark-modeles/time-l.txt`.
 - **Hors dépôt**, dans `corpus/docs/audits/2026-09-15-benchmark-modeles/` :
   `run.log`, configs, `run-benchmark.sh` (`caffeinate -i ./run-benchmark.sh
   >> run.log 2>&1`), `comparatif.py`, `revalider-chemins-commande.py`,
