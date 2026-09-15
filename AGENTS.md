@@ -107,3 +107,8 @@ une règle de contrat :
 - Quand la cible est publique, aucune alerte de hook n'est classée fausse
   sans que l'utilisateur l'ait lue : lui présenter la liste brute (fichier,
   ligne, chaîne détectée, raison) et le laisser trancher.
+- Sur un dépôt public, rejouer le scan sur le diff à pousser avant
+  `git push`, avec la même entrée que le hook (lignes ajoutées de
+  `git diff --unified=0 <distant>..<local>`), et soumettre les alertes à
+  l'utilisateur avant de pousser : le hook ne bloque pas en MEDIUM et ne
+  rend ses alertes qu'une fois la poussée partie.
