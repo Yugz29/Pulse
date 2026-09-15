@@ -1,7 +1,8 @@
 # Benchmark de modèles : le verdict se prend en local
 
 **Date :** 2026-09-14
-**Statut :** tranchée ; benchmark pas encore lancé
+**Statut :** tranchée ; benchmark passé le 2026-09-15, choix du modèle en
+attente du jugement humain
 **Voir :** [modèle local du 2026-09-06](2026-09-06-modele-local-qwen.md),
 [température explicite](2026-09-14-temperature-explicite.md)
 
@@ -53,3 +54,114 @@ l'agent et au code.
 - **Limite.** Aucune comparaison avec `mistral-common`, non installé : la
   concordance avec le tokenizer de référence de Mistral repose sur l'identité
   des regex, pas sur une tokenisation mesurée contre lui.
+
+## Résultats du 2026-09-15
+
+Passage complet de 10:09 à 10:32, un modèle en mémoire à la fois, prompt v7
+sur les 14 sessions d'`eval/observed`. **Verdict en attente du jugement de
+l'utilisateur ; la production reste sur `mlx-community/Qwen3.8-27B-4bit`.**
+
+| | Qwen3.8-27B (étalon) | Gemma 4 26B-A4B | Ministral 3 14B |
+| --- | --- | --- | --- |
+| Sorties valides | 14/14 | 13/14 | 10/14 |
+| Attentes annotées (journal d'`eval`) | 3/4 | 2/4 | 2/4 |
+| dont atteignables en v7 | 3/3 | 2/3 | 2/3 |
+| Génération, somme des 14 sessions | 739 s | 143 s | 467 s |
+| Génération, médiane par session | 43,4 s | 8,7 s | 27,7 s |
+| Durée du processus (`real`) | 744 s | 148 s | 470 s |
+| Pic mémoire | 23,9 Go | 19,3 Go | 17,1 Go |
+| Tokens d'entrée / de sortie | 77 696 / 4 066 | 82 926 / 3 419 | 80 608 / 5 784 |
+| Code de sortie d'`eval` | 0 | 1 | 1 |
+
+- **Attentes atteignables.** Sur `eef4956b`, l'attente est un point
+  `carried_over` repris de `previous_summary:1` ; v7 ne reçoit plus d'annexe
+  (`uses_annexes("v7")` est faux), aucun modèle ne peut la satisfaire.
+- **Mesures.** Durées et tokens viennent de `meta.json`, tokens comptés par
+  le tokenizer de chaque modèle. Durée du processus et pic viennent de
+  `/usr/bin/time -l` (`real`, `peak memory footprint` en octets, ici en Go
+  décimaux), pris de la même façon pour les trois. Ce pic ne se compare pas
+  tel quel aux 21,6 Go cités plus haut, dont la méthode n'est pas consignée.
+
+### Rejets
+
+- **Gemma, `2ce34456`** (work-3 du 2026-08-22) : `structured.central_files:
+  devops_culture_git/README.md absent de l'entrée`. La session n'a aucun fait
+  `file` ; le chemin figure tel quel dans la commande o14 (quatre lignes
+  `git add` et `git commit`, code 1). Le rejet tombe sur le TODO ouvert
+  « `central_files` n'accepte que les faits `file` » (`intelligence/TODOS.md`,
+  P3, « à décider, pas à implémenter »), même cas que le rejet de work-5
+  `057a0f56` du 2026-09-11 au lot du 12 (`config.yml`, cité dans trois
+  commandes). **Tant que cette règle n'est pas tranchée, ce rejet ne compte
+  pas comme un défaut du modèle, et 13/14 ne se compare pas à 14/14 sur ce
+  point.** Repassée au validateur sans modèle, en admettant les chemins cités
+  tels quels dans une commande observée, cette sortie est valide.
+- **Ministral bute au même endroit** sur `2ce34456`
+  (`devops_culture_git/0-environment.md`, même commande o14) ; au même rejeu,
+  sa sortie est valide. Ses trois autres rejets sortent de ce cas :
+  - `1e420dda` : `central_files` cite le dossier `intelligence/llm/` en chemin
+    absolu, absent de l'entrée sous cette forme ; `intelligence/llm/`
+    n'apparaît que dans le message du commit o3. `eval` tronque la sortie
+    brute à 2 000 caractères : elle ne se rejoue pas.
+  - `6a416635` : `open[0]` cite l'échec o20 (`git add vue/ .gitignore`,
+    code 128), `superseded_observed` par o23.
+  - `7bbaca78` : `open[0]` est un `recorded_statement` dont la citation vient
+    du message d'un tag, dans la commande o5, pas d'un message de commit.
+
+### Écart de contenu
+
+**À ce stade, le seul écart de contenu opposable à Gemma est l'attente
+manquée sur `1e420dda`** (work-26 du 2026-09-05) : le point observé sur le
+commit `f30781f` (« consigner la divergence list/run sur le modèle »). Qwen le
+rend en `recorded_statement` avec la citation du commit, Gemma laisse `open`
+vide : 2/3 contre 3/3. Ministral manque la même attente, sa sortie sur
+`1e420dda` étant rejetée.
+
+### Conditions observées
+
+- **Machine et code.** Apple M3 Max, 36 Go ; main à `6c3b05c`, mlx-lm
+  0.31.3, mlx 0.32.2, transformers 5.16.1, hors ligne. Config de production où
+  seul `model_id` change : prompt v7, `llm_max_tokens` 2048, température 0.0,
+  plafond d'entrée 30 000.
+- **Déroulé.** Relance complète du passage lancé le 15 à 00:56 et arrêté à
+  01:00 à la demande, pendant l'étalon. Le lot launchd du jour avait fini à
+  09:48 : aucun autre modèle en mémoire. Avant la relance, `run-benchmark.sh`
+  a été corrigé : il journalisait toujours `exit=0` (`$?` lu après un
+  `$(date)`), et il reporte désormais aussi un passage tant que
+  `com.pulse.intelligence-run` tourne.
+- **Alimentation et veille.** Lancé au branchement du secteur (10:09:14),
+  capot ouvert, sous `caffeinate -i` ; aucune transition de veille dans
+  `pmset -g log` entre 09:46 et 10:37. **Batterie déchargée sur secteur** :
+  79 % à 10:09 et 65 % à 10:33, sur secteur et en charge aux deux relevés ;
+  le chargeur de 68 W ne couvre pas la charge d'inférence.
+- **Corpus antérieur à la reconstruction courante.** Les 14 sessions sont
+  figées en reconstruction 2 (observations v1, contexte schéma 2) ; le Core de
+  production sert la reconstruction 4 au schéma 3, et `eval` l'a signalé à
+  chaque passage. Les trois modèles lisent la même entrée, qui n'est pas la
+  vue servie aujourd'hui.
+- **Tokenizer.** L'avertissement `fix_mistral_regex` s'affiche au chargement
+  de Ministral ; le drapeau n'est pas passé (faux positif, section
+  précédente).
+
+### Rejeu
+
+- Dossier hors dépôt `corpus/docs/audits/2026-09-15-benchmark-modeles/` :
+  `caffeinate -i ./run-benchmark.sh >> run.log 2>&1` ; sorties
+  `out/<modèle>/…/<session>.json` et `meta.json`, journal `run.log`,
+  paramètres dans le README.
+- Rejets `central_files` repassés au validateur sans modèle :
+  `cd intelligence && .venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/revalider-chemins-commande.py`.
+- Matière du jugement : `comparatif-qwen-gemma.md`, les 13 sessions valides
+  des deux côtés, sorties côte à côte, sans verdict ; regénéré par
+  `/usr/bin/python3 comparatif.py > comparatif-qwen-gemma.md`.
+
+### Un changement de modèle relance le compteur de l'étape 4
+
+`model_id` entre dans l'identité d'un résumé : `summary_event_id` hache la
+session, la version de prompt et le modèle
+(`intelligence/pulse_intelligence/session_summary.py`), et la sélection ne
+tient une session pour résumée que sous le même triplet (`selection.py`). Un
+autre modèle produit donc d'autres résumés, y compris pour les sessions encore
+dans `lookback_days`. **Un changement de modèle relance le compteur de
+l'étape 4** (spec du 2026-09-03, §12, repris par la décision du 2026-09-12 sur
+v7) : la décision de modèle doit être datée avant d'accumuler des jours de
+compteur, pas après.
