@@ -1,8 +1,8 @@
 # Benchmark de modèles : le verdict se prend en local
 
 **Date :** 2026-09-14
-**Statut :** tranchée ; benchmark passé le 2026-09-15, choix du modèle en
-attente du jugement humain
+**Statut :** tranchée ; les deux candidats écartés après lecture, production
+inchangée
 **Voir :** [modèle local du 2026-09-06](2026-09-06-modele-local-qwen.md),
 [température explicite](2026-09-14-temperature-explicite.md)
 
@@ -58,8 +58,10 @@ l'agent et au code.
 ## Résultats du 2026-09-15
 
 Passage complet de 10:09 à 10:32, un modèle en mémoire à la fois, prompt v7
-sur les 14 sessions d'`eval/observed`. **Verdict en attente du jugement de
-l'utilisateur ; la production reste sur `mlx-community/Qwen3.8-27B-4bit`.**
+sur les 14 sessions d'`eval/observed`. **Verdict du 2026-09-15 : Gemma 4
+26B-A4B et Ministral 3 14B écartés après lecture ; la production reste sur
+`mlx-community/Qwen3.8-27B-4bit`, config inchangée** (voir « Verdict et
+leçon »).
 
 | | Qwen3.8-27B (étalon) | Gemma 4 26B-A4B | Ministral 3 14B |
 | --- | --- | --- | --- |
@@ -147,6 +149,28 @@ accident, pas par justesse. Ce constat ne tranche pas le TODO, mais il
 appartient à la décision qui le tranchera ; la forme d'admission mesurée sur
 ce cas est versée à l'entrée du TODO.
 
+### Verdict et leçon
+
+- **Décision de l'utilisateur, le 2026-09-15 :** Gemma 4 26B-A4B et
+  Ministral 3 14B sont écartés. La production reste sur
+  `mlx-community/Qwen3.8-27B-4bit`, configuration inchangée.
+- **Défaut confirmé à la lecture de l'annexe `2ce34456`.** Le second point
+  `open` de Gemma décrit o10, la coquille `bash check-setup.s` (code 127,
+  `superseded_observed` par o11, huit secondes plus tard : 21:48:33 puis
+  21:48:41), en citant o14, la chaîne `git add` / `git commit` (code 1).
+- **Leçon du benchmark.** Le validateur vérifie que la preuve citée existe et
+  remplit la condition de sa nature (dernier échec non résolu pour
+  `command_failure`, citation exacte d'un message de commit pour
+  `recorded_statement`), pas que le texte corresponde à cette preuve. Un
+  résumé peut donc être valide et faux : aucun contrôle automatique ne
+  compare le texte à sa preuve, seul le jugement humain l'attrape. C'est la
+  leçon du benchmark autant que le choix du modèle.
+- **Deux points de lecture sur `2ce34456`.** Le `doing` de Gemma perd toute la
+  partie DevNote de la session (o1 à o3, cwd DevNote : `git status` puis deux
+  commandes de commit, `feat(search)` et `fix(search)`) ; celui de Qwen la
+  garde. Gemma rend `confidence`
+  `high` là où Qwen rend `medium`.
+
 ### Conditions observées
 
 - **Machine et code.** Apple M3 Max, 36 Go ; main à `6c3b05c`, mlx-lm
@@ -189,13 +213,14 @@ ce cas est versée à l'entrée du TODO.
   paramètres dans le README.
 - Rejets `central_files` repassés au validateur sans modèle :
   `cd intelligence && .venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/revalider-chemins-commande.py`.
-- Matière du jugement : `comparatif-qwen-gemma.md`, sous
-  [`docs/audits/2026-09-15-benchmark-modeles/`](../audits/2026-09-15-benchmark-modeles/),
-  retiré avec ce dossier une fois le verdict consigné : les 13 sessions
-  valides des deux côtés, sorties côte à côte, sans verdict ; en annexe,
-  `2ce34456` avec la sortie rejetée de Gemma, hors compte, o10, o11 et o14
-  résolus. Regénéré depuis `intelligence/` :
-  `.venv/bin/python ../corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif.py > ../docs/audits/2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`.
+- Matière du jugement : `comparatif-qwen-gemma.md`, les 13 sessions valides
+  des deux côtés, sorties côte à côte, sans verdict ; en annexe, `2ce34456`
+  avec la sortie rejetée de Gemma, hors compte, o10, o11 et o14 résolus.
+  Retiré de `docs/audits/` le 2026-09-15, une fois le verdict consigné ;
+  dernier état au commit `69deebf7d8dedc2d6c65acf682e7b617011d1416`
+  (`git show 69deebf:docs/audits/2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`),
+  copie locale dans `corpus/docs/audits-retired/2026-09-15-benchmark-modeles/`.
+  Le générateur reste `corpus/docs/audits/2026-09-15-benchmark-modeles/comparatif.py`.
 
 ### Un changement de modèle relance le compteur de l'étape 4
 

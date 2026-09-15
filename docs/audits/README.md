@@ -11,13 +11,13 @@ réponse de l'utilisateur** garde un dossier ici.
 | Audit | Ce qui est attendu |
 | --- | --- |
 | [`2026-09-09-adjudication-reprise/`](2026-09-09-adjudication-reprise/) | Les 18 fiches sont répondues (2026-09-10) et la synthèse lue (2026-09-11, décisions consignées dans [`SYNTHESE.md`](2026-09-09-adjudication-reprise/SYNTHESE.md)). Les réponses restent ici comme **vérité terrain reconstruite** tant que le format d'annotation n'est pas validé. Le dossier attend le rejeu sur `open` (trois variantes du prompt v6, en batch) avant de se clore. |
-| [`2026-09-15-benchmark-modeles/`](2026-09-15-benchmark-modeles/) | Le jugement du comparatif Qwen / Gemma, puis le verdict de modèle dans la [note de décision](../decisions/2026-09-14-benchmark-modeles-en-local.md). Les preuves des chiffres de la note, mesure de référence, vivent à côté d'elle, sous [`docs/decisions/2026-09-14-benchmark-modeles-en-local/`](../decisions/2026-09-14-benchmark-modeles-en-local/). |
 
 ## Clos
 
-Retirés du dépôt le 2026-09-09 : leurs conclusions sont dans les décisions et
-le journal listés ci-dessous. Les rapports complets sont dans l'historique Git
-(dernier commit avant le retrait) et, localement, dans
+Retirés du dépôt une fois la réponse consignée (le 2026-09-09 pour les huit
+premiers, le 2026-09-15 pour le benchmark de modèles) : leurs conclusions sont
+dans les décisions et le journal listés ci-dessous. Les rapports complets sont
+dans l'historique Git (dernier commit avant le retrait) et, localement, dans
 `corpus/docs/audits-retired/`.
 
 | Date | Audit | Verdict | Où c'est consigné |
@@ -30,6 +30,7 @@ le journal listés ci-dessous. Les rapports complets sont dans l'historique Git
 | 09-08 | Observations ordonnées | `/context` schéma 3, entrée v2 / prompt v4 ; `open` régresse encore | [décision](../decisions/2026-09-08-observations-ordonnees.md) |
 | 09-08 | Reprise fondée | Prompt v5 : 14/14 valides, 2/4 attentes humaines ; non fiable au quotidien sans relecture | [décision](../decisions/2026-09-08-reprise-fondee.md) |
 | 09-09 | Assouplissement des consignes | Gel de Core levé, `AGENTS.md` unique, autonomie bornée au chantier | [décision](../decisions/2026-09-09-assouplissement-instructions.md) |
+| 09-15 | Benchmark de modèles (étalon Qwen3.8-27B, Gemma 4 26B-A4B, Ministral 3 14B ; prompt v7, 14 sessions) | Les deux candidats écartés après lecture, production inchangée ; un résumé peut être valide et faux. Comparatif retiré (dernier état au commit `69deebf`) ; preuves conservées sous `docs/decisions/2026-09-14-benchmark-modeles-en-local/` | [décision](../decisions/2026-09-14-benchmark-modeles-en-local.md) |
 
 ## Rejouer un audit
 
@@ -150,7 +151,8 @@ de sécurité.
   occurrences dans l'arbre d'`origin/main` (`a0a7880`), pour 2 sessions
   distinctes. 44 sont dans six fichiers d'`intelligence/eval/observed/`, 5 dans
   `2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`, ajoutées par la
-  poussée du 2026-09-15.
+  poussée du 2026-09-15 ; ce comparatif est retiré du dépôt le même jour,
+  l'historique garde ses 5 lignes.
 - Aucun contrôle local n'a lu ces messages avant publication. Le hook de
   pré-poussée ne scanne jamais les messages de commit (et n'existe que depuis
   le 2026-08-31, 00:14). Les trois règles de poussée d'`AGENTS.md` portent sur

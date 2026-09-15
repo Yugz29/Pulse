@@ -110,6 +110,11 @@ terminé en code 1, sortie non collectée.
   `…/devops_culture_git/README.md`, que le même texte désigne lu depuis le
   dossier parent (cwd de o4 et o5). La forme littérale admet donc un chemin
   qui, résolu là où la commande tourne, ne correspond à rien d'observé.
+- Le fichier existe : o6 le crée (`touch README.md`, code 0, cwd
+  `…/devops_culture_git`). La vue n'a aucun fait `file` parce que le watcher
+  n'a rien remonté ce jour-là : aucun événement `file_changed` le 2026-08-22,
+  pour aucun chemin. C'est donc la forme du chemin qui est en cause, pas son
+  existence.
 - Forme relative au cwd : non rejouée. Elle écarte ce chemin si la citation
   du modèle doit égaler le chemin résolu, pas si la citation est elle-même
   résolue depuis le même cwd.
