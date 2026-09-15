@@ -103,3 +103,7 @@ une règle de contrat :
   préparer le résultat révisable puis poser une question précise ; continuer
   les travaux indépendants. Ne pas redemander une autorisation déjà donnée
   pour la même action dans le même chantier.
+- La visibilité d'un dépôt se vérifie avant toute poussée, jamais après.
+- Quand la cible est publique, aucune alerte de hook n'est classée fausse
+  sans que l'utilisateur l'ait lue : lui présenter la liste brute (fichier,
+  ligne, chaîne détectée, raison) et le laisser trancher.
