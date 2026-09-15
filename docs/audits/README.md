@@ -89,7 +89,23 @@ Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
   s'est achevée : les 20 alertes n'ont été listées et lues qu'après
   publication, par un scan rejoué à part.
 - Depuis le 2026-09-15, `AGENTS.md` fait rejouer ce scan avant `git push` sur
-  un dépôt public.
+  un dépôt public. Rejoué avant la poussée `a0a7880..d8872b6`, il a levé une
+  alerte, lue et classée fausse par l'utilisateur avant l'envoi ; le hook a
+  ensuite affiché la même : « 1 MEDIUM finding(s) ».
+- Cette alerte vient du détecteur `internal.hostname` (« Internal hostname
+  (*.internal/.corp/.local/.prod/.staging) ») sur `settings.local`, dans le
+  nom de fichier `.claude/settings.local.json`. Il signale tout nom de la
+  forme `nom.<suffixe>` pour six suffixes (`local`, `internal`, `corp`, `lan`,
+  `prod`, `staging`), sans distinguer un nom de fichier d'un nom d'hôte et
+  sans tenir compte de la casse. Mesuré le 2026-09-15 : alerte sur
+  `settings.local.json`, `printer.local`, `env.local`, `docker-compose.prod.yml`,
+  `config.staging.json`, `api.internal`, `nas.lan`, `foo.corp`. Sa seule
+  exception est `.env.<suffixe>` précédé d'un point (`.env.local`,
+  `.env.staging`, `.env.prod` : aucune alerte) ; un nom précédé d'un tiret bas
+  (`my_settings.local`) échappe aussi au motif.
+- Au 2026-09-15, l'arbre suivi ne contient qu'une chaîne de cette forme,
+  celle-là. Toute nouvelle ligne poussée qui cite un tel nom de fichier
+  lèvera la même alerte.
 
 ## Question ouverte : les trailers `Claude-Session` d'un dépôt public
 
