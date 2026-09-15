@@ -98,14 +98,37 @@ Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
 - Le dépôt `Yugz29/Pulse` est public.
 - 234 des 433 messages de commit d'`origin/main` portent une ligne
   `Claude-Session: https://claude.ai/code/session_…`, pour 18 sessions
-  distinctes, du 2026-08-30 au 2026-09-13.
+  distinctes. Premier trailer le 2026-08-30 (`b2123e5`, 15:49 +0200),
+  dernier le 2026-09-13 (`0d4a864`, écrit à 22:10 +0200, commité à 22:42).
+- Visibilité sur cette fenêtre : le dépôt est public à chacun des événements
+  que l'API GitHub rend encore, du 2026-09-03 au 2026-09-14, sans passage de
+  privé à public entre-temps (aucun `PublicEvent`). Les événements antérieurs
+  ne sont plus disponibles : 67 des 234 commits (du 2026-08-30 au
+  2026-09-03) étaient déjà sur le distant avant la plus ancienne poussée
+  visible (2026-09-03, 20:04 UTC), et la visibilité du dépôt au moment de
+  leur publication n'est pas établie.
 - Les faits `commit` des sessions figées recopient ces messages : 49
   occurrences dans l'arbre d'`origin/main` (`a0a7880`), pour 2 sessions
   distinctes. 44 sont dans six fichiers d'`intelligence/eval/observed/`, 5 dans
   `2026-09-15-benchmark-modeles/comparatif-qwen-gemma.md`, ajoutées par la
   poussée du 2026-09-15.
-- Le hook ne lit pas les messages de commit. Sur les lignes ajoutées, son
-  détecteur `env.kv` a signalé les 5 lignes du comparatif en MEDIUM (clé
-  terminée par « Session »).
+- Aucun contrôle local n'a lu ces messages avant publication. Le hook de
+  pré-poussée ne scanne jamais les messages de commit (et n'existe que depuis
+  le 2026-08-31, 00:14). Les trois règles de poussée d'`AGENTS.md` portent sur
+  le diff, pas sur les messages. Seules les 5 lignes du comparatif, parce
+  qu'elles sont dans le diff, ont été signalées en MEDIUM par le détecteur
+  `env.kv` (clé terminée par « Session »).
+- Côté GitHub, `secret_scanning` et `secret_scanning_push_protection` sont
+  activés sur le dépôt au 2026-09-15, date d'activation inconnue. La page
+  « About secret scanning » décrit une recherche d'identifiants connus dans
+  l'historique Git ; elle ne dit pas si les messages de commit sont lus.
+- Origine : Claude Code ajoute ce lien aux commits des sessions web et
+  Remote Control (réglage `attribution.sessionUrl`, vrai par défaut). Les
+  transcripts locaux portent la consigne dans les sessions CLI du 2026-09-05
+  au 2026-09-13 ; 199 des 234 commits ont été créés dans ce dépôt local. Aucun
+  trailer depuis le 2026-09-14 (sessions de l'application de bureau). Le
+  2026-09-15, `attribution.sessionUrl` est passé à `false` dans
+  `.claude/settings.local.json`, hors dépôt ; aucun commit existant n'est
+  modifié.
 - Ce que ces liens ouvrent sans authentification n'est pas établi au
   2026-09-15 ; l'utilisateur le vérifie.
