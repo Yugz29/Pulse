@@ -112,3 +112,11 @@ une règle de contrat :
   `git diff --unified=0 <distant>..<local>`), et soumettre les alertes à
   l'utilisateur avant de pousser : le hook ne bloque pas en MEDIUM et ne
   rend ses alertes qu'une fois la poussée partie.
+- Second étage du hook, `scripts/hooks/prepush_local.sh` (installé par
+  `make hooks` comme hook local de gstack, hors dépôt) : sur un dépôt public, il scanne lignes ajoutées
+  et messages de commit et sort en 2 sur une alerte MEDIUM, en listant
+  fichier ou commit, ligne, détecteur et raison. Sur un exit 2, présenter
+  cette liste à l'utilisateur et le laisser trancher. Ne jamais poser
+  `PULSE_PREPUSH_ACK=1` de sa propre initiative : c'est l'utilisateur qui
+  l'accorde, pour une poussée nommée, et l'accord est journalisé dans
+  `~/.gstack/security/prepush-ack.jsonl`.

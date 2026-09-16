@@ -122,6 +122,17 @@ Ouverte le 2026-09-15, à trancher ; aucune solution retenue.
   une exception permanente mal appliquée peut faire manquer une vraie alerte
   sur un dépôt public. Le rituel inutile est préféré.
 
+- **2026-09-16, second étage versionné** (`scripts/hooks/prepush_local.sh`,
+  installé par `make hooks` sous le nom `pre-push.local`, le seul que le
+  wrapper gstack chaîne avant son propre scan) : visibilité par `gh`, scan public des lignes ajoutées et des
+  messages de commit, MEDIUM en exit 2 avec la liste brute, acquittement
+  explicite par `PULSE_PREPUSH_ACK=1` journalisé. Mesure préalable sur les 30
+  dernières mises à jour de `origin/main` : 16 auraient été refusées, toutes
+  antérieures au 15 (trailers `Claude-Session` dans les messages, compteurs
+  `time -l`, URL `127.0.0.1` et horodatage de nom de fichier dans les fiches
+  d'audit, tous classés faux le 16) ; 0 sur les 10 postérieures au 15. Mesure
+  de fatigue à refaire le 30 septembre sur les pushs postérieurs au 15.
+
 ## Question ouverte : les trailers `Claude-Session` d'un dépôt public
 
 Ouverte le 2026-09-15 ; requalifiée le même jour en question d'hygiène, pas
