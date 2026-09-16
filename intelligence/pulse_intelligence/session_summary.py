@@ -31,6 +31,7 @@ from .session_input import (
     input_references,
     serialize_input,
     uses_annexes,
+    uses_compact_input,
     uses_open_items,
 )
 from .state import JobState
@@ -658,7 +659,9 @@ def summarize_session(
     context = client.get_context(at=session.ended_at)
     referenced = uses_open_items(config.prompt_version)
     model_input = build_model_input(
-        session, context, references=referenced, annexes=uses_annexes(config.prompt_version)
+        session, context, references=referenced,
+        annexes=uses_annexes(config.prompt_version),
+        compact=uses_compact_input(config.prompt_version),
     )
     serialized = serialize_input(model_input)
     workspace = context.get("workspace") or {}

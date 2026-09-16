@@ -44,8 +44,28 @@ def uses_open_items(prompt_version: str) -> bool:
 # Pas le défaut : `Config.prompt_version` reste v6 tant que la mesure n'est
 # pas jugée.
 PROMPT_VERSIONS_WITHOUT_ANNEXES = frozenset({
-    "v6", "v6-sans-phrase", "v6-sans-exemple", "v6-sans-phrase-ni-exemple", "v7",
+    "v6", "v6-sans-phrase", "v6-sans-exemple", "v6-sans-phrase-ni-exemple", "v7", "v8",
 })
+
+
+# v8 (chantier expérimental du 2026-09-16, branche exp/intelligence-compact-input) :
+# le texte de v7 plus la description d'une entrée compacte, `input_version`
+# 4. Mêmes faits, mêmes `ref`, moins d'octets : workspace omis quand il est
+# celui de la session, dates arrondies à la seconde, hash de commit abrégé à
+# 12 caractères, faits `file` en tableau à colonnes déclarées une fois. Les
+# messages de commit restent entiers. L'entrée compacte n'est construite que
+# pour ce prompt : v7 reste octet pour octet ce qu'il était.
+COMPACT_INPUT_PROMPT_VERSIONS = frozenset({"v8"})
+COMPACT_INPUT_VERSION = 4
+# Colonnes du tableau des faits `file`, dans cet ordre ; une clé imprévue
+# d'un fait s'ajoute en colonne à la suite, rien n'est perdu. `kind` n'est
+# pas une colonne : tout le tableau est du genre `file`.
+FILE_COLUMNS = ("ref", "at", "path", "changes", "workspace")
+CHANGE_COLUMNS = ("event", "first_at", "last_at", "count")
+COMMIT_HASH_LENGTH = 12
+# Les versions d'entrée fondées sur les observations ordonnées de Core (v3 et
+# sa forme compacte v4) : mêmes références, même validation `open`.
+OBSERVATION_INPUT_VERSIONS = frozenset({3, COMPACT_INPUT_VERSION})
 
 
 # Genres de faits que Core observe mais qu'aucune version de prompt ne décrit :
@@ -71,6 +91,11 @@ def _hidden_refs(observations: Any) -> set[str]:
 def uses_annexes(prompt_version: str) -> bool:
     """Le prompt reçoit-il `previous_summary` et `agent_session` ?"""
     return prompt_version not in PROMPT_VERSIONS_WITHOUT_ANNEXES
+
+
+def uses_compact_input(prompt_version: str) -> bool:
+    """Le prompt décrit-il l'entrée compacte (`input_version` 4) ?"""
+    return prompt_version in COMPACT_INPUT_PROMPT_VERSIONS
 
 
 # Un point par phrase : fin de phrase suivie d'un blanc, ou point-virgule.
@@ -173,7 +198,12 @@ def agent_session_annex(
 
 
 def build_model_input(
-    session: SessionView, context: dict[str, Any], *, references: bool = False, annexes: bool = True
+    session: SessionView,
+    context: dict[str, Any],
+    *,
+    references: bool = False,
+    annexes: bool = True,
+    compact: bool = False,
 ) -> dict[str, Any]:
     """Only useful observations reach the model; never event UUIDs.
 
@@ -183,6 +213,10 @@ def build_model_input(
 
     ``annexes=False`` (prompt v6) : les deux clés restent présentes et valent
     None, comme quand Core n'a rien — aucun cas spécial en aval.
+
+    ``compact=True`` (prompt v8) : mêmes faits et mêmes `ref`, sous la forme
+    compacte de `input_version` 4 (`compact_observations`). Sans ce drapeau,
+    l'entrée est celle de v7, octet pour octet.
     """
     raw = session.raw
     visible = {key: copy.deepcopy(raw.get(key)) for key in (
@@ -195,13 +229,15 @@ def build_model_input(
             fact for fact in visible["observations"].get("timeline", [])
             if fact.get("kind") not in FACT_KINDS_HIDDEN_FROM_MODEL
         ]
+        if compact:
+            visible["observations"] = compact_observations(visible["observations"], visible.get("workspace"))
     else:
         # Targeted read compatibility for frozen corpus / older Core. These
         # lists cannot establish a last result, a file state, or chronology.
         visible["legacy_aggregates"] = {key: copy.deepcopy(raw.get(key)) for key in ("files", "git", "terminal", "apps", "signals")}
         visible["chronology"] = "unavailable_in_legacy_snapshot"
     return {
-        "input_version": 3,
+        "input_version": COMPACT_INPUT_VERSION if compact else 3,
         "session": visible,
         "resumption": {
             "as_of": raw.get("last_activity_at"),
@@ -211,6 +247,90 @@ def build_model_input(
         "previous_summary": previous_summary_annex(context, session, references=references) if annexes else None,
         "agent_session": agent_session_annex(context, session, references=references) if annexes else None,
     }
+
+
+def _second(value: Any) -> Any:
+    """Une date en secondes depuis `time_origin`, arrondie à la seconde entière."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return int(round(value))
+
+
+def _columns(records: list[dict[str, Any]], preferred: tuple[str, ...]) -> list[str]:
+    """Les colonnes réellement portées par ces enregistrements : celles de
+    `preferred` qui apparaissent, dans cet ordre, puis toute clé imprévue."""
+    present = {key for record in records for key in record}
+    columns = [key for key in preferred if key in present]
+    columns.extend(sorted(present - set(preferred)))
+    return columns
+
+
+def compact_observations(observations: dict[str, Any], workspace: str | None) -> dict[str, Any]:
+    """La forme compacte (`input_version` 4) d'observations déjà filtrées.
+
+    Quatre transformations, rien d'autre : le `workspace` d'un fait est omis
+    quand il est celui de la session ; les dates sont arrondies à la seconde ;
+    le hash d'un commit est abrégé à `COMMIT_HASH_LENGTH` ; les faits `file`
+    quittent `timeline` pour le tableau `files` (colonnes déclarées une fois,
+    une ligne par fait, dans l'ordre de la chronologie). Les `ref` ne sont
+    pas renumérotées, les messages de commit restent entiers, aucun fait
+    n'est retiré. `observations` est déjà une copie : modifiée en place.
+    """
+    files: list[dict[str, Any]] = []
+    timeline: list[dict[str, Any]] = []
+    for fact in observations.get("timeline", []):
+        fact = dict(fact)
+        for key in ("at", "started_at"):
+            if key in fact:
+                fact[key] = _second(fact[key])
+        if workspace and fact.get("workspace") == workspace:
+            del fact["workspace"]
+        if fact.get("kind") == "commit" and isinstance(fact.get("hash"), str):
+            fact["hash"] = fact["hash"][:COMMIT_HASH_LENGTH]
+        if fact.get("kind") == "file":
+            del fact["kind"]
+            files.append(fact)
+        else:
+            timeline.append(fact)
+    change_columns = _columns(
+        [change for fact in files for change in fact.get("changes") or [] if isinstance(change, dict)],
+        CHANGE_COLUMNS,
+    )
+    for fact in files:
+        if isinstance(fact.get("changes"), list):
+            fact["changes"] = [
+                [_second(change.get(column)) if column in ("first_at", "last_at") else change.get(column)
+                 for column in change_columns]
+                if isinstance(change, dict) else change
+                for change in fact["changes"]
+            ]
+    columns = _columns(files, FILE_COLUMNS)
+    observations["timeline"] = timeline
+    observations["files"] = {
+        "columns": columns,
+        "change_columns": change_columns,
+        "rows": [[fact.get(column) for column in columns] for fact in files],
+    }
+    observations["applications"] = [
+        {key: _second(value) if key in ("first_at", "last_at") else value for key, value in app.items()}
+        if isinstance(app, dict) else app
+        for app in observations.get("applications", [])
+    ]
+    return observations
+
+
+def expand_file_table(observations: dict[str, Any]) -> list[dict[str, Any]]:
+    """Les faits `file` d'une entrée compacte, redevenus des objets (`kind`
+    compris), pour que la validation les énumère comme ceux de la timeline."""
+    table = observations.get("files")
+    if not isinstance(table, dict):
+        return []
+    columns = table.get("columns") or []
+    return [
+        {"kind": "file", **dict(zip(columns, row))}
+        for row in table.get("rows") or []
+        if isinstance(row, list)
+    ]
 
 
 def serialize_input(model_input: dict[str, Any]) -> str:
@@ -275,7 +395,11 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
     """
     session = model_input.get("session") or {}
     observations = session.get("observations") or {}
-    facts = observations.get("timeline", []) + observations.get("applications", [])
+    facts = (
+        observations.get("timeline", [])
+        + expand_file_table(observations)
+        + observations.get("applications", [])
+    )
     refs: set[str] = {fact["ref"] for fact in facts}
     paths: set[str] = {fact["path"] for fact in facts if fact.get("kind") == "file"}
     # Old reference names remain readable for historical evaluations only.
@@ -308,7 +432,7 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
     previous = model_input.get("previous_summary")
     previous_open: tuple[str, ...] = ()
     if isinstance(previous, dict):
-        if model_input.get("input_version") == 3:
+        if model_input.get("input_version") in OBSERVATION_INPUT_VERSIONS:
             if previous.get("ref"):
                 refs.add(previous["ref"])
         else:
@@ -327,7 +451,7 @@ def input_references(model_input: dict[str, Any]) -> InputReferences:
         paths=frozenset(paths),
         previous_open=previous_open,
         agent_requests=agent_requests,
-        observations={fact["ref"]: fact for fact in facts} if model_input.get("input_version") == 3 else None,
+        observations={fact["ref"]: fact for fact in facts} if model_input.get("input_version") in OBSERVATION_INPUT_VERSIONS else None,
         outcomes=tuple(model_input.get("resumption", {}).get("command_outcomes", [])),
     )
 
