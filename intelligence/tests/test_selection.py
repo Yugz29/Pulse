@@ -40,6 +40,47 @@ def test_short_but_busy_session_is_a_candidate(config):
     assert result.candidate is True
 
 
+def _with_commit(raw, commit_hash: str, at: float):
+    """La forme réelle du schéma 3 : le commit est un fait `commit` de la
+    chronologie des observations, pas un champ `git` de la vue."""
+    raw["observations"] = {
+        "version": 1,
+        "timeline": [
+            {"ref": "o1", "kind": "file", "path": "docs/decisions/x.md", "at": 0.0,
+             "changes": [{"event": "modified", "first_at": 0.0, "last_at": 0.0, "count": 1}]},
+            {"ref": "o2", "kind": "commit", "hash": commit_hash, "branch": "main", "at": at},
+        ],
+        "applications": [],
+        "last_observed": {"commands": [], "files": ["o1"], "git": {"/work/Pulse": {"branch": "o2", "commit": "o2"}}},
+        "sources": {"o1": ["src-1"], "o2": ["src-2"]},
+    }
+    return raw
+
+
+def test_short_session_carrying_a_commit_is_a_candidate(config):
+    # work-9 dd06e6c8 du 2026-09-15 : 3 min, 20 activités, commit 86c0348.
+    raw = _with_commit(
+        session_view("dd06e6c8932f06ee", label="work-9", started=-10, ended=-7, activity_count=20),
+        "86c03480000000000000000000000000000000000", 220.0,
+    )
+    result = classify(SessionView(raw=raw, day=REFERENCE.date()), config=config, model_id="m", known=set())
+
+    assert result.candidate is True
+    assert result.reason == "candidate"
+
+
+def test_zero_minute_session_carrying_a_commit_is_a_candidate(config):
+    # work-10 8069a1f4 du 2026-09-15 : 0 min, 5 activités, commit 626bbad.
+    raw = _with_commit(
+        session_view("8069a1f4a4200e5e", label="work-10", started=-10, ended=-10, activity_count=5),
+        "626bbad48a5b2436027a5e6903590457e265d4af", 9.0,
+    )
+    result = classify(SessionView(raw=raw, day=REFERENCE.date()), config=config, model_id="m", known=set())
+
+    assert result.candidate is True
+    assert result.reason == "candidate"
+
+
 def test_existing_summary_same_version_blocks_and_other_version_does_not(config):
     known = {("aaaaaaaaaaaaaaaa", "v1", "m")}
 
