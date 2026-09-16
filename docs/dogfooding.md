@@ -41,6 +41,21 @@ et `make status` ; depuis `intelligence/`, `.venv/bin/python -m pytest -q`.
 
 ## Reprise — état historique à la fin du 2026-09-07
 
+**Clôture du 2026-09-16.** Mergées : #98 (Intelligence : une session qui
+porte un commit n'est jamais « trop courte »), #99 (Core 0.8.3.0, même
+exception dans le journal ; production relancée vers 17:10, `make status`
+sans STALE), #100 (lot launchd sous `caffeinate -i`), #101 (second étage
+public du hook de pré-poussée, `scripts/hooks/prepush_local.sh`) ; hook
+local installé par `make hooks` le soir.
+
+**Ordre pour le jour 13, 2026-09-17.** Lot de 06:30, le premier avec #98 et
+`caffeinate`. À vérifier : les sessions courtes avec commit devenues
+candidates (combien, qualité des résumés) ; `generation_ms` compté seulement
+pour les générations faites entièrement Mac éveillé ; puis verdicts.
+
+Piste « Résumés dans la journée » consignée dans `intelligence/TODOS.md`
+(P3), non lancée.
+
 **Reprise au 2026-09-11 au soir (ajout du jour 7).** Core de production
 redémarré à 20:48:19 (`launchctl kickstart -k gui/501/com.pulse.daemon`,
 pid 51875, code de main) : `GET /context` sert `schema_version 3`. Le

@@ -120,6 +120,21 @@ retirerait les derniers chemins personnels du dépôt.
 **Priority:** P4
 **Depends on:** Aucun
 
+### `make status` vérifie le hook local de pré-poussée
+
+**What:** Le second étage public du hook (`scripts/hooks/prepush_local.sh`,
+PR #101) vit hors versionnement, installé par `make hooks` à la racine, et
+n'est actif que si le wrapper gstack de `.git/hooks/pre-push` le chaîne. Rien
+ne le contrôle aujourd'hui : une copie périmée, absente ou non exécutable, ou
+un wrapper gstack réinstallé sans chaînage, laissent passer les MEDIUM en
+silence. `make status` devrait vérifier que le hook local est installé,
+identique à la source, exécutable, et toujours appelé par le wrapper gstack,
+et écrire STALE sinon, comme pour les services.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
 ## Daemon V2
 
 ### Coût historique de l’attribution de session — résolu le 2026-09-08
