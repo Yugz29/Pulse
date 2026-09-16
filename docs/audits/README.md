@@ -10,6 +10,7 @@ réponse de l'utilisateur** garde un dossier ici.
 
 | Audit | Ce qui est attendu |
 | --- | --- |
+| [`2026-09-16-entree-compacte/`](2026-09-16-entree-compacte/) | Entrée compacte (`input_version` 4) derrière le prompt v8, branche `exp/intelligence-compact-input`, PR en brouillon. Taille mesurée sans modèle (−26 % de `prompt_tokens` sur le corpus et sur le lot du 16) ; la mesure avec le modèle attend un Mac sur secteur, puis le verdict de l'utilisateur. |
 | [`2026-09-09-adjudication-reprise/`](2026-09-09-adjudication-reprise/) | Les 18 fiches sont répondues (2026-09-10) et la synthèse lue (2026-09-11, décisions consignées dans [`SYNTHESE.md`](2026-09-09-adjudication-reprise/SYNTHESE.md)). Les réponses restent ici comme **vérité terrain reconstruite** tant que le format d'annotation n'est pas validé. Le dossier attend le rejeu sur `open` (trois variantes du prompt v6, en batch) avant de se clore. |
 
 ## Clos
