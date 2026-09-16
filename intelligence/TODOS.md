@@ -232,6 +232,29 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P2
 **Depends on:** Aucun
 
+### Une session qui porte un commit est écartée pour sa durée (cas `dd06e6c8`, 2026-09-15)
+
+**What:** `classify` écarte une session close quand `duration_minutes` est
+sous `min_session_minutes` (10) **et** `activity_count` sous
+`min_session_activities` (30), seuils du §7 de la spec du 2026-09-03, sans
+regarder ce qu'elle contient. Le 2026-09-15, work-9 `dd06e6c8`
+(14:59:51–15:03:37, 3 min, 20 activités) se termine sur le commit 86c0348, le
+verdict du benchmark de modèles ; work-10 `8069a1f4` (15:04:14–15:04:49,
+0 min, 5 activités) porte 626bbad, la règle du compteur de l'étape 4. Les
+deux décisions durables de la journée n'ont aucun résumé, alors que six
+sessions de documentation courante en ont un. À décider : un fait
+`git_commit` rend la session candidate quelle que soit sa durée, ou un seuil
+séparé pour les sessions à commit. Mesurer d'abord combien de sessions
+courtes à commit le lot écarterait et ce que v7 en ferait : une session de
+5 activités donne peu à `doing`.
+
+**Déclencheur:** jour 12 du dogfooding (`docs/dogfooding.md`), cas
+`dd06e6c8` et `8069a1f4`.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
 ## Completed
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`

@@ -1116,3 +1116,62 @@ depuis son démarrage au jour 10.
   dans 4 résumés sur 6 (`c50774a9`, `63c206ed`, `00f91935`, `84c6dd73`),
   `CHANGELOG.md` et `VERSION` dans 1 (`c50774a9`), où ils évincent tests et
   note de décision. Les cinq de `455cb408` viennent de la rafale de checkout.
+
+## Jour 12 — 2026-09-16
+
+**Contexte.** Lot launchd 06:31:38 → 11:18:29, prompt v7,
+`Qwen3.8-27B-4bit`, entrée schéma 3, reconstruction 4, `observation_version`
+2, `temperature=0.0`. 6 candidates, 6 créées, 0 échec, toutes sur des
+sessions du 15 ; écartées comme trop courtes : work-4 `fbf1ded6` (7 min,
+14 activités), work-9 `dd06e6c8` (3 min, 20) et work-10 `8069a1f4` (0 min,
+5). Mac en veille jusqu'à 11:12:10 (20 DarkWake de 2 à 10 s, toutes les 15 à
+17 min, aucun réveil complet) : seule la première `generation_ms` porte la
+veille (`ce2b5a40`, 281,2 min ; fin calculée 11:12:52, 42 s après l'ouverture
+du capot). Les cinq autres ont tourné Mac éveillé : 91,3, 38,0, 136,1, 40,1
+et 28,4 s, soit de 28 à 136 s, moyenne 66,8 s. Première mesure de durée
+exploitable depuis le démarrage du compteur.
+
+**Verdicts (lecture humaine, 2026-09-16, reconstruits avec Claude Code :
+aucun souvenir spontané des sessions ; chaque verdict s'appuie sur les
+commits, le reflog, `trace.db` et l'entrée rejouée depuis Core).**
+
+| Session | Verdict | Détail |
+| --- | --- | --- |
+| work-3 `ce2b5a40` (15, 09:54–10:26) | **juste, peu utile** | Session intermédiaire du benchmark : aucun commit dans la fenêtre, les cinq `central_files` sous `corpus/`. `stopped_at` donné en secondes depuis le début (« à 1918s »), exact mais sans prise pour la reprise. |
+| work-5 `a4109319` (15, 11:26–11:41) | **juste et utile** | `open` cite le corps de 2d506e4 (11:28:57) : les quatre points « qui disent plus que leur preuve » sont toujours en suspens, versés par a0a7880 à « Citation de `command_failure` non littérale » (`intelligence/TODOS.md`, P2). La mention de o7 (Ministral) est caduque depuis 86c0348 (15:03), postérieur à la session. |
+| work-6 `d2500d2e` (15, 11:42–12:12) | **juste et utile** | `stopped_at` = 6ffb079, hash et heure exacts (12:12:29). Réserve : `open` vide ne dit pas que les quatre cas sont passés aux TODOS par a0a7880 (11:49:35), dans la fenêtre. |
+| work-7 `21fdaaac` (15, 13:44–13:50) | **juste et utile** | `stopped_at` = 9f20f30, exact ; `open` (← o111) cite la limite du hook de pré-poussée, toujours ouverte (`docs/audits/README.md`). Réserve : « reconstruction de la documentation » pour 98a9a7a, qui est un `git mv` de 51 fichiers. |
+| work-8 `e701281c` (15, 14:07–14:25) | **à moitié juste** | Le premier `open` (← o3, a786175 à 14:08:09) reprend la question des trailers, ouverte à 14:08 et tranchée à 14:12 par d8872b6, dans la même session ; l'entrée contenait les cinq commits. Le second (← o7, f2fd0cd) reste ouvert. `stopped_at` = 69deebf, exact. |
+| work-11 `bdd27079` (15, 16:21–16:32) | **juste et utile** | « 7 branches » n'est écrit nulle part dans l'entrée (hash rejoué identique) : le nombre est compté depuis les sept noms de la commande o7 (`git branch -D …`, 16:32:00). `fetch --prune` (o8) et `git branch` (o10) exacts. |
+
+**Bilan du jour 12.** 4 justes et utiles sur 6 ; 1 juste peu utile
+(`ce2b5a40`), 1 à moitié juste (`e701281c`). Compteur de l'étape 4 : 8
+reprises justes et utiles sur 12 depuis son démarrage au jour 10.
+
+**Motifs de la lecture des six résumés.**
+
+- **Question ouverte puis tranchée dans la même session, restée dans
+  `open`** (`e701281c` : o3 à 14:08, d8872b6 à 14:12). Un `recorded_statement`
+  cite un commit sans regarder si un commit suivant de la même session le
+  ferme. Candidat pour le corpus.
+- **Session écartée pour sa durée alors qu'elle porte un commit.** work-9
+  `dd06e6c8` (14:59:51–15:03:37, 3 min, 20 activités) se termine sur 86c0348,
+  le verdict du benchmark (Gemma et Ministral écartés) ; work-10 `8069a1f4`
+  (15:04:14–15:04:49, 5 activités) porte 626bbad, la règle du compteur. Les
+  deux décisions durables du 15 n'ont aucun résumé.
+- **Pas de rafale de checkout ce jour-là** : le reflog du 15 ne contient que
+  des commits ; les deux opérations de masse sont des commits (a0a7880, 52
+  fichiers ; 98a9a7a, 51 renommages) et les `central_files` qui en viennent
+  sont du travail.
+
+**TODOS ouverts par ce jour** (sans traitement) : une session qui porte un
+commit ne doit pas être écartée pour sa durée (`intelligence/TODOS.md`, cas
+`dd06e6c8`).
+
+**Clôture du 15.** La relance de la production sur main 0.8.2.0 (#97, mergée
+le 14 à 23:58) le 15 à 00:03, quatre services, `make status` sans STALE,
+n'était consignée que dans les notes de session ; `core/CHANGELOG.md` porte
+l'entrée 0.8.2.0 (« Déploiement : relancer le daemon Core »). Elle ne se
+vérifie plus par `ps` : le Mac a redémarré le 16 vers 11:36 et launchd a
+relancé les quatre services à 11:37:27, sur le même code (dernier commit
+`core/` : 2e0f1bf, 14 à 23:58).
