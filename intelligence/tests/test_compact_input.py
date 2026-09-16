@@ -71,7 +71,7 @@ def test_v8_prompt_is_v7_plus_the_input_description_only():
     assert changed == [4, 5], changed
     assert v7[4] == "L'entrée v3 contient :" and v8[4] == "L'entrée v4 contient :"
     assert v8[5].startswith("- session.observations :")
-    for word in ("files", "columns", "rows", "change_columns", "12 caractères", "secondes entières", "sans workspace"):
+    for word in ("files", "columns", "rows", "change_columns", "files est absent", "12 caractères", "secondes entières", "sans workspace"):
         assert word in v8[5], word
 
 
@@ -163,6 +163,16 @@ def test_a_foreign_workspace_stays_on_its_fact():
     kept = compact_observations(observations, None)
     assert kept["files"]["rows"][0][4] == "/w"
     assert kept["timeline"][0]["workspace"] == "/w"
+
+
+def test_no_file_table_without_file_facts(capture_timezone):
+    corpus = {entry.id: entry for entry in load_corpus(DEFAULT_CORPUS)}
+    for session_id in ("8af930d9ef437d2a", "2ce344566f7e85dc", "d98778994319cd07"):
+        v7, v8 = _inputs(corpus[session_id])
+        assert not any(fact["kind"] == "file" for fact in v7["session"]["observations"]["timeline"])
+        assert "files" not in v8["session"]["observations"], session_id
+        assert input_references(v7).refs == input_references(v8).refs
+        assert len(serialize_input(v8)) < len(serialize_input(v7)), session_id
 
 
 def test_no_compact_input_without_the_flag_on_a_legacy_view():

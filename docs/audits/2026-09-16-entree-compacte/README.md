@@ -24,7 +24,8 @@ en décharge). Rien en production : `Config.prompt_version` reste `v6`,
   - c. hash de commit abrégé à 12 caractères ;
   - d. faits `file` sortis de `timeline` vers `observations.files`, un
     tableau : `columns` et `change_columns` déclarées une fois, une ligne par
-    fait, dans l'ordre de la chronologie, `ref` d'origine conservée.
+    fait, dans l'ordre de la chronologie, `ref` d'origine conservée ; pas de
+    tableau quand la session n'a aucun fait `file` (le prompt le dit).
   Messages de commit entiers ; aucun fait retiré, aucune `ref` renumérotée.
 - **v7 octet pour octet** : les empreintes SHA-256 des 14 entrées v7 du corpus,
   relevées sur main au commit 131a6dd, sont figées dans
@@ -48,8 +49,8 @@ entrée) et la colonne v7 de la mesure de taille redonne ses 14 `prompt_tokens`.
 | --- | --- | --- |
 | 1. Sorties acceptées sur 14 | 14/14 (le 15) | en attente |
 | 2. Attentes `open` atteintes | 3/4, 3/3 atteignables (le 15) | en attente |
-| 3. `prompt_tokens`, corpus 14 : total / médiane / maximum | 77 696 / 4 398,5 / 23 276 | 57 653 / 3 083 / 12 958 |
-| 4. `prompt_tokens`, lot du 16 (6 sessions, observations v2) : total / médiane / maximum | 41 403 / 5 160,5 / 16 658 | 30 454 / 3 921,5 / 11 320 |
+| 3. `prompt_tokens`, corpus 14 : total / médiane / maximum | 77 696 / 4 398,5 / 23 276 | 57 756 / 3 088,5 / 12 970 |
+| 4. `prompt_tokens`, lot du 16 (6 sessions, observations v2) : total / médiane / maximum | 41 403 / 5 160,5 / 16 658 | 30 526 / 3 933,5 / 11 332 |
 | 5. Durée de génération, totale / médiane | 739 s / 43,4 s (le 15) | en attente |
 | 6. Sessions où v8 contredit une attente que v7 atteignait | — | en attente |
 | 7. Verdict de qualité | aucun | aucun |
@@ -59,11 +60,15 @@ entrée) et la colonne v7 de la mesure de taille redonne ses 14 `prompt_tokens`.
   compte : gabarit de chat rendu par `_render_prompt`, tokenizer de production
   chargé par `mlx_lm.utils.load_tokenizer`, sans les poids. Corpus : −26 %
   au total, de −44 % (`eb652ce9`, 172 faits `file`) à +7 % (`8af930d9`, une
-  commande, aucun fichier : le tableau vide coûte plus qu'il n'épargne). Lot
-  du 16 : −26 % au total ; toutes les six sessions baissent.
-- **Trois sessions du corpus montent** de 26 à 101 tokens (`2ce34456`,
-  `8af930d9`, `d9877899`) : sans fait `file`, l'entrée paie la déclaration du
-  tableau vide et ne gagne que sur les dates et les hashes.
+  commande, aucun fichier). Lot du 16 : −26 % au total ; toutes les six
+  sessions baissent.
+- **Le prompt v8 coûte 104 tokens de plus que v7** (1 214 contre 1 110) : la
+  description du tableau. **Trois sessions du corpus montent** de 25 à
+  100 tokens (`2ce34456`, `8af930d9`, `d9877899`) : sans fait `file`, leur
+  entrée ne perd que 4 à 79 tokens (dates et hashes), moins que le surcoût
+  du prompt. Première explication consignée le 16 au soir (« le tableau vide
+  coûte plus qu'il n'épargne ») : fausse ; le tableau vide a été retiré à la
+  demande de l'utilisateur, les trois sessions montent toujours.
 
 ## Rejeu
 
