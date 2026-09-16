@@ -85,8 +85,8 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `llm_temperature` | `0.0` | envoyée à tous les providers : MLX la passe à `make_sampler`, soit l'argmax à `0.0` ; l'endpoint distant la reçoit, et s'il la refuse le provider la retire une fois et l'inscrit dans `dropped_parameters`. Réduit l'aléa sans garantir la reproductibilité tant que prompt, modèle, poids et runtime ne sont pas figés ([décision](../docs/decisions/2026-09-14-temperature-explicite.md)) |
 | `prompt_version` | `v6` | reprise bornée à la session, sans annexes ; `v5` reçoit les annexes ; v1–v4 refusent cette entrée. `v6-sans-phrase`, `v6-sans-exemple`, `v6-sans-phrase-ni-exemple` : variantes du rejeu `open` du 2026-09-11 (`docs/dogfooding.md`, jour 7), pas des défauts |
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
-| `min_session_minutes` | `10` | une session n'est écartée que si elle est **à la fois** plus courte que ce seuil et moins active que `min_session_activities` : atteindre l'un des deux suffit pour être candidate |
-| `min_session_activities` | `30` | l'autre seuil de la même règle. Le journal de Core (`GET /`) applique ces deux défauts sans lire ce fichier : les changer ici décale son classement des sessions sans résumé |
+| `min_session_minutes` | `10` | une session n'est écartée que si elle est **à la fois** plus courte que ce seuil et moins active que `min_session_activities` : atteindre l'un des deux suffit pour être candidate. Une session qui porte au moins un commit observé n'est jamais écartée pour sa durée, quels que soient les deux compteurs |
+| `min_session_activities` | `30` | l'autre seuil de la même règle. Le journal de Core (`GET /`) applique ces deux défauts sans lire ce fichier et sans l'exception du commit : les changer ici décale son classement des sessions sans résumé, et il note « sous les seuils » une session courte à commit qu'Intelligence résume pourtant |
 | `lookback_days` | `1` | fenêtre : aujourd'hui + N jours en arrière |
 
 ## 2. Les commandes du quotidien

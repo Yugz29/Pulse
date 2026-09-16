@@ -232,6 +232,8 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P2
 **Depends on:** Aucun
 
+## Completed
+
 ### Une session qui porte un commit est écartée pour sa durée (cas `dd06e6c8`, 2026-09-15)
 
 **What:** `classify` écarte une session close quand `duration_minutes` est
@@ -253,9 +255,18 @@ courtes à commit le lot écarterait et ce que v7 en ferait : une session de
 
 **Effort:** S
 **Priority:** P2
-**Depends on:** Aucun
 
-## Completed
+**Résolution:** `classify` n'applique plus les deux seuils à une session qui
+porte au moins un commit observé (fait `commit` de la chronologie du schéma 3,
+ou `git.commits` d'une vue héritée) : elle est candidate quelle que soit sa
+durée. Pas de seuil séparé, pas de mesure préalable sur le lot : le correctif
+ne rend candidates que des sessions qui contiennent une décision durable, et
+v7 fera de leurs cinq activités ce qu'il peut. Deux tests de régression sur
+les formes réelles de `dd06e6c8` (3 min, 20 activités) et `8069a1f4` (0 min,
+5 activités). Le journal de Core (`_absence_status`) garde la règle sans
+l'exception : il classe encore ces sessions « sous les seuils » (cf. README §1).
+
+**Completed:** 2026-09-16
 
 ### Le corpus `eval/` ne porte aucune session à `previous_summary`
 
