@@ -42,9 +42,10 @@ STALE_AFTER = timedelta(hours=24)
 UNSUMMARIZED_LOOKBACK_DAYS = 2
 # Seuils de candidature d'Intelligence, repris de la spec du 2026-09-03 (§7) :
 # une session close est candidate au résumé si elle dure au moins 10 minutes
-# ou compte au moins 30 activités ; sous les deux, jamais. Core ne lit pas la
-# configuration d'Intelligence : ce sont les défauts de la spec, que la page
-# affiche avec le compte des sessions qu'ils écartent.
+# ou compte au moins 30 activités ; sous les deux, jamais, sauf si elle porte
+# au moins un ``git_commit`` (exception d'Intelligence depuis #98, 2026-09-16).
+# Core ne lit pas la configuration d'Intelligence : ce sont les défauts de la
+# spec, que la page affiche avec le compte des sessions qu'ils écartent.
 CANDIDATE_MIN_MINUTES = 10
 CANDIDATE_MIN_ACTIVITIES = 30
 
@@ -209,6 +210,9 @@ def _unsummarized_sessions(
                 continue
             duration_minutes = max(0, int((ended - started).total_seconds() // 60))
             activity_count = len(session["activities"])
+            has_commit = any(
+                activity["type"] == "git_commit" for activity in session["activities"]
+            )
             found.append(
                 {
                     "id": session["id"],
@@ -220,7 +224,11 @@ def _unsummarized_sessions(
                     "activity_count": activity_count,
                     "project": session.get("project_name"),
                     "status": _absence_status(
-                        duration_minutes, activity_count, day=day, today=today
+                        duration_minutes,
+                        activity_count,
+                        has_commit=has_commit,
+                        day=day,
+                        today=today,
                     ),
                 }
             )
@@ -229,12 +237,18 @@ def _unsummarized_sessions(
 
 
 def _absence_status(
-    duration_minutes: int, activity_count: int, *, day: date, today: date
+    duration_minutes: int,
+    activity_count: int,
+    *,
+    has_commit: bool,
+    day: date,
+    today: date,
 ) -> str:
     """Ce que l'absence de résumé veut dire pour une session close.
 
-    - ``below_threshold`` : sous les deux seuils de candidature, Intelligence
-      ne la résumera jamais ;
+    - ``below_threshold`` : sous les deux seuils de candidature et sans
+      commit, Intelligence ne la résumera jamais ; une session qui porte un
+      ``git_commit`` est candidate quelle que soit sa durée ;
     - ``pending`` : éligible et d'aujourd'hui, elle attend le lot du matin,
       qui résume la veille ;
     - ``missing`` : éligible et d'un jour passé, le lot aurait dû la résumer.
@@ -242,7 +256,8 @@ def _absence_status(
       ne sait pas lequel.
     """
     if (
-        duration_minutes < CANDIDATE_MIN_MINUTES
+        not has_commit
+        and duration_minutes < CANDIDATE_MIN_MINUTES
         and activity_count < CANDIDATE_MIN_ACTIVITIES
     ):
         return "below_threshold"

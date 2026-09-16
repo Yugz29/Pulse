@@ -4,6 +4,26 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.3.0] - 2026-09-16
+
+Journal seulement : la règle de candidature du bloc « sessions sans résumé »
+s'aligne sur l'exception qu'Intelligence applique depuis #98. Aucun contrat
+consommé ne change : `/context`, `/context/sessions`, export du journal,
+identité de session, `reconstruction_version` et schéma de `trace.db` restent
+identiques.
+
+### Corrigé
+- Une session close qui porte au moins un événement `git_commit` n'est plus
+  classée « sous les seuils » quels que soient sa durée et son nombre
+  d'activités : elle est « éligible » (`pending` aujourd'hui, `missing` un
+  jour passé), comme Intelligence la traite. Cas `dd06e6c8` (3 min,
+  20 activités) et `8069a1f4` (0 min, 5 activités) du 2026-09-15, qui
+  restaient invisibles en alerte alors que le lot devait les résumer.
+
+### Déploiement
+- Relancer le daemon Core : launchd ne recharge pas le code. Aucune
+  coordination avec Intelligence.
+
 ## [0.8.2.0] - 2026-09-14
 
 Zone `Reprise` : la reprise d'abord, les seules anomalies en alerte. Addendum
