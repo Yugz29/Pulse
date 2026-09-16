@@ -126,6 +126,17 @@ class SessionView:
     def projects(self) -> list[str]:
         return list(self.raw.get("projects", []))
 
+    @property
+    def has_commit(self) -> bool:
+        """Au moins un commit observé : fait `commit` de la chronologie
+        (schéma 3) ou, sur une vue héritée, entrée de `git.commits`."""
+        observations = self.raw.get("observations") or {}
+        timeline = observations.get("timeline", []) if isinstance(observations, dict) else []
+        if any(isinstance(fact, dict) and fact.get("kind") == "commit" for fact in timeline):
+            return True
+        git = self.raw.get("git")
+        return isinstance(git, dict) and bool(git.get("commits"))
+
 
 @dataclass(frozen=True)
 class Classified:
@@ -178,8 +189,11 @@ def classify(
 ) -> Classified:
     if session.is_open:
         return Classified(session, False, "session ouverte")
+    # Une session qui porte un commit n'est jamais « trop courte » : les deux
+    # seuils ne s'appliquent qu'aux sessions sans commit (TODOS, cas dd06e6c8).
     if (
-        session.duration_minutes < config.min_session_minutes
+        not session.has_commit
+        and session.duration_minutes < config.min_session_minutes
         and session.activity_count < config.min_session_activities
     ):
         return Classified(
