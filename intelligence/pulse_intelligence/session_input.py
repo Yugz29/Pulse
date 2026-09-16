@@ -306,11 +306,18 @@ def compact_observations(observations: dict[str, Any], workspace: str | None) ->
             ]
     columns = _columns(files, FILE_COLUMNS)
     observations["timeline"] = timeline
-    observations["files"] = {
-        "columns": columns,
-        "change_columns": change_columns,
-        "rows": [[fact.get(column) for column in columns] for fact in files],
-    }
+    # Sans fait `file`, pas de tableau : rien à déclarer pour rien. Le prompt
+    # v8 décrit l'absence. (Ce n'est pas ce qui fait monter les sessions sans
+    # fichier : c'est le prompt v8, 104 tokens de plus que v7 ; mesure du
+    # 2026-09-16, docs/audits/2026-09-16-entree-compacte.)
+    if files:
+        observations["files"] = {
+            "columns": columns,
+            "change_columns": change_columns,
+            "rows": [[fact.get(column) for column in columns] for fact in files],
+        }
+    else:
+        observations.pop("files", None)
     observations["applications"] = [
         {key: _second(value) if key in ("first_at", "last_at") else value for key, value in app.items()}
         if isinstance(app, dict) else app
