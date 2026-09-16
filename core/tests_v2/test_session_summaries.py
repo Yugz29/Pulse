@@ -11,6 +11,7 @@ from tests_v2.test_context_snapshot import (
     PULSE,
     REFERENCE,
     at,
+    commit,
     make_store,
     terminal,
     working_session,
@@ -288,6 +289,26 @@ def test_a_session_is_set_aside_only_below_both_thresholds(tmp_path):
         (session["id"], session["duration_minutes"], session["activity_count"])
         for session in served
     )
+
+
+def test_a_session_carrying_a_commit_is_never_below_the_thresholds(tmp_path):
+    # Même exception qu'Intelligence (#98) : cas dd06e6c8 (3 min, 20 activités,
+    # un commit) et 8069a1f4 (0 min, 5 activités, un commit) du 2026-09-15.
+    store = make_store(
+        tmp_path,
+        *strong_session(-1440 - 600, minutes=3, activities=19),
+        commit(-1440 - 597, "86c0348000000000000000000000000000000000", "docs: benchmark tranché"),
+        *strong_session(-1440 - 400, minutes=0, activities=4),
+        commit(-1440 - 400, "626bbad48a5b2436027a5e6903590457e265d4af", "docs: compteur"),
+        *strong_session(-1440 - 200, minutes=3, activities=20),
+    )
+
+    listed = board(store)["unsummarized_sessions"]
+
+    assert sorted(
+        (item["duration_minutes"], item["activity_count"], item["status"])
+        for item in listed
+    ) == [(0, 5, "missing"), (3, 20, "below_threshold"), (3, 20, "missing")]
 
 
 def test_without_summary_every_closed_session_of_the_two_days_is_listed(tmp_path):
