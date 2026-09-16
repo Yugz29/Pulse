@@ -1166,7 +1166,17 @@ reprises justes et utiles sur 12 depuis son démarrage au jour 10.
 
 **TODOS ouverts par ce jour** (sans traitement) : une session qui porte un
 commit ne doit pas être écartée pour sa durée (`intelligence/TODOS.md`, cas
-`dd06e6c8`).
+`dd06e6c8`). Traité le 16 par #98 (Intelligence) et #99 (Core).
+
+**Relance manuelle de `dd06e6c8` (après #98, hors compteur).** dd06e6c8
+résumée à la main après #98, hors compteur : juste, à moitié utile. La
+décision est dans le commit mais absente du résumé (omission du modèle) :
+le corps de 86c0348 dit « Gemma 4 26B-A4B et Ministral 3 14B écartés après
+lecture, production inchangée » ; le résumé (v7, Qwen, 16 à 17:07) donne
+`stopped_at` = 86c0348 « documentant la clôture du benchmark et le
+déplacement des fichiers vers corpus/docs/audits-retired/ », `doing` =
+rédaction des audits des jours 10-11 et archivage du benchmark, `open` vide,
+sans nommer les modèles écartés ni le maintien de Qwen.
 
 **Clôture du 15.** La relance de la production sur main 0.8.2.0 (#97, mergée
 le 14 à 23:58) le 15 à 00:03, quatre services, `make status` sans STALE,
