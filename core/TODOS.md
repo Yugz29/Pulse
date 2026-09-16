@@ -336,6 +336,27 @@ ces faits, aucun modèle ne distingue cette salve d'une vraie salve d'édition.
 **Priority:** à décider
 **Depends on:** Aucun
 
+### Classification des sessions à source unique
+
+**What:** La règle « candidate au résumé » existe en deux copies : `classify`
+dans Intelligence (`selection.py`, seuils lus dans sa configuration) et
+`_absence_status` dans Core (`session_summaries.py`, seuils en constantes).
+Elles ont déjà divergé : du 2026-09-16 (#98, exception du commit dans
+Intelligence) jusqu'à l'alignement de Core en 0.8.3.0, le journal classait
+« sous les seuils » des sessions qu'Intelligence résumait. Toute évolution de
+la règle (seuils, exception, nouveaux critères) exige aujourd'hui deux
+correctifs et deux jeux de tests. La cible : Core classe une seule fois et
+expose le verdict dans `/context/sessions` (par exemple un champ
+`summary_candidate` avec sa raison), Intelligence le lit au lieu de
+recalculer, et le journal l'affiche. C'est un changement du contrat consommé
+`/context/sessions` : note datée dans `docs/decisions/`, bump de
+`schema_version`, mise à jour d'Intelligence dans le même chantier, et la
+configuration des seuils quitte Intelligence pour Core.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Note de décision datée (contrat `/context/sessions`, `schema_version`)
+
 ## Completed
 
 ### Réentrance fatale de PulseApplicationObserver
