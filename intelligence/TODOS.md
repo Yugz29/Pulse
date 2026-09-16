@@ -232,6 +232,16 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P2
 **Depends on:** Aucun
 
+### Résumés dans la journée
+
+- **Besoin :** reprendre après une bascule de projet ou une pause, sans attendre le lot du matin.
+- **Piste retenue d'abord :** déclencheur à la fermeture de session, puis benchmark de petits modèles sous v7 (9B, Qwen3-4B-Instruct-2507, Qwen3.5-4B, Qwen3.5-2B) à entrée inchangée.
+- **Piste écartée pour l'instant :** état continu mis à jour par patches (brouillons, révisions), tant que la fermeture de session n'a pas montré ses limites.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Aucun
+
 ## Completed
 
 ### Une session qui porte un commit est écartée pour sa durée (cas `dd06e6c8`, 2026-09-15)
