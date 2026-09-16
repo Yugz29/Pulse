@@ -280,8 +280,10 @@ scripts/install_run_launchd.sh --uninstall
 
 Installe `~/Library/LaunchAgents/com.pulse.intelligence-run.plist` (même
 patron que les agents de Core), qui lance `scripts/pulse_intel_run.sh` — le
-`pulse-intel` de la venv, sur la config du poste. Tâche calendaire : si le Mac
-dort à l'heure dite, launchd la rattrape au réveil. Journal :
+`pulse-intel` de la venv, sur la config du poste, sous `caffeinate -i` (pas
+de veille d'inactivité pendant le passage). Tâche calendaire : si le Mac
+dort à l'heure dite, launchd la rattrape au réveil ; capot fermé sur
+batterie, le lot avance par DarkWake et se termine à l'ouverture. Journal :
 `~/.pulse_intelligence/logs/run.log`. Le matin couvre la veille entière (la
 fenêtre de `run` est « aujourd'hui + hier ») : une session close après le
 passage est prise le lendemain.
