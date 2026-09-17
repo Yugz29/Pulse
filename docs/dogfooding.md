@@ -48,10 +48,8 @@ sans STALE), #100 (lot launchd sous `caffeinate -i`), #101 (second étage
 public du hook de pré-poussée, `scripts/hooks/prepush_local.sh`) ; hook
 local installé par `make hooks` le soir.
 
-**Ordre pour le jour 13, 2026-09-17.** Lot de 06:30, le premier avec #98 et
-`caffeinate`. À vérifier : les sessions courtes avec commit devenues
-candidates (combien, qualité des résumés) ; `generation_ms` compté seulement
-pour les générations faites entièrement Mac éveillé ; puis verdicts.
+**Ordre pour le jour 14, 2026-09-18.** Verdict v8 (entrée compacte,
+branche `exp/intelligence-compact-input`), puis choix du prochain chantier.
 
 Piste « Résumés dans la journée » consignée dans `intelligence/TODOS.md`
 (P3), non lancée.
@@ -1200,3 +1198,59 @@ l'entrée 0.8.2.0 (« Déploiement : relancer le daemon Core »). Elle ne se
 vérifie plus par `ps` : le Mac a redémarré le 16 vers 11:36 et launchd a
 relancé les quatre services à 11:37:27, sur le même code (dernier commit
 `core/` : 2e0f1bf, 14 à 23:58).
+
+## Jour 13 — 2026-09-17
+
+**Contexte.** Lot launchd 06:32:19 → 09:26:50, prompt v7,
+`Qwen3.8-27B-4bit`. 3 candidates, 3 créées, 0 échec, toutes sur des sessions
+du 16 ; écartée comme trop courte : work-3 `7499d425` (4 min, 11 activités,
+sans commit). Premier lot avec #98 : work-4 `50316b4d` (1 min, 11 activités,
+un commit) aurait été écartée avant. `run.log` n'écrit ni `prompt_version`,
+ni modèle, ni sessions écartées : lus dans les trois événements Core et par
+rejeu du classement à l'heure du lot. Dépôt sur
+`exp/intelligence-compact-input` (398726e) pendant le lot, install
+éditable : sans effet sur v7, rien sous `core/` dans le diff et les 3
+`input_hash` recalculés à l'identique depuis le code de main. `caffeinate -i`
+(#100) sans effet capot fermé sur batterie : Mac rendormi à 06:32:19,
+DarkWake jusqu'à 09:14, capot ouvert à 09:23:49. `generation_ms` : la
+première porte la veille et le chargement du modèle (`b6262f70`, 172,1 min) ;
+2 mesures exploitables, Mac éveillé : 34,6 s (`50316b4d`) et 111,4 s
+(`b21f932f`). Matière et preuves sous
+`corpus/docs/audits/2026-09-17-jour-13/` (hors dépôt).
+
+**Verdicts (validés par l'utilisateur, 2026-09-17 ; lecture à froid
+impossible, voir les motifs).**
+
+| Session | Verdict | Détail |
+| --- | --- | --- |
+| work-2 `b6262f70` (16, 15:27–16:06) | **juste et utile** | `stopped_at` = 7e6a6bf (o40), exact ; `open` (← o40) cite la règle de candidature en deux copies, Core et Intelligence. Texte et citation identiques : la même phrase affichée deux fois. |
+| work-5 `b21f932f` (16, 21:53–23:40) | **juste, à moitié utile** | 131a6dd (o41, 22:39:47, clôture du 16) est dans l'entrée et absent du résumé. Le premier `open` (← o77, ca42b99 à 23:09:34, « La mesure avec le modèle n'a pas été lancée ») est fermé par o109 dans la même session ; le résumé le dit lui-même (« a été réalisée ensuite (o109) ») et garde le point. Le second (← o109, « Pas de verdict. ») reste ouvert. |
+| work-4 `50316b4d` (16, 17:57–17:58) | **à moitié juste, inutile** | Candidate par #98 seulement. Le commit est une ligne de journal (203e318, « jour 12, dd06e6c8 résumée à la main après #98, hors compteur ») ; le résumé écrit « le commit dd06e6c8 » alors que dd06e6c8 est une session, et ne dit ni « hors compteur » ni « après #98 ». |
+
+**Bilan du jour 13.** 1 juste et utile sur 3 ; 1 juste à moitié utile
+(`b21f932f`), 1 à moitié juste et inutile (`50316b4d`). Compteur de
+l'étape 4 : 9 reprises justes et utiles sur 15 depuis son démarrage au
+jour 10.
+
+**Motifs de la lecture des trois résumés.**
+
+- **Commit de clôture absent du résumé** : 131a6dd (clôture du 16, 22:39)
+  ne figure ni dans `doing`, ni dans `stopped_at`, ni dans `open` de
+  `b21f932f`, qui ne retient que l'expérimentation v8.
+- **Point `open` fermé par la session et gardé quand même** (`b21f932f`,
+  o77 puis o109). Même motif qu'au jour 12 (`e701281c`), avec cette fois la
+  fermeture écrite dans le texte du point.
+- **#98 fait entrer un commit de journal sans valeur ajoutée** (`50316b4d`) :
+  une session d'une minute dont le seul commit consigne un verdict dans
+  `docs/dogfooding.md`. Le résumé prend dd06e6c8 pour un commit alors que
+  c'est une session.
+- **Texte et citation identiques affichés deux fois** (`b6262f70`) : quand le
+  modèle reprend la phrase du commit mot pour mot, la reprise l'affiche une
+  fois comme texte et une fois comme citation.
+- **Lecture à froid impossible** : l'utilisateur ne se souvient pas de ses
+  sessions ; `doing`, `stopped_at` et `open` lus seuls ne se jugent pas sans
+  la reconstruction (commits, entrée rejouée), comme au jour 12.
+
+**TODOS ouverts par ce jour** (sans traitement, `intelligence/TODOS.md`,
+P3) : `run.log` n'écrit ni `prompt_version`, ni modèle, ni sessions
+écartées ; références oN cliquables dans la page HTML des résumés.

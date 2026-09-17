@@ -242,6 +242,24 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P3
 **Depends on:** Aucun
 
+### `run.log` n'écrit ni `prompt_version`, ni modèle, ni sessions écartées
+
+- **Constat (jour 13, 2026-09-17) :** un passage `run` n'écrit que la ligne de compteurs et les `created`. Pour vérifier un lot, `prompt_version` et modèle se lisent dans les événements Core, et les sessions écartées (id, durée, activités, commit ou non) ne se retrouvent qu'en rejouant le classement à l'heure du lot.
+- **À décider :** une ligne d'en-tête par passage (`prompt_version`, `model_id`) et une ligne par session écartée avec sa raison, comme `list` les donne déjà.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
+### Références oN cliquables dans la page HTML des résumés
+
+- **Constat (jour 13, 2026-09-17) :** `doing`, `stopped_at` et `open` citent des faits par leur référence (o40, o77, o109) ; les résoudre demande de rejouer l'entrée (`reprises.py` sous `corpus/`). La lecture seule du résumé ne se juge pas.
+- **À décider :** dans la page HTML des résumés, chaque oN renvoie au fait cité (commit avec message, commande avec code et cwd, fichier avec ses changements).
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Aucun
+
 ## Completed
 
 ### Une session qui porte un commit est écartée pour sa durée (cas `dd06e6c8`, 2026-09-15)
