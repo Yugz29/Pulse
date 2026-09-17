@@ -166,9 +166,13 @@ Code dans `Session en cours` :**
 6. Filtre : n'émettre que si le `cwd` est sous un workspace déclaré ou l'un
    de ses worktrees.
 
-Avec cela, rien ne change dans la projection ni dans le rendu : le bloc
-`Session en cours` montre le dernier test et les échecs de l'agent dès la
-commande suivante. Tests : charges d'exemple des deux événements, échec sans
+Avec cela, les commandes de l'agent deviennent des faits `command` sans
+toucher au rendu. **Corrigé par la mesure du 17 (plus bas) :** cela ne suffit
+pas à faire apparaître ses tests. La projection ne marque `test_command` que
+sur une commande simple (`work_observations._simple_command`), et les 22
+commandes de test de l'agent des 16 et 17 sont toutes composées
+(`cd … && … | tail`) : aucune ne serait reconnue. Le tube final masque en
+plus le code de sortie du test, qui est celui de `tail`. Tests : charges d'exemple des deux événements, échec sans
 ligne de code, interruption, heredoc, plafond, `cwd` hors liste, outbox
 indisponible (sortie 0 quand même).
 
@@ -183,7 +187,87 @@ en arrière-plan par l'agent n'a pas été examinée.
 faits (`actor`), donc version des observations 3, note datée, prompt et
 Intelligence mis à jour.
 
+## Décisions du 2026-09-17 (utilisateur)
+
+- **Distinction par le producteur seul** (`pulse-claude-code`) : ni champ
+  `actor`, ni changement de version des observations.
+- **Hook global**, filtré dans le script sur les workspaces déclarés et leurs
+  worktrees, avant toute émission.
+- **Texte borné** : heredocs retirés et plafond de 2 000 caractères, sous
+  réserve de la mesure. **Réserve non levée** : voir « Mesure ».
+- **Sous-agents gardés** ; commandes interrompues non émises en V1.
+- **Codex hors périmètre.**
+- **`cwd`** : si la commande commence par `cd <chemin> &&`, le `cwd` émis est
+  ce chemin, résolu depuis le `cwd` de la session.
+- **Compteur de l'étape 4** : activation seulement après la mesure, puis lots
+  marqués « avec commandes d'agent » dans `docs/dogfooding.md`.
+
+## Mesure du 2026-09-17 : l'entrée du résumé de nuit avec les commandes d'agent
+
+**Méthode**, en lecture seule sur la production. `trace.db` est copiée par
+sauvegarde SQLite depuis une connexion immuable. Les commandes Bash des
+transcripts des 16 et 17 (430, dont 14 en échec, aucune de sous-agent ;
+interrompues écartées ; `cwd` selon la règle du `cd` ; workspaces déclarés et
+worktrees de Pulse seulement) sont rejouées sur la copie par le vrai chemin
+d'ingestion (`build_terminal_payload` : filtrage, rédaction). Core reconstruit
+les sessions des deux jours, Intelligence construit l'entrée v7, comptée comme
+`MLXProvider` la compte, tokenizer du modèle de production sans les poids.
+Plafond : 30 000 tokens (`llm_max_input_tokens`). Les copies sont détruites ;
+scripts et chiffres sous `corpus/docs/audits/2026-09-17-commandes-agent/`.
+Approximations : un worktree retiré depuis est résolu sur le dépôt principal
+(borne haute) ; l'instantané Git des commandes est celui du jour de la mesure.
+
+| Scénario | Sessions | Médiane | Au-dessus du plafond |
+| --- | --- | --- | --- |
+| Référence, sans commandes d'agent | 14 | 2 802 | 1 (bruit de virtualenv) |
+| Commandes entières | 12 | 25 317 | 6, dont 4 par les commandes |
+| Heredocs retirés, plafond 2 000 | 12 | 14 462 | 3, dont **1 par les commandes** |
+| Plafond 1 000 | 12 | 14 331 | 3, dont 1 par les commandes |
+| Plafond 500 | 12 | 13 442 | 2, aucune par les commandes |
+| Plafond 300 | 12 | 12 508 | 2, aucune par les commandes |
+| Tests et échecs seulement (36 commandes sur 432), plafond 2 000 | 15 | 2 966 | 1 (bruit de virtualenv) |
+
+- **La borne décidée ne tient pas.** Le 16, la session de 107 min (92
+  commandes) monte à 31 252 tokens, contre 12 159 sans les commandes ; le lot
+  l'aurait refusée. Celle de 93 min est à 26 979.
+- **Le texte n'est pas le levier.** De 2 000 à 300 caractères, cette session
+  passe de 31 252 à 27 993 : à 500, elle est sous le plafond de 1,6 %, sans
+  marge. Ce qui pèse est le **nombre** de faits : chaque commande coûte
+  environ 200 tokens avec son `cwd`, ses codes, son instantané Git et sa part
+  de `resumption`, et l'agent en lance une par minute.
+- **Le bruit de virtualenv est un problème à part**, déjà présent sans le
+  hook : la session du 17 à 15:48 (13 114 activités sous `DevNote-env`) fait
+  951 008 tokens et sera refusée par le lot du 18. C'est le TODO P2
+  « virtualenv reconnu par son `pyvenv.cfg` ». Les commandes d'agent
+  déplacent les frontières de session et étalent ce bruit sur deux sessions.
+- **Tests invisibles.** Sur 22 commandes de test de l'agent, 0 serait marquée
+  `test_command` par la projection (toutes composées) et les 22 finissent
+  par un tube vers `tail`, `head` ou `grep` : 14 échecs seulement sur 430
+  commandes, parce que le code rendu est celui du dernier maillon.
+
+**Proposition, à la place de la borne seule** (non appliquée, à trancher) :
+
+1. **N'émettre que ce qui porte un signal** : les commandes en échec et
+   celles dont un segment est une commande de test (`is_test_command` appliqué
+   à chaque segment séparé par `&&`, `||`, `;` ou `|`), heredocs retirés,
+   plafond de 2 000 caractères. Mesuré : 36 commandes sur 432, la plus grosse
+   session à 13 004 tokens, aucune au-dessus du plafond hors bruit de
+   virtualenv. C'est aussi exactement l'objectif : les tests et les échecs.
+2. À défaut, plafond de 500 caractères sur toutes les commandes : passe sur
+   ces deux jours, sans marge, et ne protège pas d'une session plus longue.
+3. Quel que soit le choix, **les tests de l'agent ne s'afficheront comme
+   tests** que si la projection reconnaît un test dans un segment d'une
+   commande composée. C'est un changement de `work_observations`
+   (`test_command`), donc de ce que `/context` sert : note datée et version
+   des observations, ou bien un marquage posé par le hook dans les détails de
+   l'événement, que seul le bloc `Session en cours` lirait. Le code de sortie
+   masqué par un tube ne se rattrape pas côté Pulse.
+
 ## À trancher par l'utilisateur
+
+Les points 1 à 6 ci-dessous sont tranchés par les décisions du 17, sauf la
+borne du texte (point 4), que la mesure ne confirme pas, et la
+reconnaissance des tests composés, que la mesure ajoute.
 
 1. **Sens de `terminal_finished`.** Accepter, pour la première étape, que les
    commandes d'agent entrent comme des commandes ordinaires (distinguées
