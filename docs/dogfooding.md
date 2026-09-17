@@ -49,7 +49,10 @@ public du hook de pré-poussée, `scripts/hooks/prepush_local.sh`) ; hook
 local installé par `make hooks` le soir.
 
 **Ordre pour le jour 14, 2026-09-18.** Verdict v8 (entrée compacte,
-branche `exp/intelligence-compact-input`), puis choix du prochain chantier.
+branche `exp/intelligence-compact-input`), puis cadrage des résumés en
+continu. Le chantier suivant le jour 13 a été choisi et livré le 17 : #103,
+références oN cliquables dans le journal, production en Core 0.8.4.0 depuis
+14:42.
 
 Piste « Résumés dans la journée » consignée dans `intelligence/TODOS.md`
 (P3), non lancée.

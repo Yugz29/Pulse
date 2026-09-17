@@ -137,6 +137,22 @@ et écrire STALE sinon, comme pour les services.
 
 ## Daemon V2
 
+### Core n'expose sa version nulle part
+
+**What:** `core/VERSION` n'est qu'un fichier : aucune route ne le sert
+(`/status`, `/context`) et `make status` ne l'affiche pas. À la mise en
+production de 0.8.4.0 (#103, 2026-09-17), « la version servie » ne se
+vérifiait que par détour : processus démarré après le dernier commit de
+`core/`, répertoire de travail du daemon, comportement de `GET /`. À
+décider : la version lue au démarrage du daemon, rendue par `/status` et
+affichée par `make status` à côté du contrôle STALE ; `/context` est un
+contrat consommé et n'a pas à la porter. Même famille que l'entrée `run.log`
+d'`intelligence/TODOS.md` (un lot qui ne dit ni son prompt ni son modèle).
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
 ### Coût historique de l’attribution de session — résolu le 2026-09-08
 
 L’attribution à l’écriture et son scan global ont été supprimés. La
