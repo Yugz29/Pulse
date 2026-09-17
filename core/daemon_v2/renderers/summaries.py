@@ -3,11 +3,18 @@
 Entrée : le dict de ``session_summaries.build_summary_board``. Tout texte
 passe par ``html.escape`` ; les résumés sont marqués comme interprétation du
 modèle, jamais présentés comme des faits observés.
+
+Références ``oN`` (``summary_references``) : liées au fait cité quand elles
+sont hors citation et résolues par la table du résumé ; laissées telles
+quelles dans une citation ; marquées « non vérifiable » sinon. Les faits
+cités, eux, sont des événements stockés, affichés sous la fiche.
 """
 
 from datetime import datetime, tzinfo
 from html import escape
 from typing import Any
+
+from ..summary_references import REFERENCE, RESOLVED, split_references
 
 
 NAVIGATION = (
@@ -48,6 +55,18 @@ margin-right:.35rem}.summary-session>summary .lead{color:#9aa6b4}
 .summary-session[open]>summary{color:#e4eaf1}
 .summary-session>div{padding:.4rem .2rem 1rem 1.1rem}
 .versions-note{margin:0 0 .6rem;color:var(--muted);font-size:.84rem}
+.fact-ref{color:#f0cf95;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+.fact-ref-unverified{color:#d9a9ae;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+font-size:.9em}.fact-ref-unverified small{font-family:inherit;color:#b98a90}
+.summary-facts{margin:.7rem 0 0;padding:.5rem .8rem;border-left:2px solid #4a4130;
+font-size:.86rem;color:#b8c2cd}.summary-facts h4{margin:0 0 .3rem;font-size:.84rem;color:#d6bd8f}
+.summary-fact{margin:.35rem 0 0;padding:.15rem .3rem;border-radius:6px;overflow-wrap:anywhere}
+.summary-fact:target{background:#3a2f1c;outline:1px solid #6b5630}
+.summary-fact code{background:#222a33;color:#c3ccd6;padding:.05rem .3rem;border:1px solid #303b47;
+border-radius:5px;font-size:.8rem}.summary-fact pre{margin:.25rem 0 0;padding:.4rem .6rem;
+background:#1b2128;border:1px solid #303b47;border-radius:6px;white-space:pre-wrap;
+overflow-wrap:anywhere;font-size:.8rem;color:#c3ccd6}
+.summary-fact.unverified{color:#d9a9ae}
 @media(max-width:850px){.summary-reprise{grid-template-columns:1fr;gap:.1rem}
 .summary-reprise dd{margin-bottom:.45rem}.model-reprise,.model-summaries{padding:1rem}}
 """
@@ -73,7 +92,7 @@ def _render_reprise(board: dict[str, Any], zone: tzinfo) -> str:
                 f"résumée s’est terminée {escape(_age_label(reprise['age_minutes']))}."
                 "</p>"
             )
-        parts.append(_render_card(reprise, zone))
+        parts.append(_render_card(reprise, zone, scope="reprise"))
     # La reprise d'abord, les signaux de santé ensuite (addendum du 2026-09-14
     # à la décision du 13) : l'alerte pour les seules anomalies, puis une
     # ligne discrète pour les absences attendues.
@@ -190,7 +209,7 @@ def _render_session(session: dict[str, Any], zone: tzinfo) -> str:
         f'<details class="summary-session"{anchor}>'
         f'<summary><span class="time">{escape(bounds)}</span>{label}{project} · '
         f"{versions}{lead}</summary>"
-        f"<div>{note}{''.join(_render_card(view, zone) for view in summaries)}</div>"
+        f"<div>{note}{''.join(_render_card(view, zone, scope='resume') for view in summaries)}</div>"
         "</details>"
     )
 
@@ -198,33 +217,137 @@ def _render_session(session: dict[str, Any], zone: tzinfo) -> str:
 # --- Une fiche ---------------------------------------------------------------------
 
 
-def _render_card(view: dict[str, Any], zone: tzinfo) -> str:
+def _render_card(view: dict[str, Any], zone: tzinfo, *, scope: str) -> str:
+    """``scope`` distingue les ancres : la reprise en tête est aussi une fiche
+    de la zone « Résumés », la même référence y a deux cibles."""
     rows = [
         ("En cours", view["doing"]),
         ("Arrêté à", view["stopped_at"]),
         ("Reste ouvert", view["open"]),
     ]
     reprise = "".join(
-        f"<dt>{label}</dt><dd>{escape(value) if value else '—'}</dd>"
+        f"<dt>{label}</dt><dd>{_linked_text(value, view, scope) if value else '—'}</dd>"
         for label, value in rows
     )
     extras = []
     if view["open_items"]:
         natures = ", ".join(
             f"<code>{escape(item['kind'])}</code>"
-            + (f" ({escape(', '.join(item['evidence']))})" if item["evidence"] else "")
+            + (
+                f" ({', '.join(_evidence(ref, view, scope) for ref in item['evidence'])})"
+                if item["evidence"]
+                else ""
+            )
             for item in view["open_items"]
         )
         extras.append(f'<p class="summary-extra">Nature des points ouverts : {natures}</p>')
     if view["central_files"]:
         files = ", ".join(f"<code>{escape(path)}</code>" for path in view["central_files"])
         extras.append(f'<p class="summary-extra">Fichiers centraux : {files}</p>')
+    extras.append(_render_facts(view, zone, scope))
     return (
         '<article class="summary-card">'
         f'<dl class="summary-reprise">{reprise}</dl>'
         f"{''.join(extras)}"
         f'<p class="summary-meta">{_meta(view, zone)}</p>'
         "</article>"
+    )
+
+
+# --- Références oN ---------------------------------------------------------------
+
+
+def _anchor(view: dict[str, Any], ref: str, scope: str) -> str:
+    return escape(f"fait-{scope}-{view['event_id']}-{ref}", quote=True)
+
+
+def _reference(ref: str, view: dict[str, Any], scope: str) -> str:
+    resolution = view["references"].get(ref)
+    if resolution is not None and resolution["status"] == RESOLVED:
+        return f'<a class="fact-ref" href="#{_anchor(view, ref, scope)}">{escape(ref)}</a>'
+    reason = resolution["reason"] if resolution is not None else "référence non résolue"
+    return (
+        f'<span class="fact-ref-unverified" title="{escape(reason, quote=True)}">'
+        f"{escape(ref)} <small>(non vérifiable)</small></span>"
+    )
+
+
+def _linked_text(text: str, view: dict[str, Any], scope: str) -> str:
+    """Texte du modèle, échappé ; seules les références hors citation
+    deviennent un lien ou portent « non vérifiable »."""
+    return "".join(
+        _reference(fragment, view, scope) if kind == "ref" else escape(fragment)
+        for kind, fragment in split_references(text)
+    )
+
+
+def _evidence(ref: str, view: dict[str, Any], scope: str) -> str:
+    return _reference(ref, view, scope) if REFERENCE.fullmatch(ref) else escape(ref)
+
+
+_CHANGE_LABELS = {"created": "créé", "modified": "modifié", "deleted": "supprimé"}
+_MARKER_LABELS = {
+    "screen_locked": "écran verrouillé",
+    "screen_unlocked": "écran déverrouillé",
+    "system_sleep": "mise en veille",
+    "system_wake": "réveil",
+}
+
+
+def _render_facts(view: dict[str, Any], zone: tzinfo, scope: str) -> str:
+    """Les faits cités par la fiche : des événements stockés, pas du texte du
+    modèle. Rien quand la fiche ne cite aucune référence."""
+    references = view["references"]
+    if not references:
+        return ""
+    items = "".join(
+        _render_fact(resolution, view, zone, scope) for resolution in references.values()
+    )
+    return (
+        '<div class="summary-facts"><h4>Faits cités (événements observés par Core)</h4>'
+        f"{items}</div>"
+    )
+
+
+def _render_fact(
+    resolution: dict[str, Any], view: dict[str, Any], zone: tzinfo, scope: str
+) -> str:
+    ref = resolution["ref"]
+    anchor = _anchor(view, ref, scope)
+    if resolution["status"] != RESOLVED:
+        return (
+            f'<div class="summary-fact unverified" id="{anchor}"><code>{escape(ref)}</code> · '
+            f"non vérifiable : {escape(resolution['reason'])}</div>"
+        )
+    when = _local(resolution["at"], zone).strftime("%Y-%m-%d %H:%M:%S")
+    kind = resolution["kind"]
+    block = ""
+    if kind == "commit":
+        pieces = ["commit"]
+        if resolution["hash"]:
+            pieces.append(f"<code>{escape(resolution['hash'][:7])}</code>")
+        if resolution["branch"]:
+            pieces.append(f"branche {escape(resolution['branch'])}")
+        if resolution["message"]:
+            block = f"<pre>{escape(resolution['message'])}</pre>"
+    elif kind == "command":
+        code = resolution["exit_code"]
+        pieces = ["commande", f"code {code}" if code is not None else "code inconnu"]
+        if resolution["cwd"]:
+            pieces.append(f"cwd <code>{escape(resolution['cwd'])}</code>")
+        block = f"<pre>{escape(resolution['command'])}</pre>"
+    elif kind == "file":
+        changes = ", ".join(
+            f"{_CHANGE_LABELS[change['event']]} ×{change['count']}"
+            for change in resolution["changes"]
+        )
+        pieces = ["fichier", f"<code>{escape(resolution['path'])}</code>", escape(changes)]
+    else:
+        pieces = [escape(_MARKER_LABELS.get(resolution["event"], resolution["event"]))]
+    pieces.append(escape(when))
+    return (
+        f'<div class="summary-fact" id="{anchor}"><code>{escape(ref)}</code> · '
+        f"{' · '.join(pieces)}{block}</div>"
     )
 
 

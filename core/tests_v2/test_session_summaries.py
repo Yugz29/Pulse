@@ -7,11 +7,14 @@ from daemon_v2.daily_trace import build_daily_trace, render_daily_trace_html
 from daemon_v2.main import create_app
 from daemon_v2.models import Activity
 from daemon_v2.session_summaries import build_summary_board
+from daemon_v2.summary_references import split_references
 from tests_v2.test_context_snapshot import (
     PULSE,
     REFERENCE,
+    app,
     at,
     commit,
+    file_changed,
     make_store,
     terminal,
     working_session,
@@ -30,6 +33,7 @@ def summary(
     label: str = "work-1",
     open_items: list | None = None,
     generated_minutes: int | None = None,
+    sources: dict | None = None,
 ) -> Activity:
     started = ended_minutes - 60 if started_minutes is None else started_minutes
     details = {
@@ -54,6 +58,9 @@ def summary(
     }
     if open_items is not None:
         details["open_items"] = open_items
+    if sources is not None:
+        details["observation_version"] = 2
+        details["observation_sources"] = sources
     return Activity("session_summary", at(ended_minutes), "intelligence", doing, details)
 
 
@@ -513,3 +520,242 @@ def test_archive_day_renders_no_summary_zone(tmp_path):
 
     assert 'id="reprise"' not in html
     assert 'id="resumes"' not in html
+
+
+# --- Références oN : liées au fait cité, ou « non vérifiable » ---------------------
+
+
+SESSION = "dddddddddddddddd"
+
+
+def cited(tmp_path, *events, sources=None, **fields):
+    """Un store avec ces événements (de -1560 à -1500) et un résumé qui les
+    cite. ``sources`` : fonction des ``event_id`` stockés vers la table."""
+    store = make_store(tmp_path)
+    ids = [store.append(event).event_id for event in events]
+    table = sources(ids) if callable(sources) else sources
+    store.append(summary(-1500, session_id=SESSION, sources=table, **fields))
+    return store, ids
+
+
+def only_view(store) -> dict:
+    return board(store)["days"][0]["sessions"][0]["summaries"][0]
+
+
+def test_split_references_keeps_the_text_and_ignores_quotes():
+    text = "Commit o40 puis o7 (« cas 04 o7 ») et “o3”, enfin o109."
+
+    segments = split_references(text)
+
+    assert "".join(fragment for _, fragment in segments) == text
+    assert [fragment for kind, fragment in segments if kind == "ref"] == ["o40", "o7", "o109"]
+    assert ("quote", "« cas 04 o7 »") in segments
+    # Une citation jamais refermée court jusqu'au bout : rien n'y est lié.
+    assert [k for k, _ in split_references("avant o1 « ouvert o2")] == ["text", "ref", "text", "quote"]
+    # « foo7 » n'est pas une référence, « o0 » non plus.
+    assert all(kind != "ref" for kind, _ in split_references("foo7 o0 auto1"))
+
+
+def test_commit_reference_is_linked_to_the_stored_commit(tmp_path):
+    store, ids = cited(
+        tmp_path,
+        commit(-1510, "abc1234def5678", "docs: mesure\n\nPas de verdict.", branch="exp/x"),
+        sources=lambda ids: {"o1": [ids[0]]},
+        stopped_at="Commit o1 sur la branche exp/x.",
+    )
+
+    view = only_view(store)
+    fact = view["references"]["o1"]
+    assert fact["status"] == "resolved" and fact["kind"] == "commit"
+    assert fact["hash"] == "abc1234def5678" and fact["branch"] == "exp/x"
+
+    html = render(store)
+    anchor = f"fait-resume-{view['event_id']}-o1"
+    assert f'<a class="fact-ref" href="#{anchor}">o1</a> sur la branche' in html
+    assert f'<div class="summary-fact" id="{anchor}"><code>o1</code> · commit · <code>abc1234</code> · branche exp/x' in html
+    assert "<pre>docs: mesure\n\nPas de verdict.</pre>" in html
+    assert "non vérifiable" not in html
+
+
+def test_command_reference_shows_command_exit_code_and_cwd(tmp_path):
+    store, _ = cited(
+        tmp_path,
+        terminal(-1520, "pytest -q", exit_code=2),
+        sources=lambda ids: {"o4": [ids[0]]},
+        open_text="Échec observé : pytest (o4).",
+        open_items=[{"kind": "command_failure", "evidence": ["o4"]}],
+    )
+
+    fact = only_view(store)["references"]["o4"]
+    assert (fact["kind"], fact["command"], fact["exit_code"], fact["cwd"]) == (
+        "command", "pytest -q", 2, PULSE,
+    )
+    html = render(store)
+    assert f"commande · code 2 · cwd <code>{PULSE}</code>" in html
+    assert "<pre>pytest -q</pre>" in html
+    # La preuve du point ouvert est liée elle aussi.
+    assert html.count('class="fact-ref"') >= 2
+
+
+def test_file_reference_aggregates_its_source_events(tmp_path):
+    store, _ = cited(
+        tmp_path,
+        file_changed(-1530, "docs/a.md", event="created"),
+        file_changed(-1529, "docs/a.md"),
+        file_changed(-1528, "docs/a.md"),
+        sources=lambda ids: {"o2": ids},
+        doing="Rédaction de docs/a.md (o2).",
+    )
+
+    fact = only_view(store)["references"]["o2"]
+    assert fact["path"] == "docs/a.md"
+    assert fact["changes"] == [{"event": "created", "count": 1}, {"event": "modified", "count": 2}]
+    assert "fichier · <code>docs/a.md</code> · créé ×1, modifié ×2" in render(store)
+
+
+def unverifiable(store, ref="o1") -> str:
+    fact = only_view(store)["references"][ref]
+    assert fact["status"] == "unverifiable"
+    assert set(fact) == {"ref", "status", "reason"}  # jamais un fait approximatif
+    html = render(store)
+    assert 'class="fact-ref"' not in html
+    assert f"{ref} <small>(non vérifiable)</small>" in html
+    return fact["reason"]
+
+
+def test_reference_without_a_source_table_is_unverifiable(tmp_path):
+    store, _ = cited(tmp_path, commit(-1510, "abc1234", "x"), stopped_at="Commit o1.")
+
+    assert unverifiable(store) == "résumé sans table de sources"
+
+
+def test_reference_absent_from_the_source_table_is_unverifiable(tmp_path):
+    store, _ = cited(
+        tmp_path,
+        commit(-1510, "abc1234", "x"),
+        sources=lambda ids: {"o2": [ids[0]]},
+        stopped_at="Commit o1.",
+    )
+
+    assert unverifiable(store) == "référence absente des sources du résumé"
+
+
+def test_reference_to_a_missing_event_is_unverifiable(tmp_path):
+    store, _ = cited(tmp_path, sources={"o1": ["no-such-event"]}, stopped_at="Commit o1.")
+
+    assert unverifiable(store) == "événement source introuvable"
+
+
+def test_reference_to_an_event_outside_the_session_bounds_is_unverifiable(tmp_path):
+    store, _ = cited(
+        tmp_path,
+        commit(-1400, "abc1234", "après la fin de la session"),
+        sources=lambda ids: {"o1": [ids[0]]},
+        stopped_at="Commit o1.",
+    )
+
+    assert unverifiable(store) == "événement hors des bornes de la session"
+    assert "après la fin de la session" not in render(store).split('id="resumes"', 1)[1]
+
+
+def test_reference_to_an_unexpected_event_type_is_unverifiable(tmp_path):
+    # Un type que la projection ne numérote jamais en oN.
+    store, _ = cited(
+        tmp_path,
+        app(-1510, "Terminal"),
+        sources=lambda ids: {"o1": [ids[0]]},
+        stopped_at="Fait o1.",
+    )
+    assert unverifiable(store) == "type d’événement inattendu"
+
+
+def test_evidence_must_have_the_event_type_of_its_open_kind(tmp_path):
+    # La preuve d'un échec de commande qui désigne un commit : rien à montrer.
+    store, _ = cited(
+        tmp_path,
+        commit(-1510, "abc1234", "x"),
+        sources=lambda ids: {"o1": [ids[0]]},
+        open_text="Échec observé : make test.",
+        open_items=[{"kind": "command_failure", "evidence": ["o1"]}],
+    )
+
+    assert unverifiable(store) == "type d’événement inattendu pour ce point"
+
+
+def test_mixed_sources_for_one_reference_are_unverifiable(tmp_path):
+    store, _ = cited(
+        tmp_path,
+        commit(-1510, "abc1234", "x"),
+        terminal(-1509, "pytest -q"),
+        sources=lambda ids: {"o1": ids},
+        stopped_at="Fait o1.",
+    )
+
+    assert unverifiable(store) == "type d’événement inattendu"
+
+
+def test_reference_inside_a_quotation_is_left_untouched(tmp_path):
+    # Cas a4109319 : le message cité parle du « cas 04 o1 » d'un benchmark.
+    quoted = "Point déclaré dans un commit : reste à voir (« cas 04 o1 à relire »)."
+    store, _ = cited(
+        tmp_path,
+        commit(-1510, "abc1234", "x"),
+        sources=lambda ids: {"o1": [ids[0]]},
+        open_text=quoted,
+    )
+
+    assert only_view(store)["references"] == {}
+    html = render(store)
+    assert "(« cas 04 o1 à relire »)" in html
+    assert "fact-ref" not in html.split("<style>", 1)[-1].split("</style>", 1)[-1]
+    assert "summary-facts\"" not in html
+
+
+def test_cited_facts_are_escaped(tmp_path):
+    store, _ = cited(
+        tmp_path,
+        commit(-1510, "abc1234", "<script>alert(1)</script>", branch="<b>x</b>"),
+        terminal(-1509, "echo '<img src=x>' && false", exit_code=1),
+        sources=lambda ids: {"o1": [ids[0]], "o2": [ids[1]]},
+        stopped_at="Commit o1 puis o2 <i>.",
+    )
+
+    html = render(store)
+
+    assert "<script>alert(1)</script>" not in html and "<img src=x>" not in html
+    assert "<b>x</b>" not in html and "o2</a> &lt;i&gt;." in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_coexisting_versions_and_the_reprise_have_distinct_anchors(tmp_path):
+    store = make_store(tmp_path)
+    event_id = store.append(commit(-1510, "abc1234", "x")).event_id
+    for version in ("v6", "v7"):
+        store.append(
+            summary(
+                -1500,
+                session_id=SESSION,
+                prompt_version=version,
+                sources={"o1": [event_id]},
+                stopped_at="Commit o1.",
+            )
+        )
+
+    html = render(store)
+
+    ids = [chunk.split('"', 1)[0] for chunk in html.split(' id="fait-')[1:]]
+    # Deux fiches dans « Résumés », plus la reprise en tête : trois cibles.
+    assert len(ids) == 3 and len(set(ids)) == 3
+    assert sum(anchor.startswith("reprise-") for anchor in ids) == 1
+    for anchor in ids:
+        assert f'href="#fait-{anchor}"' in html
+
+
+def test_a_summary_without_references_renders_as_before(tmp_path):
+    store = make_store(tmp_path, summary(-1500, session_id=SESSION))
+
+    assert only_view(store)["references"] == {}
+    html = render(store)
+    assert 'class="summary-facts"' not in html
+    assert "non vérifiable" not in html
+    assert "<dd>Après le commit abc1234.</dd>" in html

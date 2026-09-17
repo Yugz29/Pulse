@@ -4,6 +4,42 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.4.0] - 2026-09-17
+
+Références `oN` cliquables dans les zones `Reprise` et `Résumés` du journal
+HTML (jour 13 du dogfooding : un résumé ne se jugeait pas sans rejouer son
+entrée). Lecture seule, aucun contrat consommé ne change : `/context`,
+`/context/sessions`, export du journal, identité de session,
+`reconstruction_version`, version des observations et schéma de `trace.db`
+restent identiques.
+
+### Ajouté
+- Une référence `oN` de `doing`, `stopped_at`, `open` ou des preuves d'un
+  point ouvert renvoie au fait cité, affiché sous la fiche : commit (hash,
+  branche, message), commande (texte, code, cwd), fichier (chemin,
+  changements comptés), verrouillage ou veille. Le fait est l'événement
+  stocké, retrouvé par la table `observation_sources` du résumé lui-même :
+  rien n'est reprojeté, la référence garde le sens qu'elle avait quand le
+  modèle l'a lue.
+- Règle de liaison stricte : une référence n'est liée que hors citation et
+  présente dans la table du résumé. Dans une citation (`« … »`, `“ … ”`,
+  `" … "`), le texte reste inchangé : un message de commit peut contenir
+  « o7 » pour tout autre chose (cas `a4109319`). Hors citation et non
+  résolue, elle porte « non vérifiable ».
+- Garde-fous au rendu : l'événement existe, son type est celui d'un fait
+  numéroté (et celui qu'exige la nature du point ouvert : `terminal_finished`
+  pour `command_failure`, `git_commit` pour `recorded_statement`), sa date
+  tombe dans les bornes que le résumé déclare. Un échec donne « non
+  vérifiable » avec sa raison, jamais un fait approximatif. Les résumés sans
+  table de sources (v1 à v5, une partie des v6) restent lisibles : leurs
+  références, s'ils en citent, sont « non vérifiable ».
+- Module `daemon_v2/summary_references.py` ; la vue d'un résumé du board
+  porte `references`.
+
+### Déploiement
+- Relancer le daemon Core : launchd ne recharge pas le code. Aucune
+  coordination avec Intelligence.
+
 ## [0.8.3.0] - 2026-09-16
 
 Journal seulement : la règle de candidature du bloc « sessions sans résumé »
