@@ -39,6 +39,12 @@ session, `reconstruction_version`, version des observations, schéma de
   (`Package.swift`, `Sources/`, octets bruts) et le SHA-256 du binaire.
 - `make status` affiche `Version servie`, l'empreinte servie, et celles du
   checkout.
+- Dans `make status`, l'état ouvre la ligne du service, entre crochets et en
+  colonne fixe, avant le `running` de launchd : `running` dit que le
+  processus vit, pas qu'il exécute le bon code. `INCONNU` et `STALE` sont en
+  capitales, `à jour` non ; une ligne de bilan compte les trois états et
+  rappelle, s'il en reste, qu'INCONNU n'est pas à jour. Couleur (vert, rouge,
+  jaune) sur un terminal seulement, jamais sous `NO_COLOR` ni dans un fichier.
 
 ### Modifié
 - Le contrôle STALE ne compare plus l'heure de démarrage à la date du dernier

@@ -116,21 +116,49 @@ served_fingerprint="$(printf '%s\n' "$served" | sed -n 2p)"
 printf '  %-28s: version %s · code %s\n' "checkout" \
   "$(cat "$repo_root/VERSION" 2>/dev/null || echo illisible)" \
   "$("$python" -c 'from daemon_v2.code_fingerprint import python_fingerprint; print(python_fingerprint() or "illisible")' 2>/dev/null || echo illisible)"
+# L'état vient en tête de ligne, dans une colonne fixe, avant le « running » de
+# launchd : « running » dit que le processus vit, pas qu'il exécute le bon
+# code. INCONNU et STALE sont en capitales, « à jour » non. Couleur seulement
+# sur un terminal, jamais dans un fichier ni sous NO_COLOR.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  c_ok=$'\033[32m'; c_stale=$'\033[31m'; c_unknown=$'\033[33m'; c_off=$'\033[0m'
+else
+  c_ok=""; c_stale=""; c_unknown=""; c_off=""
+fi
+n_ok=0; n_stale=0; n_unknown=0
 for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers \
              com.pulse.file-watcher com.pulse.app-observer; do
   info="$(launchctl print "gui/$(id -u)/$label" 2>/dev/null)"
   if [[ -z "$info" ]]; then
-    printf '  %-28s: non installé\n' "$label"
+    printf '  %-28s: %-9s non installé\n' "$label" ""
     continue
   fi
   pid="$(printf '%s' "$info" | grep 'pid = ' | grep -o '[0-9]*' || true)"
   state="$(printf '%s' "$info" | grep -m1 'state = ' | sed 's/.*state = //')"
-  suffix=""
+  verdict=""; detail=""
   if [[ -n "$pid" ]]; then
-    suffix="$("$python" -m daemon_v2.service_staleness "$label" "$pid" "$served_version" "$served_fingerprint" 2>/dev/null || true)"
+    columns="$("$python" -m daemon_v2.service_staleness "$label" "$pid" "$served_version" "$served_fingerprint" 2>/dev/null || true)"
+    verdict="${columns%%$'\t'*}"
+    [[ "$columns" == *$'\t'* ]] && detail="${columns#*$'\t'}"
   fi
-  printf '  %-28s: %s%s%s\n' "$label" "$state" "${pid:+ (pid $pid)}" "$suffix"
+  case "$verdict" in
+    "à jour") color="$c_ok"; n_ok=$((n_ok + 1)) ;;
+    STALE)    color="$c_stale"; n_stale=$((n_stale + 1)) ;;
+    INCONNU)  color="$c_unknown"; n_unknown=$((n_unknown + 1)) ;;
+    *)        color="" ;;
+  esac
+  # Largeur à la main : printf compte des octets, « à jour » a un accent.
+  tag=""; pad="         "
+  if [[ -n "$verdict" ]]; then
+    tag="[$verdict]"; pad="$(printf '%*s' $((9 - ${#tag})) "")"
+  fi
+  printf '  %-28s: %s%s%s%s %s%s%s\n' "$label" "$color" "$tag" "$c_off" "$pad" \
+    "$state" "${pid:+ (pid $pid)}" "${detail:+ · $detail}"
 done
+printf '  %-28s: %s à jour · %s STALE · %s INCONNU\n' "bilan du code" "$n_ok" "$n_stale" "$n_unknown"
+if (( n_stale > 0 || n_unknown > 0 )); then
+  echo "  → INCONNU n'est pas « à jour » : tant qu'un service n'annonce pas son code, rien ne dit ce qu'il exécute."
+fi
 
 echo ""
 echo "Outbox"

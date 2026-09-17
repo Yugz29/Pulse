@@ -16,7 +16,7 @@ et une relance levait l'alerte de l'observateur sans recharger son binaire.
 
 Utilisation par status.sh :
 `python -m daemon_v2.service_staleness <label> <pid> [version servie] [empreinte servie]`
-affiche le suffixe de la ligne du service.
+affiche ``état<TAB>détail``, rien pour un service qui n'est pas jugé.
 À l'installation de l'observateur :
 `python -m daemon_v2.service_staleness --record-observer <binaire installé>`.
 """
@@ -57,6 +57,12 @@ class Verdict:
 
     def suffix(self) -> str:
         return f" — {self.state} : {self.detail}"
+
+    def columns(self) -> str:
+        """``état<TAB>détail`` : status.sh place l'état en tête de ligne, avant
+        le « running » de launchd qu'un lecteur pressé prendrait pour un
+        verdict."""
+        return f"{self.state}\t{self.detail}"
 
 
 def python_service_verdict(
@@ -148,28 +154,34 @@ def observer_verdict(
     )
 
 
-def service_suffix(
+def service_verdict(
     label: str,
     pid: int,
     *,
     served_version: str | None = None,
     served_fingerprint: str | None = None,
-) -> str:
+) -> Verdict | None:
+    """``None`` pour un service qui n'a pas à être jugé (lot périodique)."""
     if label == OBSERVER_LABEL:
-        return observer_verdict().suffix()
+        return observer_verdict()
     if label == DAEMON_LABEL:
         version, fingerprint = served_version, served_fingerprint
     elif label in ANNOUNCING_SERVICES:
         announce = announced(ANNOUNCING_SERVICES[label], pid) or {}
         version, fingerprint = announce.get("version"), announce.get("code_fingerprint")
     else:
-        return ""
+        return None
     return python_service_verdict(
         version,
         fingerprint,
         checkout_version=read_version(),
         checkout_fingerprint=python_fingerprint(),
-    ).suffix()
+    )
+
+
+def service_suffix(label: str, pid: int, **served: str | None) -> str:
+    verdict = service_verdict(label, pid, **served)
+    return verdict.suffix() if verdict else ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -185,11 +197,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     served = [value or None for value in args[2:]] + [None, None]
-    print(
-        service_suffix(
-            args[0], int(args[1]), served_version=served[0], served_fingerprint=served[1]
-        )
+    verdict = service_verdict(
+        args[0], int(args[1]), served_version=served[0], served_fingerprint=served[1]
     )
+    print(verdict.columns() if verdict else "")
     return 0
 
 
