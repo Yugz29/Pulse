@@ -138,10 +138,26 @@ def test_recording_a_missing_binary_fails_without_writing(tmp_path):
     assert not observer_record_path(binary).exists()
 
 
-def test_the_cli_prints_the_suffix_status_sh_appends(capsys):
+def test_the_cli_prints_the_state_first_then_the_detail(capsys):
+    # status.sh place l'état en tête de ligne : « INCONNU » ne doit jamais se
+    # lire comme « à jour », ni se cacher derrière le « running » de launchd.
     assert main(["com.pulse.daemon", "42", "", ""]) == 0
-    assert capsys.readouterr().out.startswith(" — INCONNU")
+    state, detail = capsys.readouterr().out.rstrip("\n").split("\t")
+    assert state == "INCONNU" and "à jour" not in detail
+
     assert main(["com.pulse.daemon", "42", CORE_VERSION, CODE_FINGERPRINT]) == 0
-    assert capsys.readouterr().out.startswith(" — à jour")
+    assert capsys.readouterr().out.startswith("à jour\t")
+
+    assert main(["com.pulse.agent-producers", "42"]) == 0
+    assert capsys.readouterr().out == "\n"
     assert main(["com.pulse.daemon"]) == 2
     assert main(["--record-observer"]) == 2
+
+
+def test_the_three_states_cannot_be_mistaken_for_one_another():
+    assert {UP_TO_DATE, STALE, UNKNOWN} == {"à jour", "STALE", "INCONNU"}
+    for verdict in (
+        python_service_verdict(None, None, **CHECKOUT),
+        python_service_verdict("0.8.9.0", None, **CHECKOUT),
+    ):
+        assert "à jour" not in verdict.columns()
