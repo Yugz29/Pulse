@@ -101,6 +101,18 @@ session, `reconstruction_version`, version des observations, schéma de
   `macos_observer/.build/release`, construit le 12 à 14:36, et le dernier
   commit des sources a été écrit le 12 à 14:36 (une date d'écriture survit à
   un amend).
+- Fait le 2026-09-17 à 22:16, à la mise en production : l'empreinte de
+  l'observateur a été **notée sans reconstruction** (`--record-observer`),
+  sources `7c4d9f0f75fc`. Le binaire n'a été ni reconstruit ni réinstallé,
+  l'Accessibilité n'a pas été redemandée. Cette note affirme, sans le
+  prouver, que le binaire installé (construit le 2026-09-12 à 14:37,
+  identique à l'octet au produit de `macos_observer/.build/release`) vient
+  des sources actuelles. Dernier commit des sources (`Sources/`,
+  `Package.swift`) : `5b59ca3`, arrivé sur main le 2026-09-12 à 14:58, écrit
+  à 13:54 ; le plus tard écrit est `a17e25e`, le 2026-09-12 à 14:36. Un « à
+  jour » de l'observateur vaut donc « sources inchangées depuis cette
+  note », jusqu'à la prochaine réinstallation, qui notera une empreinte
+  issue d'un vrai build.
 - Aucune coordination avec Intelligence.
 
 ## [0.8.8.0] - 2026-09-17
