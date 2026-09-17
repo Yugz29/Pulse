@@ -156,6 +156,18 @@ dans le hook.
 
 ## Daemon V2
 
+### Hook PostToolUse Claude Code (second étage)
+
+**What:** Second étage du chantier hooks (le premier, SessionEnd, est livré) : un hook `PostToolUse` pour donner à Pulse un signal d'activité agent en quasi-temps réel pendant la session — aujourd'hui le journal ne voit une session qu'à sa fin. À cadrer avant d'implémenter : quel événement dérivé (heartbeat de session active ? activité outil agrégée ?), quel débit acceptable (un hook par appel d'outil est fréquent — il faudra agréger côté hook), et ce que le rendu en ferait.
+
+**Référence (2026-09-11) :** à l'adjudication du 2026-09-10, 5 fiches sur 18 citent les commandes de l'agent invisibles au hook shell (06, 08, 09, 10, 15 de `docs/audits/2026-09-09-adjudication-reprise/`) ; fiche 06, c'est presque sûrement par là que la migration Django est passée. Ce hook donne les commandes, pas le contenu des sessions d'agent, dont la rétention est confirmée comme frontière.
+
+**Remontée en P1 (2026-09-17) :** les commandes d'un agent ne sont jamais observées, alors que le suivi de l'agent est l'usage principal. Relevé du 17 : les 13 `terminal_finished` de la journée viennent tous du producteur `pulse-zsh` (`scripts/pulse_terminal_watcher.zsh`, `preexec`/`precmd` d'un shell interactif) ; aucune des commandes lancées par Claude Code pendant les chantiers #103 et #104 (tests, scans, git) n'est dans `trace.db`, et aucune après 15:47. Le bloc `Session en cours` (0.8.5.0) et le résumé de nuit ne voient donc d'une journée menée par un agent que ses commits et, dans les dossiers surveillés, ses fichiers.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** Aucun (le hook SessionEnd est en usage)
+
 ### Core n'expose sa version nulle part
 
 **What:** `core/VERSION` n'est qu'un fichier : aucune route ne le sert
@@ -200,15 +212,21 @@ reconstruction de travail est effectuée en lecture, commune au journal et à
 **Priority:** P3
 **Depends on:** Cas réel observé
 
-### Hook PostToolUse Claude Code (second étage)
+### Un virtualenv se reconnaît à son `pyvenv.cfg`, pas à son nom
 
-**What:** Second étage du chantier hooks (le premier, SessionEnd, est livré) : un hook `PostToolUse` pour donner à Pulse un signal d'activité agent en quasi-temps réel pendant la session — aujourd'hui le journal ne voit une session qu'à sa fin. À cadrer avant d'implémenter : quel événement dérivé (heartbeat de session active ? activité outil agrégée ?), quel débit acceptable (un hook par appel d'outil est fréquent — il faudra agréger côté hook), et ce que le rendu en ferait.
+**What:** `file_policy.IGNORED_DIRECTORY_NAMES` ignore `.venv` par son nom. Le 2026-09-17, work-7 (15:48:58–15:57:25) compte 13 065 `file_changed`, dont 13 059 sous `DevNote/backend/DevNote-env` : un virtualenv nommé autrement, installé pendant la session. Ces événements gonflent `trace.db` (rétention infinie), la chronologie de la page et les « fichiers les plus touchés ». À faire : un dossier qui contient `pyvenv.cfg` est du bruit, quel que soit son nom, à la collecte (`file_watcher.should_ignore_directory`) comme à la projection (`file_policy`, pour l'historique déjà stocké) ; même question pour `site-packages` sans `pyvenv.cfg` au-dessus. Les événements déjà stockés ne sont pas supprimés.
 
-**Référence (2026-09-11) :** à l'adjudication du 2026-09-10, 5 fiches sur 18 citent les commandes de l'agent invisibles au hook shell (06, 08, 09, 10, 15 de `docs/audits/2026-09-09-adjudication-reprise/`) ; fiche 06, c'est presque sûrement par là que la migration Django est passée. Reste P3 : ce hook donne les commandes, pas le contenu des sessions d'agent, dont la rétention est confirmée comme frontière.
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
+### Projets suggérés : dépôts git vus mais non surveillés
+
+**What:** Core ne surveille que la liste déclarée (`~/.pulse_v2/watched_workspaces`) ; un dépôt où l'on travaille sans l'avoir déclaré reste invisible côté fichiers, sans que rien ne le dise. Core a pourtant de quoi le remarquer : le `cwd` des commandes zsh et le `workspace` des sessions d'agent. À faire : relever les dépôts git vus par ces deux sources et absents de la liste, et les lister dans la page avec la commande d'ajout (la ligne à écrire dans `watched_workspaces`, puis `launchctl kickstart -k gui/$(id -u)/com.pulse.file-watcher`). **Aucune surveillance ne démarre sans action de l'utilisateur** : Core suggère, il n'étend jamais de lui-même ce qu'il observe.
 
 **Effort:** M
 **Priority:** P3
-**Depends on:** Retour d'usage du hook SessionEnd
+**Depends on:** Aucun
 
 ### Kind `renamed` sémantique pour le watcher fichiers
 
@@ -361,6 +379,14 @@ d'une commande) : ranger les faits par workspace à l'affichage (chaque fait
 porte son `cwd` ou son `workspace`), ou rattacher après coup à la session
 suivante les faits forts qui ont précédé un `workspace_changed` confirmé, ce
 qui touche la reconstruction (`reconstruction_version`, note datée).
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Aucun
+
+### Les worktrees d'un dépôt surveillé sont surveillés d'office et rattachés au dépôt principal
+
+**What:** depuis le 2026-09-17, toute branche autre que main se travaille dans un worktree (`AGENTS.md`). Relevé du même jour : Core n'en voit que les commits (le hook `post-commit` est commun aux worktrees ; `git_root` = chemin du worktree, et un rebase réémet les commits rejoués avec la branche `HEAD`). Zéro `file_changed` sous `Pulse-refs`, `Pulse-live` ou `Pulse-exp`, contre 36 sous Pulse : le watcher n'observe que la liste déclarée (`file_watcher.read_watched_workspaces`), et un worktree est un dossier frère. Côté attribution, `analysis/projects.py` teste `(path / ".git").exists()`, vrai aussi pour un `.git` en fichier, et `git_context` lit `--show-toplevel` : le worktree devient un projet à part, nommé d'après son dossier (« Pulse-live »). À faire : pour chaque dépôt déclaré, observer aussi ses worktrees sans liste manuelle (`git worktree list --porcelain` au démarrage du watcher, et à l'apparition d'un worktree) ; rattacher un worktree au dépôt principal en lisant la ligne `gitdir:` de son fichier `.git`, en gardant son chemin comme workspace. Même chantier que l'entrée suivante, vue du côté des sessions.
 
 **Effort:** M
 **Priority:** P2
