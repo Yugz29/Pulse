@@ -668,6 +668,16 @@ Sans eux, le journal est aveugle aux fichiers et aux applications dès que
   démarrage — après édition : `launchctl kickstart -k
   gui/$(id -u)/com.pulse.file-watcher`. Une entrée disparue est ignorée
   avec un avertissement, elle n'aveugle pas les autres workspaces.
+  Les **worktrees liés** d'un dépôt déclaré sont observés d'office, sans
+  ligne à ajouter : le watcher lit `git worktree list` au démarrage puis
+  toutes les 60 secondes. Un worktree créé est donc observé au plus tard une
+  minute après, et son contenu à la découverte ne produit aucun événement.
+  Un worktree placé sous un workspace déclaré n'est pas ajouté (il est déjà
+  observé). Un worktree retiré, par `git worktree remove` ou à la main,
+  cesse d'être observé sans émettre une suppression par fichier. Ses
+  événements gardent sa racine comme workspace et portent le nom du dépôt
+  principal comme projet (`Pulse`, pas `Pulse-live`), pour les fichiers, les
+  commandes et les commits ; un sous-module n'est pas rattaché.
 - `com.pulse.app-observer` fait tourner `PulseApplicationObserver` (build
   release copié dans `~/.pulse_v2/bin`, hors de `.build`). Le contexte de
   fenêtre demande l’autorisation Accessibilité pour ce binaire (Réglages
