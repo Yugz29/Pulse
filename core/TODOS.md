@@ -393,14 +393,6 @@ qui touche la reconstruction (`reconstruction_version`, note datée).
 **Priority:** P2
 **Depends on:** Aucun
 
-### Les worktrees d'un dépôt surveillé sont surveillés d'office et rattachés au dépôt principal
-
-**What:** depuis le 2026-09-17, toute branche autre que main se travaille dans un worktree (`AGENTS.md`). Relevé du même jour : Core n'en voit que les commits (le hook `post-commit` est commun aux worktrees ; `git_root` = chemin du worktree, et un rebase réémet les commits rejoués avec la branche `HEAD`). Zéro `file_changed` sous `Pulse-refs`, `Pulse-live` ou `Pulse-exp`, contre 36 sous Pulse : le watcher n'observe que la liste déclarée (`file_watcher.read_watched_workspaces`), et un worktree est un dossier frère. Côté attribution, `analysis/projects.py` teste `(path / ".git").exists()`, vrai aussi pour un `.git` en fichier, et `git_context` lit `--show-toplevel` : le worktree devient un projet à part, nommé d'après son dossier (« Pulse-live »). À faire : pour chaque dépôt déclaré, observer aussi ses worktrees sans liste manuelle (`git worktree list --porcelain` au démarrage du watcher, et à l'apparition d'un worktree) ; rattacher un worktree au dépôt principal en lisant la ligne `gitdir:` de son fichier `.git`, en gardant son chemin comme workspace. Même chantier que l'entrée suivante, vue du côté des sessions.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** Aucun
-
 ### Attribution d'une session à un worktree git plutôt qu'au dépôt principal
 
 **What:** Le résumé de `a48ebc2f6a7fbc95` (work-13 du 2026-09-11) porte
@@ -463,6 +455,14 @@ configuration des seuils quitte Intelligence pour Core.
 **Depends on:** Note de décision datée (contrat `/context/sessions`, `schema_version`)
 
 ## Completed
+
+### Les worktrees d'un dépôt surveillé sont surveillés d'office et rattachés au dépôt principal
+
+**What:** Core ne voyait d'un worktree que ses commits, sous un projet à part nommé d'après le dossier (« Pulse-live ») ; zéro `file_changed` sous `Pulse-refs`, `Pulse-live` ou `Pulse-exp` le 2026-09-17.
+
+**Résolution (0.8.7.0) :** rattachement par la ligne `gitdir:` du fichier `.git` (nom du dépôt principal, workspace du worktree conservé) pour les commandes, les commits et les fichiers ; observation d'office par `git worktree list`, relu toutes les 60 s, retrait sans rafale de suppressions. Reste, dans l'entrée suivante : ce que le résumé doit porter quand une session a été servie avec un workspace puis un autre, et le regroupement d'une session qui bascule entre le dépôt et son worktree (la bascule reste un `workspace_changed`). Les 16 commits du 17 gardent leur projet d'alors.
+
+**Completed:** 2026-09-17
 
 ### Un virtualenv se reconnaît à son `pyvenv.cfg`, pas à son nom
 
