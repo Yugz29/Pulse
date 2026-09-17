@@ -573,7 +573,11 @@ def test_commit_reference_is_linked_to_the_stored_commit(tmp_path):
     anchor = f"fait-resume-{view['event_id']}-o1"
     assert f'<a class="fact-ref" href="#{anchor}">o1</a> sur la branche' in html
     assert f'<div class="summary-fact" id="{anchor}"><code>o1</code> · commit · <code>abc1234</code> · branche exp/x' in html
-    assert "<pre>docs: mesure\n\nPas de verdict.</pre>" in html
+    assert '<div class="fact-subject">docs: mesure</div>' in html
+    assert (
+        '<details class="fact-message"><summary>message complet</summary>'
+        "<pre>docs: mesure\n\nPas de verdict.</pre></details>"
+    ) in html
     assert "non vérifiable" not in html
 
 
@@ -759,3 +763,120 @@ def test_a_summary_without_references_renders_as_before(tmp_path):
     assert 'class="summary-facts"' not in html
     assert "non vérifiable" not in html
     assert "<dd>Après le commit abc1234.</dd>" in html
+
+
+# --- Fait commit : première ligne, phrase citée, message complet sans trailers ------
+
+
+MESSAGE = (
+    "docs: mesure de l'entrée compacte\n\n"
+    "Tokens comptés sans les poids. La mesure avec le\n"
+    "modèle n'a pas été lancée : Mac sur batterie.\n\n"
+    "Co-Authored-By: Quelqu'un <quelqu.un@example.test>\n"
+    "Claude-Session: exemple\n"
+)
+
+
+def commit_fact(tmp_path, message: str, **fields) -> str:
+    """Le HTML du fait o1 (un commit au message donné) dans la zone Résumés."""
+    store, _ = cited(
+        tmp_path,
+        commit(-1510, "abc1234", message),
+        sources=lambda ids: {"o1": [ids[0]]},
+        **{"stopped_at": "Commit o1.", **fields},
+    )
+    resumes = render(store).split('id="resumes"', 1)[1]
+    return resumes.split('<div class="summary-facts">', 1)[1].split("</article>", 1)[0]
+
+
+def test_commit_fact_drops_git_trailers_from_the_displayed_message(tmp_path):
+    fact = commit_fact(tmp_path, MESSAGE)
+
+    assert "Co-Authored-By" not in fact and "Claude-Session" not in fact
+    assert "example.test" not in fact
+    assert '<div class="fact-subject">docs: mesure de l&#x27;entrée compacte</div>' in fact
+    # Le corps reste entier dans le message complet, replié par défaut.
+    assert '<details class="fact-message"><summary>message complet</summary>' in fact
+    assert "<details open" not in fact
+    assert "Mac sur batterie.</pre>" in fact
+
+
+def test_commit_fact_keeps_what_is_not_a_trailer_block(tmp_path):
+    # Un sujet seul ressemble à « Clé: valeur » : ce n'est pas un trailer.
+    alone = commit_fact(tmp_path / "a", "docs: sujet seul")
+    assert '<div class="fact-subject">docs: sujet seul</div>' in alone
+    assert "fact-message" not in alone
+    # Un dernier paragraphe qui mêle prose et « Clé: valeur » reste affiché.
+    mixed = commit_fact(tmp_path / "b", "fix: x\n\nReste: à voir\nen prose ensuite")
+    assert "Reste: à voir\nen prose ensuite</pre>" in mixed
+
+
+def test_commit_fact_highlights_the_sentence_the_summary_quotes(tmp_path):
+    # La citation tient sur une ligne, le message la coupe : égalité aux blancs près.
+    fact = commit_fact(
+        tmp_path,
+        MESSAGE,
+        open_text=(
+            "Point déclaré dans un commit : mesure non lancée (o1) "
+            "(« La mesure avec le modèle n'a pas été lancée : Mac sur batterie. »)."
+        ),
+        open_items=[{"kind": "recorded_statement", "evidence": ["o1"]}],
+    )
+
+    assert fact.count("<mark>") == 1
+    assert (
+        '<div class="fact-quote"><mark>La mesure avec le modèle n&#x27;a pas été '
+        "lancée : Mac sur batterie.</mark></div>"
+    ) in fact
+    # Phrase citée visible sans déplier ; l'ancre du fait est hors du <details>.
+    assert fact.index("<mark>") < fact.index('<details class="fact-message">')
+    assert fact.index('id="fait-resume-') < fact.index("<details")
+
+
+def test_commit_fact_highlights_a_quotation_inside_the_first_line(tmp_path):
+    fact = commit_fact(
+        tmp_path, "docs: pas de verdict\n\nCorps.", open_text="Reste (« pas de verdict »)."
+    )
+
+    assert '<div class="fact-subject">docs: <mark>pas de verdict</mark></div>' in fact
+    assert "fact-quote" not in fact
+
+
+def test_commit_fact_has_no_mark_when_the_quotation_is_not_in_the_message(tmp_path):
+    fact = commit_fact(
+        tmp_path, MESSAGE, open_text="Point déclaré (« Une phrase que le commit ne dit pas. »)."
+    )
+
+    assert "<mark>" not in fact and "fact-quote" not in fact
+    assert "docs: mesure de l&#x27;entrée compacte" in fact
+
+
+def test_commit_fact_escapes_html_inside_the_highlight(tmp_path):
+    fact = commit_fact(
+        tmp_path,
+        "fix: x\n\nReste à traiter <script>alert(1)</script> & co.",
+        open_text="Point déclaré (« Reste à traiter <script>alert(1)</script> & co. »).",
+    )
+
+    assert "<script>" not in fact
+    assert (
+        "<mark>Reste à traiter &lt;script&gt;alert(1)&lt;/script&gt; &amp; co.</mark>"
+    ) in fact
+
+
+def test_cited_facts_block_is_always_open_and_needs_no_script(tmp_path):
+    store, _ = cited(
+        tmp_path,
+        commit(-1510, "abc1234", MESSAGE),
+        sources=lambda ids: {"o1": [ids[0]]},
+        stopped_at="Commit o1.",
+    )
+
+    reprise = render(store).split('id="reprise"', 1)[1].split("</section>", 1)[0]
+
+    # Un <div>, pas un <details> : la cible du lien est toujours visible.
+    assert '<div class="summary-facts"><h4>' in reprise
+    target = reprise.split('href="#', 1)[1].split('"', 1)[0]
+    before_target = reprise.split(f'id="{target}"', 1)[0]
+    assert before_target.count("<details") == before_target.count("</details>")
+    assert "<script" not in reprise and "onclick" not in reprise
