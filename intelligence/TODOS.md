@@ -251,6 +251,15 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P3
 **Depends on:** Aucun
 
+### Intelligence n'a ni VERSION ni CHANGELOG, rien ne relie un lot à une version
+
+- **Constat (2026-09-17) :** `__version__` et `pyproject.toml` disent `0.1.0` depuis l'origine ; aucun fichier VERSION, aucun CHANGELOG. La valeur part pourtant dans chaque résumé (`producer.version`), identique pour tous : elle ne distingue ni le correctif des sessions courtes à commit (#98), ni celui de la citation des points `open` (#106), dont l'effet ne vaut que pour les résumés à venir. Avec l'install éditable, un lot exécute le code du checkout à l'heure du lot : le 17, c'était celui d'une branche expérimentale, et seul le recalcul des `input_hash` a montré que v7 n'en était pas affecté.
+- **À décider :** une version qui bouge avec le comportement (au moins à chaque changement de ce qui est émis), un CHANGELOG sur le modèle de Core, et ce que le lot en écrit dans `run.log` ; voir l'entrée « `run.log` n'écrit ni `prompt_version`, ni modèle, ni sessions écartées » ci-dessus, et côté Core « Core n'expose sa version nulle part » (`core/TODOS.md`) : même manque, des deux côtés.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
 ## Completed
 
 ### Une session qui porte un commit est écartée pour sa durée (cas `dd06e6c8`, 2026-09-15)
