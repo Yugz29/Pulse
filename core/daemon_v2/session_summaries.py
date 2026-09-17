@@ -159,9 +159,13 @@ def _summary_view(
 def _open_items(value: Any) -> list[dict[str, Any]]:
     """Nature et preuves des points ouverts (prompts v3 et suivants).
 
-    Le texte de chaque point voyage seulement dans ``reprise.open``, composé
-    par Intelligence (``render_open_items``) : l'événement n'en porte que la
-    nature et les références.
+    Le texte de chaque point voyage seulement dans ``reprise.open``, rédigé
+    par Core : l'événement n'en porte que la nature et les références.
+
+    « Rédigé » est ici le terme du dépôt pour le masquage des secrets
+    (``redact_command``, appliqué à ``reprise.open`` à l'ingestion), pas pour
+    l'écriture du texte : c'est Intelligence qui le compose
+    (``render_open_items``), et Core qui le masque avant de le stocker.
     """
     if not isinstance(value, list):
         return []
