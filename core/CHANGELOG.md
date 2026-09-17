@@ -61,8 +61,16 @@ observations, schéma de `trace.db`).
   (0,9 s et 2,5 s le 17) : non traité ici.
 
 ### Déploiement
-- Relancer le daemon Core : launchd ne recharge pas le code. Ni le
-  file-watcher, ni le worker, ni Intelligence ne sont concernés.
+- Relancer les quatre services Core, pas le daemon seul. Daemon et worker :
+  `launchctl bootout`, attendre la sortie effective du service, puis
+  `launchctl bootstrap` ; file-watcher et observateur : `launchctl kickstart
+  -k`, sans reconstruire l'observateur (signature ad hoc, Accessibilité).
+  Seul le daemon porte le changement, mais le contrôle STALE de `make status`
+  compare l'heure de démarrage de chaque service au dernier commit sous
+  `core/` (`daemon_v2`, `scripts`, `macos_observer`, `requirements*`), pas au
+  service concerné : un service non relancé reste marqué STALE. Mention
+  corrigée le 2026-09-17, elle disait « relancer le daemon Core ».
+  Intelligence n'est pas concernée.
 
 ## [0.8.7.0] - 2026-09-17
 
@@ -224,8 +232,11 @@ restent identiques.
   porte `references`.
 
 ### Déploiement
-- Relancer le daemon Core : launchd ne recharge pas le code. Aucune
-  coordination avec Intelligence.
+- Relancer les quatre services Core, pas le daemon seul : launchd ne recharge
+  pas le code, et le contrôle STALE de `make status` compare chaque service
+  au dernier commit sous `core/`, pas au service concerné (procédure à
+  l'entrée 0.8.8.0). Mention corrigée le 2026-09-17, elle disait « relancer
+  le daemon Core ». Aucune coordination avec Intelligence.
 
 ## [0.8.3.0] - 2026-09-16
 
@@ -244,8 +255,11 @@ identiques.
   restaient invisibles en alerte alors que le lot devait les résumer.
 
 ### Déploiement
-- Relancer le daemon Core : launchd ne recharge pas le code. Aucune
-  coordination avec Intelligence.
+- Relancer les quatre services Core, pas le daemon seul : launchd ne recharge
+  pas le code, et le contrôle STALE de `make status` compare chaque service
+  au dernier commit sous `core/`, pas au service concerné (procédure à
+  l'entrée 0.8.8.0). Mention corrigée le 2026-09-17, elle disait « relancer
+  le daemon Core ». Aucune coordination avec Intelligence.
 
 ## [0.8.2.0] - 2026-09-14
 
@@ -264,8 +278,11 @@ Lecture seule, aucun contrat consommé ne change.
   zone, seuils affichés.
 
 ### Déploiement
-- Relancer le daemon Core : launchd ne recharge pas le code. Aucune
-  coordination avec Intelligence.
+- Relancer les quatre services Core, pas le daemon seul : launchd ne recharge
+  pas le code, et le contrôle STALE de `make status` compare chaque service
+  au dernier commit sous `core/`, pas au service concerné (procédure à
+  l'entrée 0.8.8.0). Mention corrigée le 2026-09-17, elle disait « relancer
+  le daemon Core ». Aucune coordination avec Intelligence.
 
 ## [0.8.1.0] - 2026-09-13
 
