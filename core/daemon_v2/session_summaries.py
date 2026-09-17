@@ -29,6 +29,7 @@ from typing import Any
 from .daily_trace import build_daily_trace
 from .models import StoredActivity
 from .runtime_config import reconstruction_timezone
+from .summary_references import resolve_references
 from .trace_store import TraceStore
 
 
@@ -68,7 +69,7 @@ def build_summary_board(
     reference_utc = reference_at.astimezone(timezone.utc)
 
     views = [
-        _summary_view(stored, zone=zone, reference_at=reference_utc)
+        _summary_view(stored, store=store, zone=zone, reference_at=reference_utc)
         for stored in store.activities_of_type(SUMMARY_TYPE, before=reference_utc)
     ]
     reprise = views[0] if views else None
@@ -101,6 +102,7 @@ def build_summary_board(
 def _summary_view(
     stored: StoredActivity,
     *,
+    store: TraceStore,
     zone: tzinfo,
     reference_at: datetime,
 ) -> dict[str, Any]:
@@ -115,6 +117,10 @@ def _summary_view(
     if isinstance(workspace, dict):
         workspace = workspace.get("workspace_root")
     age_seconds = (reference_at - ended.astimezone(timezone.utc)).total_seconds()
+    doing = _text(reprise.get("doing"))
+    stopped_at = _text(reprise.get("stopped_at"))
+    open_text = _text(reprise.get("open"))
+    open_items = _open_items(details.get("open_items"))
     return {
         "event_id": stored.event_id,
         "session_id": str(details.get("session_id") or ""),
@@ -128,10 +134,21 @@ def _summary_view(
         "model_id": _text(details.get("model_id")),
         "generated_at": _text(details.get("generated_at")),
         "origin": "model_interpretation",
-        "doing": _text(reprise.get("doing")),
-        "stopped_at": _text(reprise.get("stopped_at")),
-        "open": _text(reprise.get("open")),
-        "open_items": _open_items(details.get("open_items")),
+        "doing": doing,
+        "stopped_at": stopped_at,
+        "open": open_text,
+        "open_items": open_items,
+        # Références oN citées, résolues par la table ``observation_sources``
+        # du résumé lui-même ; les bornes sont celles que le résumé déclare,
+        # jamais ``occurred_at`` en repli : sans elles, rien ne se vérifie.
+        "references": resolve_references(
+            store,
+            details,
+            texts=[doing, stopped_at, open_text],
+            open_items=open_items,
+            started_at=started,
+            ended_at=_optional_instant(details.get("session_ended_at")),
+        ),
         "confidence": _text(structured.get("confidence")),
         "central_files": _texts(structured.get("central_files")),
         "age_minutes": max(0, int(age_seconds // 60)),
@@ -142,8 +159,9 @@ def _summary_view(
 def _open_items(value: Any) -> list[dict[str, Any]]:
     """Nature et preuves des points ouverts (prompts v3 et suivants).
 
-    Le texte de chaque point voyage seulement dans ``reprise.open``, rédigé
-    par Core : l'événement n'en porte que la nature et les références.
+    Le texte de chaque point voyage seulement dans ``reprise.open``, composé
+    par Intelligence (``render_open_items``) : l'événement n'en porte que la
+    nature et les références.
     """
     if not isinstance(value, list):
         return []
