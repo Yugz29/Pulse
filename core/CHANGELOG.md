@@ -4,6 +4,58 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.9.0] - 2026-09-17
+
+Core dit quelle version il exécute, et `make status` juge STALE sur cette
+version. Aucun contrat consommé ne change : `/context`, `/context/sessions`,
+export du journal, identité de session, `reconstruction_version`, version des
+observations, schéma de `trace.db`. `/status` gagne un champ.
+
+### Ajouté
+- `daemon_v2/version.py` : `CORE_VERSION` est le contenu de `core/VERSION`
+  lu une fois, à l'import, donc au démarrage du processus. C'est la version
+  du code exécuté : un service launchd ne recharge pas son code, et relire le
+  fichier à chaque requête dirait la version du checkout. Fichier absent,
+  vide ou illisible : `unknown`, jamais une erreur, la collecte n'en dépend
+  pas.
+- `GET /status` porte `version` ; la page `/` l'affiche dans `État système`.
+  `/context` ne la porte pas.
+- Worker et file-watcher ne servent rien : ils annoncent leur version au
+  démarrage dans `<dossier de la base>/run/<service>.json` (pid et version,
+  0600, écriture atomique, jamais bloquante). L'annonce d'un autre pid ne
+  vaut rien. Un Core jetable (`PULSE_V2_DB_PATH`) annonce à côté de sa base,
+  pas dans celle de la production.
+- `make status` affiche `Version servie` et la version du checkout.
+
+### Modifié
+- Le contrôle STALE compare la version que chaque service exécute à
+  `core/VERSION` du checkout, au lieu de l'heure de démarrage à la date du
+  dernier commit sous `core/`. Un service qui n'annonce aucune version est
+  STALE (il est antérieur à cette version) ; un `core/VERSION` illisible dans
+  le checkout ne donne aucun verdict. L'ancien calcul (`ps -o etime`) est
+  supprimé.
+- Gagné : un commit sans bump (docstring, commentaire, script, test) ne
+  marque plus les services STALE, comme #106 l'avait fait le 17 ; la ligne
+  dit quelles versions diffèrent.
+- Inchangé : après un bump, daemon, worker et file-watcher sont tous à
+  relancer, même si un seul porte le changement. Le contrôle compare des
+  versions, pas le service concerné.
+- Perdu : un changement de code mergé sans bump de `VERSION` n'est plus
+  détecté, alors que la comparaison de dates le voyait. La convention (tout
+  changement de comportement bouge la version) devient la seule garde. Un
+  service relancé depuis un checkout resté sur une branche de même version
+  n'est pas vu non plus.
+- L'observateur Swift n'est plus comparé. Son binaire est copié dans
+  `~/.pulse_v2/bin` à l'installation : une relance ne le met pas à jour, et
+  l'ancien STALE se levait par un `kickstart` sans effet sur son code.
+
+### Déploiement
+- Relancer daemon, worker et file-watcher (daemon et worker : `launchctl
+  bootout`, attente de la sortie, `bootstrap` ; file-watcher : `kickstart
+  -k`). Tant qu'ils ne le sont pas, `make status` les marque « version non
+  annoncée ». L'observateur n'a pas à être relancé. Aucune coordination avec
+  Intelligence.
+
 ## [0.8.8.0] - 2026-09-17
 
 La page du journal ne déroule plus le bruit de fichiers. Suite du « non

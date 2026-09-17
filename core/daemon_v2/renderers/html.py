@@ -399,6 +399,10 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 '<section class="system" id="etat-systeme"><h2>État système</h2><dl>',
                 f"<dt>Daemon</dt><dd>{escape(system_status['daemon'])}</dd>",
                 (
+                    "<dt>Version de Core</dt><dd>"
+                    f"{escape(str(system_status.get('version', 'inconnue')))}</dd>"
+                ),
+                (
                     "<dt>URL locale</dt><dd>"
                     f"<a href=\"{escape(system_status['url'])}\">"
                     f"{escape(system_status['url'])}</a></dd>"

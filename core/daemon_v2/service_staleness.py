@@ -1,72 +1,81 @@
-"""Un service launchd plus vieux que le code qu'il est censé exécuter.
+"""Un service launchd qui exécute une autre version que celle du checkout.
 
-Le daemon, l'outbox worker, le watcher et l'observateur chargent le code au
-démarrage et ne le rechargent jamais : après un merge dans core/, ils
-tournent sur l'ancien code tant qu'ils ne sont pas redémarrés. Du
-2026-09-06 au 11, le daemon a ainsi servi schema_version 2 alors que main
-était au schéma 3, sans qu'aucun affichage le montre. `make status`
-compare l'heure de démarrage de chaque service (ps -o etime) à la date du
-dernier commit touchant core/ sur la branche courante, et écrit STALE.
+Le daemon, l'outbox worker et le watcher chargent le code au démarrage et ne
+le rechargent jamais : après un merge dans core/, ils tournent sur l'ancien
+code tant qu'ils ne sont pas redémarrés. Du 2026-09-06 au 11, le daemon a
+ainsi servi schema_version 2 alors que main était au schéma 3, sans qu'aucun
+affichage le montre.
 
-Utilisation par status.sh : `python -m daemon_v2.service_staleness <pid> <epoch>`
-affiche « STALE » si le processus a démarré avant l'epoch, rien sinon.
+`make status` compare la version que chaque service exécute (``version.py`` :
+servie par ``/status`` pour le daemon, annoncée au démarrage pour le worker
+et le watcher) à ``core/VERSION`` du checkout. Jusqu'à la 0.8.8.0, il
+comparait l'heure de démarrage à la date du dernier commit sous core/ : un
+docstring marquait les quatre services STALE, et une relance sans effet
+levait l'alerte. Ce que la comparaison de versions ne voit pas : un
+changement de code mergé sans bump de ``VERSION``.
+
+Utilisation par status.sh :
+`python -m daemon_v2.service_staleness <label> <pid> [version servie]`
+affiche le suffixe de la ligne du service.
 """
 
 from __future__ import annotations
 
-import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+
+from .version import UNKNOWN_VERSION, announced_version, read_version
+
+# Services Python résidents qui annoncent leur version au démarrage.
+ANNOUNCING_SERVICES = {
+    "com.pulse.outbox-worker": "outbox-worker",
+    "com.pulse.file-watcher": "file-watcher",
+}
+DAEMON_LABEL = "com.pulse.daemon"
+OBSERVER_LABEL = "com.pulse.app-observer"
 
 
-def elapsed_seconds(etime: str) -> int:
-    """`ps -o etime=` : ``[[jj-]hh:]mm:ss``, sans dépendre de la locale."""
-    text = etime.strip()
-    days = 0
-    if "-" in text:
-        day_text, text = text.split("-", 1)
-        days = int(day_text)
-    parts = [int(part) for part in text.split(":")]
-    if len(parts) == 2:
-        hours, (minutes, seconds) = 0, parts
-    elif len(parts) == 3:
-        hours, minutes, seconds = parts
-    else:
-        raise ValueError(f"etime inattendu : {etime!r}")
-    return days * 86400 + hours * 3600 + minutes * 60 + seconds
+def staleness_suffix(running: str | None, checkout: str) -> str:
+    """Le suffixe d'une ligne de service : version, ou STALE et pourquoi."""
+    if checkout == UNKNOWN_VERSION:
+        shown = running or "inconnue"
+        return f" — version {shown} (core/VERSION illisible : non comparée)"
+    if not running:
+        return (
+            " — STALE : version non annoncée (service antérieur à la 0.8.9.0), "
+            "à redémarrer"
+        )
+    if running != checkout:
+        return f" — STALE : exécute {running}, checkout en {checkout}, à redémarrer"
+    return f" — version {running}"
 
 
-def started_at(etime: str, *, now: datetime) -> datetime:
-    return now - timedelta(seconds=elapsed_seconds(etime))
-
-
-def is_stale(started: datetime, *, code_changed_at: datetime) -> bool:
-    """Démarré strictement avant le dernier commit du code : périmé."""
-    return started < code_changed_at
-
-
-def process_started_at(pid: int, *, now: datetime | None = None) -> datetime | None:
-    """L'heure de démarrage d'un processus vivant, ``None`` s'il n'existe pas."""
-    result = subprocess.run(
-        ["ps", "-o", "etime=", "-p", str(pid)],
-        capture_output=True, text=True, check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    return started_at(result.stdout, now=now or datetime.now(timezone.utc))
+def service_suffix(
+    label: str, pid: int, *, served: str | None = None, checkout: str | None = None
+) -> str:
+    checkout = read_version() if checkout is None else checkout
+    if label == DAEMON_LABEL:
+        return staleness_suffix(served, checkout)
+    if label in ANNOUNCING_SERVICES:
+        return staleness_suffix(
+            announced_version(ANNOUNCING_SERVICES[label], pid), checkout
+        )
+    if label == OBSERVER_LABEL:
+        # Binaire Swift copié hors du dépôt à l'installation : une relance ne
+        # recharge pas son code, une version de Core n'en dit rien.
+        return " — non comparé (binaire installé, mis à jour par réinstallation)"
+    return ""
 
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 2:
-        print("usage: python -m daemon_v2.service_staleness <pid> <code_changed_epoch>", file=sys.stderr)
+    if len(args) not in (2, 3):
+        print(
+            "usage: python -m daemon_v2.service_staleness <label> <pid> [version servie]",
+            file=sys.stderr,
+        )
         return 2
-    pid, epoch = int(args[0]), int(args[1])
-    started = process_started_at(pid)
-    if started is None:
-        return 0
-    if is_stale(started, code_changed_at=datetime.fromtimestamp(epoch, tz=timezone.utc)):
-        print("STALE")
+    served = args[2] if len(args) == 3 and args[2] else None
+    print(service_suffix(args[0], int(args[1]), served=served))
     return 0
 
 

@@ -28,6 +28,7 @@ from .daily_trace import (
 from .event_logger import log_ingested_event, validation_error_summary
 from .ingest import IgnoredActivity, InvalidActivity, normalize_event
 from .runtime_config import reconstruction_timezone
+from .version import CORE_VERSION
 from .session_summaries import build_summary_board
 from .trace_store import EventConflictError
 
@@ -98,6 +99,9 @@ def _build_status(trace):
     database_path = Path(current_app.config["DATABASE_PATH"])
     return {
         "daemon": "running",
+        # La version que ce processus exécute, lue au démarrage : pas celle
+        # du checkout, qui a pu avancer depuis. ``/context`` ne la porte pas.
+        "version": CORE_VERSION,
         "url": f"{current_app.config['CORE_BASE_URL']}/",
         "database_path": str(database_path),
         "database_exists": database_path.exists(),

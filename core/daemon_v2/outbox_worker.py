@@ -15,6 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .private_files import apply_private_umask, ensure_private_directory
+from .version import announce
 from .producer_outbox import PendingEvent, ProducerOutbox, default_outbox_path
 from .runtime_config import activities_url
 
@@ -266,6 +267,7 @@ def main() -> None:
         if args.once:
             worker.process_one()
             return
+        announce("outbox-worker")
         run_forever(worker)
 
 
