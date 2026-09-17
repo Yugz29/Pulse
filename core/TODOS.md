@@ -135,6 +135,25 @@ et écrire STALE sinon, comme pour les services.
 **Priority:** P3
 **Depends on:** Aucun
 
+### Le détecteur `env.kv` du scan signale des affectations Python à valeur calculée
+
+**What:** deux faux positifs MEDIUM le 2026-09-17, tous deux sur une
+poussée publique, tous deux soumis à l'utilisateur et levés par réécriture,
+sans acquittement : `"Claude-Session: https://…"` dans une fixture de test
+(#103), puis `live_session = build_live_session(trace) if …` dans
+`renderers/html.py` (#104). `gstack-redact` lit « nom qui évoque un secret »
+(`session`, ici) suivi d'une valeur à forte entropie, sans distinguer un
+littéral d'un appel de fonction. Le rituel tient (liste brute, décision de
+l'utilisateur), mais renommer une variable pour passer un scan est un coût
+et une habitude à surveiller : voir la mesure de fatigue prévue le 30
+(`docs/audits/README.md`). À décider : remonter le cas à gstack (valeur non
+littérale = pas un secret), ou le laisser au rituel. Pas d'exception locale
+dans le hook.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
 ## Daemon V2
 
 ### Core n'expose sa version nulle part
@@ -326,6 +345,26 @@ déclaration citable, au même titre qu'un message de commit.
 **Effort:** S
 **Priority:** P2
 **Depends on:** Décision datée (nouveau type d'événement) ; ajouté le 2026-09-11
+
+### Une session de travail mélange deux projets (work-6 du 2026-09-17)
+
+**What:** work-6 (15:37:06–15:48:58, attribuée à Pulse) porte un commit et un
+fichier de Pulse, puis trois commandes en échec lancées dans DevNote
+(`npm run dev`, `python manage.py runserver`, 15:46:56–15:47:36) ; elle ne se
+ferme sur `workspace_changed` qu'à 15:48:58. Le seuil avant split (0.8.0.0,
+`SPLIT_MIN_DURATION` 2 min et `SPLIT_MIN_STRONG` 2) retient la bascule tant
+qu'elle n'a pas duré : trois commandes en quarante secondes restent dans la
+session de départ. Vu au premier rendu du bloc `Session en cours` (0.8.5.0),
+qui liste ces échecs DevNote sous une session Pulse ; le résumé de nuit les
+recevra de même. À examiner sans défaire le seuil (il évite les sessions
+d'une commande) : ranger les faits par workspace à l'affichage (chaque fait
+porte son `cwd` ou son `workspace`), ou rattacher après coup à la session
+suivante les faits forts qui ont précédé un `workspace_changed` confirmé, ce
+qui touche la reconstruction (`reconstruction_version`, note datée).
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Aucun
 
 ### Attribution d'une session à un worktree git plutôt qu'au dépôt principal
 
