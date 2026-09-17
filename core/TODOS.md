@@ -177,33 +177,9 @@ exact est remplacé par une périphrase pour passer le scan.
 **Priority:** P1
 **Depends on:** Aucun (le hook SessionEnd est en usage)
 
-### `make status` marque STALE sur tout commit sous `core/daemon_v2`, même sans effet
-
-**What:** le contrôle STALE (`scripts/status.sh`, `daemon_v2.service_staleness`) compare l'heure de démarrage de chaque service à la date du dernier commit qui touche `daemon_v2`, `scripts`, `macos_observer` ou `requirements*`. Un commentaire, un docstring ou de la doc dans ces dossiers suffit : le 2026-09-17, le rétablissement d'un docstring (#106, `c23b0c1`) a marqué les quatre services STALE vingt minutes après leur relance, sans qu'aucun comportement ait changé. Une alerte qui se déclenche sans raison finit par ne plus être lue. Pistes : comparer la version servie à `core/VERSION` plutôt que des dates, ce qui suppose que Core l'expose (entrée suivante, « Core n'expose sa version nulle part ») et que chaque changement de comportement la fasse bouger, ce qui est déjà la convention ; ou ignorer les commits sans effet sur le comportement, ce qui ne se décide pas mécaniquement. La première piste règle les deux entrées d'un coup.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Aucun
-
 ### Le daemon tourne en `ProcessType Background` : facteur 5 probable sur les pages
 
 **What:** le plist de `com.pulse.daemon` déclare `ProcessType` `Background` ; le processus tourne en priorité 4. C'est l'explication probable, non mesurée, du facteur 5 entre le même code mesuré hors daemon et la production : le 2026-09-17, après la 0.8.8.0, `GET /` en 2,7 s servi par la production contre 0,48 s hors daemon, `/day/2026-09-17` en 1,1 s contre 0,20 s ; avant le correctif, 17,6 s contre 3,8 s. À mesurer avant de changer quoi que ce soit : mêmes routes, même base, avec et sans ce réglage, sur un Core jetable lancé par launchd plutôt que sur la production. Ne pas modifier le plist sans cette mesure avant/après : le réglage protège aussi le travail au premier plan d'une collecte qui tourne toute la journée.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Aucun
-
-### Core n'expose sa version nulle part
-
-**What:** `core/VERSION` n'est qu'un fichier : aucune route ne le sert
-(`/status`, `/context`) et `make status` ne l'affiche pas. À la mise en
-production de 0.8.4.0 (#103, 2026-09-17), « la version servie » ne se
-vérifiait que par détour : processus démarré après le dernier commit de
-`core/`, répertoire de travail du daemon, comportement de `GET /`. À
-décider : la version lue au démarrage du daemon, rendue par `/status` et
-affichée par `make status` à côté du contrôle STALE ; `/context` est un
-contrat consommé et n'a pas à la porter. Même famille que l'entrée `run.log`
-d'`intelligence/TODOS.md` (un lot qui ne dit ni son prompt ni son modèle).
 
 **Effort:** S
 **Priority:** P3
@@ -471,6 +447,30 @@ configuration des seuils quitte Intelligence pour Core.
 **Depends on:** Note de décision datée (contrat `/context/sessions`, `schema_version`)
 
 ## Completed
+
+### `make status` marque STALE sur tout commit sous `core/daemon_v2`, même sans effet
+
+**What:** le contrôle STALE (`scripts/status.sh`, `daemon_v2.service_staleness`) compare l'heure de démarrage de chaque service à la date du dernier commit qui touche `daemon_v2`, `scripts`, `macos_observer` ou `requirements*`. Un commentaire, un docstring ou de la doc dans ces dossiers suffit : le 2026-09-17, le rétablissement d'un docstring (#106, `c23b0c1`) a marqué les quatre services STALE vingt minutes après leur relance, sans qu'aucun comportement ait changé. Une alerte qui se déclenche sans raison finit par ne plus être lue. Pistes : comparer la version servie à `core/VERSION` plutôt que des dates, ce qui suppose que Core l'expose (entrée suivante, « Core n'expose sa version nulle part ») et que chaque changement de comportement la fasse bouger, ce qui est déjà la convention ; ou ignorer les commits sans effet sur le comportement, ce qui ne se décide pas mécaniquement. La première piste règle les deux entrées d'un coup.
+
+**Résolution (0.8.9.0) :** le contrôle compare la version que chaque service exécute à `core/VERSION` du checkout (`service_staleness.py`) ; un commit sans bump ne marque plus rien. Perdu : un changement de code mergé sans bump de `VERSION` n'est plus détecté, et l'observateur Swift n'est plus comparé du tout (son STALE se levait par une relance qui ne rechargeait pas son binaire).
+
+**Completed:** 2026-09-17
+
+### Core n'expose sa version nulle part
+
+**What:** `core/VERSION` n'est qu'un fichier : aucune route ne le sert
+(`/status`, `/context`) et `make status` ne l'affiche pas. À la mise en
+production de 0.8.4.0 (#103, 2026-09-17), « la version servie » ne se
+vérifiait que par détour : processus démarré après le dernier commit de
+`core/`, répertoire de travail du daemon, comportement de `GET /`. À
+décider : la version lue au démarrage du daemon, rendue par `/status` et
+affichée par `make status` à côté du contrôle STALE ; `/context` est un
+contrat consommé et n'a pas à la porter. Même famille que l'entrée `run.log`
+d'`intelligence/TODOS.md` (un lot qui ne dit ni son prompt ni son modèle).
+
+**Résolution (0.8.9.0) :** `daemon_v2/version.py` lit `core/VERSION` au démarrage ; `/status` sert `version`, `make status` l'affiche, la page `/` aussi. Worker et file-watcher l'annoncent dans `~/.pulse_v2/run/`. `/context` ne la porte pas.
+
+**Completed:** 2026-09-17
 
 ### Les worktrees d'un dépôt surveillé sont surveillés d'office et rattachés au dépôt principal
 
