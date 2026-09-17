@@ -290,7 +290,8 @@ La page locale s’ouvre sur `Reprise` (le dernier résumé de session, puis les
 sessions éligibles d’hier restées sans résumé ; celles d’aujourd’hui et celles
 sous les seuils de candidature d’Intelligence sont seulement comptées) et
 `Résumés` (tous les résumés stockés, repliés), puis affiche les blocs
-`Maintenant`, `Faits de reprise`, `Aujourd’hui` et `État système`, puis une
+`Maintenant`, `Session en cours` (quand une session de travail est ouverte),
+`Faits de reprise`, `Aujourd’hui` et `État système`, puis une
 timeline navigable. Elle regroupe les changements de
 fichiers par vague de modification, résume les sessions, marque les changements
 de projet et synthétise les applications actives. Un événement fort isolé
@@ -432,6 +433,12 @@ La route `/` représente l’état courant. Elle affiche :
 - `Résumés` : tous les `session_summary` stockés, par jour puis par session,
   repliés, chaque version coexistante visible avec sa `prompt_version` ;
 - `Maintenant` ;
+- `Session en cours`, ancre `#session-en-cours`, seulement quand une session
+  de travail est ouverte : ses commits, ses fichiers les plus touchés, son
+  dernier test, ses commandes en échec (brutes : code et heure, jamais
+  « résolu ») et les sessions d’agent terminées depuis son début. Chaque
+  ligne est un fait observé, numéroté comme dans `/context` et ancré
+  (`#fait-live-oN`) ; calculé à chaque rendu, sans modèle ni stockage ;
 - `Faits de reprise` : les signaux déterministes (dernier test, dernière
   erreur, git local), ancre `#faits-de-reprise` ;
 - `Aujourd’hui` ;
@@ -441,7 +448,8 @@ La route `/` représente l’état courant. Elle affiche :
 
 La route `/day/YYYY-MM-DD` représente une archive stable d’une journée. Elle
 affiche `Journal du YYYY-MM-DD`, le résumé du jour et la timeline. Elle
-n’affiche ni `Reprise`, ni `Résumés`, ni `Maintenant`, ni `Faits de reprise`,
+n’affiche ni `Reprise`, ni `Résumés`, ni `Maintenant`, ni `Session en cours`,
+ni `Faits de reprise`,
 ni `État système`, et sa navigation se
 termine par `Fin du jour`.
 
