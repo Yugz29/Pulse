@@ -177,6 +177,14 @@ exact est remplacé par une périphrase pour passer le scan.
 **Priority:** P1
 **Depends on:** Aucun (le hook SessionEnd est en usage)
 
+### `make status` marque STALE sur tout commit sous `core/daemon_v2`, même sans effet
+
+**What:** le contrôle STALE (`scripts/status.sh`, `daemon_v2.service_staleness`) compare l'heure de démarrage de chaque service à la date du dernier commit qui touche `daemon_v2`, `scripts`, `macos_observer` ou `requirements*`. Un commentaire, un docstring ou de la doc dans ces dossiers suffit : le 2026-09-17, le rétablissement d'un docstring (#106, `c23b0c1`) a marqué les quatre services STALE vingt minutes après leur relance, sans qu'aucun comportement ait changé. Une alerte qui se déclenche sans raison finit par ne plus être lue. Pistes : comparer la version servie à `core/VERSION` plutôt que des dates, ce qui suppose que Core l'expose (entrée suivante, « Core n'expose sa version nulle part ») et que chaque changement de comportement la fasse bouger, ce qui est déjà la convention ; ou ignorer les commits sans effet sur le comportement, ce qui ne se décide pas mécaniquement. La première piste règle les deux entrées d'un coup.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
 ### Core n'expose sa version nulle part
 
 **What:** `core/VERSION` n'est qu'un fichier : aucune route ne le sert
