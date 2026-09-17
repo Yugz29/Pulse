@@ -74,6 +74,8 @@ une règle de contrat :
   vérifications pertinentes pour le changement ; élargir selon les risques.
   Pour Core, lancer les tests depuis `core/` avec `make test` ou
   `.venv/bin/python -m pytest tests_v2`.
+- Le checkout principal reste sur main (le lot launchd l'exécute) ; les
+  branches exp/ se travaillent dans le worktree `~/Projets/Pulse-exp`.
 - Expliquer le résultat, les validations réellement exécutées et les limites.
   Signaler les conséquences concrètes d'un risque, pas seulement un score d'outil.
 
