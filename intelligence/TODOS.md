@@ -251,15 +251,6 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P3
 **Depends on:** Aucun
 
-### Références oN cliquables dans la page HTML des résumés
-
-- **Constat (jour 13, 2026-09-17) :** `doing`, `stopped_at` et `open` citent des faits par leur référence (o40, o77, o109) ; les résoudre demande de rejouer l'entrée (`reprises.py` sous `corpus/`). La lecture seule du résumé ne se juge pas.
-- **À décider :** dans la page HTML des résumés, chaque oN renvoie au fait cité (commit avec message, commande avec code et cwd, fichier avec ses changements).
-
-**Effort:** M
-**Priority:** P3
-**Depends on:** Aucun
-
 ## Completed
 
 ### Une session qui porte un commit est écartée pour sa durée (cas `dd06e6c8`, 2026-09-15)

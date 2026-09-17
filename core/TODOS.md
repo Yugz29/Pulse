@@ -137,6 +137,23 @@ et écrire STALE sinon, comme pour les services.
 
 ## Daemon V2
 
+### Références oN cliquables dans la page HTML des résumés
+
+**What:** prochain chantier (décidé le 2026-09-17, jour 13 du dogfooding).
+`doing`, `stopped_at` et `open` citent des faits par leur référence (o40,
+o77, o109) ; les résoudre demande aujourd'hui de rejouer l'entrée
+(`reprises.py` sous `corpus/`), et la lecture seule du résumé ne se juge pas.
+Dans la page HTML des résumés (`daemon_v2/renderers/summaries.py`), chaque oN
+renvoie au fait cité : commit avec son message, commande avec code et cwd,
+fichier avec ses changements ; repli explicite quand la référence ne se
+vérifie plus. Les oN sont numérotés par Core (`work_observations.py`) et la
+page est rendue par Core : l'entrée vit ici, déplacée depuis
+`intelligence/TODOS.md` (P3 du matin).
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** Aucun
+
 ### Coût historique de l’attribution de session — résolu le 2026-09-08
 
 L’attribution à l’écriture et son scan global ont été supprimés. La

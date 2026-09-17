@@ -1251,6 +1251,8 @@ jour 10.
   sessions ; `doing`, `stopped_at` et `open` lus seuls ne se jugent pas sans
   la reconstruction (commits, entrée rejouée), comme au jour 12.
 
-**TODOS ouverts par ce jour** (sans traitement, `intelligence/TODOS.md`,
-P3) : `run.log` n'écrit ni `prompt_version`, ni modèle, ni sessions
-écartées ; références oN cliquables dans la page HTML des résumés.
+**TODOS ouverts par ce jour** (sans traitement) : `run.log` n'écrit ni
+`prompt_version`, ni modèle, ni sessions écartées (`intelligence/TODOS.md`,
+P3) ; références oN cliquables dans la page HTML des résumés, passées en P1
+le même jour et déplacées dans `core/TODOS.md` (rendu dans Core) : prochain
+chantier.
