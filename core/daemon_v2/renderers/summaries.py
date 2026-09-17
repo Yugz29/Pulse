@@ -387,8 +387,28 @@ def _render_facts(view: dict[str, Any], zone: tzinfo, scope: str) -> str:
 def _render_fact(
     resolution: dict[str, Any], view: dict[str, Any], zone: tzinfo, scope: str
 ) -> str:
+    return render_fact(
+        resolution,
+        zone,
+        anchor=_anchor(view, resolution["ref"], scope),
+        quotations=_quotations(view),
+    )
+
+
+def render_fact(
+    resolution: dict[str, Any],
+    zone: tzinfo,
+    *,
+    anchor: str,
+    quotations: list[str] | None = None,
+) -> str:
+    """Un fait observé, affiché par nature. ``anchor`` est déjà échappée.
+
+    Partagé avec le bloc « Session en cours » (``renderers/live``) : un fait
+    s'affiche de la même façon qu'il soit cité par un résumé ou listé en
+    direct. ``quotations`` : phrases à surligner dans un message de commit.
+    """
     ref = resolution["ref"]
-    anchor = _anchor(view, ref, scope)
     if resolution["status"] != RESOLVED:
         return (
             f'<div class="summary-fact unverified" id="{anchor}"><code>{escape(ref)}</code> · '
@@ -404,7 +424,7 @@ def _render_fact(
         if resolution["branch"]:
             pieces.append(f"branche {escape(resolution['branch'])}")
         if resolution["message"]:
-            block = _commit_message(resolution["message"], _quotations(view))
+            block = _commit_message(resolution["message"], quotations or [])
     elif kind == "command":
         code = resolution["exit_code"]
         pieces = ["commande", f"code {code}" if code is not None else "code inconnu"]

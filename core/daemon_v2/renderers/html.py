@@ -38,6 +38,10 @@ from ..daily_trace import (
     build_resume,
     build_session_summary,
 )
+from ..live_session import build_live_session
+from .live import CSS as LIVE_CSS
+from .live import NAVIGATION as LIVE_NAVIGATION
+from .live import render_live_session
 from .summaries import CSS as SUMMARY_CSS
 from .summaries import NAVIGATION as SUMMARY_NAVIGATION
 from .summaries import render_summary_zones
@@ -91,6 +95,9 @@ def render_daily_trace_html(
     summary = build_daily_summary(trace)
     current = build_current_state(trace) if not archive_mode else None
     resume = build_resume(trace) if not archive_mode else []
+    # Bloc « Session en cours » : vue vivante seulement, et seulement quand
+    # une session de travail est ouverte.
+    live = build_live_session(trace) if not archive_mode else None
     displayed_sessions = _displayed_sessions(trace)
     unresolved_sessions = trace["unresolved_sessions"]
     agent_views = agent_session_views(trace)
@@ -131,6 +138,8 @@ def render_daily_trace_html(
         navigation.append(
             '<a class="nav-main" href="#maintenant">Maintenant</a>'
         )
+        if live is not None:
+            navigation.append(LIVE_NAVIGATION)
         if resume:
             navigation.append(
                 '<a class="nav-main" href="#faits-de-reprise">Faits de reprise</a>'
@@ -245,6 +254,7 @@ grid-template-columns:3.25rem 1fr;gap:.65rem}.content{
 grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
 """
         + SUMMARY_CSS
+        + LIVE_CSS
         + """</style></head><body>""",
         '<div class="page-shell">',
         '<nav class="sidebar" aria-label="Navigation de la timeline">',
@@ -281,6 +291,8 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 "</dl></section>",
             ]
         )
+    if live is not None:
+        body.append(render_live_session(live, trace_zone))
     if resume:
         resume_content = []
         for fact in resume:

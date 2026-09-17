@@ -4,6 +4,39 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.5.0] - 2026-09-17
+
+Bloc `Session en cours` dans le journal HTML : étape 1 de
+`docs/decisions/2026-09-17-resumes-en-continu.md`, l'état du travail pendant
+la session, sans modèle. Lecture seule, calculé à chaque rendu, rien n'est
+stocké ; aucun contrat consommé ne change : `/context`, `/context/sessions`,
+export du journal, identité de session, `reconstruction_version`, version des
+observations et schéma de `trace.db` restent identiques.
+
+### Ajouté
+- Sous `Maintenant`, quand une session de travail est ouverte, le bloc
+  `Session en cours` (ancre `#session-en-cours`) range ses faits, numérotés
+  comme dans `/context` (`project_work_observations`) : commits, fichiers les
+  plus touchés (un par chemin, leurs faits réunis, huit au plus, le reste
+  compté), dernier test et nombre de tests en échec, commandes en échec (huit
+  au plus, du plus récent au plus ancien), sessions d'agent terminées depuis
+  le début de la session. Chaque ligne est un fait ancré (`#fait-live-oN`),
+  affiché comme les faits cités de 0.8.4.0 ; un lien mène à la chronologie
+  complète de la session.
+- Les échecs sont bruts : code et heure observés, jamais « résolu » ni
+  « dépassé ». L'état net des commandes reste côté Intelligence
+  (`resumption.py`) ; Core ne le recalcule pas. 130 est une interruption, pas
+  un échec, comme dans `/context`.
+- Le bloc est absent sans session ouverte, et dans `/day/<date>` et l'export
+  Markdown. Aucun script : la page se recharge à la main.
+- Modules `daemon_v2/live_session.py` et `daemon_v2/renderers/live.py` ;
+  `renderers/summaries.render_fact` partagé entre faits cités et faits en
+  direct.
+
+### Déploiement
+- Relancer les services Core : launchd ne recharge pas le code. Aucune
+  coordination avec Intelligence.
+
 ## [0.8.4.0] - 2026-09-17
 
 Références `oN` cliquables dans les zones `Reprise` et `Résumés` du journal
