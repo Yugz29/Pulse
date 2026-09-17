@@ -5,7 +5,7 @@ ne sert qu'à la collecte. La projection de l'historique n'appelle que les
 fonctions pures.
 """
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 IGNORED_DIRECTORY_NAMES = {
     ".build",
@@ -55,6 +55,29 @@ def virtualenv_roots(paths: Iterable[str | Path]) -> frozenset[Path]:
 def under_virtualenv(path: Path, roots: frozenset[Path]) -> bool:
     """``path`` est-il un virtualenv connu, ou sous l'un d'eux ?"""
     return bool(roots) and any(root == path or root in path.parents for root in roots)
+
+
+def attributed_workspace(path: str, workspace: Any) -> str | None:
+    """Workspace persisté d'un ``file_changed`` (chaîne, ou forme résolue
+    ``{"workspace_root": …}``), ou ``None`` s'il ne contient pas ``path`` :
+    un workspace historique incohérent est une attribution inconnue, pas la
+    preuve que le fichier est du bruit."""
+    if isinstance(workspace, dict):
+        workspace = workspace.get("workspace_root")
+    if workspace and not Path(path).is_relative_to(workspace):
+        return None
+    return workspace
+
+
+def is_file_noise(
+    path: str, workspace: str | None, virtualenvs: frozenset[Path]
+) -> bool:
+    """Le prédicat de bruit de l'historique, un seul pour ses deux lecteurs :
+    la projection (``/context``, entrée des résumés) et l'affichage du
+    journal. ``workspace`` sort de ``attributed_workspace``."""
+    return bool(workspace and should_ignore(Path(path), Path(workspace))) or (
+        under_virtualenv(Path(path), virtualenvs)
+    )
 
 
 def inside_virtualenv_on_disk(path: Path, workspace: Path) -> bool:

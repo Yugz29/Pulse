@@ -37,6 +37,7 @@ from ..daily_trace import (
     build_daily_summary,
     build_resume,
     build_session_summary,
+    without_file_noise,
 )
 from ..live_session import build_live_session
 from .live import CSS as LIVE_CSS
@@ -75,6 +76,31 @@ def _html_summary_facts(facts: list[str | tuple[str, list[str]]]) -> str:
     return f"<ul>{''.join(items)}</ul>"
 
 
+def _hidden_count_label(count: int) -> str:
+    return (
+        "1 changement de fichier masqué"
+        if count == 1
+        else f"{count} changements de fichiers masqués"
+    )
+
+
+def _hidden_noise_html(hidden: dict[str, Any]) -> str:
+    """Ce que la page ne déroule pas, et où le retrouver : jamais un retrait
+    silencieux."""
+    venvs = ", ".join(
+        f"<code>{escape(Path(root).name)}</code>" for root in hidden["virtualenvs"]
+    )
+    reason = (
+        f"virtualenv {venvs} ou dossier d’outillage"
+        if venvs
+        else "dossiers d’outillage"
+    )
+    return (
+        f"{_hidden_count_label(hidden['count'])} ({reason}), "
+        "conservés dans l’export JSON"
+    )
+
+
 def _format_grown_sessions(count: int | None) -> str:
     # None = manifeste producteur illisible : afficher l'incertitude,
     # jamais un faux zéro.
@@ -92,12 +118,17 @@ def render_daily_trace_html(
     # Zones « Reprise » et « Résumés » : vue vivante seulement, et seulement
     # quand l'appelant a lu les résumés stockés (``session_summaries``).
     show_summaries = summary_board is not None and not archive_mode
+    # Bloc « Session en cours » : vue vivante seulement, et seulement quand
+    # une session de travail est ouverte. Il lit la trace entière : ses
+    # références oN sont celles de ``/context``.
+    live = build_live_session(trace) if not archive_mode else None
+    # Tout le reste de la page déroule la journée sans le bruit de fichiers
+    # que la projection écarte déjà, et dit combien elle en masque.
+    trace = without_file_noise(trace)
+    hidden_noise = trace["hidden_file_noise"]
     summary = build_daily_summary(trace)
     current = build_current_state(trace) if not archive_mode else None
     resume = build_resume(trace) if not archive_mode else []
-    # Bloc « Session en cours » : vue vivante seulement, et seulement quand
-    # une session de travail est ouverte.
-    live = build_live_session(trace) if not archive_mode else None
     displayed_sessions = _displayed_sessions(trace)
     unresolved_sessions = trace["unresolved_sessions"]
     agent_views = agent_session_views(trace)
@@ -349,6 +380,11 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
         f"<dt>Git</dt><dd>{summary['git_count']}</dd>",
         f"<dt>Erreurs</dt><dd>{summary['error_count']}</dd>",
         f"<dt>Fichiers modifiés</dt><dd>{summary['distinct_file_count']}</dd>",
+        *(
+            [f"<dt>Fichiers masqués</dt><dd>{_hidden_noise_html(hidden_noise)}</dd>"]
+            if hidden_noise["count"]
+            else []
+        ),
         f"<dt>Projets</dt><dd>{', '.join(projects) if projects else 'Aucun'}</dd>",
         f"<dt>Apps principales</dt><dd>{', '.join(apps) if apps else 'Aucune'}</dd>",
         "</dl></section>",
@@ -450,6 +486,12 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
             body.append(
                 '<div class="session-summary"><h3>Résumé de session</h3>'
                 "<p>Aucun signal significatif dans cette session.</p></div>"
+            )
+        if session.get("hidden_file_noise"):
+            body.append(
+                '<p class="detail hidden-noise">'
+                f"{_hidden_count_label(session['hidden_file_noise'])} dans cette "
+                "session (virtualenv ou dossier d’outillage).</p>"
             )
         body.append('<ul class="timeline">')
         file_change_groups = _file_change_groups(session)

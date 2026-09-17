@@ -23,6 +23,7 @@ from .daily_trace import (
     render_available_days_html,
     render_daily_trace_html,
     render_daily_trace_markdown,
+    without_file_noise,
 )
 from .event_logger import log_ingested_event, validation_error_summary
 from .ingest import IgnoredActivity, InvalidActivity, normalize_event
@@ -131,7 +132,9 @@ def get_home():
     return Response(
         render_daily_trace_html(
             trace,
-            system_status=_build_status(trace),
+            # La page entière déroule la journée sans le bruit de fichiers ;
+            # ``/status`` garde la trace brute.
+            system_status=_build_status(without_file_noise(trace)),
             summary_board=summary_board,
         ),
         mimetype="text/html",

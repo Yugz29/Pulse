@@ -453,6 +453,15 @@ ni `Faits de reprise`,
 ni `État système`, et sa navigation se
 termine par `Fin du jour`.
 
+Les deux pages HTML déroulent la journée sans le bruit de fichiers que la
+projection de `/context` écarte déjà (`file_policy.is_file_noise` : dossiers
+d’outillage, virtualenv révélé par un événement `pyvenv.cfg` de la journée),
+sans lecture du disque. Rien n’est retiré en silence : `Fichiers masqués`
+donne le compte du jour, chaque session le sien, et l’en-tête garde le compte
+de la base. L’export `/trace/…` (JSON et Markdown), `/status`, `/days` et
+`/context` lisent toujours tous les événements. Une journée sans bruit est
+rendue à l’identique, sans plafond ni regroupement supplémentaire.
+
 Les vues datées HTML et Markdown sont temporellement stables : elles n’affichent
 pas `Maintenant` ni `Reprise`, et ne consultent pas l’état Git courant. La
 qualification des projets suit la même règle dans les deux modes : fichier

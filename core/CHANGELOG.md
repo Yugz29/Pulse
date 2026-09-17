@@ -4,6 +4,66 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.8.0] - 2026-09-17
+
+La page du journal ne déroule plus le bruit de fichiers. Suite du « non
+traité ici » de la 0.8.6.0. Page HTML seulement, comme 0.8.1.0 et 0.8.4.0 :
+aucun contrat consommé ne change (`/context`, `/context/sessions`, export du
+journal, identité de session, `reconstruction_version`, version des
+observations, schéma de `trace.db`).
+
+### Corrigé
+- `GET /day/2026-09-17` : 2,3 s et 1,78 Mo ; `GET /` : 3,8 s et 1,90 Mo.
+  Répartition de `/day` : requête SQL 0,12 s, construction de la vue 0,05 s,
+  rendu HTML 2,15 s. Le journal lit les événements bruts
+  (`activities_between` puis `reconstruct_session_views`), jamais la
+  projection : le filtre `pyvenv.cfg` de la 0.8.6.0, posé à la collecte et
+  dans `work_observations`, ne s'y appliquait pas. Les 13 059 `file_changed`
+  de `DevNote-env` y passaient donc tous, chacun résolu par `pathlib`
+  plusieurs fois par rendu (79 451 résolutions de projet), et sortaient en
+  listes de plusieurs milliers de lignes. Le volume de `file_changed` est la
+  seule cause : le 16 (659 événements, 107 fichiers) se rend en 25 ms pour
+  43 Ko.
+- `daily_trace.without_file_noise` : les pages HTML (`/` et `/day/…`)
+  déroulent une vue de la journée sans les `file_changed` que la projection
+  compte en `file_noise`. Même prédicat, désormais partagé
+  (`file_policy.is_file_noise`, `attributed_workspace`), sans lecture du
+  disque. Deux différences voulues avec la projection : les virtualenvs sont
+  ceux que la journée révèle, toutes sessions confondues, et un préfixe de
+  chaîne tranche les rafales avant `pathlib`.
+- La page dit ce qu'elle masque : `Fichiers masqués` dans le résumé du jour
+  (compte, virtualenv nommé, renvoi à l'export JSON) et une ligne par session
+  concernée. L'en-tête et `Événements` gardent le compte de la base ;
+  `Fichiers modifiés`, `Maintenant`, `Faits de reprise` et le
+  `Workspace principal` d'`État système` suivent la vue. `Session en cours`
+  lit toujours la trace entière : ses références oN restent celles de
+  `/context`.
+- Après correctif : `/day/2026-09-17` 0,20 s et 104 Ko (SQL 0,11 s, vue
+  0,04 s, rendu 0,07 s) ; `/` 0,48 s et 229 Ko ; `/day/2026-09-16` 27 ms et
+  42 947 octets, identique à l'octet.
+
+### Ce que cela fait perdre
+- Sur la page, le détail des fichiers masqués : il reste dans `/trace/…`.
+  Neuf journées passées changent d'affichage, toutes par du bruit que la
+  collecte n'enregistre plus : `node_modules`, `dist`, `.build` (juillet),
+  `.gitnexus` (29 août – 3 septembre, 1 306 lignes le 2), le virtualenv du
+  5 septembre (6 132). Une session faite seulement de bruit reste affichée,
+  avec son compte masqué.
+- Une rafale de vrais fichiers (259 dans la même minute le 9 septembre)
+  reste déroulée en entier : ni plafond ni regroupement ajouté.
+
+### Sans effet sur l'existant
+- Sur une copie de la base de production, entre `main` et cette version :
+  `/context/sessions` identique sur les 103 jours, `/context` (fenêtres 30,
+  120, 720), `/trace/<jour>` JSON et Markdown sur 102 jours et `/trace/days`
+  identiques, hors `generated_at`. Seules 9 pages `/day/…` diffèrent.
+  `/status` et `/days` lisent toujours la trace entière, avec leur coût
+  (0,9 s et 2,5 s le 17) : non traité ici.
+
+### Déploiement
+- Relancer le daemon Core : launchd ne recharge pas le code. Ni le
+  file-watcher, ni le worker, ni Intelligence ne sont concernés.
+
 ## [0.8.7.0] - 2026-09-17
 
 Worktrees Git liés : rattachés au dépôt principal, observés d'office. Depuis
