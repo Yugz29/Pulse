@@ -452,7 +452,7 @@ configuration des seuils quitte Intelligence pour Core.
 
 **What:** le contrôle STALE (`scripts/status.sh`, `daemon_v2.service_staleness`) compare l'heure de démarrage de chaque service à la date du dernier commit qui touche `daemon_v2`, `scripts`, `macos_observer` ou `requirements*`. Un commentaire, un docstring ou de la doc dans ces dossiers suffit : le 2026-09-17, le rétablissement d'un docstring (#106, `c23b0c1`) a marqué les quatre services STALE vingt minutes après leur relance, sans qu'aucun comportement ait changé. Une alerte qui se déclenche sans raison finit par ne plus être lue. Pistes : comparer la version servie à `core/VERSION` plutôt que des dates, ce qui suppose que Core l'expose (entrée suivante, « Core n'expose sa version nulle part ») et que chaque changement de comportement la fasse bouger, ce qui est déjà la convention ; ou ignorer les commits sans effet sur le comportement, ce qui ne se décide pas mécaniquement. La première piste règle les deux entrées d'un coup.
 
-**Résolution (0.8.9.0) :** le contrôle compare la version que chaque service exécute à `core/VERSION` du checkout (`service_staleness.py`) ; un commit sans bump ne marque plus rien. Perdu : un changement de code mergé sans bump de `VERSION` n'est plus détecté, et l'observateur Swift n'est plus comparé du tout (son STALE se levait par une relance qui ne rechargeait pas son binaire).
+**Résolution (0.8.9.0) :** le contrôle compare l'empreinte du code que chaque service exécute (`code_fingerprint.py` : arbre syntaxique sans docstrings, plus `VERSION` et `requirements.txt`) à celle du checkout, en trois états : à jour, STALE, INCONNU. Un docstring ne marque plus rien, un changement sans bump reste vu. L'observateur Swift est jugé sur l'empreinte de ses sources notée à l'installation ; son STALE se levait auparavant par une relance qui ne rechargeait pas son binaire. Non vus : dépendances installées sans changement de `requirements.txt`, environnement du plist.
 
 **Completed:** 2026-09-17
 
@@ -468,7 +468,7 @@ affichée par `make status` à côté du contrôle STALE ; `/context` est un
 contrat consommé et n'a pas à la porter. Même famille que l'entrée `run.log`
 d'`intelligence/TODOS.md` (un lot qui ne dit ni son prompt ni son modèle).
 
-**Résolution (0.8.9.0) :** `daemon_v2/version.py` lit `core/VERSION` au démarrage ; `/status` sert `version`, `make status` l'affiche, la page `/` aussi. Worker et file-watcher l'annoncent dans `~/.pulse_v2/run/`. `/context` ne la porte pas.
+**Résolution (0.8.9.0) :** `daemon_v2/version.py` lit `core/VERSION` au démarrage ; `/status` sert `version` et `code_fingerprint`, `make status` et la page `/` les affichent. Worker et file-watcher les annoncent dans `~/.pulse_v2/run/`. `/context` ne les porte pas.
 
 **Completed:** 2026-09-17
 
