@@ -60,7 +60,10 @@ db_state = "oui" if status["database_exists"] else "non"
 print("Pulse V2")
 print("  Daemon             : {}".format(status["daemon"]))
 # Absente : le daemon qui répond est antérieur à la 0.8.9.0.
-print("  Version servie     : {}".format(status.get("version") or "non servie"))
+print("  Version servie     : {} · code {}".format(
+    status.get("version") or "non servie",
+    status.get("code_fingerprint") or "non servi",
+))
 print("  URL                : {}".format(status["url"]))
 print("  Base SQLite        : {}".format(status["database_path"]))
 print(f"  Base existante     : {db_state}")
@@ -97,14 +100,22 @@ fi
 echo ""
 echo "Services launchd"
 # Un service launchd ne recharge jamais son code : après un merge, il exécute
-# l'ancienne version tant qu'il n'est pas redémarré. Le daemon a servi le
-# schéma 2 du 2026-09-06 au 11 sans que rien ne le montre. Le contrôle compare
-# la version que chaque service exécute (servie par /status, ou annoncée au
-# démarrage) à core/VERSION du checkout : un commit sans bump ne marque rien,
-# et un changement de code sans bump passe inaperçu.
-served_version="$(printf '%s' "$response" | "$python" -c \
-  'import json, sys; print(json.load(sys.stdin).get("version") or "")' 2>/dev/null || true)"
-printf '  %-28s: %s\n' "checkout (core/VERSION)" "$(cat "$repo_root/VERSION" 2>/dev/null || echo illisible)"
+# l'ancien tant qu'il n'est pas redémarré. Le daemon a servi le schéma 2 du
+# 2026-09-06 au 11 sans que rien ne le montre. Trois états : à jour, STALE,
+# INCONNU. L'empreinte du code décide (daemon_v2/code_fingerprint.py : arbre
+# syntaxique sans docstrings, plus VERSION et requirements.txt) : un docstring
+# ne marque rien, un changement sans bump est vu. La version se lit à côté.
+# L'observateur Swift est jugé sur les sources notées à son installation.
+served="$(printf '%s' "$response" | "$python" -c '
+import json, sys
+status = json.load(sys.stdin)
+print(status.get("version") or "")
+print(status.get("code_fingerprint") or "")' 2>/dev/null || true)"
+served_version="$(printf '%s\n' "$served" | sed -n 1p)"
+served_fingerprint="$(printf '%s\n' "$served" | sed -n 2p)"
+printf '  %-28s: version %s · code %s\n' "checkout" \
+  "$(cat "$repo_root/VERSION" 2>/dev/null || echo illisible)" \
+  "$("$python" -c 'from daemon_v2.code_fingerprint import python_fingerprint; print(python_fingerprint() or "illisible")' 2>/dev/null || echo illisible)"
 for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers \
              com.pulse.file-watcher com.pulse.app-observer; do
   info="$(launchctl print "gui/$(id -u)/$label" 2>/dev/null)"
@@ -116,7 +127,7 @@ for label in com.pulse.daemon com.pulse.outbox-worker com.pulse.agent-producers 
   state="$(printf '%s' "$info" | grep -m1 'state = ' | sed 's/.*state = //')"
   suffix=""
   if [[ -n "$pid" ]]; then
-    suffix="$("$python" -m daemon_v2.service_staleness "$label" "$pid" "$served_version" 2>/dev/null || true)"
+    suffix="$("$python" -m daemon_v2.service_staleness "$label" "$pid" "$served_version" "$served_fingerprint" 2>/dev/null || true)"
   fi
   printf '  %-28s: %s%s%s\n' "$label" "$state" "${pid:+ (pid $pid)}" "$suffix"
 done

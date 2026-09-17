@@ -1,83 +1,147 @@
-"""`make status` doit dire STALE pour un service launchd qui exécute une
-autre version que celle du checkout : du 2026-09-06 au 11, quatre services
-ont tourné sur du code antérieur au schéma 3 sans qu'aucun affichage le
-montre. Depuis la 0.8.9.0 la comparaison porte sur les versions, plus sur
-l'heure de démarrage contre la date du dernier commit."""
+"""`make status` doit dire qu'un service launchd n'exécute pas le code du
+checkout : du 2026-09-06 au 11, quatre services ont tourné sur du code
+antérieur au schéma 3 sans qu'aucun affichage le montre. Trois états : à
+jour, STALE, INCONNU. L'empreinte du code décide, la version se lit."""
 
 from __future__ import annotations
 
+import json
 import os
 
-from daemon_v2.service_staleness import main, service_suffix, staleness_suffix
-from daemon_v2.version import UNKNOWN_VERSION, announce
+from daemon_v2.service_staleness import (
+    STALE,
+    UNKNOWN,
+    UP_TO_DATE,
+    main,
+    observer_record_path,
+    observer_verdict,
+    python_service_verdict,
+    record_observer,
+    service_suffix,
+)
+from daemon_v2.version import CODE_FINGERPRINT, CORE_VERSION, announce
+
+CHECKOUT = {"checkout_version": "0.8.9.0", "checkout_fingerprint": "aaaaaaaaaaaa"}
 
 
-def test_a_service_running_the_checkout_version_is_not_stale():
-    assert staleness_suffix("0.8.9.0", "0.8.9.0") == " — version 0.8.9.0"
+def test_same_code_is_up_to_date_and_shows_the_version():
+    verdict = python_service_verdict("0.8.9.0", "aaaaaaaaaaaa", **CHECKOUT)
+
+    assert verdict.state == UP_TO_DATE
+    assert "version 0.8.9.0" in verdict.detail
+    assert verdict.suffix().startswith(" — à jour : ")
 
 
-def test_a_service_running_another_version_is_stale_and_says_both():
-    suffix = staleness_suffix("0.8.8.0", "0.8.9.0")
+def test_another_version_is_stale_and_says_both():
+    verdict = python_service_verdict("0.8.8.0", "bbbbbbbbbbbb", **CHECKOUT)
 
-    assert "STALE" in suffix
-    assert "exécute 0.8.8.0" in suffix and "checkout en 0.8.9.0" in suffix
-
-
-def test_a_service_that_announces_nothing_is_stale():
-    # Démarré avant la 0.8.9.0 : il exécute forcément un code plus ancien.
-    assert "STALE : version non annoncée" in staleness_suffix(None, "0.8.9.0")
-    assert "STALE : version non annoncée" in staleness_suffix("", "0.8.9.0")
+    assert verdict.state == STALE
+    assert "exécute 0.8.8.0" in verdict.detail and "checkout en 0.8.9.0" in verdict.detail
 
 
-def test_a_service_whose_version_file_was_missing_is_stale():
-    assert "STALE : exécute unknown" in staleness_suffix(UNKNOWN_VERSION, "0.8.9.0")
+def test_a_merge_without_a_bump_is_still_stale():
+    verdict = python_service_verdict("0.8.9.0", "bbbbbbbbbbbb", **CHECKOUT)
+
+    assert verdict.state == STALE
+    assert "changement sans bump" in verdict.detail
 
 
-def test_an_unreadable_checkout_version_is_not_a_verdict():
-    suffix = staleness_suffix("0.8.9.0", UNKNOWN_VERSION)
+def test_a_service_that_announces_no_fingerprint_is_unknown_not_stale():
+    for version in (None, "", "0.8.9.0"):
+        verdict = python_service_verdict(version, None, **CHECKOUT)
+        assert verdict.state == UNKNOWN
+        assert "STALE" not in verdict.suffix()
 
-    assert "STALE" not in suffix
-    assert "non comparée" in suffix
 
-
-def test_the_daemon_is_judged_on_the_version_it_serves():
-    assert service_suffix(
-        "com.pulse.daemon", 1, served="0.8.9.0", checkout="0.8.9.0"
-    ) == " — version 0.8.9.0"
-    assert "STALE" in service_suffix(
-        "com.pulse.daemon", 1, served=None, checkout="0.8.9.0"
+def test_an_unreadable_checkout_is_unknown():
+    verdict = python_service_verdict(
+        "0.8.9.0", "aaaaaaaaaaaa", checkout_version="unknown", checkout_fingerprint=None
     )
 
+    assert verdict.state == UNKNOWN
 
-def test_worker_and_watcher_are_judged_on_the_version_they_announced(
-    tmp_path, monkeypatch
-):
+
+def test_the_daemon_is_judged_on_what_it_serves():
+    up_to_date = service_suffix(
+        "com.pulse.daemon", 1,
+        served_version=CORE_VERSION, served_fingerprint=CODE_FINGERPRINT,
+    )
+    other_code = service_suffix(
+        "com.pulse.daemon", 1,
+        served_version=CORE_VERSION, served_fingerprint="bbbbbbbbbbbb",
+    )
+
+    assert up_to_date.startswith(" — à jour")
+    assert other_code.startswith(" — STALE") and "sans bump" in other_code
+    assert service_suffix("com.pulse.daemon", 1).startswith(" — INCONNU")
+
+
+def test_worker_and_watcher_are_judged_on_what_they_announced(tmp_path, monkeypatch):
     monkeypatch.setattr("daemon_v2.version.announce_directory", lambda: tmp_path)
-    monkeypatch.setattr("daemon_v2.version.CORE_VERSION", "0.8.8.0")
     announce("outbox-worker")
 
-    mine = service_suffix("com.pulse.outbox-worker", os.getpid(), checkout="0.8.9.0")
+    mine = service_suffix("com.pulse.outbox-worker", os.getpid())
     # Une annonce laissée par un processus précédent ne vaut pas pour ce pid.
-    other = service_suffix("com.pulse.outbox-worker", os.getpid() + 1, checkout="0.8.9.0")
-    watcher = service_suffix("com.pulse.file-watcher", os.getpid(), checkout="0.8.9.0")
+    other_pid = service_suffix("com.pulse.outbox-worker", os.getpid() + 1)
+    silent = service_suffix("com.pulse.file-watcher", os.getpid())
 
-    assert "exécute 0.8.8.0" in mine
-    assert "version non annoncée" in other
-    assert "version non annoncée" in watcher
-
-
-def test_the_swift_observer_is_never_called_stale():
-    suffix = service_suffix("com.pulse.app-observer", 1, checkout="0.8.9.0")
-
-    assert "STALE" not in suffix
-    assert "non comparé" in suffix
+    assert mine.startswith(" — à jour")
+    assert other_pid.startswith(" — INCONNU")
+    assert silent.startswith(" — INCONNU")
 
 
 def test_a_periodic_service_gets_no_suffix():
-    assert service_suffix("com.pulse.agent-producers", 1, checkout="0.8.9.0") == ""
+    assert service_suffix("com.pulse.agent-producers", 1) == ""
+
+
+def _observer(tmp_path):
+    root = tmp_path / "macos_observer"
+    (root / "Sources").mkdir(parents=True)
+    (root / "Package.swift").write_text("// swift-tools-version:5.9\n")
+    (root / "Sources" / "main.swift").write_text("print(1)\n")
+    binary = tmp_path / "bin" / "PulseApplicationObserver"
+    binary.parent.mkdir()
+    binary.write_bytes(b"\xcf\xfa\xed\xfe binaire")
+    return root, binary
+
+
+def test_the_observer_is_compared_through_the_sources_recorded_at_install(tmp_path):
+    root, binary = _observer(tmp_path)
+
+    assert observer_verdict(binary, observer_root=root).state == UNKNOWN
+    assert record_observer(binary, observer_root=root)
+    assert observer_verdict(binary, observer_root=root).state == UP_TO_DATE
+    assert set(json.loads(observer_record_path(binary).read_text())) == {
+        "source_fingerprint", "binary_sha256",
+    }
+
+    (root / "Sources" / "main.swift").write_text("print(2)\n")
+    stale = observer_verdict(binary, observer_root=root)
+    assert stale.state == STALE
+    # Une relance ne recharge pas un binaire copié : le remède est différent.
+    assert "réinstaller" in stale.detail
+
+
+def test_an_observer_binary_replaced_by_hand_is_unknown(tmp_path):
+    root, binary = _observer(tmp_path)
+    record_observer(binary, observer_root=root)
+    binary.write_bytes(b"autre binaire")
+
+    assert observer_verdict(binary, observer_root=root).state == UNKNOWN
+
+
+def test_recording_a_missing_binary_fails_without_writing(tmp_path):
+    root, binary = _observer(tmp_path)
+    binary.unlink()
+
+    assert not record_observer(binary, observer_root=root)
+    assert not observer_record_path(binary).exists()
 
 
 def test_the_cli_prints_the_suffix_status_sh_appends(capsys):
-    assert main(["com.pulse.daemon", "42", ""]) == 0
-    assert "version non annoncée" in capsys.readouterr().out
+    assert main(["com.pulse.daemon", "42", "", ""]) == 0
+    assert capsys.readouterr().out.startswith(" — INCONNU")
+    assert main(["com.pulse.daemon", "42", CORE_VERSION, CODE_FINGERPRINT]) == 0
+    assert capsys.readouterr().out.startswith(" — à jour")
     assert main(["com.pulse.daemon"]) == 2
+    assert main(["--record-observer"]) == 2

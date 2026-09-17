@@ -28,7 +28,7 @@ from .daily_trace import (
 from .event_logger import log_ingested_event, validation_error_summary
 from .ingest import IgnoredActivity, InvalidActivity, normalize_event
 from .runtime_config import reconstruction_timezone
-from .version import CORE_VERSION
+from .version import CODE_FINGERPRINT, CORE_VERSION
 from .session_summaries import build_summary_board
 from .trace_store import EventConflictError
 
@@ -102,6 +102,9 @@ def _build_status(trace):
         # La version que ce processus exécute, lue au démarrage : pas celle
         # du checkout, qui a pu avancer depuis. ``/context`` ne la porte pas.
         "version": CORE_VERSION,
+        # Empreinte du code chargé au démarrage : c'est elle que ``make
+        # status`` compare au checkout, la version se lit.
+        "code_fingerprint": CODE_FINGERPRINT,
         "url": f"{current_app.config['CORE_BASE_URL']}/",
         "database_path": str(database_path),
         "database_exists": database_path.exists(),

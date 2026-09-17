@@ -400,7 +400,9 @@ grid-column:2}.current,.resume,.summary,.system,.session{padding:1rem}}
                 f"<dt>Daemon</dt><dd>{escape(system_status['daemon'])}</dd>",
                 (
                     "<dt>Version de Core</dt><dd>"
-                    f"{escape(str(system_status.get('version', 'inconnue')))}</dd>"
+                    f"{escape(str(system_status.get('version', 'inconnue')))}"
+                    " · code "
+                    f"{escape(str(system_status.get('code_fingerprint') or 'inconnu'))}</dd>"
                 ),
                 (
                     "<dt>URL locale</dt><dd>"

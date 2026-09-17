@@ -8,11 +8,12 @@ import stat
 
 from daemon_v2.main import create_app
 from daemon_v2.version import (
+    CODE_FINGERPRINT,
     CORE_VERSION,
     UNKNOWN_VERSION,
     VERSION_FILE,
     announce,
-    announced_version,
+    announced,
     read_version,
 )
 
@@ -44,15 +45,21 @@ def test_status_serves_the_version_read_at_startup_not_the_file(tmp_path, monkey
     monkeypatch.setattr("daemon_v2.version.VERSION_FILE", moved)
     client = create_app(tmp_path / "trace.db").test_client()
 
-    assert client.get("/status").get_json()["version"] == "0.8.8.0"
-    assert "<dt>Version de Core</dt><dd>0.8.8.0</dd>" in client.get("/").get_data(as_text=True)
+    status = client.get("/status").get_json()
+    assert status["version"] == "0.8.8.0"
+    assert status["code_fingerprint"] == CODE_FINGERPRINT
+    assert (
+        f"<dt>Version de Core</dt><dd>0.8.8.0 · code {CODE_FINGERPRINT}</dd>"
+        in client.get("/").get_data(as_text=True)
+    )
 
 
 def test_the_version_stays_out_of_the_consumed_contracts(tmp_path):
     client = create_app(tmp_path / "trace.db").test_client()
 
     for url in ("/context", "/context/sessions", "/trace/today"):
-        assert "version" not in client.get(url).get_json(), url
+        body = client.get(url).get_json()
+        assert "version" not in body and "code_fingerprint" not in body, url
     assert CORE_VERSION not in json.dumps(client.get("/context").get_json())
 
 
@@ -60,11 +67,18 @@ def test_announce_writes_pid_and_version_in_a_private_file(tmp_path):
     announce("file-watcher", directory=tmp_path / "run")
     target = tmp_path / "run" / "file-watcher.json"
 
-    assert json.loads(target.read_text()) == {"pid": os.getpid(), "version": CORE_VERSION}
+    assert json.loads(target.read_text()) == {
+        "pid": os.getpid(),
+        "version": CORE_VERSION,
+        "code_fingerprint": CODE_FINGERPRINT,
+    }
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
-    assert announced_version("file-watcher", os.getpid(), directory=tmp_path / "run") == CORE_VERSION
-    assert announced_version("file-watcher", os.getpid() + 1, directory=tmp_path / "run") is None
-    assert announced_version("outbox-worker", os.getpid(), directory=tmp_path / "run") is None
+    assert announced("file-watcher", os.getpid(), directory=tmp_path / "run") == {
+        "version": CORE_VERSION,
+        "code_fingerprint": CODE_FINGERPRINT,
+    }
+    assert announced("file-watcher", os.getpid() + 1, directory=tmp_path / "run") is None
+    assert announced("outbox-worker", os.getpid(), directory=tmp_path / "run") is None
 
 
 def test_announce_never_raises(tmp_path):
@@ -73,10 +87,10 @@ def test_announce_never_raises(tmp_path):
 
     announce("outbox-worker", directory=blocker)
 
-    assert announced_version("outbox-worker", os.getpid(), directory=blocker) is None
+    assert announced("outbox-worker", os.getpid(), directory=blocker) is None
 
 
 def test_a_corrupt_announce_reads_as_none(tmp_path):
     (tmp_path / "outbox-worker.json").write_text("{pas du json")
 
-    assert announced_version("outbox-worker", os.getpid(), directory=tmp_path) is None
+    assert announced("outbox-worker", os.getpid(), directory=tmp_path) is None

@@ -6,10 +6,11 @@ versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
 ## [0.8.9.0] - 2026-09-17
 
-Core dit quelle version il exécute, et `make status` juge STALE sur cette
-version. Aucun contrat consommé ne change : `/context`, `/context/sessions`,
-export du journal, identité de session, `reconstruction_version`, version des
-observations, schéma de `trace.db`. `/status` gagne un champ.
+Core dit quelle version et quel code il exécute, et `make status` juge chaque
+service en trois états : à jour, STALE, INCONNU. Aucun contrat consommé ne
+change : `/context`, `/context/sessions`, export du journal, identité de
+session, `reconstruction_version`, version des observations, schéma de
+`trace.db`. `/status` gagne deux champs.
 
 ### Ajouté
 - `daemon_v2/version.py` : `CORE_VERSION` est le contenu de `core/VERSION`
@@ -18,43 +19,83 @@ observations, schéma de `trace.db`. `/status` gagne un champ.
   fichier à chaque requête dirait la version du checkout. Fichier absent,
   vide ou illisible : `unknown`, jamais une erreur, la collecte n'en dépend
   pas.
-- `GET /status` porte `version` ; la page `/` l'affiche dans `État système`.
-  `/context` ne la porte pas.
-- Worker et file-watcher ne servent rien : ils annoncent leur version au
-  démarrage dans `<dossier de la base>/run/<service>.json` (pid et version,
-  0600, écriture atomique, jamais bloquante). L'annonce d'un autre pid ne
+- `daemon_v2/code_fingerprint.py` : empreinte du code, calculée au même
+  moment. Chaque `.py` de `daemon_v2` est réduit à son arbre syntaxique,
+  docstrings retirées ; `VERSION` et `requirements.txt` en font partie. Un
+  commentaire, une docstring ajoutée, ôtée ou réécrite, une remise en forme
+  ne la changent pas ; toute instruction modifiée la change, bump ou pas.
+  Pure lecture, sans Git ni sous-processus ; environ 0,1 s au démarrage
+  (11 000 lignes), une fois par processus. Un fichier qui ne se parse pas
+  compte par ses octets.
+- `GET /status` porte `version` et `code_fingerprint` ; la page `/` les
+  affiche dans `État système`. `/context` ne les porte pas.
+- Worker et file-watcher ne servent rien : ils annoncent pid, version et
+  empreinte au démarrage dans `<dossier de la base>/run/<service>.json`
+  (0600, écriture atomique, jamais bloquante). L'annonce d'un autre pid ne
   vaut rien. Un Core jetable (`PULSE_V2_DB_PATH`) annonce à côté de sa base,
   pas dans celle de la production.
-- `make status` affiche `Version servie` et la version du checkout.
+- Observateur Swift : `install_observers_launchd.sh` note à côté du binaire
+  installé (`PulseApplicationObserver.json`) l'empreinte de ses sources
+  (`Package.swift`, `Sources/`, octets bruts) et le SHA-256 du binaire.
+- `make status` affiche `Version servie`, l'empreinte servie, et celles du
+  checkout.
 
 ### Modifié
-- Le contrôle STALE compare la version que chaque service exécute à
-  `core/VERSION` du checkout, au lieu de l'heure de démarrage à la date du
-  dernier commit sous `core/`. Un service qui n'annonce aucune version est
-  STALE (il est antérieur à cette version) ; un `core/VERSION` illisible dans
-  le checkout ne donne aucun verdict. L'ancien calcul (`ps -o etime`) est
-  supprimé.
-- Gagné : un commit sans bump (docstring, commentaire, script, test) ne
-  marque plus les services STALE, comme #106 l'avait fait le 17 ; la ligne
-  dit quelles versions diffèrent.
-- Inchangé : après un bump, daemon, worker et file-watcher sont tous à
-  relancer, même si un seul porte le changement. Le contrôle compare des
-  versions, pas le service concerné.
-- Perdu : un changement de code mergé sans bump de `VERSION` n'est plus
-  détecté, alors que la comparaison de dates le voyait. La convention (tout
-  changement de comportement bouge la version) devient la seule garde. Un
-  service relancé depuis un checkout resté sur une branche de même version
-  n'est pas vu non plus.
-- L'observateur Swift n'est plus comparé. Son binaire est copié dans
-  `~/.pulse_v2/bin` à l'installation : une relance ne le met pas à jour, et
-  l'ancien STALE se levait par un `kickstart` sans effet sur son code.
+- Le contrôle STALE ne compare plus l'heure de démarrage à la date du dernier
+  commit sous `core/`. L'empreinte décide, la version se lit à côté :
+  - **à jour** : même empreinte que le checkout ;
+  - **STALE** : empreinte différente, avec les deux versions si elles
+    diffèrent, ou « changement sans bump » si elles sont égales ;
+  - **INCONNU** : rien d'annoncé (service antérieur à cette version, annonce
+    illisible ou d'un autre pid) ou checkout illisible. Jamais compté à jour,
+    jamais compté périmé.
+- Observateur : à jour si le binaire installé est celui noté à l'installation
+  et que ses sources sont celles du checkout ; STALE sinon, avec le bon
+  remède (réinstaller : une relance ne recharge pas un binaire copié, et
+  l'ancien STALE se levait pourtant par un `kickstart`) ; INCONNU sans note
+  ou si le binaire a été remplacé à la main.
+- L'ancien calcul (`ps -o etime`, `git log -1 --format=%ct`) est supprimé.
+
+### Pistes évaluées
+- Version servie plus date du dernier commit « de code exécuté » : écartée.
+  Un chemin ne distingue pas un docstring d'une instruction (#106 touchait
+  `daemon_v2`), la date d'un commit en rebase est celle de son arrivée, et
+  la comparaison dépend de l'horloge, de `ps` et de la branche du checkout.
+- SHA du commit du checkout au démarrage : écarté. Tout commit, même de
+  documentation, change le SHA ; un arbre modifié sans commit ne le change
+  pas ; un worktree a un `.git` en fichier.
+- Empreinte des seuls modules chargés : écartée. Les imports tardifs
+  (`renderers`) rendent l'ensemble instable d'un instant à l'autre.
+
+### Ce que l'empreinte rate encore
+- Les dépendances installées dans le venv quand `requirements.txt` ne bouge
+  pas, l'environnement du plist, les fichiers de configuration relus au
+  démarrage (`watched_workspaces`).
+- Une docstring lue à l'exécution (`__doc__`) : aucune aujourd'hui dans
+  `daemon_v2`.
+- Elle marque trop large, du côté sûr : le paquet entier compte pour chaque
+  service, et un renommage sans effet compte comme un changement. Une montée
+  de version de Python change `ast.dump`, donc toutes les empreintes.
+- Observateur : les sources sont comparées, pas le binaire. Comparer le
+  binaire au checkout demande de le reconstruire (`swift build -c release`),
+  sans garantie de reproductibilité à l'octet. Un processus démarré avant une
+  réinstallation faite à la main n'est pas vu (le script relance).
 
 ### Déploiement
 - Relancer daemon, worker et file-watcher (daemon et worker : `launchctl
   bootout`, attente de la sortie, `bootstrap` ; file-watcher : `kickstart
-  -k`). Tant qu'ils ne le sont pas, `make status` les marque « version non
-  annoncée ». L'observateur n'a pas à être relancé. Aucune coordination avec
-  Intelligence.
+  -k`). D'ici là, `make status` les dit INCONNU.
+- L'observateur reste INCONNU tant que rien n'est noté. Deux voies, au choix
+  de l'utilisateur : réinstaller (reconstruit le binaire, donc redemande
+  l'Accessibilité), ou noter sans reconstruire, depuis `core/` :
+  `.venv/bin/python -m daemon_v2.service_staleness --record-observer
+  ~/.pulse_v2/bin/PulseApplicationObserver`. La seconde affirme que le
+  binaire installé vient des sources actuelles ; au 2026-09-17 les indices
+  concordent, sans faire preuve : il est identique à l'octet au produit de
+  `macos_observer/.build/release`, construit le 12 à 14:36, et le dernier
+  commit des sources a été écrit le 12 à 14:36 (une date d'écriture survit à
+  un amend).
+- Aucune coordination avec Intelligence.
 
 ## [0.8.8.0] - 2026-09-17
 
