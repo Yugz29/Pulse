@@ -6,6 +6,8 @@ import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .git_worktree import repository_name
+
 
 GIT_TIMEOUT_SECONDS = 0.75
 
@@ -68,7 +70,9 @@ def read_git_context(path: Path) -> GitContext | None:
             return None
         staged, unstaged, untracked = _parse_status_counts(status)
         return GitContext(
-            repository=root.name,
+            # Un worktree lié appartient au dépôt principal : Pulse, pas
+            # Pulse-live. ``git_root`` reste le worktree.
+            repository=repository_name(root),
             git_root=str(root),
             branch=branch,
             head=head,

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..git_worktree import repository_name
 from ..models import WEAK_CONTEXT_TYPES
 from .terminal import useful_command_lines
 
@@ -111,14 +112,18 @@ def resolve_project_context(cwd: str) -> ProjectContext:
         or _marked_project_root(path)
         or path
     )
-    project_name = project_root.name
+    # Un worktree lié (``.git`` en fichier, ligne ``gitdir:``) porte le nom du
+    # dépôt principal ; sa racine reste la sienne. Affichage seulement, et
+    # seulement tant que le worktree existe : ``/context`` lit le nom que
+    # l'événement a persisté, jamais ce résolveur.
+    project_name = repository_name(project_root)
 
     module = None
     try:
         relative_parts = list(path.relative_to(project_root).parts)
     except ValueError:
         relative_parts = []
-    while relative_parts and relative_parts[0].casefold() == project_name.casefold():
+    while relative_parts and relative_parts[0].casefold() == project_root.name.casefold():
         relative_parts.pop(0)
     for part in relative_parts:
         if part.casefold() in GENERIC_MODULE_NAMES:

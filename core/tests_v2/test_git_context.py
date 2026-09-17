@@ -68,7 +68,8 @@ def test_reads_worktree_and_dot_git_file(tmp_path):
     assert (worktree / ".git").is_file()
     assert context is not None
     assert context.git_root == str(worktree)
-    assert context.repository == "linked-worktree"
+    # Le worktree appartient au dépôt principal ; sa racine reste la sienne.
+    assert context.repository == "main-repo"
     assert context.branch == "worktree-branch"
     assert context.head == git("rev-parse", "--short", "HEAD", cwd=worktree)
 
