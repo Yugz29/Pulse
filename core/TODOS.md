@@ -135,7 +135,7 @@ et écrire STALE sinon, comme pour les services.
 **Priority:** P3
 **Depends on:** Aucun
 
-### Le détecteur `env.kv` du scan signale des affectations Python à valeur calculée
+### Les détecteurs du scan signalent du code et de la doc sans secret : trois faux positifs le 17
 
 **What:** deux faux positifs MEDIUM le 2026-09-17, tous deux sur une
 poussée publique, tous deux soumis à l'utilisateur et levés par réécriture,
@@ -150,8 +150,17 @@ et une habitude à surveiller : voir la mesure de fatigue prévue le 30
 littérale = pas un secret), ou le laisser au rituel. Pas d'exception locale
 dans le hook.
 
+**Passée de P3 à P2 (2026-09-17, soir) :** troisième faux positif de la
+journée, deux alertes `internal.hostname` sur une note de décision qui
+nommait le fichier de réglages locaux de Claude Code : son nom contient un
+suffixe que le détecteur lit comme un nom d'hôte interne. Levées par
+reformulation, sans acquittement. Conséquence : la documentation ne peut
+plus nommer un fichier réel, et cette entrée elle-même doit le décrire sans
+l'écrire. Ce n'est plus un détecteur mais la règle : à chaque fois, un texte
+exact est remplacé par une périphrase pour passer le scan.
+
 **Effort:** S
-**Priority:** P3
+**Priority:** P2
 **Depends on:** Aucun
 
 ## Daemon V2
