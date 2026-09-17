@@ -2440,3 +2440,146 @@ def test_renders_window_context_per_window_in_markdown_and_html(tmp_path):
         in html
     )
     assert '<a href="https://github.com' not in html
+
+
+# --- Bruit de fichiers : la page HTML le masque, l'export le garde ---------
+
+NOISE_DAY = date(2026, 9, 17)
+NOISE_VENV = "/work/DevNote/backend/DevNote-env"
+
+
+def _noise_store(tmp_path, changes):
+    store = TraceStore(tmp_path / "pulse.sqlite3")
+    first_at = datetime(2026, 9, 17, 10, 0, 5, tzinfo=timezone.utc)
+    for index, (event, path) in enumerate(changes):
+        store.append(
+            Activity(
+                "file_changed",
+                first_at + timedelta(seconds=index),
+                "filesystem",
+                f"{event.capitalize()} {path}",
+                {"path": path, "event": event, "workspace": "/work/DevNote"},
+            )
+        )
+    return store
+
+
+def test_html_hides_the_file_noise_the_projection_already_omits(tmp_path):
+    from daemon_v2.work_observations import project_work_observations
+
+    store = _noise_store(
+        tmp_path,
+        [
+            ("created", f"{NOISE_VENV}/lib/python3.13/site-packages/django/apps.py"),
+            ("created", f"{NOISE_VENV}/pyvenv.cfg"),
+            ("created", f"{NOISE_VENV}/bin/activate"),
+            ("modified", "/work/DevNote/node_modules/left-pad/index.js"),
+            ("modified", "/work/DevNote/backend/manage.py"),
+            ("modified", f"{NOISE_VENV}-notes/todo.md"),
+        ],
+    )
+    trace = build_daily_trace(store, NOISE_DAY, timezone.utc)
+
+    html = render_daily_trace_html(trace, archive_mode=True)
+
+    assert "<code>backend/manage.py</code>" in html
+    # Un voisin au nom proche n'est pas le virtualenv.
+    assert "<code>backend/DevNote-env-notes/todo.md</code>" in html
+    for hidden in ("site-packages", "pyvenv.cfg", "bin/activate", "node_modules"):
+        assert hidden not in html
+    # Jamais un retrait silencieux : la page dit combien, pourquoi, et où.
+    assert (
+        "<dt>Fichiers masqués</dt><dd>4 changements de fichiers masqués "
+        "(virtualenv <code>DevNote-env</code> ou dossier d’outillage), "
+        "conservés dans l’export JSON</dd>"
+    ) in html
+    assert "4 changements de fichiers masqués dans cette session" in html
+    assert "<dt>Fichiers modifiés</dt><dd>2</dd>" in html
+    # Le compte de la base reste celui de la base.
+    assert "6 activité(s)" in html
+    # Même filtre que la projection : ce que /context compte en file_noise.
+    observations = project_work_observations(trace["work_sessions"][0]["activities"])
+    assert observations["coverage"]["omitted_events"]["file_noise"] == 4
+
+
+def test_file_noise_stays_in_the_json_and_markdown_exports(tmp_path):
+    store = _noise_store(
+        tmp_path,
+        [
+            ("created", f"{NOISE_VENV}/pyvenv.cfg"),
+            ("created", f"{NOISE_VENV}/bin/activate"),
+            ("modified", "/work/DevNote/backend/manage.py"),
+        ],
+    )
+    trace = build_daily_trace(store, NOISE_DAY, timezone.utc)
+    before = render_daily_trace_markdown(trace, archive_mode=True)
+
+    render_daily_trace_html(trace, archive_mode=True)
+
+    # Le rendu HTML travaille sur une vue : la trace exportée n'est pas touchée.
+    assert "hidden_file_noise" not in trace
+    assert trace["activity_count"] == len(trace["activities"]) == 3
+    assert len(trace["work_sessions"][0]["activities"]) == 3
+    assert render_daily_trace_markdown(trace, archive_mode=True) == before
+    assert "bin/activate" in before
+
+
+def test_an_ordinary_day_is_rendered_whole(tmp_path):
+    from daemon_v2.daily_trace import without_file_noise
+
+    store = _noise_store(
+        tmp_path,
+        [("modified", f"/work/DevNote/backend/app_{index}.py") for index in range(300)],
+    )
+    trace = build_daily_trace(store, NOISE_DAY, timezone.utc)
+
+    view = without_file_noise(trace)
+    html = render_daily_trace_html(trace, archive_mode=True)
+
+    # Une rafale de vrais fichiers n'est ni plafonnée ni résumée.
+    assert view["hidden_file_noise"] == {"count": 0, "virtualenvs": []}
+    assert view["work_sessions"] == trace["work_sessions"]
+    assert html.count("<li>Modified <code>backend/app_") == 300
+    assert "masqué" not in html
+
+
+def test_a_session_made_only_of_file_noise_says_what_it_hides(tmp_path):
+    store = _noise_store(
+        tmp_path,
+        [
+            ("deleted", f"{NOISE_VENV}/lib/python3.11/site-packages/pytz/zone.py"),
+            ("deleted", f"{NOISE_VENV}/pyvenv.cfg"),
+        ],
+    )
+    trace = build_daily_trace(store, NOISE_DAY, timezone.utc)
+
+    html = render_daily_trace_html(trace, archive_mode=True)
+
+    assert "pytz" not in html
+    assert "2 changements de fichiers masqués" in html
+
+
+def test_without_file_noise_is_idempotent_and_never_reads_the_disk(
+    tmp_path, monkeypatch
+):
+    from daemon_v2.daily_trace import without_file_noise
+
+    store = _noise_store(
+        tmp_path,
+        [("created", f"{NOISE_VENV}/pyvenv.cfg"), ("created", f"{NOISE_VENV}/bin/python")],
+    )
+    trace = build_daily_trace(store, NOISE_DAY, timezone.utc)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("la vue du journal ne doit pas lire le disque")
+
+    for name in ("exists", "is_file", "is_dir", "stat"):
+        monkeypatch.setattr(Path, name, forbidden)
+
+    view = without_file_noise(trace)
+
+    assert view["hidden_file_noise"] == {"count": 2, "virtualenvs": [NOISE_VENV]}
+    assert view["activities"] == []
+    assert view["activity_count"] == 2
+    # Rejouée sur sa propre sortie, elle ne remet pas le compte à zéro.
+    assert without_file_noise(view) is view

@@ -35,6 +35,7 @@ from .analysis.timeline import (
     background_sessions,
     reconstruct_session_views,
 )
+from .file_policy import attributed_workspace, is_file_noise, virtualenv_roots
 from .models import StoredActivity
 from .git_context import parse_status_output
 from .runtime_config import reconstruction_timezone
@@ -902,6 +903,68 @@ def build_daily_trace(
         "unresolved_activity_count": sum(
             len(session["activities"]) for session in unresolved_sessions
         ),
+    }
+
+
+def without_file_noise(trace: dict[str, Any]) -> dict[str, Any]:
+    """La journée telle que la page HTML la déroule : sans les ``file_changed``
+    que la projection écarte déjà de ``/context`` (``is_file_noise`` : dossiers
+    d'outillage, virtualenv reconnu à son ``pyvenv.cfg``).
+
+    Affichage seulement. La trace reçue n'est pas modifiée : l'export
+    ``/trace/…``, ``/context`` et l'entrée des résumés lisent toujours tous
+    les événements, et ``activity_count`` reste le compte de la base. Les
+    virtualenvs sont ceux que la journée révèle, toutes sessions confondues ;
+    chaque session porte ``hidden_file_noise``, le nombre de ses événements
+    masqués, pour que la page dise ce qu'elle ne montre pas. Le 2026-09-17,
+    13 059 ``file_changed`` d'un virtualenv faisaient une page de 1,8 Mo
+    rendue en plus de deux secondes.
+    """
+    if "hidden_file_noise" in trace:
+        return trace
+    venvs = virtualenv_roots(
+        activity.get("details", {}).get("path") or ""
+        for activity in trace["activities"]
+        if activity["type"] == "file_changed"
+    )
+
+    venv_prefixes = tuple(f"{root}/" for root in venvs)
+
+    def is_noise(activity: dict[str, Any]) -> bool:
+        if activity["type"] != "file_changed":
+            return False
+        details = activity.get("details", {})
+        path = details.get("path")
+        if not path:
+            return False
+        # Une rafale se compte en milliers : le préfixe tranche sans pathlib,
+        # et ne dit jamais oui à tort ; le prédicat exact décide du reste.
+        if isinstance(path, str) and path.startswith(venv_prefixes):
+            return True
+        root = attributed_workspace(path, details.get("workspace"))
+        return is_file_noise(path, root, venvs)
+
+    noise = {id(activity) for activity in trace["activities"] if is_noise(activity)}
+    hidden = {"count": len(noise), "virtualenvs": sorted(str(root) for root in venvs)}
+    if not noise:
+        return {**trace, "hidden_file_noise": hidden}
+
+    def visible(session: dict[str, Any]) -> dict[str, Any]:
+        # Les sessions portent les dicts mêmes de ``trace["activities"]``
+        # (reconstruction unique), d'où la comparaison par identité.
+        kept = [a for a in session["activities"] if id(a) not in noise]
+        return {
+            **session,
+            "activities": kept,
+            "hidden_file_noise": len(session["activities"]) - len(kept),
+        }
+
+    return {
+        **trace,
+        "activities": [a for a in trace["activities"] if id(a) not in noise],
+        "work_sessions": [visible(s) for s in trace["work_sessions"]],
+        "unresolved_sessions": [visible(s) for s in trace["unresolved_sessions"]],
+        "hidden_file_noise": hidden,
     }
 
 

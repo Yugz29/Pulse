@@ -1254,3 +1254,37 @@ def test_window_focused_on_an_ignored_domain_returns_204(tmp_path, monkeypatch):
         "select count(*) from activities"
     ).fetchone()[0]
     assert stored == 0
+
+
+def test_home_hides_file_noise_while_status_and_export_keep_it(tmp_path):
+    client = create_app(tmp_path / "trace.db").test_client()
+    venv = "/work/DevNote/backend/DevNote-env"
+    paths = [f"{venv}/pyvenv.cfg"] + [
+        f"{venv}/lib/site-packages/pkg/module_{index}.py" for index in range(5)
+    ]
+    for path in [*paths, "/work/Pulse/core/app.py"]:
+        workspace = "/work/DevNote" if path.startswith(venv) else "/work/Pulse"
+        response = client.post(
+            "/activities",
+            json={
+                "type": "file_changed",
+                "path": path,
+                "event": "created",
+                "workspace": workspace,
+            },
+        )
+        assert response.status_code == 201
+
+    html = client.get("/").get_data(as_text=True)
+    status = client.get("/status").get_json()
+    trace = client.get("/trace/today").get_json()
+
+    assert "site-packages" not in html
+    assert "6 changements de fichiers masqués" in html
+    # Le bloc « État système » de la page suit la page, pas la rafale.
+    assert "<dt>Workspace principal</dt><dd>/work/Pulse</dd>" in html
+    assert "<dt>Événements du jour</dt><dd>7</dd>" in html
+    # /status et l'export lisent toujours la trace entière.
+    assert status["primary_workspace"] == "/work/DevNote"
+    assert status["event_count"] == 7
+    assert trace["activity_count"] == len(trace["activities"]) == 7

@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
-from .file_policy import is_noise_path, should_ignore, under_virtualenv, virtualenv_roots
+from .file_policy import attributed_workspace, is_file_noise, is_noise_path, virtualenv_roots
 from .analysis.terminal import is_test_command, useful_command_lines
 from .analysis.timeline import display_file_path
 
@@ -71,16 +71,10 @@ def project_work_observations(activities: list[dict[str, Any]]) -> dict[str, Any
             if not path or change not in {"created", "modified", "deleted"}:
                 excluded[kind] = excluded.get(kind, 0) + 1
                 continue
-            root = details.get("workspace")
-            if isinstance(root, dict):
-                root = root.get("workspace_root")
             # A historical inconsistent workspace is unknown attribution,
             # not proof that the observed file is noise.
-            if root and not Path(path).is_relative_to(root):
-                root = None
-            if (root and should_ignore(Path(path), Path(root))) or under_virtualenv(
-                Path(path), venvs
-            ):
+            root = attributed_workspace(path, details.get("workspace"))
+            if is_file_noise(path, root, venvs):
                 excluded["file_noise"] = excluded.get("file_noise", 0) + 1
                 continue
             # Absolute identity prevents equal relative names in two roots
