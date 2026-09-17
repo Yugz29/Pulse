@@ -250,14 +250,14 @@ n'est pas recommandée.
 1. **Récapitulatif sans modèle de la session en cours, dans la page.** Core
    seul, lecture seule : sous « Maintenant », un bloc « Session en cours »
    qui range les faits de la session ouverte comme au point 2 (commits,
-   fichiers, tests, échecs non suivis d'une réussite, sessions d'agent),
+   fichiers, tests, échecs bruts, sessions d'agent),
    chaque ligne ancrée sur son fait comme en 0.8.4.0. Aucun stockage, aucun
    modèle, aucun contrat ; tests de rendu ; bump de version et relance du
    daemon. C'est la plus petite étape utile : elle sert dès le premier jour
    et elle dit, à l'usage, ce qui manque vraiment.
 2. **Usage pendant quelques jours** et consignation dans
-   `docs/dogfooding.md` : dans quels cas le récapitulatif a suffi à
-   reprendre, dans quels cas il a manqué « le fil ». C'est ce relevé qui
+   `docs/dogfooding.md`, une ligne par jour : « ce qui m'a manqué dans
+   Session en cours ». C'est ce relevé qui
    justifie, ou non, l'étape 4.
 3. **Mesure des candidats**, protocole du 14 plus le pic mémoire pendant le
    travail ; prompt de note dédié, court ; verdict à la lecture humaine.
@@ -267,6 +267,24 @@ n'est pas recommandée.
    sous le récapitulatif, jetées à la fermeture de la session ; test qui
    garantit qu'aucune note n'atteint l'entrée de nuit.
 5. **Cache de préfixe**, seulement si la latence mesurée à l'étape 4 gêne.
+
+## Décisions du 2026-09-17 (utilisateur)
+
+- **L'étape 1 part seule** : bloc `Session en cours`, Core 0.8.5.0.
+- **Pas de logique d'état net des commandes dans Core.** Les échecs
+  s'affichent bruts, avec leur code et leur heure, sans conclure « résolu ».
+  Le déplacement de `resumption.py` dans Core rejoint le TODO
+  « Classification des sessions à source unique » (`core/TODOS.md`) : même
+  dette, une règle tenue en deux copies entre Core et Intelligence. Le
+  point 2 ci-dessus, qui parlait d'« échec qu'aucune réussite n'a suivi »,
+  est donc remplacé par : tous les échecs de la session, bruts.
+- **Reportés après l'étape 2** : emplacement des notes du modèle, mesure des
+  candidats, déclencheur.
+- **Étape 2** : une ligne par jour dans `docs/dogfooding.md`, « ce qui m'a
+  manqué dans Session en cours ».
+
+Des cinq points ci-dessous, les points 2 et 3 sont tranchés ; les points 1,
+4 et 5 attendent la fin de l'étape 2.
 
 ## À trancher par l'utilisateur
 
