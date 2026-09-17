@@ -4,6 +4,57 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.7.0] - 2026-09-17
+
+Worktrees Git liés : rattachés au dépôt principal, observés d'office. Depuis
+le 17, toute branche autre que main se travaille dans un worktree
+(`AGENTS.md`) ; Core n'en voyait que les commits, sous un projet à part
+nommé d'après le dossier. Aucun contrat consommé ne change de forme :
+`/context`, `/context/sessions`, export du journal, identité de session,
+`reconstruction_version`, version des observations, schéma de `trace.db`.
+
+### Ajouté
+- **Attribution.** Quand `.git` est un fichier, sa ligne `gitdir:` mène au
+  dossier commun du dépôt principal (`daemon_v2/git_worktree.py`, sans
+  lancer Git ; un sous-module, sans `commondir`, n'est pas rattaché). Le nom
+  de projet écrit à la collecte suit le dépôt principal : `git.repository` et
+  `workspace.project_name` des commandes, `repository` du hook de commit
+  (`git rev-parse --git-common-dir`). `git_root` et `workspace_root` restent
+  le worktree : une bascule entre le dépôt et son worktree reste un
+  changement de workspace.
+- **Observation.** Le file-watcher observe d'office les worktrees liés des
+  workspaces déclarés, lus par `git worktree list` au démarrage puis toutes
+  les 60 secondes. Le contenu d'un worktree à sa découverte est la ligne de
+  base : aucun événement. Un worktree placé sous un workspace déclaré n'est
+  pas ajouté. Les `file_changed` d'un worktree persistent la forme résolue du
+  workspace (racine du worktree, nom du dépôt principal), que l'ingestion
+  acceptait déjà ; ceux d'un workspace déclaré gardent leur chemin.
+- Un worktree disparu (dossier ou fichier `.git` absent, ou plus listé par
+  Git) est retiré avant le flush : `git worktree remove` n'émet pas une
+  suppression par fichier suivi.
+- Le résolveur d'affichage du journal nomme un worktree d'après son dépôt
+  principal tant que le worktree existe. `/context` ne lit jamais ce
+  résolveur, seulement le nom persisté dans l'événement.
+
+### Corrigé
+- Le fichier `.git` d'un worktree ou d'un sous-module n'est plus un fichier
+  de travail : il entrait dans le snapshot du watcher (aucun événement de ce
+  genre dans la base).
+
+### Sans effet sur l'existant
+- Les noms de projet sont persistés à la collecte. `/context/sessions` est
+  identique, champ pour champ, entre 0.8.6.0 et cette version sur les 103
+  jours et 222 sessions closes de la base de production ; aucune référence
+  oN n'est renumérotée. Les 16 `git_commit` du 17 émis depuis des worktrees
+  gardent leur `repository` d'alors (`Pulse-live`, `Pulse-refs`…), et les 3
+  sessions qui les portent gardent ce projet. Aucun des 68 résumés stockés
+  n'a de worktree pour workspace ou pour projet.
+
+### Déploiement
+- Relancer les services Core : le file-watcher porte l'observation, le hook
+  de commit est lu depuis le checkout à chaque commit. Aucune coordination
+  avec Intelligence.
+
 ## [0.8.6.0] - 2026-09-17
 
 Un virtualenv se reconnaît à son `pyvenv.cfg`, pas à son nom. Correctif de

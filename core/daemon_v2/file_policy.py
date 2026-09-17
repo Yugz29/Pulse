@@ -22,7 +22,9 @@ IGNORED_DIRECTORY_NAMES = {
     "dist",
     "node_modules",
 }
-IGNORED_FILE_NAMES = {".DS_Store"}
+# ``.git`` est aussi un fichier : celui d'un worktree lié ou d'un sous-module
+# (une ligne ``gitdir:``), jamais un fichier de travail.
+IGNORED_FILE_NAMES = {".DS_Store", ".git"}
 IGNORED_FILE_SUFFIXES = {".pyc", ".db"}
 # Un virtualenv se reconnaît à ce fichier, pas à son nom : ``.venv`` est dans
 # la liste ci-dessus, ``DevNote-env`` ne l'était pas (13 059 ``file_changed``

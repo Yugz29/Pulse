@@ -474,10 +474,15 @@ def build_file_event_payload(
     *,
     path: str,
     event: str,
-    workspace: str,
+    workspace: str | dict[str, Any],
     occurred_at: datetime,
 ) -> str:
     """Build the canonical file_changed event for durable outbox persistence.
+
+    ``workspace`` : le chemin d'un workspace déclaré, ou la forme résolue
+    (``WorkspaceContext.as_details``) pour un worktree lié, qui persiste le
+    nom du dépôt principal à côté de la racine du worktree. L'ingestion
+    accepte déjà les deux formes (``_copy_persisted_context``).
 
     Transport decision 2A-révisée: the file watcher enqueues here instead of
     POSTing straight to the daemon, so a stopped daemon no longer loses
@@ -521,7 +526,7 @@ def enqueue_file_event(
     *,
     path: str,
     event: str,
-    workspace: str,
+    workspace: str | dict[str, Any],
     occurred_at: datetime | None = None,
 ) -> str:
     payload = build_file_event_payload(

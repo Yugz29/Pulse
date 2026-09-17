@@ -21,7 +21,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -30,6 +30,7 @@ from .private_files import apply_private_umask
 from .producer_outbox import ProducerOutbox, enqueue_file_event
 
 
+from .git_worktree import linked_worktrees, main_repository_root
 from .file_policy import (
     IGNORED_DIRECTORY_NAMES,
     VIRTUALENV_MARKER,
@@ -226,7 +227,7 @@ def record_file_event(
     outbox: ProducerOutbox,
     event: str,
     path: Path,
-    workspace: Path,
+    workspace: Path | dict[str, str],
 ) -> bool:
     """Enqueue one observed change into the durable producer outbox.
 
@@ -239,7 +240,7 @@ def record_file_event(
             outbox,
             path=str(path),
             event=event,
-            workspace=str(workspace),
+            workspace=workspace if isinstance(workspace, dict) else str(workspace),
         )
         return True
     except (sqlite3.Error, ValueError, OSError):
@@ -337,9 +338,99 @@ class WatchedWorkspace:
     workspace: Path
     collector: DirtyPathCollector
     snapshot: Snapshot
+    # Worktree lié observé d'office : le workspace déclaré dont il dépend, et
+    # la surveillance watchdog à retirer quand il disparaît. ``None`` pour un
+    # workspace déclaré, qui n'est jamais retiré.
+    owner: Path | None = None
+    handle: Any = None
     # Chemins dont l'enqueue a échoué : re-signalés au passage suivant, sans
     # attendre que watchdog les revoie (il ne le fera pas sans nouvel accès).
     deferred: set[Path] = field(default_factory=set)
+
+
+# Relecture de `git worktree list` : au démarrage, puis à cet intervalle. Un
+# worktree créé est observé au plus tard une minute après ; son contenu au
+# moment de la découverte est la ligne de base du snapshot, il n'émet rien.
+WORKTREE_REFRESH_SECONDS = 60.0
+
+
+def event_workspace(watched: WatchedWorkspace) -> Path | dict[str, str]:
+    """Ce que l'événement persiste comme workspace.
+
+    Workspace déclaré : son chemin, comme toujours. Worktree lié : la forme
+    résolue, qui garde sa racine et porte le nom du dépôt principal (Pulse,
+    pas Pulse-live), le seul endroit où la projection pourra le lire.
+    """
+    if watched.owner is None:
+        return watched.workspace
+    root = str(watched.workspace)
+    return {
+        "project_name": (main_repository_root(watched.workspace) or watched.owner).name,
+        "workspace_root": root,
+        "git_root": root,
+        "resolution_method": "git",
+        "resolution_confidence": "high",
+    }
+
+
+def worktree_targets(declared: list[Path]) -> dict[Path, Path]:
+    """Worktrees liés à observer d'office : ``{worktree: workspace déclaré}``.
+
+    Ceux des dépôts déclarés, qui existent, et qu'aucun workspace déclaré ne
+    couvre déjà (un worktree placé sous un workspace déclaré est observé par
+    lui, l'ajouter doublerait chaque événement).
+    """
+    targets: dict[Path, Path] = {}
+    for owner in declared:
+        for worktree in linked_worktrees(owner):
+            worktree = canonical_case_path(worktree.resolve())
+            if any(worktree == known or known in worktree.parents for known in declared):
+                continue
+            targets.setdefault(worktree, owner)
+    return targets
+
+
+def worktree_is_gone(watched: WatchedWorkspace) -> bool:
+    """Un worktree lié a disparu quand son dossier ou son fichier ``.git``
+    n'est plus là. Un workspace déclaré ne disparaît jamais de cette façon."""
+    return watched.owner is not None and not (watched.workspace / ".git").exists()
+
+
+def sync_worktrees(
+    watched: list[WatchedWorkspace],
+    declared: list[Path],
+    *,
+    schedule: Callable[[DirtyPathCollector, Path], Any],
+    unschedule: Callable[[Any], None],
+) -> tuple[list[Path], list[Path]]:
+    """Aligne les worktrees observés sur `git worktree list`. Rend (ajoutés,
+    retirés).
+
+    Un worktree retiré (dossier disparu, ou plus listé par Git) cesse d'être
+    observé **sans émettre ses suppressions** : `git worktree remove` n'est
+    pas du travail, et ses centaines de fichiers ne sont pas des faits.
+    """
+    targets = worktree_targets(declared)
+    removed: list[Path] = []
+    for entry in [e for e in watched if e.owner is not None]:
+        if entry.workspace not in targets or worktree_is_gone(entry):
+            try:
+                unschedule(entry.handle)
+            except Exception:  # surveillance déjà morte avec le dossier
+                pass
+            watched.remove(entry)
+            removed.append(entry.workspace)
+    added: list[Path] = []
+    known = {entry.workspace for entry in watched}
+    for worktree, owner in targets.items():
+        if worktree in known or not (worktree / ".git").exists():
+            continue
+        collector = DirtyPathCollector(worktree)
+        entry = WatchedWorkspace(worktree, collector, take_snapshot(worktree), owner=owner)
+        entry.handle = schedule(collector, worktree)
+        watched.append(entry)
+        added.append(worktree)
+    return added, removed
 
 
 def flush_workspace(watched: WatchedWorkspace, enqueue: Enqueue) -> ResolvedPaths:
@@ -383,14 +474,36 @@ def watch(
     observer.start()
     for entry in watched:
         print(f"Watching files in {entry.workspace}", flush=True)
+
+    def schedule(collector: DirtyPathCollector, path: Path) -> Any:
+        return observer.schedule(collector, str(path), recursive=True)
+
+    def refresh_worktrees() -> None:
+        added, removed = sync_worktrees(
+            watched, workspaces, schedule=schedule, unschedule=observer.unschedule
+        )
+        for path in added:
+            print(f"Watching files in {path} (linked worktree)", flush=True)
+        for path in removed:
+            print(f"[file-watcher] linked worktree gone, no longer watched: {path}", flush=True)
+
+    refresh_worktrees()
+    last_refresh = time.monotonic()
     try:
         while True:
             time.sleep(interval)
             observer_alive = observer.is_alive()
+            if time.monotonic() - last_refresh >= WORKTREE_REFRESH_SECONDS or any(
+                worktree_is_gone(entry) for entry in watched
+            ):
+                # Un worktree disparu est retiré AVANT le flush : ses
+                # suppressions ne partent pas.
+                refresh_worktrees()
+                last_refresh = time.monotonic()
             for entry in watched:
                 flush_workspace(
                     entry,
-                    lambda event, path, workspace=entry.workspace: record_file_event(
+                    lambda event, path, workspace=event_workspace(entry): record_file_event(
                         outbox, event, path, workspace
                     ),
                 )
