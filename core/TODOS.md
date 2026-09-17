@@ -476,7 +476,7 @@ configuration des seuils quitte Intelligence pour Core.
 
 **What:** `file_policy.IGNORED_DIRECTORY_NAMES` ignorait `.venv` par son nom. Le 2026-09-17, work-7 (15:48:58–15:57:25) comptait 13 065 `file_changed`, dont 13 059 sous `DevNote/backend/DevNote-env`.
 
-**Résolution (0.8.6.0) :** à la collecte, un dossier qui porte `pyvenv.cfg` n'est plus observé ; à la projection, les fichiers d'un virtualenv révélé par un événement `pyvenv.cfg` de la session sont du bruit, sans lecture du disque. Session du 17 : 951 008 tokens → 1 804. Reste : la chronologie HTML déroule encore ces événements ; `site-packages` sans `pyvenv.cfg` dans la session n'est pas reconnu sur l'historique.
+**Résolution (0.8.6.0) :** à la collecte, un dossier qui porte `pyvenv.cfg` n'est plus observé ; à la projection, les fichiers d'un virtualenv révélé par un événement `pyvenv.cfg` de la session sont du bruit, sans lecture du disque. Session du 17 : 951 008 tokens → 1 804. Reste : `site-packages` sans `pyvenv.cfg` dans la session n'est pas reconnu sur l'historique. La chronologie HTML, qui déroulait encore ces événements, les masque depuis la 0.8.8.0 (même prédicat, compte affiché).
 
 **Completed:** 2026-09-17
 
