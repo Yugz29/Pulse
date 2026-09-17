@@ -263,11 +263,49 @@ Approximations : un worktree retiré depuis est résolu sur le dépôt principal
    l'événement, que seul le bloc `Session en cours` lirait. Le code de sortie
    masqué par un tube ne se rattrape pas côté Pulse.
 
+## Décisions du 2026-09-17, après la mesure (utilisateur)
+
+- **Ordre des chantiers** : le virtualenv d'abord (Core 0.8.6.0, PR #105),
+  le hook ensuite.
+- **Filtre « tests et échecs » adopté.** Le hook n'émet que les commandes en
+  échec et celles dont un segment est une commande de test ; heredocs
+  retirés, plafond de 2 000 caractères. La borne seule est abandonnée.
+- **Reconnaissance du test par marquage du hook**, sans toucher à
+  `test_command` ni au contrat. Le hook pose dans les détails de l'événement
+  qu'un segment de la commande est une commande de test ; la projection
+  (`work_observations`) et ce que `/context` sert ne changent pas.
+- **Deux règles coexistent alors, et chacune fait foi pour une chose :**
+  - `test_command`, **côté projection**, fait foi pour tout ce qui sort de
+    Core par contrat : `/context`, `/context/sessions`, donc l'entrée du
+    résumé de nuit et ce que le modèle lit. Elle ne reconnaît un test que
+    dans une commande simple. Une commande composée de l'agent y reste un
+    fait `command` ordinaire : le résumé de nuit la voit comme une commande,
+    pas comme un test.
+  - le **marquage du hook** fait foi pour le seul affichage du bloc
+    `Session en cours` : « dernier test » et compte des tests de l'agent. Il
+    ne vaut que pour les événements du producteur `pulse-claude-code` et
+    n'est lu par rien d'autre.
+  - Quand les deux s'appliquent à la même commande (une commande simple de
+    l'agent), elles concordent. Quand elles divergent, c'est toujours dans
+    le même sens : le bloc dit « test », `/context` dit « commande ». Cette
+    divergence est voulue et provisoire ; la lever revient à changer
+    `test_command`, donc la version des observations, avec note datée.
+- **Le code de sortie est celui que l'agent reçoit.** Un tube vers `tail`,
+  `head` ou `grep` rend le code du dernier maillon : un test qui échoue
+  derrière `| tail` arrive en succès (22 commandes de test sur 22 les 16 et
+  17). **Le hook émet ce que la documentation lui donne, sans déduction** :
+  0 sur `PostToolUse`, le `N` de la première ligne `Exit code N` sur
+  `PostToolUseFailure`. Il ne lit pas la sortie, ne devine pas un échec
+  masqué, ne reclasse rien. Le bloc affichera donc des tests d'agent « code
+  0 » qui ont pu échouer ; c'est une limite de la source, à dire dans le
+  bloc, pas à corriger par heuristique.
+
 ## À trancher par l'utilisateur
 
-Les points 1 à 6 ci-dessous sont tranchés par les décisions du 17, sauf la
-borne du texte (point 4), que la mesure ne confirme pas, et la
-reconnaissance des tests composés, que la mesure ajoute.
+Les points 1 à 6 ci-dessous sont tous tranchés par les deux séries de
+décisions du 17 ; la borne du texte (point 4) est remplacée par le filtre
+« tests et échecs ». Reste avant l'activation : le virtualenv en production
+(PR #105), puis les lots marqués « avec commandes d'agent ».
 
 1. **Sens de `terminal_finished`.** Accepter, pour la première étape, que les
    commandes d'agent entrent comme des commandes ordinaires (distinguées
