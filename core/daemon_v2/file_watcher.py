@@ -27,6 +27,7 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from .private_files import apply_private_umask
+from .version import announce
 from .producer_outbox import ProducerOutbox, enqueue_file_event
 
 
@@ -561,6 +562,7 @@ def main() -> None:
         if not workspace.is_dir():
             parser.error(f"workspace is not a directory: {workspace}")
         workspaces = [workspace]
+    announce("file-watcher")
     watch(workspaces, args.interval)
 
 

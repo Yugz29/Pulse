@@ -325,6 +325,19 @@ Vérifier l’état local sans démarrer de processus :
 
 Le même état est disponible en JSON sur `http://127.0.0.1:8765/status`.
 
+`/status` porte `version` : le contenu de `core/VERSION` lu au démarrage du
+processus (`daemon_v2/version.py`), donc la version du code que le daemon
+exécute, pas celle du checkout ; `unknown` si le fichier manque ou est
+illisible, jamais une erreur. `/context` ne la porte pas. Worker et
+file-watcher, qui ne servent rien, annoncent la leur au démarrage dans
+`~/.pulse_v2/run/<service>.json` (pid et version). `make status` affiche la
+version servie et marque STALE un service qui exécute une autre version que
+celle du checkout, ou qui n'en annonce aucune. Un commit sans bump de
+`VERSION` ne marque rien ; en contrepartie, un changement de code mergé sans
+bump n'est pas détecté. L'observateur Swift n'est pas comparé : son binaire
+est copié dans `~/.pulse_v2/bin` à l'installation, une relance ne le met pas
+à jour.
+
 Réinitialiser explicitement la trace de développement, après avoir arrêté
 Pulse :
 
