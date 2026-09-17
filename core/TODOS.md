@@ -177,6 +177,14 @@ exact est remplacé par une périphrase pour passer le scan.
 **Priority:** P1
 **Depends on:** Aucun (le hook SessionEnd est en usage)
 
+### « Workspace principal » de `make status` compte le bruit de fichiers
+
+**What:** `primary_workspace` de `/status`, affiché par `make status`, vient de `most_frequent_explicit_workspace` (`analysis/projects.py`), qui compte les événements bruts de la journée, sans le filtre de bruit de fichiers. Le 2026-09-17, il annonce `/Users/<user>/Projets/DevNote` après une journée de travail sur Pulse : les 13 059 `file_changed` du virtualenv `DevNote-env` sont toujours dans la base (elle est append-only, et c'est voulu) et pèsent plus que tout le reste. La 0.8.8.0 a corrigé la chronologie HTML, pas ce calcul : sur la page `/`, le bloc `État système` reçoit la vue sans bruit et affiche le bon workspace, alors que `/status` lit la trace entière ; les deux se contredisent donc le même jour. Piste : réutiliser `file_policy.is_file_noise`, comme la page (`daily_trace.without_file_noise`), pour ce calcul. `/status` n'est pas un contrat consommé listé dans `AGENTS.md` ; son seul lecteur connu est `scripts/status.sh`. À rapprocher du coût de `/status` et de `/days`, qui lisent eux aussi la trace entière (le 17 : `/status` 4,1 s en production, `/days` 2,5 s hors daemon, le jour courant n'étant jamais mis en cache) : ce point n'a pas d'entrée ici, il n'est consigné qu'en « non traité » dans le CHANGELOG de la 0.8.8.0. Une même vue sans bruit réglerait les deux, la justesse et le temps.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
 ### Le daemon tourne en `ProcessType Background` : facteur 5 probable sur les pages
 
 **What:** le plist de `com.pulse.daemon` déclare `ProcessType` `Background` ; le processus tourne en priorité 4. C'est l'explication probable, non mesurée, du facteur 5 entre le même code mesuré hors daemon et la production : le 2026-09-17, après la 0.8.8.0, `GET /` en 2,7 s servi par la production contre 0,48 s hors daemon, `/day/2026-09-17` en 1,1 s contre 0,20 s ; avant le correctif, 17,6 s contre 3,8 s. À mesurer avant de changer quoi que ce soit : mêmes routes, même base, avec et sans ce réglage, sur un Core jetable lancé par launchd plutôt que sur la production. Ne pas modifier le plist sans cette mesure avant/après : le réglage protège aussi le travail au premier plan d'une collecte qui tourne toute la journée.
