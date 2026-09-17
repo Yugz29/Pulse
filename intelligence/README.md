@@ -202,6 +202,19 @@ recommandation ni une affirmation sur l'état actuel. Deux appuis :
   son cwd, sans résolution observée. Le code concerne le processus global.
 - `recorded_statement` : déclaration explicite dans un commit, avec citation
   exacte. Sa pertinence est interprétée ; la citation ne prouve pas sa vérité.
+  La citation reste exigée du modèle et validée ; dans `reprise.open`, elle
+  n'est **affichée** que si elle ajoute au texte (`quote_adds_to_text`,
+  2026-09-17). Texte et citation sont comparés une fois rendus comparables :
+  NFKC, casse repliée, toute ponctuation et tout symbole remplacés par une
+  espace (apostrophes et guillemets compris), blancs réduits. La citation est
+  omise si elle est alors vide, égale au texte, ou contenue dans le texte
+  comme suite de mots entiers, dans l'ordre ; elle est gardée dans tous les
+  autres cas, y compris quand c'est le texte qui est contenu dans la
+  citation. Rendu seulement : ni le prompt, ni `open_items`, ni le contrat
+  ne changent. `reprise.open` est composé à la génération et stocké dans
+  l'événement : la règle ne vaut que pour les résumés à venir, les résumés
+  déjà stockés gardent leur texte (sur 9 points stockés au 17, un seul,
+  `b6262f70`, portait le doublon).
 
 `resumption.command_outcomes` distingue `resolved_observed`,
 `unresolved_observed` et `unknown`. `as_of` borne l'interprétation à la session.

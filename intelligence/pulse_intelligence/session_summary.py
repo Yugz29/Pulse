@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 import re
+import unicodedata
 import uuid
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
@@ -113,6 +114,36 @@ def normalize_open_text(text: str) -> str:
     return cleaned.casefold()
 
 
+def _comparable(text: str) -> str:
+    """La forme sous laquelle un texte et une citation se comparent : casse
+    repliée, apostrophes et guillemets unifiés puis toute ponctuation retirée
+    (catégories Unicode P et S), blancs réduits à une espace. Les mots et
+    leur ordre restent."""
+    folded = unicodedata.normalize("NFKC", text).casefold()
+    kept = "".join(
+        " " if unicodedata.category(char)[0] in "PSZC" else char for char in folded
+    )
+    return " ".join(kept.split())
+
+
+def quote_adds_to_text(text: str, quote: str | None) -> bool:
+    """La citation apporte-t-elle quelque chose que le texte ne dit pas déjà ?
+
+    Non quand, une fois comparables, la citation est vide, égale au texte, ou
+    contenue dans le texte comme suite de mots entiers : le modèle a recopié
+    la phrase du commit, l'afficher une seconde fois entre guillemets ne
+    montre rien de plus (cas `b6262f70` du lot du 2026-09-17). Oui dans tous
+    les autres cas, y compris quand c'est le texte qui est contenu dans la
+    citation : elle en dit alors plus que lui.
+    """
+    if not isinstance(quote, str):
+        return False
+    comparable_quote = _comparable(quote)
+    if not comparable_quote:
+        return False
+    return f" {comparable_quote} " not in f" {_comparable(text)} "
+
+
 def render_open_items(items: list[dict[str, Any]]) -> str:
     """Le `open` que Core reçoit : une phrase par point, dans l'ordre.
 
@@ -128,7 +159,11 @@ def render_open_items(items: list[dict[str, Any]]) -> str:
         if item["kind"] == "command_failure":
             body = "Échec observé, sans résolution correspondante observée en fin de session : " + body
         elif item["kind"] == "recorded_statement":
-            body = "Point déclaré dans un commit : " + body + f" (« {item['quote']} »)"
+            # La citation reste validée et exigée du modèle ; seul son
+            # affichage dépend de ce qu'elle ajoute au texte.
+            quote = item.get("quote")
+            shown = f" (« {quote} »)" if quote_adds_to_text(body, quote) else ""
+            body = "Point déclaré dans un commit : " + body + shown
         if item["kind"] == "carried_over":
             body += f" (repris : {item['reason_kept'].strip().rstrip(' .;')})"
         sentences.append(body + ".")
