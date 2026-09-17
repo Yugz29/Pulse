@@ -602,3 +602,91 @@ def test_a_case_corrected_workspace_no_longer_filters_everything(tmp_path):
     workspaces, _ = read_watched_workspaces(config)
 
     assert should_ignore(observed, workspaces[0]) is False
+
+
+# --- Un virtualenv se reconnaît à son pyvenv.cfg, pas à son nom -------------------
+
+
+def make_virtualenv(workspace, relative="backend/DevNote-env"):
+    root = workspace / relative
+    (root / "lib" / "python3.13" / "site-packages" / "django").mkdir(parents=True)
+    (root / "bin").mkdir()
+    (root / "pyvenv.cfg").write_text("home = /usr/bin\n")
+    (root / "bin" / "activate").write_text("# activate")
+    (root / "lib" / "python3.13" / "site-packages" / "django" / "apps.py").write_text("x")
+    return root
+
+
+def test_snapshot_never_enters_a_directory_holding_pyvenv_cfg(tmp_path):
+    venv = make_virtualenv(tmp_path)
+    kept = tmp_path / "backend" / "manage.py"
+    kept.write_text("print()")
+
+    snapshot = take_snapshot(tmp_path)
+
+    assert set(snapshot) == {kept}
+    assert not any(venv in path.parents for path in snapshot)
+
+
+def test_virtualenv_is_ignored_whatever_its_name_and_dot_venv_still_is(tmp_path):
+    venv = make_virtualenv(tmp_path)
+    # .venv reste ignoré par son nom, même sans pyvenv.cfg sur le disque.
+    assert should_ignore(tmp_path / ".venv" / "lib" / "x.py", tmp_path)
+    assert should_ignore_directory(tmp_path / ".venv" / "lib", tmp_path)
+
+    assert should_ignore(venv / "lib" / "python3.13" / "site-packages" / "django" / "apps.py", tmp_path)
+    assert should_ignore(venv / "pyvenv.cfg", tmp_path)
+    assert should_ignore_directory(venv, tmp_path)
+    assert should_ignore_directory(venv / "lib", tmp_path)
+    # Le dossier voisin, et un dossier du même nom sans pyvenv.cfg, restent observés.
+    assert not should_ignore(tmp_path / "backend" / "manage.py", tmp_path)
+    (tmp_path / "frontend" / "DevNote-env").mkdir(parents=True)
+    assert not should_ignore(tmp_path / "frontend" / "DevNote-env" / "notes.md", tmp_path)
+    assert not should_ignore_directory(tmp_path / "frontend" / "DevNote-env", tmp_path)
+
+
+def test_a_pyvenv_cfg_at_the_workspace_root_does_not_blind_the_workspace(tmp_path):
+    (tmp_path / "pyvenv.cfg").write_text("home = /usr/bin\n")
+    source = tmp_path / "src" / "app.py"
+    source.parent.mkdir()
+    source.write_text("x")
+
+    assert not should_ignore(source, tmp_path)
+    assert source in take_snapshot(tmp_path)
+
+
+def test_collector_drops_virtualenv_changes_at_the_source(tmp_path):
+    venv = make_virtualenv(tmp_path)
+    collector = DirtyPathCollector(tmp_path)
+
+    collector.dispatch(FileCreatedEvent(str(venv / "lib" / "python3.13" / "site-packages" / "pytz" / "zone.py")))
+    collector.dispatch(FileModifiedEvent(str(venv / "pyvenv.cfg")))
+    collector.dispatch(DirModifiedEvent(str(venv / "lib")))
+
+    assert collector.drain() == (set(), set())
+
+
+def test_pip_install_in_a_virtualenv_reports_nothing(tmp_path):
+    venv = make_virtualenv(tmp_path)
+    snapshot = take_snapshot(tmp_path)
+    package = venv / "lib" / "python3.13" / "site-packages" / "requests"
+    package.mkdir()
+    (package / "__init__.py").write_text("x")
+
+    changes = detect_changes(snapshot, {package / "__init__.py"}, {package}, tmp_path)
+
+    assert changes == []
+
+
+def test_removing_a_virtualenv_reports_nothing_because_it_was_never_tracked(tmp_path):
+    # rm -rf supprime pyvenv.cfg en route : les suppressions qui suivent ne
+    # sont plus reconnues par le disque, mais aucun de ces fichiers n'a
+    # jamais été dans le snapshot, donc aucune suppression n'est émise.
+    import shutil
+
+    venv = make_virtualenv(tmp_path)
+    snapshot = take_snapshot(tmp_path)
+    gone = venv / "lib" / "python3.13" / "site-packages" / "django" / "apps.py"
+    shutil.rmtree(venv)
+
+    assert detect_changes(snapshot, {gone}, {venv}, tmp_path) == []

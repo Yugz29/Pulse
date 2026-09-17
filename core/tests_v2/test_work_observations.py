@@ -150,3 +150,68 @@ def test_window_facts_keep_title_and_url_and_filter_noise_documents():
     assert result["coverage"]["omitted_events"] == {"window_focused": 1}
     assert result["sources"]["o2"] == ["event-2"]
     assert result["applications"] == []
+
+
+# --- Un virtualenv se reconnaît à son pyvenv.cfg, pas à son nom -------------------
+
+
+VENV = "/work/DevNote/backend/DevNote-env"
+
+
+def venv_edit(i, relative, change="created"):
+    return event(i, "file_changed", path=f"{VENV}/{relative}", event=change, workspace="/work/DevNote")
+
+
+def test_files_of_a_virtualenv_revealed_by_pyvenv_cfg_are_noise():
+    events = [
+        venv_edit(1, "lib/python3.13/site-packages/django/apps.py"),
+        venv_edit(2, "pyvenv.cfg"),
+        venv_edit(3, "bin/activate"),
+        event(4, "file_changed", path="/work/DevNote/backend/manage.py", event="modified", workspace="/work/DevNote"),
+    ]
+
+    result = project_work_observations(events)
+
+    # L'ordre ne compte pas : le fichier vu avant pyvenv.cfg est écarté aussi.
+    assert [f["path"] for f in result["timeline"]] == ["backend/manage.py"]
+    assert result["coverage"]["omitted_events"]["file_noise"] == 3
+    assert all(VENV not in json.dumps(result[key]) for key in ("timeline", "last_observed", "sources"))
+
+
+def test_a_deleted_pyvenv_cfg_reveals_the_virtualenv_too():
+    # rm -rf d'un ancien environnement : 6 000 suppressions le 2026-09-17.
+    events = [venv_edit(1, "lib/python3.11/site-packages/pytz/zone.py", "deleted"), venv_edit(2, "pyvenv.cfg", "deleted")]
+
+    assert project_work_observations(events)["timeline"] == []
+
+
+def test_a_sibling_with_a_similar_name_is_not_a_virtualenv():
+    events = [
+        venv_edit(1, "pyvenv.cfg"),
+        event(2, "file_changed", path=f"{VENV}-notes/todo.md", event="modified", workspace="/work/DevNote"),
+    ]
+
+    assert [f["path"] for f in project_work_observations(events)["timeline"]] == ["backend/DevNote-env-notes/todo.md"]
+
+
+def test_without_a_pyvenv_cfg_event_the_projection_cannot_know():
+    # Limite assumée : la projection ne lit jamais le disque. Un `pip install`
+    # ancien dans un environnement dont pyvenv.cfg n'a pas bougé reste visible ;
+    # depuis ce correctif, la collecte ne l'enregistre plus.
+    events = [venv_edit(1, "lib/python3.13/site-packages/requests/api.py")]
+
+    assert len(project_work_observations(events)["timeline"]) == 1
+
+
+def test_projection_of_a_virtualenv_never_reads_the_disk(monkeypatch):
+    from pathlib import Path
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("la projection ne doit pas lire le disque")
+
+    for name in ("exists", "is_file", "is_dir", "stat"):
+        monkeypatch.setattr(Path, name, forbidden)
+
+    result = project_work_observations([venv_edit(1, "pyvenv.cfg"), venv_edit(2, "bin/python")])
+
+    assert result["timeline"] == []

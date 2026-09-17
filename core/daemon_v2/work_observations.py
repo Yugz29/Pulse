@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
-from .file_policy import is_noise_path, should_ignore
+from .file_policy import is_noise_path, should_ignore, under_virtualenv, virtualenv_roots
 from .analysis.terminal import is_test_command, useful_command_lines
 from .analysis.timeline import display_file_path
 
@@ -42,6 +42,14 @@ def project_work_observations(activities: list[dict[str, Any]]) -> dict[str, Any
     last_git: dict[str, dict[str, str]] = {}
     excluded: dict[str, int] = {}
     origin = min((_utc(a["occurred_at"]) for a in activities), default=None)
+    # Virtualenvs que la session révèle elle-même (un ``pyvenv.cfg`` créé,
+    # modifié ou supprimé) : leurs fichiers sont du bruit, quel que soit le
+    # nom du dossier. Déduit des événements, jamais du disque.
+    venvs = virtualenv_roots(
+        a.get("details", {}).get("path") or ""
+        for a in activities
+        if a["type"] == "file_changed"
+    )
 
     def offset(value: str | None) -> float | None:
         if value is None or origin is None:
@@ -70,7 +78,9 @@ def project_work_observations(activities: list[dict[str, Any]]) -> dict[str, Any
             # not proof that the observed file is noise.
             if root and not Path(path).is_relative_to(root):
                 root = None
-            if root and should_ignore(Path(path), Path(root)):
+            if (root and should_ignore(Path(path), Path(root))) or under_virtualenv(
+                Path(path), venvs
+            ):
                 excluded["file_noise"] = excluded.get("file_noise", 0) + 1
                 continue
             # Absolute identity prevents equal relative names in two roots
