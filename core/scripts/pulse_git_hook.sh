@@ -28,7 +28,15 @@ branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 [[ -n "$branch" ]] || branch="HEAD"
 message="$(git log -1 --pretty=%B HEAD 2>/dev/null)"
 occurred_at="$(git log -1 --pretty=%cI HEAD 2>/dev/null)"
-repository="$(basename "$repo_root")"
+# Un worktree lié appartient au dépôt principal : Pulse, pas Pulse-live.
+# Le dossier commun d'un worktree est le .git du dépôt principal ; git_root,
+# lui, reste le worktree.
+common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+if [[ "$(basename "$common_dir")" == ".git" ]]; then
+  repository="$(basename "$(dirname "$common_dir")")"
+else
+  repository="$(basename "$repo_root")"
+fi
 
 shortstat="$(git show --shortstat --pretty=format: HEAD 2>/dev/null | tail -n1)"
 
