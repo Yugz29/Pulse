@@ -221,14 +221,6 @@ reconstruction de travail est effectuée en lecture, commune au journal et à
 **Priority:** P3
 **Depends on:** Cas réel observé
 
-### Un virtualenv se reconnaît à son `pyvenv.cfg`, pas à son nom
-
-**What:** `file_policy.IGNORED_DIRECTORY_NAMES` ignore `.venv` par son nom. Le 2026-09-17, work-7 (15:48:58–15:57:25) compte 13 065 `file_changed`, dont 13 059 sous `DevNote/backend/DevNote-env` : un virtualenv nommé autrement, installé pendant la session. Ces événements gonflent `trace.db` (rétention infinie), la chronologie de la page et les « fichiers les plus touchés ». À faire : un dossier qui contient `pyvenv.cfg` est du bruit, quel que soit son nom, à la collecte (`file_watcher.should_ignore_directory`) comme à la projection (`file_policy`, pour l'historique déjà stocké) ; même question pour `site-packages` sans `pyvenv.cfg` au-dessus. Les événements déjà stockés ne sont pas supprimés.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** Aucun
-
 ### Projets suggérés : dépôts git vus mais non surveillés
 
 **What:** Core ne surveille que la liste déclarée (`~/.pulse_v2/watched_workspaces`) ; un dépôt où l'on travaille sans l'avoir déclaré reste invisible côté fichiers, sans que rien ne le dise. Core a pourtant de quoi le remarquer : le `cwd` des commandes zsh et le `workspace` des sessions d'agent. À faire : relever les dépôts git vus par ces deux sources et absents de la liste, et les lister dans la page avec la commande d'ajout (la ligne à écrire dans `watched_workspaces`, puis `launchctl kickstart -k gui/$(id -u)/com.pulse.file-watcher`). **Aucune surveillance ne démarre sans action de l'utilisateur** : Core suggère, il n'étend jamais de lui-même ce qu'il observe.
@@ -463,6 +455,14 @@ configuration des seuils quitte Intelligence pour Core.
 **Depends on:** Note de décision datée (contrat `/context/sessions`, `schema_version`)
 
 ## Completed
+
+### Un virtualenv se reconnaît à son `pyvenv.cfg`, pas à son nom
+
+**What:** `file_policy.IGNORED_DIRECTORY_NAMES` ignorait `.venv` par son nom. Le 2026-09-17, work-7 (15:48:58–15:57:25) comptait 13 065 `file_changed`, dont 13 059 sous `DevNote/backend/DevNote-env`.
+
+**Résolution (0.8.6.0) :** à la collecte, un dossier qui porte `pyvenv.cfg` n'est plus observé ; à la projection, les fichiers d'un virtualenv révélé par un événement `pyvenv.cfg` de la session sont du bruit, sans lecture du disque. Session du 17 : 951 008 tokens → 1 804. Reste : la chronologie HTML déroule encore ces événements ; `site-packages` sans `pyvenv.cfg` dans la session n'est pas reconnu sur l'historique.
+
+**Completed:** 2026-09-17
 
 ### Références oN cliquables dans la page HTML des résumés
 
