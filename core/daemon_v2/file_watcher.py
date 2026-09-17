@@ -30,7 +30,12 @@ from .private_files import apply_private_umask
 from .producer_outbox import ProducerOutbox, enqueue_file_event
 
 
-from .file_policy import IGNORED_DIRECTORY_NAMES, should_ignore
+from .file_policy import (
+    IGNORED_DIRECTORY_NAMES,
+    VIRTUALENV_MARKER,
+    inside_virtualenv_on_disk,
+    should_ignore as _policy_ignores,
+)
 
 FileSignature: TypeAlias = tuple[int, int]
 Snapshot: TypeAlias = dict[Path, FileSignature]
@@ -38,21 +43,34 @@ Snapshot: TypeAlias = dict[Path, FileSignature]
 Enqueue: TypeAlias = Callable[[str, Path], bool]
 
 
+def should_ignore(path: Path, workspace: Path) -> bool:
+    """Politique de bruit partagée, plus ce que seule la collecte peut voir :
+    un fichier sous un dossier qui porte ``pyvenv.cfg`` est dans un
+    virtualenv, quel que soit le nom du dossier."""
+    return _policy_ignores(path, workspace) or inside_virtualenv_on_disk(path, workspace)
+
+
 def should_ignore_directory(path: Path, workspace: Path) -> bool:
     try:
         relative_path = path.relative_to(workspace)
     except ValueError:
         return True
-    return any(part in IGNORED_DIRECTORY_NAMES for part in relative_path.parts)
+    if any(part in IGNORED_DIRECTORY_NAMES for part in relative_path.parts):
+        return True
+    return inside_virtualenv_on_disk(path, workspace)
 
 
 def take_snapshot(workspace: Path, root: Path | None = None) -> Snapshot:
     snapshot: Snapshot = {}
     for walk_root, directory_names, file_names in os.walk(root or workspace):
+        root_path = Path(walk_root)
+        # Un virtualenv ne se parcourt pas : ni ses fichiers, ni ses dossiers.
+        if VIRTUALENV_MARKER in file_names and root_path != workspace:
+            directory_names[:] = []
+            continue
         directory_names[:] = [
             name for name in directory_names if name not in IGNORED_DIRECTORY_NAMES
         ]
-        root_path = Path(walk_root)
         for file_name in file_names:
             path = root_path / file_name
             if should_ignore(path, workspace):

@@ -4,6 +4,47 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.6.0] - 2026-09-17
+
+Un virtualenv se reconnaît à son `pyvenv.cfg`, pas à son nom. Correctif de
+bruit, comme l'exclusion de `.gitnexus/` en 0.3.1.0 : la forme de
+`/context`, `/context/sessions`, de l'export du journal et le schéma de
+`trace.db` ne changent pas ; l'identité des sessions et
+`reconstruction_version` non plus (les événements stockés restent dans leurs
+sessions, seule la projection en observations les écarte).
+
+### Corrigé
+- Le 2026-09-17, un environnement nommé `DevNote-env` a produit 19 191
+  `file_changed` (suppression puis réinstallation), dont 13 059 dans une
+  session de neuf minutes : 6 618 faits `file`, une entrée de résumé de
+  951 008 tokens pour un plafond de 30 000, donc une session refusée par le
+  lot. Seul `.venv` était ignoré, par son nom.
+- **Collecte** (`file_watcher`) : un dossier qui porte `pyvenv.cfg` n'est ni
+  parcouru ni observé, quel que soit son nom ; `.venv` reste ignoré par son
+  nom, même sans `pyvenv.cfg`. Un `pyvenv.cfg` à la racine d'un workspace
+  n'aveugle pas le workspace. La suppression d'un virtualenv n'émet rien :
+  ses fichiers n'ont jamais été dans le snapshot.
+- **Projection** (`work_observations`) : les fichiers d'un virtualenv que la
+  session révèle elle-même, par un `pyvenv.cfg` créé, modifié ou supprimé
+  parmi ses événements, sont comptés en `file_noise` et ne deviennent pas des
+  faits. La projection ne lit jamais le disque : la même base rend la même
+  projection, que le dossier existe encore ou non, et un `input_hash` se
+  recalcule à l'identique. Mesure sur la session du 17 à 15:48 (`6af523d8`,
+  13 114 activités inchangées) : 6 637 faits → 21, 951 008 tokens → 1 804.
+- Limite assumée : une session ancienne qui touche un virtualenv sans
+  événement `pyvenv.cfg` (un `pip install` dans un environnement existant)
+  garde ses fichiers ; la collecte n'en enregistre plus. Les seuls
+  `pyvenv.cfg` de la base sont ceux du 17 : aucun résumé stocké ne voit ses
+  références renumérotées.
+- Non traité ici : la chronologie HTML de la page déroule toujours ces
+  événements (page de 1,8 Mo le 17) ; le document d'une fenêtre
+  (`is_noise_path`) reste filtré par nom seulement.
+
+### Déploiement
+- Relancer les services Core : launchd ne recharge pas le code, et c'est le
+  file-watcher qui porte la moitié du correctif. Aucune coordination avec
+  Intelligence.
+
 ## [0.8.5.0] - 2026-09-17
 
 Bloc `Session en cours` dans le journal HTML : étape 1 de
