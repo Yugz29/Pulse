@@ -15,9 +15,11 @@ restent identiques.
 
 ### Ajouté
 - Une référence `oN` de `doing`, `stopped_at`, `open` ou des preuves d'un
-  point ouvert renvoie au fait cité, affiché sous la fiche : commit (hash,
-  branche, message), commande (texte, code, cwd), fichier (chemin,
-  changements comptés), verrouillage ou veille. Le fait est l'événement
+  point ouvert renvoie au fait cité, affiché sous la fiche dans un bloc
+  toujours ouvert (ancres sans JavaScript) : commit (hash, branche, première
+  ligne du message, phrase que le résumé en cite surlignée, message complet
+  replié et sans ses trailers Git), commande (texte, code, cwd), fichier
+  (chemin, changements comptés), verrouillage ou veille. Le fait est l'événement
   stocké, retrouvé par la table `observation_sources` du résumé lui-même :
   rien n'est reprojeté, la référence garde le sens qu'elle avait quand le
   modèle l'a lue.

@@ -7,9 +7,14 @@ modèle, jamais présentés comme des faits observés.
 Références ``oN`` (``summary_references``) : liées au fait cité quand elles
 sont hors citation et résolues par la table du résumé ; laissées telles
 quelles dans une citation ; marquées « non vérifiable » sinon. Les faits
-cités, eux, sont des événements stockés, affichés sous la fiche.
+cités, eux, sont des événements stockés, affichés sous la fiche, dans un bloc
+toujours ouvert : l'ancre d'un fait est hors de tout ``<details>`` replié,
+le lien fonctionne sans JavaScript. Un commit montre sa première ligne, la
+phrase que le résumé en cite (``<mark>``), puis le message complet replié,
+sans ses trailers Git.
 """
 
+import re
 from datetime import datetime, tzinfo
 from html import escape
 from typing import Any
@@ -67,6 +72,11 @@ border-radius:5px;font-size:.8rem}.summary-fact pre{margin:.25rem 0 0;padding:.4
 background:#1b2128;border:1px solid #303b47;border-radius:6px;white-space:pre-wrap;
 overflow-wrap:anywhere;font-size:.8rem;color:#c3ccd6}
 .summary-fact.unverified{color:#d9a9ae}
+.summary-fact .fact-subject{color:#dde3ea}.summary-fact .fact-quote{margin:.25rem 0 0;
+padding-left:.6rem;border-left:2px solid #6b5630}
+.summary-fact mark{background:#5a4a1f;color:#f6e3b4;border-radius:3px;padding:0 .15rem}
+.fact-message{margin:.25rem 0 0}.fact-message>summary{cursor:pointer;color:var(--muted);
+font-size:.8rem}
 @media(max-width:850px){.summary-reprise{grid-template-columns:1fr;gap:.1rem}
 .summary-reprise dd{margin-bottom:.45rem}.model-reprise,.model-summaries{padding:1rem}}
 """
@@ -294,6 +304,71 @@ _MARKER_LABELS = {
 }
 
 
+# Un trailer Git : ``Clé: valeur`` (clé alphanumérique à tirets), suites
+# indentées comprises. Seul le dernier paragraphe peut en être un bloc, et
+# jamais le premier : « docs: … » est un sujet, pas un trailer.
+_TRAILER = re.compile(r"[A-Za-z][A-Za-z0-9-]*:[ \t]\S.*")
+
+
+def _without_trailers(message: str) -> str:
+    """Le message sans son bloc de trailers (Co-Authored-By, Claude-Session…)."""
+    paragraphs = re.split(r"\n[ \t]*\n", message.strip())
+    if len(paragraphs) < 2:
+        return message.strip()
+    lines = paragraphs[-1].splitlines()
+    if _TRAILER.fullmatch(lines[0]) and all(
+        _TRAILER.fullmatch(line) or line[:1] in (" ", "\t") for line in lines
+    ):
+        paragraphs.pop()
+    return "\n\n".join(paragraphs)
+
+
+def _quotations(view: dict[str, Any]) -> list[str]:
+    """Les citations « … » du texte du résumé, sans leurs guillemets."""
+    found = []
+    for text in (view["doing"], view["stopped_at"], view["open"]):
+        for kind, fragment in split_references(text or ""):
+            if kind == "quote" and fragment.startswith("«"):
+                quoted = fragment.strip("«»").strip()
+                if quoted and quoted not in found:
+                    found.append(quoted)
+    return found
+
+
+def _quoted_spans(message: str, quotations: list[str]) -> list[tuple[int, int]]:
+    """Où le message contient une citation du résumé, aux blancs près : un
+    message est coupé en lignes, la citation ne l'est pas."""
+    spans = []
+    for quoted in quotations:
+        pattern = r"\s+".join(re.escape(word) for word in quoted.split())
+        match = re.search(pattern, message)
+        if match:
+            spans.append(match.span())
+    return sorted(set(spans))
+
+
+def _commit_message(message: str, quotations: list[str]) -> str:
+    """Première ligne, phrases citées par le résumé, message complet replié."""
+    message = _without_trailers(message)
+    subject, _, rest = message.partition("\n")
+    parts, cursor, below = [], 0, []
+    for start, end in _quoted_spans(message, quotations):
+        if end <= len(subject) and start >= cursor:
+            parts.append(f"{escape(subject[cursor:start])}<mark>{escape(subject[start:end])}</mark>")
+            cursor = end
+        elif start >= len(subject):
+            sentence = " ".join(message[start:end].split())
+            below.append(f'<div class="fact-quote"><mark>{escape(sentence)}</mark></div>')
+    parts.append(escape(subject[cursor:]))
+    html = f'<div class="fact-subject">{"".join(parts)}</div>{"".join(below)}'
+    if rest.strip():
+        html += (
+            '<details class="fact-message"><summary>message complet</summary>'
+            f"<pre>{escape(message)}</pre></details>"
+        )
+    return html
+
+
 def _render_facts(view: dict[str, Any], zone: tzinfo, scope: str) -> str:
     """Les faits cités par la fiche : des événements stockés, pas du texte du
     modèle. Rien quand la fiche ne cite aucune référence."""
@@ -329,7 +404,7 @@ def _render_fact(
         if resolution["branch"]:
             pieces.append(f"branche {escape(resolution['branch'])}")
         if resolution["message"]:
-            block = f"<pre>{escape(resolution['message'])}</pre>"
+            block = _commit_message(resolution["message"], _quotations(view))
     elif kind == "command":
         code = resolution["exit_code"]
         pieces = ["commande", f"code {code}" if code is not None else "code inconnu"]
