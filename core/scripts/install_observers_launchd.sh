@@ -137,6 +137,11 @@ swift_bin_path="$(swift build -c release \
   --show-bin-path)" || exit 1
 install -m 0755 "$swift_bin_path/PulseApplicationObserver" \
   "$bin_dir/PulseApplicationObserver"
+# De quelles sources vient ce binaire : `make status` le compare au checkout
+# (une relance ne le met pas à jour, seule cette installation le fait).
+(cd "$repo_root" && "$python" -m daemon_v2.service_staleness \
+  --record-observer "$bin_dir/PulseApplicationObserver") \
+  || echo "Empreinte des sources de l'observateur non notée (make status dira INCONNU)" >&2
 
 write_and_load() {
   local label="$1"

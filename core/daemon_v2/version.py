@@ -9,9 +9,13 @@ checkout, pas celle du processus.
 Un fichier absent, illisible ou vide donne ``UNKNOWN_VERSION``, jamais une
 erreur : la collecte ne dépend pas d'un fichier de version.
 
-Le daemon sert sa version sur ``GET /status``. Worker et file-watcher ne
-servent rien : ils l'annoncent au démarrage dans ``<données>/run/<service>.json``
-(pid et version, rien d'autre), que ``make status`` relit.
+``CODE_FINGERPRINT`` (``code_fingerprint.py``) est calculée au même moment :
+la version se lit, l'empreinte décide. Deux services de même version peuvent
+exécuter un code différent (changement mergé sans bump).
+
+Le daemon sert les deux sur ``GET /status``. Worker et file-watcher ne servent
+rien : ils les annoncent au démarrage dans ``<données>/run/<service>.json``
+(pid, version, empreinte, rien d'autre), que ``make status`` relit.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import json
 import os
 from pathlib import Path
 
+from .code_fingerprint import python_fingerprint
 from .private_files import ensure_private_directory, restrict_private_file
 from .runtime_config import select_database_path
 
@@ -35,6 +40,8 @@ def read_version(path: Path = VERSION_FILE) -> str:
 
 
 CORE_VERSION = read_version()
+# ``None`` si le dossier de Core est illisible : l'état sera « inconnu ».
+CODE_FINGERPRINT = python_fingerprint()
 
 
 def announce_directory() -> Path:
@@ -51,7 +58,13 @@ def announce(service: str, *, directory: Path | None = None) -> None:
         ensure_private_directory(target.parent)
         temporary = target.with_suffix(".json.tmp")
         temporary.write_text(
-            json.dumps({"pid": os.getpid(), "version": CORE_VERSION}),
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "version": CORE_VERSION,
+                    "code_fingerprint": CODE_FINGERPRINT,
+                }
+            ),
             encoding="utf-8",
         )
         restrict_private_file(temporary)
@@ -60,11 +73,12 @@ def announce(service: str, *, directory: Path | None = None) -> None:
         pass
 
 
-def announced_version(
+def announced(
     service: str, pid: int, *, directory: Path | None = None
-) -> str | None:
-    """La version annoncée par ce pid, ``None`` si l'annonce manque, est
-    illisible ou vient d'un autre processus (une exécution précédente)."""
+) -> dict[str, str | None] | None:
+    """Ce que ce pid a annoncé (``version``, ``code_fingerprint``), ``None``
+    si l'annonce manque, est illisible ou vient d'un autre processus (une
+    exécution précédente)."""
     target = (directory or announce_directory()) / f"{service}.json"
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
@@ -72,5 +86,9 @@ def announced_version(
         return None
     if not isinstance(data, dict) or data.get("pid") != pid:
         return None
-    version = data.get("version")
-    return version if isinstance(version, str) and version else None
+
+    def text(key: str) -> str | None:
+        value = data.get(key)
+        return value if isinstance(value, str) and value else None
+
+    return {"version": text("version"), "code_fingerprint": text("code_fingerprint")}

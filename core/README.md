@@ -325,18 +325,23 @@ Vérifier l’état local sans démarrer de processus :
 
 Le même état est disponible en JSON sur `http://127.0.0.1:8765/status`.
 
-`/status` porte `version` : le contenu de `core/VERSION` lu au démarrage du
-processus (`daemon_v2/version.py`), donc la version du code que le daemon
-exécute, pas celle du checkout ; `unknown` si le fichier manque ou est
-illisible, jamais une erreur. `/context` ne la porte pas. Worker et
-file-watcher, qui ne servent rien, annoncent la leur au démarrage dans
-`~/.pulse_v2/run/<service>.json` (pid et version). `make status` affiche la
-version servie et marque STALE un service qui exécute une autre version que
-celle du checkout, ou qui n'en annonce aucune. Un commit sans bump de
-`VERSION` ne marque rien ; en contrepartie, un changement de code mergé sans
-bump n'est pas détecté. L'observateur Swift n'est pas comparé : son binaire
-est copié dans `~/.pulse_v2/bin` à l'installation, une relance ne le met pas
-à jour.
+`/status` porte `version` et `code_fingerprint`, tous deux fixés au démarrage
+du processus : la version est le contenu de `core/VERSION`
+(`daemon_v2/version.py` ; `unknown` si le fichier manque, jamais une erreur),
+l'empreinte résume le code de `daemon_v2` sans commentaires ni docstrings,
+plus `VERSION` et `requirements.txt` (`daemon_v2/code_fingerprint.py`).
+`/context` ne les porte pas. Worker et file-watcher, qui ne servent rien,
+les annoncent au démarrage dans `~/.pulse_v2/run/<service>.json`.
+
+`make status` juge chaque service en trois états. **À jour** : même empreinte
+que le checkout. **STALE** : empreinte différente, que la version ait bougé
+ou non (un changement mergé sans bump est vu, un docstring ne marque rien).
+**INCONNU** : rien d'annoncé ou checkout illisible ; ni à jour ni périmé.
+L'observateur Swift est jugé sur l'empreinte de ses sources, notée à côté du
+binaire par `install_observers_launchd.sh` : périmé, il se réinstalle, une
+relance ne recharge pas un binaire copié dans `~/.pulse_v2/bin`. L'empreinte
+ne voit ni les dépendances installées sans changement de
+`requirements.txt`, ni l'environnement du plist.
 
 Réinitialiser explicitement la trace de développement, après avoir arrêté
 Pulse :
