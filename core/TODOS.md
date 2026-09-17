@@ -393,6 +393,14 @@ qui touche la reconstruction (`reconstruction_version`, note datée).
 **Priority:** P2
 **Depends on:** Aucun
 
+### L'affichage du journal ne rattache un worktree que tant qu'il existe sur le disque
+
+**What:** depuis 0.8.7.0, le résolveur d'affichage (`analysis/projects.resolve_project_context`) nomme un worktree d'après son dépôt principal en lisant son fichier `.git`. Un worktree est éphémère : une fois retiré, il n'y a plus rien à lire et le nom du dossier revient. Les sessions du 2026-09-17 restent donc affichées « Pulse-live », « Pulse-refs », « Pulse-venv », et toute session d'un worktree le redeviendra après son retrait, alors que `/context` continue de dire « Pulse » pour les événements émis depuis 0.8.7.0. Piste : conserver le rattachement à la collecte plutôt que de le recalculer à l'affichage. Les événements le portent déjà (`workspace.project_name`, `git.repository`, `repository`) : le journal devrait lire le nom persisté par `persisted_workspace_identity`, comme `/context`, et ne garder le résolveur par chemin que pour les événements qui n'en portent pas. À vérifier avant : ce que ce changement ferait aux noms affichés de l'historique (le résolveur par chemin et le nom persisté ne coïncident pas toujours, par exemple `DevNote/DevNote`). Les 16 commits du 17, persistés sous le nom du worktree, resteront tels quels dans les deux cas.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Aucun
+
 ### Attribution d'une session à un worktree git plutôt qu'au dépôt principal
 
 **What:** Le résumé de `a48ebc2f6a7fbc95` (work-13 du 2026-09-11) porte
