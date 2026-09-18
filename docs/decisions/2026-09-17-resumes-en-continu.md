@@ -284,8 +284,15 @@ n'est pas recommandée.
    ([décision du 18](2026-09-18-open-instantane-de-fin-de-session.md)).
    Place (hors `trace.db` ou non), affichage et règle de fermeture à cadrer
    ici, avec le point 1 (où vivent les notes) ; jeu d'essai : les 11 échecs
-   de commande et les 25 déclarations de commit du rejeu du 18. Non
-   commencé, après l'étape 2.
+   de commande et les 25 déclarations de commit du rejeu du 18, plus ce
+   cas : **une commande longue qui réussit n'est jamais observée comme
+   réussie** — Pulse n'enregistre une commande qu'à sa fin, et un serveur
+   de développement ou un `docker run` au premier plan se termine par
+   Ctrl-C, en général avec un code non nul. Cas réel du 18 : `docker run
+   -p 5001:5000 first-image` fonctionnait (`curl` OK), et n'existe dans la
+   trace que comme un échec (125). Piste : observer aussi le **début** des
+   commandes, pour qu'une commande qui tourne soit un fait distinct d'une
+   commande qui a échoué. Non commencé, après l'étape 2.
 
 ## Décisions du 2026-09-17 (utilisateur)
 

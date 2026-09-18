@@ -1282,7 +1282,7 @@ les 4 sessions du 18 et les 2 plus longues du 11.**
 | Session | Verdict | Détail |
 | --- | --- | --- |
 | work-3 `bb6c96e0` (18, 10:31–10:40, Pulse + Holberton28) | `doing`/`stopped_at` justes ; `open` fausse alerte | `open` (← o28) : `docker build … && docker run …` en échec (code 1). Résolu plus tard, hors de cette session. |
-| work-4 `f8a3ebc4` (18, 10:40–11:04, devops-formation + Holberton28 + Pulse) | `doing`/`stopped_at` justes ; `open` deux fausses alertes | `open` (← o26, o39) : deux échecs Docker (code 125). Résolus plus tard. Deux projets menés en parallèle dans la même session. |
+| work-4 `f8a3ebc4` (18, 10:40–11:04, devops-formation + Holberton28 + Pulse) | `doing`/`stopped_at` justes ; `open` deux fausses alertes | `open` (← o26, o39) : deux échecs Docker (code 125). Résolus plus tard. Deux projets menés en parallèle dans la même session. `structured.central_files` : `intelligence/pulse_intelligence/state.py` — un fichier Pulse, cité comme central dans une session Docker : le fichier a bien changé dans la fenêtre (worktree Pulse observé d'office), mais il appartient à l'autre fil de travail. |
 | work-5 `0e1e3cab` (18, 11:04–11:12, Pulse) | `doing`/`stopped_at` justes ; `open` vide | Voir le motif ci-dessous : la poussée refusée par le hook tombe dans cette session et `open` ne l'a pas signalée. |
 | work-6 `7fd70078` (18, 11:12–11:18, Pulse) | `doing`/`stopped_at` justes ; `open` vide | — |
 | work-11 `efc91c08` (11, 21:13–21:52, Pulse + observer-log-timestamps) | ne permet pas de se rappeler la session | Lu à sept jours. |
@@ -1320,3 +1320,13 @@ et son message complet, qui racontent la session. Manqué : l'agent en cours
 (seules ses sessions terminées apparaissent ; ses tests et ses échecs sont
 invisibles, donc « aucun test » rassure à tort) ; les fichiers arrivés par
 un merge masquent ceux réellement modifiés.
+
+*Complément du soir (après l'étape 1 bis, Core 0.8.10.0, et la v0 du signal
+d'état).* Deux angles morts de plus : **une erreur d'API** coupe le tour de
+l'agent sans `Stop`, la session reste « travaille » dans le menu alors
+qu'elle attend (PR #116 : `idle_prompt` la passe en attente) ; et les
+**« échecs bruts » sont bruyants sur les scripts composés** — une commande
+`cd … && python3 - <<'EOF' …` qui sort en 1 parce qu'un `assert` du script
+a échoué s'affiche comme un échec de l'agent au même titre qu'un test rouge,
+et le corps du heredoc s'affichait entier (PR #115 : première ligne
+seulement, coupée avant `<<`).
