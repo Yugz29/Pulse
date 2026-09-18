@@ -255,6 +255,16 @@ n'est pas recommandée.
    modèle, aucun contrat ; tests de rendu ; bump de version et relance du
    daemon. C'est la plus petite étape utile : elle sert dès le premier jour
    et elle dit, à l'usage, ce qui manque vraiment.
+   **1 bis (2026-09-18, Core 0.8.10.0).** Le bloc montre aussi, pour chaque
+   session Claude Code vivante, ce que son transcript dit de l'agent : les
+   10 dernières commandes (description, commande masquée par
+   `redact_command`, issue ok / échec / interrompue, heure), le dernier
+   test, les échecs bruts, les fichiers écrits (`Edit`/`Write`). Jamais
+   `stdout`/`stderr`, ni prompt, ni motif d'`Exit code` ; lecture tolérante
+   et incrémentale, dernière ligne tronquée ignorée, sous-agents ignorés,
+   bloc muet sans dossier d'état ; `transcript_path` ajouté au fichier
+   d'état v0. Claude Code seulement ; répond au premier relevé de l'étape 2
+   (« l'agent en cours est invisible, "aucun test" rassure à tort »).
 2. **Usage pendant quelques jours** et consignation dans
    `docs/dogfooding.md`, une ligne par jour : « ce qui m'a manqué dans
    Session en cours ». C'est ce relevé qui

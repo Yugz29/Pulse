@@ -197,6 +197,10 @@ def apply_event(
     previous = current.get("state") if current else None
     data: dict[str, Any] = dict(current or {})
     cwd = payload.get("cwd") or data.get("cwd")
+    # Le chemin du transcript live : lu par le bloc « Session en cours »
+    # (étape 1 bis), jamais par le résumé de nuit. Gardé d'un événement à
+    # l'autre si un payload ne le porte pas.
+    transcript_path = payload.get("transcript_path") or data.get("transcript_path")
     data.update(
         {
             "agent": agent,
@@ -205,6 +209,7 @@ def apply_event(
             "updated_at": moment,
             "cwd": cwd,
             "project": Path(str(cwd)).name if cwd else None,
+            "transcript_path": transcript_path if isinstance(transcript_path, str) and transcript_path else None,
         }
     )
     if previous != target or "since" not in data:

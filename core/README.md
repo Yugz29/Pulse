@@ -688,6 +688,15 @@ sessions en parallèle = plusieurs fichiers, une ligne chacune (projet, état,
 depuis quand ; en sous-ligne l'identifiant court et le `cwd`). Aucun
 contenu de prompt n'est écrit.
 
+**Étape 1 bis (0.8.10.0) :** le fichier d'état porte aussi `transcript_path`,
+et le bloc « Session en cours » de `GET /` lit le transcript de chaque
+session vivante (`daemon_v2/agent_transcript.py`, lecture tolérante et
+incrémentale) : les 10 dernières commandes (description de l'agent,
+commande masquée, issue, heure), le dernier test, les échecs bruts, les
+fichiers écrits par l'agent. Jamais `stdout`/`stderr`, ni le prompt, ni le
+motif d'un `Exit code` ; sous-agents ignorés ; rien dans `trace.db` ; bloc
+muet si le dossier d'état est absent. Claude Code seulement.
+
 Le menu ajoute une ligne « Résumés à jour : dernier passage à HH:MM » lue
 dans `last_complete_pass` de `~/.pulse_intelligence/state.json` : le dernier
 passage complet de `run`, **relances manuelles comprises** — ce n'est pas le

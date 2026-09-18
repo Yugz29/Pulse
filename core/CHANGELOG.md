@@ -4,6 +4,47 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.10.0] - 2026-09-18
+
+Étape 1 bis du mode continu : le bloc « Session en cours » montre, pour
+chaque session Claude Code vivante, ce que son transcript dit de l'agent.
+Aucun contrat consommé ne change : `/context`, `/context/sessions`, export
+du journal, identité de session, `reconstruction_version`, version des
+observations, schéma de `trace.db`. Rien n'entre en base.
+
+### Ajouté
+- `daemon_v2/agent_transcript.py` : lecture tolérante et incrémentale du
+  transcript JSONL d'une session Claude Code (offset repris d'un rendu à
+  l'autre, fichier rétréci ou remplacé relu du début, dernière ligne sans
+  retour à la ligne laissée pour le rendu suivant, ligne illisible comptée
+  et ignorée, entrées de sous-agent `isSidechain` ignorées). Ce qu'il rend :
+  les 10 dernières commandes (description de l'agent, commande, issue
+  `ok` / `échec` / `interrompue`, heure), le dernier test (un segment de la
+  commande reconnu par la règle de la projection), les échecs bruts, les
+  fichiers écrits par `Edit`/`Write`/`MultiEdit`/`NotebookEdit`. Commande et
+  description passent par `redact_command` ; la description, texte libre,
+  reçoit en plus un masque `utilisateur:secret@`. **Jamais** `stdout`,
+  `stderr`, le prompt, ni le motif d'un `Exit code`.
+- `daemon_v2/agent_live.py` : les sessions vivantes d'après le dossier
+  d'état des hooks (`~/.pulse_v2/run/agents/`, `PULSE_AGENT_STATE_DIR`) :
+  pid du processus `claude` encore là, ou fichier sans pid de moins de
+  12 h. Dossier absent : liste vide, le bloc dit seulement qu'aucune
+  session vivante n'est connue.
+- Bloc « Session en cours », sous-section « Claude Code en cours » : une
+  entrée par session (projet, état, depuis quand, identifiant court, cwd),
+  puis commandes, dernier test, échecs, fichiers. Vue vivante seulement,
+  jamais en archive. `render_daily_trace_html` gagne `agent_state_dir`
+  (tests).
+- `scripts/pulse_agent_state.py` (v0 des hooks) : le fichier d'état porte
+  `transcript_path`, gardé d'un événement à l'autre.
+- `tests_v2/test_agent_live.py` sur un transcript figé
+  (`tests_v2/fixtures/claude_transcript_live.jsonl`) : deux tests dont un
+  en échec, `Read` ignoré, `Edit` et `Write`, mot de passe dans l'URL et
+  dans la description, interruption, sous-agent, ligne illisible, ligne
+  tronquée puis complétée, fichier remplacé, bornes, page avec et sans
+  dossier d'état, archive. Mesuré sur la session du 18 (4,1 Mo, 258
+  commandes) : 86 ms la première lecture, 0,2 ms les suivantes.
+
 ## [0.8.9.1] - 2026-09-18
 
 Le prédicat de bruit de l'historique sans `pathlib` : `/context/sessions`
