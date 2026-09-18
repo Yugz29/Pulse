@@ -37,3 +37,15 @@ du compteur de l'étape 4
 - Hors du champ de cette précision : un lot complet sans aucun résumé, comme
   celui du 2026-09-13 (jour 9, entrée refusée au plafond avant génération),
   que le journal tient pour non jugeable.
+
+## Précision du 2026-09-18 : le lot du jour est le passage planifié, jamais une relance
+
+Le lot du jour est le passage déclenché par la planification de 06:30, même
+s'il démarre plus tard au réveil du Mac, et lui seul. Une relance manuelle
+ne compte pas comme lot du jour, qu'elle vienne le jour même ou plus tard ;
+ses résumés sont jugés hors compteur, comme `0ababe11` le 13. Un passage
+interrompu reste « interrompu » au compteur même si le passage suivant
+rattrape ses sessions : le
+[rattrapage](2026-09-18-rattrapage-des-jours-non-resumes.md) efface la perte
+de sessions, pas l'absence du lot. Le 18 : « interrompu, sessions
+rattrapées » (16 résumés par relance manuelle à 10:38, hors compteur).
