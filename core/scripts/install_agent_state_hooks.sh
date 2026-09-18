@@ -12,8 +12,10 @@
 # Claude Code relit ses hooks à chaud (docs hooks-guide) : pas de relance.
 #
 # SwiftBar n'est jamais installé par ce script : s'il manque, il le dit et
-# donne la commande, c'est tout. Surcharges de test : PULSE_CLAUDE_SETTINGS
-# (fichier de réglages), PULSE_SWIFTBAR_PLUGIN_DIR (dossier de plugins).
+# donne la commande, c'est tout. Refuse de tourner depuis un worktree git.
+# Surcharges de test : PULSE_CLAUDE_SETTINGS (fichier de réglages),
+# PULSE_SWIFTBAR_PLUGIN_DIR (dossier de plugins), PULSE_ALLOW_WORKTREE=1
+# (lève le refus, pour la suite de tests qui tourne parfois en worktree).
 
 set -u
 
@@ -23,6 +25,22 @@ plugin="$script_dir/swiftbar/pulse-agents.5s.sh"
 settings="${PULSE_CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 mode="install"
 [[ "${1:-}" == "--uninstall" ]] && mode="uninstall"
+
+# Jamais depuis un worktree : les hooks pointent sur ce checkout par chemin
+# absolu, et un worktree se retire (`git worktree remove`), ce qui laisserait
+# six hooks sur des scripts disparus. Le checkout principal a le même
+# `--git-dir` et `--git-common-dir` ; un worktree lié, non.
+git_dir="$(git -C "$script_dir" rev-parse --git-dir 2>/dev/null || true)"
+common_dir="$(git -C "$script_dir" rev-parse --git-common-dir 2>/dev/null || true)"
+if [[ -n "$git_dir" && -n "$common_dir" && "${PULSE_ALLOW_WORKTREE:-}" != "1" ]]; then
+  git_dir="$(cd "$script_dir" && cd "$git_dir" && pwd -P)"
+  common_dir="$(cd "$script_dir" && cd "$common_dir" && pwd -P)"
+  if [[ "$git_dir" != "$common_dir" ]]; then
+    echo "refus : ce checkout est un worktree ($(cd "$script_dir/../.." && pwd -P))." >&2
+    echo "Les hooks pointeraient sur des scripts qui disparaissent avec lui. Lance l'installateur depuis le checkout principal : $(dirname "$common_dir")/core/scripts/install_agent_state_hooks.sh" >&2
+    exit 2
+  fi
+fi
 
 python="$(command -v python3 || true)"
 if [[ -z "$python" ]]; then
@@ -73,7 +91,7 @@ for event in set(list(hooks) + list(WANTED)):
     kept = [e for e in entries if not ours(e)]
     if mode == "install" and event in WANTED:
         matcher, command = WANTED[event]
-        entry = {"hooks": [{"type": "command", "command": command, "timeout": 15}]}
+        entry = {"hooks": [{"type": "command", "command": command, "timeout": 3}]}
         if matcher:
             entry["matcher"] = matcher
         kept.append(entry)

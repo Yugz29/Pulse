@@ -303,7 +303,8 @@ def test_plugin_wrapper_runs_the_menu(tmp_path):
 
 
 def _install(settings: Path, *args: str) -> str:
-    env = {**os.environ, "PULSE_CLAUDE_SETTINGS": str(settings), "PULSE_SWIFTBAR_PLUGIN_DIR": str(settings.parent / "plugins")}
+    env = {**os.environ, "PULSE_CLAUDE_SETTINGS": str(settings), "PULSE_SWIFTBAR_PLUGIN_DIR": str(settings.parent / "plugins"),
+           "PULSE_ALLOW_WORKTREE": "1"}
     (settings.parent / "plugins").mkdir(parents=True, exist_ok=True)
     return subprocess.run([str(INSTALLER), *args], capture_output=True, text=True, env=env, check=True, timeout=30).stdout
 
@@ -322,6 +323,7 @@ def test_installer_adds_six_hooks_keeps_others_is_idempotent_and_reversible(tmp_
     assert data["hooks"]["SessionEnd"][0]["hooks"][0]["command"] == "/x/pulse_session_end_hook.sh"
     notification = data["hooks"]["Notification"][0]
     assert notification["matcher"] == "permission_prompt"
+    assert all(h["timeout"] == 3 for entries in data["hooks"].values() for e in entries if "agent_state" in json.dumps(e) for h in e["hooks"])
     assert notification["hooks"][0]["command"].endswith("pulse_agent_state_hook.sh permission_prompt")
     assert (settings.parent / "settings.json.bak-agent-state").exists()
     assert (tmp_path / "plugins" / "pulse-agents.5s.sh").resolve() == PLUGIN.resolve()
@@ -337,3 +339,36 @@ def test_installer_without_settings_file_creates_it(tmp_path):
     settings = tmp_path / "claude" / "settings.json"
     _install(settings)
     assert set(json.loads(settings.read_text())["hooks"]) == {"SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"}
+
+
+def test_installer_refuses_to_run_from_a_worktree(tmp_path):
+    """Les hooks pointent sur le checkout par chemin absolu ; un worktree
+    disparaît. Rejoué sur un vrai dépôt : checkout principal accepté,
+    worktree lié refusé avec le chemin du principal dans le message."""
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"], check=True)
+    for base in (repo,):
+        (base / "core" / "scripts").mkdir(parents=True)
+    import shutil
+    for name in ("install_agent_state_hooks.sh", "pulse_agent_state_hook.sh"):
+        shutil.copy2(SCRIPTS / name, repo / "core" / "scripts" / name)
+    (repo / "core" / "scripts" / "swiftbar").mkdir()
+    shutil.copy2(PLUGIN, repo / "core" / "scripts" / "swiftbar" / PLUGIN.name)
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "scripts"], check=True)
+    worktree = tmp_path / "repo-wt"
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", str(worktree)], check=True)
+
+    env = {**os.environ, "PULSE_CLAUDE_SETTINGS": str(tmp_path / "settings.json"), "PULSE_SWIFTBAR_PLUGIN_DIR": str(tmp_path / "plugins")}
+    env.pop("PULSE_ALLOW_WORKTREE", None)
+    (tmp_path / "plugins").mkdir()
+
+    refused = subprocess.run([str(worktree / "core" / "scripts" / "install_agent_state_hooks.sh")], capture_output=True, text=True, env=env, timeout=30)
+    assert refused.returncode == 2
+    assert "worktree" in refused.stderr and str(repo.resolve()) in refused.stderr
+    assert not (tmp_path / "settings.json").exists()
+
+    accepted = subprocess.run([str(repo / "core" / "scripts" / "install_agent_state_hooks.sh")], capture_output=True, text=True, env=env, timeout=30)
+    assert accepted.returncode == 0, accepted.stderr
+    assert "posés : 6 hooks" in accepted.stdout
