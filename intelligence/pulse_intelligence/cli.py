@@ -132,7 +132,7 @@ def _load(args: argparse.Namespace) -> tuple[Config, CoreClient, JobState]:
 def _now() -> datetime:
     """L'unique horloge de la CLI.
 
-    Tout ce qui est sous la CLI accepte déjà un `now` explicite — `lookback_days`,
+    Tout ce qui est sous la CLI accepte déjà un `now` explicite — `selection_days`,
     `classify_sessions`, `find_session`, `run_pass`. Seule la CLI lisait l'heure
     en quatre endroits, dont un qui ne la transmettait pas à `run_pass`. La
     fenêtre de sélection valant « aujourd'hui plus la veille », une suite dont
@@ -258,7 +258,7 @@ def run_summarize(
 ) -> int:
     now = _now()
     summarizer = _summarizer(args, config)
-    session = find_session(client, args.session_id, now=now, config=config, day=args.date)
+    session = find_session(client, args.session_id, now=now, state=state, day=args.date)
     if session is None:
         print(f"session introuvable sur la période : {args.session_id}", file=sys.stderr)
         return EXIT_USAGE

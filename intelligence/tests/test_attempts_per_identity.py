@@ -149,7 +149,11 @@ def test_a_legacy_session_keyed_state_is_honoured_and_preserved(fake_core, clien
     assert [o.status for o in report.outcomes] == ["given_up"]
     assert report.outcomes[0].detail == "tentative 3: sortie non JSON"
     assert summarizer.calls == []
-    assert json.loads(path.read_text(encoding="utf-8")) == before
+    after = json.loads(path.read_text(encoding="utf-8"))
+    # Le passage est complet (l'abandon est un verdict, pas une panne) : il
+    # pose le repère de rattrapage, et ne touche à rien d'autre.
+    assert after.pop("last_complete_pass") == REFERENCE.isoformat()
+    assert after == before
 
 
 def test_summarize_retry_clears_both_key_forms_and_replays_the_pending(

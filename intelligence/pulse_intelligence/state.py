@@ -20,6 +20,7 @@ import os
 import stat
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,11 @@ class JobState:
     pending: dict[str, dict[str, Any]] = field(default_factory=dict)
     failures: dict[str, int] = field(default_factory=dict)
     failed: dict[str, str] = field(default_factory=dict)
+    # Début (UTC, ISO) du dernier passage de `run` arrivé au bout de sa
+    # sélection : c'est le repère du rattrapage (`selection.selection_days`).
+    # Absent tant qu'aucun passage complet n'a eu lieu depuis la création du
+    # fichier : la fenêtre est alors pleine (7 jours en arrière).
+    last_complete_pass: str | None = None
     # Descripteur du verrou exclusif, tenu tant que l'instance vit (ou jusqu'à
     # `release`). Hors du fichier d'état : le format sur disque ne change pas.
     _lock_fd: int | None = field(default=None, repr=False, compare=False)
@@ -75,6 +81,8 @@ class JobState:
             state.pending = dict(raw.get("pending", {}))
             state.failures = {k: int(v) for k, v in raw.get("failures", {}).items()}
             state.failed = dict(raw.get("failed", {}))
+            marker = raw.get("last_complete_pass")
+            state.last_complete_pass = str(marker) if marker else None
         return state
 
     def save(self) -> None:
@@ -85,6 +93,8 @@ class JobState:
             "failures": self.failures,
             "failed": self.failed,
         }
+        if self.last_complete_pass is not None:
+            payload["last_complete_pass"] = self.last_complete_pass
         # Nom temporaire unique : un nom fixe est une seconde course entre
         # deux sauvegardes réellement simultanées, même sous verrou côté CLI.
         fd, temporary = tempfile.mkstemp(
@@ -103,6 +113,29 @@ class JobState:
 
     def knows(self, event_id: str) -> bool:
         return event_id in self.emitted
+
+    def record_complete_pass(self, started_at: datetime) -> None:
+        """Un passage a lu toute sa fenêtre et traité chaque candidate.
+
+        Le repère est le *début* du passage : une session close pendant le
+        passage appartient encore à un jour que le suivant relira. Un échec
+        par session (`failed`, `given_up`) ne retient pas le repère, il a son
+        propre suivi par identité ; un passage interrompu (Core ou modèle
+        injoignable) ne l'avance pas, et le suivant relit les mêmes jours.
+        """
+        if started_at.tzinfo is None:
+            raise ValueError("started_at doit porter un fuseau")
+        self.last_complete_pass = started_at.astimezone(timezone.utc).isoformat()
+        self.save()
+
+    def last_complete_pass_at(self) -> datetime | None:
+        if not self.last_complete_pass:
+            return None
+        try:
+            parsed = datetime.fromisoformat(self.last_complete_pass)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
     def known_summaries(self) -> set[tuple[str, str, str]]:
         """(session_id, prompt_version, model_id) déjà émis."""

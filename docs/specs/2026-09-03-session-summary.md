@@ -138,7 +138,7 @@ Règles :
 
 ### Candidates
 
-Lues par `GET /context/sessions?date=` pour aujourd'hui et hier (`lookback_days = 1`). Une session est candidate si :
+Lues par `GET /context/sessions?date=` pour aujourd'hui et hier (`lookback_days = 1`). *Remplacé le 2026-09-18 : la fenêtre va d'aujourd'hui au jour du dernier passage complet, plafonnée à sept jours en arrière, voir la [décision rattrapage](../decisions/2026-09-18-rattrapage-des-jours-non-resumes.md).* Une session est candidate si :
 
 - `is_open == false` ;
 - `duration_minutes >= 10` ou `activity_count >= 30` ;
@@ -215,8 +215,9 @@ tick_minutes = 10
 generation_timeout_s = 120
 min_session_minutes = 10
 min_session_activities = 30
-lookback_days = 1
 ```
+
+*`lookback_days = 1` figurait ici jusqu'au 2026-09-18 ; la clé n'existe plus.*
 
 Le dossier `~/.pulse_intelligence/` est créé en `0700`, ses fichiers en `0600` — même politique que Core après hardening.
 

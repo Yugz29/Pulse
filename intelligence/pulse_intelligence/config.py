@@ -36,7 +36,6 @@ class Config:
     core_timeout_s: int = 60
     min_session_minutes: int = 10
     min_session_activities: int = 30
-    lookback_days: int = 1
     # Couche modèle (spec 2026-09-05-llm-provider v2). Clés à plat : `Config`
     # est un dataclass simple et `load_config` refuse les clés inconnues, donc
     # une table `[llm]` ne se chargerait pas.
@@ -78,7 +77,6 @@ _INT_FIELDS = {
     "core_timeout_s",
     "min_session_minutes",
     "min_session_activities",
-    "lookback_days",
     "llm_max_tokens",
     "llm_max_input_tokens",
 }

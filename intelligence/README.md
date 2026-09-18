@@ -88,7 +88,18 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | `tick_minutes` | `10` | intervalle de `run` sans `--once` |
 | `min_session_minutes` | `10` | une session n'est écartée que si elle est **à la fois** plus courte que ce seuil et moins active que `min_session_activities` : atteindre l'un des deux suffit pour être candidate. Une session qui porte au moins un commit observé n'est jamais écartée pour sa durée, quels que soient les deux compteurs |
 | `min_session_activities` | `30` | l'autre seuil de la même règle. Le journal de Core (`GET /`) applique ces deux défauts sans lire ce fichier et sans l'exception du commit : les changer ici décale son classement des sessions sans résumé, et il note « sous les seuils » une session courte à commit qu'Intelligence résume pourtant |
-| `lookback_days` | `1` | fenêtre : aujourd'hui + N jours en arrière |
+
+La fenêtre de sélection n'est plus une clé : `run` relit chaque jour depuis
+celui du dernier passage complet (repère `last_complete_pass` dans
+`state.json`, posé au début d'un passage qui a lu toute sa fenêtre et traité
+chaque candidate), plafonné à sept jours en arrière — huit jours listés avec
+aujourd'hui. Sans repère (premier passage, état perdu), la fenêtre est
+pleine. `list` et `summarize <id>` lisent la même fenêtre. Un ancien
+`config.toml` qui porte encore `lookback_days` est refusé comme clé
+inconnue : retirer la ligne. Après un changement de `prompt_version` ou de
+`model_id`, toute session de la fenêtre redevient candidate : deux jours en
+régime quotidien, huit au pire après une semaine de lots manqués
+([décision](../docs/decisions/2026-09-18-rattrapage-des-jours-non-resumes.md)).
 
 ## 2. Les commandes du quotidien
 
@@ -135,7 +146,7 @@ $ pulse-intel run --once
   consommée — comme un Core injoignable.
 - `replayed` : payloads `pending` rejoués **avant** la sélection, tels que
   figés lors d'une panne Core, même si leur session est sortie de la fenêtre
-  `lookback_days` — sans modèle, sans commande datée. Un rejeu que Core refuse
+  de rattrapage — sans modèle, sans commande datée. Un rejeu que Core refuse
   encore compte comme `failed` ; un `409` (Core détient déjà un résumé pour
   cette identité, par exemple après restauration d'une sauvegarde) reprend
   l'événement de Core en `already_known`, sans consommer le budget ; le
@@ -299,9 +310,10 @@ de veille d'inactivité pendant le passage). Tâche calendaire : si le Mac
 dort à l'heure dite, launchd la rattrape au réveil ; capot fermé sur
 batterie, le lot avance par DarkWake et se termine à l'ouverture ; une
 requête vers Core coupée par la veille est rejouée une fois au réveil
-(`core_timeout_s`). Journal : `~/.pulse_intelligence/logs/run.log`. Le matin couvre la veille entière (la
-fenêtre de `run` est « aujourd'hui + hier ») : une session close après le
-passage est prise le lendemain.
+(`core_timeout_s`). Journal : `~/.pulse_intelligence/logs/run.log`. Le
+matin couvre la veille entière, et les jours manqués depuis le dernier
+passage complet (sept au plus) : une session close après le passage est
+prise le lendemain, un lot qui n'a pas tourné est rattrapé par le suivant.
 
 ## 3. Lire un résumé
 

@@ -2,7 +2,7 @@
 (audit 2026-09-06, défaut 4 ; contraintes de l'issue #62).
 
 Un payload gelé après une panne Core doit repartir au passage suivant même
-si sa session est sortie de la fenêtre `lookback_days` : tel que figé,
+si sa session est sortie de la fenêtre de rattrapage : tel que figé,
 sans modèle, sans commande datée. Le budget d'échecs et le 409 restent.
 """
 
@@ -44,15 +44,16 @@ def _freeze_a_pending(fake_core, client, config, state_path) -> FakeSummarizer:
 def test_a_pending_out_of_the_window_is_drained_as_frozen_without_the_model(
     fake_core, client, config, tmp_path
 ):
-    """Scénario de l'audit : résumé figé le 6, redémarrage le 9 avec
-    lookback_days=1. Aujourd'hui candidates=0, pending=1, aucun POST."""
+    """Scénario de l'audit : résumé figé le 6, redémarrage le 9. Le rejeu
+    passe avant la sélection et rend l'identité connue : candidates=0,
+    pending=1, aucun POST — que la session soit ou non dans la fenêtre."""
     state_path = tmp_path / "state" / "state.json"
     summarizer = _freeze_a_pending(fake_core, client, config, state_path)
     three_days_later = REFERENCE + timedelta(days=3)
 
     report = run_pass(client, summarizer, config, JobState.load(state_path), now=three_days_later)
 
-    assert report.candidates == 0  # la session est hors fenêtre
+    assert report.candidates == 0  # vidée avant la sélection, donc connue
     assert len(fake_core.posts) == 1  # aujourd'hui : aucun POST, pending=1
     assert report.replayed == 1
     assert [o.status for o in report.outcomes] == ["created"]
