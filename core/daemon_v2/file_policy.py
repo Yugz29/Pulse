@@ -4,6 +4,7 @@ Pure, à une exception nommée : ``inside_virtualenv_on_disk`` lit le disque et
 ne sert qu'à la collecte. La projection de l'historique n'appelle que les
 fonctions pures.
 """
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -64,7 +65,7 @@ def attributed_workspace(path: str, workspace: Any) -> str | None:
     preuve que le fichier est du bruit."""
     if isinstance(workspace, dict):
         workspace = workspace.get("workspace_root")
-    if workspace and not Path(path).is_relative_to(workspace):
+    if workspace and not _contains(str(workspace), path):
         return None
     return workspace
 
@@ -74,10 +75,76 @@ def is_file_noise(
 ) -> bool:
     """Le prédicat de bruit de l'historique, un seul pour ses deux lecteurs :
     la projection (``/context``, entrée des résumés) et l'affichage du
-    journal. ``workspace`` sort de ``attributed_workspace``."""
-    return bool(workspace and should_ignore(Path(path), Path(workspace))) or (
-        under_virtualenv(Path(path), virtualenvs)
-    )
+    journal. ``workspace`` sort de ``attributed_workspace``.
+
+    Appelé une fois par ``file_changed`` de la journée — 13 364 fois pour le
+    2026-09-17 — d'où le chemin rapide sur chaînes ci-dessous. Il ne s'engage
+    que sur des chemins déjà sous la forme que ``Path`` rendrait telle quelle
+    (``_plain_absolute``) ; tout autre chemin passe par les fonctions
+    ``Path`` de référence, ``should_ignore`` et ``under_virtualenv``. Les
+    deux voies rendent le même verdict, ce que ``tests_v2`` vérifie sur un
+    corpus de chemins non normalisés.
+    """
+    if workspace:
+        root = str(workspace)
+        if _plain_absolute(path) and _plain_absolute(root):
+            if not _plain_contains(root, path):
+                return True
+            relative = path[len(root) + 1 :] if root != "/" else path[1:]
+            parts = relative.split("/") if relative else []
+            name = path.rsplit("/", 1)[-1]
+            if _is_noise(tuple(parts[:-1]), _PlainName(name)):
+                return True
+        elif should_ignore(Path(path), Path(root)):
+            return True
+    if not virtualenvs:
+        return False
+    if _plain_absolute(path):
+        return any(_plain_contains(root, path) for root in _root_strings(virtualenvs))
+    return under_virtualenv(Path(path), virtualenvs)
+
+
+def _plain_absolute(path: str) -> bool:
+    """``path`` est-il absolu et déjà normalisé, au sens où ``str(Path(path))``
+    le rendrait à l'identique ? Ni segment vide (``//``), ni ``.``, ni barre
+    finale. ``..`` est exclu par prudence : ``Path`` le conserve, mais le
+    chemin de référence reste le seul juge de ces cas rares."""
+    if not path.startswith("/") or (len(path) > 1 and path.endswith("/")):
+        return False
+    return all(part not in ("", ".", "..") for part in path[1:].split("/")) if len(path) > 1 else True
+
+
+def _plain_contains(root: str, path: str) -> bool:
+    """``Path(path).is_relative_to(root)`` pour deux chemins ``_plain_absolute``."""
+    if root == "/":
+        return True
+    return path == root or path.startswith(root + "/")
+
+
+def _contains(root: str, path: str) -> bool:
+    if _plain_absolute(root) and _plain_absolute(path):
+        return _plain_contains(root, path)
+    return Path(path).is_relative_to(root)
+
+
+class _PlainName:
+    """Le ``name`` et le ``suffix`` d'un chemin normalisé, sans ``Path`` :
+    ``suffix`` reprend la règle de ``PurePath.suffix`` de l'interpréteur
+    épinglé (points initiaux ignorés, dernier point restant), et
+    ``tests_v2`` la compare à ``Path`` pour que toute dérive se voie."""
+
+    __slots__ = ("name", "suffix")
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        stem = name.lstrip(".")
+        dot = stem.rfind(".")
+        self.suffix = stem[dot:] if dot != -1 else ""
+
+
+@lru_cache(maxsize=64)
+def _root_strings(roots: frozenset[Path]) -> tuple[str, ...]:
+    return tuple(str(root) for root in roots)
 
 
 def inside_virtualenv_on_disk(path: Path, workspace: Path) -> bool:
@@ -106,7 +173,7 @@ def is_noise_path(path: Path) -> bool:
     return _is_noise(path.parts[:-1], path)
 
 
-def _is_noise(directory_parts: tuple[str, ...], path: Path) -> bool:
+def _is_noise(directory_parts: tuple[str, ...], path: "Path | _PlainName") -> bool:
     return (
         any(part in IGNORED_DIRECTORY_NAMES for part in directory_parts)
         or path.name in IGNORED_FILE_NAMES

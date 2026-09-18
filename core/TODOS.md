@@ -187,7 +187,7 @@ exact est remplacé par une périphrase pour passer le scan.
 
 ### Le daemon tourne en `ProcessType Background` : facteur 5 probable sur les pages
 
-**What:** le plist de `com.pulse.daemon` déclare `ProcessType` `Background` ; le processus tourne en priorité 4. C'est l'explication probable, non mesurée, du facteur 5 entre le même code mesuré hors daemon et la production : le 2026-09-17, après la 0.8.8.0, `GET /` en 2,7 s servi par la production contre 0,48 s hors daemon, `/day/2026-09-17` en 1,1 s contre 0,20 s ; avant le correctif, 17,6 s contre 3,8 s. À mesurer avant de changer quoi que ce soit : mêmes routes, même base, avec et sans ce réglage, sur un Core jetable lancé par launchd plutôt que sur la production. Ne pas modifier le plist sans cette mesure avant/après : le réglage protège aussi le travail au premier plan d'une collecte qui tourne toute la journée.
+**What:** le plist de `com.pulse.daemon` déclare `ProcessType` `Background` ; le processus tourne en priorité 4. C'est l'explication probable, non mesurée, du facteur 5 entre le même code mesuré hors daemon et la production : le 2026-09-17, après la 0.8.8.0, `GET /` en 2,7 s servi par la production contre 0,48 s hors daemon, `/day/2026-09-17` en 1,1 s contre 0,20 s ; avant le correctif, 17,6 s contre 3,8 s ; le 2026-09-18, `/context/sessions?date=2026-09-17` en 4,9 à 9 s en production contre 0,90 s hors daemon (0,37 s après la 0.8.9.1). À mesurer avant de changer quoi que ce soit : mêmes routes, même base, avec et sans ce réglage, sur un Core jetable lancé par launchd plutôt que sur la production. Ne pas modifier le plist sans cette mesure avant/après : le réglage protège aussi le travail au premier plan d'une collecte qui tourne toute la journée.
 
 **Effort:** S
 **Priority:** P3
