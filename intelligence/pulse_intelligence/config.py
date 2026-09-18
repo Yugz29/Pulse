@@ -29,6 +29,11 @@ class Config:
     prompt_version: str = "v6"
     tick_minutes: int = 10
     generation_timeout_s: int = 120
+    # Timeout HTTP vers Core, par requête. 60 s et non 5 : `/context/sessions`
+    # reconstruit la journée à chaque appel et une journée chargée dépasse
+    # 5 s en production (2026-09-17 : 5 à 9 s). Le lot du 18 s'est arrêté sur
+    # « Core injoignable » alors que Core répondait, juste trop tard.
+    core_timeout_s: int = 60
     min_session_minutes: int = 10
     min_session_activities: int = 30
     lookback_days: int = 1
@@ -70,6 +75,7 @@ class Config:
 _INT_FIELDS = {
     "tick_minutes",
     "generation_timeout_s",
+    "core_timeout_s",
     "min_session_minutes",
     "min_session_activities",
     "lookback_days",

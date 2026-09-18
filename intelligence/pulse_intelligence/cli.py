@@ -121,7 +121,7 @@ def _load(args: argparse.Namespace) -> tuple[Config, CoreClient, JobState]:
     config = load_config(args.config)
     if args.core_url:
         config = Config(**{**config.__dict__, "core_url": args.core_url})
-    client = CoreClient(config.core_url)
+    client = CoreClient(config.core_url, timeout_s=config.core_timeout_s)
     state_path = args.state or config_home() / "state.json"
     # Les commandes qui écrivent l'état prennent le verrou dès le chargement
     # et le gardent jusqu'à la fin ; `list` et `show` lisent sans verrou.

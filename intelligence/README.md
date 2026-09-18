@@ -78,6 +78,7 @@ export PULSE_LLM_MODEL="…"                # nom du modèle côté endpoint
 | clé | défaut | rôle |
 | --- | --- | --- |
 | `core_url` | `http://127.0.0.1:8765` | Pulse Core |
+| `core_timeout_s` | `60` | timeout HTTP par requête vers Core. `/context/sessions` reconstruit la journée à chaque appel : une journée chargée dépasse 5 s en production. Un GET qui échoue (timeout, connexion) est rejoué une fois après 2 s ; un POST jamais |
 | `llm_provider` | `""` | `mlx` \| `openai-compatible` \| `fake` ; vide = refus de démarrer |
 | `model_id` | `""` | identifiant du modèle (entre dans l'identité du résumé) |
 | `llm_max_tokens` | `2048` | plafond de génération |
@@ -296,8 +297,9 @@ patron que les agents de Core), qui lance `scripts/pulse_intel_run.sh` — le
 `pulse-intel` de la venv, sur la config du poste, sous `caffeinate -i` (pas
 de veille d'inactivité pendant le passage). Tâche calendaire : si le Mac
 dort à l'heure dite, launchd la rattrape au réveil ; capot fermé sur
-batterie, le lot avance par DarkWake et se termine à l'ouverture. Journal :
-`~/.pulse_intelligence/logs/run.log`. Le matin couvre la veille entière (la
+batterie, le lot avance par DarkWake et se termine à l'ouverture ; une
+requête vers Core coupée par la veille est rejouée une fois au réveil
+(`core_timeout_s`). Journal : `~/.pulse_intelligence/logs/run.log`. Le matin couvre la veille entière (la
 fenêtre de `run` est « aujourd'hui + hier ») : une session close après le
 passage est prise le lendemain.
 
