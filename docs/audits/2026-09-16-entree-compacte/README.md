@@ -1,11 +1,15 @@
 # Entrée compacte (`input_version` 4) derrière le prompt v8 — mesure
 
 **Date :** 2026-09-16
-**Statut :** mesure complète, en attente du verdict de l'utilisateur.
-L'étape 5 a été lancée le 16 à 23:21 sur secteur, après un premier soir sur
-batterie. Rien en production : `Config.prompt_version` reste `v6`,
-`~/.pulse_intelligence/config.toml` reste `v7`, le lot launchd n'est pas touché.
-**Branche :** `exp/intelligence-compact-input` (PR en brouillon, pas de merge).
+**Statut :** tranché le 2026-09-18 — **verdict : v8 aussi juste que v7**
+(lecture croisée des 14 sorties par l'utilisateur). PR #102 mergée. Le
+défaut du code reste `v6`, décidé le 12
+([décision](../../decisions/2026-09-12-prompt-v7.md)) : ce merge ne le
+change pas. `~/.pulse_intelligence/config.toml` reste `v7` cette nuit du
+18 au 19 — la bascule en `v8` est prévue le 19, après vérification du lot
+de 06:30, avec la date consignée dans `docs/dogfooding.md` pour le
+compteur de l'étape 4.
+**Branche :** `exp/intelligence-compact-input` (mergée, #102).
 **Données de travail :** `corpus/docs/audits/2026-09-16-entree-compacte/`
 (hors dépôt) : les 6 sessions du lot du 16 figées, `mesure_tokens.py`,
 `tokens.json`, `tokens.md`, config et script de l'étape 5.
@@ -52,7 +56,7 @@ entrée) et la colonne v7 de la mesure de taille redonne ses 14 `prompt_tokens`.
 | 4. `prompt_tokens`, lot du 16 (6 sessions, observations v2) : total / médiane / maximum | 41 403 / 5 160,5 / 16 658 | 30 526 / 3 933,5 / 11 332 |
 | 5. Durée de génération, totale / médiane | 739 s / 43,4 s (le 15) | 645 s / 41,9 s |
 | 6. Sessions où v8 contredit une attente que v7 atteignait | — | aucune |
-| 7. Verdict de qualité | aucun | aucun |
+| 7. Verdict de qualité | — | aussi juste que v7 (utilisateur, 2026-09-18) |
 | 8. Conditions | secteur, aucun lot en cours (le 15) | secteur, aucun lot en cours, 23:21:48 → 23:32:41, `real` 650 s, pic 21,55 Go |
 
 - **Tokens.** Comptés sans modèle, exactement comme `MLXProvider` les
@@ -83,10 +87,13 @@ entrée) et la colonne v7 de la mesure de taille redonne ses 14 `prompt_tokens`.
   de ces deux sessions n'a d'attente annotée. Le total des tokens de sortie
   est le même dans les deux passages (4 066) par coïncidence : une seule
   session a le même compte dans les deux.
-- **Pas de verdict de qualité ici** : la lecture des 14 sorties v8, côte à
-  côte avec v7, revient à l'utilisateur. Sorties sous
-  `corpus/docs/audits/2026-09-16-entree-compacte/out/v8/`, à comparer à
-  `docs/decisions/2026-09-14-benchmark-modeles-en-local/out/qwen3.8-27b/`.
+- **Verdict (utilisateur, 2026-09-18) : v8 aussi juste que v7.** Lecture
+  croisée des 14 sorties, `corpus/docs/audits/2026-09-16-entree-compacte/out/v8/`
+  contre `docs/decisions/2026-09-14-benchmark-modeles-en-local/out/qwen3.8-27b/`.
+  Adopté sans réserve sur les deux sessions à preuves différentes
+  (`d047b37b`, `eb652ce9` ci-dessus) : aucune n'a d'attente annotée, la
+  citation en plus ou en moins ne change ni `doing` ni `stopped_at` de façon
+  jugée fausse.
 
 ## Rejeu
 
