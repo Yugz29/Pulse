@@ -1,4 +1,10 @@
-"""Lecture tolérante et incrémentale du transcript live d'une session Claude Code.
+"""Adaptateur Claude Code : lecture tolérante et incrémentale de son transcript live.
+
+Seul module qui connaisse le format de Claude Code — son JSONL, ses noms
+d'outils (``Bash``, ``Edit``, ``Write``…), ses sous-agents (``isSidechain``),
+la forme d'un ``Exit code``. Il produit le format commun décrit dans
+``agent_actions`` ; ``agent_live`` et le rendu ne lisent que ce format,
+jamais une clé propre à Claude Code.
 
 Étape 1 bis du mode continu (``docs/decisions/2026-09-17-resumes-en-continu.md``,
 décision du 2026-09-18) : le bloc « Session en cours » montre, pour chaque
@@ -32,12 +38,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .agent_actions import FAILED, INTERRUPTED, MAX_COMMANDS, MAX_FAILURES, MAX_FILES, OK
 from .analysis.terminal import is_test_command
 from .ingest import redact_command
 
-MAX_COMMANDS = 10
-MAX_FAILURES = 8
-MAX_FILES = 8
+# Identité de cet adaptateur : ce que porte le format commun pour « qui »,
+# et ce qu'``agent_live`` sert par défaut quand le fichier d'état ne précise
+# pas d'agent (aujourd'hui, un seul producteur de ces fichiers : les hooks
+# Claude Code).
+AGENT_KIND = "claude-code"
+AGENT_LABEL = "Claude Code"
+
 # Une entrée d'outil sans résultat au-delà de ce nombre d'appels suivants
 # est oubliée : un résultat n'arrive jamais après tant d'autres.
 MAX_PENDING = 64
@@ -45,10 +56,6 @@ MAX_PENDING = 64
 # ``<<`` et bornée. Jamais le corps d'un heredoc : il porte du contenu de
 # fichier (retour du 2026-09-18, le corps des scripts s'affichait entier).
 COMMAND_HEAD_CHARS = 100
-
-OK = "ok"
-FAILED = "échec"
-INTERRUPTED = "interrompue"
 
 _FILE_TOOLS = {"Edit": "modifié", "MultiEdit": "modifié", "Write": "écrit", "NotebookEdit": "modifié"}
 # La description est du texte libre écrit par l'agent : en plus des motifs de

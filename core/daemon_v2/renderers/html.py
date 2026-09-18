@@ -39,6 +39,7 @@ from ..daily_trace import (
     build_session_summary,
     without_file_noise,
 )
+from ..agent_live import AGENT_LABEL as LIVE_AGENT_LABEL
 from ..agent_live import live_agent_sessions
 from ..live_session import build_live_session
 from .live import CSS as LIVE_CSS
@@ -125,10 +126,13 @@ def render_daily_trace_html(
     # références oN sont celles de ``/context``.
     live = build_live_session(trace) if not archive_mode else None
     if live is not None:
-        # Étape 1 bis : les sessions Claude Code vivantes, lues depuis le
+        # Étape 1 bis : les sessions d'agent vivantes, lues depuis le
         # dossier d'état des hooks et leurs transcripts. Dossier absent :
-        # liste vide, le bloc n'en parle pas.
+        # liste vide, le bloc n'en parle pas. Le libellé affiché vient de
+        # l'adaptateur (aujourd'hui Claude Code, seul producteur de ces
+        # fichiers d'état).
         live["agents"] = live_agent_sessions(agent_state_dir)
+        live["agents_label"] = LIVE_AGENT_LABEL
     # Tout le reste de la page déroule la journée sans le bruit de fichiers
     # que la projection écarte déjà, et dit combien elle en masque.
     trace = without_file_noise(trace)
