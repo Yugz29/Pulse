@@ -666,7 +666,7 @@ garantit pas l’absence de tout secret.
 ### État d'agent dans la barre de menus (SwiftBar, v0)
 
 Signal « l'agent attend », **hors `trace.db` et sans passer par Core ni par
-le modèle**. Six hooks Claude Code appellent `scripts/pulse_agent_state_hook.sh`,
+le modèle**. Sept hooks Claude Code appellent `scripts/pulse_agent_state_hook.sh`,
 qui tient un fichier par session sous `~/.pulse_v2/run/agents/`
 (`claude-code-<session_id>.json`, 0600) ; le plugin SwiftBar
 `scripts/swiftbar/pulse-agents.5s.sh` lit ce dossier toutes les 5 s.
@@ -677,10 +677,10 @@ Trois états, `since` ne bouge que quand l'état change :
 | --- | --- | --- |
 | `working` (travaille) | `SessionStart`, `UserPromptSubmit`, `PostToolUse` | — |
 | `waiting_permission` (attend une permission) | `Notification` `permission_prompt` | `PostToolUse`, `UserPromptSubmit` |
-| `waiting_for_you` (attend ta suite) | `Stop` | `UserPromptSubmit` ; jamais masqué avec le temps |
+| `waiting_for_you` (attend ta suite) | `Stop` ; `Notification` `idle_prompt` si la session dit encore `working` (tour coupé par une erreur d'API, sans `Stop`) | `UserPromptSubmit` ; jamais masqué avec le temps |
 
-`Notification` `idle_prompt` ne change rien ; `SessionEnd` supprime le
-fichier. Le fichier porte le pid du processus `claude` lui-même, trouvé en
+`idle_prompt` sur une session qui attend déjà ne change rien (`since`
+reste) ; `SessionEnd` supprime le fichier. Le fichier porte le pid du processus `claude` lui-même, trouvé en
 remontant l'arbre des processus (Claude Code lance le hook via `/bin/sh -c`,
 `$PPID` n'est pas l'agent) : une session sans fin propre (crash, `kill`,
 redémarrage) disparaît du menu et est balayée au hook suivant. Plusieurs

@@ -62,7 +62,7 @@ def test_stop_means_waiting_for_you_and_only_a_prompt_lifts_it(tmp_path):
     assert data["state"] == "waiting_for_you"
     assert data["since"] == (NOW + timedelta(minutes=5)).isoformat()
 
-    # idle_prompt ne change rien : Stop l'a déjà dit, `since` reste.
+    # idle_prompt sur une session qui attend déjà ne change rien : `since` reste.
     data = apply(tmp_path, payload("Notification", notification_type="idle_prompt"), now=NOW + timedelta(hours=2))
     assert data["state"] == "waiting_for_you"
     assert data["since"] == (NOW + timedelta(minutes=5)).isoformat()
@@ -70,6 +70,20 @@ def test_stop_means_waiting_for_you_and_only_a_prompt_lifts_it(tmp_path):
     data = apply(tmp_path, payload("UserPromptSubmit"), now=NOW + timedelta(hours=3))
     assert data["state"] == "working"
     assert data["since"] == (NOW + timedelta(hours=3)).isoformat()
+
+
+def test_idle_prompt_without_a_stop_means_waiting_for_you(tmp_path):
+    # Tour coupé par une erreur d'API : pas de Stop, la session dit encore
+    # `working` ; l'idle_prompt (≈ 60 s d'inactivité) la passe en attente.
+    apply(tmp_path, payload("SessionStart"))
+    data = apply(tmp_path, payload("Notification", notification_type="idle_prompt"), now=NOW + timedelta(minutes=1))
+    assert data["state"] == "waiting_for_you"
+    assert data["since"] == (NOW + timedelta(minutes=1)).isoformat()
+    # Déjà en attente de permission : idle_prompt n'y touche pas.
+    apply(tmp_path, payload("Notification", notification_type="permission_prompt"), now=NOW + timedelta(minutes=2))
+    data = apply(tmp_path, payload("Notification", notification_type="idle_prompt"), now=NOW + timedelta(minutes=3))
+    assert data["state"] == "waiting_permission"
+    assert data["since"] == (NOW + timedelta(minutes=2)).isoformat()
 
 
 def test_permission_prompt_waits_and_a_tool_use_lifts_it(tmp_path):
@@ -324,11 +338,11 @@ def test_installer_adds_six_hooks_keeps_others_is_idempotent_and_reversible(tmp_
     settings.write_text(json.dumps(original))
 
     first = _install(settings)
-    assert "posés : 6 hooks" in first and "plugin lié" in first
+    assert "posés : 7 hooks" in first and "plugin lié" in first
     data = json.loads(settings.read_text())
     assert data["model"] == "opus"
     assert {k: len(v) for k, v in data["hooks"].items()} == {
-        "SessionEnd": 2, "SessionStart": 1, "UserPromptSubmit": 1, "PostToolUse": 1, "Notification": 1, "Stop": 1}
+        "SessionEnd": 2, "SessionStart": 1, "UserPromptSubmit": 1, "PostToolUse": 1, "Notification": 2, "Stop": 1}
     assert data["hooks"]["SessionEnd"][0]["hooks"][0]["command"] == "/x/pulse_session_end_hook.sh"
     notification = data["hooks"]["Notification"][0]
     assert notification["matcher"] == "permission_prompt"
@@ -380,4 +394,4 @@ def test_installer_refuses_to_run_from_a_worktree(tmp_path):
 
     accepted = subprocess.run([str(repo / "core" / "scripts" / "install_agent_state_hooks.sh")], capture_output=True, text=True, env=env, timeout=30)
     assert accepted.returncode == 0, accepted.stderr
-    assert "posés : 6 hooks" in accepted.stdout
+    assert "posés : 7 hooks" in accepted.stdout

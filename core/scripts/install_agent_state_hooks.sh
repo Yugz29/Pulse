@@ -2,7 +2,7 @@
 # Pose (ou retire) les hooks Claude Code de l'état d'agent dans
 # ~/.claude/settings.json, et lie le plugin SwiftBar si SwiftBar est là.
 #
-#   scripts/install_agent_state_hooks.sh              # pose les six hooks
+#   scripts/install_agent_state_hooks.sh              # pose les sept hooks
 #   scripts/install_agent_state_hooks.sh --uninstall  # les retire
 #
 # Idempotent : nos entrées se reconnaissent à la commande
@@ -54,14 +54,19 @@ from pathlib import Path
 
 settings, hook, mode = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 MARK = "pulse_agent_state_hook.sh"
-WANTED = {
-    "SessionStart": (None, hook),
-    "UserPromptSubmit": (None, hook),
-    "PostToolUse": (None, hook),
-    "Notification": ("permission_prompt", f"{hook} permission_prompt"),
-    "Stop": (None, hook),
-    "SessionEnd": (None, hook),
-}
+# (événement, matcher, commande) ; Notification a deux entrées, une par
+# type : permission_prompt (attend une permission) et idle_prompt (inactif
+# sans Stop, par exemple après une erreur d'API).
+WANTED = [
+    ("SessionStart", None, hook),
+    ("UserPromptSubmit", None, hook),
+    ("PostToolUse", None, hook),
+    ("Notification", "permission_prompt", f"{hook} permission_prompt"),
+    ("Notification", "idle_prompt", f"{hook} idle_prompt"),
+    ("Stop", None, hook),
+    ("SessionEnd", None, hook),
+]
+WANTED_EVENTS = {event for event, _, _ in WANTED}
 
 data = {}
 if settings.exists():
@@ -84,17 +89,19 @@ def ours(entry):
     )
 
 changed = False
-for event in set(list(hooks) + list(WANTED)):
+for event in set(list(hooks) + list(WANTED_EVENTS)):
     entries = hooks.get(event)
     if not isinstance(entries, list):
         entries = []
     kept = [e for e in entries if not ours(e)]
-    if mode == "install" and event in WANTED:
-        matcher, command = WANTED[event]
-        entry = {"hooks": [{"type": "command", "command": command, "timeout": 3}]}
-        if matcher:
-            entry["matcher"] = matcher
-        kept.append(entry)
+    if mode == "install":
+        for wanted_event, matcher, command in WANTED:
+            if wanted_event != event:
+                continue
+            entry = {"hooks": [{"type": "command", "command": command, "timeout": 3}]}
+            if matcher:
+                entry["matcher"] = matcher
+            kept.append(entry)
     if kept != entries:
         changed = True
     if kept:

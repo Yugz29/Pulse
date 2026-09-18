@@ -11,10 +11,12 @@ Trois états, ``since`` ne bouge que quand l'état change :
   (un agent qui appelle un outil travaille, quel que soit l'état d'avant ;
   c'est aussi ce qui lève ``waiting_permission``).
 - ``waiting_permission`` — posé par Notification ``permission_prompt``.
-- ``waiting_for_you`` (« attend ta suite ») — posé par Stop, levé par
-  UserPromptSubmit. Jamais masqué avec le temps : une réponse attendue
-  depuis deux heures reste affichée. Notification ``idle_prompt`` ne change
-  rien : Stop l'a déjà dit.
+- ``waiting_for_you`` (« attend ta suite ») — posé par Stop, et par
+  Notification ``idle_prompt`` quand la session dit encore ``working`` (une
+  erreur d'API coupe le tour sans Stop : l'agent attend, rien ne l'a dit).
+  Levé par UserPromptSubmit. Jamais masqué avec le temps : une réponse
+  attendue depuis deux heures reste affichée. Si la session attend déjà
+  (permission ou suite), ``idle_prompt`` ne change rien : ``since`` reste.
 
 SessionEnd supprime le fichier. Les autres événements (SubagentStop,
 PreToolUse, PreCompact…) sont ignorés.
@@ -141,6 +143,10 @@ def next_state(event: str, payload: dict[str, Any], current: str | None) -> str 
         kind = str(payload.get("notification_type") or payload.get("matcher") or "")
         if kind == "permission_prompt":
             return WAITING_PERMISSION
+        if kind == "idle_prompt":
+            # Inactif sans Stop (tour coupé par une erreur d'API) : l'agent
+            # attend. Déjà en attente : rien à changer, `since` reste.
+            return WAITING_FOR_YOU if current == WORKING else None
         return None
     return None
 
