@@ -337,10 +337,11 @@ def frozen_cli_clock(monkeypatch):
     """L'horloge de la CLI est gelée sur l'instant des fixtures.
 
     Les vues rejouées par le faux Core sont ancrées sur ``REFERENCE`` et la
-    fenêtre de sélection vaut « aujourd'hui plus la veille » (`lookback_days`
-    = 1). Sans gel, la suite passe le jour où elle est écrite puis échoue deux
-    jours plus tard : le 2026-09-05, cinq tests de CLI ne trouvaient plus
-    aucune session close, sans qu'une ligne de code ait bougé.
+    fenêtre de sélection est bornée (sept jours en arrière au plus, depuis le
+    2026-09-18 ; « aujourd'hui plus la veille » avant). Sans gel, la suite
+    passe le jour où elle est écrite puis échoue quelques jours plus tard :
+    le 2026-09-05, cinq tests de CLI ne trouvaient plus aucune session close,
+    sans qu'une ligne de code ait bougé.
 
     Le gel porte sur l'horloge, pas sur les dates des fixtures : décaler les
     fixtures aurait seulement reporté la panne de quelques mois.

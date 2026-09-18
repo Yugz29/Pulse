@@ -755,8 +755,8 @@ def run_pass(
     moment = now or datetime.now(timezone.utc)
     # Vidage de la file d'abord, indépendant de la fenêtre de sélection : un
     # payload gelé pendant une panne repart tel quel même si sa session est
-    # sortie de `lookback_days` (défaut 4, issue #62). Distinct du rattrapage
-    # des sessions jamais traitées, qui n'existe pas ici.
+    # sortie de la fenêtre de rattrapage (issue #62). Distinct du rattrapage
+    # des sessions jamais traitées, que `selection_days` couvre.
     outcomes: list[Outcome] = []
     replayed = 0
     # Une identité traitée par le vidage ne l'est pas une seconde fois par la
@@ -820,6 +820,10 @@ def run_pass(
             return PassReport(
                 candidates=len(candidates), outcomes=outcomes, error=str(exc), replayed=replayed
             )
+    # Toute la fenêtre lue, chaque candidate traitée : le prochain passage
+    # repart de ce début-ci. Un `failed` ou un `given_up` n'y change rien —
+    # l'identité garde son compte de tentatives.
+    state.record_complete_pass(moment)
     return PassReport(
         candidates=len(candidates), outcomes=outcomes, replayed=replayed,
         legacy_view=legacy_view_served(),

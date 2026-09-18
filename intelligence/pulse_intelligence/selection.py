@@ -145,10 +145,31 @@ class Classified:
     reason: str
 
 
-def lookback_days(now: datetime, config: Config) -> list[date]:
-    """Aujourd'hui puis la veille (lookback_days = 1) : jamais plus loin."""
+# Plancher du rattrapage : au plus sept jours en arrière, soit huit jours
+# listés avec aujourd'hui. Au-delà, on tient les sessions pour perdues plutôt
+# que de relire un mois de `/context/sessions` à chaque passage après une
+# longue absence.
+MAX_CATCHUP_DAYS = 7
+
+
+def selection_days(now: datetime, state: JobState) -> list[date]:
+    """Aujourd'hui, puis en arrière jusqu'au jour du dernier passage complet.
+
+    Le repère est `state.last_complete_pass` (début du passage) : ce jour-là
+    compte, des sessions s'y sont closes après le passage. Sans repère
+    (premier passage, état perdu), la fenêtre est pleine : `MAX_CATCHUP_DAYS`
+    en arrière. Elle ne remonte jamais au-delà, repère ou non.
+
+    Conséquence assumée (décision du 2026-09-18) : après un changement de
+    prompt ou de modèle, toute session de la fenêtre redevient candidate ;
+    en régime quotidien la fenêtre fait deux jours, au pire huit.
+    """
     today = now.astimezone().date()
-    return [today - timedelta(days=offset) for offset in range(config.lookback_days + 1)]
+    floor = today - timedelta(days=MAX_CATCHUP_DAYS)
+    marker = state.last_complete_pass_at()
+    start = floor if marker is None else max(floor, marker.astimezone().date())
+    start = min(start, today)
+    return [today - timedelta(days=offset) for offset in range((today - start).days + 1)]
 
 
 def fetch_sessions(
@@ -219,14 +240,14 @@ def classify_sessions(
     state: JobState,
     days: list[date] | None = None,
 ) -> list[Classified]:
-    """Toutes les sessions des journées de lookback, classées, chronologiques.
+    """Toutes les sessions de la fenêtre de rattrapage, classées, chronologiques.
 
     Une session dont l'id a disparu de /context/sessions depuis le dernier
     passage n'est simplement plus listée : rien à oublier, rien à nettoyer.
     """
     known = state.known_summaries()
     classified: list[Classified] = []
-    for day in days if days is not None else lookback_days(now, config):
+    for day in days if days is not None else selection_days(now, state):
         for session in fetch_sessions(client, day, at=now):
             classified.append(
                 classify(session, config=config, model_id=model_id, known=known)
@@ -257,10 +278,11 @@ def find_session(
     session_id: str,
     *,
     now: datetime,
-    config: Config,
+    state: JobState,
     day: date | None = None,
 ) -> SessionView | None:
-    days = [day] if day is not None else lookback_days(now, config)
+    """Une session par identifiant, sur la même fenêtre que `run` (ou un jour donné)."""
+    days = [day] if day is not None else selection_days(now, state)
     for candidate_day in days:
         for session in fetch_sessions(client, candidate_day, at=now):
             if session.id == session_id:
