@@ -185,6 +185,14 @@ exact est remplacé par une périphrase pour passer le scan.
 **Priority:** P3
 **Depends on:** Aucun
 
+### Le journal signale les sessions sans résumé sur deux jours, Intelligence en rattrape sept
+
+**What:** `daemon_v2/session_summaries.py` : la zone « sessions éligibles sans résumé » du journal (`GET /`) et le champ `unsummarized_days` sont calculés sur `UNSUMMARIZED_LOOKBACK_DAYS = 2` (aujourd'hui et hier), fenêtre fixe et propre à Core. Depuis la PR #112 (2026-09-18), Intelligence relit chaque jour depuis son dernier passage complet, plafonné à sept jours en arrière : une session close à J−3 pendant une panne du lot sera résumée au passage suivant, mais le journal ne l'aura jamais signalée comme manquante, et une session de J−5 que le lot a définitivement perdue n'apparaît nulle part. Core ne lit pas l'état d'Intelligence (`last_complete_pass` dans `~/.pulse_intelligence/state.json`) et ne doit pas en dépendre pour collecter ; mais le journal pourrait élargir sa fenêtre à la même borne de sept jours, ou afficher la date du dernier résumé reçu pour que l'écart se voie. À trancher avec l'utilisateur : c'est un choix d'affichage, pas de collecte, et `unsummarized_days` est servi dans `/` — vérifier ses consommateurs avant de l'étendre.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** PR #112 mergée
+
 ### Le daemon tourne en `ProcessType Background` : facteur 5 probable sur les pages
 
 **What:** le plist de `com.pulse.daemon` déclare `ProcessType` `Background` ; le processus tourne en priorité 4. C'est l'explication probable, non mesurée, du facteur 5 entre le même code mesuré hors daemon et la production : le 2026-09-17, après la 0.8.8.0, `GET /` en 2,7 s servi par la production contre 0,48 s hors daemon, `/day/2026-09-17` en 1,1 s contre 0,20 s ; avant le correctif, 17,6 s contre 3,8 s ; le 2026-09-18, `/context/sessions?date=2026-09-17` en 4,9 à 9 s en production contre 0,90 s hors daemon (0,37 s après la 0.8.9.1). À mesurer avant de changer quoi que ce soit : mêmes routes, même base, avec et sans ce réglage, sur un Core jetable lancé par launchd plutôt que sur la production. Ne pas modifier le plist sans cette mesure avant/après : le réglage protège aussi le travail au premier plan d'une collecte qui tourne toute la journée.
