@@ -49,6 +49,8 @@ STATES = (WORKING, WAITING_PERMISSION, WAITING_FOR_YOU)
 # Nom du processus Claude Code tel que `ps -o comm=` le rend.
 AGENT_PROCESS_NAMES = ("claude",)
 MAX_TREE_DEPTH = 8
+# Sans pid, un fichier non mis à jour depuis ce délai n'est plus affiché.
+STALE_AFTER_HOURS = 12
 PRIVATE_DIR_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
 
@@ -214,13 +216,18 @@ def apply_event(
 
 
 def sweep_dead(directory: Path) -> list[Path]:
-    """Retire les fichiers dont le pid n'existe plus (crash, kill, redémarrage)."""
+    """Retire les fichiers dont le pid n'existe plus (crash, kill, redémarrage).
+
+    Un fichier sans pid (aucun processus ``claude`` trouvé au-dessus du
+    hook : autre lanceur, CI) n'est pas mort, il est inconnu : il reste, et
+    seul SessionEnd le retire ; le menu le masque après ``STALE_AFTER``.
+    """
     removed = []
     if not directory.is_dir():
         return removed
     for path in directory.glob("*.json"):
         data = read_state(path)
-        if data is None or process_alive(data.get("pid")):
+        if data is None or data.get("pid") is None or process_alive(data.get("pid")):
             continue
         try:
             path.unlink()

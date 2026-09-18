@@ -5,8 +5,9 @@ format SwiftBar (titre, ``---``, une ligne par session). Deux règles
 d'affichage :
 
 - une session dont le pid n'existe plus n'est pas affichée (crash, kill,
-  redémarrage : pas de SessionEnd) ; ``waiting_for_you`` n'est jamais masqué
-  avec le temps, une réponse attendue depuis deux heures reste en tête ;
+  redémarrage : pas de SessionEnd) ; sans pid connu, elle l'est tant que son
+  fichier a moins de ``STALE_AFTER_HOURS`` ; ``waiting_for_you`` n'est jamais
+  masqué avec le temps, une réponse attendue depuis deux heures reste en tête ;
 - en option, la ligne « Dernier lot » lit ``last_complete_pass`` dans le
   ``state.json`` d'Intelligence : rouge si aucun passage complet depuis le
   06:30 du jour une fois 07:30 passé, vert sinon, gris avant 07:30.
@@ -25,6 +26,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pulse_agent_state import (  # noqa: E402
+    STALE_AFTER_HOURS,
     WAITING_FOR_YOU,
     WAITING_PERMISSION,
     WORKING,
@@ -57,7 +59,8 @@ def elapsed(since: str, now: datetime) -> str:
     return f"{minutes // 60} h {minutes % 60:02d}"
 
 
-def live_sessions(directory: Path, *, alive=process_alive) -> list[dict[str, Any]]:
+def live_sessions(directory: Path, now: datetime, *, alive=process_alive) -> list[dict[str, Any]]:
+    """Les sessions à afficher : pid vivant, ou pid inconnu et fichier récent."""
     rows = []
     if not directory.is_dir():
         return rows
@@ -65,7 +68,15 @@ def live_sessions(directory: Path, *, alive=process_alive) -> list[dict[str, Any
         data = read_state(path)
         if not data or data.get("state") not in LABELS:
             continue
-        if not alive(data.get("pid")):
+        pid = data.get("pid")
+        if pid is None:
+            try:
+                age = now - datetime.fromisoformat(str(data.get("updated_at")))
+            except ValueError:
+                continue
+            if age > timedelta(hours=STALE_AFTER_HOURS):
+                continue
+        elif not alive(pid):
             continue
         rows.append(data)
     rows.sort(key=lambda s: (ORDER[s["state"]], s.get("since") or ""))
@@ -117,7 +128,7 @@ def last_batch_line(intel_state: Path, now: datetime) -> str:
 
 def render(directory: Path, intel_state: Path | None, now: datetime | None = None, *, alive=process_alive) -> str:
     moment = now or datetime.now(timezone.utc)
-    lines = agent_lines(live_sessions(directory, alive=alive), moment)
+    lines = agent_lines(live_sessions(directory, moment, alive=alive), moment)
     if intel_state is not None:
         lines += ["---", last_batch_line(intel_state, moment)]
     return "\n".join(lines) + "\n"
