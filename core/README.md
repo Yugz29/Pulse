@@ -701,8 +701,11 @@ scripts/install_agent_state_hooks.sh --uninstall
 ```
 
 L'installateur ne touche pas aux autres hooks (le `SessionEnd` ci-dessus
-reste), écrit une sauvegarde `.bak-agent-state`, et n'installe jamais
-SwiftBar : s'il manque ou n'a pas encore de dossier de plugins, il le dit.
+reste), écrit une sauvegarde `.bak-agent-state`, pose un `timeout` de 3 s
+par hook, et n'installe jamais SwiftBar : s'il manque ou n'a pas encore de
+dossier de plugins, il le dit. Il **refuse de tourner depuis un worktree**
+(`--git-dir` ≠ `--git-common-dir`) : les hooks pointent sur le checkout par
+chemin absolu, et un worktree se retire ; lancer depuis `~/Projets/Pulse`.
 Claude Code relit ses hooks à chaud. Journal :
 `~/.pulse_v2/logs/agent_state_hook.log`. Ces états n'entrent pas dans
 `trace.db` ; ce que Core en ferait (historique, bloc « Session en cours »)
