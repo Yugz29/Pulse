@@ -156,9 +156,22 @@ def test_real_process_tree_records_claude_not_the_shell(tmp_path):
 def test_sweep_removes_dead_sessions_only(tmp_path):
     agent_state.write_state(tmp_path / "claude-code-dead.json", {"state": "working", "pid": 2_000_000_000})
     agent_state.write_state(tmp_path / "claude-code-alive.json", {"state": "working", "pid": os.getpid()})
+    # Pas de processus `claude` trouvé (autre lanceur, CI) : inconnu, pas mort.
+    agent_state.write_state(tmp_path / "claude-code-unknown.json", {"state": "working", "pid": None})
     removed = agent_state.sweep_dead(tmp_path)
     assert [p.name for p in removed] == ["claude-code-dead.json"]
     assert (tmp_path / "claude-code-alive.json").exists()
+    assert (tmp_path / "claude-code-unknown.json").exists()
+
+
+def test_without_a_claude_ancestor_the_file_survives_the_sweep(tmp_path):
+    # Arbre sans `claude` : le hook écrit pid None et son propre balayage
+    # ne doit pas effacer ce qu'il vient d'écrire (vu en CI).
+    tree = fake_tree((100, 90, "bash"), (90, 1, "zsh"))
+    agent_state.apply_event(payload("SessionStart", "ci"), directory=tmp_path, hook_pid=100, now=NOW, rows=tree)
+    assert agent_state.sweep_dead(tmp_path) == []
+    data = agent_state.read_state(tmp_path / "claude-code-ci.json")
+    assert data["pid"] is None and data["state"] == "working"
 
 
 # --- Le wrapper bash --------------------------------------------------------------
@@ -217,6 +230,17 @@ def test_menu_lists_waiting_first_hides_dead_and_never_hides_an_old_wait(tmp_pat
     assert lines[4].startswith("Holberton28 — attend ta suite — depuis 2 h 30")
     assert lines[6].startswith("Pulse — travaille — depuis 12 min")
     assert "Mort" not in out
+
+
+def test_menu_shows_a_pidless_session_until_it_goes_stale(tmp_path):
+    _state(tmp_path, "fresh", "waiting_for_you", NOW - timedelta(hours=3), pid=None, project="SansPid")
+    old = tmp_path / "claude-code-old.json"
+    agent_state.write_state(old, {"agent": "claude-code", "session_id": "old", "state": "working", "pid": None,
+                                  "since": (NOW - timedelta(hours=20)).isoformat(),
+                                  "updated_at": (NOW - timedelta(hours=13)).isoformat(), "project": "Vieux"})
+    out = menu.render(tmp_path, None, now=NOW)
+    assert "SansPid — attend ta suite — depuis 3 h 00" in out
+    assert "Vieux" not in out
 
 
 def test_menu_without_sessions(tmp_path):
