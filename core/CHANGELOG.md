@@ -4,6 +4,31 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.9.1] - 2026-09-18
+
+Le prédicat de bruit de l'historique sans `pathlib` : `/context/sessions`
+d'une journée chargée rend la même réponse, deux fois et demie plus vite.
+Aucun contrat ne change ; les réponses sont identiques à l'octet.
+
+### Corrigé
+- `daemon_v2/file_policy.py` : `is_file_noise` et `attributed_workspace`
+  construisaient des `Path` et appelaient `relative_to` / `is_relative_to`
+  / `parents` pour chaque `file_changed` de la journée — 13 364 fois pour
+  le 2026-09-17, soit 2,2 s de `pathlib` sur 2,8 s de projection, et
+  4,9 à 9 s servis par le daemon, au-delà du timeout de 5 s qu'avait alors
+  le client d'Intelligence (lot du 18 interrompu). Le chemin rapide sur
+  chaînes ne s'engage que sur un chemin absolu déjà normalisé (ni `//`, ni
+  `.`, ni `..`, ni barre finale : `_plain_absolute`) ; tout autre chemin
+  passe par les fonctions `Path` de référence, inchangées, que le watcher
+  utilise toujours. `tests_v2/test_file_policy_history.py` compare les deux
+  voies à l'ancienne implémentation sur un corpus de chemins propres et
+  non normalisés, workspace racine, forme résolue et racines de virtualenv,
+  et vérifie que la garde n'accepte que ce que `Path` rendrait tel quel.
+  Mesuré sur une copie de `trace.db` (référence 2026-09-18T07:18:05Z) :
+  `/context/sessions` du 17 en 0,90 s → 0,37 s hors daemon, réponses des
+  15, 16 et 17 et `/context` identiques à l'octet hors `generated_at`
+  (935 215 octets).
+
 ## [0.8.9.0] - 2026-09-17
 
 Core dit quelle version et quel code il exécute, et `make status` juge chaque
