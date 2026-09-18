@@ -663,6 +663,48 @@ commandes (`redact_command`) : `reprise.doing`, `reprise.stopped_at`,
 pas de recopie silencieuse. La rédaction porte sur des motifs connus, elle ne
 garantit pas l’absence de tout secret.
 
+### État d'agent dans la barre de menus (SwiftBar, v0)
+
+Signal « l'agent attend », **hors `trace.db` et sans passer par Core ni par
+le modèle**. Six hooks Claude Code appellent `scripts/pulse_agent_state_hook.sh`,
+qui tient un fichier par session sous `~/.pulse_v2/run/agents/`
+(`claude-code-<session_id>.json`, 0600) ; le plugin SwiftBar
+`scripts/swiftbar/pulse-agents.5s.sh` lit ce dossier toutes les 5 s.
+
+Trois états, `since` ne bouge que quand l'état change :
+
+| état | posé par | levé par |
+| --- | --- | --- |
+| `working` (travaille) | `SessionStart`, `UserPromptSubmit`, `PostToolUse` | — |
+| `waiting_permission` (attend une permission) | `Notification` `permission_prompt` | `PostToolUse`, `UserPromptSubmit` |
+| `waiting_for_you` (attend ta suite) | `Stop` | `UserPromptSubmit` ; jamais masqué avec le temps |
+
+`Notification` `idle_prompt` ne change rien ; `SessionEnd` supprime le
+fichier. Le fichier porte le pid du processus `claude` lui-même, trouvé en
+remontant l'arbre des processus (Claude Code lance le hook via `/bin/sh -c`,
+`$PPID` n'est pas l'agent) : une session sans fin propre (crash, `kill`,
+redémarrage) disparaît du menu et est balayée au hook suivant. Plusieurs
+sessions en parallèle = plusieurs fichiers, une ligne chacune (projet, état,
+depuis quand ; en sous-ligne l'identifiant court et le `cwd`). Aucun
+contenu de prompt n'est écrit.
+
+Le menu ajoute une ligne « Dernier lot » lue dans `last_complete_pass` de
+`~/.pulse_intelligence/state.json` : vert si un passage complet a eu lieu
+depuis le 06:30 du jour, **rouge à partir de 07:30 sinon**, gris avant.
+
+```bash
+scripts/install_agent_state_hooks.sh              # hooks dans ~/.claude/settings.json + lien du plugin
+scripts/install_agent_state_hooks.sh --uninstall
+```
+
+L'installateur ne touche pas aux autres hooks (le `SessionEnd` ci-dessus
+reste), écrit une sauvegarde `.bak-agent-state`, et n'installe jamais
+SwiftBar : s'il manque ou n'a pas encore de dossier de plugins, il le dit.
+Claude Code relit ses hooks à chaud. Journal :
+`~/.pulse_v2/logs/agent_state_hook.log`. Ces états n'entrent pas dans
+`trace.db` ; ce que Core en ferait (historique, bloc « Session en cours »)
+est une décision à part.
+
 ## Services daemon + worker (launchd)
 
 Deux LaunchAgents `KeepAlive` font tourner Pulse en continu — relancés au

@@ -173,6 +173,8 @@ exact est remplacé par une périphrase pour passer le scan.
 
 **Remontée en P1 (2026-09-17) :** les commandes d'un agent ne sont jamais observées, alors que le suivi de l'agent est l'usage principal. Relevé du 17 : les 13 `terminal_finished` de la journée viennent tous du producteur `pulse-zsh` (`scripts/pulse_terminal_watcher.zsh`, `preexec`/`precmd` d'un shell interactif) ; aucune des commandes lancées par Claude Code pendant les chantiers #103 et #104 (tests, scans, git) n'est dans `trace.db`, et aucune après 15:47. Le bloc `Session en cours` (0.8.5.0) et le résumé de nuit ne voient donc d'une journée menée par un agent que ses commits et, dans les dossiers surveillés, ses fichiers.
 
+**v0 du 2026-09-18 (état d'agent, SwiftBar) :** la partie « l'agent attend » est couverte hors `trace.db` par `scripts/pulse_agent_state_hook.sh` (six hooks, un fichier d'état par session) et le plugin `scripts/swiftbar/pulse-agents.5s.sh`. Ce que cette entrée garde ouvert : les **commandes** de l'agent dans `trace.db` (PostToolUse → `terminal_finished` ou nouveau type), et la décision de faire entrer ou non les états d'attente dans l'historique.
+
 **Effort:** M
 **Priority:** P1
 **Depends on:** Aucun (le hook SessionEnd est en usage)
