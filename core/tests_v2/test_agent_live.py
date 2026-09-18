@@ -4,7 +4,7 @@ Transcript figé sous ``fixtures/claude_transcript_live.jsonl`` : deux tests
 (le premier en échec), un ``Read`` (ignoré), un ``Edit`` et un ``Write``,
 une commande avec un mot de passe factice dans l'URL et dans la description, une
 interruption (130), deux entrées de sous-agent, une ligne illisible et une
-dernière ligne tronquée. Ce qui ne doit jamais apparaître porte le mot
+dernière ligne tronquée, un heredoc qui écrit ``API_KEY=…``. Ce qui ne doit jamais apparaître porte le mot
 ``NE_DOIT_PAS_APPARAITRE``.
 """
 from __future__ import annotations
@@ -40,8 +40,8 @@ def read(path: Path, states=None):
 
 def test_commands_carry_description_redacted_command_outcome_and_time(tmp_path):
     view = read(copy_fixture(tmp_path))
-    assert view["command_count"] == 5
-    first, curl, wait, second, commit = view["commands"]
+    assert view["command_count"] == 6
+    first, curl, wait, second, commit, heredoc = view["commands"]
     assert first == {
         "at": "2026-09-18T09:01:30.000Z",
         "command": "cd core && python -m pytest tests_v2 -q",
@@ -56,6 +56,14 @@ def test_commands_carry_description_redacted_command_outcome_and_time(tmp_path):
     assert wait["outcome"] == "interrompue"
     assert second["outcome"] == "ok" and second["test_command"]
     assert commit["outcome"] == "échec" and commit["description"] is None and not commit["test_command"]
+    # Un heredoc : la première ligne seulement, coupée avant « << », jamais le corps.
+    assert heredoc == {
+        "at": "2026-09-18T09:08:31.000Z",
+        "command": "cat > /Users/dev/Projets/Pulse/.env <<…",
+        "description": "Write the env file",
+        "test_command": False,
+        "outcome": "ok",
+    }
 
 
 def test_last_test_failures_and_files(tmp_path):
@@ -83,7 +91,7 @@ def test_truncated_last_line_waits_for_the_next_read(tmp_path):
     path = copy_fixture(tmp_path)
     states = {}
     view = read(path, states)
-    assert view["command_count"] == 5
+    assert view["command_count"] == 6
     offset = states[str(path)].offset
     assert offset < path.stat().st_size  # la ligne tronquée n'est pas consommée
 
@@ -93,7 +101,7 @@ def test_truncated_last_line_waits_for_the_next_read(tmp_path):
         handle.write(json.dumps({"type": "user", "timestamp": "2026-09-18T09:09:05.000Z", "message": {"role": "user", "content": [
             {"type": "tool_result", "tool_use_id": "toolu_09", "content": "ok", "is_error": False}]}}) + "\n")
     again = read(path, states)
-    assert again["command_count"] == 6
+    assert again["command_count"] == 7
     assert again["commands"][-1]["command"] == "make test" and again["commands"][-1]["test_command"]
     assert again["last_test"]["command"] == "make test"
     assert states[str(path)].offset == path.stat().st_size
@@ -159,6 +167,14 @@ def test_description_gets_every_command_rule_plus_the_free_text_one():
     assert redact("Push to origin") == "Push to origin"
 
 
+def test_command_head_first_line_no_heredoc_bounded():
+    head = agent_transcript.command_head
+    assert head("cd core && python3 - <<'EOF'\nimport os\nAPI_KEY=abc\nEOF") == "cd core && python3 - <<…"
+    assert head("git status\ngit log --oneline") == "git status"
+    assert head("x" * 150).endswith("…") and len(head("x" * 150)) == agent_transcript.COMMAND_HEAD_CHARS
+    assert head("  make test  ") == "make test"
+
+
 def test_test_detection_looks_at_each_segment():
     assert agent_transcript.is_agent_test_command("cd core && python -m pytest tests_v2 -q")
     assert agent_transcript.is_agent_test_command("make test 2>&1 | tail -3")
@@ -194,7 +210,7 @@ def test_live_sessions_skip_dead_pids_and_read_transcripts(tmp_path):
     (folder / "claude-code-broken.json").write_text("{pas du json")
     sessions = live_agent_sessions(folder, now=REFERENCE, states={})
     assert [s["session_id"] for s in sessions] == ["alive", "notranscript"]
-    assert sessions[0]["transcript"]["command_count"] == 5
+    assert sessions[0]["transcript"]["command_count"] == 6
     assert sessions[1]["transcript"] is None and sessions[1]["state_label"] == "attend ta suite"
 
 
@@ -226,7 +242,7 @@ def test_block_shows_the_agent_from_its_transcript_and_nothing_forbidden(tmp_pat
     html = render(open_session_store(tmp_path), folder)
     assert "Claude Code en cours (1)" in html
     assert "<strong>Pulse</strong> · travaille depuis" in html
-    assert "Dernières commandes (5 sur 5)" in html
+    assert "Dernières commandes (6 sur 6)" in html
     assert "Run the Core suite again" in html and "python -m pytest tests_v2 -q" in html
     assert "[REDACTED]@localhost" in html and "YOUR_PASSWORD" not in html
     assert 'class="live-outcome">échec</span>' in html and 'class="live-outcome">interrompue</span>' in html
@@ -235,7 +251,10 @@ def test_block_shows_the_agent_from_its_transcript_and_nothing_forbidden(tmp_pat
     assert "Fichiers écrits par l’agent (2)" in html and "test_new.py" in html and "écrit ×1" in html
     assert "1 ligne(s) du transcript ignorée(s)" in html
     assert FORBIDDEN not in html and "Exit code" not in html and "SIDECHAIN" not in html
-    assert html.count('id="fait-live-agent-live-1-cmd-') == 5
+    assert html.count('id="fait-live-agent-live-1-cmd-') == 6
+    # Le corps du heredoc (API_KEY=…) n'est nulle part ; la première ligne, si.
+    assert "API_KEY" not in html and "CLEF_HEREDOC" not in html and "postgres://" not in html
+    assert "cat &gt; /Users/dev/Projets/Pulse/.env &lt;&lt;…" in html
 
 
 def test_archive_page_never_reads_transcripts(tmp_path):

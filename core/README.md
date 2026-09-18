@@ -692,7 +692,8 @@ contenu de prompt n'est écrit.
 et le bloc « Session en cours » de `GET /` lit le transcript de chaque
 session vivante (`daemon_v2/agent_transcript.py`, lecture tolérante et
 incrémentale) : les 10 dernières commandes (description de l'agent,
-commande masquée, issue, heure), le dernier test, les échecs bruts, les
+première ligne de la commande masquée, coupée avant tout `<<` et bornée à
+100 caractères — jamais le corps d'un heredoc —, issue, heure), le dernier test, les échecs bruts, les
 fichiers écrits par l'agent. Jamais `stdout`/`stderr`, ni le prompt, ni le
 motif d'un `Exit code` ; sous-agents ignorés ; rien dans `trace.db` ; bloc
 muet si le dossier d'état est absent. Claude Code seulement.
