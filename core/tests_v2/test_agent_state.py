@@ -261,30 +261,33 @@ def _local(hour: int, minute: int = 0, day: int = 18) -> datetime:
     return datetime(2026, 9, day, hour, minute).astimezone()
 
 
-def test_last_batch_is_green_when_a_pass_completed_since_the_scheduled_time(tmp_path):
+def test_summaries_are_up_to_date_when_a_pass_completed_since_the_scheduled_time(tmp_path):
     state = _intel_state(tmp_path, _local(6, 36).astimezone(timezone.utc).isoformat())
-    assert "OK, passage complet à 06:36 | color=green" in menu.last_batch_line(state, _local(8))
+    assert menu.summaries_line(state, _local(8)) == "Résumés à jour : dernier passage à 06:36 | color=green"
+    # Une relance manuelle compte : c'est last_complete_pass, pas le lot du compteur.
+    manual = _intel_state(tmp_path, _local(11, 32).astimezone(timezone.utc).isoformat())
+    assert menu.summaries_line(manual, _local(12)) == "Résumés à jour : dernier passage à 11:32 | color=green"
     # Même avant 07:30 : un passage complet du jour est vert.
-    assert "color=green" in menu.last_batch_line(state, _local(6, 50))
+    assert "color=green" in menu.summaries_line(state, _local(6, 50))
 
 
-def test_last_batch_is_red_after_0730_without_a_pass_since_0630(tmp_path):
+def test_summaries_are_late_after_0730_without_a_pass_since_0630(tmp_path):
     yesterday = _intel_state(tmp_path, _local(6, 40, day=17).astimezone(timezone.utc).isoformat())
-    assert menu.last_batch_line(yesterday, _local(7, 30)) == "Dernier lot : aucun passage complet depuis 06:30 | color=red"
-    assert "color=red" in menu.last_batch_line(yesterday, _local(23, 59))
+    assert menu.summaries_line(yesterday, _local(7, 30)) == "Résumés en retard : dernier passage hier 06:40, aucun depuis 06:30 | color=red"
+    assert "color=red" in menu.summaries_line(yesterday, _local(23, 59))
     # Sans repère du tout, même verdict une fois 07:30 passé.
-    assert "color=red" in menu.last_batch_line(_intel_state(tmp_path, None), _local(9))
+    assert "color=red" in menu.summaries_line(_intel_state(tmp_path, None), _local(9))
     # Un passage à 06:29 est celui d'avant le lot planifié : rouge aussi.
     early = _intel_state(tmp_path, _local(6, 29).astimezone(timezone.utc).isoformat())
-    assert "color=red" in menu.last_batch_line(early, _local(8))
+    assert "color=red" in menu.summaries_line(early, _local(8))
 
 
-def test_last_batch_is_grey_before_0730_and_names_the_last_pass(tmp_path):
+def test_summaries_line_is_grey_before_0730_and_names_the_last_pass(tmp_path):
     yesterday = _intel_state(tmp_path, _local(11, 32, day=17).astimezone(timezone.utc).isoformat())
-    line = menu.last_batch_line(yesterday, _local(7, 0))
-    assert line.startswith("Dernier lot : hier 11:32") and line.endswith("| color=gray")
-    assert "aucun passage complet connu | color=gray" in menu.last_batch_line(_intel_state(tmp_path, None), _local(7, 0))
-    assert "color=gray" in menu.last_batch_line(tmp_path / "absent.json", _local(7, 0))
+    line = menu.summaries_line(yesterday, _local(7, 0))
+    assert line.startswith("Résumés : dernier passage hier 11:32") and line.endswith("| color=gray")
+    assert menu.summaries_line(_intel_state(tmp_path, None), _local(7, 0)).startswith("Résumés : aucun passage complet connu")
+    assert "color=gray" in menu.summaries_line(tmp_path / "absent.json", _local(7, 0))
 
 
 def test_plugin_wrapper_runs_the_menu(tmp_path):
@@ -293,7 +296,7 @@ def test_plugin_wrapper_runs_the_menu(tmp_path):
            "PULSE_INTEL_STATE_PATH": str(_intel_state(tmp_path, None))}
     out = subprocess.run([str(PLUGIN)], capture_output=True, text=True, env=env, check=True, timeout=30).stdout
     assert out.splitlines()[0] == "·"
-    assert "Pulse — travaille" in out and "Dernier lot" in out
+    assert "Pulse — travaille" in out and "Résumés" in out
 
 
 # --- L'installateur ---------------------------------------------------------------
