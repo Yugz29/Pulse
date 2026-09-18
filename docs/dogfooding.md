@@ -1259,3 +1259,57 @@ jour 10.
 P3) ; références oN cliquables dans la page HTML des résumés, passées en P1
 le même jour et déplacées dans `core/TODOS.md` (rendu dans Core) : prochain
 chantier.
+
+## Jour 14 — 2026-09-18
+
+**Contexte.** Lot planifié de 06:30 démarré à 06:36:11 (DarkWake, Mac en
+veille sur batterie), **interrompu** à 06:47:52 : « Core injoignable »,
+0 candidate — `/context/sessions?date=2026-09-17` (18 sessions, 702 Ko)
+à cheval sur la veille, puis, Mac éveillé, en 4,9–9 s en production contre
+le timeout de 5 s alors codé en dur. Au sens de la
+[précision du 18](decisions/2026-09-15-compteur-etape-4-veille-du-mac.md) :
+« interrompu, sessions rattrapées », **hors compteur**. Deux relances
+manuelles, Mac éveillé sur secteur, hors compteur : 10:38 → 10:52 après #110
+(timeout 60 s, retry GET), 16 créées, toutes du 17 ; 11:31 → 11:47 après
+#112 (rattrapage depuis `last_complete_pass`, plafond 7 jours), 19 créées
+(8 du 11, 2 du 12, 2 du 13, 3 du 15, 4 du 18), repère posé à
+`2026-09-18T09:32:00Z`. Prompt v7, `Qwen3.8-27B-4bit`. Core 0.8.9.1 (#111,
+`is_file_noise` sans pathlib) en production depuis 11:30.
+
+**Verdicts (utilisateur, 2026-09-18) sur 6 résumés de la relance de 11:31 :
+les 4 sessions du 18 et les 2 plus longues du 11.**
+
+| Session | Verdict | Détail |
+| --- | --- | --- |
+| work-3 `bb6c96e0` (18, 10:31–10:40, Pulse + Holberton28) | `doing`/`stopped_at` justes ; `open` fausse alerte | `open` (← o28) : `docker build … && docker run …` en échec (code 1). Résolu plus tard, hors de cette session. |
+| work-4 `f8a3ebc4` (18, 10:40–11:04, devops-formation + Holberton28 + Pulse) | `doing`/`stopped_at` justes ; `open` deux fausses alertes | `open` (← o26, o39) : deux échecs Docker (code 125). Résolus plus tard. Deux projets menés en parallèle dans la même session. |
+| work-5 `0e1e3cab` (18, 11:04–11:12, Pulse) | `doing`/`stopped_at` justes ; `open` vide | Voir le motif ci-dessous : la poussée refusée par le hook tombe dans cette session et `open` ne l'a pas signalée. |
+| work-6 `7fd70078` (18, 11:12–11:18, Pulse) | `doing`/`stopped_at` justes ; `open` vide | — |
+| work-11 `efc91c08` (11, 21:13–21:52, Pulse + observer-log-timestamps) | ne permet pas de se rappeler la session | Lu à sept jours. |
+| work-9 `cc4aa106` (11, 20:08–20:26, Pulse) | ne permet pas de se rappeler la session | Lu à sept jours. |
+
+**Bilan du jour 14.** `doing` et `stopped_at` justes sur les 4 sessions du
+18. `open` : 3 signalements, 3 fausses alertes — des échecs Docker résolus
+plus tard, dans des sessions fragmentées (la journée du 18 est découpée en
+sessions de 6 à 23 min) et avec deux projets en parallèle. Les 2 résumés du
+11, lus à sept jours, n'ont pas permis à l'utilisateur de se rappeler la
+session. Rien au compteur : 9 reprises justes et utiles sur 15, inchangé.
+
+**Motifs.**
+
+- **La poussée refusée par le hook n'est pas dans `open`** (work-5) : le
+  commit `045852e` est à 11:10:21 (o à 365 s de la session), la poussée
+  refusée par le hook de pré-poussée (exit 2, `env.kv` MEDIUM) dans la
+  seconde qui suit, la session se ferme à 11:12:45 avec ce point non résolu
+  (poussée acquittée à 11:24, dans work-7). `open` dit « Aucun point ouvert
+  étayé par les faits de la session ». L'entrée de work-5 ne contient aucun
+  fait de commande (les commandes de cette session ont été lancées par un
+  agent, hors du terminal instrumenté) et `coverage.remote_push_state` vaut
+  `not_collected` : l'échec n'était pas dans les faits lus par le modèle.
+- **`open` signale des échecs de commande que la suite de la journée
+  résout** (work-3, work-4) : les deux sessions se suivent (10:31–10:40,
+  10:40–11:04) et la troisième occurrence du même `docker build` réussit
+  plus tard ; à l'échelle d'une session de 8 min, le dernier fait observé
+  est un échec.
+- **Lecture à sept jours** (work-9, work-11) : `doing`, `stopped_at` et
+  `open` ne suffisent pas à retrouver la session.
