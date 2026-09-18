@@ -8,8 +8,9 @@ Rien n'entre dans ``trace.db`` (rétention du 2026-08-30) ; rien ne passe par
 un modèle ; le résumé de nuit et ``/context`` ne voient rien de plus.
 
 Ce qui sort d'ici est borné à ce que le shell interactif expose déjà : la
-**commande** et la **description** de l'agent, passées par ``redact_command``
-(la description, texte libre, reçoit en plus un masque ``utilisateur:secret@``) ; l'**issue** (``ok`` / ``échec`` / ``interrompue``) ;
+**description** de l'agent et la **première ligne** de la commande (coupée
+avant tout ``<<``, ~100 caractères), passées par ``redact_command`` (la
+description, texte libre, reçoit en plus un masque ``utilisateur:secret@``) ; l'**issue** (``ok`` / ``échec`` / ``interrompue``) ;
 l'**heure** ; les **chemins** des fichiers édités. **Jamais** ``stdout``,
 ``stderr``, le prompt, ni le motif d'un ``Exit code``.
 
@@ -40,6 +41,10 @@ MAX_FILES = 8
 # Une entrée d'outil sans résultat au-delà de ce nombre d'appels suivants
 # est oubliée : un résultat n'arrive jamais après tant d'autres.
 MAX_PENDING = 64
+# Ce que la page montre d'une commande : sa première ligne, coupée avant tout
+# ``<<`` et bornée. Jamais le corps d'un heredoc : il porte du contenu de
+# fichier (retour du 2026-09-18, le corps des scripts s'affichait entier).
+COMMAND_HEAD_CHARS = 100
 
 OK = "ok"
 FAILED = "échec"
@@ -183,7 +188,7 @@ def _remember_use(state: TranscriptState, block: dict[str, Any], stamp: str | No
     description = inputs.get("description")
     state.pending[use_id] = {
         "at": stamp,
-        "command": redact_command(command),
+        "command": command_head(redact_command(command)),
         "description": redact_description(description) if isinstance(description, str) and description else None,
         "test_command": is_agent_test_command(command),
     }
@@ -230,6 +235,22 @@ def _result_text(block: dict[str, Any]) -> str:
     if isinstance(content, list):
         return " ".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
     return ""
+
+
+def command_head(command: str) -> str:
+    """La première ligne de la commande, coupée avant tout ``<<``, tronquée.
+
+    Appliqué après ``redact_command`` : un secret sur la première ligne est
+    déjà masqué. Le corps d'un heredoc n'est jamais conservé — ni dans la
+    vue, ni dans le cache.
+    """
+    first = command.strip().split("\n", 1)[0]
+    cut = first.find("<<")
+    if cut >= 0:
+        first = first[:cut].rstrip() + " <<…"
+    if len(first) > COMMAND_HEAD_CHARS:
+        first = first[: COMMAND_HEAD_CHARS - 1].rstrip() + "…"
+    return first
 
 
 def is_agent_test_command(command: str) -> bool:

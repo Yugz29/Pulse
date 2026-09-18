@@ -4,6 +4,20 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.10.1] - 2026-09-18
+
+Retour en réel sur l'étape 1 bis : les commandes d'agent étaient illisibles
+et les heredocs exposaient du contenu de fichier (le corps d'un script
+passé par `<<'EOF'` s'affichait entier, faux secrets d'un test compris).
+
+### Corrigé
+- `daemon_v2/agent_transcript.py` : la page montre la description, puis
+  **la première ligne** de la commande, **coupée avant tout `<<`** et
+  tronquée à 100 caractères (`command_head`, appliqué après
+  `redact_command`). Le corps d'un heredoc n'est conservé ni dans la vue ni
+  dans le cache. Test : un heredoc qui écrit `API_KEY=…` n'apparaît ni dans
+  la vue ni dans le HTML ; sa première ligne, si.
+
 ## [0.8.10.0] - 2026-09-18
 
 Étape 1 bis du mode continu : le bloc « Session en cours » montre, pour
