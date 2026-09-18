@@ -135,11 +135,27 @@ def test_only_the_last_ten_commands_are_kept_but_all_are_counted(tmp_path):
     assert view["failures"][0]["command"] == "echo 24"
 
 
-def test_description_free_text_is_redacted_too():
+def test_description_gets_every_command_rule_plus_the_free_text_one():
+    """La description passe par toutes les règles de ``redact_command`` (jetons
+    connus, en-têtes, options sensibles, ``user:pass`` en URL), puis par le
+    masque ``utilisateur:secret@`` du texte libre. Les faux secrets sont
+    assemblés à l'exécution pour que ce fichier n'en contienne aucun en clair
+    (le scan de pré-poussée du dépôt public les bloquerait, à raison)."""
     redact = agent_transcript.redact_description
+    openai_like = "sk-" + "proj-" + "Zx9Qw8Er7Ty6Ui5Op4As3Df2"
+    github_like = "ghp_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab"
+    jwt_like = "eyJ" + "hbGciOiJIUzI1NiJ9.abc.def"
+    aws_like = "wJalrXUtnFEMI/K7MDENG/" + "bPxRfiCYEXAMPLEKEY"
+    url_with_password = "https://" + "user:" + "hunter2@" + "localhost/x"
+    assert redact(f"Call the API with {openai_like} as key") == "Call the API with [REDACTED] as key"
+    assert redact(f"Use token {github_like} for gh") == "Use token [REDACTED] for gh"
+    assert redact(f"Header Authorization: Bearer {jwt_like}") == "Header Authorization: Bearer [REDACTED]"
+    assert redact(f"Export AWS_SECRET_ACCESS_KEY={aws_like}") == "Export AWS_SECRET_ACCESS_KEY=[REDACTED]"
+    assert redact("Run with --password=hunter2 on the db") == "Run with --password=[REDACTED] on the db"
+    fetched = redact(f"Fetch {url_with_password}")
+    assert fetched.endswith("user:[REDACTED]@localhost/x") and "hunter2" not in fetched
     assert redact("Check the registry with user:YOUR_PASSWORD@localhost") == "Check the registry with user:[REDACTED]@localhost"
     assert redact("ssh admin:hunter2@10.0.0.1") == "ssh admin:[REDACTED]@10.0.0.1"
-    assert redact("curl -H 'Authorization: Bearer abc.def.ghi' api") .count("[REDACTED]") == 1
     assert redact("Push to origin") == "Push to origin"
 
 
