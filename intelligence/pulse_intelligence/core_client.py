@@ -8,6 +8,8 @@ Un Core arrêté se traduit par CoreUnavailable, jamais par une trace de pile.
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any
@@ -16,6 +18,19 @@ import requests
 
 
 EXPECTED_SCHEMA_VERSION = 3
+
+# 60 s et non 5 : `/context/sessions` reconstruit la journée à chaque appel
+# et une journée chargée dépasse 5 s en production (le 2026-09-17 : 18
+# sessions, 702 Ko, 5 à 9 s servis par le daemon). Un client de lot n'a
+# aucune raison d'abandonner si tôt ; c'est la route qui est lente, pas Core
+# qui est tombé.
+DEFAULT_TIMEOUT_S = 60.0
+# Une seule reprise, sur les GET seulement : un GET rejoué ne crée rien. Elle
+# absorbe une requête à cheval sur une veille du Mac (le lot launchd part
+# dans une fenêtre DarkWake de deux secondes ; au réveil, le timeout est
+# écoulé alors que Core n'est pas tombé). Un POST n'est jamais rejoué ici :
+# le vidage des `pending` et l'identité par event_id s'en chargent.
+RETRY_PAUSE_S = 2.0
 
 
 class CoreUnavailable(RuntimeError):
@@ -40,23 +55,31 @@ class CoreClient:
         self,
         base_url: str,
         *,
-        timeout_s: float = 5.0,
+        timeout_s: float = DEFAULT_TIMEOUT_S,
         session: requests.Session | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
         self._session = session or requests.Session()
+        self._sleep = sleep
 
     def _request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
-        try:
-            return self._session.request(
-                method,
-                f"{self.base_url}{path}",
-                timeout=self.timeout_s,
-                **kwargs,
-            )
-        except requests.RequestException as exc:
-            raise CoreUnavailable(f"Core injoignable sur {self.base_url}: {exc}") from exc
+        attempts = 2 if method == "GET" else 1
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._session.request(
+                    method,
+                    f"{self.base_url}{path}",
+                    timeout=self.timeout_s,
+                    **kwargs,
+                )
+            except requests.RequestException as exc:
+                if attempt < attempts:
+                    self._sleep(RETRY_PAUSE_S)
+                    continue
+                raise CoreUnavailable(f"Core injoignable sur {self.base_url}: {exc}") from exc
+        raise AssertionError("unreachable")
 
     @staticmethod
     def _json(response: requests.Response, path: str) -> Any:
