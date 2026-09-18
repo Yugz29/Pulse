@@ -8,9 +8,11 @@ d'affichage :
   redémarrage : pas de SessionEnd) ; sans pid connu, elle l'est tant que son
   fichier a moins de ``STALE_AFTER_HOURS`` ; ``waiting_for_you`` n'est jamais
   masqué avec le temps, une réponse attendue depuis deux heures reste en tête ;
-- en option, la ligne « Dernier lot » lit ``last_complete_pass`` dans le
-  ``state.json`` d'Intelligence : rouge si aucun passage complet depuis le
-  06:30 du jour une fois 07:30 passé, vert sinon, gris avant 07:30.
+- la ligne « Résumés à jour : dernier passage à HH:MM » lit
+  ``last_complete_pass`` dans le ``state.json`` d'Intelligence. Elle reflète
+  le dernier passage complet, relances manuelles comprises — ce n'est pas le
+  « lot du jour » du compteur de l'étape 4. Rouge si aucun passage complet
+  depuis le 06:30 du jour une fois 07:30 passé, vert sinon, gris avant 07:30.
 
 Appelé par ``scripts/swiftbar/pulse-agents.5s.sh`` ; testé directement.
 """
@@ -101,8 +103,10 @@ def agent_lines(rows: list[dict[str, Any]], now: datetime) -> list[str]:
     return lines
 
 
-def last_batch_line(intel_state: Path, now: datetime) -> str:
-    """« Dernier lot » d'après ``last_complete_pass`` (UTC), jugé en heure locale."""
+def summaries_line(intel_state: Path, now: datetime) -> str:
+    """« Résumés à jour : dernier passage à HH:MM », d'après ``last_complete_pass``
+    (UTC), jugé en heure locale. Passage complet = `run` arrivé au bout de sa
+    fenêtre, planifié ou relancé à la main."""
     marker = None
     try:
         raw = json.loads(intel_state.read_text(encoding="utf-8")).get("last_complete_pass")
@@ -116,21 +120,23 @@ def last_batch_line(intel_state: Path, now: datetime) -> str:
     today_batch = datetime.combine(local_now.date(), BATCH_TIME, tzinfo=local_now.tzinfo)
     alert_from = datetime.combine(local_now.date(), ALERT_TIME, tzinfo=local_now.tzinfo)
     if marker is not None and marker >= today_batch:
-        return f"Dernier lot : OK, passage complet à {marker.astimezone().strftime('%H:%M')} | color=green"
-    if local_now >= alert_from:
-        return "Dernier lot : aucun passage complet depuis 06:30 | color=red"
+        return f"Résumés à jour : dernier passage à {marker.astimezone().strftime('%H:%M')} | color=green"
     if marker is None:
-        return "Dernier lot : aucun passage complet connu | color=gray"
-    local_marker = marker.astimezone()
-    day = "hier" if local_marker.date() == local_now.date() - timedelta(days=1) else local_marker.strftime("%d/%m")
-    return f"Dernier lot : {day} {local_marker.strftime('%H:%M')}, le lot de 06:30 n'est pas encore attendu | color=gray"
+        last = "aucun passage complet connu"
+    else:
+        local_marker = marker.astimezone()
+        day = "hier" if local_marker.date() == local_now.date() - timedelta(days=1) else local_marker.strftime("%d/%m")
+        last = f"dernier passage {day} {local_marker.strftime('%H:%M')}"
+    if local_now >= alert_from:
+        return f"Résumés en retard : {last}, aucun depuis 06:30 | color=red"
+    return f"Résumés : {last}, le passage de 06:30 n'est pas encore attendu | color=gray"
 
 
 def render(directory: Path, intel_state: Path | None, now: datetime | None = None, *, alive=process_alive) -> str:
     moment = now or datetime.now(timezone.utc)
     lines = agent_lines(live_sessions(directory, moment, alive=alive), moment)
     if intel_state is not None:
-        lines += ["---", last_batch_line(intel_state, moment)]
+        lines += ["---", summaries_line(intel_state, moment)]
     return "\n".join(lines) + "\n"
 
 

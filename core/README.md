@@ -688,9 +688,12 @@ sessions en parallèle = plusieurs fichiers, une ligne chacune (projet, état,
 depuis quand ; en sous-ligne l'identifiant court et le `cwd`). Aucun
 contenu de prompt n'est écrit.
 
-Le menu ajoute une ligne « Dernier lot » lue dans `last_complete_pass` de
-`~/.pulse_intelligence/state.json` : vert si un passage complet a eu lieu
-depuis le 06:30 du jour, **rouge à partir de 07:30 sinon**, gris avant.
+Le menu ajoute une ligne « Résumés à jour : dernier passage à HH:MM » lue
+dans `last_complete_pass` de `~/.pulse_intelligence/state.json` : le dernier
+passage complet de `run`, **relances manuelles comprises** — ce n'est pas le
+« lot du jour » du compteur de l'étape 4. Vert si un passage complet a eu
+lieu depuis le 06:30 du jour, **rouge à partir de 07:30 sinon** (« Résumés en
+retard »), gris avant.
 
 ```bash
 scripts/install_agent_state_hooks.sh              # hooks dans ~/.claude/settings.json + lien du plugin
