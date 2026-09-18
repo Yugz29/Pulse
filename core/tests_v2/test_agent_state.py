@@ -98,6 +98,15 @@ def test_session_end_removes_the_file_and_unknown_events_are_ignored(tmp_path):
     assert agent_state.apply_event({}, directory=tmp_path, hook_pid=100).startswith("ignored")
 
 
+def test_transcript_path_is_kept_for_the_live_block(tmp_path):
+    # SessionStart le donne ; un événement suivant sans le champ ne l'efface pas.
+    data = apply(tmp_path, payload("SessionStart", transcript_path="/Users/dev/.claude/projects/p/s1.jsonl"))
+    assert data["transcript_path"] == "/Users/dev/.claude/projects/p/s1.jsonl"
+    data = apply(tmp_path, payload("Stop"))
+    assert data["transcript_path"] == "/Users/dev/.claude/projects/p/s1.jsonl"
+    assert apply(tmp_path, payload("SessionStart", "sans"))["transcript_path"] is None
+
+
 def test_two_parallel_sessions_have_two_files(tmp_path):
     apply(tmp_path, payload("SessionStart", "aaa"))
     apply(tmp_path, payload("SessionStart", "bbb", cwd="/Users/dev/Projets/Autre"))

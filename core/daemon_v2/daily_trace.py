@@ -812,6 +812,7 @@ def render_daily_trace_html(
     trace_markdown_url: str = "/trace/today.md",
     archive_mode: bool = False,
     summary_board: dict[str, Any] | None = None,
+    agent_state_dir: Path | None = None,
 ) -> str:
     """Render a daily trace as HTML through the renderer package."""
     from .renderers.html import render_daily_trace_html as render
@@ -823,6 +824,7 @@ def render_daily_trace_html(
         trace_markdown_url=trace_markdown_url,
         archive_mode=archive_mode,
         summary_board=summary_board,
+        agent_state_dir=agent_state_dir,
     )
 
 

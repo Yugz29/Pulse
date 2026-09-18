@@ -39,6 +39,7 @@ from ..daily_trace import (
     build_session_summary,
     without_file_noise,
 )
+from ..agent_live import live_agent_sessions
 from ..live_session import build_live_session
 from .live import CSS as LIVE_CSS
 from .live import NAVIGATION as LIVE_NAVIGATION
@@ -114,6 +115,7 @@ def render_daily_trace_html(
     trace_markdown_url: str = "/trace/today.md",
     archive_mode: bool = False,
     summary_board: dict[str, Any] | None = None,
+    agent_state_dir: Path | None = None,
 ) -> str:
     # Zones « Reprise » et « Résumés » : vue vivante seulement, et seulement
     # quand l'appelant a lu les résumés stockés (``session_summaries``).
@@ -122,6 +124,11 @@ def render_daily_trace_html(
     # une session de travail est ouverte. Il lit la trace entière : ses
     # références oN sont celles de ``/context``.
     live = build_live_session(trace) if not archive_mode else None
+    if live is not None:
+        # Étape 1 bis : les sessions Claude Code vivantes, lues depuis le
+        # dossier d'état des hooks et leurs transcripts. Dossier absent :
+        # liste vide, le bloc n'en parle pas.
+        live["agents"] = live_agent_sessions(agent_state_dir)
     # Tout le reste de la page déroule la journée sans le bruit de fichiers
     # que la projection écarte déjà, et dit combien elle en masque.
     trace = without_file_noise(trace)
