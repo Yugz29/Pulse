@@ -9,9 +9,11 @@ from datetime import datetime, tzinfo
 from html import escape
 from typing import Any
 
-from ..agent_transcript import MAX_COMMANDS as MAX_AGENT_COMMANDS
+from ..agent_actions import MAX_COMMANDS as MAX_AGENT_COMMANDS
 from ..summary_references import RESOLVED
 from .summaries import render_fact
+
+_DEFAULT_AGENT_LABEL = "Agent"
 
 
 NAVIGATION = '<a class="nav-main" href="#session-en-cours">Session en cours</a>'
@@ -151,22 +153,25 @@ _OUTCOME_CLASS = {"ok": "live-ok", "échec": "live-fail", "interrompue": "live-s
 
 
 def _live_agents(live: dict[str, Any], zone: tzinfo) -> str:
-    """Étape 1 bis : les sessions Claude Code vivantes, depuis leur transcript.
+    """Les sessions d'agent vivantes, dans le format commun (``agent_actions``).
 
     Rien ici ne vient de ``trace.db`` ; rien n'est stocké. Commande et
     description sont déjà passées par ``redact_command`` ; ``stdout``,
     ``stderr``, le prompt et le motif d'un ``Exit code`` ne sont jamais lus.
     Sans dossier d'état (hooks non installés), la clé ``agents`` est vide et
-    la sous-section dit seulement qu'aucune session vivante n'est connue.
+    la sous-section dit seulement qu'aucune session vivante n'est connue. Le
+    nom affiché (« Claude Code » aujourd'hui) vient de l'adaptateur, via
+    ``agents_label`` ; rien ici ne le connaît.
     """
     agents = live.get("agents") or []
+    label = live.get("agents_label") or _DEFAULT_AGENT_LABEL
     if not agents:
         return (
-            "<h3>Claude Code en cours</h3>"
-            '<p class="live-empty">Aucune session Claude Code vivante connue '
+            f"<h3>{escape(label)} en cours</h3>"
+            f'<p class="live-empty">Aucune session {escape(label)} vivante connue '
             "(hooks d’état d’agent non installés, ou aucune session ouverte).</p>"
         )
-    parts = [f"<h3>Claude Code en cours ({len(agents)})</h3>"]
+    parts = [f"<h3>{escape(label)} en cours ({len(agents)})</h3>"]
     for index, agent in enumerate(agents, start=1):
         parts.append(_live_agent(agent, index, zone))
     parts.append(

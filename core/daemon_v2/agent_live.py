@@ -1,4 +1,4 @@
-"""Les sessions Claude Code vivantes et ce que leur transcript montre, pour la page.
+"""Les sessions d'agent vivantes, dans le format commun, pour la page.
 
 Étape 1 bis du mode continu. Source : le dossier d'état écrit par les hooks
 (``scripts/pulse_agent_state_hook.sh``, v0 du 2026-09-18), un fichier JSON
@@ -6,10 +6,17 @@ par session avec ``state``, ``since``, ``pid``, ``cwd``, ``project`` et
 ``transcript_path``. Le dossier absent, illisible ou vide rend une liste vide :
 le bloc reste muet, Core n'en dépend pour rien d'autre.
 
-Une session est vivante si son ``pid`` (le processus ``claude``) existe
-encore ; sans pid connu, si son fichier a moins de ``STALE_AFTER_HOURS``. La
-même règle que le plugin SwiftBar, tenue ici en quelques lignes plutôt
-qu'importée de ``scripts/`` : le daemon ne charge pas les scripts.
+Ce module ne sait rien d'un agent en particulier : les actions (commandes,
+fichiers, tests) sont lues via l'adaptateur qui comprend le transcript désigné
+par ``transcript_path`` — aujourd'hui ``agent_transcript``, pour Claude Code,
+seul producteur de ces fichiers d'état. Le format qu'il rend est celui défini
+dans ``agent_actions`` ; c'est aussi l'adaptateur qui fournit l'identité et le
+libellé affiché de l'agent (``AGENT_KIND``/``AGENT_LABEL``).
+
+Une session est vivante si son ``pid`` existe encore ; sans pid connu, si son
+fichier a moins de ``STALE_AFTER_HOURS``. La même règle que le plugin
+SwiftBar, tenue ici en quelques lignes plutôt qu'importée de ``scripts/`` :
+le daemon ne charge pas les scripts.
 """
 
 from __future__ import annotations
@@ -20,6 +27,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .agent_actions import STATE_UNKNOWN
+from .agent_transcript import AGENT_KIND as DEFAULT_AGENT
+from .agent_transcript import AGENT_LABEL
 from .agent_transcript import read_transcript
 
 STATE_DIR_ENV = "PULSE_AGENT_STATE_DIR"
@@ -61,14 +71,16 @@ def live_agent_sessions(
             if isinstance(transcript_path, str) and transcript_path
             else None
         )
+        agent_kind = state.get("agent") or DEFAULT_AGENT
         found.append(
             {
-                "agent": state.get("agent") or "claude-code",
+                "agent": agent_kind,
+                "agent_label": AGENT_LABEL if agent_kind == DEFAULT_AGENT else agent_kind,
                 "session_id": str(state.get("session_id") or ""),
                 "project": state.get("project"),
                 "cwd": state.get("cwd"),
                 "state": state.get("state"),
-                "state_label": STATE_LABELS.get(str(state.get("state")), str(state.get("state") or "?")),
+                "state_label": STATE_LABELS.get(str(state.get("state")), STATE_UNKNOWN),
                 "since": state.get("since"),
                 "transcript_path": transcript_path if isinstance(transcript_path, str) else None,
                 "transcript": transcript,
