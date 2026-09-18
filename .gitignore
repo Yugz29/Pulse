@@ -4,6 +4,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+# Sans barre aussi : `.venv/` n'ignore qu'un dossier, pas un lien symbolique
+# vers le venv d'un autre checkout (parti dans un commit le 2026-09-18).
+.venv
 .build/
 .swiftpm/
 data/
