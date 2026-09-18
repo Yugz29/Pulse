@@ -267,6 +267,15 @@ n'est pas recommandée.
    sous le récapitulatif, jetées à la fermeture de la session ; test qui
    garantit qu'aucune note n'atteint l'entrée de nuit.
 5. **Cache de préfixe**, seulement si la latence mesurée à l'étape 4 gêne.
+6. **État ouvert par projet** (ajouté le 2026-09-18) : ce qui est encore en
+   échec ou déclaré non fait dans un projet, mis à jour à chaque session et
+   fermable, par un fait observé ou par l'utilisateur. Distinct du `open` du
+   résumé de nuit, qui reste un instantané de fin de session
+   ([décision du 18](2026-09-18-open-instantane-de-fin-de-session.md)).
+   Place (hors `trace.db` ou non), affichage et règle de fermeture à cadrer
+   ici, avec le point 1 (où vivent les notes) ; jeu d'essai : les 11 échecs
+   de commande et les 25 déclarations de commit du rejeu du 18. Non
+   commencé, après l'étape 2.
 
 ## Décisions du 2026-09-17 (utilisateur)
 
@@ -302,6 +311,12 @@ Des cinq points ci-dessous, les points 2 et 3 sont tranchés ; les points 1,
    cwd), soit le déplacement de `resumption.py` dans Core, ce qui rejoint le
    TODO « Classification des sessions à source unique ». Recommandé pour
    l'étape 1 : la règle minimale, affichée comme telle.
+   *Reformulé le 2026-09-18* : la question devient celle de l'étape 6,
+   « état ouvert par projet ». Le rejeu du 18 sur 11 échecs montre qu'une
+   règle « dernière commande du projet » ramène les fausses alertes de 7 à
+   3 mais se trompe par l'attribution du workspace, les commandes longues
+   (`docker run` ne rend jamais 0) et les fautes de frappe ; aucune règle
+   par session ne suffit, l'état doit vivre et se fermer.
 4. **Liste des candidats et moment de la mesure** (téléchargements de 2 à
    6 Go chacun ; secteur ; hors lot).
 5. **Cadence et gardes du tick** : 5 min, secteur seulement, seuils de

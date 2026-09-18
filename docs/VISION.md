@@ -208,6 +208,21 @@ problème réel.
 
 ## Décisions prises
 
+- **2026-09-18** — `open` par session reste un instantané de fin de session
+  (prompt v7, aucun nouveau réglage) ; rejeu sur 52 résumés v7 : 11 échecs
+  de commande, 4 vraies alertes, 25 déclarations toutes issues de messages
+  de commit, jamais refermées. Suite : un état ouvert par projet, mis à jour
+  et fermable, étape 6 du cadrage du mode continu
+  ([décision](decisions/2026-09-18-open-instantane-de-fin-de-session.md)).
+
+- **2026-09-18** — Rattrapage des jours non résumés depuis le dernier passage
+  complet (`last_complete_pass`), plafonné à sept jours ; `lookback_days`
+  retiré ; régénération après changement de prompt ou de modèle acceptée
+  sur la fenêtre ; le lot du jour du compteur est le passage planifié de
+  06:30, une relance manuelle est hors compteur
+  ([décision](decisions/2026-09-18-rattrapage-des-jours-non-resumes.md),
+  [précision](decisions/2026-09-15-compteur-etape-4-veille-du-mac.md)).
+
 - **2026-09-13** — Résumés dans le journal HTML : zones « Reprise » (même
   sélection que `last_session_summary`, bandeau au-delà de 24 h ; sous la
   carte, en alerte, les seules sessions éligibles d'hier sans résumé, celles
