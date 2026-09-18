@@ -1313,3 +1313,10 @@ session. Rien au compteur : 9 reprises justes et utiles sur 15, inchangé.
   est un échec.
 - **Lecture à sept jours** (work-9, work-11) : `doing`, `stopped_at` et
   `open` ne suffisent pas à retrouver la session.
+
+**Étape 2 du mode continu — « ce qui m'a manqué dans Session en cours »
+(première ligne, utilisateur, 2026-09-18).** Ouvert : oui. Utile : le commit
+et son message complet, qui racontent la session. Manqué : l'agent en cours
+(seules ses sessions terminées apparaissent ; ses tests et ses échecs sont
+invisibles, donc « aucun test » rassure à tort) ; les fichiers arrivés par
+un merge masquent ceux réellement modifiés.
