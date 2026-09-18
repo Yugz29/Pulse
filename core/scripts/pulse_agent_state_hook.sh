@@ -16,7 +16,7 @@
 # Ne bloque jamais l'agent : `exit 0` sur tout, journal dans
 # ~/.pulse_v2/logs/agent_state_hook.log. Surcharges : PULSE_AGENT_STATE_DIR
 # (dossier des états), PULSE_AGENT_STATE_LOG (journal). Argument optionnel :
-# le matcher du hook Notification (`permission_prompt`), que l'installateur
+# le matcher du hook Notification (`permission_prompt`, `idle_prompt`), que l'installateur
 # passe pour ne pas dépendre du nom du champ dans le payload.
 
 set -u
