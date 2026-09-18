@@ -4,6 +4,26 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.10.2] - 2026-09-18
+
+Format commun d'une session d'agent vivante : Claude Code passe adaptateur
+unique. Aucun contrat ne change ; le bloc « Session en cours » rendu sur la
+page réelle (`trace.db` et session vivante gelées) est identique à l'octet
+avant/après.
+
+### Interne
+- `daemon_v2/agent_actions.py` (nouveau) : le format commun d'une session
+  d'agent vivante — qui (agent, session, dossier), état (peut valoir
+  `inconnu`), actions (commandes avec description/commande masquée/issue/
+  heure, fichiers modifiés, tests).
+- `daemon_v2/agent_transcript.py` reste le seul module à connaître Claude
+  Code (JSONL, noms d'outils, sous-agents, forme d'un `Exit code`) ; il
+  fournit désormais aussi l'identité affichée (`AGENT_KIND`, `AGENT_LABEL`).
+- `daemon_v2/agent_live.py` et le rendu (`renderers/live.py`,
+  `renderers/html.py`) ne manipulent plus que le format commun ; le libellé
+  « Claude Code » vient de l'adaptateur via `agents_label`, plus jamais en
+  dur dans le rendu.
+
 ## [0.8.10.1] - 2026-09-18
 
 Retour en réel sur l'étape 1 bis : les commandes d'agent étaient illisibles
