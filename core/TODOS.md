@@ -277,6 +277,22 @@ reconstruction de travail est effectuée en lecture, commune au journal et à
 **Priority:** P4 (veille)
 **Depends on:** Aucun — item sentinelle, ne pas implémenter
 
+### Codex (app VS Code) : rollout local seulement pour les tâches locales
+
+**What:** Codex (l'app, via l'extension VS Code) écrit un rollout local lisible
+(`~/.codex/sessions/…jsonl`, commandes et codes de sortie) pour les tâches
+lancées localement ; rien de comparable pour une tâche cloud
+(`chatgptWorkCloud`), et aucun hook n'existe côté Codex pour brancher Core
+dessus. Usage ponctuel : couverture non prioritaire. Un export OTel existe
+aussi côté Codex (section `[otel]` de `config.toml`), à considérer si le
+besoin devient réel un jour ; les commandes y seraient peut-être exportées en
+clair par défaut (issue non tranchée openai/codex#17909, à revérifier avant
+tout branchement).
+
+**Effort:** —
+**Priority:** P4 (veille)
+**Depends on:** Aucun
+
 ## Reconstruction et contrat `/context`
 
 Observations du dogfooding (`docs/dogfooding.md`) qui touchent la
