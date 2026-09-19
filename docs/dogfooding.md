@@ -1418,3 +1418,21 @@ Ce lot est le lot du jour 15 au compteur : 3 justes et utiles sur 11,
   cours », qui portait l'objectif de la session. TODO ouvert, à ne pas
   traiter avant la fin de l'évaluation v8 : exposer les titres de terminal
   (noms de session Claude Code), pas toutes les fenêtres.
+
+**Facteur 5 du daemon : mesuré, tranché, déployé (2026-09-19, après-midi,
+sur batterie).** Protocole : copie figée de `trace.db` (15:49), Core
+jetable sur un autre port, une requête de chauffe puis cinq en série par
+route, médianes. Ordinaire depuis un shell (priorité 31) : `/` 0,196 s,
+`/day/2026-09-17` 0,192 s, `/context/sessions?date=2026-09-17` 0,363 s.
+Sous `taskpolicy -b` (priorité 4) : 1,109 s, 1,146 s, 2,095 s. Sous un
+plist launchd jetable `ProcessType Background` : 1,163 s, 1,158 s,
+2,130 s. Production sur sa base vivante, même réglage : 1,151 s, 1,186 s,
+2,132 s. **Facteur 5,7 à 6,0, cause : `ProcessType Background`** ; la
+base vivante n'y est pour rien. Mesure sur secteur non faite, décision
+prise sur batterie (usage réel). PR #119 mergée (Core 0.8.10.3) : le
+daemon passe en `Standard`, les collecteurs restent en `Background` ;
+daemon seul réinstallé depuis main à 16:01 (`--only com.pulse.daemon`,
+priorité 20). Remesure en production, base vivante : `/` 0,230 s,
+`/day/2026-09-17` 0,189 s, `/context/sessions` 0,361 s. `make status` :
+daemon à jour ; outbox-worker et file-watcher STALE (ils exécutent
+0.8.10.2, le bump de VERSION change l'empreinte), non relancés.
