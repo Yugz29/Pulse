@@ -4,6 +4,23 @@ Toutes les modifications notables de Pulse Core sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnage 4 chiffres `MAJOR.MINOR.PATCH.MICRO`.
 
+## [0.8.10.3] - 2026-09-19
+
+Le daemon passe en `ProcessType Standard` ; les collecteurs restent en
+`Background`. Aucun contrat ne change, aucune ligne de code servie ne change.
+
+### Déploiement
+- `scripts/install_daemon_launchd.sh` : `com.pulse.daemon` est généré en
+  `ProcessType Standard`, `com.pulse.outbox-worker` reste `Background` ;
+  option `--only <label>` pour (ré)installer un seul des deux services.
+  Mesure du 2026-09-19 sur batterie, base figée, cinq requêtes en série :
+  le même code en bande de priorité 4 (Background) répond 6× plus lentement
+  qu'en bande 31 (`/` 0,196 s → 1,16 s ; `/day/2026-09-17` 0,192 s →
+  1,16 s ; `/context/sessions?date=2026-09-17` 0,363 s → 2,13 s), à
+  l'identique sous `taskpolicy -b`, sous un plist launchd jetable et en
+  production sur sa base vivante. Le réglage protégeait le premier plan
+  d'une collecte permanente : elle est portée par les autres services.
+
 ## [0.8.10.2] - 2026-09-18
 
 Format commun d'une session d'agent vivante : Claude Code passe adaptateur

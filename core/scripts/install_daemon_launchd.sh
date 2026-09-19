@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
 # Install the launchd services for the Pulse daemon and its outbox worker.
 #
-# Usage: scripts/install_daemon_launchd.sh [--uninstall]
+# Usage: scripts/install_daemon_launchd.sh [--uninstall] [--only <label>]
 #
 # Generates two user LaunchAgents (one per long-running service, KeepAlive):
-#   com.pulse.daemon         -> python -m daemon_v2.main
-#   com.pulse.outbox-worker  -> python -m daemon_v2.outbox_worker
+#   com.pulse.daemon         -> python -m daemon_v2.main       (ProcessType Standard)
+#   com.pulse.outbox-worker  -> python -m daemon_v2.outbox_worker (ProcessType Background)
 # then (re)loads them via launchctl. Refuses to overwrite plists it did not
 # install itself. Idempotent. Same managed-marker pattern as
-# install_agent_producers_launchd.sh.
+# install_agent_producers_launchd.sh. `--only <label>` (re)installs that one
+# service and leaves the other untouched.
+#
+# The daemon serves HTTP (journal, /context) and runs as Standard: measured
+# on 2026-09-19 on battery, ProcessType Background (priority band 4) made the
+# same code answer 6x slower on the same frozen database (/ 0.196 s -> 1.16 s,
+# /context/sessions 0.363 s -> 2.13 s). The collectors (worker, watchers,
+# observers, producers) keep Background: they run all day and must yield to
+# foreground work; the daemon's bursts last a fraction of a second.
 #
 # Coexistence with scripts/dev.sh: the worker holds a flock and a second
 # instance exits silently; the daemon would conflict on the port — stop the
@@ -30,6 +38,19 @@ marker="pulse-daemon-services: managed"
 labels=("com.pulse.daemon" "com.pulse.outbox-worker")
 modules=("daemon_v2.main" "daemon_v2.outbox_worker")
 logs=("daemon.log" "outbox_worker.log")
+process_types=("Standard" "Background")
+indexes=(0 1)
+
+if [[ "${1:-}" == "--only" ]]; then
+  indexes=()
+  for i in 0 1; do
+    [[ "${labels[$i]}" == "${2:-}" ]] && indexes=("$i")
+  done
+  if (( ${#indexes[@]} == 0 )); then
+    echo "--only attend l'un de: ${labels[*]}" >&2
+    exit 1
+  fi
+fi
 
 if [[ "${1:-}" == "--uninstall" ]]; then
   for label in "${labels[@]}"; do
@@ -43,10 +64,11 @@ fi
 mkdir -p -- "$plist_dir" "$log_dir"
 "$script_dir/fix_permissions.sh"
 
-for i in 0 1; do
+for i in "${indexes[@]}"; do
   label="${labels[$i]}"
   module="${modules[$i]}"
   log_file="${logs[$i]}"
+  process_type="${process_types[$i]}"
   plist_path="$plist_dir/$label.plist"
 
   if [[ -e "$plist_path" ]] && ! grep -qF "$marker" "$plist_path" 2>/dev/null; then
@@ -80,7 +102,7 @@ for i in 0 1; do
   <key>StandardErrorPath</key>
   <string>$log_dir/$log_file</string>
   <key>ProcessType</key>
-  <string>Background</string>
+  <string>$process_type</string>
 </dict>
 </plist>
 EOF
@@ -95,7 +117,7 @@ EOF
     echo "launchctl bootstrap en échec pour $plist_path" >&2
     exit 1
   fi
-  echo "LaunchAgent installé: $label (KeepAlive)"
+  echo "LaunchAgent installé: $label (KeepAlive, ProcessType $process_type)"
 done
 
 echo "Journaux: $log_dir/daemon.log, $log_dir/outbox_worker.log"

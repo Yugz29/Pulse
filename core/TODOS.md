@@ -197,14 +197,6 @@ exact est remplacé par une périphrase pour passer le scan.
 **Priority:** P3
 **Depends on:** PR #112 mergée
 
-### Le daemon tourne en `ProcessType Background` : facteur 5 probable sur les pages
-
-**What:** le plist de `com.pulse.daemon` déclare `ProcessType` `Background` ; le processus tourne en priorité 4. C'est l'explication probable, non mesurée, du facteur 5 entre le même code mesuré hors daemon et la production : le 2026-09-17, après la 0.8.8.0, `GET /` en 2,7 s servi par la production contre 0,48 s hors daemon, `/day/2026-09-17` en 1,1 s contre 0,20 s ; avant le correctif, 17,6 s contre 3,8 s ; le 2026-09-18, `/context/sessions?date=2026-09-17` en 4,9 à 9 s en production contre 0,90 s hors daemon (0,37 s après la 0.8.9.1). À mesurer avant de changer quoi que ce soit : mêmes routes, même base, avec et sans ce réglage, sur un Core jetable lancé par launchd plutôt que sur la production. Ne pas modifier le plist sans cette mesure avant/après : le réglage protège aussi le travail au premier plan d'une collecte qui tourne toute la journée.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Aucun
-
 ### Coût historique de l’attribution de session — résolu le 2026-09-08
 
 L’attribution à l’écriture et son scan global ont été supprimés. La
@@ -483,6 +475,16 @@ configuration des seuils quitte Intelligence pour Core.
 **Depends on:** Note de décision datée (contrat `/context/sessions`, `schema_version`)
 
 ## Completed
+
+### Le daemon tournait en `ProcessType Background` : facteur 6 mesuré, résolu le 2026-09-19
+
+**What:** le plist de `com.pulse.daemon` déclarait `ProcessType Background` (priorité 4). Mesure du 19 sur batterie, base figée (copie de `trace.db`), cinq requêtes en série après chauffe, médianes : ordinaire (priorité 31) `/` 0,196 s, `/day/2026-09-17` 0,192 s, `/context/sessions?date=2026-09-17` 0,363 s ; sous `taskpolicy -b` (priorité 4) 1,109 s, 1,146 s, 2,095 s ; sous un plist launchd jetable `Background` 1,163 s, 1,158 s, 2,130 s ; production sur sa base vivante 1,151 s, 1,186 s, 2,132 s. Facteur 5,7 à 6,0 ; la base vivante n'y est pour rien.
+
+**Résolution (0.8.10.3) :** `com.pulse.daemon` généré en `ProcessType Standard`, les collecteurs (worker, watchers, observateurs, producteurs) inchangés en `Background` ; option `--only <label>` de l'installateur pour relancer le daemon seul.
+
+**Completed:** 2026-09-19
+
+
 
 ### `make status` marque STALE sur tout commit sous `core/daemon_v2`, même sans effet
 
