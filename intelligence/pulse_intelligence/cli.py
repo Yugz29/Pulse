@@ -4,6 +4,7 @@
     pulse-intel summarize <id> [--date YYYY-MM-DD] [--dry-run] --fake FICHIER
     pulse-intel run [--once] --fake FICHIER
     pulse-intel show <id>|latest [--all] [--md|--json]
+    pulse-intel gate [--cycle-start HH:MM]
 
 Le modèle est choisi par ``llm_provider`` dans la configuration — vide par
 défaut, parce que le choix du modèle est une décision écrite. ``--fake
@@ -27,6 +28,17 @@ from .config import Config, ConfigError, config_home, load_config
 from .core_client import CoreClient, CoreError, CoreUnavailable
 from . import KNOWN_RECONSTRUCTION_VERSION
 from .evaluation import compare_run, evaluate, format_comparison, reconstruction_versions
+from .gate import (
+    DEFERRED,
+    DONE,
+    GATE_FILE,
+    cycle_threshold,
+    decide,
+    deferred_already_logged,
+    parse_cycle_start,
+    read_power_state,
+    record_deferred_logged,
+)
 from .llm.fake import FakeProvider
 from .llm.openai_compatible import OpenAICompatibleProvider
 from .llm.provider import LLMProvider, ProviderError
@@ -57,6 +69,14 @@ EXIT_LOCKED = 5
 # sans observations ni `open` citable. Le plus grave des codes : chaque
 # résumé du passage est dégradé, pas seulement une candidate.
 EXIT_LEGACY_VIEW = 6
+# `gate` : la garde du lot (décision 2026-09-19). 0 = lancer ; 10 = le lot
+# du jour est déjà fait, sortie muette ; 11 = reporté (pas en réveil complet,
+# capot fermé, batterie sous le plancher), une ligne dans le journal par
+# cycle au plus. Hors de la
+# plage 0–6 des passages pour que le wrapper ne confonde pas une garde et un
+# passage.
+EXIT_GATE_DONE = 10
+EXIT_GATE_DEFERRED = 11
 PRIVATE_UMASK = 0o077
 
 
@@ -109,6 +129,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     show.add_argument("--md", action="store_true", help="la reprise seule, en trois lignes")
     show.add_argument("--json", action="store_true", help="l'événement complet, en JSON")
+
+    gate = commands.add_parser(
+        "gate",
+        help="garde du lot : 0 lancer, 10 lot du jour déjà fait (muet), 11 reporté (DarkWake, capot fermé, batterie basse)",
+    )
+    gate.add_argument(
+        "--cycle-start", default="06:30",
+        help="heure locale à laquelle commence le lot du jour, défaut 06:30",
+    )
 
     ev = commands.add_parser("eval", help="passer le modèle courant sur le corpus gelé")
     ev.add_argument("--provider", default=None, help="remplace llm_provider pour ce passage")
@@ -613,6 +642,29 @@ def run_eval(args: argparse.Namespace, config: Config) -> int:
     return EXIT_OK if ok == len(outcomes) else EXIT_USAGE
 
 
+def run_gate(args: argparse.Namespace) -> int:
+    """Ni config ni Core : l'état seul, sans verrou, et deux commandes système."""
+    try:
+        cycle_start = parse_cycle_start(args.cycle_start)
+    except ValueError as exc:
+        print(f"gate : {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    state_path = args.state or config_home() / "state.json"
+    state = JobState.load(state_path)
+    now = _now()
+    verdict = decide(state, now, read_power_state(), cycle_start)
+    if verdict.outcome == DONE:
+        return EXIT_GATE_DONE
+    if verdict.outcome == DEFERRED:
+        gate_file = state_path.with_name(GATE_FILE)
+        if not deferred_already_logged(gate_file, cycle_threshold(now, cycle_start)):
+            stamp = now.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{stamp}] lot reporté : {verdict.reason}")
+            record_deferred_logged(gate_file, now)
+        return EXIT_GATE_DEFERRED
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     os.umask(PRIVATE_UMASK)
     parser = _build_parser()
@@ -621,6 +673,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "eval":
             return run_eval(args, load_config(args.config))
+        if args.command == "gate":
+            return run_gate(args)
         config, client, state = _load(args)
         if args.command == "list":
             return run_list(args, config, client, state)

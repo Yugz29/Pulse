@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# Install the daily launchd agent running `pulse-intel run --once`.
+# Install the launchd agent that runs `pulse-intel run --once` once a day.
 #
 # Usage: scripts/install_run_launchd.sh [--uninstall]
-#        PULSE_INTEL_RUN_HOUR=6 PULSE_INTEL_RUN_MINUTE=30 scripts/install_run_launchd.sh
+#        PULSE_INTEL_CYCLE_START=07:00 PULSE_INTEL_RUN_INTERVAL=900 scripts/install_run_launchd.sh
 #
 # Generates ~/Library/LaunchAgents/com.pulse.intelligence-run.plist pointing
 # at scripts/pulse_intel_run.sh by absolute path (future edits to the script
-# apply without reinstalling), then (re)loads it via launchctl. Calendar job:
-# if the Mac is asleep at that time, launchd runs it at wake-up. Refuses to
-# overwrite a plist it did not install itself. Idempotent. Same pattern as
-# core/scripts/install_agent_producers_launchd.sh.
+# apply without reinstalling), then (re)loads it via launchctl. The agent
+# runs every PULSE_INTEL_RUN_INTERVAL seconds (default 900); the wrapper's
+# gate turns each run into a no-op once the day's pass is done, and defers
+# it in a DarkWake, while the lid is closed or the battery is under the floor — a calendar
+# job fired at wake-up inside a two-second DarkWake, lid closed, and the
+# pass only progressed by DarkWake slices until the Mac was really awake.
+# The day starts at PULSE_INTEL_CYCLE_START (local time, default 06:30).
+# Refuses to overwrite a plist it did not install itself. Idempotent. Same
+# pattern as core/scripts/install_agent_producers_launchd.sh.
 
 set -u
 
@@ -20,11 +25,20 @@ plist_dir="$HOME/Library/LaunchAgents"
 plist_path="$plist_dir/$label.plist"
 log_dir="$HOME/.pulse_intelligence/logs"
 marker="pulse-intelligence-run: managed"
-hour="${PULSE_INTEL_RUN_HOUR:-6}"
-minute="${PULSE_INTEL_RUN_MINUTE:-30}"
+cycle_start="${PULSE_INTEL_CYCLE_START:-06:30}"
+interval="${PULSE_INTEL_RUN_INTERVAL:-900}"
 
 if [[ ! -x "$wrapper" ]]; then
   echo "Wrapper introuvable ou non exécutable: $wrapper" >&2
+  exit 1
+fi
+
+if [[ ! "$cycle_start" =~ ^[0-9]{2}:[0-9]{2}$ ]]; then
+  echo "PULSE_INTEL_CYCLE_START attendu au format HH:MM: $cycle_start" >&2
+  exit 1
+fi
+if [[ ! "$interval" =~ ^[0-9]+$ ]] || (( interval < 60 )); then
+  echo "PULSE_INTEL_RUN_INTERVAL attendu en secondes (60 au moins): $interval" >&2
   exit 1
 fi
 
@@ -56,13 +70,13 @@ cat > "$plist_path" <<PLIST
   <array>
     <string>$wrapper</string>
   </array>
-  <key>StartCalendarInterval</key>
+  <key>EnvironmentVariables</key>
   <dict>
-    <key>Hour</key>
-    <integer>$hour</integer>
-    <key>Minute</key>
-    <integer>$minute</integer>
+    <key>PULSE_INTEL_CYCLE_START</key>
+    <string>$cycle_start</string>
   </dict>
+  <key>StartInterval</key>
+  <integer>$interval</integer>
   <key>RunAtLoad</key>
   <false/>
   <key>StandardOutPath</key>
@@ -87,5 +101,4 @@ if ! launchctl bootstrap "gui/$(id -u)" "$plist_path"; then
   exit 1
 fi
 
-printf 'LaunchAgent installé: %s (chaque jour à %02d:%02d, rattrapé au réveil)\n' "$label" "$hour" "$minute"
-echo "Journal: $log_dir/run.log"
+printf 'LaunchAgent installé: %s (toutes les %s s ; lot du jour à partir de %s, en réveil complet, capot ouvert, batterie au-dessus du plancher)\n' "$label" "$interval" "$cycle_start"
