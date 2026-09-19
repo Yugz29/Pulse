@@ -5,10 +5,10 @@
 (lecture croisée des 14 sorties par l'utilisateur). PR #102 mergée. Le
 défaut du code reste `v6`, décidé le 12
 ([décision](../../decisions/2026-09-12-prompt-v7.md)) : ce merge ne le
-change pas. `~/.pulse_intelligence/config.toml` reste `v7` cette nuit du
-18 au 19 — la bascule en `v8` est prévue le 19, après vérification du lot
-de 06:30, avec la date consignée dans `docs/dogfooding.md` pour le
-compteur de l'étape 4.
+change pas. `~/.pulse_intelligence/config.toml` est resté `v7` la nuit du
+18 au 19 ; **bascule en `v8` faite le 2026-09-19 à 11:25**, après
+vérification du lot de 06:30 (11/11 créées), date consignée dans
+`docs/dogfooding.md` (jour 15) pour le compteur de l'étape 4.
 **Branche :** `exp/intelligence-compact-input` (mergée, #102).
 **Données de travail :** `corpus/docs/audits/2026-09-16-entree-compacte/`
 (hors dépôt) : les 6 sessions du lot du 16 figées, `mesure_tokens.py`,
