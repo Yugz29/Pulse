@@ -4,6 +4,9 @@
 **Statut :** tranchée
 **Précise :** [prompt v7 activé](2026-09-12-prompt-v7.md), clause « Mac éveillé »
 du compteur de l'étape 4
+**Précisée par :** [lot en réveil complet, capot ouvert, batterie au-dessus du plancher](2026-09-19-lot-capot-ouvert-batterie.md)
+(le lot du jour devient le premier passage complet du cycle, quelle que soit
+l'heure de l'appel qui l'a lancé ; « reporté » n'est pas « interrompu »)
 
 ## Décision
 

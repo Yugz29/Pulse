@@ -294,26 +294,33 @@ l'annonce aussi pour son corpus, dont `meta.json` note les versions figées
 
 ### Le passage quotidien via launchd
 
-`run --once` chaque matin, sans y penser :
+`run --once` une fois par jour, sans y penser :
 
 ```bash
 cd intelligence
-scripts/install_run_launchd.sh                      # chaque jour à 06:30
-PULSE_INTEL_RUN_HOUR=7 PULSE_INTEL_RUN_MINUTE=0 scripts/install_run_launchd.sh
+scripts/install_run_launchd.sh                      # toutes les 15 min ; lot du jour à partir de 06:30
+PULSE_INTEL_CYCLE_START=07:00 PULSE_INTEL_RUN_INTERVAL=600 scripts/install_run_launchd.sh
 scripts/install_run_launchd.sh --uninstall
 ```
 
 Installe `~/Library/LaunchAgents/com.pulse.intelligence-run.plist` (même
-patron que les agents de Core), qui lance `scripts/pulse_intel_run.sh` — le
-`pulse-intel` de la venv, sur la config du poste, sous `caffeinate -i` (pas
-de veille d'inactivité pendant le passage). Tâche calendaire : si le Mac
-dort à l'heure dite, launchd la rattrape au réveil ; capot fermé sur
-batterie, le lot avance par DarkWake et se termine à l'ouverture ; une
-requête vers Core coupée par la veille est rejouée une fois au réveil
-(`core_timeout_s`). Journal : `~/.pulse_intelligence/logs/run.log`. Le
-matin couvre la veille entière, et les jours manqués depuis le dernier
-passage complet (sept au plus) : une session close après le passage est
-prise le lendemain, un lot qui n'a pas tourné est rattrapé par le suivant.
+patron que les agents de Core), en `StartInterval` de 900 s, qui lance
+`scripts/pulse_intel_run.sh` — le `pulse-intel` de la venv, sur la config du
+poste. Avant de lancer le passage, le wrapper interroge `pulse-intel gate`,
+dans cet ordre ([décision du 2026-09-19](../docs/decisions/2026-09-19-lot-capot-ouvert-batterie.md)) :
+le lot du jour est-il déjà fait (`last_complete_pass` postérieur au dernier
+06:30 échu ; code 10, rien dans le journal) ; le Mac est-il en réveil
+complet (`pmset -g systemstate` sans `Graphics` = DarkWake) ; le capot
+est-il fermé ; la batterie est-elle sous 40 % (code 11, « lot reporté : … »,
+une ligne par jour au plus). Un lot qui partait dans un DarkWake n'avançait
+que par tranches de quelques secondes jusqu'au réveil complet. Sinon le
+passage part sous `caffeinate -i`, avec le niveau de batterie journalisé
+avant et après ; une requête vers Core coupée par la veille est rejouée une
+fois au réveil (`core_timeout_s`). Journal :
+`~/.pulse_intelligence/logs/run.log`. Le premier passage du jour couvre la
+veille entière, et les jours manqués depuis le dernier passage complet
+(sept au plus) : une session close après le passage est prise le lendemain,
+un jour sans passage est rattrapé par le suivant.
 
 ## 3. Lire un résumé
 

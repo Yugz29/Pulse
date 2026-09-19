@@ -251,6 +251,16 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P3
 **Depends on:** Aucun
 
+### Marquer « veille » une durée de génération quand horloge murale et `CLOCK_UPTIME_RAW` divergent
+
+- **Constat (jour 15, 2026-09-19) :** `generation_ms` mesure l'horloge murale ; un lot parti dans un DarkWake sur batterie y met le temps de veille (3 h 06 et 1 h 19 le 19 pour deux sessions calculées en quelques minutes). Le journal l'a d'abord lu comme deux générations anormales ; seule la lecture de `pmset -g log` a tranché. La [décision du 15](../docs/decisions/2026-09-15-compteur-etape-4-veille-du-mac.md) demande de marquer ces durées non significatives, à la main.
+- **À faire :** mesurer chaque génération sur deux horloges, `time.monotonic()` (`CLOCK_UPTIME_RAW` sur macOS, arrêtée pendant la veille) et l'horloge murale ; quand elles divergent au-delà d'une tolérance, écrire `generation_ms` avec un indicateur `slept` (ou la durée de veille) dans `details`, et le dire dans `run.log`. Le détail est un ajout de champ dans `details` : version des observations inchangée, à vérifier.
+- **Contexte :** la [garde du 19](../docs/decisions/2026-09-19-lot-capot-ouvert-batterie.md) évite le départ en DarkWake ou capot fermé ; le marquage couvre ce qu'elle laisse passer (source illisible, veille en cours de lot).
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Aucun
+
 ### Intelligence n'a ni VERSION ni CHANGELOG, rien ne relie un lot à une version
 
 - **Constat (2026-09-17) :** `__version__` et `pyproject.toml` disent `0.1.0` depuis l'origine ; aucun fichier VERSION, aucun CHANGELOG. La valeur part pourtant dans chaque résumé (`producer.version`), identique pour tous : elle ne distingue ni le correctif des sessions courtes à commit (#98), ni celui de la citation des points `open` (#106), dont l'effet ne vaut que pour les résumés à venir. Avec l'install éditable, un lot exécute le code du checkout à l'heure du lot : le 17, c'était celui d'une branche expérimentale, et seul le recalcul des `input_hash` a montré que v7 n'en était pas affecté.
