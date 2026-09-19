@@ -1360,3 +1360,61 @@ lot de ce matin (v7) restent à lire.
 Ménage : worktree `~/Projets/Pulse-exp` et branche locale
 `exp/intelligence-compact-input` supprimés (5 commits, tous sur main par
 rebase, `git cherry` vide).
+
+**Lecture des 11 résumés v7 du lot du 19 (utilisateur, 2026-09-19, une
+ligne par session, avec les commits de la plage et les fichiers touchés
+hors commit sous les yeux).** Référence v7 pour le premier lot v8.
+
+| Session | Verdict |
+| --- | --- |
+| work-8 `bd376369` (11:25–11:41, 70 faits) | Juste (chantier #112 + compteur étape 4), mais ne dit pas que le travail est en cours et non commité. |
+| work-9 `a83b0976` (11:41–12:11, 208 faits, devops-formation) | Juste, confirmé par les 6 commits ; oublie le déploiement (d17b4c5) ; la référence interne (o124) ne doit pas apparaître dans un résumé. |
+| work-10 `30fb8df1` (13:12–13:28, 51 faits) | Ligne 1 juste (jour 14), ligne 2 du remplissage (un `cd`), rien sur les 28 fenêtres qui font l'essentiel de la session. |
+| work-11 `3321f584` (13:28–13:55, 129 faits) | Juste sur l'essentiel (état d'agent v0 + installateur) ; oublie 2 commits sur 4 (pid inconnu ≠ mort, menu « Résumés à jour ») ; ligne 2 = dernier commit, pertinent ici par chance, SHA périmé après rebase. |
+| work-12 `cb3444e6` (13:55–14:48, 138 faits) | Juste sur le chantier « état ouvert par projet » ; oublie la décision du jour (open = instantané de fin de session), ignore la réunion Zoom (fenêtres), ligne 3 redit la ligne 1. |
+| work-13 `cf598e8a` (14:48–15:17, 114 faits) | Juste et complet sur le code (0.8.10.0, 0.8.10.1, état idle) ; « commit o84 » est un identifiant interne pris pour un SHA ; rate les angles morts du soir (553389a), qui sont des points ouverts. |
+| work-14 `610379b9` (15:17–15:21, 21 faits) | **Faux** sur la nature : #115 et #116 ont été mergées, rien n'a été développé ; ne cite pas les merges ; rate encore les angles morts de 553389a. |
+| work-15 `2d5e019a` (15:21–15:43, 237 faits) | **Exact mais trompeur** : « suppression massive de fichiers » = suppression du worktree Pulse-agent-head (ménage) ; réinstallation des hooks juste ; ligne 2 = dernier événement (lancement de claude). |
+| work-16 `83a6a45b` (22:00–22:10, 40 faits) | Juste mais vague (fichiers du format live, travail non commité non signalé) ; rate l'objectif que donnait le titre du terminal (sessions Codex) ; ligne 2 = dernier événement. |
+| work-17 `e047c4d3` (22:10–22:58, 78 faits) | Juste sur le refactor (quasi-copie du commit) ; « synchronisation » = arrivée dans main, décrite vaguement ; rate TODOS.md modifié non commité (points ouverts probables) et l'objectif Codex. |
+| work-18 `596ac554` (22:58–23:05, 15 faits) | Juste et utile (adoption v8, bascule du 19 bien extraite) ; « migration initiée » = merge de #102 ; identifiants internes (o6 à o13). |
+
+**Bilan.** Les lignes ci-dessus jugent l'exactitude ; l'utilité à la
+reprise, critère du compteur (spec §12, « justes **et** utiles », appliqué
+tel quel du jour 10 au jour 13), a été jugée après coup par l'utilisateur :
+**utiles work-9, work-11 et work-18**, les huit autres non utiles. Sur
+l'exactitude : 1 faux (work-14), 1 exact mais trompeur (work-15), 9 justes.
+Ce lot est le lot du jour 15 au compteur : 3 justes et utiles sur 11,
+**12 reprises justes et utiles sur 26** depuis le jour 10 (9/15 + 3/11).
+
+**Motifs côté prompt** (à comparer sur le premier lot v8) :
+
+- **Ligne 2 = dernier événement par construction**, pertinent ou non : un
+  `git push` (work-9), un `cd` (work-10), le lancement de `claude` (work-15),
+  la dernière modification de fichier (work-16) ; pertinent par chance
+  quand c'est un commit (work-11, work-12).
+- **Identifiants internes de faits dans le texte** : o124 (work-9),
+  « commit o84 » pris pour un SHA (work-13), « o6 à o13 » (work-18).
+- **Points ouverts inconstants** : un point déclaré dans un commit est
+  extrait en work-12 et work-18, raté en work-13 et work-14 (les angles
+  morts de 553389a) ; `TODOS.md` modifié sans commit n'est jamais lu comme
+  un point ouvert (work-17).
+
+**Motifs côté entrée** (ce que le modèle ne peut pas savoir) :
+
+- **Les opérations git sont lues comme des événements fichier bruts** : un
+  merge dans le checkout main devient du développement (work-12 avec #113,
+  work-14 avec #115 et #116, work-17 « synchronisation », work-18
+  « migration initiée ») ; la suppression d'un worktree devient une
+  « suppression massive de fichiers » (work-15, 202 `deleted`).
+- **Le travail non commité n'est pas signalé** comme tel : 11 fichiers
+  d'intelligence modifiés sans commit (work-8), le format live avant son
+  commit (work-16), `TODOS.md` (work-17).
+- **Fenêtres masquées au modèle (`FACT_KINDS_HIDDEN_FROM_MODEL`)** : les
+  faits `window` sont retirés de l'entrée par `session_input.py`, en v7
+  comme en v8. Manquent donc 28 fenêtres sur 51 faits (work-10), la lecture
+  des PR gstack redact-prepush (work-11), une réunion Zoom (work-12), et en
+  work-16 et work-17 le titre du terminal « Codex sessions et tâches en
+  cours », qui portait l'objectif de la session. TODO ouvert, à ne pas
+  traiter avant la fin de l'évaluation v8 : exposer les titres de terminal
+  (noms de session Claude Code), pas toutes les fenêtres.

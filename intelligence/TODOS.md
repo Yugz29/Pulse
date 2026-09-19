@@ -251,6 +251,16 @@ constante `KNOWN_OBSERVATION_VERSION` annoncée comme la reconstruction.
 **Priority:** P3
 **Depends on:** Aucun
 
+### Exposer au modèle les titres de terminal (noms de session Claude Code), pas toutes les fenêtres
+
+- **Constat (jour 15, 2026-09-19) :** les faits `window` sont masqués au modèle par `FACT_KINDS_HIDDEN_FROM_MODEL` (`session_input.py`, addendum du 13 : 85 % des tokens d'une session refusée). Sur les 11 résumés v7 du lot du 19, le titre du terminal portait l'objectif de la session en work-16 et work-17 (« Codex sessions et tâches en cours », le nom de la session Claude Code), et les fenêtres faisaient l'essentiel de work-10 (28 sur 51 faits), work-11 (PR gstack lues) et work-12 (réunion Zoom) ; aucun résumé ne peut le dire.
+- **À faire :** n'exposer que les titres de terminal débarrassés du spinner et de la taille (le nom de session Claude Code, `Pulse — Codex sessions et tâches en cours`), dédoublonnés, pas les autres fenêtres ; version d'entrée et prompt qui les décrit.
+- **Quand :** pas avant la fin de l'évaluation v8 (premier lot le 20), pour que la comparaison v7/v8 reste à entrée égale.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Fin de l'évaluation v8
+
 ### Marquer « veille » une durée de génération quand horloge murale et `CLOCK_UPTIME_RAW` divergent
 
 - **Constat (jour 15, 2026-09-19) :** `generation_ms` mesure l'horloge murale ; un lot parti dans un DarkWake sur batterie y met le temps de veille (3 h 06 et 1 h 19 le 19 pour deux sessions calculées en quelques minutes). Le journal l'a d'abord lu comme deux générations anormales ; seule la lecture de `pmset -g log` a tranché. La [décision du 15](../docs/decisions/2026-09-15-compteur-etape-4-veille-du-mac.md) demande de marquer ces durées non significatives, à la main.
