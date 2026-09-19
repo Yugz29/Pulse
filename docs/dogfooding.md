@@ -1330,3 +1330,33 @@ qu'elle attend (PR #116 : `idle_prompt` la passe en attente) ; et les
 a échoué s'affiche comme un échec de l'agent au même titre qu'un test rouge,
 et le corps du heredoc s'affichait entier (PR #115 : première ligne
 seulement, coupée avant `<<`).
+
+## Jour 15 — 2026-09-19
+
+**Lot planifié de 06:30, vérifié à 11:22, corrigé à 11:40 sur `pmset -g log`.**
+Lancé par launchd à 06:45:11 dans un DarkWake de 2 s (Mac capot fermé, sur
+batterie à 50 %), rendormi à 06:45:13 ; dix-sept DarkWakes de 2 à 20 s
+jusqu'au branchement USB-C à 11:09:21, FullWake à 11:09:22. Démarrage
+effectif du calcul : 11:09 ; fin à 11:18:43, soit ~10 min de calcul pour
+4 h 33 d'horloge. 11 candidates, **11 créées**, 0 doublon, 0 échec, 0
+abandon, 0 rejeu — passage complet, les 11 sessions sont du 18 (la
+journée entière après le repère `2026-09-18T09:32:00Z`).
+`last_complete_pass` avancé à `2026-09-19T04:45:12Z`. Prompt v7,
+`Qwen3.8-27B-4bit`. `generation_ms` : `bd376369` (3 h 06) et `a83b0976`
+(1 h 19) portent la veille, non significatifs au sens de la
+[précision du 15](decisions/2026-09-15-compteur-etape-4-veille-du-mac.md) ;
+9 mesures exploitables, Mac éveillé sur secteur : 28 s à 2 min 39. Lot du
+jour au compteur (passage planifié, complet).
+
+**Bascule en v8 le 2026-09-19 à 11:25.** `~/.pulse_intelligence/config.toml`
+passe de `prompt_version = "v7"` à `"v8"` (entrée compacte, `input_version`
+4), conformément au verdict du 18 (v8 aussi juste que v7, PR #102,
+[mesure](audits/2026-09-16-entree-compacte/README.md)). Sauvegarde de
+l'ancienne config : `config.toml.bak-v7-2026-09-19`. Le défaut du code
+reste `v6`. Premier lot v8 attendu le 20 à 06:30 ; pour le compteur de
+l'étape 4, les résumés v8 comptent à partir de ce lot. Les 11 résumés du
+lot de ce matin (v7) restent à lire.
+
+Ménage : worktree `~/Projets/Pulse-exp` et branche locale
+`exp/intelligence-compact-input` supprimés (5 commits, tous sur main par
+rebase, `git cherry` vide).
